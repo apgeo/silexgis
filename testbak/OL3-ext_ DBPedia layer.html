@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<!-- saved from url=(0064)http://viglino.github.io/ol3-ext/examples/map.dbpedia.photo.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<title>OL3-ext: DBPedia layer</title>
+	
+
+	<!-- jQuery -->
+	<script type="text/javascript" src="./OL3-ext_ DBPedia layer_files/jquery-1.11.0.min.js"></script>
+
+	<!-- OL3 -->
+    <link rel="stylesheet" href="./OL3-ext_ DBPedia layer_files/ol.css">
+	<!--<script type="text/javascript" src="./OL3-ext_ DBPedia layer_files/ol.js"></script>-->
+	<!--<script src="/speogis/temp_offline_scripts/ol-debug.js" type="text/javascript"></script>-->
+	
+	<script type="text/javascript" src="./OL3-ext_ DBPedia layer_files/ol.js"></script>
+	
+	<!-- Photo styles -->
+	<script type="text/javascript" src="/speogis/scripts/photostyle.js"></script>
+	<script type="text/javascript" src="/speogis/scripts/OL3-AnimatedCluster-gh-pages/layer/animatedclusterlayer.js"></script>
+
+	<script type="text/javascript" src="/speogis/scripts/ol.ordering.js"></script>
+	<script type="text/javascript" src="/speogis/scripts/dbpediasource.js"></script>
+	
+
+	<link rel="stylesheet" href="./OL3-ext_ DBPedia layer_files/style.css">
+	<style>
+		#select img
+		{	max-height: 300px;
+		}
+	</style>
+</head>
+<body>
+	<a href="https://github.com/Viglino/ol3-ext"><img style="position: absolute; top: 0; right: 0; border: 0;" src="./OL3-ext_ DBPedia layer_files/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f6461726b626c75655f3132313632312e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png"></a>
+
+	<a href="http://viglino.github.io/ol3-ext/index.html">
+		<h1>OL3-ext: DBPedia layer</h1>
+	</a>
+	<div class="info">
+		An example using a BDpedia layer with clusters to show photos on a map..
+		<ul>
+		<li>
+			Use <a href="http://viglino.github.io/ol3-ext/examples/map.dbpedia.html">ol.source.DBPedia</a>.
+		</li>
+		<li>
+			Use <a href="http://viglino.github.io/ol3-ext/examples/map.style.photo.html">ol.style.Photo</a>.
+		</li>
+		<li>
+			Use <a href="http://viglino.github.io/OL3-AnimatedCluster/">OL3-AnimatedCluster</a>.
+		</li>
+		</ul>
+	</div>
+
+	<!-- DIV pour la carte -->
+	<div id="map" style="width:600px; height:400px;"><div class="ol-viewport" style="position: relative; overflow: hidden; width: 100%; height: 100%; touch-action: none;"><canvas class="ol-unselectable" width="600" height="400" style="width: 100%; height: 100%;"></canvas><div class="ol-overlaycontainer"></div><div class="ol-overlaycontainer-stopevent"><div class="ol-zoom ol-unselectable ol-control"><button class="ol-zoom-in" type="button" title="Zoom in">+</button><button class="ol-zoom-out" type="button" title="Zoom out">−</button></div><div class="ol-rotate ol-unselectable ol-control ol-hidden"><button class="ol-rotate-reset" type="button" title="Reset rotation"><span class="ol-compass" style="transform: rotate(0rad);">⇧</span></button></div><div class="ol-attribution ol-unselectable ol-control ol-collapsed"><ul><li style=""><a href="https://openlayers.org/"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAA3NCSVQICAjb4U/gAAAACXBIWXMAAAHGAAABxgEXwfpGAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAhNQTFRF////AP//AICAgP//AFVVQECA////K1VVSbbbYL/fJ05idsTYJFtbbcjbJllmZszWWMTOIFhoHlNiZszTa9DdUcHNHlNlV8XRIVdiasrUHlZjIVZjaMnVH1RlIFRkH1RkH1ZlasvYasvXVsPQH1VkacnVa8vWIVZjIFRjVMPQa8rXIVVkXsXRsNveIFVkIFZlIVVj3eDeh6GmbMvXH1ZkIFRka8rWbMvXIFVkIFVjIFVkbMvWH1VjbMvWIFVlbcvWIFVla8vVIFVkbMvWbMvVH1VkbMvWIFVlbcvWIFVkbcvVbMvWjNPbIFVkU8LPwMzNIFVkbczWIFVkbsvWbMvXIFVkRnB8bcvW2+TkW8XRIFVkIlZlJVloJlpoKlxrLl9tMmJwOWd0Omh1RXF8TneCT3iDUHiDU8LPVMLPVcLPVcPQVsPPVsPQV8PQWMTQWsTQW8TQXMXSXsXRX4SNX8bSYMfTYcfTYsfTY8jUZcfSZsnUaIqTacrVasrVa8jTa8rWbI2VbMvWbcvWdJObdcvUdszUd8vVeJaee87Yfc3WgJyjhqGnitDYjaarldPZnrK2oNbborW5o9bbo9fbpLa6q9ndrL3ArtndscDDutzfu8fJwN7gwt7gxc/QyuHhy+HizeHi0NfX0+Pj19zb1+Tj2uXk29/e3uLg3+Lh3+bl4uXj4ufl4+fl5Ofl5ufl5ujm5+jmySDnBAAAAFp0Uk5TAAECAgMEBAYHCA0NDg4UGRogIiMmKSssLzU7PkJJT1JTVFliY2hrdHZ3foSFhYeJjY2QkpugqbG1tre5w8zQ09XY3uXn6+zx8vT09vf4+Pj5+fr6/P39/f3+gz7SsAAAAVVJREFUOMtjYKA7EBDnwCPLrObS1BRiLoJLnte6CQy8FLHLCzs2QUG4FjZ5GbcmBDDjxJBXDWxCBrb8aM4zbkIDzpLYnAcE9VXlJSWlZRU13koIeW57mGx5XjoMZEUqwxWYQaQbSzLSkYGfKFSe0QMsX5WbjgY0YS4MBplemI4BdGBW+DQ11eZiymfqQuXZIjqwyadPNoSZ4L+0FVM6e+oGI6g8a9iKNT3o8kVzNkzRg5lgl7p4wyRUL9Yt2jAxVh6mQCogae6GmflI8p0r13VFWTHBQ0rWPW7ahgWVcPm+9cuLoyy4kCJDzCm6d8PSFoh0zvQNC5OjDJhQopPPJqph1doJBUD5tnkbZiUEqaCnB3bTqLTFG1bPn71kw4b+GFdpLElKIzRxxgYgWNYc5SCENVHKeUaltHdXx0dZ8uBI1hJ2UUDgq82CM2MwKeibqAvSO7MCABq0wXEPiqWEAAAAAElFTkSuQmCC"></a></li><li>© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.</li></ul><button type="button" title="Attributions"><span>i</span></button></div></div></div></div>
+	<div class="options"></div>
+	<div id="select" class="options">Select an item.</div>
+	
+	<script type="text/javascript">
+	// The map
+	var map = new ol.Map
+		({	target: 'map',
+			view: new ol.View
+			({	zoom: 15,
+				center: [261204.43490751847, 6250258.191535994]
+			}),
+			interactions: ol.interaction.defaults(),
+			layers: [ new ol.layer.Tile({ name:"OSM", source: new ol.source.OSM() })]
+		});
+
+	// Style
+	var styleCache={};
+	function getFeatureStyle (feature, resolution, sel)
+	{	var f = feature.get("features")[0];
+		var nb = feature.get("features").length;
+		var th = f.get("thumbnail");
+		var k = th.replace(/(.*)\/(.*)\?(.*)/,"$2")+(nb>1?"_0":"_1")+(sel?"_1":"");
+		var style = styleCache[k];
+		if (!style)
+		{	styleCache[k] = style = new ol.style.Style
+			({	image: new ol.style.Photo (
+				{	src: th,
+					radius: 20,
+					crop: true,
+					kind: (nb>1) ? "folio":"square",
+					shadow: true,
+					onload: function() { vector.changed(); },
+					stroke: new ol.style.Stroke(
+					{	width: sel ? 5 : 3,
+						color: sel ? 'red' : '#fff'
+					})
+				})
+			});
+		}
+		if (nb>1)
+		{	var count = new ol.style.Style(
+				{	image: new ol.style.RegularShape(
+					{	points: 12,
+						radius: 9,
+						fill: new ol.style.Fill({
+								color: '#fff'
+							})
+					}),
+					text: new ol.style.Text(
+					{	text: nb.toString(),
+						font: 'bold 12px helvetica,sans-serif',
+						offsetX: 20,
+						offsetY: -20,
+                        fill: new ol.style.Fill({
+                            color: '#000'
+                        })
+					})
+				});
+			var p = count.getImage().getAnchor();
+			p[0]-=20;
+			p[1]+=20;
+			return [ style, count ];
+		}
+		else return [style];
+	}
+
+	// DBPedia layer source
+	var vectorSource = new ol.source.DBPedia(
+	{	// Tile strategy load at zoom 14
+        strategy: ol.loadingstrategy.tile(ol.tilegrid.createXYZ({ minZoom: 14, maxZoom: 14, tileSize:512  })),
+		// Bbox strategy : reload at each move
+		//strategy: ol.loadingstrategy.bbox,
+		//maxResolution: 10, // > zoom 14
+		// Language
+		lang:"fr"
+	});
+
+	// Force thumbnail to non optional
+	vectorSource.querySubject = function ()
+	{	return "?subject rdfs:label ?label. "
+			+ "?subject dbpedia-owl:thumbnail ?thumbnail."
+			+ "OPTIONAL {?subject dbpedia-owl:abstract ?abstract} . "
+			+ "OPTIONAL {?subject rdf:type ?type}";
+	}
+
+	// Force layer reload on resolution change 
+	map.getView().on('change:resolution', function(evt)
+	{	//vectorSource.clear();
+		if (map.getView().getZoom() < 14) $(".options").first().text("Zoom to load data...");
+		else $(".options").first().text("");
+	});
+
+	var clusterSource = new ol.source.Cluster({
+		distance: 60,
+		source: vectorSource
+	});
+
+	var vector = new ol.layer.AnimatedCluster(
+	{	name: 'DBPedia',
+		source: clusterSource,
+		// Limit resolution to avoid large area request
+		maxResolution: 40, // > zoom 12
+		// y ordering
+		renderOrder: ol.ordering.yOrdering(),
+		// default dbPedia style function
+		style: getFeatureStyle
+	});
+
+	map.addLayer(vector);
+
+	// Control Select 
+	var select = new ol.interaction.Select(
+		{	// select dbPedia style function
+			style: function(f,res){return getFeatureStyle(f,res,true);}
+        })
+	map.addInteraction(select);
+	// On selected
+	select.getFeatures().on(['add','remove'], function(e)
+	{	var info = $("#select").html("");
+		if (e.type=="add") 
+		{	var el = e.element.get("features")[0];
+			$("<h2>").text(el.get("label")).appendTo(info);
+			if (el.get("thumbnail")) $("<img>").attr('src',el.get("thumbnail")).appendTo(info);
+			$("<p>").text(el.get("abstract")).appendTo(info);
+		}
+	});
+
+	</script>
+
+</body></html>

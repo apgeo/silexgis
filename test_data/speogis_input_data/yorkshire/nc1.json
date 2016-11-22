@@ -1,0 +1,85 @@
+nc1 = 
+{
+  "name": "Yorkshire Dales - Wharfedale",
+  "areas":
+  [
+    {"area":"Great Whernside","caves":[
+      {"name":"Dow Cave",                      "lng":-2.026381,    "lat":54.164537, "fix":"GPS"},
+      {"name":"Fossil Pot",                    "lng":-1.974449,    "lat":54.098515, "fix":"GPS"},
+      {"name":"Langcliffe Pot",                "lng":-2.007954,    "lat":54.135519, "fix":"GPS"},
+      {"name":"Mossdale Caverns",              "lng":-1.976112,    "lat":54.123820, "fix":"GPS"},
+      {"name":"Oddmire Pot",                   "lng":-2.011004,    "lat":54.138114, "fix":"GPS"},
+      {"name":"Providence Pot",                "lng":-2.013543,    "lat":54.151823, "fix":"GPS"}
+      ]},
+    {"area":"Upper Wharfedale","caves":[
+      {"name":"Birks Fell Cave",               "lng":-2.1072676523,   "lat":54.1886249904, "fix":"GPS"},
+      {"name":"Rowantree Cave",                "lng":-2.0957136451,   "lat":54.1756991806}
+	     ]},
+    {"area":"Langstrothdale","caves":[
+      {"name":"Bracken Cave",                  "lng":-2.1294930171,   "lat":54.1999334429},
+      {"name":"Hagg Gill Pot",                 "lng":-2.1643421118   ,"lat":54.2093725326, "fix":"GPS"},
+      {"name":"Langstroth Cave",               "lng":-2.1515596069   ,"lat":54.2064414654, "fix":"GPS"},
+      {"name":"Langstroth Cave (Middle Entrance)","lng":-2.1508209932,"lat":54.2056964437, "fix":"GPS"},
+      {"name":"Langstroth Pot",                "lng":-2.1606789789   ,"lat":54.2057555788, "fix":"GPS"},
+      {"name":"Pasture Gill Pot",              "lng":-2.1464497281,   "lat":54.2100020522, "fix":"GPS"},
+      {"name":"Strans Gill Pot",               "lng":-2.1289451668,   "lat":54.2053682499, "fix":"GPS"},
+      {"name":"Yockenthwaite Pot",             "lng":-2.1532164740,   "lat":54.2120827900, "fix":"GPS"}
+      ]},  
+    {"area":"Lower Littondale","caves":[
+      {"name":"Dowkabottom Cave",              "lng":-2.0754065592,   "lat":54.1159412863, "fix":"GPS"},
+      {"name":"Sleets Gill Cave",              "lng":-2.0635865389,   "lat":54.1192340820, "fix":"GPS"}
+      ]},  
+    {"area":"Darnbrook and Cowside","caves":[
+      {"name":"Cherry Tree Hole",              "lng":-2.1826265795,   "lat":54.1287674131, "fix":"GPS"},
+      {"name":"Robinsons' Pot",                "lng":-2.1564476401,   "lat":54.1309958277, "fix":"GPS"}
+      ]},  
+    {"area":"Upper Littondale","caves":[
+      {"name":"Bown Scar",              "lng": -2.125800848161305,    "lat":54.14546398942993, "fix":"GPS"},
+      {"name":"Scoska Cave",            "lng": -2.131225554991005,    "lat":54.14762151433703, "fix":"GPS"},
+      {"name":"Spittle Croft Cave",     "lng": -2.153681471070101,    "lat":54.16340491883901, "fix":"GPS"}
+      ]},  
+    {"area":"Penyghent Gill","caves":[
+      {"name":"Out Sleets Beck Pot",           "lng":-2.2035888800,   "lat":54.1588566108, "fix":"GPS"},
+      {"name":"Snatcher Pot",                  "lng":-2.2080605502,   "lat":54.1639093963, "fix":"GPS"},
+      {"name":"Swan Dike Pot",                 "lng":-2.1999750027,   "lat":54.1651623850, "fix":"GPS"}
+      ]},  
+    {"area":"Stump Cross","caves":[
+      {"name":"Mongo Gill (South Entrance)",   "lng": -1.854916343391082, "lat":54.06458090660605, "fix":"GPS"},
+      {"name":"Mongo Gill (North Shaft)",      "lng": -1.854429327845765, "lat":54.06503236252495, "fix":"GPS"},
+      {"name":"Mongo Gill (Shockle Shaft)",    "lng": -1.859892810266359, "lat":54.06733319949943, "fix":"GPS"},
+	  {"name":"Stump Cross Caverns",           "lng":-1.8653221529,   "lat":54.0674100599, "fix":"GPS"}
+      ]},  
+    {"area":"Nidderdale","caves":[
+      {name:"Manchester Hole",    "lng":-1.848213586909452, "lat":54.18325729787104, "fix":"GPS"},
+      {name:"Goyden Pot",         "lng":-1.848606126976577, "lat":54.18074283221701, "fix":"GPS"},
+      {name:"Limley Pot",         "lng":-1.847574620483826, "lat":54.17966580464077, "fix":"GPS"},
+      {name:"Frog Pot",           "lng":-1.846104153209083, "lat":54.17645466014309, "fix":"GPS"},
+      {name:"Bax Pot",            "lng":-1.848504316306673, "lat":54.18118723655714, "fix":"GPS"},
+      {name:"New Goyden Pot",     "lng":-1.845930548682659, "lat":54.17432772359479, "fix":"GPS"},
+      {name:"Thrope Edge Pot",    "lng":-1.845982236965099, "lat":54.17420385728392, "fix":"GPS"},
+      {name:"Church Pot",         "lng":-1.848906674542448, "lat":54.17991799484947, "fix":"GPS"},
+      {name:"Nidd Head Rising 1", "lng":-1.840706320011549, "lat":54.15424877241214, "fix":"GPS"},
+      {name:"Nidd Head Rising 2", "lng":-1.839421040258117, "lat":54.15352922129624, "fix":"GPS"},
+      {name:"Tom Taylors Cave",   "lng":-1.857855821824373, "lat":54.15749181339267, "fix":"GPS"},
+      {name:"Eglins Hole",        "lng":-1.858329846405255, "lat":54.15759024569915, "fix":"GPS"},
+      {name:"Low Eglins Hole",    "lng":-1.856562790662949, "lat":54.15716359586101, "fix":"GPS"}
+      ]},  
+    {"area":"Coverdale and Bishopdale","caves":[
+      {"name":"Scrafton Pot",                  "lng":-1.8887017207,   "lat":54.2484836693}
+      ]},
+    {"area":"Wensleydale","caves":[
+      {"name":"Fossdale Beck Cave",            "lng":-2.2115306321,   "lat":54.3552966420},
+      {"name":"Keld Heads Cave",               "lng":-1.8854335162,   "lat":54.3203784452},
+      {"name":"Thackthwaite Beck Cave",        "lng":-2.0207178104,   "lat":54.3159371769},
+      {"name":"Whirley Gill Pot",              "lng":-2.0437985722,   "lat":54.3375001411}
+      ]},
+    {"area":"Swaledale and Arkengarthdale","caves":[
+      {"name":"Cliffe Force Cave",             "lng":-2.1930880367,   "lat":54.3598211569},
+      {"name":"Crackpot Cave",                 "lng":-2.0561258195,   "lat":54.3545705620},
+      {"name":"Devis Hole Mine",               "lng":-1.9222554810,   "lat":54.3599511346},
+      {"name":"Windegg Mine Caverns",          "lng":-1.9822344517,   "lat":54.4426555736}
+    ]}
+  ]  
+}
+
+

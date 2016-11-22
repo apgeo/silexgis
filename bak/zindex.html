@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <title>Speo GIS</title>x</br/>
+
+  <!--<script src="http://www.openlayers.org/api/OpenLayers.js"></script>-->
+ <!--<script src='http://maps.google.com/maps?file=api&amp;v=3&amp;key=ABQIAAAAjpkAC9ePGem0lIq5XcMiuhR_wWLPFku8Ix9i2SXYRVK3e45q1BQUd_beF8dtzKET_EteAjPdGDwqpQ'></script>-->
+ <script src='http://maps.google.com/maps/api/js?v=3&amp;sensor=false'></script>
+
+ <!-- <script src="https://code.jquery.com/jquery-1.11.2.min.js"></script>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ol3/3.5.0/ol.css" type="text/css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ol3/3.5.0/ol.js"></script>
+-->
+
+<!--<script src="http://api.maps.yahoo.com/ajaxymap?v=3.0&appid=euzuro-openlayers"></script>-->
+
+<!--<script type="text/javascript" src="//dev.virtualearth.net/REST/v1/Imagery/Metadata/Road?key=AqTGBsziZHIJYYxgivLBf0hVdrAk9mWO5cQcb8Yux8sW5M8c8opEC2lZqKR1ZZXf&amp;jsonp=_callback_OpenLayers_Layer_Bing_23&amp;include=ImageryProviders" id="_callback_OpenLayers_Layer_Bing_23"></script>
+<script type="text/javascript" src="//dev.virtualearth.net/REST/v1/Imagery/Metadata/AerialWithLabels?key=AqTGBsziZHIJYYxgivLBf0hVdrAk9mWO5cQcb8Yux8sW5M8c8opEC2lZqKR1ZZXf&amp;jsonp=_callback_OpenLayers_Layer_Bing_25&amp;include=ImageryProviders" id="_callback_OpenLayers_Layer_Bing_25"></script>
+<script type="text/javascript" src="//dev.virtualearth.net/REST/v1/Imagery/Metadata/Aerial?key=AqTGBsziZHIJYYxgivLBf0hVdrAk9mWO5cQcb8Yux8sW5M8c8opEC2lZqKR1ZZXf&amp;jsonp=_callback_OpenLayers_Layer_Bing_27&amp;include=ImageryProviders" id="_callback_OpenLayers_Layer_Bing_27"></script>
+-->
+    <script src="http://ecn.dev.virtualearth.net/mapcontrol/mapcontrol.ashx?v=6.2&mkt=en-us"></script>
+	<script src="http://openlayers.org/en/v3.12.1/build/ol.js" type="text/javascript"></script>
+	
+	<link rel="stylesheet" href="http://openlayers.org/en/v3.12.1/css/ol.css" type="text/css">    
+
+	<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>	
+  <meta name="description" content="" />
+  <script>
+  var map;
+  
+    function init() {
+		console.info('init()');
+		
+       var epsg4326 =  new ol.proj.Projection("EPSG:4326"); //WGS 1984 projection
+       var googleMercator = new ol.proj.Projection("EPSG:900913");
+	   var epsg3857 =  new ol.proj.Projection("EPSG:3857");
+
+		var scaleLineControl = new ol.control.ScaleLine();	   
+		
+        map = new ol.Map({
+        target: 'mapdiv',
+        /*layers: [
+          new ol.layer.Tile({
+            source: new ol.source.MapQuest({layer: 'sat'})
+          })
+        ],
+        view: new ol.View({
+          center: ol.proj.fromLonLat([37.41, 8.82]),
+          zoom: 4
+        })*/   
+		
+             //div: "mapdiv",
+			 //projection: googleMercator,
+             //displayProjection: epsg3857,
+			 //displayProjection: wgs84,
+			 //center: new OpenLayers.LonLat(45.669245, 25.416870).transform(new ol.proj.Projection('EPSG:4326'), new ol.proj.Projection('EPSG:3857')),
+			 zoom: 5,
+			  controls: ol.control.defaults({
+				attributionOptions: /** @type {olx.control.AttributionOptions} */ ({
+				  collapsible: false
+				})
+			  }).extend([
+				scaleLineControl
+			  ]),
+			  layers: [
+				new ol.layer.Tile({
+				  source: new ol.source.OSM()
+				})
+			  ]			 
+       } );      
+ 
+		//map.controls.addControl(new ol.control.ScaleLine());
+		//map.addControls(new ol.control.Attribution());
+       
+	   /*map.addControls(new ol.control.LayerSwitcher(),
+                        new ol.control.ScaleLine(),
+                        new ol.control.Permalink(),                    
+                        new ol.control.Attribution(),
+						//new ol.control.Navigation()
+						//new ol.control.PanZoomBar()
+						]);
+       */
+       
+       // OSM("Mapnik"/*, {projection: epsg4326}*/)); // "EPSG:3857"
+	   map.addLayer(mapQuestOpenLayer = new ol.layer.Tile({source: new ol.source.OSM()}));
+       
+	   /*map.addLayer(new ol.layer.
+       .Tile({
+  source: new ol.source.OSM({
+    attributions: [
+      new ol.Attribution({
+        html: 'All maps &copy; ' +
+            '<a href="http://www.openseamap.org/">OpenSeaMap</a>'
+      }),
+      ol.source.OSM.ATTRIBUTION
+    ],
+    crossOrigin: null,
+    url: 'http://tiles.openseamap.org/seamark/{z}/{x}/{y}.png'
+  })
+});
+	   */
+	   /*
+       var mapQuestOpenLayer;
+       map.addLayer(mapQuestOpenLayer = new ol.layer.OSM("MapQuest Open",
+											
+                                           ["http://otile1.mqcdn.com/tiles/1.0.0/osm/${z}/${x}/${y}.png",
+                                            "http://otile2.mqcdn.com/tiles/1.0.0/osm/${z}/${x}/${y}.png",
+                                            "http://otile3.mqcdn.com/tiles/1.0.0/osm/${z}/${x}/${y}.png",
+                                            "http://otile4.mqcdn.com/tiles/1.0.0/osm/${z}/${x}/${y}.png"],
+                                            { // projection: epsg3857, sphericalMercator: false,
+											attribution: "&copy; <a href='http://www.openstreetmap.org/'>OpenStreetMap</a> and contributors, under an <a href='http://www.openstreetmap.org/copyright' title='ODbL'>open license</a>. Tiles Courtesy of <a href='http://www.mapquest.com/'>MapQuest</a> <img src='http://developer.mapquest.com/content/osm/mq_logo.png'>" }));
+       
+                                            
+                                            
+       map.addLayer(new ol.layer.OSM("Humanitarian Style",                                                   
+                                           ["http://a.tile.openstreetmap.fr/hot/${z}/${x}/${y}.png",
+                                            "http://b.tile.openstreetmap.fr/hot/${z}/${x}/${y}.png",
+                                            "http://c.tile.openstreetmap.fr/hot/${z}/${x}/${y}.png"],
+                                            {attribution: "&copy; <a href='http://www.openstreetmap.org/'>OpenStreetMap</a> and contributors, under an <a href='http://www.openstreetmap.org/copyright' title='ODbL'>open license</a>. Humanitarian style by <a href='http://hot.openstreetmap.org'>H.O.T.</a>",
+                                            "tileOptions": { "crossOriginKeyword": null }}));
+       
+       
+       map.addLayer(new ol.layer.OSM("Stamen watercolour",                                                   
+                                           ["http://tile.stamen.com/watercolor/${z}/${x}/${y}.png"],
+                                            {attribution: "&copy; <a href='http://www.openstreetmap.org/'>OpenStreetMap</a> and contributors, under an <a href='http://www.openstreetmap.org/copyright' title='ODbL'>open license</a>. Watercolour style by <a href='http://stamen.com'>Stamen Design</a>",
+                                            "tileOptions": { "crossOriginKeyword": null }}));
+      
+       map.addLayer(new ol.layer.OSM("Stamen toner",                                                   
+                                           ["http://tile.stamen.com/toner/${z}/${x}/${y}.png"],
+                                            {attribution: "&copy; <a href='http://www.openstreetmap.org/'>OpenStreetMap</a> and contributors, under an <a href='http://www.openstreetmap.org/copyright' title='ODbL'>open license</a>. Toner style by <a href='http://stamen.com'>Stamen Design</a>",
+                                            "tileOptions": { "crossOriginKeyword": null }}));
+                                            
+                                            
+       map.addLayer(new ol.layer.OSM("CartoDB positron",                                                   
+                                           ["http://a.basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png",
+                                            "http://b.basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png",
+                                            "http://c.basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png",
+                                            "http://d.basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png"],
+                                            {attribution: "&copy; <a href='http://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors, &copy; <a href='http://cartodb.com/attributions'>CartoDB</a>" }));
+       map.addLayer(new ol.layer.OSM("CartoDB dark matter",                                                   
+                                           ["http://a.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png",
+                                            "http://b.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png",
+                                            "http://c.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png",
+                                            "http://d.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png"],
+                                            {attribution: "&copy; <a href='http://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors, &copy; <a href='http://cartodb.com/attributions'>CartoDB</a>" }));
+       map.addLayer(new ol.layer.OSM("CartoDB positron (no labels)",                                                   
+                                           ["http://a.basemaps.cartocdn.com/light_nolabels/${z}/${x}/${y}.png",
+                                            "http://b.basemaps.cartocdn.com/light_nolabels/${z}/${x}/${y}.png",
+                                            "http://c.basemaps.cartocdn.com/light_nolabels/${z}/${x}/${y}.png",
+                                            "http://d.basemaps.cartocdn.com/light_nolabels/${z}/${x}/${y}.png"],
+                                            {sphericalMercator: false, attribution: "&copy; <a href='http://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors, &copy; <a href='http://cartodb.com/attributions'>CartoDB</a>" }));
+		
+		map.addLayer(new ol.layer.Tile({
+        source: new ol.source.MapQuest({layer: 'sat'})
+      }));
+	  
+		// googlelayer = new ol.layer.Google.v3("Google street", {sphericalMercator: true});
+		
+		var sphericalMercatorEnabled = false;
+	   googlelayer = new ol.layer.Google("Google Satellite", {type: google.maps.MapTypeId.SATELLITE, numZoomLevels: 14, sphericalMercator: sphericalMercatorEnabled});
+	   map.addLayer(googlelayer);
+
+	      var gphy = new ol.layer.Google(
+        "Google Physical",
+        {type: google.maps.MapTypeId.TERRAIN, visibility: false, sphericalMercator: sphericalMercatorEnabled}
+    );
+    var gmap = new ol.layer.Google(
+        "Google Streets", // the default
+        {numZoomLevels: 20, visibility: false, sphericalMercator: sphericalMercatorEnabled}
+    );
+    var ghyb = new ol.layer.Google(
+        "Google Hybrid",
+        {type: google.maps.MapTypeId.HYBRID, numZoomLevels: 5, visibility: false, sphericalMercator: sphericalMercatorEnabled} // numZoomLevels: 22
+    );
+
+    map.addLayers([gsat, gphy, gmap, ghyb]);
+	
+       map.addLayer(new ol.layer.OSM("CartoDB dark matter (no labels)",
+                                           ["http://a.basemaps.cartocdn.com/dark_nolabels/${z}/${x}/${y}.png",
+                                            "http://b.basemaps.cartocdn.com/dark_nolabels/${z}/${x}/${y}.png",
+                                            "http://c.basemaps.cartocdn.com/dark_nolabels/${z}/${x}/${y}.png",
+                                            "http://d.basemaps.cartocdn.com/dark_nolabels/${z}/${x}/${y}.png"],
+                                            {attribution: "&copy; <a href='http://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors, &copy; <a href='http://cartodb.com/attributions'>CartoDB</a>" })
+											//, { isBaseLayer: true }
+											);
+		
+           //Vector Layer
+    var vectorLayer = new ol.layer.Vector("Simple Geometry", {
+        preFeatureInsert: function(feature) {
+           feature.geometry.transform(new ol.proj.Projection("EPSG:4326"),new ol.proj.Projection("EPSG:900913"))
+    }
+    });
+    map.addLayer(vectorLayer);  
+    
+	//yahooLayer = new ol.layer.Yahoo("Yahoo");
+    //        map.addLayer(yahooLayer);
+			
+
+
+        // API key for http://openlayers.org. Please get your own at
+        // http://bingmapsportal.com/ and use that instead.
+        //var apiKey = "AqTGBsziZHIJYYxgivLBf0hVdrAk9mWO5cQcb8Yux8sW5M8c8opEC2lZqKR1ZZXf";
+		var apiKey = "";
+        var map;
+        
+            //map.addControl(new ol.control.LayerSwitcher());
+
+            // var road = new ol.layer.Bing({
+                // name: "Road",
+                // key: apiKey,
+                // type: "Road"
+            // });
+            // var hybrid = new ol.layer.Bing({
+                // name: "Hybrid",
+                // key: apiKey,
+                // type: "AerialWithLabels"
+            // });
+            // var aerial = new ol.layer.Bing({
+                // name: "Aerial",
+                // key: apiKey,
+                // type: "Aerial"
+            // });
+
+            // map.addLayers([road, hybrid, aerial]);
+
+			// var shaded = new ol.layer.VirtualEarth("Shaded", {
+                // type: VEMapStyle.Shaded
+            // });
+            // var hybrid = new ol.layer.VirtualEarth("Hybrid", {
+                // type: VEMapStyle.Hybrid
+            // });
+            // var aerial = new ol.layer.VirtualEarth("Aerial", {
+                // type: VEMapStyle.Aerial
+            // });
+
+            // map.addLayers([shaded, hybrid, aerial]);
+            //map.setCenter(new OpenLayers.LonLat(-110, 45), 3);
+*/
+    			
+       //map.setBaseLayer(mapQuestOpenLayer);
+	   //var layers = this.map.getLayers();
+       //layers.insertAt(0, base_layer);
+	   
+	   //map.setBaseLayer(googlelayer);
+	   
+	       //Point
+    
+	/*var point = new OpenLayers.Geometry.Point(25.416870, 45.669245);
+    //point.transform(new ol.proj.Projection("EPSG:4326"), new ol.proj.Projection("EPSG:900913"));
+    var pointFeature = new OpenLayers.Feature.Vector(point);
+    vectorLayer.addFeatures([pointFeature]);
+	
+	   var fromProjection = new ol.proj.Projection("EPSG:4326"); // transform from WGS 1984
+       var toProjection = new ol.proj.Projection("EPSG:900913"); // to Spherical Mercator Projection
+	  */ 
+	   startLon = 25.416870;
+	   startLat = 45.669245;
+	   // 25.416870, 45.669245
+	   
+	   //var position       = new OpenLayers.LonLat(startLon, startLat).transform(fromProjection, toProjection);
+       var zoom           = 10;
+	   //var zoom = map.getZoomForResolution(76.43702827453613);
+	   //var position       = new OpenLayers.LonLat(25.416870, 45.669245).transform(new ol.proj.Projection('EPSG:4326'), new ol.proj.Projection('EPSG:3857'));
+	   
+	   //var position       = new OpenLayers.LonLat(startLon, startLat);//.transform(map.displayProjection, map.baseLayer.projection);
+	   
+	   var coord = [startLon, startLat];
+	   
+	   var position = ol.proj.transform(coord, "EPSG:4326", 'EPSG:3857'); // map.getProjectionObject()
+	   // var position = ol.proj.fromLonLat(coord).transform(new ol.proj.Projection("EPSG:4326"), new ol.proj.Projection('EPSG:3857')); // map.getProjectionObject()
+	   //document.getElementById("header").innerHTML = "displayProjection = " + map.displayProjection + "  baseLayerProjection = " + map.baseLayer.projection;
+	   console.info("displayProjection = " + map.displayProjection + "  baseLayerProjection = ?" /*+ map.baseLayer.projection*/);
+	   //map.setDisplayProjection(new ol.proj.Projection('EPSG:3857'));
+	   
+	   //map.setCenter(position, zoom);
+	   map.setView(new ol.View({
+		center: position,
+		zoom: zoom
+	  }));
+	   
+	   // map.setCenter(new OpenLayers.LonLat(10.2, 48.9).transform(
+        // new ol.proj.Projection("EPSG:4326"),
+        // map.getProjectionObject()
+    // ), 5);
+	   
+	   // map.zoomToMaxExtent();
+       //if (!map.getCenter()) map.zoomToMaxExtent();		
+	   
+	   initEditing();
+    }
+
+	function initEditing()
+	{
+	alert("init");
+		console.info('initEditing()');
+		
+	  var features = new ol.Collection();
+	  
+	  var featureOverlaySource;
+	  
+      var featureOverlay = new ol.layer.Vector({
+        source: featureOverlaySource = new ol.source.Vector({features: features}),
+        style: new ol.style.Style({
+          fill: new ol.style.Fill({
+            color: 'rgba(255, 255, 255, 0.2)'
+          }),
+          stroke: new ol.style.Stroke({
+            color: '#ffcc00',
+            width: 2
+          }),
+          image: new ol.style.Circle({
+            radius: 7,
+            fill: new ol.style.Fill({
+              color: '#ffcc33'
+            })
+          })
+        })
+      });
+      
+	  featureOverlaySource.on('addfeature', function(evt){
+    var feature = evt.feature;
+    var coords = feature.getGeometry().getCoordinates();
+	console.info(feature);
+	console.info(coords);
+});
+
+	  featureOverlay.setMap(map);
+
+      var modify = new ol.interaction.Modify({
+        features: features,
+        // the SHIFT key must be pressed to delete vertices, so
+        // that new vertices can be drawn at the same position
+        // of existing vertices
+        deleteCondition: function(event) {
+          return ol.events.condition.shiftKeyOnly(event) &&
+              ol.events.condition.singleClick(event);
+        }
+      });
+      map.addInteraction(modify);
+
+      var draw; // global so we can remove it later
+      function addInteraction() {
+        draw = new ol.interaction.Draw({
+          features: features,
+          type: /** @type {ol.geom.GeometryType} */ (typeSelect.value)
+        });
+        map.addInteraction(draw);
+      }
+
+      var typeSelect = document.getElementById('type');
+
+
+      /**
+       * Let user change the geometry type.
+       * @param {Event} e Change event.
+       */
+      typeSelect.onchange = function(e) {
+        map.removeInteraction(draw);
+        addInteraction();
+      };
+
+	  
+	  /////////////
+	  var iconFeature = new ol.Feature({
+  geometry: new ol.geom.Point(ol.proj.transform([25.416870, 45.669245], "EPSG:4326", 'EPSG:3857')),
+  name: 'marc',
+  population: 4000,
+  rainfall: 500
+});
+
+var iconStyle = new ol.style.Style({
+  image: new ol.style.Icon(/** @type {olx.style.IconOptions} */ ({
+    //anchor: [0.5, 46],
+    anchorXUnits: 'fraction',
+    anchorYUnits: 'pixels',
+    opacity: 0.75,
+    src: '<?php echo base_url(); ?>res/banda-rosie.png'
+	    //<?php echo base_url(); ?>res/banda-rosie.png"
+  }))
+});
+
+iconFeature.setStyle(iconStyle);
+
+var vectorSource = new ol.source.Vector({
+  features: [iconFeature]
+});
+
+var vectorLayer = new ol.layer.Vector({
+  source: vectorSource
+});
+
+map.addLayer(vectorLayer);
+console.info("vectorLayer");
+console.info(vectorLayer);
+	  /////////////
+	  
+      addInteraction();
+	}
+	
+	//////////////////////////////////////////////
+	// layers control
+	function switchLayer()
+	 {
+	  var checkedLayer = $('#layerswitcher input[name=layer]:checked').val();
+	  for (i = 0, ii = layers.length; i < ii; ++i) layers[i].setVisible(i==checkedLayer);
+	 }
+
+	$(function() { switchLayer() } );
+	$("#layerswitcher input[name=layer]").change(function() { switchLayer() } );
+
+	var layers = [];
+	layers[0] = new ol.layer.Tile({ source: new ol.source.MapQuest({layer: 'sat'}) });
+	layers[1] = new ol.layer.Group({ layers: [ new ol.layer.Tile({ source: new ol.source.MapQuest({layer: 'sat'}) }), new ol.layer.Tile({ source: new ol.source.MapQuest({layer: 'hyb'}) }) ] });
+	layers[2] = new ol.layer.Tile({ source: new ol.source.MapQuest({layer: 'osm'}) });
+	layers[3] = new ol.layer.Tile({ source: new ol.source.OSM() });
+
+	var map = new ol.Map({
+	  target: 'map',
+	  controls: ol.control.defaults().extend([ new ol.control.ScaleLine({ units:'metric' }) ]),
+	  layers: layers,
+	  view: new ol.View({
+		center: ol.proj.transform([0, 10], 'EPSG:4326', 'EPSG:3857'),
+		zoom: 3
+	  })
+	});
+	/////////////////////////////////////////////
+		
+	//initEditing();
+  </script>
+  
+  <style type="text/css">
+    html, body, #mapdiv {
+        width:100%; height:100%; margin:0;
+    }
+  </style>
+      <style>
+      .mapdiv {
+        height: 400px;
+        width: 100%;
+      }
+
+html           { width:100%; height:100%; margin:0; }
+body           { width:100%; height:100%; margin:0; font-family:sans-serif; }
+#map           { width:100%; height:100%; margin:0; }
+#toolbox       { position:absolute; top:8px; right:8px; padding:3px; border-radius:4px; color:#fff; background: rgba(255, 255, 255, 0.4); z-index:100; }
+#layerswitcher { margin:0; padding:10px; border-radius:4px; background:rgba(0, 60, 136, 0.5); list-style-type:none; } 
+	  
+    </style>
+
+</head>
+
+<body onload="init();">
+  <!--<span id="header">z</div>-->
+  <div id="mapdiv" class="mapdiv" ></div>
+  <div div id="toolbox">
+	<ul id="layerswitcher">
+		<li><label><input type="radio" name="layer" value="0" checked=""> MapQuest Satellite</label></li>
+		<li><label><input type="radio" name="layer" value="1"> MapQuest Hybrid</label></li>
+		<li><label><input type="radio" name="layer" value="2"> MapQuest OSM</label></li>
+		<li><label><input type="radio" name="layer" value="3"> OSM</label></li>
+	</ul>
+	</div>
+    <form class="form-inline">
+      <label>Geometry type &nbsp;</label>
+      <select id="type">
+        <option value="Point">Point</option>
+        <option value="LineString">LineString</option>
+        <option value="Polygon">Polygon</option>
+      </select>
+    </form>  
+</body>
+
+</html>
+    

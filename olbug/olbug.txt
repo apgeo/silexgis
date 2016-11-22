@@ -1,0 +1,2421 @@
+{
+	"type": "FeatureCollection",
+	"features": [{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-9.69895107513e-233,
+			-1.49616596331e+18]
+		},
+		"properties": {
+			"id": 1,
+			"lat": 25.303944,
+			"long": 45.91986,
+			"elevation": 469,
+			"gpx_name": "18-10-2015 01:55:30",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-17 22:55:30",
+			"_type": 0,
+			"_details": 11,
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:13",
+			"_id_point_type": 0
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.2181149736e-32,
+			8.06444274391e+79]
+		},
+		"properties": {
+			"id": 2,
+			"lat": 25.312,
+			"long": 45.92434,
+			"elevation": 600,
+			"gpx_name": "bazin acum xdezafectat 18-10-201",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "comment 1",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-18 09:20:21",
+			"_type": 0,
+			"_details": "x",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:13",
+			"_id_point_type": 6
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.16317561634e-32,
+			-5.72656112108e+16]
+		},
+		"properties": {
+			"id": 3,
+			"lat": 25.30546,
+			"long": 45.91728,
+			"elevation": 676,
+			"gpx_name": "if18-10-2015 12:46:21",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-18 09:46:48",
+			"_type": 0,
+			"_details": "zz",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:13",
+			"_id_point_type": 3
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-3.0256293167e-141,
+			-2.64735568649e+54]
+		},
+		"properties": {
+			"id": 4,
+			"lat": 25.30326,
+			"long": 45.91887,
+			"elevation": 671,
+			"gpx_name": "g aer cald ziua 2 18-10-2015 12",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-18 09:57:32",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:13",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [9.35139989815e+65,
+			-1.06745853494e+12]
+		},
+		"properties": {
+			"id": 5,
+			"lat": 25.303244,
+			"long": 45.918867,
+			"elevation": 671,
+			"gpx_name": "18-10-2015 12:57:38",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-18 09:57:38",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:13",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [9.471863285e-185,
+			1.69478787677e+58]
+		},
+		"properties": {
+			"id": 6,
+			"lat": 25.30508,
+			"long": 45.92062,
+			"elevation": 649,
+			"gpx_name": "intrare drum capat vale doline",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-18 13:38:19",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:13",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.1993642531e-32,
+			9.03587735642e-99]
+		},
+		"properties": {
+			"id": 7,
+			"lat": 25.30913,
+			"long": 45.9154,
+			"elevation": 616,
+			"gpx_name": "lanovici 17-10-2015 10:37:18",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-17 07:37:44",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:41",
+			"_id_point_type": 3
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.1993642531e-32,
+			-3.96244826218e+15]
+		},
+		"properties": {
+			"id": 8,
+			"lat": 25.30913,
+			"long": 45.91541,
+			"elevation": 298,
+			"gpx_name": "17-10-2015 10:37:47",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "lanovici avg",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-17 07:40:55",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:41",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-7.05739179184e-151,
+			2.31308096301e-302]
+		},
+		"properties": {
+			"id": 9,
+			"lat": 25.30323,
+			"long": 45.91889,
+			"elevation": 614,
+			"gpx_name": "g aer 17-10-2015 12:02:17",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "g aer",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-17 09:20:46",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:41",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-7.05739179184e-151,
+			8.98971856864e+236]
+		},
+		"properties": {
+			"id": 10,
+			"lat": 25.30323,
+			"long": 45.91844,
+			"elevation": 674,
+			"gpx_name": "g dol 4m molii 17-10-2015 14:03",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-17 11:04:46",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:41",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.33259442822e-295,
+			3.78873318063e+90]
+		},
+		"properties": {
+			"id": 11,
+			"lat": 25.30328,
+			"long": 45.9184,
+			"elevation": 681,
+			"gpx_name": "dolina mare de sub drum 17-10-2",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "copac peste",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-17 11:06:33",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:41",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-0.14601937191,
+			2.91431775683e-177]
+		},
+		"properties": {
+			"id": 12,
+			"lat": 25.30371,
+			"long": 45.91932,
+			"elevation": 676,
+			"gpx_name": "dolina straturi 17-10-2015 14:1",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "copac peste",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-17 11:20:32",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:41",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-0.14601937191,
+			-9.3831544396e-162]
+		},
+		"properties": {
+			"id": 13,
+			"lat": 25.30371,
+			"long": 45.91955,
+			"elevation": 679,
+			"gpx_name": "dol dora 17-10-2015 14:23:22",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-17 11:23:58",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:41",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [3.78640339574e+65,
+			-5.18691075781e+17]
+		},
+		"properties": {
+			"id": 14,
+			"lat": 25.3039,
+			"long": 45.91994,
+			"elevation": 673,
+			"gpx_name": "dolina cu sapa 17-10-2015 14:25",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-17 11:26:02",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:41",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.16317561634e-32,
+			-5.72656112108e+16]
+		},
+		"properties": {
+			"id": 17,
+			"lat": 25.30546,
+			"long": 45.91728,
+			"elevation": 676,
+			"gpx_name": "if18-10-2015 12:46:21",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-18 09:46:48",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:54:45",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-0.14601937191,
+			2.91431775683e-177]
+		},
+		"properties": {
+			"id": 26,
+			"lat": 25.30371,
+			"long": 45.91932,
+			"elevation": 676,
+			"gpx_name": "dolina straturi 17-10-2015 14:1",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "copac peste",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-17 11:20:32",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:55:38",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-0.14601937191,
+			-9.3831544396e-162]
+		},
+		"properties": {
+			"id": 27,
+			"lat": 25.30371,
+			"long": 45.91955,
+			"elevation": 679,
+			"gpx_name": "dol dora 17-10-2015 14:23:22",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-17 11:23:58",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:55:38",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.16317561634e-32,
+			-5.72656112108e+16]
+		},
+		"properties": {
+			"id": 31,
+			"lat": 25.30546,
+			"long": 45.91728,
+			"elevation": 676,
+			"gpx_name": "if18-10-2015 12:46:21",
+			"gpx_sym": "flag, blue",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "2015-10-18 09:46:48",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:55:45",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [25.293659,
+			3.89672090538e+152]
+		},
+		"properties": {
+			"id": 35,
+			"lat": 25.293659,
+			"long": 45.924793,
+			"elevation": 708,
+			"gpx_name": "2 doline",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.06462242155e+51,
+			-2.77130064908e-218]
+		},
+		"properties": {
+			"id": 36,
+			"lat": 25.626141,
+			"long": 45.719831,
+			"elevation": 0,
+			"gpx_name": "acas\u00c4\u0192",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.11862874102e-242,
+			3.07956838786e+20]
+		},
+		"properties": {
+			"id": 37,
+			"lat": 25.302934,
+			"long": 45.916451,
+			"elevation": 482,
+			"gpx_name": "aven 1 sub ponor",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 4
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-5.98251095205e+12,
+			-3.31696406695e-11]
+		},
+		"properties": {
+			"id": 38,
+			"lat": 25.299085,
+			"long": 45.91865,
+			"elevation": 722,
+			"gpx_name": "aven cu vatra",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 4
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.10973700888e-136,
+			-3.17956960325e-218]
+		},
+		"properties": {
+			"id": 39,
+			"lat": 25.300347,
+			"long": 45.930134,
+			"elevation": 577,
+			"gpx_name": "avenul 1",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 4
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.09314513098e+66,
+			2.49747389461e+156]
+		},
+		"properties": {
+			"id": 40,
+			"lat": 25.303293,
+			"long": 45.924817,
+			"elevation": 614,
+			"gpx_name": "avenul 10",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 4
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [3.23929880101e+66,
+			-8.0225064578e-74]
+		},
+		"properties": {
+			"id": 41,
+			"lat": 25.303685,
+			"long": 45.915823,
+			"elevation": 672,
+			"gpx_name": "avenul 2 sub ponor",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 4
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-1.86507107094e-266,
+			-4.36489520169e+12]
+		},
+		"properties": {
+			"id": 42,
+			"lat": 25.299603,
+			"long": 45.924709,
+			"elevation": 656,
+			"gpx_name": "avenul andrea",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 4
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.80808290375e+61,
+			-1.1963000262e+13]
+		},
+		"properties": {
+			"id": 43,
+			"lat": 25.298911,
+			"long": 45.916007,
+			"elevation": 636,
+			"gpx_name": "avenul de la paducel",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 4
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-3.12873429871e+12,
+			-1.5674233593e+13]
+		},
+		"properties": {
+			"id": 44,
+			"lat": 25.303677,
+			"long": 45.928809,
+			"elevation": 554,
+			"gpx_name": "avenul elevilor",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 4
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.17373657301e-6,
+			-1.78017909309e+17]
+		},
+		"properties": {
+			"id": 45,
+			"lat": 25.303684,
+			"long": 45.928861,
+			"elevation": 556,
+			"gpx_name": "avenul elevilor 1",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 4
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [9.87963593197e+65,
+			-1.10835760418e+18]
+		},
+		"properties": {
+			"id": 46,
+			"lat": 25.304233,
+			"long": 45.929834,
+			"elevation": 532,
+			"gpx_name": "avenul grataristilor",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 4
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [5.7834468963e+70,
+			-1.18907682039e-208]
+		},
+		"properties": {
+			"id": 47,
+			"lat": 25.307135,
+			"long": 45.917729,
+			"elevation": 576,
+			"gpx_name": "avenul lui bubita",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 4
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.12553673347e-32,
+			-4.28065040652e+17]
+		},
+		"properties": {
+			"id": 48,
+			"lat": 25.301643,
+			"long": 45.928584,
+			"elevation": 571,
+			"gpx_name": "avenul pacaleli",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 4
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-1.85610837011e+18,
+			-3.68111448842e-300]
+		},
+		"properties": {
+			"id": 49,
+			"lat": 25.304195,
+			"long": 45.927302,
+			"elevation": 570,
+			"gpx_name": "avenul prabusit langa elevilor",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 4
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.22047357555e+16,
+			2.00738275323e-292]
+		},
+		"properties": {
+			"id": 50,
+			"lat": 23.829401,
+			"long": 45.251038,
+			"elevation": 1260,
+			"gpx_name": "biserica haiducilor",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.04991819292e-122,
+			-1.52634539666e+13]
+		},
+		"properties": {
+			"id": 51,
+			"lat": 26.151781,
+			"long": 44.412829,
+			"elevation": 63,
+			"gpx_name": "bogdan marinescu",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.10511559447e-136,
+			-3.69447850435e+15]
+		},
+		"properties": {
+			"id": 52,
+			"lat": 23.866194,
+			"long": 45.281233,
+			"elevation": 1571,
+			"gpx_name": "capat drum",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-3.99834200584e-170,
+			-3.91635100668e-285]
+		},
+		"properties": {
+			"id": 53,
+			"lat": 23.819768,
+			"long": 45.250636,
+			"elevation": 1036,
+			"gpx_name": "capat drum cerna",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [9.03384649623e+117,
+			7.54017949318e-65]
+		},
+		"properties": {
+			"id": 54,
+			"lat": 23.841193,
+			"long": 45.256215,
+			"elevation": 1418,
+			"gpx_name": "capat drum kangoo marita 1",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-5.65255946131e-170,
+			-5.72218220385e+17]
+		},
+		"properties": {
+			"id": 55,
+			"lat": 25.299199,
+			"long": 45.910722,
+			"elevation": 615,
+			"gpx_name": "carolesti",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 3
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [6.92517871081e-192,
+			-1.59958799653e+17]
+		},
+		"properties": {
+			"id": 56,
+			"lat": 12.64081,
+			"long": 41.553186,
+			"elevation": 76,
+			"gpx_name": "casa aprilia",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [3.99834496782e-190,
+			-6.22982689136e-276]
+		},
+		"properties": {
+			"id": 57,
+			"lat": 23.85975,
+			"long": 45.278129,
+			"elevation": 1455,
+			"gpx_name": "chei si grota",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-3.51393197664e-247,
+			-2.50237922941e+13]
+		},
+		"properties": {
+			"id": 58,
+			"lat": 12.480077,
+			"long": 41.900886,
+			"elevation": 10,
+			"gpx_name": "columna lui traian",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-3.83392749551e+16,
+			7.22731216761e+49]
+		},
+		"properties": {
+			"id": 59,
+			"lat": 12.481209,
+			"long": 41.894357,
+			"elevation": 58,
+			"gpx_name": "de vazut",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-4.18666513937e-223,
+			-5.93128047157e-122]
+		},
+		"properties": {
+			"id": 60,
+			"lat": 23.850851,
+			"long": 45.277495,
+			"elevation": 1587,
+			"gpx_name": "dolina 1",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-1.11294755573e+15,
+			-4.47945816672e-40]
+		},
+		"properties": {
+			"id": 61,
+			"lat": 23.836176,
+			"long": 45.258026,
+			"elevation": 1349,
+			"gpx_name": "dolina 1 1",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-7.8565840368e-204,
+			-169173520263]
+		},
+		"properties": {
+			"id": 62,
+			"lat": 23.83576,
+			"long": 45.258351,
+			"elevation": 1389,
+			"gpx_name": "dolina 2",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-9.38297421241e-162,
+			23.5850180247]
+		},
+		"properties": {
+			"id": 63,
+			"lat": 23.835906,
+			"long": 45.258457,
+			"elevation": 1391,
+			"gpx_name": "dolina 3 cerna",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-8.7078019743e+14,
+			8.13178164124e-287]
+		},
+		"properties": {
+			"id": 64,
+			"lat": 23.836071,
+			"long": 45.258636,
+			"elevation": 1393,
+			"gpx_name": "dolina 4 cerna",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-8.3394645702e+14,
+			-2.13017988566e-304]
+		},
+		"properties": {
+			"id": 65,
+			"lat": 23.836055,
+			"long": 45.258779,
+			"elevation": 1396,
+			"gpx_name": "dolina 5 cerna",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-1.09129352366e-102,
+			-2.14038664524e+17]
+		},
+		"properties": {
+			"id": 66,
+			"lat": 25.298659,
+			"long": 45.919106,
+			"elevation": 693,
+			"gpx_name": "dolina alex",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-4.38121251008e-93,
+			-8.94415535606e+14]
+		},
+		"properties": {
+			"id": 67,
+			"lat": 25.30341,
+			"long": 45.918975,
+			"elevation": 667,
+			"gpx_name": "dolina cea mai clara",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.09363731538e-32,
+			-2.54695836638e-112]
+		},
+		"properties": {
+			"id": 68,
+			"lat": 25.298408,
+			"long": 45.918851,
+			"elevation": 709,
+			"gpx_name": "dolina copac la 90",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-1.45685599562e+167,
+			-4.02960246835e-152]
+		},
+		"properties": {
+			"id": 69,
+			"lat": 25.302809,
+			"long": 45.928825,
+			"elevation": 555,
+			"gpx_name": "dolina deschisa",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-8.43151296513e+16,
+			-5.99696405416e+16]
+		},
+		"properties": {
+			"id": 70,
+			"lat": 25.292823,
+			"long": 45.925794,
+			"elevation": 785,
+			"gpx_name": "dolina mare + 3",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.14243150138e-32,
+			-5.60469166823e-305]
+		},
+		"properties": {
+			"id": 71,
+			"lat": 25.303352,
+			"long": 45.91848,
+			"elevation": 666,
+			"gpx_name": "dolina mare de sub drum",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.02706714624e+71,
+			-1.90977543068e+18]
+		},
+		"properties": {
+			"id": 72,
+			"lat": 25.308307,
+			"long": 45.917557,
+			"elevation": 583,
+			"gpx_name": "dolina mare din valea 2",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-1.63598796888e+13,
+			-2.53480621774e+165]
+		},
+		"properties": {
+			"id": 73,
+			"lat": 25.303706,
+			"long": 45.915759,
+			"elevation": 662,
+			"gpx_name": "dolina rece ??",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.2200984854e+69,
+			4.81082869112e-77]
+		},
+		"properties": {
+			"id": 74,
+			"lat": 25.305769,
+			"long": 45.91553,
+			"elevation": 629,
+			"gpx_name": "dolina superece",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [8.05308144127e+31,
+			-1.18382853147e-25]
+		},
+		"properties": {
+			"id": 75,
+			"lat": 25.305768,
+			"long": 45.915526,
+			"elevation": 628,
+			"gpx_name": "dolina superrece",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [2.01226670991e+238,
+			5.19871571323e-182]
+		},
+		"properties": {
+			"id": 76,
+			"lat": 23.822043,
+			"long": 45.237965,
+			"elevation": 1150,
+			"gpx_name": "g 13 sau g8",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-6.75900452141e+17,
+			-1.47105838604e+13]
+		},
+		"properties": {
+			"id": 77,
+			"lat": 25.300028,
+			"long": 45.92743,
+			"elevation": 601,
+			"gpx_name": "gaura manzului",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 5
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-1.08578459103e-102,
+			-1.74027229343e-160]
+		},
+		"properties": {
+			"id": 78,
+			"lat": 23.85514,
+			"long": 45.281258,
+			"elevation": 1587,
+			"gpx_name": "gauriciu 1",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-6.41963359434e-210,
+			-1.03941124867e+12]
+		},
+		"properties": {
+			"id": 79,
+			"lat": 23.873239,
+			"long": 45.174527,
+			"elevation": 610,
+			"gpx_name": "intrare in drum 1 marita",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-1.42362993113e+165,
+			3937.62531348]
+		},
+		"properties": {
+			"id": 80,
+			"lat": 12.543947,
+			"long": 41.928984,
+			"elevation": 17,
+			"gpx_name": "ioana si catalin",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-3.50705786686e-11,
+			-4.51403798193e-146]
+		},
+		"properties": {
+			"id": 81,
+			"lat": 25.304646,
+			"long": 45.931107,
+			"elevation": 526,
+			"gpx_name": "izbucul sapatorilor",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.1014982267e-304,
+			-5.25370977593e-69]
+		},
+		"properties": {
+			"id": 82,
+			"lat": 23.849723,
+			"long": 45.275398,
+			"elevation": 1491,
+			"gpx_name": "izvorul rece",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.12795342978e-304,
+			-2.9134250942e+167]
+		},
+		"properties": {
+			"id": 83,
+			"lat": 25.298241,
+			"long": 45.918415,
+			"elevation": 705,
+			"gpx_name": "la bursucul parlit",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.10632198491e-32,
+			-65779298633.9]
+		},
+		"properties": {
+			"id": 84,
+			"lat": 25.299306,
+			"long": 45.91747,
+			"elevation": 672,
+			"gpx_name": "langa paducel",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [5.19071494084e-286,
+			2.52157504052e+150]
+		},
+		"properties": {
+			"id": 85,
+			"lat": 29.097728,
+			"long": 45.189539,
+			"elevation": 4,
+			"gpx_name": "loc imbarcare",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.72128286956e-218,
+			-5.26090153737e+15]
+		},
+		"properties": {
+			"id": 86,
+			"lat": 23.821142,
+			"long": 45.240332,
+			"elevation": 1098,
+			"gpx_name": "oltenilor",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 3
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.0106449022e-136,
+			8.1399786274e+237]
+		},
+		"properties": {
+			"id": 87,
+			"lat": 25.303283,
+			"long": 45.917521,
+			"elevation": 645,
+			"gpx_name": "parasim drumul",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.79048524163e-35,
+			-2.11371282463e-304]
+		},
+		"properties": {
+			"id": 88,
+			"lat": 23.834851,
+			"long": 45.259717,
+			"elevation": 1333,
+			"gpx_name": "pereti valcel b",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-1.77434619548e+15,
+			1.94760978008e+177]
+		},
+		"properties": {
+			"id": 89,
+			"lat": 23.816791,
+			"long": 45.240292,
+			"elevation": 920,
+			"gpx_name": "pestera cu ceasul lui dan",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 3
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-8.42272111704e+16,
+			-2.9146284506e-88]
+		},
+		"properties": {
+			"id": 90,
+			"lat": 23.829879,
+			"long": 45.260439,
+			"elevation": 1125,
+			"gpx_name": "pierdere 1",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-9.382151043e-162,
+			-2.27435417438e-59]
+		},
+		"properties": {
+			"id": 91,
+			"lat": 23.830143,
+			"long": 45.206961,
+			"elevation": 764,
+			"gpx_name": "pod rupt cerna",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-1.0069251352e-285,
+			1.59149595536e-74]
+		},
+		"properties": {
+			"id": 92,
+			"lat": 23.858462,
+			"long": 45.278003,
+			"elevation": 1461,
+			"gpx_name": "ponor 2",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [3.80031007575e-7,
+			-5.18981428186e-16]
+		},
+		"properties": {
+			"id": 93,
+			"lat": 23.832986,
+			"long": 45.259281,
+			"elevation": 1336,
+			"gpx_name": "ponor fosil valcel b",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-5.3609263683e+17,
+			4.02895662394e+258]
+		},
+		"properties": {
+			"id": 94,
+			"lat": 23.823572,
+			"long": 45.240707,
+			"elevation": 1058,
+			"gpx_name": "ponor rusallii",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [6.20549817745e+68,
+			-1.03931116904e+12]
+		},
+		"properties": {
+			"id": 95,
+			"lat": 25.305527,
+			"long": 45.912092,
+			"elevation": 609,
+			"gpx_name": "ponor suflatoare 2",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.23571752036e+167,
+			9.47037918046e-163]
+		},
+		"properties": {
+			"id": 96,
+			"lat": 25.30229,
+			"long": 45.916477,
+			"elevation": 621,
+			"gpx_name": "ponor valea 2",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.20822787807e+59,
+			3.45452915129e+284]
+		},
+		"properties": {
+			"id": 97,
+			"lat": 25.297657,
+			"long": 45.924209,
+			"elevation": 667,
+			"gpx_name": "prima gaura",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-7.76141618678e-186,
+			-5.34318366808e-16]
+		},
+		"properties": {
+			"id": 98,
+			"lat": 23.823785,
+			"long": 45.241387,
+			"elevation": 1076,
+			"gpx_name": "rusaliilor",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 3
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-3.23457178098e-141,
+			-5.5408270388e-122]
+		},
+		"properties": {
+			"id": 99,
+			"lat": 23.823772,
+			"long": 45.241358,
+			"elevation": 1067,
+			"gpx_name": "rusaliilor 1",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 3
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.67342559687e-167,
+			1.12507685845e-80]
+		},
+		"properties": {
+			"id": 100,
+			"lat": 25.309041,
+			"long": 45.915507,
+			"elevation": 532,
+			"gpx_name": "suflatoare",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [2.18058733331e-132,
+			7.64021941081e+306]
+		},
+		"properties": {
+			"id": 101,
+			"lat": 25.309156,
+			"long": 45.915353,
+			"elevation": 577,
+			"gpx_name": "suflatoare 1",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.11849435907e-304,
+			-5.59039750434e+24]
+		},
+		"properties": {
+			"id": 102,
+			"lat": 25.306146,
+			"long": 45.912147,
+			"elevation": 602,
+			"gpx_name": "suflatoare 2 dora",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.61861398289e+70,
+			-1.72891294344e-160]
+		},
+		"properties": {
+			"id": 103,
+			"lat": 23.817608,
+			"long": 45.248291,
+			"elevation": 941,
+			"gpx_name": "tabara 1 mai",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.04640777644e-168,
+			-4.27677578699e-40]
+		},
+		"properties": {
+			"id": 104,
+			"lat": 29.113523,
+			"long": 45.201359,
+			"elevation": -7,
+			"gpx_name": "tabara 2 sor 2014",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.78111644007e-218,
+			-7.31882460704e-151]
+		},
+		"properties": {
+			"id": 105,
+			"lat": 29.114072,
+			"long": 45.202381,
+			"elevation": 7,
+			"gpx_name": "tabara sor 2014",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-2.28850328034e+18,
+			-862516798502]
+		},
+		"properties": {
+			"id": 106,
+			"lat": 28.769268,
+			"long": 44.430595,
+			"elevation": -1,
+			"gpx_name": "tabara sor 3 2014",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-4.25061767898e-223,
+			-2.16034244869e-189]
+		},
+		"properties": {
+			"id": 107,
+			"lat": 23.819028,
+			"long": 45.23962,
+			"elevation": 1201,
+			"gpx_name": "tribunal",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": 3
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [1.03264685791e-16,
+			-2.10792937093e-304]
+		},
+		"properties": {
+			"id": 108,
+			"lat": 23.83296,
+			"long": 45.252747,
+			"elevation": 1235,
+			"gpx_name": "valcelul iula",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:21",
+			"_id_point_type": null
+		}
+	},
+	{
+		"type": "Feature",
+		"geometry": {
+			"type": "Point",
+			"coordinates": [-9.34439033726e-233,
+			-3.39054267261e-11]
+		},
+		"properties": {
+			"id": 109,
+			"lat": 25.56179,
+			"long": 45.659345,
+			"elevation": 0,
+			"gpx_name": "",
+			"gpx_sym": "",
+			"gpx_type": "",
+			"gpx_cmt": "",
+			"gpx_sat": null,
+			"gpx_fix": "",
+			"gpx_time": "0000-00-00 00:00:00",
+			"_type": 0,
+			"_details": "",
+			"added_by_user_id": 1,
+			"add_time": "2016-04-19 19:56:51",
+			"_id_point_type": null
+		}
+	}]
+}

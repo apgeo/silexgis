@@ -1,0 +1,112 @@
+/* Bar style */
+.ol-control.ol-bar
+{	left: 50%;
+	min-height: 1em;
+	min-width: 1em;
+	position: absolute;
+	top: 0.5em;
+	transform: translate(-50%,0);
+	-webkit-transform: translate(-50%,0);
+}
+
+/* Default position for controls */
+.ol-control.ol-bar .ol-control
+{	position: static;
+	display: inline-block;
+	vertical-align: middle;
+	background: none;
+	padding: 0;
+	margin: 0;
+	transform: none;
+	-webkit-transform: none;
+}
+.ol-control.ol-bar .ol-control button
+{	margin:2px 1px;
+}
+
+/* Positionning */
+.ol-control.ol-bar.ol-left
+{	left: 0.5em;
+	top: 50%;
+	transform: translate(0px, -50%);
+}
+.ol-control.ol-bar.ol-left .ol-control
+{	display: block;
+}
+
+.ol-control.ol-bar.ol-right
+{	left: auto;
+	right: 0.5em;
+	top: 50%;
+	transform: translate(0px, -50%);
+}
+.ol-control.ol-bar.ol-right .ol-control
+{	display: block;
+}
+
+.ol-control.ol-bar.ol-bottom
+{	top: auto;
+	bottom: 0.5em;
+}
+
+.ol-control.ol-bar.ol-top.ol-left,
+.ol-control.ol-bar.ol-top.ol-right
+{	top: 0.5em;
+	transform:none;
+}
+.ol-control.ol-bar.ol-bottom.ol-left,
+.ol-control.ol-bar.ol-bottom.ol-right
+{	top: auto;
+	bottom: 0.5em;
+	transform:none;
+}
+
+
+
+/* Group buttons */
+.ol-control.ol-bar.ol-group
+{	margin: 1px 1px 1px 0;
+}
+.ol-control.ol-bar.ol-right .ol-group,
+.ol-control.ol-bar.ol-left .ol-group
+{	margin: 1px 1px 0 1px;
+}
+
+.ol-control.ol-bar.ol-group button
+{	border-radius:0;
+	margin: 0 0 0 1px;
+}
+.ol-control.ol-bar.ol-right.ol-group button,
+.ol-control.ol-bar.ol-left.ol-group button,
+.ol-control.ol-bar.ol-right .ol-group button,
+.ol-control.ol-bar.ol-left .ol-group button
+{	margin: 0 0 1px 0;
+}
+.ol-control.ol-bar.ol-group .ol-control:first-child > button
+{	border-radius: 5px 0 0 5px;
+}
+.ol-control.ol-bar.ol-group .ol-control:last-child > button
+{	border-radius: 0 5px 5px 0;
+}
+.ol-control.ol-bar.ol-left.ol-group .ol-control:first-child > button,
+.ol-control.ol-bar.ol-right.ol-group .ol-control:first-child > button,
+.ol-control.ol-bar.ol-left .ol-group .ol-control:first-child > button,
+.ol-control.ol-bar.ol-right .ol-group .ol-control:first-child > button
+{	border-radius: 5px 5px 0 0;
+}
+.ol-control.ol-bar.ol-left.ol-group .ol-control:last-child > button,
+.ol-control.ol-bar.ol-right.ol-group .ol-control:last-child > button,
+.ol-control.ol-bar.ol-left .ol-group .ol-control:last-child > button,
+.ol-control.ol-bar.ol-right .ol-group .ol-control:last-child > button
+{	border-radius: 0 0 5px 5px;
+}
+
+
+/* Active buttons */
+.ol-control.ol-bar .ol-toggle.ol-active button
+{	background: rgba(60, 136, 0, 0.7)
+}
+.ol-control.ol-bar .ol-toggle.ol-active button:hover
+{	background: rgba(60, 136, 0, 0.7)
+}
+

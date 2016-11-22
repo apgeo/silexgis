@@ -1,0 +1,71 @@
+
+
+views?
+
+id
+title
+
+cave
+
+1.
+identification_code / nr. cod
+
+2.
+synonims (split by ;, tags)
+
+3.
+rock_type / sediment_type
+rock_age / sediment_age
+hydrographic_area (Baz. hidrogr.)
+valley
+afluent?
+closest_address?
+
+
+
+5.
+cave_entrances
+
+
+6.
+main_entrance_id
+
+7. 
+etages
+cave_sections
+
+9 denivelation
+
+negative_denivelation
+pozitive_denivelation
+absolute_denivelation
+
+depth?
+
+10.
+real_extension
+projected_extension
+
+exploration_status (not explored, partially explored, finished)
+
+11.
+protection_class
+
+
+
+
+cave_sections ?
+section_hidrology_type (active, subfossil, fossil)
+section_morphology_type (structural, freatic, vadoasa?)
+
+cave_entrances
+
+entrance_height
+entrance_width
+morphology_type (cave, pit, abri?, impenetrable, mine gallery, mine pit)
+hidrology_type (1. Resurgenta perm. 3. imergenta perm. 4. imergenta  temp.5. functionare dubla  6.fosila  7.fosila, dar în pestera exista circulatie perm. 8.fosila, dar în pestera exista circulatie temp.2  Resurgenta temp.)
+azimuth
+
+altitude
+relative_altitude
+potential_ denivelation/depth?

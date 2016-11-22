@@ -1,0 +1,1146 @@
+<?php
+    include_once 'header.php';
+	include_once 'main_page_logger.php';
+?>
+
+
+
+<script type="text/javascript" src="/speogis/scripts/main_map.js"></script>
+<!--<body onload="init();">-->
+
+<div class="ui-layout-center">						
+	<div id="mapdiv" class="mapdiv" >
+	
+	
+	  <div id="toolbox">
+		<div id="layerswitcher_header" onclick="toggleMapLayerSelector();" > B</div>
+	<ul id="layerswitcher" onchange="switchLayer();" >
+		<li><label><input type="radio" name="layer" value="0" checked="">OSM</label></li>
+		<!--<li><label><input type="radio" name="layer" value="1"> MapQuest Satellitar</label></li>
+		<li><label><input type="radio" name="layer" value="2"> MapQuest Hybrid</label></li>
+		<li><label><input type="radio" name="layer" value="3"> MapQuest OSM</label></li>
+		-->
+		<li><label><input type="radio" name="layer" value="1"> ESRI</label></li>
+		<li><label><input type="radio" name="layer" value="2"> Bing Topo</label></li>
+		<li><label><input type="radio" name="layer" value="3"> Bing Aerial</label></li>
+		<li><label><input type="radio" name="layer" value="4"> Bing labelled</label></li>
+		<!--<li><label><input type="radio" name="layer" value="5"> x1</label></li>
+		<li><label><input type="radio" name="layer" value="6"> x2</label></li>
+		<li><label><input type="radio" name="layer" value="7"> x3</label></li>
+		<li><label><input type="radio" name="layer" value="8"> x4</label></li>-->
+		<!--<li><label><input type="radio" name="layer" value="8"> OpenLayers local</label></li>		-->
+		<!--<li><label><input type="checkbox" name="layer" value="99"> Harta gelogica 1970</label></li>		-->
+	</ul>
+	</div>
+
+	<div id="measurementsBox">	
+	<form class="form-inline">
+	  <label><input type="checkbox" onchange="" id="measurementCheckBox" value="99"/>Distances </label>
+      <label>Type:&nbsp;</label>
+        <select id="measure_type">
+          <option value="length">Distance</option>
+          <option value="area">Area</option>
+        </select>
+        <label class="checkbox">
+          <input type="checkbox" id="geodesic"/>
+          Geodesic measurement
+		  
+        </label>
+		<!--
+		<button type="button" onclick="selectDrawFeature('Point');" >Point</button>
+		<button type="button" onclick="selectDrawFeature('LineString');" >Line</button>
+		<button type="button" onclick="selectDrawFeature('Polygon');" >Polygon</button>
+		<button type="button" onclick="selectDrawFeature('MultiPolygon');" >MP</button>
+		-->
+		
+		<!--<button type="button" onclick="enableDrawNewCave();" >Add new cave</button>
+		-->
+		<!--<button type="button" onclick="newCave();" > Adauga pestera</button>-->
+		<!--<button type="button" onclick="newCave(1);" > Editeaza test</button>-->
+		</form>		
+</div>
+
+<div id="search_popup" class="ol-popup">
+      <a href="#" id="search-popup-closer" class="ol-popup-closer"></a>
+      <div id="search-popup-content"></div>
+    </div>
+	</div>
+	</div>
+<!--<div class="ui-layout-north">North</div>-->
+<div class="ui-layout-south">
+	<div>
+	
+		<label><input type="checkbox" onchange="" id="hgPersaniCentruCheckBox" value="false"/><a href='./assets/layer_images/persani_comana_geologica.jpg' target='_blank' >Gelogic Map 1970 - persani centru</a><label>
+		<!--<a href='./assets/layer_images/persani_comana_geologica.jpg' target='_blank' >geologica persani centru</a>-->
+		
+		<div id="slider-id"><div class="ui-slider-handle">X</div></div>
+		
+	</div>
+
+</div>
+
+<div class="ui-layout-east">
+
+<div id="mapViewsControlBox" >
+Map views:
+<br/>
+<br/>
+<br/>
+
+</div>
+
+<div id="drawControlBox" >
+<b>Features:</b><br/>
+
+</div>
+
+</div>
+<div class="ui-layout-west">
+	<div class="layerSwitcher"><b>Map layers</b></div>
+	<div class="options">
+		<!--<h2>Options:</h2>-->
+		<!--<input id="dils" type="checkbox" checked="checked" onchange="displayInLayerSwitcher(this.checked);"/>
+		<label for="dils">display "Pirate Map" in LayerSwitcher (zoom out to make it visible).</label>
+		<br/>-->
+		<input id="opb" type="checkbox" onchange="$('body').toggleClass('hideOpacity');" />
+		<label for="opb">hide opacity bar</label>
+	</div>
+
+</div>
+
+</div>
+
+	<div id="pointInfoBox" >
+          <div id="info" <!--class="alert alert-success"-->>
+            
+          </div>
+        </div>		
+
+<!-- 
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+	New cave form
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+-->
+
+<div class="modal fade" id="caveModal" tabindex="-1" role="dialog" aria-labelledby="caveModalTitleLabel">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="caveModalTitleLabel">New cave</h4>
+		<h5><i><div id="cave_coords_label"></div></i></h5>
+      </div>
+      <div class="modal-body">	  
+        <form id="caveForm" role="form" > <!-- class="form-inline" -->
+		 
+		 <input type="hidden" id="cave_id" name="cave_id" >
+		 <input type="hidden" id="cave_coords_lat" name="cave_coords_lat" >
+		 <input type="hidden" id="cave_coords_lon" name="cave_coords_lon" >
+		 <input type="hidden" id="entrance_existing_point_id" name="entrance_existing_point_id" >
+		 
+		 <input type="hidden" id="ce_feature_string" name="ce_feature_string" >
+		 
+          <div class="form-group row">
+            <label for="cf_name" class="col-sm-2 control-label">Name:</label>
+			<div class="col-sm-10">
+				<input type="text" class="form-control" id="cf_name" name="cf_name" >
+			</div>
+          </div>
+
+          <div class="form-group row">
+            <label for="
+			" class="col-sm-2 control-label">Other toponyms:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_other_toponyms" name="cf_other_toponyms" ></textarea>
+			</div>
+          </div>		  
+		  
+          <div class="form-group row">
+            <label for="cf_identification_code" class="col-sm-2 control-label">Identification code:</label>
+			<div class="col-sm-10">
+				<input type="text" class="form-control" id="cf_identification_code" name="cf_identification_code" ></textarea>
+			</div>
+          </div>		  
+
+	<div class="form-group row">	
+		<label for="cf_cave_type" class="col-sm-2 control-label">Type:</label>	
+		<div class="col-sm-10">
+			<select id="cf_cave_type" class="selectpicker form-control" name="cf_cave_type" data-hide-disabled="true" data-max-options="1">
+			</select> <!-- multiple data-size="5"  -->
+		</div>
+	</div>
+		  
+          <div class="form-group row">
+            <label for="cf_description" class="col-sm-2 control-label">Description:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_description" name="cf_description" ></textarea>
+			</div>
+          </div>		  
+
+	<div class="form-group row">	
+		<label for="cf_rock_type_id" class="col-sm-2 control-label">Rock type:</label>	
+		<div class="col-sm-10">
+			<select id="cf_rock_type_id" class="selectpicker form-control" name="cf_rock_type_id" data-hide-disabled="true" data-max-options="1">
+			</select> <!-- multiple data-size="5"  -->
+		</div>
+	</div>
+		  
+          <div class="form-group row">
+            <label for="cf_rock_age" class="col-sm-2 control-label">Rock age:</label>
+			<div class="col-sm-10">
+				<!--<textarea class="form-control" id="cf_rock_age" name="cf_rock_age" ></textarea>-->
+				<input type="text" id="cf_rock_age" name="cf_rock_age" value="2" />				
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_cave_age" class="col-sm-2 control-label">Cave age:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_cave_age" name="cf_cave_age" ></textarea>
+			</div>
+          </div>		  
+		  
+          <div class="form-group row">
+            <label for="cf_region" class="col-sm-2 control-label">Region:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_region" name="cf_region" ></textarea>
+			</div>
+          </div>		  
+		  
+          <div class="form-group row">
+            <label for="cf_hydrographic_basin" class="col-sm-2 control-label">Catchement basin:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_hydrographic_basin" name="cf_hydrographic_basin" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_valley" class="col-sm-2 control-label">Valley:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_valley" name="cf_valley" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_tributary_river" class="col-sm-2 control-label">Tributary river:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_tributary_river" name="cf_tributary_river" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_closest_address" class="col-sm-2 control-label">Closest address:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_closest_address" name="cf_closest_address" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_land_registry_number" class="col-sm-2 control-label">Land registry number:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_land_registry_number" name="cf_land_registry_number" ></textarea>
+			</div>
+          </div>		  
+		  
+          <div class="form-group row">
+            <label for="cf_is_show_cave" class="col-sm-2 control-label">Show cave:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_is_show_cave" name="cf_is_show_cave" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_show_cave_length" class="col-sm-2 control-label">Show cave length:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_show_cave_length" name="cf_show_cave_length" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_website" class="col-sm-2 control-label">Website:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_website" name="cf_website" ></textarea>
+			</div>
+          </div>		  
+		  
+          <div class="form-group row">
+            <label for="cf_depth" class="col-sm-2 control-label">Depth:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_depth" name="cf_depth" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_positive_depth" class="col-sm-2 control-label">Positive depth:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_positive_depth" name="cf_positive_depth" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_negative_depth" class="col-sm-2 control-label">Negative depth:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_negative_depth" name="cf_negative_depth" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_potential_depth" class="col-sm-2 control-label">Potential depth:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_potential_depth" name="cf_potential_depth" ></textarea>
+			</div>
+          </div>		  
+		  
+          <div class="form-group row">
+            <label for="cf_surveyed_length" class="col-sm-2 control-label">Surveyed length:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_surveyed_length" name="cf_surveyed_length" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_real_extension" class="col-sm-2 control-label">Real extension:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_real_extension" name="cf_real_extension" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_projected_extension" class="col-sm-2 control-label">Projected extension:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_projected_extension" name="cf_projected_extension" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_exploration_status" class="col-sm-2 control-label">Exploration status:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_exploration_status" name="cf_exploration_status" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_protection_class" class="col-sm-2 control-label">Protection class:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_protection_class" name="cf_protection_class" ></textarea>
+			</div>
+          </div>		  
+		  
+          <div class="form-group row">
+            <label for="cf_volume" class="col-sm-2 control-label">Volume (cm):</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_volume" name="cf_volume" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_ramification_index" class="col-sm-2 control-label">Ramification index:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_ramification_index" name="cf_ramification_index" ></textarea>
+			</div>
+          </div>		  
+		  
+          <div class="form-group row">
+            <label for="cf_discovery_date" class="col-sm-2 control-label">Discovery date:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_discovery_date" name="cf_discovery_date" ></textarea>
+			</div>
+          </div>		  
+
+          <div class="form-group row">
+            <label for="cf_discoverer" class="col-sm-2 control-label">Discover(s):</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cf_discoverer" name="cf_discoverer" ></textarea>
+			</div>
+          </div>		  
+		  
+<!--		
+		<div class="dropdown">
+		  <button id="cave_type_btn" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+			Tip
+			<span class="caret"></span>
+		  </button>
+		  <ul id="caveTypes" class="dropdown-menu" aria-labelledby="cave_type_btn">
+		  </ul>
+		</div>		  
+		-->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        <button type="submit" class="btn btn-primary" id="saveCave" >Save</button>
+      </div>	  
+	        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+<!--
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ	
+	End New cave form
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+-->
+
+
+<!-- 
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+	New feature form
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+-->
+
+<div class="modal fade" id="featureModal" tabindex="-1" role="dialog" aria-labelledby="featureModalTitleLabel">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="featureModalTitleLabel">New feature</h4>
+		<h5><i><div id="feature_coords_label"></div></i></h5>
+      </div>
+      <div class="modal-body">	  
+        <form id="featureForm" role="form" > <!-- class="form-inline" -->
+		 
+		 <input type="hidden" id="feature_id" name="feature_id" >
+		 <!--<input type="hidden" id="feature_coords_lat" name="feature_coords_lat" >
+		 <input type="hidden" id="feature_coords_lon" name="feature_coords_lon" >-->
+		 <input type="hidden" id="feature_existing_point_id" name="feature_existing_point_id" >
+		 <input type="hidden" id="feature_type_id" name="feature_type_id" >
+		 
+		 <input type="hidden" id="feature_string" name="feature_string" >
+		 
+          <div class="form-group row">
+            <label for="feature_name" class="col-sm-2 control-label">Name:</label>
+			<div class="col-sm-10">
+				<input type="text" class="form-control focusedInput" id="feature_name" name="feature_name" >
+			</div>
+          </div>
+
+          <div class="form-group row">
+            <label for="feature_description" class="col-sm-2 control-label">Description:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="feature_description" name="feature_description" ></textarea>
+			</div>
+          </div>		  
+
+		  <div class="modal-footer">
+			<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+			<button type="submit" class="btn btn-primary" id="saveFeature" >Save</button>
+		  </div>
+	  
+	    </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+<!--
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ	
+	End New feature form
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+-->
+
+
+<!-- 
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+	Cave details form
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+-->
+
+<div class="modal fade" id="caveDetailsModal" tabindex="-1" role="dialog" aria-labelledby="caveDetailsModalTitleLabel">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="caveDetailsModalTitleLabel">Cave details {}</h4>
+		<!--<h5><i><div id="picture_coords_label"></div></i></h5>-->
+      </div>
+      <div class="modal-body">	  
+        <!--<form id="caveDetailsForm" role="form" enctype="multipart/form-data" >
+		 
+		 <input type="hidden" id="cd_cave_id" name="cave_id" >		 
+		 
+          <div class="form-group row">
+            <label class="col-sm-2 control-label">Description:</label>
+          </div>		  
+
+			
+
+	    </form>
+		-->
+	<!--<form id="fileupload1" action="speogis\data\uploader" method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="example1" value="test">
+    <div class="row">
+        <label>Example: <input type="text" name="example2"></label>
+    </div>
+    
+	</form>
+	-->
+<table id="cave_files_table" class="display" cellspacing="0" width="100%">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Size</th>
+                <th>Add time</th>
+                <th>Category</th>
+            </tr>
+        </thead>
+    </table>
+	
+				<button type="button" class="btn btn-success" id="caveDetailsAddFilesButton">
+                    <i class="icon-plus icon-white"></i>
+                    <span>Add files...</span>                    
+                </button>
+
+
+<!--	
+    <form id="fileupload" action="\data\uploader" method="POST" enctype="multipart/form-data">
+        <!-- The fileupload-buttonbar contains buttons to add/delete files and start/cancel the upload --
+       <div class="row fileupload-buttonbar">
+            <div class="col-lg-7">
+                <!-- The fileinput-button span is used to style the file input field as button --
+                <span class="btn btn-success fileinput-button">
+                    <i class="icon-plus icon-white"></i>
+                    <span>Add files...</span>
+                    <input type="file" name="files[]" multiple>
+                </span>
+                <button type="submit" class="btn btn-primary start">
+                    <i class="icon-upload icon-white"></i>
+                    <span>Start upload</span>
+                </button>
+                <button type="reset" class="btn btn-warning cancel">
+                    <i class="icon-ban-circle icon-white"></i>
+                    <span>Cancel upload</span>
+                </button>
+                <button type="button" class="btn btn-danger delete">
+                    <i class="icon-trash icon-white"></i>
+                    <span>Delete</span>
+                </button>
+                <input type="checkbox" class="toggle">
+                <!-- The global file processing state --
+                <span class="fileupload-process"></span>
+            </div>
+            <!-- The global progress state --
+            <div class="col-lg-5 fileupload-progress">
+                <!-- The global progress bar --
+                <div class="progress progress-striped active" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar progress-bar-success" style="width:0%;"></div>
+                </div>
+                <!-- The extended global progress state --
+                <div class="progress-extended">&nbsp;</div>
+            </div>
+        </div>
+        <!-- The table listing the files available for upload/download --
+        <table role="presentation" class="table table-striped"><tbody class="files"></tbody></table>
+
+		<input type="hidden" id="upload_file_cave_id" name="upload_file_cave_id" >
+<!--
+<label class="title">
+    <span>Title:</span><br>
+    <input name="title[]" class="form-control">
+</label>
+<label class="description">
+    <span>Description:</span><br>
+    <input name="description[]" class="form-control">
+</label>
+
+<p class="title"><strong>{%=file.title||''%}</strong></p>
+<p class="description">{%=file.description||''%}</p>
+-->
+		
+    </form>
+<!-- The template to display files available for upload --
+<script id="template-upload" type="text/x-tmpl">
+{% for (var i=0, file; file=o.files[i]; i++) { %}
+    <tr class="template-upload">
+        <td>
+            <span class="preview"></span>
+        </td>
+        <td>
+            <p class="name">{%=file.name%}</p>
+            <strong class="error text-danger"></strong>
+        </td>
+        <td>
+            <p class="size">Processing...</p>
+            <div class="progress progress-striped active" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-success" style="width:0%;"></div></div>
+        </td>
+        <td>
+            {% if (!i && !o.options.autoUpload) { %}
+                <button class="btn btn-primary start" disabled>
+                    <i class="glyphicon glyphicon-upload"></i>
+                    <span>Start</span>
+                </button>
+            {% } %}
+            {% if (!i) { %}
+                <button class="btn btn-warning cancel">
+                    <i class="glyphicon glyphicon-ban-circle"></i>
+                    <span>Cancel</span>
+                </button>
+            {% } %}
+        </td>
+    </tr>
+{% } %}
+</script>
+<!-- The template to display files available for download --
+
+<script id="template-download" type="text/x-tmpl">
+{% for (var i=0, file; file=o.files[i]; i++) { %}
+    <tr class="template-download">
+        <td>
+            <span class="preview">
+                {% if (file.thumbnailUrl) { %}
+                    <a href="{%=file.url%}" title="{%=file.name%}" download="{%=file.name%}" data-gallery><img src="{%=file.thumbnailUrl%}"></a>
+                {% } %}
+            </span>
+        </td>
+        <td>
+            <p class="name">
+                {% if (file.url) { %}
+                    <a href="{%=file.url%}" title="{%=file.name%}" download="{%=file.name%}" {%=file.thumbnailUrl?'data-gallery':''%}>{%=file.name%}</a>
+                {% } else { %}
+                    <span>{%=file.name%}</span>
+                {% } %}
+            </p>
+            {% if (file.error) { %}
+                <div><span class="label label-danger">Error</span> {%=file.error%}</div>
+            {% } %}
+        </td>
+        <td>
+            <span class="size">{%=o.formatFileSize(file.size)%}</span>
+        </td>
+        <td>
+            {% if (file.deleteUrl) { %}
+                <button class="btn btn-danger delete" data-type="{%=file.deleteType%}" data-url="{%=file.deleteUrl%}"{% if (file.deleteWithCredentials) { %} data-xhr-fields='{"withCredentials":true}'{% } %}>
+                    <i class="glyphicon glyphicon-trash"></i>
+                    <span>Delete</span>
+                </button>
+                <input type="checkbox" name="delete" value="1" class="toggle">
+            {% } else { %}
+                <button class="btn btn-warning cancel">
+                    <i class="glyphicon glyphicon-ban-circle"></i>
+                    <span>Cancel</span>
+                </button>
+            {% } %}
+        </td>
+    </tr>
+{% } %}
+</script>
+-->
+</div>
+
+    </div>
+  </div>
+</div>
+<!--
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ	
+	Cave details form
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+-->
+
+
+<!-- 
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+	New picture form
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+-->
+
+<div class="modal fade" id="pictureModal" tabindex="-1" role="dialog" aria-labelledby="pictureModalTitleLabel">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="pictureModalTitleLabel">New picture</h4>
+		<h5><i><div id="picture_coords_label"></div></i></h5>
+      </div>
+      <div class="modal-body">	  
+        <form id="pictureForm" role="form" enctype="multipart/form-data" > <!-- class="form-inline" -->										   
+		 
+		 <input type="hidden" id="picture_id" name="picture_id" >
+		 <input type="hidden" id="point_coords_lat" name="point_coords_lat" >
+		 <input type="hidden" id="point_coords_lon" name="point_coords_lon" >
+		 <input type="hidden" id="picture_existing_point_id" name="picture_existing_point_id" >
+		 
+		 
+		 <input type="hidden" id="point_string" name="point_string" >
+		 
+          <!--<div class="form-group row">
+            <label for="feature_name" class="col-sm-2 control-label">Name:</label>
+			<div class="col-sm-10">
+				<input type="text" class="form-control" id="picture_name" name="picture_name" >				
+			</div>
+          </div>
+			-->
+          <div class="form-group row">
+            <label for="picture_description" class="col-sm-2 control-label">Description:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="picture_description" name="picture_description" ></textarea>
+			</div>
+          </div>		  
+
+		  <label class="btn btn-default btn-file">
+			Browse <input type="file" style="display: none;" id="file" name="file" >
+		  </label>
+
+		<!--<div class="fileupload fileupload-new" data-provides="fileupload">
+		  <div class="fileupload-preview thumbnail" style="width: 200px; height: 150px;"></div>
+		  <div>
+			<span class="btn btn-file"><span class="fileupload-new">Select image</span><span class="fileupload-exists">Change</span><input type="file" /></span>
+			<a href="#" class="btn fileupload-exists" data-dismiss="fileupload">Remove</a>
+		  </div>
+		</div>
+		-->
+		  <div class="modal-footer">
+			<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+			<button type="submit" class="btn btn-primary" id="savePicture" >Save</button>
+		  </div>
+	  
+	    </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+<!--
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ	
+	End New picture form
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+-->
+
+
+<!-- 
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+	New cave entrance form
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+-->
+
+<div class="modal fade" id="caveEntranceModal" tabindex="-1" role="dialog" aria-labelledby="caveEntranceModalTitleLabel">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="caveEntranceModalTitleLabel">New cave</h4>
+		<h5><i><div id="cave_entrance_coords_label"></div></i></h5>
+      </div>
+      <div class="modal-body">	  
+        <form id="caveEntranceForm" role="form" > <!-- class="form-inline" -->
+		 
+		 <!--<input type="hidden" id="cave_entrance_cave_id" name="cave_entrance_cave_id" >-->
+		 <input type="hidden" id="cave_entrance_coords_lat" name="cave_coords_lat" >
+		 <input type="hidden" id="cave_entrance_coords_lon" name="cave_coords_lon" >
+		 <input type="hidden" id="cave_entrance_existing_point_id" name="cave_entrance_existing_point_id" >
+		 
+		 <input type="hidden" id="cave_entrance_feature_string" name="cave_entrance_feature_string" >
+		 
+          <div class="form-group row">
+            <label for="cave_entrance_name" class="col-sm-2 control-label">Name:</label>
+			<div class="col-sm-10">
+				<input type="text" class="form-control" id="cave_entrance_name" name="cave_entrance_name" >
+			</div>
+          </div>
+
+          <div class="form-group row">
+            <label for="cave_entrance_description" class="col-sm-2 control-label">Description:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cave_entrance_description" name="cave_entrance_description" ></textarea>
+			</div>
+          </div>
+
+<!--		
+		<div class="dropdown">
+		  <button id="cave_type_btn" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+			Tip
+			<span class="caret"></span>
+		  </button>
+		  <ul id="caveTypes" class="dropdown-menu" aria-labelledby="cave_type_btn">
+		  </ul>
+		</div>		  
+		-->
+	<div class="form-group row">	
+		<label for="cave_entrance_type" class="col-sm-2 control-label">Type:</label>	
+		<div class="col-sm-10">
+			<select id="cave_entrance_type" class="selectpicker form-control" name="cave_entrance_type" data-hide-disabled="true" data-max-options="1">
+			</select> <!-- multiple data-size="5"  -->
+		</div>
+	</div>
+
+	<div class="form-group row">	
+		<label for="cave_entrance_cave_id" class="col-sm-2 control-label">Cave:</label>	
+		<div class="col-sm-10">
+			<select id="cave_entrance_cave_id" class="selectpicker form-control" name="cave_entrance_cave_id" data-hide-disabled="true" data-max-options="1">
+			</select> <!-- multiple data-size="5"  -->
+		</div>
+	</div>
+
+	<div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        <button type="submit" class="btn btn-primary" id="saveCaveEntrance" >Save</button>
+      </div>	  
+	        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+<!--
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ	
+	End New cave entrance form
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+-->
+
+
+<!-- 
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+	Begin Upload files form
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+-->
+<div class="modal fade modal-child" id="uploadFilesModal" tabindex="-1" role="dialog" aria-labelledby="uploadFilesModalTitleLabel" data-modal-parent="#tripReportModal">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="uploadFilesModalTitleLabel">New cave</h4>
+		<h5><i><div id="upload_files_x_label"></div></i></h5>
+      </div>
+      <div class="modal-body">	  
+        <!--<form id="uploadFilesForm" role="form" >
+		-->
+		
+    <form class="fileupload" id="fileupload_cave" action="./data/uploader/index.php" method="POST" enctype="multipart/form-data"> <!-- id="fileupload" -->
+        <!-- The fileupload-buttonbar contains buttons to add/delete files and start/cancel the upload -->
+       <div class="row fileupload-buttonbar">
+            <div class="col-lg-7">
+				<input type="hidden" id="fileupload_target_type" name="fileupload_target_type" >
+				<input type="hidden" id="fileupload_target_object_id" name="fileupload_target_object_id" >
+                <!-- The fileinput-button span is used to style the file input field as button -->
+                <span class="btn btn-success fileinput-button">
+                    <i class="icon-plus icon-white"></i>
+                    <span>Add files...</span>
+                    <input type="file" name="files[]" multiple>
+                </span>
+                <button type="submit" class="btn btn-primary start">
+                    <i class="icon-upload icon-white"></i>
+                    <span>Start upload</span>
+                </button>
+                <button type="reset" class="btn btn-warning cancel">
+                    <i class="icon-ban-circle icon-white"></i>
+                    <span>Cancel upload</span>
+                </button>
+                <button type="button" class="btn btn-danger delete">
+                    <i class="icon-trash icon-white"></i>
+                    <span>Delete</span>
+                </button>
+                <input type="checkbox" class="toggle">
+                <!-- The global file processing state -->
+                <span class="fileupload-process"></span>
+            </div>
+            <!-- The global progress state -->
+            <div class="col-lg-5 fileupload-progress">
+                <!-- The global progress bar -->
+                <div class="progress progress-striped active" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar progress-bar-success" style="width:0%;"></div>
+                </div>
+                <!-- The extended global progress state -->
+                <div class="progress-extended">&nbsp;</div>
+            </div>
+        </div>
+        <!-- The table listing the files available for upload/download -->
+        <table role="presentation" class="table table-striped"><tbody class="files"></tbody></table>
+
+		<input type="hidden" id="upload_file_cave_id" name="upload_file_cave_id" >
+<!--
+<label class="title">
+    <span>Title:</span><br>
+    <input name="title[]" class="form-control">
+</label>
+<label class="description">
+    <span>Description:</span><br>
+    <input name="description[]" class="form-control">
+</label>
+
+<p class="title"><strong>{%=file.title||''%}</strong></p>
+<p class="description">{%=file.description||''%}</p>
+-->
+		
+    </form>
+<!-- The template to display files available for upload -->
+<script id="template-upload" type="text/x-tmpl">
+{% for (var i=0, file; file=o.files[i]; i++) { %}
+    <tr class="template-upload">
+        <td>
+            <span class="preview"></span>
+        </td>
+        <td>
+            <p class="name">{%=file.name%}</p>
+            <strong class="error text-danger"></strong>
+        </td>
+        <td>
+            <p class="size">Processing...</p>
+            <div class="progress progress-striped active" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-success" style="width:0%;"></div></div>
+        </td>
+        <td>
+            {% if (!i && !o.options.autoUpload) { %}
+                <button class="btn btn-primary start" disabled>
+                    <i class="glyphicon glyphicon-upload"></i>
+                    <span>Start</span>
+                </button>
+            {% } %}
+            {% if (!i) { %}
+                <button class="btn btn-warning cancel">
+                    <i class="glyphicon glyphicon-ban-circle"></i>
+                    <span>Cancel</span>
+                </button>
+            {% } %}
+        </td>
+    </tr>
+{% } %}
+</script>
+<!-- The template to display files available for download -->
+
+<script id="template-download" type="text/x-tmpl">
+{% for (var i=0, file; file=o.files[i]; i++) { %}
+    <tr class="template-download">
+        <td>
+            <span class="preview">
+                {% if (file.thumbnailUrl) { %}
+                    <a href="{%=file.url%}" title="{%=file.name%}" download="{%=file.name%}" data-gallery><img src="{%=file.thumbnailUrl%}"></a>
+                {% } %}
+            </span>
+        </td>
+        <td>
+            <p class="name">
+                {% if (file.url) { %}
+                    <a href="{%=file.url%}" title="{%=file.name%}" download="{%=file.name%}" {%=file.thumbnailUrl?'data-gallery':''%}>{%=file.name%}</a>
+                {% } else { %}
+                    <span>{%=file.name%}</span>
+                {% } %}
+            </p>
+            {% if (file.error) { %}
+                <div><span class="label label-danger">Error</span> {%=file.error%}</div>
+            {% } %}
+        </td>
+        <td>
+            <span class="size">{%=o.formatFileSize(file.size)%}</span>
+        </td>
+        <td>
+            {% if (file.deleteUrl) { %}
+                <button class="btn btn-danger delete" data-type="{%=file.deleteType%}" data-url="{%=file.deleteUrl%}"{% if (file.deleteWithCredentials) { %} data-xhr-fields='{"withCredentials":true}'{% } %}>
+                    <i class="glyphicon glyphicon-trash"></i>
+                    <span>Delete</span>
+                </button>
+                <input type="checkbox" name="delete" value="1" class="toggle">
+            {% } else { %}
+                <button class="btn btn-warning cancel">
+                    <i class="glyphicon glyphicon-ban-circle"></i>
+                    <span>Cancel</span>
+                </button>
+            {% } %}
+        </td>
+    </tr>
+{% } %}
+</script>
+		 
+	<div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        <button type="submit" class="btn btn-primary" id="saveFileUpload" >Save</button>
+      </div>	  
+	  
+	  
+	        <!--</form>
+			-->
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- 
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+	end Upload files form
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+-->
+
+
+<!-- 
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+	Begin Upload pictures form
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+-->
+<div class="modal fade" id="uploadPicturesModal" tabindex="-1" role="dialog" aria-labelledby="uploadFilesModalTitleLabel">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="uploadPicturesModalTitleLabel">Pictures</h4>
+		<h5><i><div id="upload_files_z_label"></div></i></h5>
+      </div>
+      <div class="modal-body">	  
+        <!--<form id="uploadPicturesForm" role="form" >
+		-->
+		
+			<!--<input type="hidden" id="upload_files_cave_id" name="upload_files_cave_id" >-->
+			
+    <form class="fileupload" id="pictureUploader" action="./data/uploader/picture_uploader.php" method="POST" enctype="multipart/form-data"> <!-- id="pictureUploader" -->
+        <!-- The fileupload-buttonbar contains buttons to add/delete files and start/cancel the upload -->
+       <div class="row fileupload-buttonbar">
+            <div class="col-lg-7">
+                <!-- The fileinput-button span is used to style the file input field as button -->
+                <span class="btn btn-success fileinput-button">
+                    <i class="icon-plus icon-white"></i>
+                    <span>Add pictures...</span>
+                    <input type="file" name="files[]" multiple>
+                </span>
+                <button type="submit" class="btn btn-primary start">
+                    <i class="icon-upload icon-white"></i>
+                    <span>Start upload</span>
+                </button>
+                <button type="reset" class="btn btn-warning cancel">
+                    <i class="icon-ban-circle icon-white"></i>
+                    <span>Cancel upload</span>
+                </button>
+                <button type="button" class="btn btn-danger delete">
+                    <i class="icon-trash icon-white"></i>
+                    <span>Delete</span>
+                </button>
+                <input type="checkbox" class="toggle">
+                <!-- The global file processing state -->
+                <span class="fileupload-process"></span>
+            </div>
+            <!-- The global progress state -->
+            <div class="col-lg-5 fileupload-progress">
+                <!-- The global progress bar -->
+                <div class="progress progress-striped active" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar progress-bar-success" style="width:0%;"></div>
+                </div>
+                <!-- The extended global progress state -->
+                <div class="progress-extended">&nbsp;</div>
+            </div>
+        </div>
+        <!-- The table listing the files available for upload/download -->
+        <table role="presentation" class="table table-striped"><tbody class="files"></tbody></table>
+
+		<input type="hidden" id="upload_feature_id" name="upload_feature_id" >
+		<!--<input type="hidden" id="upload_cave_id" name="upload_cave_id" >-->
+<!--
+<label class="title">
+    <span>Title:</span><br>
+    <input name="title[]" class="form-control">
+</label>
+<label class="description">
+    <span>Description:</span><br>
+    <input name="description[]" class="form-control">
+</label>
+
+<p class="title"><strong>{%=file.title||''%}</strong></p>
+<p class="description">{%=file.description||''%}</p>
+-->
+		
+    </form>
+<!-- The template to display files available for upload -->
+<script id="template-upload-picture" type="text/x-tmpl">
+{% for (var i=0, file; file=o.files[i]; i++) { %}
+    <tr class="template-upload-picture">
+        <td>
+            <span class="preview"></span>
+        </td>
+        <td>
+            <p class="name">{%=file.name%}</p>
+            <strong class="error text-danger"></strong>
+        </td>
+        <td>
+            <p class="size">Processing...</p>
+            <div class="progress progress-striped active" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-success" style="width:0%;"></div></div>
+        </td>
+        <td>
+            {% if (!i && !o.options.autoUpload) { %}
+                <button class="btn btn-primary start" disabled>
+                    <i class="glyphicon glyphicon-upload"></i>
+                    <span>Start</span>
+                </button>
+            {% } %}
+            {% if (!i) { %}
+                <button class="btn btn-warning cancel">
+                    <i class="glyphicon glyphicon-ban-circle"></i>
+                    <span>Cancel</span>
+                </button>
+            {% } %}
+        </td>
+    </tr>
+{% } %}
+</script>
+<!-- The template to display files available for download -->
+
+<script id="template-download-picture" type="text/x-tmpl">
+{% for (var i=0, file; file=o.files[i]; i++) { %}
+    <tr class="template-download-picture">
+        <td>
+            <span class="preview">
+                {% if (file.thumbnailUrl) { %}
+                    <a href="{%=file.url%}" title="{%=file.name%}" download="{%=file.name%}" data-gallery><img src="{%=file.thumbnailUrl%}"></a>
+                {% } %}
+            </span>
+        </td>
+        <td>
+            <p class="name">
+                {% if (file.url) { %}
+                    <a href="{%=file.url%}" title="{%=file.name%}" download="{%=file.name%}" {%=file.thumbnailUrl?'data-gallery':''%}>{%=file.name%}</a>
+                {% } else { %}
+                    <span>{%=file.name%}</span>
+                {% } %}
+            </p>
+            {% if (file.error) { %}
+                <div><span class="label label-danger">Error</span> {%=file.error%}</div>
+            {% } %}
+        </td>
+        <td>
+            <span class="size">{%=o.formatFileSize(file.size)%}</span>
+        </td>
+        <td>
+            {% if (file.deleteUrl) { %}
+                <button class="btn btn-danger delete" data-type="{%=file.deleteType%}" data-url="{%=file.deleteUrl%}"{% if (file.deleteWithCredentials) { %} data-xhr-fields='{"withCredentials":true}'{% } %}>
+                    <i class="glyphicon glyphicon-trash"></i>
+                    <span>Delete</span>
+                </button>
+                <input type="checkbox" name="delete" value="1" class="toggle">
+            {% } else { %}
+                <button class="btn btn-warning cancel">
+                    <i class="glyphicon glyphicon-ban-circle"></i>
+                    <span>Cancel</span>
+                </button>
+            {% } %}
+        </td>
+    </tr>
+{% } %}
+</script>
+
+	<div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        <button type="submit" class="btn btn-primary" id="savePictureFileUpload" >Save</button>
+      </div>	  
+	  
+	  
+	        <!--</form>
+			-->
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- 
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+	end Upload pictures form
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+-->
+
+<?php
+    include_once 'trip_report_form.php';
+?>
+
+<!--
+                            <a href="http://41.media.tumblr.com/f37ac708134914c471073e4c0b47328d/tumblr_mrn3dc10Wa1r1thfzo8_1280.jpg" data-toggle="lightbox" data-title="A random title" data-footer="A custom footer text">
+                                xx
+                            </a>
+-->							
+                            <a href="#" data-toggle="lightbox" data-title="custom title" data-footer="custom text" id="thumbPictureHolder" style="visibility:hidden" >
+                                
+                            </a>
+
+</body>
+</html>
