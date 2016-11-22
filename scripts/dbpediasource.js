@@ -159,11 +159,12 @@ ol.source.DBPedia.prototype._loaderFn = function(extent, resolution, projection)
 		feature.set('subject', "x");
 		feature.set('lat', coordinate[0]);
 		feature.set('long', coordinate[1]);
-		feature.set('label', "z");
+		//feature.set('label', "z");
 		//feature.set('thumbnail', item.properties.thumbUrl);
 		feature.set('thumbnail', './' + item.properties.thumbUrl);
 		feature.set('abstract', "");
 		feature.set('type', "");
+		feature.set('url', './' + item.properties.url);
 		//feature.set('', "");
 
 		

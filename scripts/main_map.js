@@ -2316,7 +2316,7 @@ $(document).ready(function() {
 	setTimeout( function() 
 		{ 
 		initPictureThumbLayer();
-	}, 3500);
+	}, 1000);
 	
 	init_export_map_as_image();
 	
@@ -5804,13 +5804,38 @@ function initPictureThumbLayer()
 	select.getFeatures().on(['add','remove'], function(e)
 	{	var info = $("#select").html("");
 		if (e.type=="add") 
-		{	var el = e.element.get("features")[0];
-			$("<h2>").text(el.get("label")).appendTo(info);
-			if (el.get("thumbnail")) $("<img>").attr('src',el.get("thumbnail")).appendTo(info);
+		{	
+			var el = e.element.get("features")[0];
+			
+			/*$("<h2>").text(el.get("label")).appendTo(info);
+			
+			if (el.get("thumbnail")) 
+				$("<img>").attr('src',el.get("thumbnail")).appendTo(info);
+				
 			$("<p>").text(el.get("abstract")).appendTo(info);
+			*/
+			if (el.get("url"))
+				showPicture(el.get("url"), "", "");
 		}
 	});
 	
+}
+
+function showPicture(url, title, footer)
+{
+			//var url = clickedFeature.getProperties().url;
+			//var description = clickedFeature.getProperties().description;
+			//var pictureName = clickedFeature.getProperties().file_path;
+
+				//var url = '.' + url;
+				
+				$("#thumbPictureHolder").attr("href", url);
+				$("#thumbPictureHolder").attr("data-footer", "");
+				$("#thumbPictureHolder").attr("data-title", "");
+								
+				$("#thumbPictureHolder").ekkoLightbox(
+				//{ remote: url }
+				);	
 }
 	
 
