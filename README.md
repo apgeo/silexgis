@@ -15,4 +15,4 @@ The application is currently under development in a "prealpha" stage.
 * solve plenty bugs
 
 ##Demo
-	[http://speosilex.ro/speogis](http://speosilex.ro/speogis)
+[http://speosilex.ro/speogis](http://speosilex.ro/speogis)
