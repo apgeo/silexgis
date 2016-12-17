@@ -44,10 +44,13 @@ ol.source.DBPedia = function(opt_options)
 	/** Default attribution */
 	if (!options.attributions) options.attributions = [ new ol.Attribution({ html:"&copy; <a href='http://dbpedia.org/'>DBpedia</a> CC-by-SA" }) ];
 
+	//if (options.onPicturesLoad) 
+	this._onPicturesLoad = options.onPicturesLoad;
+	
 	// Bbox strategy : reload at each move
     if (!options.strategy) options.strategy = ol.loadingstrategy.bbox;
 
-	ol.source.Vector.call (this, options);	
+	ol.source.Vector.call (this, options);
 };
 ol.inherits (ol.source.DBPedia, ol.source.Vector);
 
@@ -141,47 +144,52 @@ ol.source.DBPedia.prototype._loaderFn = function(extent, resolution, projection)
 		//data: { query: query, format:"json" },
 		success: function(data) 
 		{	
-      var transform = ol.proj.getTransform('EPSG:4326', 'EPSG:3857');
-	  var features = [];
-      data.features.forEach(function(item) {
+			var transform = ol.proj.getTransform('EPSG:4326', 'EPSG:3857');
+			var features = [];
 			
-		//return;
-		
-		
-        var feature = new ol.Feature(); // var feature = new ol.Feature(item);
-        //feature.set('url', item.properties.url);
-		//feature.set('thumbUrl', item.properties.thumbUrl);
-        var coordinate = transform([parseFloat(item.geometry.coordinates[1]), parseFloat(item.geometry.coordinates[0])]);
-        var geometry = new ol.geom.Point(coordinate);
-        feature.setGeometry(geometry);
-        //pictureSource.addFeature(feature);
-		
-		feature.set('subject', "x");
-		feature.set('lat', coordinate[0]);
-		feature.set('long', coordinate[1]);
-		//feature.set('label', "z");
-		//feature.set('thumbnail', item.properties.thumbUrl);
-		feature.set('thumbnail', './' + item.properties.thumbUrl);
-		feature.set('abstract', "");
-		feature.set('type', "");
-		feature.set('url', './' + item.properties.url);
-		//feature.set('', "");
+			data.features.forEach(function(item) {
+			
+				//return;
+			
+			
+				var feature = new ol.Feature(); // var feature = new ol.Feature(item);
+				//feature.set('url', item.properties.url);
+				//feature.set('thumbUrl', item.properties.thumbUrl);
+				var coordinate = transform([parseFloat(item.geometry.coordinates[1]), parseFloat(item.geometry.coordinates[0])]);
+				var geometry = new ol.geom.Point(coordinate);
+				feature.setGeometry(geometry);
+				//pictureSource.addFeature(feature);
+				
+				feature.set('description', item.properties.description);
+				feature.set('lat', item.geometry.coordinates[0]); // coordinate[0]
+				feature.set('long', item.geometry.coordinates[1]); // coordinate[1]
+				//feature.set('label', "z");
+				//feature.set('thumbnail', item.properties.thumbUrl);
+				feature.set('thumbnail', './' + item.properties.thumbUrl);
+				//feature.set('abstract', "");
+				feature.set('type', "");
+				feature.set('url', './' + item.properties.url);
+				feature.set('image_id', item.properties.image_id);
+				//feature.set('', "");
 
-		
-		//if (self._features_indexed == unde)
-		//	self._features_indexed = {};
-			
-		if (self._features_indexed[feature.get("thumbnail")] == undefined)
-		{
-		self._features_indexed[feature.get("thumbnail")] = 1;
-		features.push(feature);
-		}
-		
-		//features.push(feature);
-		//console.log(feature.get("thumbnail") + " " + coordinate[0] + " " + coordinate[1]);
-      });
+				
+				//if (self._features_indexed == unde)
+				//	self._features_indexed = {};
+					
+				if (self._features_indexed[feature.get("thumbnail")] == undefined)
+				{
+					self._features_indexed[feature.get("thumbnail")] = 1;
+					features.push(feature);
+				}
+				
+				//features.push(feature);
+				//console.log(feature.get("thumbnail") + " " + coordinate[0] + " " + coordinate[1]);
+			});
 	  	  
-	  self.addFeatures(features);
+			self.addFeatures(features);
+			
+			//-- maybe instead of this callback some event from the ol.source.Vector base could be used
+			self._onPicturesLoad(features);
 		/*
 			var bindings = data.results.bindings;
 			var features = [];

@@ -473,6 +473,9 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 
 	<!--<link rel="stylesheet" href="/speogis/OL3-ext_ DBPedia layer_files/style.css" />-->
 	
+	<!-- lightbox for picture thumbnail browsing -->
+	<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/lightslider/1.1.3/js/lightslider.min.js"></script>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lightslider/1.1.3/css/lightslider.min.css">
 <!--
 	 =============================================================================================================================================
 	 =============================================================================================================================================

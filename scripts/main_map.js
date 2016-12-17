@@ -39,6 +39,9 @@
   var _geofiles = undefined;
   var _team_members = undefined;
   
+  var _pictureThumbnailLightSlider;
+  var _map_pictures;
+  
   var geoStyle = {
         'Point': new ol.style.Style({
           image: new ol.style.Circle({
@@ -2071,7 +2074,7 @@ var stateResetSettings = {
 	,	east__initClosed:	false
 	,	east__initHidden:	false
 	*/
-			south__initClosed:	true
+		south__initClosed:	!true
 	,	south__initHidden:	false
 	,	west__initClosed:	false
 	,	west__initHidden:	false
@@ -5699,6 +5702,7 @@ $('#tripreport_place').bind('typeahead:select', function(ev, suggestion) {
 	
 function initPictureThumbLayer()
 {
+	initPictureThumbnailLightSlider();
 	// Style
 	var styleCache={};
 	function getFeatureStyle (feature, resolution, sel)
@@ -5758,7 +5762,19 @@ function initPictureThumbLayer()
 		strategy: ol.loadingstrategy.bbox,
 		//maxResolution: 10, // > zoom 14
 		// Language
-		lang:"fr"
+		lang:"en",
+		onPicturesLoad: function (pictures) {
+			//$.each(pictures, function(key, value) {
+			pictures.forEach(function(feature) {				
+				//console.log(feature);
+				var image_id = feature.getProperties()["image_id"]; 
+				_map_pictures[image_id] = feature.getProperties();
+				// feature.getProperties()["thumbnail"]
+				addSlide(image_id);
+			});
+			//console.log(pictures);
+			_pictureThumbnailLightSlider.refresh();
+		}
 	});
 
 	// Force thumbnail to non optional
@@ -5837,7 +5853,47 @@ function showPicture(url, title, footer)
 				//{ remote: url }
 				);	
 }
+
+function initPictureThumbnailLightSlider()
+{
+	// http://sachinchoolur.github.io/lightslider/
+	// http://sachinchoolur.github.io/lightslider/examples.html
 	
+	var slider = $('#mapPicturesLightSlider').lightSlider({
+		//gallery: true,
+		item: 8,
+		loop: true,
+		slideMargin: 0,
+		thumbItem: 0,
+		verticalHeight:50,
+		autoWidth:false,
+	});
+	
+	_pictureThumbnailLightSlider = slider;
+
+	slider.refresh();
+}
+
+function addSlide(image_id) // url
+{ 
+	var image_url = _map_pictures[image_id]["thumbnail"];
+	//var image_id = _map_pictures[image_id]["image_id"];
+	
+	// Class 'lslide' needs to be added with new slide item
+	// var newEl = "<li class='lslide'> <a href='javascript:void(0)'><img src='" + url + "' /></a> </li>";
+	var newEl = "<li class='lslide'> <a onclick=\"selectThumbPicture(" + image_id + ")\"><img src='" + image_url + "' /></a> </li>";
+	_pictureThumbnailLightSlider.prepend(newEl);
+}
+
+function selectThumbPicture(image_id)
+{
+	//_map_pictures[image_id] = 
+	
+	showPicture(_map_pictures[image_id]["thumbnail"], "", "");
+}
+
+
+
 
 
 	

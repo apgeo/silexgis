@@ -1,4 +1,4 @@
-## Silex GIS
+# Silex GIS
 
 SilexGIS is a web software application which aims to provide speleological groups and individuals with a way to manage the existing cave and associated surface data.
 
@@ -9,10 +9,12 @@ Another aspect, currently under development, is the data analysis functionality 
 
 The application is currently under development in a "prealpha" stage.
 
-#Roadmap
+##Roadmap
 * major source code refactoring
+* refactor database schema
 * add/finish several features to make some workflows fully usable
 * solve plenty bugs
+* add web installer
 
-#Demo
+##Demo
 	http://speosilex.ro/speogis

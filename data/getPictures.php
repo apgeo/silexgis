@@ -53,7 +53,7 @@ foreach ($pictures as $row)
 {
 //print_r($row);
     $properties = $row;
-    # Remove wkb and geometry fields from properties
+    # Remove wkb and geometry fields from properties	
     unset($properties['wkb']);
     //unset($properties['coords']);
 	unset($properties['sg']);

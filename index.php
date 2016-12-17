@@ -8,6 +8,29 @@
 <script type="text/javascript" src="/speogis/scripts/main_map.js"></script>
 <!--<body onload="init();">-->
 
+<style>
+.pictureThumbnailListContainer {
+    width:420px;
+}
+ul.pictureThumbnailListContainer {
+    list-style: none outside none;
+    padding-left: 0;
+    margin-bottom:0;
+}
+li.pictureThumbnailListContainer {
+    display: block;
+    float: left;
+    margin-right: 6px;
+    cursor:pointer;
+}
+img.pictureThumbnailListContainer {
+    display: block;
+    height: auto;
+    /*height: auto;*/
+    max-width: 100%;
+}
+</style>
+
 <div class="ui-layout-center">						
 	<div id="mapdiv" class="mapdiv" >
 	
@@ -68,15 +91,20 @@
 	</div>
 <!--<div class="ui-layout-north">North</div>-->
 <div class="ui-layout-south">
-	<div>
-	
-		<label><input type="checkbox" onchange="" id="hgPersaniCentruCheckBox" value="false"/><a href='./assets/layer_images/persani_comana_geologica.jpg' target='_blank' >Gelogic Map 1970 - persani centru</a><label>
-		<!--<a href='./assets/layer_images/persani_comana_geologica.jpg' target='_blank' >geologica persani centru</a>-->
-		
-		<div id="slider-id"><div class="ui-slider-handle">X</div></div>
-		
-	</div>
 
+x1
+<div class="pictureThumbnailListContainer">
+    <ul id="mapPicturesLightSlider">
+    </ul>
+</div>
+x2
+<!--
+	<div>
+		<label><input type="checkbox" onchange="" id="hgPersaniCentruCheckBox" value="false"/><a href='./assets/layer_images/persani_comana_geologica.jpg' target='_blank' >Gelogic Map 1970 - persani centru</a><label>
+		<div id="slider-id"><div class="ui-slider-handle">X</div></div>
+	</div>
+-->
+<!--<a href='./assets/layer_images/persani_comana_geologica.jpg' target='_blank' >geologica persani centru</a>-->
 </div>
 
 <div class="ui-layout-east">
