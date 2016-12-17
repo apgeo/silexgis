@@ -1,3 +1,0 @@
-uncomment/enable in php.ini
-extension=php_exif.dll
-extension=php_mbstring.dll
