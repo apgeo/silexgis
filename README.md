@@ -11,10 +11,8 @@ The application is currently under development in a "prealpha" stage.
 
 ##Roadmap
 * major source code refactoring
-* refactor database schema
 * add/finish several features to make some workflows fully usable
 * solve plenty bugs
-* add web installer
 
 ##Demo
-	http://speosilex.ro/speogis
+[http://speosilex.ro/speogis](http://speosilex.ro/speogis)
