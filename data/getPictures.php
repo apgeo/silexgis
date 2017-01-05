@@ -25,17 +25,18 @@
 * bbox should be a string in the form of 'southwest_lng,southwest_lat,northeast_lng,northeast_lat'
 * Leaflet: map.getBounds().pad(0.05).toBBoxString()
 */
-$sql;
-
+$sql; $bbox;
+/*
 if (isset($_GET['bbox']) || isset($_POST['bbox'])) {
     $bbox = explode(',', $_GET['bbox']);
-    $sql = $sql . ' WHERE x <= ' . $bbox[2] . ' AND x >= ' . $bbox[0] . ' AND y <= ' . $bbox[3] . ' AND y >= ' . $bbox[1];
+    //$sql = $sql . ' WHERE x <= ' . $bbox[2] . ' AND x >= ' . $bbox[0] . ' AND y <= ' . $bbox[3] . ' AND y >= ' . $bbox[1];
 }
-
+*/
+$bbox = explode(',', $_GET['bbox']);
 
 //$points = GPSData::get_gps_points($user_id);
 //$features = GPSData::get_features($user_id);
-$pictures = GPSData::get_pictures($user_id);
+$pictures = GPSData::get_pictures($user_id, $bbox);
 
 //$x = array_merge($features, $cave_entrances);
 

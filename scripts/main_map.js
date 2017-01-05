@@ -42,6 +42,8 @@
   var _pictureThumbnailLightSlider;
   var _map_pictures;
   
+  var _current_coordinate;
+  
   var geoStyle = {
         'Point': new ol.style.Style({
           image: new ol.style.Circle({
@@ -483,6 +485,8 @@ map.on('pointermove', function(evt) {
   var pixel = map.getEventPixel(evt.originalEvent);
   
   current_point_pixel = pixel;
+  
+  _current_coordinate = evt.coordinate;
   
   displayFeatureInfo(pixel);
   
@@ -1801,8 +1805,12 @@ function initThumbnailLoading()
       });
     }
 
+	var extent = map.getView().calculateExtent(map.getSize());
+	var projection = map.getView().getProjection();
+	var bbox = ol.proj.transformExtent(extent, projection, "EPSG:4326");
+	
     $.ajax({
-      url: 'data/getPictures.php',
+      url: 'data/getPictures.php?bbox=' + bbox[0] + ',' + bbox[1] + ',' + bbox[2] + ',' + bbox[3],
       dataType: 'json', // dataType: 'jsonp',
       //jsonpCallback: 'jsonFlickrFeed',
       success: successHandler,
@@ -1859,6 +1867,8 @@ function initThumbnailLoading()
 			  type: /** @type {ol.geom.GeometryType} */ drawFeatureType,
 			  //condition: ol.events.condition.singleClick,
 			  //freehandCondition: ol.events.condition.noModifierKeys
+			  //freehandCondition: ol.events.condition.always,
+			  //condition: ol.events.condition.never,
 			});
 			map.addInteraction(drawInt);
 			
@@ -2076,6 +2086,7 @@ var stateResetSettings = {
 	*/
 		south__initClosed:	!true
 	,	south__initHidden:	false
+	,	south__size:		"auto"
 	,	west__initClosed:	false
 	,	west__initHidden:	false
 
@@ -2084,7 +2095,7 @@ var stateResetSettings = {
 
 	};
 
-$('body').layout().loadState( stateResetSettings )
+$('body').layout().loadState(stateResetSettings);
 
 
 
@@ -2434,6 +2445,7 @@ function UserException(message) {
 }
 
 var drawGeoElemInteraction;
+var _draw_source;
 
       function addGeoElemInteraction(featureType) 
 	  {
@@ -2451,7 +2463,7 @@ var drawGeoElemInteraction;
 		map.removeInteraction(drawGeoElemInteraction);
         
 		var source = new ol.source.Vector();
-		
+			_draw_source = source;
 /*       var vector = new ol.layer.Vector({
         source: source,
         style: new ol.style.Style({
@@ -2513,6 +2525,10 @@ else
         drawGeoElemInteraction = new ol.interaction.Draw({
           source: source,
           type: /** @type {ol.geom.GeometryType} */ (type),
+			  //condition: ol.events.condition.singleClick,
+			  //freehandCondition: ol.events.condition.noModifierKeys
+		  freehandCondition: ol.events.condition.always,
+			  //condition: ol.events.condition.never,		  
           style: new ol.style.Style({
             fill: new ol.style.Fill({
               color: 'rgba(255, 255, 255, 0.2)'
@@ -2747,7 +2763,20 @@ function openNewFeatureForm(feature_id, coordinates, existingSelectedFeature, ne
 	$('#feature_id').val("");
 	//$('#feature_coords_lon').val("");
 	//$('#feature_coords_lat').val("");
+	
+	//-- workaround to avoid selecting an existing multipoint feature on adding a new onerror	
+	
+	var added_point = new ol.Feature({
+		//name: "point_feature_xx",
+		geometry: new ol.geom.Point(_current_coordinate)
+	});
+	
+	_draw_source.addFeature(added_point);
+	
+	existingSelectedFeature = added_point;
+	
 	$('#feature_string').val(getFeatureGeoJsonString(existingSelectedFeature));
+	//console.log($('#feature_string').val());
 	
 	$('#feature_type_id').val(featureType.Id);
 	$('#feature_existing_point_id').val("");	
@@ -5037,10 +5066,18 @@ function initPicturesUploadControl()
 ///////////////////////
 //  begin localization
 var selected_language = 'en'; // 'ro';
+var selected_language = 'ro';
 
 function _t()
 {
-	return localizedText[selected_language];
+	try
+	{
+		return localizedText[selected_language];
+	}
+	catch (ex)
+	{
+		return "_not_found_";
+	}
 }
 
 function localize_static_html()
@@ -5061,7 +5098,11 @@ function localize_static_html()
 	
 		res = match.match(/[\w\.]+/)[0];
 		console.log(res);
+		
 		var localized_text = eval("_t()." + res);
+			
+		if (localized_text == undefined)
+			return "*not found*";
 		//m_res[0].replace(regex, localized_text);
 		//document.body.innerHTML.replace(m_res[0], "");
 	
@@ -5706,7 +5747,12 @@ function initPictureThumbLayer()
 	// Style
 	var styleCache={};
 	function getFeatureStyle (feature, resolution, sel)
-	{	var f = feature.get("features")[0];
+	{	
+		var features = feature.get("features");
+			
+		if (features)
+		{
+		var f = features[0];
 		var nb = feature.get("features").length;
 		var th = f.get("thumbnail");
 		var k = th.replace(/(.*)\/(.*)\?(.*)/,"$2")+(nb>1?"_0":"_1")+(sel?"_1":"");
@@ -5753,7 +5799,10 @@ function initPictureThumbLayer()
 		}
 		else return [style];
 	}
-
+	//-- else return ?
+	}
+	console.log("_map_pictures = [];");
+	_map_pictures = [];
 	// DBPedia layer source
 	var vectorSource = new ol.source.DBPedia(
 	{	// Tile strategy load at zoom 14
@@ -5765,15 +5814,27 @@ function initPictureThumbLayer()
 		lang:"en",
 		onPicturesLoad: function (pictures) {
 			//$.each(pictures, function(key, value) {
-			pictures.forEach(function(feature) {				
+			//console.log("onPicturesLoad clearSlides();");
+			clearOutOfViewSlides();
+			
+			pictures.forEach(function(feature) {
+				//console.log("pictures.forEach(function(feature) {");
 				//console.log(feature);
 				var image_id = feature.getProperties()["image_id"]; 
 				_map_pictures[image_id] = feature.getProperties();
 				// feature.getProperties()["thumbnail"]
+				
 				addSlide(image_id);
 			});
-			//console.log(pictures);
+			//console.log(pictures);			
 			_pictureThumbnailLightSlider.refresh();
+			//console.log("_pictureThumbnailLightSlider.refresh();");
+			
+			setTimeout( function() 
+			{ 
+				$('body').layout().resizeAll(); //--
+			}, 1500);
+			
 		}
 	});
 
@@ -5798,7 +5859,7 @@ function initPictureThumbLayer()
 	});
 
 	var vector = new ol.layer.AnimatedCluster(
-	{	name: 'DBPedia pictures',
+	{	name: 'Pictures layer',
 		source: clusterSource,
 		// Limit resolution to avoid large area request
 		maxResolution: 40, // > zoom 12
@@ -5821,17 +5882,22 @@ function initPictureThumbLayer()
 	{	var info = $("#select").html("");
 		if (e.type=="add") 
 		{	
-			var el = e.element.get("features")[0];
+			var features = e.element.get("features");
 			
-			/*$("<h2>").text(el.get("label")).appendTo(info);
-			
-			if (el.get("thumbnail")) 
-				$("<img>").attr('src',el.get("thumbnail")).appendTo(info);
+			if (features)
+			{
+				var el = features[0];
 				
-			$("<p>").text(el.get("abstract")).appendTo(info);
-			*/
-			if (el.get("url"))
-				showPicture(el.get("url"), "", "");
+				/*$("<h2>").text(el.get("label")).appendTo(info);
+				
+				if (el.get("thumbnail")) 
+					$("<img>").attr('src',el.get("thumbnail")).appendTo(info);
+					
+				$("<p>").text(el.get("abstract")).appendTo(info);
+				*/
+				if (el.get("url"))
+					showPicture(el.get("url"), "", "");
+			}
 		}
 	});
 	
@@ -5861,12 +5927,15 @@ function initPictureThumbnailLightSlider()
 	
 	var slider = $('#mapPicturesLightSlider').lightSlider({
 		//gallery: true,
-		item: 8,
+		item: 5,//8,
 		loop: true,
-		slideMargin: 0,
-		thumbItem: 0,
-		verticalHeight:50,
+		//slideMargin: 0,
+		thumbItem: 20,
+		//verticalHeight:50,
 		autoWidth:false,
+		slideMargin: 10,
+		//controls: true,
+		thumbMargin: 10,
 	});
 	
 	_pictureThumbnailLightSlider = slider;
@@ -5876,20 +5945,47 @@ function initPictureThumbnailLightSlider()
 
 function addSlide(image_id) // url
 { 
-	var image_url = _map_pictures[image_id]["thumbnail"];
+	//if (_map_pictures[image_id])
+	{
+	var image_thumb_url = _map_pictures[image_id]["thumbnail"];
 	//var image_id = _map_pictures[image_id]["image_id"];
+	//var image_url = _map_pictures[image_id]["url"];
 	
 	// Class 'lslide' needs to be added with new slide item
 	// var newEl = "<li class='lslide'> <a href='javascript:void(0)'><img src='" + url + "' /></a> </li>";
-	var newEl = "<li class='lslide'> <a onclick=\"selectThumbPicture(" + image_id + ")\"><img src='" + image_url + "' /></a> </li>";
+	var newEl = "<li class='lslide'> <a onclick=\"selectThumbPicture(" + image_id + ")\"><img src='" + image_thumb_url + "' /></a> </li>";
 	_pictureThumbnailLightSlider.prepend(newEl);
+	}
+}
+
+//-- this might get triggered multiple times
+function clearOutOfViewSlides()
+{
+	//_map_pictures = _map_pictures.filter(pic => ol.extent.containsExtent(map.getView().calculateExtent(map.getSize()), pic.geometry.getExtent()));
+	
+	//-- _pictureThumbnailLightSlider should have a remove slide by identifier/index function to remove only not in view slides-pictures insted of removing all and readding the remaining ones
+	_pictureThumbnailLightSlider.empty();
+	
+	_map_pictures.forEach(function(pic, index, object){
+		if (!ol.extent.containsExtent(map.getView().calculateExtent(map.getSize()), pic.geometry.getExtent()))
+		{
+			//_map_pictures.
+			object.slice(index, 1);
+			//console.log("object.splice " + index);
+		}
+		else
+		{
+			//console.log("addSlide " + pic.image_id);
+			addSlide(pic.image_id);			
+		}
+	});	
 }
 
 function selectThumbPicture(image_id)
 {
 	//_map_pictures[image_id] = 
 	
-	showPicture(_map_pictures[image_id]["thumbnail"], "", "");
+	showPicture(_map_pictures[image_id]["url"], "", "");
 }
 
 

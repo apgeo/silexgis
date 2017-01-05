@@ -81,12 +81,6 @@
 
 var localizedText = {
     'en': {
-        /**
-         * @member $.fn.ajaxSelectPicker.locale
-         * @cfg {String} currentlySelected = 'Currently Selected'
-         * @markdown
-         * El texto que se utilizará para la etiqueta del grupo de opciones cuando se conservan las opciones seleccionadas.
-         */	
 		map_popup:
 		{
 			edit_cave_entrance: "Edit cave entrance",
@@ -101,39 +95,103 @@ var localizedText = {
 			{
 				map: "Map",
 				data: "Data",
-				files: "Files",
-				add: "Config", 
-				config: "Draw"
+				files: "Files",				
+				users: "Users",				
+				reports: "Reports",
+				add: "Add",
+				add_submenu:
+				{
+					picture: "Picture",
+					pictures: "Pictures",
+					view: "View",
+					trip_report: "Trip report",
+				},
+				config: "Config",
+				config_submenu:
+				{
+					feature_types: "Feature types",
+					team_members: "Team members",
+				},							
+				
+				draw: "Draw",
+				draw_submenu:
+				{
+					point: "Point",
+					line: "Line",
+					polygon: "Polygon",
+				},
+				tools: "Tools",
+				tools_submenu:
+				{
+					export_map: "Export"
+				},
+				
+			},
+			user_menu:
+			{
+				user: "User",
+				log_out: "Log out"
 			}
 		}
-		,
-		ajaxStatus: {
-            defaultLoadingText: "Loading...",
-            defaultSavingText: "Saving...",
-            defaultDoneText: "Done",
-            defaultRedirectText: "Redirecting...",
-            defaultErrorText: "Oops! Our bad, something wrong."
-        },
-        shrinker: {
-            moreText: "Read more", 
-            lessText: "hide"
-        }
     },
     'ro': {
+        /**
+         * @member $.fn.ajaxSelectPicker.locale
+         * @cfg {String} currentlySelected = 'Currently Selected'
+         * @markdown
+         * El texto que se utilizará para la etiqueta del grupo de opciones cuando se conservan las opciones seleccionadas.
+         */	
 		map_popup:
 		{
-			edit_cave_entrance: "Editeaza intrarea"
-        },	
-        ajaxStatus: {
-            defaultLoadingText: "Cargar...",
-            defaultSavingText: "Guardar...",
-            defaultDoneText: "Terminado",
-            defaultRedirectText: "Redirigir...",
-            defaultErrorText: "¡Ay! Nuestra algo malo, malo."
+			edit_cave_entrance: "Editeaza intrarea",
+			entrance_details: "Entrance details",
+			edit_cave: "Edit cave",
+			edit_cave_entrance: "Edit cave entrance",
+			meters_abbreviation: "m",
         },
-        shrinker: {
-            moreText: "Leer más", 
-            lessText: "esconder"
-        }
-    } // ... etc.
+		main_map:
+		{
+			menu:
+			{
+				map: "Harta",
+				data: "Date",
+				files: "Fisiere",
+				users: "Utilizatori",				
+				reports: "Rapoarte",
+				add: "Adauga",
+				add_submenu:
+				{
+					picture: "Poza",
+					pictures: "Poze",
+					view: "Detalii harta",
+					trip_report: "Raport de tura",
+				},
+				config: "Configuratie",
+				config_submenu:
+				{
+					feature_types: "Tipuri de obiecte",
+					team_members: "Membri de echipa",
+				},							
+				
+				draw: "Deseneaza",
+				draw_submenu:
+				{
+					point: "Punct",
+					line: "Linie",
+					polygon: "Poligon",
+				},
+				tools: "Unelte",
+				tools_submenu:
+				{
+					export_map: "Exporta ca imagine"
+				},
+				
+			},
+			user_menu:
+			{
+				user: "Utilizator",
+				log_out: "Iesire"
+			}
+		}
+	} // ... etc.
 };

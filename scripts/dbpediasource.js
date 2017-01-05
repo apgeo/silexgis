@@ -25,7 +25,7 @@ ol.source.DBPedia = function(opt_options)
 {	var options = opt_options || {};
 	var self = this; 
 
-	//var 
+	//var
 	this._features_indexed = {};
 	options.loader = this._loaderFn;
 	
@@ -138,7 +138,7 @@ ol.source.DBPedia.prototype._loaderFn = function(extent, resolution, projection)
 	$.ajax(
 	{	//url: this._url,
 		//dataType: 'jsonp', 
-		url: 'data/getPictures.php',
+		url: 'data/getPictures.php?bbox=' + bbox[0] + ',' + bbox[1] + ',' + bbox[2] + ',' + bbox[3],
 		dataType: 'json', // dataType: 'jsonp',
 		
 		//data: { query: query, format:"json" },

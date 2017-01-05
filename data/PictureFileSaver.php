@@ -58,9 +58,11 @@ if (!empty($_FILES['file']) && ($_FILES['file']['error'] != UPLOAD_ERR_OK)) {
     }
     else 			
 	{
+		$root = realpath($_SERVER["DOCUMENT_ROOT"])."/speogis";
+		
 		$user_directory = "";
-		$upload_dir = '../uploads/' . 'pictures/' . $user_directory;
-		$thumbs_upload_dir = '../uploads/' . 'pictures/' . "thumbnails/" . $user_directory;
+		$upload_dir = $root.'/uploads/' . 'pictures/' . $user_directory;
+		$thumbs_upload_dir = $root.'/uploads/' . 'pictures/' . "thumbnail/" . $user_directory;
 		//var_dump($_FILES);
 		
 		$file_path = $upload_dir . $_FILES['file']['name'];
@@ -69,7 +71,9 @@ if (!empty($_FILES['file']) && ($_FILES['file']['error'] != UPLOAD_ERR_OK)) {
 		//makeThumbnails($upload_dir, $_FILES['file']['name'], 0);
 		// $thumbnail_file_name = "thumb".$_FILES['file']['name'];
 		$thumbnail_file_name = "thumb".$_FILES['file']['name'];
-		$thumbnail_file_path = $upload_dir . $thumbnail_file_name;
+		$thumbnail_file_path = $thumbs_upload_dir . $thumbnail_file_name;
+		
+		//echo "$file_path, $thumbnail_file_path";
 		createThumbnail2($file_path, $thumbnail_file_path, 90, 63, $background=!false);
 		
 		

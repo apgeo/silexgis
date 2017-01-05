@@ -78,8 +78,8 @@
             return $rows;
         }
 
-        public static function get_pictures($user_id)
-        {
+        public static function get_pictures($user_id, $bbox)
+        {			
             if (empty($user_id) || ($user_id < 0))
             {
                 Utils::print_message("user_id parameter is empty", "argument error", MSG_ERROR);  
@@ -87,6 +87,10 @@
 				
                 //throw new Exception('Title are empty'); //return 0;
             }
+			
+			$bbox_polygon_text = "{$bbox[1]} {$bbox[0]},{$bbox[3]} {$bbox[0]},{$bbox[3]} {$bbox[2]},{$bbox[1]} {$bbox[2]},{$bbox[1]} {$bbox[0]}";
+			//echo $bbox_polygon_text;
+			
 			$tp = GPSData::$tablePrefix;
 			$query = "SELECT
 						images.id AS image_id, 
@@ -97,8 +101,10 @@
 						point_id,												
 						elevation, 
 						ASTEXT(spatial_geometry) AS sg FROM points
-						INNER JOIN images ON points.id = images.point_id"; //where disabled != 1 or disabled is null
+						INNER JOIN images ON points.id = images.point_id
+						WHERE CONTAINS(GEOMFROMTEXT('Polygon(($bbox_polygon_text))'), spatial_geometry)"; //where disabled != 1 or disabled is null
 			
+			// WHERE CONTAINS(GEOMFROMTEXT('Polygon((44 24,46 24,46 26,44 26,44 24))'), spatial_geometry)"
 			// X(coords) AS lat_from_point, Y(coords) AS long_from_point, 
 			
 			//$query = "select *, AsWKB(coords) AS wkb FROM {$tp}points"; //where disabled != 1 or disabled is null

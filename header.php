@@ -510,20 +510,20 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
       <ul class="nav navbar-nav">
         <li <?php if ($currentPage == 'index') echo "class='active'"; ?> ><a href="/speogis/index.php">*{main_map.menu.map}*<span class="sr-only">(current)</span></a></li>
         <li <?php if ($currentPage == 'points') echo "class='active'"; ?> ><a href="/speogis/user/points.php">*{main_map.menu.data}*</a></li>
-		<li <?php if ($currentPage == 'files') echo "class='active'"; ?> ><a href="/speogis/user/files.php">Files</a></li>
-		<li <?php if ($currentPage == 'users') echo "class='active'"; ?> ><a href="/speogis/user/users.php">Users</a></li>		
-		<li <?php if ($currentPage == 'trip_reports') echo "class='active'"; ?> ><a href="/speogis/user/trip_reports.php">Reports</a></li>		
+		<li <?php if ($currentPage == 'files') echo "class='active'"; ?> ><a href="/speogis/user/files.php">*{main_map.menu.files}*</a></li>
+		<li <?php if ($currentPage == 'users') echo "class='active'"; ?> ><a href="/speogis/user/users.php">*{main_map.menu.users}*</a></li>
+		<li <?php if ($currentPage == 'trip_reports') echo "class='active'"; ?> ><a href="/speogis/user/trip_reports.php">*{main_map.menu.reports}*</a></li>
 
         <li role="separator" class="divider"></li>
 		
 		<li class="dropdown">
-          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Add<span class="caret"></span></a>
+          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.menu.add}*<span class="caret"></span></a>
           <ul class="dropdown-menu">
             <!--<li><a href="#" onclick="enableDrawNewCave();" >Cave</a></li>-->
-			<li><a href="#" onclick="enableDrawNewPicture();" >Picture</a></li>
-			<li><a href="#" onclick="addPictures();" >Pictures</a></li>
-			<li><a href="#" onclick="addView();" >View</a></li>
-			<li><a href="#" onclick="addTripReport();" >Trip report</a></li>
+			<li><a href="#" onclick="enableDrawNewPicture();" >*{main_map.menu.add_submenu.picture}*</a></li>
+			<li><a href="#" onclick="addPictures();" >*{main_map.menu.add_submenu.pictures}*</a></li>
+			<li><a href="#" onclick="addView();" >*{main_map.menu.add_submenu.view}*</a></li>
+			<li><a href="#" onclick="addTripReport();" >*{main_map.menu.add_submenu.trip_report}*</a></li>
 
 			<!--
 			<li role="separator" class="divider"></li>
@@ -543,28 +543,28 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 		<li role="separator" class="divider"></li>
 		
 		<li class="dropdown">
-			<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Config<span class="caret"></span></a>
+			<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.menu.config}*<span class="caret"></span></a>
 			<ul class="dropdown-menu">
-				<li <?php if ($currentPage == 'feature_types') echo "class='active'"; ?> ><a href="/speogis/user/feature_types.php">Feature types<span class="sr-only">(current)</span></a></li>          
-				<li <?php if ($currentPage == 'team_members') echo "class='active'"; ?> ><a href="/speogis/user/team_members.php">Team members<span class="sr-only">(current)</span></a></li>          
+				<li <?php if ($currentPage == 'feature_types') echo "class='active'"; ?> ><a href="/speogis/user/feature_types.php">*{main_map.menu.config_submenu.feature_types}*<span class="sr-only">(current)</span></a></li>          
+				<li <?php if ($currentPage == 'team_members') echo "class='active'"; ?> ><a href="/speogis/user/team_members.php">*{main_map.menu.config_submenu.team_members}*<span class="sr-only">(current)</span></a></li>          
 			</ul>
         </li>
 		
 		<li role="separator" class="divider"></li>
 		
 		<li class="dropdown">
-          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Draw <span class="caret"></span></a>
+          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.menu.draw}*<span class="caret"></span></a>
           <ul class="dropdown-menu">
-            <li><a href="#" onclick="selectDrawFeature('Point');" >Point</a></li>
-            <li><a href="#" onclick="selectDrawFeature('LineString');" >Line</a></li>
-            <li><a href="#" onclick="selectDrawFeature('Polygon');" >Polygon</a></li>            
+            <li><a href="#" onclick="selectDrawFeature('Point');" >*{main_map.menu.draw_submenu.point}*</a></li>
+            <li><a href="#" onclick="selectDrawFeature('LineString');" >*{main_map.menu.draw_submenu.line}*</a></li>
+            <li><a href="#" onclick="selectDrawFeature('Polygon');" >*{main_map.menu.draw_submenu.polygon}*</a></li>
           </ul>
         </li>
 
 		<li class="dropdown">
-          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Tools <span class="caret"></span></a>
+          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.menu.tools}*<span class="caret"></span></a>
           <ul class="dropdown-menu">
-            <li><a id="export_map" href="#" onclick="" download="map.png" >Export</a></li>
+            <li><a id="export_map" href="#" onclick="" download="map.png" >*{main_map.menu.tools_submenu.export_map}*</a></li>
 			<!--<li><a href="#" onclick="exportMap" download="map.png" >Export</a></li>-->
 		  </ul>
 		</li>		
@@ -646,9 +646,9 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
       <ul class="nav navbar-nav navbar-right">
         <!--<li><a href="#">Link</a></li>-->
         <li class="dropdown">
-          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">User <span class="caret"></span></a>
+          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.user_menu.user}*<span class="caret"></span></a>
           <ul class="dropdown-menu">
-            <li><a href="/speogis/logout.php">Log out</a></li>
+            <li><a href="/speogis/logout.php">*{main_map.user_menu.log_out}*</a></li>
             <!--
 			<li><a href="#">Another action</a></li>
             <li><a href="#">Something else here</a></li>

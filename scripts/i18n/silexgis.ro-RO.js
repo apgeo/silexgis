@@ -116,9 +116,5 @@ var localizedText = {
             defaultRedirectText: "Redirigir...",
             defaultErrorText: "¡Ay! Nuestra algo malo, malo.";
         },
-        shrinker: {
-            moreText: "Leer más", 
-            lessText: "esconder"
-        }
     } // ... etc.
 };

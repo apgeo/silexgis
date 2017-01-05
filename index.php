@@ -91,13 +91,10 @@ img.pictureThumbnailListContainer {
 	</div>
 <!--<div class="ui-layout-north">North</div>-->
 <div class="ui-layout-south">
-
-x1
 <div class="pictureThumbnailListContainer">
     <ul id="mapPicturesLightSlider">
     </ul>
 </div>
-x2
 <!--
 	<div>
 		<label><input type="checkbox" onchange="" id="hgPersaniCentruCheckBox" value="false"/><a href='./assets/layer_images/persani_comana_geologica.jpg' target='_blank' >Gelogic Map 1970 - persani centru</a><label>
