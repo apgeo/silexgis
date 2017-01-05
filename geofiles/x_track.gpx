@@ -1,0 +1,159 @@
+﻿<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" creator="nüvi 3590" version="1.1" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.garmin.com/xmlschemas/GpxExtensions/v3 http://www.garmin.com/xmlschemas/GpxExtensionsv3.xsd http://www.garmin.com/xmlschemas/TrackPointExtension/v2 http://www.garmin.com/xmlschemas/TrackPointExtensionv2.xsd">
+  <metadata><link href="http://www.garmin.com"><text>Garmin International</text></link><time>2015-09-11T15:54:57Z</time>
+
+</metadata>
+  <trk>
+    <name>Jurnal activ: 05 AUG 2015 11:11</name>
+    <trkseg>
+      <trkpt lat="45.659345" lon="25.561790">
+        <ele>498.10</ele>
+        <time>2015-08-05T08:11:17Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:course>98.82</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.659455" lon="25.561753">
+        <ele>499.06</ele>
+        <time>2015-08-05T08:11:27Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:course>98.82</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.659451" lon="25.561859">
+        <ele>498.58</ele>
+        <time>2015-08-05T08:11:29Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:speed>2.75</gpxtpx:speed>
+            <gpxtpx:course>162.35</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.659431" lon="25.561872">
+        <ele>497.14</ele>
+        <time>2015-08-05T08:11:30Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:speed>2.75</gpxtpx:speed>
+            <gpxtpx:course>172.24</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.659245" lon="25.561989">
+        <ele>496.66</ele>
+        <time>2015-08-05T08:11:37Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:speed>1.37</gpxtpx:speed>
+            <gpxtpx:course>117.18</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.659245" lon="25.561989">
+        <ele>496.18</ele>
+        <time>2015-08-05T08:11:38Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:speed>2.75</gpxtpx:speed>
+            <gpxtpx:course>93.18</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.659245" lon="25.561989">
+        <ele>497.14</ele>
+        <time>2015-08-05T08:11:39Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:speed>4.12</gpxtpx:speed>
+            <gpxtpx:course>87.53</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.659253" lon="25.562009">
+        <ele>496.18</ele>
+        <time>2015-08-05T08:11:40Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:speed>4.12</gpxtpx:speed>
+            <gpxtpx:course>84.71</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.659270" lon="25.562053">
+        <ele>903.78</ele>
+        <time>2015-08-05T15:14:35Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:course>343.06</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.248247" lon="23.817694">
+        <ele>902.33</ele>
+        <time>2015-08-05T15:14:49Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:course>343.06</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.248247" lon="23.817694">
+        <ele>902.33</ele>
+        <time>2015-08-05T15:15:12Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:course>343.06</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+    </trkseg>
+	
+    <trkseg>
+      <trkpt lat="41.659345" lon="25.561790">
+        <ele>498.10</ele>
+        <time>2015-08-05T08:11:17Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:course>98.82</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+      <trkpt lat="42.659455" lon="25.561753">
+        <ele>499.06</ele>
+        <time>2015-08-05T08:11:27Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:course>98.82</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+      <trkpt lat="43.659451" lon="25.561859">
+        <ele>498.58</ele>
+        <time>2015-08-05T08:11:29Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:speed>2.75</gpxtpx:speed>
+            <gpxtpx:course>162.35</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+      <trkpt lat="44.659431" lon="25.561872">
+        <ele>497.14</ele>
+        <time>2015-08-05T08:11:30Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:speed>2.75</gpxtpx:speed>
+            <gpxtpx:course>172.24</gpxtpx:course>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+
+    </trkseg>
+	
+  </trk>
+</gpx>
