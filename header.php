@@ -565,6 +565,7 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
           <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.menu.tools}*<span class="caret"></span></a>
           <ul class="dropdown-menu">
             <li><a id="export_map" href="#" onclick="" download="map.png" >*{main_map.menu.tools_submenu.export_map}*</a></li>
+			<li><a id="export_map" href="/speogis/test/CaveView.js-dev/src/html/" >CV 3d test</a></li>
 			<!--<li><a href="#" onclick="exportMap" download="map.png" >Export</a></li>-->
 		  </ul>
 		</li>		
