@@ -14,6 +14,7 @@
  * @method TripLogsQuery orderByTargetZone($order = Criteria::ASC) Order by the target_zone column
  * @method TripLogsQuery orderByType($order = Criteria::ASC) Order by the type column
  * @method TripLogsQuery orderByTemporary($order = Criteria::ASC) Order by the temporary column
+ * @method TripLogsQuery orderBySummary($order = Criteria::ASC) Order by the summary column
  *
  * @method TripLogsQuery groupById() Group by the id column
  * @method TripLogsQuery groupByAddTime() Group by the add_time column
@@ -23,6 +24,7 @@
  * @method TripLogsQuery groupByTargetZone() Group by the target_zone column
  * @method TripLogsQuery groupByType() Group by the type column
  * @method TripLogsQuery groupByTemporary() Group by the temporary column
+ * @method TripLogsQuery groupBySummary() Group by the summary column
  *
  * @method TripLogsQuery leftJoin($relation) Adds a LEFT JOIN clause to the query
  * @method TripLogsQuery rightJoin($relation) Adds a RIGHT JOIN clause to the query
@@ -38,6 +40,7 @@
  * @method TripLogs findOneByTargetZone(string $target_zone) Return the first TripLogs filtered by the target_zone column
  * @method TripLogs findOneByType(string $type) Return the first TripLogs filtered by the type column
  * @method TripLogs findOneByTemporary(string $temporary) Return the first TripLogs filtered by the temporary column
+ * @method TripLogs findOneBySummary(string $summary) Return the first TripLogs filtered by the summary column
  *
  * @method array findById(string $id) Return TripLogs objects filtered by the id column
  * @method array findByAddTime(string $add_time) Return TripLogs objects filtered by the add_time column
@@ -47,6 +50,7 @@
  * @method array findByTargetZone(string $target_zone) Return TripLogs objects filtered by the target_zone column
  * @method array findByType(string $type) Return TripLogs objects filtered by the type column
  * @method array findByTemporary(string $temporary) Return TripLogs objects filtered by the temporary column
+ * @method array findBySummary(string $summary) Return TripLogs objects filtered by the summary column
  *
  * @package    propel.generator.speogis.om
  */
@@ -154,7 +158,7 @@ abstract class BaseTripLogsQuery extends ModelCriteria
      */
     protected function findPkSimple($key, $con)
     {
-        $sql = 'SELECT `id`, `add_time`, `trip_start_time`, `trip_end_time`, `details`, `target_zone`, `type`, `temporary` FROM `trip_logs` WHERE `id` = :p0';
+        $sql = 'SELECT `id`, `add_time`, `trip_start_time`, `trip_end_time`, `details`, `target_zone`, `type`, `temporary`, `summary` FROM `trip_logs` WHERE `id` = :p0';
         try {
             $stmt = $con->prepare($sql);
             $stmt->bindValue(':p0', $key, PDO::PARAM_STR);
@@ -528,6 +532,35 @@ abstract class BaseTripLogsQuery extends ModelCriteria
         }
 
         return $this->addUsingAlias(TripLogsPeer::TEMPORARY, $temporary, $comparison);
+    }
+
+    /**
+     * Filter the query on the summary column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterBySummary('fooValue');   // WHERE summary = 'fooValue'
+     * $query->filterBySummary('%fooValue%'); // WHERE summary LIKE '%fooValue%'
+     * </code>
+     *
+     * @param     string $summary The value to use as filter.
+     *              Accepts wildcards (* and % trigger a LIKE)
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return TripLogsQuery The current query, for fluid interface
+     */
+    public function filterBySummary($summary = null, $comparison = null)
+    {
+        if (null === $comparison) {
+            if (is_array($summary)) {
+                $comparison = Criteria::IN;
+            } elseif (preg_match('/[\%\*]/', $summary)) {
+                $summary = str_replace('*', '%', $summary);
+                $comparison = Criteria::LIKE;
+            }
+        }
+
+        return $this->addUsingAlias(TripLogsPeer::SUMMARY, $summary, $comparison);
     }
 
     /**

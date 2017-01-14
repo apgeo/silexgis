@@ -43,6 +43,9 @@ class UsersTableMap extends TableMap
         $this->addColumn('password', 'Password', 'VARCHAR', true, 50, null);
         $this->addColumn('email', 'Email', 'VARCHAR', false, 50, null);
         $this->addColumn('admin_level', 'AdminLevel', 'INTEGER', false, null, null);
+        $this->addColumn('language', 'Language', 'VARCHAR', false, 5, null);
+        $this->addColumn('last_log_in_time', 'LastLogInTime', 'TIMESTAMP', false, null, null);
+        $this->addColumn('add_time', 'AddTime', 'TIMESTAMP', true, null, null);
         // validators
     } // initialize()
 

@@ -1,4 +1,7 @@
 <?php
+	require_once("grid_common.php");  //require_once('utilities.php'); include_once 'db_interface.php'; include_once 'data_interface.php'; require_once 'languages.php'; 	
+?>
+<?php
 ################################################################################   
 ## +---------------------------------------------------------------------------+
 ## | 1. Creating & Calling:                                                    | 
@@ -133,13 +136,13 @@ GROUP BY team_members.id ;
 
 
     $vm_columns = array(   
-    "first_name"  =>array("header"=>"First name", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
-    "last_name" =>array("header"=>"Last name",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
-	"nickname" =>array("header"=>"Nickname",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
-	"email" =>array("header"=>"Email",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
-	"notes" =>array("header"=>"Notes",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
-	"member_trip_count" =>array("header"=>"Count",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
-	"member_trip_percentage" =>array("header"=>"Percentage",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+    "first_name"  =>array("header"=>"*{team_members.col_first_name}*", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+    "last_name" =>array("header"=>"*{team_members.col_last_name}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+	"nickname" =>array("header"=>"*{team_members.col_nickname}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+	"email" =>array("header"=>"*{team_members.col_email}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+	"notes" =>array("header"=>"*{team_members.col_notes}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+	"member_trip_count" =>array("header"=>"*{team_members.col_trip_count}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+	"member_trip_percentage" =>array("header"=>"*{team_members.col_trip_percentage}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
     //"email" => array("header"=>"Email", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
     // "browser_language"  => array("header"=>"Browser language",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
     // "user_ip" => array("header"=>"User ip", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),

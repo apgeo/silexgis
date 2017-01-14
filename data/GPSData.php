@@ -431,6 +431,90 @@
             return $rows;
         }
 
+        public static function get_trip_report_features($user_id, $trip_log_id)
+        {
+            if (empty($user_id) || ($user_id < 0))
+            {
+                Utils::print_message("user_id parameter is empty", "argument error", MSG_ERROR);
+                return false;
+				
+                //throw new Exception('Title are empty'); //return 0;
+            }
+
+            if (empty($trip_log_id) || ($trip_log_id < 0))
+            {
+                Utils::print_message("trip_log_id parameter is empty", "argument error", MSG_ERROR);
+                return false;
+				
+                //throw new Exception('Title are empty'); //return 0;
+            }
+			
+			//-- query needs improvement as too many rows are selected
+			
+			$query = "SELECT trip_logs.id AS trip_log_id, trip_logs_to_features.id AS trip_logs_to_features_id, trip_logs_to_features.geoobject_id as geoobject_id, geoobject_type, geoobject_name
+						FROM trip_logs
+						INNER JOIN trip_logs_to_features ON trip_logs_to_features.trip_log_id = trip_logs.id
+						INNER JOIN 
+						(SELECT id, name as geoobject_name, 'cave' AS object_type FROM caves
+						 UNION
+						 SELECT id, name as geoobject_name, 'feature' AS object_type FROM features
+						 UNION
+						 SELECT id, name as geoobject_name, 'feature' AS object_type FROM cave_entrances
+						 ) AS geoobjects_vt ON trip_logs_to_features.geoobject_id = geoobjects_vt.id AND object_type = trip_logs_to_features.geoobject_type
+						 WHERE trip_logs.id = $trip_log_id
+						 ORDER BY trip_logs.id"; //where disabled != 1 or disabled is null
+			
+			//$query = "select *, AsWKB(coords) AS wkb FROM {$tp}points"; //where disabled != 1 or disabled is null
+            $db_result = DB_Execute(GPSData::$ConId, $query);
+
+            $rows = array();
+            
+            while ($row = mysql_fetch_array($db_result, MYSQL_ASSOC))
+			{
+				//$row["file_type"] = "cave";
+                $rows[/*$row["id"]*/] = $row; // 0 based index
+			}
+                
+            return $rows;
+
+/*			
+            if (empty($user_id) || ($user_id < 0))
+            {
+                Utils::print_message("user_id parameter is empty", "argument error", MSG_ERROR);
+                return false;
+				
+                //throw new Exception('Title are empty'); //return 0;
+            }
+
+            if (empty($trip_log_id) || ($trip_log_id < 0))
+            {
+                Utils::print_message("$trip_log_id parameter is empty", "argument error", MSG_ERROR);
+                return false;
+				
+                //throw new Exception('Title are empty'); //return 0;
+            }
+			
+			$query = "SELECT features.id, features.name, user_id, trip_logs_to_features.id AS trip_logs_to_features_id
+								FROM features
+								INNER JOIN trip_logs_to_features ON trip_logs_to_features.feature_id = features.id
+								WHERE trip_logs_to_features.trip_log_id = $trip_log_id
+								ORDER BY features.id"; //where disabled != 1 or disabled is null
+			
+			//$query = "select *, AsWKB(coords) AS wkb FROM {$tp}points"; //where disabled != 1 or disabled is null
+            $db_result = DB_Execute(GPSData::$ConId, $query);
+
+            $rows = array();
+            
+            while ($row = mysql_fetch_array($db_result, MYSQL_ASSOC))
+			{
+				//$row["file_type"] = "cave";
+                $rows[] = $row; // 0 based index
+			}
+                
+            return $rows;
+*/			
+        }
+		
 		public static function add_picture($user_id, $file_name, $thumbnail_file_name, $coord)
 		{
 	$image = null;

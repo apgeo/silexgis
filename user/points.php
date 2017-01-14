@@ -9,7 +9,7 @@
 	//include_once "../header.php"; // include_once 'db_interface.php'; require_once('utilities.php'); 
   //require_once('utilities.php'); include_once 'db_interface.php'; include_once 'data_interface.php'; require_once 'languages.php'; 
 
-  echo "<b><h3>GPS Points</h3></b>";
+  echo "<b><h3>*{gps_points.page_title}*</h3></b>";
   ##  *** creating variables that we need for database connection 
   
   $DB_USER= DB_USER;            
@@ -58,7 +58,7 @@ ob_start();
 ##  *** put a primary key on the first place 
   //$sql="SELECT points.id, X(coords) as lat, Y(coords) as lon, elevation, gpx_name, gpx_time, `_details`, points._id_point_type FROM points"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
    
-  $sql="SELECT points.id, X(spatial_geometry) as lat, Y(spatial_geometry) as lon, elevation, gpx_name, gpx_time, `_details`, points._id_point_type, feature_types.name AS point_type, 'Show point' as view_on_map, points.id as pid FROM points LEFT JOIN feature_types ON points._id_point_type = feature_types.id"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
+  $sql="SELECT points.id, X(spatial_geometry) as lat, Y(spatial_geometry) as lon, elevation, gpx_name, gpx_time, `_details`, points._id_point_type, feature_types.name AS point_type, 'Show point' as view_on_map, points.id as pid FROM points LEFT JOIN feature_types ON points._id_point_type = feature_types.id"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : "");
    
 ##  *** set needed options
   $debug_mode = false;
@@ -192,18 +192,18 @@ ob_start();
   $dgrid->setAutoColumnsInViewMode(false);  
 
     $vm_columns = array(   
-    "lat"  =>array("header"=>"lat", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "readonly"=>true),    
-    "lon" =>array("header"=>"lon",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "readonly"=>true),
-    "elevation" => array("header"=>"altitudine", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
-    "gpx_name"  => array("header"=>"Nume",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
-    "gpx_time"  => array("header"=>"Data",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
-    "point_type"  => array("header"=>"Tip",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
-    "_details"  => array("header"=>"Detalii",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+    "lat"  =>array("header"=>"*{gps_points.col_lat}*", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "readonly"=>true),    
+    "lon" =>array("header"=>"*{gps_points.col_long}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "readonly"=>true),
+    "elevation" => array("header"=>"*{gps_points.col_alt}*", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
+    "gpx_name"  => array("header"=>"*{gps_points.col_name}*",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
+    "gpx_time"  => array("header"=>"*{gps_points.col_time}*",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+    "point_type"  => array("header"=>"*{gps_points.col_type}*",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+    "_details"  => array("header"=>"*{gps_points.details}*",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
 	//"view_on_map"  => array("header"=>"Map",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "summarize"=>false, "on_js_event"=>"", "target_path"=>"http://localhost/speogis/?long=23.49174&lat=43.20218" ),    
     //"pic"  =>array("header"=>"Pic",      "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "field_key"=>"pic", "field_key_1"=>"pic", "field_data"=>"x", "rel"=>"", "title"=>"", "target"=>"_self", "href"=>"{0}"),
     //"gallery_url"  =>array("header"=>"Pic",      "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "field_key"=>"gallery_url", "field_key_1"=>"gallery_url", "field_data"=>"{1}", "rel"=>"{0}", "title"=>"{0}", "target"=>"_self", "href"=>"{0}"),
     //"pic"=>array("header"=>"pic", "type"=>"image",      "align"=>"left", "width"=>"20px", "wrap"=>"wrap", "text_length"=>"-1", "field_key"=>"gallery_url", "target_path"=>"{0}", "default"=>"def", "image_width"=>"50px", "image_height"=>"50px", "linkto"=>"{0}", "magnify"=>"true", "magnify_type"=>"lightbox", "magnify_power"=>"2"),
-	"view_on_map" =>array("header"=>"Map",    "visible"=>"true", "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal",	
+	"view_on_map" =>array("header"=>"*{gps_points.col_map_location}*",    "visible"=>"true", "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal",	
 	
 	 "field_key"=>"lat", 
   "field_key_1"=>"lon", 

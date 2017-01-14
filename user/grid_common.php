@@ -24,3 +24,8 @@
 	//Propel::init("$root/db/propel_1_6_pr/build/conf/speogis-conf.php");
 	//set_include_path("$root/db/propel_1_6_pr/build/classes" . PATH_SEPARATOR . get_include_path());
 ?>
+<script>
+	$(document).ready(function() {
+	});
+</script>
+<script type="text/javascript" src="/speogis/scripts/user_common.js"></script>

@@ -24,13 +24,13 @@ abstract class BaseUsersPeer
     const TM_CLASS = 'UsersTableMap';
 
     /** The total number of columns. */
-    const NUM_COLUMNS = 5;
+    const NUM_COLUMNS = 8;
 
     /** The number of lazy-loaded columns. */
     const NUM_LAZY_LOAD_COLUMNS = 0;
 
     /** The number of columns to hydrate (NUM_COLUMNS - NUM_LAZY_LOAD_COLUMNS) */
-    const NUM_HYDRATE_COLUMNS = 5;
+    const NUM_HYDRATE_COLUMNS = 8;
 
     /** the column name for the id field */
     const ID = 'users.id';
@@ -46,6 +46,15 @@ abstract class BaseUsersPeer
 
     /** the column name for the admin_level field */
     const ADMIN_LEVEL = 'users.admin_level';
+
+    /** the column name for the language field */
+    const LANGUAGE = 'users.language';
+
+    /** the column name for the last_log_in_time field */
+    const LAST_LOG_IN_TIME = 'users.last_log_in_time';
+
+    /** the column name for the add_time field */
+    const ADD_TIME = 'users.add_time';
 
     /** The default string format for model objects of the related table **/
     const DEFAULT_STRING_FORMAT = 'YAML';
@@ -66,12 +75,12 @@ abstract class BaseUsersPeer
      * e.g. UsersPeer::$fieldNames[UsersPeer::TYPE_PHPNAME][0] = 'Id'
      */
     protected static $fieldNames = array (
-        BasePeer::TYPE_PHPNAME => array ('Id', 'Username', 'Password', 'Email', 'AdminLevel', ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'username', 'password', 'email', 'adminLevel', ),
-        BasePeer::TYPE_COLNAME => array (UsersPeer::ID, UsersPeer::USERNAME, UsersPeer::PASSWORD, UsersPeer::EMAIL, UsersPeer::ADMIN_LEVEL, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'USERNAME', 'PASSWORD', 'EMAIL', 'ADMIN_LEVEL', ),
-        BasePeer::TYPE_FIELDNAME => array ('id', 'username', 'password', 'email', 'admin_level', ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, )
+        BasePeer::TYPE_PHPNAME => array ('Id', 'Username', 'Password', 'Email', 'AdminLevel', 'Language', 'LastLogInTime', 'AddTime', ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'username', 'password', 'email', 'adminLevel', 'language', 'lastLogInTime', 'addTime', ),
+        BasePeer::TYPE_COLNAME => array (UsersPeer::ID, UsersPeer::USERNAME, UsersPeer::PASSWORD, UsersPeer::EMAIL, UsersPeer::ADMIN_LEVEL, UsersPeer::LANGUAGE, UsersPeer::LAST_LOG_IN_TIME, UsersPeer::ADD_TIME, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'USERNAME', 'PASSWORD', 'EMAIL', 'ADMIN_LEVEL', 'LANGUAGE', 'LAST_LOG_IN_TIME', 'ADD_TIME', ),
+        BasePeer::TYPE_FIELDNAME => array ('id', 'username', 'password', 'email', 'admin_level', 'language', 'last_log_in_time', 'add_time', ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, )
     );
 
     /**
@@ -81,12 +90,12 @@ abstract class BaseUsersPeer
      * e.g. UsersPeer::$fieldNames[BasePeer::TYPE_PHPNAME]['Id'] = 0
      */
     protected static $fieldKeys = array (
-        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'Username' => 1, 'Password' => 2, 'Email' => 3, 'AdminLevel' => 4, ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'username' => 1, 'password' => 2, 'email' => 3, 'adminLevel' => 4, ),
-        BasePeer::TYPE_COLNAME => array (UsersPeer::ID => 0, UsersPeer::USERNAME => 1, UsersPeer::PASSWORD => 2, UsersPeer::EMAIL => 3, UsersPeer::ADMIN_LEVEL => 4, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'USERNAME' => 1, 'PASSWORD' => 2, 'EMAIL' => 3, 'ADMIN_LEVEL' => 4, ),
-        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'username' => 1, 'password' => 2, 'email' => 3, 'admin_level' => 4, ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, )
+        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'Username' => 1, 'Password' => 2, 'Email' => 3, 'AdminLevel' => 4, 'Language' => 5, 'LastLogInTime' => 6, 'AddTime' => 7, ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'username' => 1, 'password' => 2, 'email' => 3, 'adminLevel' => 4, 'language' => 5, 'lastLogInTime' => 6, 'addTime' => 7, ),
+        BasePeer::TYPE_COLNAME => array (UsersPeer::ID => 0, UsersPeer::USERNAME => 1, UsersPeer::PASSWORD => 2, UsersPeer::EMAIL => 3, UsersPeer::ADMIN_LEVEL => 4, UsersPeer::LANGUAGE => 5, UsersPeer::LAST_LOG_IN_TIME => 6, UsersPeer::ADD_TIME => 7, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'USERNAME' => 1, 'PASSWORD' => 2, 'EMAIL' => 3, 'ADMIN_LEVEL' => 4, 'LANGUAGE' => 5, 'LAST_LOG_IN_TIME' => 6, 'ADD_TIME' => 7, ),
+        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'username' => 1, 'password' => 2, 'email' => 3, 'admin_level' => 4, 'language' => 5, 'last_log_in_time' => 6, 'add_time' => 7, ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, )
     );
 
     /**
@@ -165,12 +174,18 @@ abstract class BaseUsersPeer
             $criteria->addSelectColumn(UsersPeer::PASSWORD);
             $criteria->addSelectColumn(UsersPeer::EMAIL);
             $criteria->addSelectColumn(UsersPeer::ADMIN_LEVEL);
+            $criteria->addSelectColumn(UsersPeer::LANGUAGE);
+            $criteria->addSelectColumn(UsersPeer::LAST_LOG_IN_TIME);
+            $criteria->addSelectColumn(UsersPeer::ADD_TIME);
         } else {
             $criteria->addSelectColumn($alias . '.id');
             $criteria->addSelectColumn($alias . '.username');
             $criteria->addSelectColumn($alias . '.password');
             $criteria->addSelectColumn($alias . '.email');
             $criteria->addSelectColumn($alias . '.admin_level');
+            $criteria->addSelectColumn($alias . '.language');
+            $criteria->addSelectColumn($alias . '.last_log_in_time');
+            $criteria->addSelectColumn($alias . '.add_time');
         }
     }
 

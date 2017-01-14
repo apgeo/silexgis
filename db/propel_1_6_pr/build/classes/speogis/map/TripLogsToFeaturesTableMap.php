@@ -3,7 +3,7 @@
 
 
 /**
- * This class defines the structure of the 'geoobjects_to_files' table.
+ * This class defines the structure of the 'trip_logs_to_features' table.
  *
  *
  *
@@ -14,13 +14,13 @@
  *
  * @package    propel.generator.speogis.map
  */
-class GeoobjectsToFilesTableMap extends TableMap
+class TripLogsToFeaturesTableMap extends TableMap
 {
 
     /**
      * The (dot-path) name of this class
      */
-    const CLASS_NAME = 'speogis.map.GeoobjectsToFilesTableMap';
+    const CLASS_NAME = 'speogis.map.TripLogsToFeaturesTableMap';
 
     /**
      * Initialize the table attributes, columns and validators
@@ -32,20 +32,20 @@ class GeoobjectsToFilesTableMap extends TableMap
     public function initialize()
     {
         // attributes
-        $this->setName('geoobjects_to_files');
-        $this->setPhpName('GeoobjectsToFiles');
-        $this->setClassname('GeoobjectsToFiles');
+        $this->setName('trip_logs_to_features');
+        $this->setPhpName('TripLogsToFeatures');
+        $this->setClassname('TripLogsToFeatures');
         $this->setPackage('speogis');
         $this->setUseIdGenerator(true);
         // columns
         $this->addPrimaryKey('id', 'Id', 'BIGINT', true, null, null);
-        $this->addColumn('file_id', 'FileId', 'BIGINT', true, null, null);
         $this->addColumn('geoobject_id', 'GeoobjectId', 'BIGINT', true, null, null);
-        $this->addColumn('geoobject_type', 'GeoobjectType', 'CHAR', true, null, null);
+        $this->addColumn('trip_log_id', 'TripLogId', 'BIGINT', true, null, null);
+        $this->addColumn('geoobject_type', 'GeoobjectType', 'CHAR', false, null, null);
         $this->getColumn('geoobject_type', false)->setValueSet(array (
   0 => 'cave',
   1 => 'feature',
-  2 => 'cave_entry',
+  2 => 'cave_entrance',
 ));
         // validators
     } // initialize()
@@ -57,4 +57,4 @@ class GeoobjectsToFilesTableMap extends TableMap
     {
     } // buildRelations()
 
-} // GeoobjectsToFilesTableMap
+} // TripLogsToFeaturesTableMap

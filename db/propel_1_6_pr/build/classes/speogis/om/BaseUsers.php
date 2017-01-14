@@ -60,6 +60,24 @@ abstract class BaseUsers extends BaseObject implements Persistent
     protected $admin_level;
 
     /**
+     * The value for the language field.
+     * @var        string
+     */
+    protected $language;
+
+    /**
+     * The value for the last_log_in_time field.
+     * @var        string
+     */
+    protected $last_log_in_time;
+
+    /**
+     * The value for the add_time field.
+     * @var        string
+     */
+    protected $add_time;
+
+    /**
      * Flag to prevent endless save loop, if this object is referenced
      * by another object which falls in this transaction.
      * @var        boolean
@@ -132,6 +150,97 @@ abstract class BaseUsers extends BaseObject implements Persistent
     {
 
         return $this->admin_level;
+    }
+
+    /**
+     * Get the [language] column value.
+     *
+     * @return string
+     */
+    public function getLanguage()
+    {
+
+        return $this->language;
+    }
+
+    /**
+     * Get the [optionally formatted] temporal [last_log_in_time] column value.
+     *
+     *
+     * @param string $format The date/time format string (either date()-style or strftime()-style).
+     *				 If format is null, then the raw DateTime object will be returned.
+     * @return mixed Formatted date/time value as string or DateTime object (if format is null), null if column is null, and 0 if column value is 0000-00-00 00:00:00
+     * @throws PropelException - if unable to parse/validate the date/time value.
+     */
+    public function getLastLogInTime($format = 'Y-m-d H:i:s')
+    {
+        if ($this->last_log_in_time === null) {
+            return null;
+        }
+
+        if ($this->last_log_in_time === '0000-00-00 00:00:00') {
+            // while technically this is not a default value of null,
+            // this seems to be closest in meaning.
+            return null;
+        }
+
+        try {
+            $dt = new DateTime($this->last_log_in_time);
+        } catch (Exception $x) {
+            throw new PropelException("Internally stored date/time/timestamp value could not be converted to DateTime: " . var_export($this->last_log_in_time, true), $x);
+        }
+
+        if ($format === null) {
+            // Because propel.useDateTimeClass is true, we return a DateTime object.
+            return $dt;
+        }
+
+        if (strpos($format, '%') !== false) {
+            return strftime($format, $dt->format('U'));
+        }
+
+        return $dt->format($format);
+
+    }
+
+    /**
+     * Get the [optionally formatted] temporal [add_time] column value.
+     *
+     *
+     * @param string $format The date/time format string (either date()-style or strftime()-style).
+     *				 If format is null, then the raw DateTime object will be returned.
+     * @return mixed Formatted date/time value as string or DateTime object (if format is null), null if column is null, and 0 if column value is 0000-00-00 00:00:00
+     * @throws PropelException - if unable to parse/validate the date/time value.
+     */
+    public function getAddTime($format = 'Y-m-d H:i:s')
+    {
+        if ($this->add_time === null) {
+            return null;
+        }
+
+        if ($this->add_time === '0000-00-00 00:00:00') {
+            // while technically this is not a default value of null,
+            // this seems to be closest in meaning.
+            return null;
+        }
+
+        try {
+            $dt = new DateTime($this->add_time);
+        } catch (Exception $x) {
+            throw new PropelException("Internally stored date/time/timestamp value could not be converted to DateTime: " . var_export($this->add_time, true), $x);
+        }
+
+        if ($format === null) {
+            // Because propel.useDateTimeClass is true, we return a DateTime object.
+            return $dt;
+        }
+
+        if (strpos($format, '%') !== false) {
+            return strftime($format, $dt->format('U'));
+        }
+
+        return $dt->format($format);
+
     }
 
     /**
@@ -240,6 +349,73 @@ abstract class BaseUsers extends BaseObject implements Persistent
     } // setAdminLevel()
 
     /**
+     * Set the value of [language] column.
+     *
+     * @param  string $v new value
+     * @return Users The current object (for fluent API support)
+     */
+    public function setLanguage($v)
+    {
+        if ($v !== null) {
+            $v = (string) $v;
+        }
+
+        if ($this->language !== $v) {
+            $this->language = $v;
+            $this->modifiedColumns[] = UsersPeer::LANGUAGE;
+        }
+
+
+        return $this;
+    } // setLanguage()
+
+    /**
+     * Sets the value of [last_log_in_time] column to a normalized version of the date/time value specified.
+     *
+     * @param mixed $v string, integer (timestamp), or DateTime value.
+     *               Empty strings are treated as null.
+     * @return Users The current object (for fluent API support)
+     */
+    public function setLastLogInTime($v)
+    {
+        $dt = PropelDateTime::newInstance($v, null, 'DateTime');
+        if ($this->last_log_in_time !== null || $dt !== null) {
+            $currentDateAsString = ($this->last_log_in_time !== null && $tmpDt = new DateTime($this->last_log_in_time)) ? $tmpDt->format('Y-m-d H:i:s') : null;
+            $newDateAsString = $dt ? $dt->format('Y-m-d H:i:s') : null;
+            if ($currentDateAsString !== $newDateAsString) {
+                $this->last_log_in_time = $newDateAsString;
+                $this->modifiedColumns[] = UsersPeer::LAST_LOG_IN_TIME;
+            }
+        } // if either are not null
+
+
+        return $this;
+    } // setLastLogInTime()
+
+    /**
+     * Sets the value of [add_time] column to a normalized version of the date/time value specified.
+     *
+     * @param mixed $v string, integer (timestamp), or DateTime value.
+     *               Empty strings are treated as null.
+     * @return Users The current object (for fluent API support)
+     */
+    public function setAddTime($v)
+    {
+        $dt = PropelDateTime::newInstance($v, null, 'DateTime');
+        if ($this->add_time !== null || $dt !== null) {
+            $currentDateAsString = ($this->add_time !== null && $tmpDt = new DateTime($this->add_time)) ? $tmpDt->format('Y-m-d H:i:s') : null;
+            $newDateAsString = $dt ? $dt->format('Y-m-d H:i:s') : null;
+            if ($currentDateAsString !== $newDateAsString) {
+                $this->add_time = $newDateAsString;
+                $this->modifiedColumns[] = UsersPeer::ADD_TIME;
+            }
+        } // if either are not null
+
+
+        return $this;
+    } // setAddTime()
+
+    /**
      * Indicates whether the columns in this object are only set to default values.
      *
      * This method can be used in conjunction with isModified() to indicate whether an object is both
@@ -276,6 +452,9 @@ abstract class BaseUsers extends BaseObject implements Persistent
             $this->password = ($row[$startcol + 2] !== null) ? (string) $row[$startcol + 2] : null;
             $this->email = ($row[$startcol + 3] !== null) ? (string) $row[$startcol + 3] : null;
             $this->admin_level = ($row[$startcol + 4] !== null) ? (int) $row[$startcol + 4] : null;
+            $this->language = ($row[$startcol + 5] !== null) ? (string) $row[$startcol + 5] : null;
+            $this->last_log_in_time = ($row[$startcol + 6] !== null) ? (string) $row[$startcol + 6] : null;
+            $this->add_time = ($row[$startcol + 7] !== null) ? (string) $row[$startcol + 7] : null;
             $this->resetModified();
 
             $this->setNew(false);
@@ -285,7 +464,7 @@ abstract class BaseUsers extends BaseObject implements Persistent
             }
             $this->postHydrate($row, $startcol, $rehydrate);
 
-            return $startcol + 5; // 5 = UsersPeer::NUM_HYDRATE_COLUMNS.
+            return $startcol + 8; // 8 = UsersPeer::NUM_HYDRATE_COLUMNS.
 
         } catch (Exception $e) {
             throw new PropelException("Error populating Users object", $e);
@@ -512,6 +691,15 @@ abstract class BaseUsers extends BaseObject implements Persistent
         if ($this->isColumnModified(UsersPeer::ADMIN_LEVEL)) {
             $modifiedColumns[':p' . $index++]  = '`admin_level`';
         }
+        if ($this->isColumnModified(UsersPeer::LANGUAGE)) {
+            $modifiedColumns[':p' . $index++]  = '`language`';
+        }
+        if ($this->isColumnModified(UsersPeer::LAST_LOG_IN_TIME)) {
+            $modifiedColumns[':p' . $index++]  = '`last_log_in_time`';
+        }
+        if ($this->isColumnModified(UsersPeer::ADD_TIME)) {
+            $modifiedColumns[':p' . $index++]  = '`add_time`';
+        }
 
         $sql = sprintf(
             'INSERT INTO `users` (%s) VALUES (%s)',
@@ -537,6 +725,15 @@ abstract class BaseUsers extends BaseObject implements Persistent
                         break;
                     case '`admin_level`':
                         $stmt->bindValue($identifier, $this->admin_level, PDO::PARAM_INT);
+                        break;
+                    case '`language`':
+                        $stmt->bindValue($identifier, $this->language, PDO::PARAM_STR);
+                        break;
+                    case '`last_log_in_time`':
+                        $stmt->bindValue($identifier, $this->last_log_in_time, PDO::PARAM_STR);
+                        break;
+                    case '`add_time`':
+                        $stmt->bindValue($identifier, $this->add_time, PDO::PARAM_STR);
                         break;
                 }
             }
@@ -687,6 +884,15 @@ abstract class BaseUsers extends BaseObject implements Persistent
             case 4:
                 return $this->getAdminLevel();
                 break;
+            case 5:
+                return $this->getLanguage();
+                break;
+            case 6:
+                return $this->getLastLogInTime();
+                break;
+            case 7:
+                return $this->getAddTime();
+                break;
             default:
                 return null;
                 break;
@@ -720,6 +926,9 @@ abstract class BaseUsers extends BaseObject implements Persistent
             $keys[2] => $this->getPassword(),
             $keys[3] => $this->getEmail(),
             $keys[4] => $this->getAdminLevel(),
+            $keys[5] => $this->getLanguage(),
+            $keys[6] => $this->getLastLogInTime(),
+            $keys[7] => $this->getAddTime(),
         );
         $virtualColumns = $this->virtualColumns;
         foreach ($virtualColumns as $key => $virtualColumn) {
@@ -774,6 +983,15 @@ abstract class BaseUsers extends BaseObject implements Persistent
             case 4:
                 $this->setAdminLevel($value);
                 break;
+            case 5:
+                $this->setLanguage($value);
+                break;
+            case 6:
+                $this->setLastLogInTime($value);
+                break;
+            case 7:
+                $this->setAddTime($value);
+                break;
         } // switch()
     }
 
@@ -803,6 +1021,9 @@ abstract class BaseUsers extends BaseObject implements Persistent
         if (array_key_exists($keys[2], $arr)) $this->setPassword($arr[$keys[2]]);
         if (array_key_exists($keys[3], $arr)) $this->setEmail($arr[$keys[3]]);
         if (array_key_exists($keys[4], $arr)) $this->setAdminLevel($arr[$keys[4]]);
+        if (array_key_exists($keys[5], $arr)) $this->setLanguage($arr[$keys[5]]);
+        if (array_key_exists($keys[6], $arr)) $this->setLastLogInTime($arr[$keys[6]]);
+        if (array_key_exists($keys[7], $arr)) $this->setAddTime($arr[$keys[7]]);
     }
 
     /**
@@ -819,6 +1040,9 @@ abstract class BaseUsers extends BaseObject implements Persistent
         if ($this->isColumnModified(UsersPeer::PASSWORD)) $criteria->add(UsersPeer::PASSWORD, $this->password);
         if ($this->isColumnModified(UsersPeer::EMAIL)) $criteria->add(UsersPeer::EMAIL, $this->email);
         if ($this->isColumnModified(UsersPeer::ADMIN_LEVEL)) $criteria->add(UsersPeer::ADMIN_LEVEL, $this->admin_level);
+        if ($this->isColumnModified(UsersPeer::LANGUAGE)) $criteria->add(UsersPeer::LANGUAGE, $this->language);
+        if ($this->isColumnModified(UsersPeer::LAST_LOG_IN_TIME)) $criteria->add(UsersPeer::LAST_LOG_IN_TIME, $this->last_log_in_time);
+        if ($this->isColumnModified(UsersPeer::ADD_TIME)) $criteria->add(UsersPeer::ADD_TIME, $this->add_time);
 
         return $criteria;
     }
@@ -886,6 +1110,9 @@ abstract class BaseUsers extends BaseObject implements Persistent
         $copyObj->setPassword($this->getPassword());
         $copyObj->setEmail($this->getEmail());
         $copyObj->setAdminLevel($this->getAdminLevel());
+        $copyObj->setLanguage($this->getLanguage());
+        $copyObj->setLastLogInTime($this->getLastLogInTime());
+        $copyObj->setAddTime($this->getAddTime());
         if ($makeNew) {
             $copyObj->setNew(true);
             $copyObj->setId(NULL); // this is a auto-increment column, so set to default value
@@ -942,6 +1169,9 @@ abstract class BaseUsers extends BaseObject implements Persistent
         $this->password = null;
         $this->email = null;
         $this->admin_level = null;
+        $this->language = null;
+        $this->last_log_in_time = null;
+        $this->add_time = null;
         $this->alreadyInSave = false;
         $this->alreadyInValidation = false;
         $this->alreadyInClearAllReferencesDeep = false;

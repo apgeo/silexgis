@@ -3,7 +3,8 @@
   const POINTER_DRAW_GENERIC = 2;
   const POINTER_NEW_CAVE = 3;
   const POINTER_NEW_FEATURE = 4;
-  const POINTER_NEW_PICTURE = 5;  
+  const POINTER_NEW_PICTURE = 5;
+  const POINTER_DEFINE_CAVE_FEATURES = 6;
 
   var map;
   var layers = [];
@@ -312,9 +313,7 @@ var dragAndDropInteraction = new ol.interaction.DragAndDrop({
 			 //projection: new ol.proj.Projection("EPSG:4326"),
 			 
 			 //center: new OpenLayers.LonLat(45.669245, 25.416870).transform(new ol.proj.Projection('EPSG:4326'), new ol.proj.Projection('EPSG:3857')),
-			  interactions: ol.interaction.defaults().extend([dragAndDropInteraction, new ol.interaction.DragRotateAndZoom(), keyboardPan, keyboardZoom, 
-			  //switcher
-			  ]),
+			 interactions: ol.interaction.defaults().extend([dragAndDropInteraction, new ol.interaction.DragRotateAndZoom(), keyboardPan, keyboardZoom, /*switcher*/]),			  
 			 zoom: 2,//5,
 			  controls: ol.control.defaults({
 				attributionOptions: /** @type {olx.control.AttributionOptions} */ ({
@@ -509,7 +508,7 @@ map.on('click', function(evt) {
   //displayFeatureInfo(evt.pixel);
   displayDetailsWindow(evt.pixel);
   //console.info(evt);
- 
+	
 	if (user_mouse_interaction_type == POINTER_INSPECT_FEATURE)
 	{
 		var clickedFeature = map.forEachFeatureAtPixel(evt.pixel, function(feature, layer) { return feature; });
@@ -1335,7 +1334,7 @@ for (index = 0, z = styles.length; index < z; ++index) {
             // params: {'LAYERS': 'topp:states'},
             // serverType: 'geoserver'
           // })
-		  
+		  name: 'geologic test',
 				//extent: extent,
 		     source: new ol.source.ImageStatic({
 			 //opacity: 0.5,
@@ -1547,7 +1546,7 @@ $("#hgPersaniCentruCheckBox").change(
     // }
 // );
 
-map_overlay_geo_comana.setVisible(false);
+map_overlay_geo_comana.setVisible(!false);
 
 $("#hgPersaniCentruCheckBox").prop('checked', map_overlay_geo_comana.getVisible());
 //$("#hgPersaniCentruCheckBox").prop('checked', map_overlay_geo_comana.getVisible());
@@ -1705,6 +1704,12 @@ $(document).delegate('*[data-toggle="lightbox"]', 'click', function(event) {
 					console.log("");
 				}
 				}
+				
+				if (caveFeatureDrawInteraction)
+				{
+					map.removeInteraction(caveFeatureDrawInteraction);
+					user_mouse_interaction_type = POINTER_INSPECT_FEATURE;
+				}
 			  }
 			  else
 			  if (event.keyCode === 187) // 61
@@ -1712,11 +1717,37 @@ $(document).delegate('*[data-toggle="lightbox"]', 'click', function(event) {
 				console.log("= pressed");
 				map.getView().setZoom(map.getView().getZoom() + 1);
 			  }
-			});
-}	
+			});			
+			
+			//testInitLineSelection(_db_features_layer);
+}
 	///////////////////////////
 	// end initMap
 	///////////////////////////
+
+function testInitLineSelection(target_layer)
+{
+	/////////////////
+	// test selection
+			
+var selectEuropa = new ol.style.Style({
+          stroke: new ol.style.Stroke({
+            color: '#f201f9',
+            width: 8
+        })
+      });			
+var selectInteraction = new ol.interaction.Select({
+        layers: function(layer) {
+		console.log("selectInteraction function(layer)");
+          return true;
+		  //layer.get('selectable') == true;
+        },
+        style: [/*selectFrancePoints, */selectEuropa]
+      });
+map.getInteractions().extend([selectInteraction]);
+
+target_layer.set('selectable', true);
+}
 
 	var mainLayerFilter = function (layerCandidate)
 	{
@@ -1842,7 +1873,6 @@ function initThumbnailLoading()
 	}
 	
 	function addFeatureInteraction(drawFeatureType) {
-
 		  if (drawFeatureType !== 'None') {
 
 	//	var features = new ol.Collection();
@@ -1918,8 +1948,10 @@ function initThumbnailLoading()
 	var kmlFormat = new ol.format.KML({
 		readExtensions: function(x) {
 			  return x;
-			}
-		});
+			},
+		extractStyles: false,
+		extractAttributes: !false
+	});
 		
 	var gpxFeatures;
 
@@ -1933,6 +1965,7 @@ function initThumbnailLoading()
 		//	  return geoStyle[feature.getGeometry().getType()];
 		//}
 		//style: geoStyle['LineString'] // defaultStyle
+		style: caveGalleryLinesStyleFunction
 		});
 	
 	map.addLayer(geoFileLayer);
@@ -1992,6 +2025,8 @@ function initThumbnailLoading()
 						{
 							gpxFeatures = geoFormat.readFeatures(data, { dataProjection:'EPSG:4326', featureProjection:'EPSG:3857' });
 							geoFileLayer.getSource().addFeatures(gpxFeatures);
+							
+							testInitLineSelection(geoFileLayer);
 						},
 		error:  function(jqXHR, textStatus, errorThrown )
 		{
@@ -2084,8 +2119,8 @@ var stateResetSettings = {
 	,	east__initClosed:	false
 	,	east__initHidden:	false
 	*/
-		south__initClosed:	!true
-	,	south__initHidden:	false
+		south__initClosed:	true
+	,	south__initHidden:	!false
 	,	south__size:		"auto"
 	,	west__initClosed:	false
 	,	west__initHidden:	false
@@ -2305,7 +2340,7 @@ $(document).ready(function() {
 	localize_static_html();
 	document.getElementsByTagName("html")[0].style.visibility = "visible";	
 	
-	initMap();
+	initMap();	
 	initLayout();
 	initNewCaveForm(); //-- might be deffered until new cave form is open
 	initNewFeatureForm();
@@ -2328,25 +2363,28 @@ $(document).ready(function() {
 	initContextMenu();
 	
 	setTimeout( function() 
-		{ 
+	{ 
 		initPictureThumbLayer();
 	}, 1000);
 	
 	init_export_map_as_image();
 	
-		setTimeout( function() 
-		{ 
-			//initThumbnailLoading();			
-		}, 500);
-
 	setTimeout( function() 
-		{ 
+	{ 
+		//initThumbnailLoading();			
+	}, 500);
+
+	setTimeout( function()
+	{ 
 		initViews(set_center = true);
-		}, 1500);
+	}, 1500);
 		
 	initSearchControl();		
 	
-	setTimeout(function() {			loadGeoFiles(); }, 2500);
+	setTimeout(function() 
+	{			
+		loadGeoFiles(); 
+	}, 2500);
 	//setTimeout(function() {			initFeatureClusteringLayer(); }, 2500);
 	
 	var _lat = parseFloat(getUrlParameter('lat'));
@@ -5065,7 +5103,7 @@ function initPicturesUploadControl()
 
 ///////////////////////
 //  begin localization
-var selected_language = 'en'; // 'ro';
+//var selected_language = 'en'; // 'ro';
 var selected_language = 'ro';
 
 function _t()
@@ -5097,7 +5135,7 @@ function localize_static_html()
 	{ // p1 is nondigits, p2 digits, and p3 non-alphanumerics 
 	
 		res = match.match(/[\w\.]+/)[0];
-		console.log(res);
+		//console.log(res);
 		
 		var localized_text = eval("_t()." + res);
 			
@@ -5988,6 +6026,188 @@ function selectThumbPicture(image_id)
 	showPicture(_map_pictures[image_id]["url"], "", "");
 }
 
+var caveGalleryLinesStyleFunction = function(feature) {
+	 var styles = [
+          // linestring
+          new ol.style.Style({
+            stroke: new ol.style.Stroke({
+              color: '#ffcc33',
+              width: 2
+            })
+          })
+        ];
+		var index = 0;
+		
+	 var geometry = feature.getGeometry();
+	 console.log(geometry.getType());
+	 
+	 //if (geometry.getType() == "LineString") // MultiLineString
+	 if (geometry.getType() == "MultiLineString")
+	 geometry.getLineStrings().forEach(function(ls)
+		{			
+			//console.out(ls);
+		//ls = geometry;
+	
+	 ls.forEachSegment(function(start, end) {
+          var dx = end[0] - start[0];
+          var dy = end[1] - start[1];
+          var rotation = Math.atan2(dy, dx);
+		  
+		  var isInside = false;
+		  
+		  if (selectedCaveFeatures.getArray().length > 0)
+		  {
+			var pt = turf.point(end); // turf.
+		  	
+			selectedCaveFeatures.forEach(function (feature)
+			{	
+				var poly = turf.polygon(feature.getGeometry().getCoordinates()); //[[[-81, 41],  [-81, 47],  [-72, 47],  [-72, 41],  [-81, 41]]] 			
+				isInside |= turf.inside(pt, poly);
+			});			
+		  }
+		
+          // arrows
+          styles.push(new ol.style.Style({
+            //geometry: new ol.geom.Point(end),
+			geometry: new ol.geom.LineString([start, end]),
+            /*image: new ol.style.Icon({
+              src: 'http://openlayers.org/en/v3.20.1/examples/data/arrow.png',
+              anchor: [0.75, 0.5],
+              rotateWithView: true,
+              rotation: -rotation
+            }),*/
+			stroke: new ol.style.Stroke({
+				color: isInside ? "red" : getRandomColor(),
+				width: 2
+			}),
+			/*text: new ol.style.Text({
+				text: "" + (index++),
+				scale: 1.3,
+				fill: new ol.style.Fill({
+				color: '#000000'
+				}),
+			})
+			*/
+          }));
+	});
+	}
+	);
+	
+		return styles;
+	}
+	
+	function getRandomColor() {
+    var letters = '0123456789ABCDEF';
+    var color = '#';
+    for (var i = 0; i < 6; i++ ) {
+        color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
+}
+
+function initCaveFeaturesEditor()
+{
+	var selectEuropa = new ol.style.Style({
+          stroke: new ol.style.Stroke({
+            color: '#f29109',
+            width: 8
+        })
+      });			
+	
+	var selectInteraction = new ol.interaction.Select({
+		condition: ol.events.condition.mouseMove,
+		//condition: ol.events.condition.click
+        layers: function(layer) {
+			console.log("selectInteraction function(layer)");
+          //return true;
+		  return layer.get('selectable') == true;
+        },
+        style: [/*selectFrancePoints, */selectEuropa],		
+      });
+_selectInteraction = selectInteraction;
+
+map.getInteractions().extend([selectInteraction]);
+
+target_layer.set('selectable', true);
+
+selectInteraction.on('select', 
+function (features)
+		{
+			// _selectInteraction.getFeatures().forEach(function (feature, index, ar) { console.log(feature); console.log(feature.getGeometry().getCoordinates());})
+			features.selected.forEach(function (feature, index, ar) 
+				{
+					//console.log(feature); 
+					//console.log(feature.getGeometry().getCoordinates());
+					//showParts(feature);
+				});
+			
+			//console.log(features);
+		}/*, this(*/);
+}
+
+var caveFeatureDrawInteraction = undefined;
+var caveFeatureDrawType = undefined;
+var selectedCaveFeatures = new ol.Collection();
+
+function enableCaveFeatureEditing()
+{
+		user_mouse_interaction_type = POINTER_DRAW_GENERIC;
+		draw_feature_type = "Polygon";
+		caveFeatureDrawType = draw_feature_type;
+		
+		map.removeInteraction(drawInteraction);
+		map.removeInteraction(modify);
+		
+		//addFeatureInteraction(featureType);	
+      drawModifyInt = new ol.interaction.Modify({
+        features: selectedCaveFeatures,//selectInteraction.getFeatures()
+		//source: drawSource
+		deleteCondition: function(event) {
+    return ol.events.condition.shiftKeyOnly(event) &&
+        ol.events.condition.singleClick(event);
+		}
+      });	  
+
+	map.addInteraction(drawModifyInt);
+	//map.getInteractions().extend([selectInteraction, modify]);	  		  		  
+		  
+			drawInt = new ol.interaction.Draw({
+			  source: drawSource,
+			  //features: featureOverlay.getFeatures(),
+			  features: selectedCaveFeatures,
+			  type: /** @type {ol.geom.GeometryType} */ caveFeatureDrawType,
+			  condition: ol.events.condition.singleClick,
+			  //condition: ol.events.condition.singleClick,
+			  //freehandCondition: ol.events.condition.noModifierKeys
+			  //freehandCondition: ol.events.condition.always,
+			  //condition: ol.events.condition.never,
+			  drawend: function ()
+			  {				
+				console.log("draw end");
+			  }
+			});
+		
+		function onDrawEnd() {
+				console.log("drawend");
+				_geo_file_layer.changed();
+				
+				/*features.forEach(function (feature) 
+				{ 
+					feature.changed();
+				});*/
+				// ol.Observable.unByKey(listener);
+            };
+			
+        drawInt.on('drawend', onDrawEnd
+            , this);
+		
+		drawModifyInt.on('drawend', onDrawEnd
+            , this);
+			
+			map.addInteraction(drawInt);
+			
+			caveFeatureDrawInteraction = drawInt;		
+}
 
 
 

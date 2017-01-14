@@ -11,8 +11,8 @@
     <div class="modal-content">
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-        <h4 class="modal-title" id="tripReportModalTitleLabel">New trip report</h4>
-		<h5><i><div id="zzxx_label"></div></i></h5>
+        <h4 class="modal-title" id="tripReportModalTitleLabel">*{trip_reports.title_new_trip_report_form}*</h4>
+		<h5><i><div id="trip_report_label"></div></i></h5>
       </div>
       <div class="modal-body">	  
         <form id="tripReportForm" role="form" enctype="multipart/form-data" > <!-- class="form-inline" -->										   
@@ -34,14 +34,19 @@
           </div>
 			-->
           <div class="form-group row">
-            <label for="tripreport_place" class="col-sm-2 control-label">Place / area:</label>
-			<div class="input-group" class="col-sm-10">				
-				<input class="Typeahead-hint_2" type="text" tabindex="-1" readonly>
+            <label for="tripreport_place" class="col-sm-2 control-label">*{trip_reports.trip_edit_form.place}*:</label>
+			<div class="input-group" class="col-sm-10">
+				<input class="Typeahead-hint" type="text" tabindex="-1" readonly>
 				<input type="text" class="Typeahead-input" id="tripreport_place" name="tripreport_place" placeholder="Search features" >
-				<div class="Typeahead-menu_2"></div>
+				<div class="Typeahead-menu"></div>
 			</div>
           </div>
 		  
+		<div id="featuresListBox" >
+			
+		</div>
+
+		  <input type="hidden" id="tripreport_features" name="tripreport_features" >
 		  <!--
 			<div class="input-group" id="searchFeatureControlContainer" >
 				<input class="Typeahead-hint" type="text" tabindex="-1" readonly>
@@ -51,14 +56,14 @@
 			-->
 			<!-- class="typeahead" -->
           <div class="form-group row">
-            <label for="tripreport_details" class="col-sm-2 control-label">Details:</label>
+            <label for="tripreport_details" class="col-sm-2 control-label">*{trip_reports.trip_edit_form.details}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="tripreport_details" name="tripreport_details" ></textarea>
 			</div>
           </div>
 
 		  <div class="form-group row">
-			<label for="tripreport_members" class="col-sm-2 control-label">Participants:</label>
+			<label for="tripreport_members" class="col-sm-2 control-label">*{trip_reports.trip_edit_form.participants}*:</label>
 			<div class="col-sm-10">
 			<!--<div class="membersTagsControl">-->
 				<input class="form-control" type="text" id="tripreport_members" name="tripreport_members" />
@@ -66,12 +71,22 @@
 			</div>
 		  </div>
 		  
-		  			<!--<div class="col-sm-10">
-				<textarea class="form-control" id="tripreport_start_time" name="tripreport_start_time" ></textarea>
-			</div>	-->
+		  <!--<div class="form-group row">
+			<label for="tripreport_summary" class="col-sm-2 control-label">Summary:</label>
+			<div class="col-sm-10">			
+				<input class="form-control" type="text" id="tripreport_summary" name="tripreport_summary" />				
+			</div>
+		  </div>
+		  -->
+
+		  	<!--
+				<div class="col-sm-10">
+					<textarea class="form-control" id="tripreport_start_time" name="tripreport_start_time" ></textarea>
+				</div>	
+			-->
 
     <div class="form-group row">
-		<label for="tripreport_start_time" class="col-sm-2 control-label">Start time:</label>
+		<label for="tripreport_start_time" class="col-sm-2 control-label">*{trip_reports.trip_edit_form.start}*:</label>
 			<div class='input-group date col-sm-10' id='tripreport_start_time'>
                     <input type='text' class="form-control" name="tripreport_start_time" />
                     <span class="input-group-addon">
@@ -81,7 +96,7 @@
     </div>
 
     <div class="form-group row">
-		<label for="tripreport_end_time" class="col-sm-2 control-label">End time:</label>
+		<label for="tripreport_end_time" class="col-sm-2 control-label">*{trip_reports.trip_edit_form.end}*:</label>
 			<div class='input-group date col-sm-10' id='tripreport_end_time'>
                     <input type='text' class="form-control" name="tripreport_end_time" />
                     <span class="input-group-addon">
@@ -93,19 +108,19 @@
 			<table id="trip_report_files_table" class="display" cellspacing="0" width="100%">
 				<thead>
 					<tr>
-						<th>Name</th>
-						<th>Size</th>
-						<th>Add time</th>				
-						<th>Category</th>
+						<th>*{generic.file_table.name}*</th>
+						<th>*{generic.file_table.size}*</th>
+						<th>*{generic.file_table.add_time}*</th>
+						<th>*{generic.file_table.category}*</th>
 					</tr>
 				</thead>
 			</table>
 		  
-		  <button class="btn btn-primary" id="addFilesToTripReport" >Add files</button>
+		  <button class="btn btn-primary" id="addFilesToTripReport" >*{generic.add_files}*</button>
 		  
 		  <div class="modal-footer">
-			<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-			<button type="submit" class="btn btn-primary" id="saveTripReport" >Save</button>
+			<button type="button" class="btn btn-default" data-dismiss="modal">*{generic.close}*</button>
+			<button type="submit" class="btn btn-primary" id="saveTripReport" >*{generic.save}*</button>
 		  </div>
 	  
 	    </form>
@@ -130,7 +145,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-        <h4 class="modal-title" id="uploadFilesModalTitleLabel">New cave</h4>
+        <h4 class="modal-title" id="uploadFilesModalTitleLabel">*{generic.add_files}*</h4>
 		<h5><i><div id="upload_files_x_label"></div></i></h5>
       </div>
       <div class="modal-body">	  
@@ -149,20 +164,20 @@
                 <!-- The fileinput-button span is used to style the file input field as button -->
                 <span class="btn btn-success fileinput-button">
                     <i class="icon-plus icon-white"></i>
-                    <span>Add files...</span>
+                    <span>*{generic.add_files}*</span>
                     <input type="file" name="files[]" multiple>
                 </span>
                 <button type="submit" class="btn btn-primary start">
                     <i class="icon-upload icon-white"></i>
-                    <span>Start upload</span>
+                    <span>*{generic.start_upload}*</span>
                 </button>
                 <button type="reset" class="btn btn-warning cancel">
                     <i class="icon-ban-circle icon-white"></i>
-                    <span>Cancel upload</span>
+                    <span>*{generic.end_upload}*</span>
                 </button>
                 <button type="button" class="btn btn-danger delete">
                     <i class="icon-trash icon-white"></i>
-                    <span>Delete</span>
+                    <span>*{generic.delete}*</span>
                 </button>
                 <input type="checkbox" class="toggle">
                 <!-- The global file processing state -->
@@ -209,20 +224,20 @@
             <strong class="error text-danger"></strong>
         </td>
         <td>
-            <p class="size">Processing...</p>
+            <p class="size">*{generic.processing}*</p>
             <div class="progress progress-striped active" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-success" style="width:0%;"></div></div>
         </td>
         <td>
             {% if (!i && !o.options.autoUpload) { %}
                 <button class="btn btn-primary start" disabled>
                     <i class="glyphicon glyphicon-upload"></i>
-                    <span>Start</span>
+                    <span>*{generic.start}*</span>
                 </button>
             {% } %}
             {% if (!i) { %}
                 <button class="btn btn-warning cancel">
                     <i class="glyphicon glyphicon-ban-circle"></i>
-                    <span>Cancel</span>
+                    <span>*{generic.cancel}*</span>
                 </button>
             {% } %}
         </td>
@@ -250,7 +265,7 @@
                 {% } %}
             </p>
             {% if (file.error) { %}
-                <div><span class="label label-danger">Error</span> {%=file.error%}</div>
+                <div><span class="label label-danger">*{generic.error}*</span> {%=file.error%}</div>
             {% } %}
         </td>
         <td>
@@ -260,13 +275,13 @@
             {% if (file.deleteUrl) { %}
                 <button class="btn btn-danger delete" data-type="{%=file.deleteType%}" data-url="{%=file.deleteUrl%}"{% if (file.deleteWithCredentials) { %} data-xhr-fields='{"withCredentials":true}'{% } %}>
                     <i class="glyphicon glyphicon-trash"></i>
-                    <span>Delete</span>
+                    <span>*{generic.delete}*</span>
                 </button>
                 <input type="checkbox" name="delete" value="1" class="toggle">
             {% } else { %}
                 <button class="btn btn-warning cancel">
                     <i class="glyphicon glyphicon-ban-circle"></i>
-                    <span>Cancel</span>
+                    <span>*{generic.cancel}*</span>
                 </button>
             {% } %}
         </td>
@@ -275,8 +290,8 @@
 </script>
 		 
 	<div class="modal-footer">
-        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-        <button type="submit" class="btn btn-primary" id="saveFileUpload" >Save</button>
+        <button type="button" class="btn btn-default" data-dismiss="modal">*{generic.close}*</button>
+        <button type="submit" class="btn btn-primary" id="saveFileUpload" >*{generic.save}*</button>
       </div>	  
 	  
 	  
@@ -293,3 +308,7 @@
 	end Upload files form
 	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
 -->
+
+
+
+

@@ -11,12 +11,18 @@
  * @method UsersQuery orderByPassword($order = Criteria::ASC) Order by the password column
  * @method UsersQuery orderByEmail($order = Criteria::ASC) Order by the email column
  * @method UsersQuery orderByAdminLevel($order = Criteria::ASC) Order by the admin_level column
+ * @method UsersQuery orderByLanguage($order = Criteria::ASC) Order by the language column
+ * @method UsersQuery orderByLastLogInTime($order = Criteria::ASC) Order by the last_log_in_time column
+ * @method UsersQuery orderByAddTime($order = Criteria::ASC) Order by the add_time column
  *
  * @method UsersQuery groupById() Group by the id column
  * @method UsersQuery groupByUsername() Group by the username column
  * @method UsersQuery groupByPassword() Group by the password column
  * @method UsersQuery groupByEmail() Group by the email column
  * @method UsersQuery groupByAdminLevel() Group by the admin_level column
+ * @method UsersQuery groupByLanguage() Group by the language column
+ * @method UsersQuery groupByLastLogInTime() Group by the last_log_in_time column
+ * @method UsersQuery groupByAddTime() Group by the add_time column
  *
  * @method UsersQuery leftJoin($relation) Adds a LEFT JOIN clause to the query
  * @method UsersQuery rightJoin($relation) Adds a RIGHT JOIN clause to the query
@@ -29,12 +35,18 @@
  * @method Users findOneByPassword(string $password) Return the first Users filtered by the password column
  * @method Users findOneByEmail(string $email) Return the first Users filtered by the email column
  * @method Users findOneByAdminLevel(int $admin_level) Return the first Users filtered by the admin_level column
+ * @method Users findOneByLanguage(string $language) Return the first Users filtered by the language column
+ * @method Users findOneByLastLogInTime(string $last_log_in_time) Return the first Users filtered by the last_log_in_time column
+ * @method Users findOneByAddTime(string $add_time) Return the first Users filtered by the add_time column
  *
  * @method array findById(string $id) Return Users objects filtered by the id column
  * @method array findByUsername(string $username) Return Users objects filtered by the username column
  * @method array findByPassword(string $password) Return Users objects filtered by the password column
  * @method array findByEmail(string $email) Return Users objects filtered by the email column
  * @method array findByAdminLevel(int $admin_level) Return Users objects filtered by the admin_level column
+ * @method array findByLanguage(string $language) Return Users objects filtered by the language column
+ * @method array findByLastLogInTime(string $last_log_in_time) Return Users objects filtered by the last_log_in_time column
+ * @method array findByAddTime(string $add_time) Return Users objects filtered by the add_time column
  *
  * @package    propel.generator.speogis.om
  */
@@ -142,7 +154,7 @@ abstract class BaseUsersQuery extends ModelCriteria
      */
     protected function findPkSimple($key, $con)
     {
-        $sql = 'SELECT `id`, `username`, `password`, `email`, `admin_level` FROM `users` WHERE `id` = :p0';
+        $sql = 'SELECT `id`, `username`, `password`, `email`, `admin_level`, `language`, `last_log_in_time`, `add_time` FROM `users` WHERE `id` = :p0';
         try {
             $stmt = $con->prepare($sql);
             $stmt->bindValue(':p0', $key, PDO::PARAM_STR);
@@ -400,6 +412,121 @@ abstract class BaseUsersQuery extends ModelCriteria
         }
 
         return $this->addUsingAlias(UsersPeer::ADMIN_LEVEL, $adminLevel, $comparison);
+    }
+
+    /**
+     * Filter the query on the language column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterByLanguage('fooValue');   // WHERE language = 'fooValue'
+     * $query->filterByLanguage('%fooValue%'); // WHERE language LIKE '%fooValue%'
+     * </code>
+     *
+     * @param     string $language The value to use as filter.
+     *              Accepts wildcards (* and % trigger a LIKE)
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return UsersQuery The current query, for fluid interface
+     */
+    public function filterByLanguage($language = null, $comparison = null)
+    {
+        if (null === $comparison) {
+            if (is_array($language)) {
+                $comparison = Criteria::IN;
+            } elseif (preg_match('/[\%\*]/', $language)) {
+                $language = str_replace('*', '%', $language);
+                $comparison = Criteria::LIKE;
+            }
+        }
+
+        return $this->addUsingAlias(UsersPeer::LANGUAGE, $language, $comparison);
+    }
+
+    /**
+     * Filter the query on the last_log_in_time column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterByLastLogInTime('2011-03-14'); // WHERE last_log_in_time = '2011-03-14'
+     * $query->filterByLastLogInTime('now'); // WHERE last_log_in_time = '2011-03-14'
+     * $query->filterByLastLogInTime(array('max' => 'yesterday')); // WHERE last_log_in_time < '2011-03-13'
+     * </code>
+     *
+     * @param     mixed $lastLogInTime The value to use as filter.
+     *              Values can be integers (unix timestamps), DateTime objects, or strings.
+     *              Empty strings are treated as NULL.
+     *              Use scalar values for equality.
+     *              Use array values for in_array() equivalent.
+     *              Use associative array('min' => $minValue, 'max' => $maxValue) for intervals.
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return UsersQuery The current query, for fluid interface
+     */
+    public function filterByLastLogInTime($lastLogInTime = null, $comparison = null)
+    {
+        if (is_array($lastLogInTime)) {
+            $useMinMax = false;
+            if (isset($lastLogInTime['min'])) {
+                $this->addUsingAlias(UsersPeer::LAST_LOG_IN_TIME, $lastLogInTime['min'], Criteria::GREATER_EQUAL);
+                $useMinMax = true;
+            }
+            if (isset($lastLogInTime['max'])) {
+                $this->addUsingAlias(UsersPeer::LAST_LOG_IN_TIME, $lastLogInTime['max'], Criteria::LESS_EQUAL);
+                $useMinMax = true;
+            }
+            if ($useMinMax) {
+                return $this;
+            }
+            if (null === $comparison) {
+                $comparison = Criteria::IN;
+            }
+        }
+
+        return $this->addUsingAlias(UsersPeer::LAST_LOG_IN_TIME, $lastLogInTime, $comparison);
+    }
+
+    /**
+     * Filter the query on the add_time column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterByAddTime('2011-03-14'); // WHERE add_time = '2011-03-14'
+     * $query->filterByAddTime('now'); // WHERE add_time = '2011-03-14'
+     * $query->filterByAddTime(array('max' => 'yesterday')); // WHERE add_time < '2011-03-13'
+     * </code>
+     *
+     * @param     mixed $addTime The value to use as filter.
+     *              Values can be integers (unix timestamps), DateTime objects, or strings.
+     *              Empty strings are treated as NULL.
+     *              Use scalar values for equality.
+     *              Use array values for in_array() equivalent.
+     *              Use associative array('min' => $minValue, 'max' => $maxValue) for intervals.
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return UsersQuery The current query, for fluid interface
+     */
+    public function filterByAddTime($addTime = null, $comparison = null)
+    {
+        if (is_array($addTime)) {
+            $useMinMax = false;
+            if (isset($addTime['min'])) {
+                $this->addUsingAlias(UsersPeer::ADD_TIME, $addTime['min'], Criteria::GREATER_EQUAL);
+                $useMinMax = true;
+            }
+            if (isset($addTime['max'])) {
+                $this->addUsingAlias(UsersPeer::ADD_TIME, $addTime['max'], Criteria::LESS_EQUAL);
+                $useMinMax = true;
+            }
+            if ($useMinMax) {
+                return $this;
+            }
+            if (null === $comparison) {
+                $comparison = Criteria::IN;
+            }
+        }
+
+        return $this->addUsingAlias(UsersPeer::ADD_TIME, $addTime, $comparison);
     }
 
     /**

@@ -1,8 +1,8 @@
 <?php
 	include_once("grid_common.php");
 ?>
-<a href="/speogis/user/addFile.php" >Add file</a>
-<a href="/speogis/user/addFiles.php" >Add multiple files</a>
+<a href="/speogis/user/addFile.php" >*{files.add_file}*</a>
+<a href="/speogis/user/addFiles.php" >*{files.add_multiple_files}*</a>
 <?php
 ################################################################################   
 ## +---------------------------------------------------------------------------+
@@ -12,7 +12,7 @@
 
   //require_once("grid_common.php");
 
-  echo "<b><h3>Files</h3></b>";
+  echo "<b><h3>*{files.page_title}*</h3></b>";
   ##  *** creating variables that we need for database connection 
   
   $DB_USER= DB_USER;

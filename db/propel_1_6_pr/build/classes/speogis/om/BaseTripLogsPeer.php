@@ -24,13 +24,13 @@ abstract class BaseTripLogsPeer
     const TM_CLASS = 'TripLogsTableMap';
 
     /** The total number of columns. */
-    const NUM_COLUMNS = 8;
+    const NUM_COLUMNS = 9;
 
     /** The number of lazy-loaded columns. */
     const NUM_LAZY_LOAD_COLUMNS = 0;
 
     /** The number of columns to hydrate (NUM_COLUMNS - NUM_LAZY_LOAD_COLUMNS) */
-    const NUM_HYDRATE_COLUMNS = 8;
+    const NUM_HYDRATE_COLUMNS = 9;
 
     /** the column name for the id field */
     const ID = 'trip_logs.id';
@@ -56,6 +56,9 @@ abstract class BaseTripLogsPeer
     /** the column name for the temporary field */
     const TEMPORARY = 'trip_logs.temporary';
 
+    /** the column name for the summary field */
+    const SUMMARY = 'trip_logs.summary';
+
     /** The default string format for model objects of the related table **/
     const DEFAULT_STRING_FORMAT = 'YAML';
 
@@ -75,12 +78,12 @@ abstract class BaseTripLogsPeer
      * e.g. TripLogsPeer::$fieldNames[TripLogsPeer::TYPE_PHPNAME][0] = 'Id'
      */
     protected static $fieldNames = array (
-        BasePeer::TYPE_PHPNAME => array ('Id', 'AddTime', 'TripStartTime', 'TripEndTime', 'Details', 'TargetZone', 'Type', 'Temporary', ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'addTime', 'tripStartTime', 'tripEndTime', 'details', 'targetZone', 'type', 'temporary', ),
-        BasePeer::TYPE_COLNAME => array (TripLogsPeer::ID, TripLogsPeer::ADD_TIME, TripLogsPeer::TRIP_START_TIME, TripLogsPeer::TRIP_END_TIME, TripLogsPeer::DETAILS, TripLogsPeer::TARGET_ZONE, TripLogsPeer::TYPE, TripLogsPeer::TEMPORARY, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'ADD_TIME', 'TRIP_START_TIME', 'TRIP_END_TIME', 'DETAILS', 'TARGET_ZONE', 'TYPE', 'TEMPORARY', ),
-        BasePeer::TYPE_FIELDNAME => array ('id', 'add_time', 'trip_start_time', 'trip_end_time', 'details', 'target_zone', 'type', 'temporary', ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, )
+        BasePeer::TYPE_PHPNAME => array ('Id', 'AddTime', 'TripStartTime', 'TripEndTime', 'Details', 'TargetZone', 'Type', 'Temporary', 'Summary', ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'addTime', 'tripStartTime', 'tripEndTime', 'details', 'targetZone', 'type', 'temporary', 'summary', ),
+        BasePeer::TYPE_COLNAME => array (TripLogsPeer::ID, TripLogsPeer::ADD_TIME, TripLogsPeer::TRIP_START_TIME, TripLogsPeer::TRIP_END_TIME, TripLogsPeer::DETAILS, TripLogsPeer::TARGET_ZONE, TripLogsPeer::TYPE, TripLogsPeer::TEMPORARY, TripLogsPeer::SUMMARY, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'ADD_TIME', 'TRIP_START_TIME', 'TRIP_END_TIME', 'DETAILS', 'TARGET_ZONE', 'TYPE', 'TEMPORARY', 'SUMMARY', ),
+        BasePeer::TYPE_FIELDNAME => array ('id', 'add_time', 'trip_start_time', 'trip_end_time', 'details', 'target_zone', 'type', 'temporary', 'summary', ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, )
     );
 
     /**
@@ -90,12 +93,12 @@ abstract class BaseTripLogsPeer
      * e.g. TripLogsPeer::$fieldNames[BasePeer::TYPE_PHPNAME]['Id'] = 0
      */
     protected static $fieldKeys = array (
-        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'AddTime' => 1, 'TripStartTime' => 2, 'TripEndTime' => 3, 'Details' => 4, 'TargetZone' => 5, 'Type' => 6, 'Temporary' => 7, ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'addTime' => 1, 'tripStartTime' => 2, 'tripEndTime' => 3, 'details' => 4, 'targetZone' => 5, 'type' => 6, 'temporary' => 7, ),
-        BasePeer::TYPE_COLNAME => array (TripLogsPeer::ID => 0, TripLogsPeer::ADD_TIME => 1, TripLogsPeer::TRIP_START_TIME => 2, TripLogsPeer::TRIP_END_TIME => 3, TripLogsPeer::DETAILS => 4, TripLogsPeer::TARGET_ZONE => 5, TripLogsPeer::TYPE => 6, TripLogsPeer::TEMPORARY => 7, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'ADD_TIME' => 1, 'TRIP_START_TIME' => 2, 'TRIP_END_TIME' => 3, 'DETAILS' => 4, 'TARGET_ZONE' => 5, 'TYPE' => 6, 'TEMPORARY' => 7, ),
-        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'add_time' => 1, 'trip_start_time' => 2, 'trip_end_time' => 3, 'details' => 4, 'target_zone' => 5, 'type' => 6, 'temporary' => 7, ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, )
+        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'AddTime' => 1, 'TripStartTime' => 2, 'TripEndTime' => 3, 'Details' => 4, 'TargetZone' => 5, 'Type' => 6, 'Temporary' => 7, 'Summary' => 8, ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'addTime' => 1, 'tripStartTime' => 2, 'tripEndTime' => 3, 'details' => 4, 'targetZone' => 5, 'type' => 6, 'temporary' => 7, 'summary' => 8, ),
+        BasePeer::TYPE_COLNAME => array (TripLogsPeer::ID => 0, TripLogsPeer::ADD_TIME => 1, TripLogsPeer::TRIP_START_TIME => 2, TripLogsPeer::TRIP_END_TIME => 3, TripLogsPeer::DETAILS => 4, TripLogsPeer::TARGET_ZONE => 5, TripLogsPeer::TYPE => 6, TripLogsPeer::TEMPORARY => 7, TripLogsPeer::SUMMARY => 8, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'ADD_TIME' => 1, 'TRIP_START_TIME' => 2, 'TRIP_END_TIME' => 3, 'DETAILS' => 4, 'TARGET_ZONE' => 5, 'TYPE' => 6, 'TEMPORARY' => 7, 'SUMMARY' => 8, ),
+        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'add_time' => 1, 'trip_start_time' => 2, 'trip_end_time' => 3, 'details' => 4, 'target_zone' => 5, 'type' => 6, 'temporary' => 7, 'summary' => 8, ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, )
     );
 
     /**
@@ -177,6 +180,7 @@ abstract class BaseTripLogsPeer
             $criteria->addSelectColumn(TripLogsPeer::TARGET_ZONE);
             $criteria->addSelectColumn(TripLogsPeer::TYPE);
             $criteria->addSelectColumn(TripLogsPeer::TEMPORARY);
+            $criteria->addSelectColumn(TripLogsPeer::SUMMARY);
         } else {
             $criteria->addSelectColumn($alias . '.id');
             $criteria->addSelectColumn($alias . '.add_time');
@@ -186,6 +190,7 @@ abstract class BaseTripLogsPeer
             $criteria->addSelectColumn($alias . '.target_zone');
             $criteria->addSelectColumn($alias . '.type');
             $criteria->addSelectColumn($alias . '.temporary');
+            $criteria->addSelectColumn($alias . '.summary');
         }
     }
 

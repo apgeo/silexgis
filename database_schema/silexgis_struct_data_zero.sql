@@ -182,7 +182,7 @@ CREATE TABLE `geoobjects_to_files` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `file_id` bigint(20) unsigned NOT NULL,
   `geoobject_id` bigint(20) unsigned NOT NULL,
-  `geoobject_type` enum('cave','feature','point','cave_entry') COLLATE utf8_unicode_ci NOT NULL,
+  `geoobject_type` enum('cave','feature','cave_entry') COLLATE utf8_unicode_ci NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `file_geoobject_id` (`file_id`,`geoobject_id`,`geoobject_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
@@ -359,10 +359,28 @@ CREATE TABLE `trip_logs` (
   `target_zone` varchar(90) COLLATE utf8_unicode_ci DEFAULT NULL,
   `type` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
   `temporary` bit(1) DEFAULT NULL,
+  `summary` varchar(500) COLLATE utf8_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 /*Data for the table `trip_logs` */
+
+/*Table structure for table `trip_logs_to_features` */
+
+DROP TABLE IF EXISTS `trip_logs_to_features`;
+
+CREATE TABLE `trip_logs_to_features` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `geoobject_id` bigint(20) unsigned NOT NULL,
+  `trip_log_id` bigint(20) unsigned NOT NULL,
+  `geoobject_type` enum('cave','feature','cave_entrance') COLLATE utf8_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `trip_feature_unique` (`geoobject_id`,`trip_log_id`,`geoobject_type`)
+) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+
+/*Data for the table `trip_logs_to_features` */
+
+insert  into `trip_logs_to_features`(`id`,`geoobject_id`,`trip_log_id`,`geoobject_type`) values (35,2,3,'cave'),(36,6,3,'cave');
 
 /*Table structure for table `trip_logs_to_files` */
 
@@ -372,7 +390,8 @@ CREATE TABLE `trip_logs_to_files` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `file_id` bigint(20) NOT NULL,
   `trip_log_id` bigint(20) NOT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `trip_file_unique` (`file_id`,`trip_log_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 /*Data for the table `trip_logs_to_files` */
@@ -401,12 +420,15 @@ CREATE TABLE `users` (
   `password` varchar(50) COLLATE utf8_unicode_ci NOT NULL,
   `email` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
   `admin_level` int(11) DEFAULT NULL,
+  `language` varchar(5) COLLATE utf8_unicode_ci DEFAULT NULL,
+  `last_log_in_time` datetime DEFAULT NULL,
+  `add_time` datetime NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=MyISAM AUTO_INCREMENT=6 DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 /*Data for the table `users` */
 
-insert  into `users`(`id`,`username`,`password`,`email`,`admin_level`) values (1,'user','pass','',0),(3,'user2','pass','',0),(4,'admin','pass','admin@silexgis.com',0),(5,'','',NULL,NULL);
+insert  into `users`(`id`,`username`,`password`,`email`,`admin_level`,`language`,`last_log_in_time`,`add_time`) values (1,'user','pass','',0,NULL,NULL,'0000-00-00 00:00:00'),(3,'user2','pass','',0,NULL,NULL,'0000-00-00 00:00:00'),(4,'admin','pass','admin@silexgis.com',0,NULL,NULL,'0000-00-00 00:00:00'),(5,'','',NULL,NULL,NULL,NULL,'0000-00-00 00:00:00');
 
 /*Table structure for table `ways` */
 

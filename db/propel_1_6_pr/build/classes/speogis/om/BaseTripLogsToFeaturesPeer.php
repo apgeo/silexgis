@@ -2,26 +2,26 @@
 
 
 /**
- * Base static class for performing query and update operations on the 'geoobjects_to_files' table.
+ * Base static class for performing query and update operations on the 'trip_logs_to_features' table.
  *
  *
  *
  * @package propel.generator.speogis.om
  */
-abstract class BaseGeoobjectsToFilesPeer
+abstract class BaseTripLogsToFeaturesPeer
 {
 
     /** the default database name for this class */
     const DATABASE_NAME = 'speogis';
 
     /** the table name for this class */
-    const TABLE_NAME = 'geoobjects_to_files';
+    const TABLE_NAME = 'trip_logs_to_features';
 
     /** the related Propel class for this table */
-    const OM_CLASS = 'GeoobjectsToFiles';
+    const OM_CLASS = 'TripLogsToFeatures';
 
     /** the related TableMap class for this table */
-    const TM_CLASS = 'GeoobjectsToFilesTableMap';
+    const TM_CLASS = 'TripLogsToFeaturesTableMap';
 
     /** The total number of columns. */
     const NUM_COLUMNS = 4;
@@ -33,30 +33,30 @@ abstract class BaseGeoobjectsToFilesPeer
     const NUM_HYDRATE_COLUMNS = 4;
 
     /** the column name for the id field */
-    const ID = 'geoobjects_to_files.id';
-
-    /** the column name for the file_id field */
-    const FILE_ID = 'geoobjects_to_files.file_id';
+    const ID = 'trip_logs_to_features.id';
 
     /** the column name for the geoobject_id field */
-    const GEOOBJECT_ID = 'geoobjects_to_files.geoobject_id';
+    const GEOOBJECT_ID = 'trip_logs_to_features.geoobject_id';
+
+    /** the column name for the trip_log_id field */
+    const TRIP_LOG_ID = 'trip_logs_to_features.trip_log_id';
 
     /** the column name for the geoobject_type field */
-    const GEOOBJECT_TYPE = 'geoobjects_to_files.geoobject_type';
+    const GEOOBJECT_TYPE = 'trip_logs_to_features.geoobject_type';
 
     /** The enumerated values for the geoobject_type field */
     const GEOOBJECT_TYPE_CAVE = 'cave';
     const GEOOBJECT_TYPE_FEATURE = 'feature';
-    const GEOOBJECT_TYPE_CAVE_ENTRY = 'cave_entry';
+    const GEOOBJECT_TYPE_CAVE_ENTRANCE = 'cave_entrance';
 
     /** The default string format for model objects of the related table **/
     const DEFAULT_STRING_FORMAT = 'YAML';
 
     /**
-     * An identity map to hold any loaded instances of GeoobjectsToFiles objects.
+     * An identity map to hold any loaded instances of TripLogsToFeatures objects.
      * This must be public so that other peer classes can access this when hydrating from JOIN
      * queries.
-     * @var        array GeoobjectsToFiles[]
+     * @var        array TripLogsToFeatures[]
      */
     public static $instances = array();
 
@@ -65,14 +65,14 @@ abstract class BaseGeoobjectsToFilesPeer
      * holds an array of fieldnames
      *
      * first dimension keys are the type constants
-     * e.g. GeoobjectsToFilesPeer::$fieldNames[GeoobjectsToFilesPeer::TYPE_PHPNAME][0] = 'Id'
+     * e.g. TripLogsToFeaturesPeer::$fieldNames[TripLogsToFeaturesPeer::TYPE_PHPNAME][0] = 'Id'
      */
     protected static $fieldNames = array (
-        BasePeer::TYPE_PHPNAME => array ('Id', 'FileId', 'GeoobjectId', 'GeoobjectType', ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'fileId', 'geoobjectId', 'geoobjectType', ),
-        BasePeer::TYPE_COLNAME => array (GeoobjectsToFilesPeer::ID, GeoobjectsToFilesPeer::FILE_ID, GeoobjectsToFilesPeer::GEOOBJECT_ID, GeoobjectsToFilesPeer::GEOOBJECT_TYPE, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'FILE_ID', 'GEOOBJECT_ID', 'GEOOBJECT_TYPE', ),
-        BasePeer::TYPE_FIELDNAME => array ('id', 'file_id', 'geoobject_id', 'geoobject_type', ),
+        BasePeer::TYPE_PHPNAME => array ('Id', 'GeoobjectId', 'TripLogId', 'GeoobjectType', ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'geoobjectId', 'tripLogId', 'geoobjectType', ),
+        BasePeer::TYPE_COLNAME => array (TripLogsToFeaturesPeer::ID, TripLogsToFeaturesPeer::GEOOBJECT_ID, TripLogsToFeaturesPeer::TRIP_LOG_ID, TripLogsToFeaturesPeer::GEOOBJECT_TYPE, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'GEOOBJECT_ID', 'TRIP_LOG_ID', 'GEOOBJECT_TYPE', ),
+        BasePeer::TYPE_FIELDNAME => array ('id', 'geoobject_id', 'trip_log_id', 'geoobject_type', ),
         BasePeer::TYPE_NUM => array (0, 1, 2, 3, )
     );
 
@@ -80,23 +80,23 @@ abstract class BaseGeoobjectsToFilesPeer
      * holds an array of keys for quick access to the fieldnames array
      *
      * first dimension keys are the type constants
-     * e.g. GeoobjectsToFilesPeer::$fieldNames[BasePeer::TYPE_PHPNAME]['Id'] = 0
+     * e.g. TripLogsToFeaturesPeer::$fieldNames[BasePeer::TYPE_PHPNAME]['Id'] = 0
      */
     protected static $fieldKeys = array (
-        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'FileId' => 1, 'GeoobjectId' => 2, 'GeoobjectType' => 3, ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'fileId' => 1, 'geoobjectId' => 2, 'geoobjectType' => 3, ),
-        BasePeer::TYPE_COLNAME => array (GeoobjectsToFilesPeer::ID => 0, GeoobjectsToFilesPeer::FILE_ID => 1, GeoobjectsToFilesPeer::GEOOBJECT_ID => 2, GeoobjectsToFilesPeer::GEOOBJECT_TYPE => 3, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'FILE_ID' => 1, 'GEOOBJECT_ID' => 2, 'GEOOBJECT_TYPE' => 3, ),
-        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'file_id' => 1, 'geoobject_id' => 2, 'geoobject_type' => 3, ),
+        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'GeoobjectId' => 1, 'TripLogId' => 2, 'GeoobjectType' => 3, ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'geoobjectId' => 1, 'tripLogId' => 2, 'geoobjectType' => 3, ),
+        BasePeer::TYPE_COLNAME => array (TripLogsToFeaturesPeer::ID => 0, TripLogsToFeaturesPeer::GEOOBJECT_ID => 1, TripLogsToFeaturesPeer::TRIP_LOG_ID => 2, TripLogsToFeaturesPeer::GEOOBJECT_TYPE => 3, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'GEOOBJECT_ID' => 1, 'TRIP_LOG_ID' => 2, 'GEOOBJECT_TYPE' => 3, ),
+        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'geoobject_id' => 1, 'trip_log_id' => 2, 'geoobject_type' => 3, ),
         BasePeer::TYPE_NUM => array (0, 1, 2, 3, )
     );
 
     /** The enumerated values for this table */
     protected static $enumValueSets = array(
-        GeoobjectsToFilesPeer::GEOOBJECT_TYPE => array(
-            GeoobjectsToFilesPeer::GEOOBJECT_TYPE_CAVE,
-            GeoobjectsToFilesPeer::GEOOBJECT_TYPE_FEATURE,
-            GeoobjectsToFilesPeer::GEOOBJECT_TYPE_CAVE_ENTRY,
+        TripLogsToFeaturesPeer::GEOOBJECT_TYPE => array(
+            TripLogsToFeaturesPeer::GEOOBJECT_TYPE_CAVE,
+            TripLogsToFeaturesPeer::GEOOBJECT_TYPE_FEATURE,
+            TripLogsToFeaturesPeer::GEOOBJECT_TYPE_CAVE_ENTRANCE,
         ),
     );
 
@@ -112,10 +112,10 @@ abstract class BaseGeoobjectsToFilesPeer
      */
     public static function translateFieldName($name, $fromType, $toType)
     {
-        $toNames = GeoobjectsToFilesPeer::getFieldNames($toType);
-        $key = isset(GeoobjectsToFilesPeer::$fieldKeys[$fromType][$name]) ? GeoobjectsToFilesPeer::$fieldKeys[$fromType][$name] : null;
+        $toNames = TripLogsToFeaturesPeer::getFieldNames($toType);
+        $key = isset(TripLogsToFeaturesPeer::$fieldKeys[$fromType][$name]) ? TripLogsToFeaturesPeer::$fieldKeys[$fromType][$name] : null;
         if ($key === null) {
-            throw new PropelException("'$name' could not be found in the field names of type '$fromType'. These are: " . print_r(GeoobjectsToFilesPeer::$fieldKeys[$fromType], true));
+            throw new PropelException("'$name' could not be found in the field names of type '$fromType'. These are: " . print_r(TripLogsToFeaturesPeer::$fieldKeys[$fromType], true));
         }
 
         return $toNames[$key];
@@ -132,11 +132,11 @@ abstract class BaseGeoobjectsToFilesPeer
      */
     public static function getFieldNames($type = BasePeer::TYPE_PHPNAME)
     {
-        if (!array_key_exists($type, GeoobjectsToFilesPeer::$fieldNames)) {
+        if (!array_key_exists($type, TripLogsToFeaturesPeer::$fieldNames)) {
             throw new PropelException('Method getFieldNames() expects the parameter $type to be one of the class constants BasePeer::TYPE_PHPNAME, BasePeer::TYPE_STUDLYPHPNAME, BasePeer::TYPE_COLNAME, BasePeer::TYPE_FIELDNAME, BasePeer::TYPE_NUM. ' . $type . ' was given.');
         }
 
-        return GeoobjectsToFilesPeer::$fieldNames[$type];
+        return TripLogsToFeaturesPeer::$fieldNames[$type];
     }
 
     /**
@@ -145,7 +145,7 @@ abstract class BaseGeoobjectsToFilesPeer
      */
     public static function getValueSets()
     {
-      return GeoobjectsToFilesPeer::$enumValueSets;
+      return TripLogsToFeaturesPeer::$enumValueSets;
     }
 
     /**
@@ -157,7 +157,7 @@ abstract class BaseGeoobjectsToFilesPeer
      */
     public static function getValueSet($colname)
     {
-        $valueSets = GeoobjectsToFilesPeer::getValueSets();
+        $valueSets = TripLogsToFeaturesPeer::getValueSets();
 
         if (!isset($valueSets[$colname])) {
             throw new PropelException(sprintf('Column "%s" has no ValueSet.', $colname));
@@ -176,7 +176,7 @@ abstract class BaseGeoobjectsToFilesPeer
      */
     public static function getSqlValueForEnum($colname, $enumVal)
     {
-        $values = GeoobjectsToFilesPeer::getValueSet($colname);
+        $values = TripLogsToFeaturesPeer::getValueSet($colname);
         if (!in_array($enumVal, $values)) {
             throw new PropelException(sprintf('Value "%s" is not accepted in this enumerated column', $colname));
         }
@@ -193,12 +193,12 @@ abstract class BaseGeoobjectsToFilesPeer
      *		$c->addJoin(TablePeer::alias("alias1", TablePeer::PRIMARY_KEY_COLUMN), TablePeer::PRIMARY_KEY_COLUMN);
      * </code>
      * @param      string $alias The alias for the current table.
-     * @param      string $column The column name for current table. (i.e. GeoobjectsToFilesPeer::COLUMN_NAME).
+     * @param      string $column The column name for current table. (i.e. TripLogsToFeaturesPeer::COLUMN_NAME).
      * @return string
      */
     public static function alias($alias, $column)
     {
-        return str_replace(GeoobjectsToFilesPeer::TABLE_NAME.'.', $alias.'.', $column);
+        return str_replace(TripLogsToFeaturesPeer::TABLE_NAME.'.', $alias.'.', $column);
     }
 
     /**
@@ -216,14 +216,14 @@ abstract class BaseGeoobjectsToFilesPeer
     public static function addSelectColumns(Criteria $criteria, $alias = null)
     {
         if (null === $alias) {
-            $criteria->addSelectColumn(GeoobjectsToFilesPeer::ID);
-            $criteria->addSelectColumn(GeoobjectsToFilesPeer::FILE_ID);
-            $criteria->addSelectColumn(GeoobjectsToFilesPeer::GEOOBJECT_ID);
-            $criteria->addSelectColumn(GeoobjectsToFilesPeer::GEOOBJECT_TYPE);
+            $criteria->addSelectColumn(TripLogsToFeaturesPeer::ID);
+            $criteria->addSelectColumn(TripLogsToFeaturesPeer::GEOOBJECT_ID);
+            $criteria->addSelectColumn(TripLogsToFeaturesPeer::TRIP_LOG_ID);
+            $criteria->addSelectColumn(TripLogsToFeaturesPeer::GEOOBJECT_TYPE);
         } else {
             $criteria->addSelectColumn($alias . '.id');
-            $criteria->addSelectColumn($alias . '.file_id');
             $criteria->addSelectColumn($alias . '.geoobject_id');
+            $criteria->addSelectColumn($alias . '.trip_log_id');
             $criteria->addSelectColumn($alias . '.geoobject_type');
         }
     }
@@ -244,21 +244,21 @@ abstract class BaseGeoobjectsToFilesPeer
         // We need to set the primary table name, since in the case that there are no WHERE columns
         // it will be impossible for the BasePeer::createSelectSql() method to determine which
         // tables go into the FROM clause.
-        $criteria->setPrimaryTableName(GeoobjectsToFilesPeer::TABLE_NAME);
+        $criteria->setPrimaryTableName(TripLogsToFeaturesPeer::TABLE_NAME);
 
         if ($distinct && !in_array(Criteria::DISTINCT, $criteria->getSelectModifiers())) {
             $criteria->setDistinct();
         }
 
         if (!$criteria->hasSelectClause()) {
-            GeoobjectsToFilesPeer::addSelectColumns($criteria);
+            TripLogsToFeaturesPeer::addSelectColumns($criteria);
         }
 
         $criteria->clearOrderByColumns(); // ORDER BY won't ever affect the count
-        $criteria->setDbName(GeoobjectsToFilesPeer::DATABASE_NAME); // Set the correct dbName
+        $criteria->setDbName(TripLogsToFeaturesPeer::DATABASE_NAME); // Set the correct dbName
 
         if ($con === null) {
-            $con = Propel::getConnection(GeoobjectsToFilesPeer::DATABASE_NAME, Propel::CONNECTION_READ);
+            $con = Propel::getConnection(TripLogsToFeaturesPeer::DATABASE_NAME, Propel::CONNECTION_READ);
         }
         // BasePeer returns a PDOStatement
         $stmt = BasePeer::doCount($criteria, $con);
@@ -277,7 +277,7 @@ abstract class BaseGeoobjectsToFilesPeer
      *
      * @param      Criteria $criteria object used to create the SELECT statement.
      * @param      PropelPDO $con
-     * @return GeoobjectsToFiles
+     * @return TripLogsToFeatures
      * @throws PropelException Any exceptions caught during processing will be
      *		 rethrown wrapped into a PropelException.
      */
@@ -285,7 +285,7 @@ abstract class BaseGeoobjectsToFilesPeer
     {
         $critcopy = clone $criteria;
         $critcopy->setLimit(1);
-        $objects = GeoobjectsToFilesPeer::doSelect($critcopy, $con);
+        $objects = TripLogsToFeaturesPeer::doSelect($critcopy, $con);
         if ($objects) {
             return $objects[0];
         }
@@ -303,7 +303,7 @@ abstract class BaseGeoobjectsToFilesPeer
      */
     public static function doSelect(Criteria $criteria, PropelPDO $con = null)
     {
-        return GeoobjectsToFilesPeer::populateObjects(GeoobjectsToFilesPeer::doSelectStmt($criteria, $con));
+        return TripLogsToFeaturesPeer::populateObjects(TripLogsToFeaturesPeer::doSelectStmt($criteria, $con));
     }
     /**
      * Prepares the Criteria object and uses the parent doSelect() method to execute a PDOStatement.
@@ -321,16 +321,16 @@ abstract class BaseGeoobjectsToFilesPeer
     public static function doSelectStmt(Criteria $criteria, PropelPDO $con = null)
     {
         if ($con === null) {
-            $con = Propel::getConnection(GeoobjectsToFilesPeer::DATABASE_NAME, Propel::CONNECTION_READ);
+            $con = Propel::getConnection(TripLogsToFeaturesPeer::DATABASE_NAME, Propel::CONNECTION_READ);
         }
 
         if (!$criteria->hasSelectClause()) {
             $criteria = clone $criteria;
-            GeoobjectsToFilesPeer::addSelectColumns($criteria);
+            TripLogsToFeaturesPeer::addSelectColumns($criteria);
         }
 
         // Set the correct dbName
-        $criteria->setDbName(GeoobjectsToFilesPeer::DATABASE_NAME);
+        $criteria->setDbName(TripLogsToFeaturesPeer::DATABASE_NAME);
 
         // BasePeer returns a PDOStatement
         return BasePeer::doSelect($criteria, $con);
@@ -344,7 +344,7 @@ abstract class BaseGeoobjectsToFilesPeer
      * to the cache in order to ensure that the same objects are always returned by doSelect*()
      * and retrieveByPK*() calls.
      *
-     * @param GeoobjectsToFiles $obj A GeoobjectsToFiles object.
+     * @param TripLogsToFeatures $obj A TripLogsToFeatures object.
      * @param      string $key (optional) key to use for instance map (for performance boost if key was already calculated externally).
      */
     public static function addInstanceToPool($obj, $key = null)
@@ -353,7 +353,7 @@ abstract class BaseGeoobjectsToFilesPeer
             if ($key === null) {
                 $key = (string) $obj->getId();
             } // if key === null
-            GeoobjectsToFilesPeer::$instances[$key] = $obj;
+            TripLogsToFeaturesPeer::$instances[$key] = $obj;
         }
     }
 
@@ -365,7 +365,7 @@ abstract class BaseGeoobjectsToFilesPeer
      * methods in your stub classes -- you may need to explicitly remove objects
      * from the cache in order to prevent returning objects that no longer exist.
      *
-     * @param      mixed $value A GeoobjectsToFiles object or a primary key value.
+     * @param      mixed $value A TripLogsToFeatures object or a primary key value.
      *
      * @return void
      * @throws PropelException - if the value is invalid.
@@ -373,17 +373,17 @@ abstract class BaseGeoobjectsToFilesPeer
     public static function removeInstanceFromPool($value)
     {
         if (Propel::isInstancePoolingEnabled() && $value !== null) {
-            if (is_object($value) && $value instanceof GeoobjectsToFiles) {
+            if (is_object($value) && $value instanceof TripLogsToFeatures) {
                 $key = (string) $value->getId();
             } elseif (is_scalar($value)) {
                 // assume we've been passed a primary key
                 $key = (string) $value;
             } else {
-                $e = new PropelException("Invalid value passed to removeInstanceFromPool().  Expected primary key or GeoobjectsToFiles object; got " . (is_object($value) ? get_class($value) . ' object.' : var_export($value,true)));
+                $e = new PropelException("Invalid value passed to removeInstanceFromPool().  Expected primary key or TripLogsToFeatures object; got " . (is_object($value) ? get_class($value) . ' object.' : var_export($value,true)));
                 throw $e;
             }
 
-            unset(GeoobjectsToFilesPeer::$instances[$key]);
+            unset(TripLogsToFeaturesPeer::$instances[$key]);
         }
     } // removeInstanceFromPool()
 
@@ -394,14 +394,14 @@ abstract class BaseGeoobjectsToFilesPeer
      * a multi-column primary key, a serialize()d version of the primary key will be returned.
      *
      * @param      string $key The key (@see getPrimaryKeyHash()) for this instance.
-     * @return GeoobjectsToFiles Found object or null if 1) no instance exists for specified key or 2) instance pooling has been disabled.
+     * @return TripLogsToFeatures Found object or null if 1) no instance exists for specified key or 2) instance pooling has been disabled.
      * @see        getPrimaryKeyHash()
      */
     public static function getInstanceFromPool($key)
     {
         if (Propel::isInstancePoolingEnabled()) {
-            if (isset(GeoobjectsToFilesPeer::$instances[$key])) {
-                return GeoobjectsToFilesPeer::$instances[$key];
+            if (isset(TripLogsToFeaturesPeer::$instances[$key])) {
+                return TripLogsToFeaturesPeer::$instances[$key];
             }
         }
 
@@ -416,15 +416,15 @@ abstract class BaseGeoobjectsToFilesPeer
     public static function clearInstancePool($and_clear_all_references = false)
     {
       if ($and_clear_all_references) {
-        foreach (GeoobjectsToFilesPeer::$instances as $instance) {
+        foreach (TripLogsToFeaturesPeer::$instances as $instance) {
           $instance->clearAllReferences(true);
         }
       }
-        GeoobjectsToFilesPeer::$instances = array();
+        TripLogsToFeaturesPeer::$instances = array();
     }
 
     /**
-     * Method to invalidate the instance pool of all tables related to geoobjects_to_files
+     * Method to invalidate the instance pool of all tables related to trip_logs_to_features
      * by a foreign key with ON DELETE CASCADE
      */
     public static function clearRelatedInstancePool()
@@ -478,11 +478,11 @@ abstract class BaseGeoobjectsToFilesPeer
         $results = array();
 
         // set the class once to avoid overhead in the loop
-        $cls = GeoobjectsToFilesPeer::getOMClass();
+        $cls = TripLogsToFeaturesPeer::getOMClass();
         // populate the object(s)
         while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
-            $key = GeoobjectsToFilesPeer::getPrimaryKeyHashFromRow($row, 0);
-            if (null !== ($obj = GeoobjectsToFilesPeer::getInstanceFromPool($key))) {
+            $key = TripLogsToFeaturesPeer::getPrimaryKeyHashFromRow($row, 0);
+            if (null !== ($obj = TripLogsToFeaturesPeer::getInstanceFromPool($key))) {
                 // We no longer rehydrate the object, since this can cause data loss.
                 // See http://www.propelorm.org/ticket/509
                 // $obj->hydrate($row, 0, true); // rehydrate
@@ -491,7 +491,7 @@ abstract class BaseGeoobjectsToFilesPeer
                 $obj = new $cls();
                 $obj->hydrate($row);
                 $results[] = $obj;
-                GeoobjectsToFilesPeer::addInstanceToPool($obj, $key);
+                TripLogsToFeaturesPeer::addInstanceToPool($obj, $key);
             } // if key exists
         }
         $stmt->closeCursor();
@@ -505,21 +505,21 @@ abstract class BaseGeoobjectsToFilesPeer
      * @param      int $startcol The 0-based offset for reading from the resultset row.
      * @throws PropelException Any exceptions caught during processing will be
      *		 rethrown wrapped into a PropelException.
-     * @return array (GeoobjectsToFiles object, last column rank)
+     * @return array (TripLogsToFeatures object, last column rank)
      */
     public static function populateObject($row, $startcol = 0)
     {
-        $key = GeoobjectsToFilesPeer::getPrimaryKeyHashFromRow($row, $startcol);
-        if (null !== ($obj = GeoobjectsToFilesPeer::getInstanceFromPool($key))) {
+        $key = TripLogsToFeaturesPeer::getPrimaryKeyHashFromRow($row, $startcol);
+        if (null !== ($obj = TripLogsToFeaturesPeer::getInstanceFromPool($key))) {
             // We no longer rehydrate the object, since this can cause data loss.
             // See http://www.propelorm.org/ticket/509
             // $obj->hydrate($row, $startcol, true); // rehydrate
-            $col = $startcol + GeoobjectsToFilesPeer::NUM_HYDRATE_COLUMNS;
+            $col = $startcol + TripLogsToFeaturesPeer::NUM_HYDRATE_COLUMNS;
         } else {
-            $cls = GeoobjectsToFilesPeer::OM_CLASS;
+            $cls = TripLogsToFeaturesPeer::OM_CLASS;
             $obj = new $cls();
             $col = $obj->hydrate($row, $startcol);
-            GeoobjectsToFilesPeer::addInstanceToPool($obj, $key);
+            TripLogsToFeaturesPeer::addInstanceToPool($obj, $key);
         }
 
         return array($obj, $col);
@@ -534,7 +534,7 @@ abstract class BaseGeoobjectsToFilesPeer
      */
     public static function getTableMap()
     {
-        return Propel::getDatabaseMap(GeoobjectsToFilesPeer::DATABASE_NAME)->getTable(GeoobjectsToFilesPeer::TABLE_NAME);
+        return Propel::getDatabaseMap(TripLogsToFeaturesPeer::DATABASE_NAME)->getTable(TripLogsToFeaturesPeer::TABLE_NAME);
     }
 
     /**
@@ -542,9 +542,9 @@ abstract class BaseGeoobjectsToFilesPeer
      */
     public static function buildTableMap()
     {
-      $dbMap = Propel::getDatabaseMap(BaseGeoobjectsToFilesPeer::DATABASE_NAME);
-      if (!$dbMap->hasTable(BaseGeoobjectsToFilesPeer::TABLE_NAME)) {
-        $dbMap->addTableObject(new \GeoobjectsToFilesTableMap());
+      $dbMap = Propel::getDatabaseMap(BaseTripLogsToFeaturesPeer::DATABASE_NAME);
+      if (!$dbMap->hasTable(BaseTripLogsToFeaturesPeer::TABLE_NAME)) {
+        $dbMap->addTableObject(new \TripLogsToFeaturesTableMap());
       }
     }
 
@@ -556,13 +556,13 @@ abstract class BaseGeoobjectsToFilesPeer
      */
     public static function getOMClass($row = 0, $colnum = 0)
     {
-        return GeoobjectsToFilesPeer::OM_CLASS;
+        return TripLogsToFeaturesPeer::OM_CLASS;
     }
 
     /**
-     * Performs an INSERT on the database, given a GeoobjectsToFiles or Criteria object.
+     * Performs an INSERT on the database, given a TripLogsToFeatures or Criteria object.
      *
-     * @param      mixed $values Criteria or GeoobjectsToFiles object containing data that is used to create the INSERT statement.
+     * @param      mixed $values Criteria or TripLogsToFeatures object containing data that is used to create the INSERT statement.
      * @param      PropelPDO $con the PropelPDO connection to use
      * @return mixed           The new primary key.
      * @throws PropelException Any exceptions caught during processing will be
@@ -571,22 +571,22 @@ abstract class BaseGeoobjectsToFilesPeer
     public static function doInsert($values, PropelPDO $con = null)
     {
         if ($con === null) {
-            $con = Propel::getConnection(GeoobjectsToFilesPeer::DATABASE_NAME, Propel::CONNECTION_WRITE);
+            $con = Propel::getConnection(TripLogsToFeaturesPeer::DATABASE_NAME, Propel::CONNECTION_WRITE);
         }
 
         if ($values instanceof Criteria) {
             $criteria = clone $values; // rename for clarity
         } else {
-            $criteria = $values->buildCriteria(); // build Criteria from GeoobjectsToFiles object
+            $criteria = $values->buildCriteria(); // build Criteria from TripLogsToFeatures object
         }
 
-        if ($criteria->containsKey(GeoobjectsToFilesPeer::ID) && $criteria->keyContainsValue(GeoobjectsToFilesPeer::ID) ) {
-            throw new PropelException('Cannot insert a value for auto-increment primary key ('.GeoobjectsToFilesPeer::ID.')');
+        if ($criteria->containsKey(TripLogsToFeaturesPeer::ID) && $criteria->keyContainsValue(TripLogsToFeaturesPeer::ID) ) {
+            throw new PropelException('Cannot insert a value for auto-increment primary key ('.TripLogsToFeaturesPeer::ID.')');
         }
 
 
         // Set the correct dbName
-        $criteria->setDbName(GeoobjectsToFilesPeer::DATABASE_NAME);
+        $criteria->setDbName(TripLogsToFeaturesPeer::DATABASE_NAME);
 
         try {
             // use transaction because $criteria could contain info
@@ -603,9 +603,9 @@ abstract class BaseGeoobjectsToFilesPeer
     }
 
     /**
-     * Performs an UPDATE on the database, given a GeoobjectsToFiles or Criteria object.
+     * Performs an UPDATE on the database, given a TripLogsToFeatures or Criteria object.
      *
-     * @param      mixed $values Criteria or GeoobjectsToFiles object containing data that is used to create the UPDATE statement.
+     * @param      mixed $values Criteria or TripLogsToFeatures object containing data that is used to create the UPDATE statement.
      * @param      PropelPDO $con The connection to use (specify PropelPDO connection object to exert more control over transactions).
      * @return int             The number of affected rows (if supported by underlying database driver).
      * @throws PropelException Any exceptions caught during processing will be
@@ -614,35 +614,35 @@ abstract class BaseGeoobjectsToFilesPeer
     public static function doUpdate($values, PropelPDO $con = null)
     {
         if ($con === null) {
-            $con = Propel::getConnection(GeoobjectsToFilesPeer::DATABASE_NAME, Propel::CONNECTION_WRITE);
+            $con = Propel::getConnection(TripLogsToFeaturesPeer::DATABASE_NAME, Propel::CONNECTION_WRITE);
         }
 
-        $selectCriteria = new Criteria(GeoobjectsToFilesPeer::DATABASE_NAME);
+        $selectCriteria = new Criteria(TripLogsToFeaturesPeer::DATABASE_NAME);
 
         if ($values instanceof Criteria) {
             $criteria = clone $values; // rename for clarity
 
-            $comparison = $criteria->getComparison(GeoobjectsToFilesPeer::ID);
-            $value = $criteria->remove(GeoobjectsToFilesPeer::ID);
+            $comparison = $criteria->getComparison(TripLogsToFeaturesPeer::ID);
+            $value = $criteria->remove(TripLogsToFeaturesPeer::ID);
             if ($value) {
-                $selectCriteria->add(GeoobjectsToFilesPeer::ID, $value, $comparison);
+                $selectCriteria->add(TripLogsToFeaturesPeer::ID, $value, $comparison);
             } else {
-                $selectCriteria->setPrimaryTableName(GeoobjectsToFilesPeer::TABLE_NAME);
+                $selectCriteria->setPrimaryTableName(TripLogsToFeaturesPeer::TABLE_NAME);
             }
 
-        } else { // $values is GeoobjectsToFiles object
+        } else { // $values is TripLogsToFeatures object
             $criteria = $values->buildCriteria(); // gets full criteria
             $selectCriteria = $values->buildPkeyCriteria(); // gets criteria w/ primary key(s)
         }
 
         // set the correct dbName
-        $criteria->setDbName(GeoobjectsToFilesPeer::DATABASE_NAME);
+        $criteria->setDbName(TripLogsToFeaturesPeer::DATABASE_NAME);
 
         return BasePeer::doUpdate($selectCriteria, $criteria, $con);
     }
 
     /**
-     * Deletes all rows from the geoobjects_to_files table.
+     * Deletes all rows from the trip_logs_to_features table.
      *
      * @param      PropelPDO $con the connection to use
      * @return int             The number of affected rows (if supported by underlying database driver).
@@ -651,19 +651,19 @@ abstract class BaseGeoobjectsToFilesPeer
     public static function doDeleteAll(PropelPDO $con = null)
     {
         if ($con === null) {
-            $con = Propel::getConnection(GeoobjectsToFilesPeer::DATABASE_NAME, Propel::CONNECTION_WRITE);
+            $con = Propel::getConnection(TripLogsToFeaturesPeer::DATABASE_NAME, Propel::CONNECTION_WRITE);
         }
         $affectedRows = 0; // initialize var to track total num of affected rows
         try {
             // use transaction because $criteria could contain info
             // for more than one table or we could emulating ON DELETE CASCADE, etc.
             $con->beginTransaction();
-            $affectedRows += BasePeer::doDeleteAll(GeoobjectsToFilesPeer::TABLE_NAME, $con, GeoobjectsToFilesPeer::DATABASE_NAME);
+            $affectedRows += BasePeer::doDeleteAll(TripLogsToFeaturesPeer::TABLE_NAME, $con, TripLogsToFeaturesPeer::DATABASE_NAME);
             // Because this db requires some delete cascade/set null emulation, we have to
             // clear the cached instance *after* the emulation has happened (since
             // instances get re-added by the select statement contained therein).
-            GeoobjectsToFilesPeer::clearInstancePool();
-            GeoobjectsToFilesPeer::clearRelatedInstancePool();
+            TripLogsToFeaturesPeer::clearInstancePool();
+            TripLogsToFeaturesPeer::clearRelatedInstancePool();
             $con->commit();
 
             return $affectedRows;
@@ -674,9 +674,9 @@ abstract class BaseGeoobjectsToFilesPeer
     }
 
     /**
-     * Performs a DELETE on the database, given a GeoobjectsToFiles or Criteria object OR a primary key value.
+     * Performs a DELETE on the database, given a TripLogsToFeatures or Criteria object OR a primary key value.
      *
-     * @param      mixed $values Criteria or GeoobjectsToFiles object or primary key or array of primary keys
+     * @param      mixed $values Criteria or TripLogsToFeatures object or primary key or array of primary keys
      *              which is used to create the DELETE statement
      * @param      PropelPDO $con the connection to use
      * @return int The number of affected rows (if supported by underlying database driver).  This includes CASCADE-related rows
@@ -687,32 +687,32 @@ abstract class BaseGeoobjectsToFilesPeer
      public static function doDelete($values, PropelPDO $con = null)
      {
         if ($con === null) {
-            $con = Propel::getConnection(GeoobjectsToFilesPeer::DATABASE_NAME, Propel::CONNECTION_WRITE);
+            $con = Propel::getConnection(TripLogsToFeaturesPeer::DATABASE_NAME, Propel::CONNECTION_WRITE);
         }
 
         if ($values instanceof Criteria) {
             // invalidate the cache for all objects of this type, since we have no
             // way of knowing (without running a query) what objects should be invalidated
             // from the cache based on this Criteria.
-            GeoobjectsToFilesPeer::clearInstancePool();
+            TripLogsToFeaturesPeer::clearInstancePool();
             // rename for clarity
             $criteria = clone $values;
-        } elseif ($values instanceof GeoobjectsToFiles) { // it's a model object
+        } elseif ($values instanceof TripLogsToFeatures) { // it's a model object
             // invalidate the cache for this single object
-            GeoobjectsToFilesPeer::removeInstanceFromPool($values);
+            TripLogsToFeaturesPeer::removeInstanceFromPool($values);
             // create criteria based on pk values
             $criteria = $values->buildPkeyCriteria();
         } else { // it's a primary key, or an array of pks
-            $criteria = new Criteria(GeoobjectsToFilesPeer::DATABASE_NAME);
-            $criteria->add(GeoobjectsToFilesPeer::ID, (array) $values, Criteria::IN);
+            $criteria = new Criteria(TripLogsToFeaturesPeer::DATABASE_NAME);
+            $criteria->add(TripLogsToFeaturesPeer::ID, (array) $values, Criteria::IN);
             // invalidate the cache for this object(s)
             foreach ((array) $values as $singleval) {
-                GeoobjectsToFilesPeer::removeInstanceFromPool($singleval);
+                TripLogsToFeaturesPeer::removeInstanceFromPool($singleval);
             }
         }
 
         // Set the correct dbName
-        $criteria->setDbName(GeoobjectsToFilesPeer::DATABASE_NAME);
+        $criteria->setDbName(TripLogsToFeaturesPeer::DATABASE_NAME);
 
         $affectedRows = 0; // initialize var to track total num of affected rows
 
@@ -722,7 +722,7 @@ abstract class BaseGeoobjectsToFilesPeer
             $con->beginTransaction();
 
             $affectedRows += BasePeer::doDelete($criteria, $con);
-            GeoobjectsToFilesPeer::clearRelatedInstancePool();
+            TripLogsToFeaturesPeer::clearRelatedInstancePool();
             $con->commit();
 
             return $affectedRows;
@@ -733,13 +733,13 @@ abstract class BaseGeoobjectsToFilesPeer
     }
 
     /**
-     * Validates all modified columns of given GeoobjectsToFiles object.
+     * Validates all modified columns of given TripLogsToFeatures object.
      * If parameter $columns is either a single column name or an array of column names
      * than only those columns are validated.
      *
      * NOTICE: This does not apply to primary or foreign keys for now.
      *
-     * @param GeoobjectsToFiles $obj The object to validate.
+     * @param TripLogsToFeatures $obj The object to validate.
      * @param      mixed $cols Column name or array of column names.
      *
      * @return mixed TRUE if all columns are valid or the error message of the first invalid column.
@@ -749,8 +749,8 @@ abstract class BaseGeoobjectsToFilesPeer
         $columns = array();
 
         if ($cols) {
-            $dbMap = Propel::getDatabaseMap(GeoobjectsToFilesPeer::DATABASE_NAME);
-            $tableMap = $dbMap->getTable(GeoobjectsToFilesPeer::TABLE_NAME);
+            $dbMap = Propel::getDatabaseMap(TripLogsToFeaturesPeer::DATABASE_NAME);
+            $tableMap = $dbMap->getTable(TripLogsToFeaturesPeer::TABLE_NAME);
 
             if (! is_array($cols)) {
                 $cols = array($cols);
@@ -766,7 +766,7 @@ abstract class BaseGeoobjectsToFilesPeer
 
         }
 
-        return BasePeer::doValidate(GeoobjectsToFilesPeer::DATABASE_NAME, GeoobjectsToFilesPeer::TABLE_NAME, $columns);
+        return BasePeer::doValidate(TripLogsToFeaturesPeer::DATABASE_NAME, TripLogsToFeaturesPeer::TABLE_NAME, $columns);
     }
 
     /**
@@ -774,23 +774,23 @@ abstract class BaseGeoobjectsToFilesPeer
      *
      * @param string $pk the primary key.
      * @param      PropelPDO $con the connection to use
-     * @return GeoobjectsToFiles
+     * @return TripLogsToFeatures
      */
     public static function retrieveByPK($pk, PropelPDO $con = null)
     {
 
-        if (null !== ($obj = GeoobjectsToFilesPeer::getInstanceFromPool((string) $pk))) {
+        if (null !== ($obj = TripLogsToFeaturesPeer::getInstanceFromPool((string) $pk))) {
             return $obj;
         }
 
         if ($con === null) {
-            $con = Propel::getConnection(GeoobjectsToFilesPeer::DATABASE_NAME, Propel::CONNECTION_READ);
+            $con = Propel::getConnection(TripLogsToFeaturesPeer::DATABASE_NAME, Propel::CONNECTION_READ);
         }
 
-        $criteria = new Criteria(GeoobjectsToFilesPeer::DATABASE_NAME);
-        $criteria->add(GeoobjectsToFilesPeer::ID, $pk);
+        $criteria = new Criteria(TripLogsToFeaturesPeer::DATABASE_NAME);
+        $criteria->add(TripLogsToFeaturesPeer::ID, $pk);
 
-        $v = GeoobjectsToFilesPeer::doSelect($criteria, $con);
+        $v = TripLogsToFeaturesPeer::doSelect($criteria, $con);
 
         return !empty($v) > 0 ? $v[0] : null;
     }
@@ -800,31 +800,31 @@ abstract class BaseGeoobjectsToFilesPeer
      *
      * @param      array $pks List of primary keys
      * @param      PropelPDO $con the connection to use
-     * @return GeoobjectsToFiles[]
+     * @return TripLogsToFeatures[]
      * @throws PropelException Any exceptions caught during processing will be
      *		 rethrown wrapped into a PropelException.
      */
     public static function retrieveByPKs($pks, PropelPDO $con = null)
     {
         if ($con === null) {
-            $con = Propel::getConnection(GeoobjectsToFilesPeer::DATABASE_NAME, Propel::CONNECTION_READ);
+            $con = Propel::getConnection(TripLogsToFeaturesPeer::DATABASE_NAME, Propel::CONNECTION_READ);
         }
 
         $objs = null;
         if (empty($pks)) {
             $objs = array();
         } else {
-            $criteria = new Criteria(GeoobjectsToFilesPeer::DATABASE_NAME);
-            $criteria->add(GeoobjectsToFilesPeer::ID, $pks, Criteria::IN);
-            $objs = GeoobjectsToFilesPeer::doSelect($criteria, $con);
+            $criteria = new Criteria(TripLogsToFeaturesPeer::DATABASE_NAME);
+            $criteria->add(TripLogsToFeaturesPeer::ID, $pks, Criteria::IN);
+            $objs = TripLogsToFeaturesPeer::doSelect($criteria, $con);
         }
 
         return $objs;
     }
 
-} // BaseGeoobjectsToFilesPeer
+} // BaseTripLogsToFeaturesPeer
 
 // This is the static code needed to register the TableMap for this table with the main Propel class.
 //
-BaseGeoobjectsToFilesPeer::buildTableMap();
+BaseTripLogsToFeaturesPeer::buildTableMap();
 

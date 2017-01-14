@@ -3,6 +3,10 @@
 /doc
 /uploads/pictures
 /uploads/files
+/uploads
 /ip.txt
 /data/uploader/files
 /test
+/.git-rewrite
+/bak
+/database_schema/bak

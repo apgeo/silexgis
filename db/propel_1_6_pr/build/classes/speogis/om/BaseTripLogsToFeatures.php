@@ -2,24 +2,24 @@
 
 
 /**
- * Base class that represents a row from the 'trip_logs' table.
+ * Base class that represents a row from the 'trip_logs_to_features' table.
  *
  *
  *
  * @package    propel.generator.speogis.om
  */
-abstract class BaseTripLogs extends BaseObject implements Persistent
+abstract class BaseTripLogsToFeatures extends BaseObject implements Persistent
 {
     /**
      * Peer class name
      */
-    const PEER = 'TripLogsPeer';
+    const PEER = 'TripLogsToFeaturesPeer';
 
     /**
      * The Peer class.
      * Instance provides a convenient way of calling static methods on a class
      * that calling code may not be able to identify.
-     * @var        TripLogsPeer
+     * @var        TripLogsToFeaturesPeer
      */
     protected static $peer;
 
@@ -36,52 +36,22 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
     protected $id;
 
     /**
-     * The value for the add_time field.
+     * The value for the geoobject_id field.
      * @var        string
      */
-    protected $add_time;
+    protected $geoobject_id;
 
     /**
-     * The value for the trip_start_time field.
+     * The value for the trip_log_id field.
      * @var        string
      */
-    protected $trip_start_time;
+    protected $trip_log_id;
 
     /**
-     * The value for the trip_end_time field.
+     * The value for the geoobject_type field.
      * @var        string
      */
-    protected $trip_end_time;
-
-    /**
-     * The value for the details field.
-     * @var        string
-     */
-    protected $details;
-
-    /**
-     * The value for the target_zone field.
-     * @var        string
-     */
-    protected $target_zone;
-
-    /**
-     * The value for the type field.
-     * @var        string
-     */
-    protected $type;
-
-    /**
-     * The value for the temporary field.
-     * @var        string
-     */
-    protected $temporary;
-
-    /**
-     * The value for the summary field.
-     * @var        string
-     */
-    protected $summary;
+    protected $geoobject_type;
 
     /**
      * Flag to prevent endless save loop, if this object is referenced
@@ -115,185 +85,43 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
     }
 
     /**
-     * Get the [optionally formatted] temporal [add_time] column value.
-     *
-     *
-     * @param string $format The date/time format string (either date()-style or strftime()-style).
-     *				 If format is null, then the raw DateTime object will be returned.
-     * @return mixed Formatted date/time value as string or DateTime object (if format is null), null if column is null, and 0 if column value is 0000-00-00 00:00:00
-     * @throws PropelException - if unable to parse/validate the date/time value.
-     */
-    public function getAddTime($format = 'Y-m-d H:i:s')
-    {
-        if ($this->add_time === null) {
-            return null;
-        }
-
-        if ($this->add_time === '0000-00-00 00:00:00') {
-            // while technically this is not a default value of null,
-            // this seems to be closest in meaning.
-            return null;
-        }
-
-        try {
-            $dt = new DateTime($this->add_time);
-        } catch (Exception $x) {
-            throw new PropelException("Internally stored date/time/timestamp value could not be converted to DateTime: " . var_export($this->add_time, true), $x);
-        }
-
-        if ($format === null) {
-            // Because propel.useDateTimeClass is true, we return a DateTime object.
-            return $dt;
-        }
-
-        if (strpos($format, '%') !== false) {
-            return strftime($format, $dt->format('U'));
-        }
-
-        return $dt->format($format);
-
-    }
-
-    /**
-     * Get the [optionally formatted] temporal [trip_start_time] column value.
-     *
-     *
-     * @param string $format The date/time format string (either date()-style or strftime()-style).
-     *				 If format is null, then the raw DateTime object will be returned.
-     * @return mixed Formatted date/time value as string or DateTime object (if format is null), null if column is null, and 0 if column value is 0000-00-00 00:00:00
-     * @throws PropelException - if unable to parse/validate the date/time value.
-     */
-    public function getTripStartTime($format = 'Y-m-d H:i:s')
-    {
-        if ($this->trip_start_time === null) {
-            return null;
-        }
-
-        if ($this->trip_start_time === '0000-00-00 00:00:00') {
-            // while technically this is not a default value of null,
-            // this seems to be closest in meaning.
-            return null;
-        }
-
-        try {
-            $dt = new DateTime($this->trip_start_time);
-        } catch (Exception $x) {
-            throw new PropelException("Internally stored date/time/timestamp value could not be converted to DateTime: " . var_export($this->trip_start_time, true), $x);
-        }
-
-        if ($format === null) {
-            // Because propel.useDateTimeClass is true, we return a DateTime object.
-            return $dt;
-        }
-
-        if (strpos($format, '%') !== false) {
-            return strftime($format, $dt->format('U'));
-        }
-
-        return $dt->format($format);
-
-    }
-
-    /**
-     * Get the [optionally formatted] temporal [trip_end_time] column value.
-     *
-     *
-     * @param string $format The date/time format string (either date()-style or strftime()-style).
-     *				 If format is null, then the raw DateTime object will be returned.
-     * @return mixed Formatted date/time value as string or DateTime object (if format is null), null if column is null, and 0 if column value is 0000-00-00 00:00:00
-     * @throws PropelException - if unable to parse/validate the date/time value.
-     */
-    public function getTripEndTime($format = 'Y-m-d H:i:s')
-    {
-        if ($this->trip_end_time === null) {
-            return null;
-        }
-
-        if ($this->trip_end_time === '0000-00-00 00:00:00') {
-            // while technically this is not a default value of null,
-            // this seems to be closest in meaning.
-            return null;
-        }
-
-        try {
-            $dt = new DateTime($this->trip_end_time);
-        } catch (Exception $x) {
-            throw new PropelException("Internally stored date/time/timestamp value could not be converted to DateTime: " . var_export($this->trip_end_time, true), $x);
-        }
-
-        if ($format === null) {
-            // Because propel.useDateTimeClass is true, we return a DateTime object.
-            return $dt;
-        }
-
-        if (strpos($format, '%') !== false) {
-            return strftime($format, $dt->format('U'));
-        }
-
-        return $dt->format($format);
-
-    }
-
-    /**
-     * Get the [details] column value.
+     * Get the [geoobject_id] column value.
      *
      * @return string
      */
-    public function getDetails()
+    public function getGeoobjectId()
     {
 
-        return $this->details;
+        return $this->geoobject_id;
     }
 
     /**
-     * Get the [target_zone] column value.
+     * Get the [trip_log_id] column value.
      *
      * @return string
      */
-    public function getTargetZone()
+    public function getTripLogId()
     {
 
-        return $this->target_zone;
+        return $this->trip_log_id;
     }
 
     /**
-     * Get the [type] column value.
+     * Get the [geoobject_type] column value.
      *
      * @return string
      */
-    public function getType()
+    public function getGeoobjectType()
     {
 
-        return $this->type;
-    }
-
-    /**
-     * Get the [temporary] column value.
-     *
-     * @return string
-     */
-    public function getTemporary()
-    {
-
-        return $this->temporary;
-    }
-
-    /**
-     * Get the [summary] column value.
-     *
-     * @return string
-     */
-    public function getSummary()
-    {
-
-        return $this->summary;
+        return $this->geoobject_type;
     }
 
     /**
      * Set the value of [id] column.
      *
      * @param  string $v new value
-     * @return TripLogs The current object (for fluent API support)
+     * @return TripLogsToFeatures The current object (for fluent API support)
      */
     public function setId($v)
     {
@@ -303,7 +131,7 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
 
         if ($this->id !== $v) {
             $this->id = $v;
-            $this->modifiedColumns[] = TripLogsPeer::ID;
+            $this->modifiedColumns[] = TripLogsToFeaturesPeer::ID;
         }
 
 
@@ -311,178 +139,67 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
     } // setId()
 
     /**
-     * Sets the value of [add_time] column to a normalized version of the date/time value specified.
-     *
-     * @param mixed $v string, integer (timestamp), or DateTime value.
-     *               Empty strings are treated as null.
-     * @return TripLogs The current object (for fluent API support)
-     */
-    public function setAddTime($v)
-    {
-        $dt = PropelDateTime::newInstance($v, null, 'DateTime');
-        if ($this->add_time !== null || $dt !== null) {
-            $currentDateAsString = ($this->add_time !== null && $tmpDt = new DateTime($this->add_time)) ? $tmpDt->format('Y-m-d H:i:s') : null;
-            $newDateAsString = $dt ? $dt->format('Y-m-d H:i:s') : null;
-            if ($currentDateAsString !== $newDateAsString) {
-                $this->add_time = $newDateAsString;
-                $this->modifiedColumns[] = TripLogsPeer::ADD_TIME;
-            }
-        } // if either are not null
-
-
-        return $this;
-    } // setAddTime()
-
-    /**
-     * Sets the value of [trip_start_time] column to a normalized version of the date/time value specified.
-     *
-     * @param mixed $v string, integer (timestamp), or DateTime value.
-     *               Empty strings are treated as null.
-     * @return TripLogs The current object (for fluent API support)
-     */
-    public function setTripStartTime($v)
-    {
-        $dt = PropelDateTime::newInstance($v, null, 'DateTime');
-        if ($this->trip_start_time !== null || $dt !== null) {
-            $currentDateAsString = ($this->trip_start_time !== null && $tmpDt = new DateTime($this->trip_start_time)) ? $tmpDt->format('Y-m-d H:i:s') : null;
-            $newDateAsString = $dt ? $dt->format('Y-m-d H:i:s') : null;
-            if ($currentDateAsString !== $newDateAsString) {
-                $this->trip_start_time = $newDateAsString;
-                $this->modifiedColumns[] = TripLogsPeer::TRIP_START_TIME;
-            }
-        } // if either are not null
-
-
-        return $this;
-    } // setTripStartTime()
-
-    /**
-     * Sets the value of [trip_end_time] column to a normalized version of the date/time value specified.
-     *
-     * @param mixed $v string, integer (timestamp), or DateTime value.
-     *               Empty strings are treated as null.
-     * @return TripLogs The current object (for fluent API support)
-     */
-    public function setTripEndTime($v)
-    {
-        $dt = PropelDateTime::newInstance($v, null, 'DateTime');
-        if ($this->trip_end_time !== null || $dt !== null) {
-            $currentDateAsString = ($this->trip_end_time !== null && $tmpDt = new DateTime($this->trip_end_time)) ? $tmpDt->format('Y-m-d H:i:s') : null;
-            $newDateAsString = $dt ? $dt->format('Y-m-d H:i:s') : null;
-            if ($currentDateAsString !== $newDateAsString) {
-                $this->trip_end_time = $newDateAsString;
-                $this->modifiedColumns[] = TripLogsPeer::TRIP_END_TIME;
-            }
-        } // if either are not null
-
-
-        return $this;
-    } // setTripEndTime()
-
-    /**
-     * Set the value of [details] column.
+     * Set the value of [geoobject_id] column.
      *
      * @param  string $v new value
-     * @return TripLogs The current object (for fluent API support)
+     * @return TripLogsToFeatures The current object (for fluent API support)
      */
-    public function setDetails($v)
+    public function setGeoobjectId($v)
+    {
+        if ($v !== null && is_numeric($v)) {
+            $v = (string) $v;
+        }
+
+        if ($this->geoobject_id !== $v) {
+            $this->geoobject_id = $v;
+            $this->modifiedColumns[] = TripLogsToFeaturesPeer::GEOOBJECT_ID;
+        }
+
+
+        return $this;
+    } // setGeoobjectId()
+
+    /**
+     * Set the value of [trip_log_id] column.
+     *
+     * @param  string $v new value
+     * @return TripLogsToFeatures The current object (for fluent API support)
+     */
+    public function setTripLogId($v)
+    {
+        if ($v !== null && is_numeric($v)) {
+            $v = (string) $v;
+        }
+
+        if ($this->trip_log_id !== $v) {
+            $this->trip_log_id = $v;
+            $this->modifiedColumns[] = TripLogsToFeaturesPeer::TRIP_LOG_ID;
+        }
+
+
+        return $this;
+    } // setTripLogId()
+
+    /**
+     * Set the value of [geoobject_type] column.
+     *
+     * @param  string $v new value
+     * @return TripLogsToFeatures The current object (for fluent API support)
+     */
+    public function setGeoobjectType($v)
     {
         if ($v !== null) {
             $v = (string) $v;
         }
 
-        if ($this->details !== $v) {
-            $this->details = $v;
-            $this->modifiedColumns[] = TripLogsPeer::DETAILS;
+        if ($this->geoobject_type !== $v) {
+            $this->geoobject_type = $v;
+            $this->modifiedColumns[] = TripLogsToFeaturesPeer::GEOOBJECT_TYPE;
         }
 
 
         return $this;
-    } // setDetails()
-
-    /**
-     * Set the value of [target_zone] column.
-     *
-     * @param  string $v new value
-     * @return TripLogs The current object (for fluent API support)
-     */
-    public function setTargetZone($v)
-    {
-        if ($v !== null) {
-            $v = (string) $v;
-        }
-
-        if ($this->target_zone !== $v) {
-            $this->target_zone = $v;
-            $this->modifiedColumns[] = TripLogsPeer::TARGET_ZONE;
-        }
-
-
-        return $this;
-    } // setTargetZone()
-
-    /**
-     * Set the value of [type] column.
-     *
-     * @param  string $v new value
-     * @return TripLogs The current object (for fluent API support)
-     */
-    public function setType($v)
-    {
-        if ($v !== null) {
-            $v = (string) $v;
-        }
-
-        if ($this->type !== $v) {
-            $this->type = $v;
-            $this->modifiedColumns[] = TripLogsPeer::TYPE;
-        }
-
-
-        return $this;
-    } // setType()
-
-    /**
-     * Set the value of [temporary] column.
-     *
-     * @param  string $v new value
-     * @return TripLogs The current object (for fluent API support)
-     */
-    public function setTemporary($v)
-    {
-        if ($v !== null) {
-            $v = (string) $v;
-        }
-
-        if ($this->temporary !== $v) {
-            $this->temporary = $v;
-            $this->modifiedColumns[] = TripLogsPeer::TEMPORARY;
-        }
-
-
-        return $this;
-    } // setTemporary()
-
-    /**
-     * Set the value of [summary] column.
-     *
-     * @param  string $v new value
-     * @return TripLogs The current object (for fluent API support)
-     */
-    public function setSummary($v)
-    {
-        if ($v !== null) {
-            $v = (string) $v;
-        }
-
-        if ($this->summary !== $v) {
-            $this->summary = $v;
-            $this->modifiedColumns[] = TripLogsPeer::SUMMARY;
-        }
-
-
-        return $this;
-    } // setSummary()
+    } // setGeoobjectType()
 
     /**
      * Indicates whether the columns in this object are only set to default values.
@@ -517,14 +234,9 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
         try {
 
             $this->id = ($row[$startcol + 0] !== null) ? (string) $row[$startcol + 0] : null;
-            $this->add_time = ($row[$startcol + 1] !== null) ? (string) $row[$startcol + 1] : null;
-            $this->trip_start_time = ($row[$startcol + 2] !== null) ? (string) $row[$startcol + 2] : null;
-            $this->trip_end_time = ($row[$startcol + 3] !== null) ? (string) $row[$startcol + 3] : null;
-            $this->details = ($row[$startcol + 4] !== null) ? (string) $row[$startcol + 4] : null;
-            $this->target_zone = ($row[$startcol + 5] !== null) ? (string) $row[$startcol + 5] : null;
-            $this->type = ($row[$startcol + 6] !== null) ? (string) $row[$startcol + 6] : null;
-            $this->temporary = ($row[$startcol + 7] !== null) ? (string) $row[$startcol + 7] : null;
-            $this->summary = ($row[$startcol + 8] !== null) ? (string) $row[$startcol + 8] : null;
+            $this->geoobject_id = ($row[$startcol + 1] !== null) ? (string) $row[$startcol + 1] : null;
+            $this->trip_log_id = ($row[$startcol + 2] !== null) ? (string) $row[$startcol + 2] : null;
+            $this->geoobject_type = ($row[$startcol + 3] !== null) ? (string) $row[$startcol + 3] : null;
             $this->resetModified();
 
             $this->setNew(false);
@@ -534,10 +246,10 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
             }
             $this->postHydrate($row, $startcol, $rehydrate);
 
-            return $startcol + 9; // 9 = TripLogsPeer::NUM_HYDRATE_COLUMNS.
+            return $startcol + 4; // 4 = TripLogsToFeaturesPeer::NUM_HYDRATE_COLUMNS.
 
         } catch (Exception $e) {
-            throw new PropelException("Error populating TripLogs object", $e);
+            throw new PropelException("Error populating TripLogsToFeatures object", $e);
         }
     }
 
@@ -580,13 +292,13 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
         }
 
         if ($con === null) {
-            $con = Propel::getConnection(TripLogsPeer::DATABASE_NAME, Propel::CONNECTION_READ);
+            $con = Propel::getConnection(TripLogsToFeaturesPeer::DATABASE_NAME, Propel::CONNECTION_READ);
         }
 
         // We don't need to alter the object instance pool; we're just modifying this instance
         // already in the pool.
 
-        $stmt = TripLogsPeer::doSelectStmt($this->buildPkeyCriteria(), $con);
+        $stmt = TripLogsToFeaturesPeer::doSelectStmt($this->buildPkeyCriteria(), $con);
         $row = $stmt->fetch(PDO::FETCH_NUM);
         $stmt->closeCursor();
         if (!$row) {
@@ -616,12 +328,12 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
         }
 
         if ($con === null) {
-            $con = Propel::getConnection(TripLogsPeer::DATABASE_NAME, Propel::CONNECTION_WRITE);
+            $con = Propel::getConnection(TripLogsToFeaturesPeer::DATABASE_NAME, Propel::CONNECTION_WRITE);
         }
 
         $con->beginTransaction();
         try {
-            $deleteQuery = TripLogsQuery::create()
+            $deleteQuery = TripLogsToFeaturesQuery::create()
                 ->filterByPrimaryKey($this->getPrimaryKey());
             $ret = $this->preDelete($con);
             if ($ret) {
@@ -659,7 +371,7 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
         }
 
         if ($con === null) {
-            $con = Propel::getConnection(TripLogsPeer::DATABASE_NAME, Propel::CONNECTION_WRITE);
+            $con = Propel::getConnection(TripLogsToFeaturesPeer::DATABASE_NAME, Propel::CONNECTION_WRITE);
         }
 
         $con->beginTransaction();
@@ -679,7 +391,7 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
                     $this->postUpdate($con);
                 }
                 $this->postSave($con);
-                TripLogsPeer::addInstanceToPool($this);
+                TripLogsToFeaturesPeer::addInstanceToPool($this);
             } else {
                 $affectedRows = 0;
             }
@@ -740,42 +452,27 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
         $modifiedColumns = array();
         $index = 0;
 
-        $this->modifiedColumns[] = TripLogsPeer::ID;
+        $this->modifiedColumns[] = TripLogsToFeaturesPeer::ID;
         if (null !== $this->id) {
-            throw new PropelException('Cannot insert a value for auto-increment primary key (' . TripLogsPeer::ID . ')');
+            throw new PropelException('Cannot insert a value for auto-increment primary key (' . TripLogsToFeaturesPeer::ID . ')');
         }
 
          // check the columns in natural order for more readable SQL queries
-        if ($this->isColumnModified(TripLogsPeer::ID)) {
+        if ($this->isColumnModified(TripLogsToFeaturesPeer::ID)) {
             $modifiedColumns[':p' . $index++]  = '`id`';
         }
-        if ($this->isColumnModified(TripLogsPeer::ADD_TIME)) {
-            $modifiedColumns[':p' . $index++]  = '`add_time`';
+        if ($this->isColumnModified(TripLogsToFeaturesPeer::GEOOBJECT_ID)) {
+            $modifiedColumns[':p' . $index++]  = '`geoobject_id`';
         }
-        if ($this->isColumnModified(TripLogsPeer::TRIP_START_TIME)) {
-            $modifiedColumns[':p' . $index++]  = '`trip_start_time`';
+        if ($this->isColumnModified(TripLogsToFeaturesPeer::TRIP_LOG_ID)) {
+            $modifiedColumns[':p' . $index++]  = '`trip_log_id`';
         }
-        if ($this->isColumnModified(TripLogsPeer::TRIP_END_TIME)) {
-            $modifiedColumns[':p' . $index++]  = '`trip_end_time`';
-        }
-        if ($this->isColumnModified(TripLogsPeer::DETAILS)) {
-            $modifiedColumns[':p' . $index++]  = '`details`';
-        }
-        if ($this->isColumnModified(TripLogsPeer::TARGET_ZONE)) {
-            $modifiedColumns[':p' . $index++]  = '`target_zone`';
-        }
-        if ($this->isColumnModified(TripLogsPeer::TYPE)) {
-            $modifiedColumns[':p' . $index++]  = '`type`';
-        }
-        if ($this->isColumnModified(TripLogsPeer::TEMPORARY)) {
-            $modifiedColumns[':p' . $index++]  = '`temporary`';
-        }
-        if ($this->isColumnModified(TripLogsPeer::SUMMARY)) {
-            $modifiedColumns[':p' . $index++]  = '`summary`';
+        if ($this->isColumnModified(TripLogsToFeaturesPeer::GEOOBJECT_TYPE)) {
+            $modifiedColumns[':p' . $index++]  = '`geoobject_type`';
         }
 
         $sql = sprintf(
-            'INSERT INTO `trip_logs` (%s) VALUES (%s)',
+            'INSERT INTO `trip_logs_to_features` (%s) VALUES (%s)',
             implode(', ', $modifiedColumns),
             implode(', ', array_keys($modifiedColumns))
         );
@@ -787,29 +484,14 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
                     case '`id`':
                         $stmt->bindValue($identifier, $this->id, PDO::PARAM_STR);
                         break;
-                    case '`add_time`':
-                        $stmt->bindValue($identifier, $this->add_time, PDO::PARAM_STR);
+                    case '`geoobject_id`':
+                        $stmt->bindValue($identifier, $this->geoobject_id, PDO::PARAM_STR);
                         break;
-                    case '`trip_start_time`':
-                        $stmt->bindValue($identifier, $this->trip_start_time, PDO::PARAM_STR);
+                    case '`trip_log_id`':
+                        $stmt->bindValue($identifier, $this->trip_log_id, PDO::PARAM_STR);
                         break;
-                    case '`trip_end_time`':
-                        $stmt->bindValue($identifier, $this->trip_end_time, PDO::PARAM_STR);
-                        break;
-                    case '`details`':
-                        $stmt->bindValue($identifier, $this->details, PDO::PARAM_STR);
-                        break;
-                    case '`target_zone`':
-                        $stmt->bindValue($identifier, $this->target_zone, PDO::PARAM_STR);
-                        break;
-                    case '`type`':
-                        $stmt->bindValue($identifier, $this->type, PDO::PARAM_STR);
-                        break;
-                    case '`temporary`':
-                        $stmt->bindValue($identifier, $this->temporary, PDO::PARAM_STR);
-                        break;
-                    case '`summary`':
-                        $stmt->bindValue($identifier, $this->summary, PDO::PARAM_STR);
+                    case '`geoobject_type`':
+                        $stmt->bindValue($identifier, $this->geoobject_type, PDO::PARAM_STR);
                         break;
                 }
             }
@@ -905,7 +587,7 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
             $failureMap = array();
 
 
-            if (($retval = TripLogsPeer::doValidate($this, $columns)) !== true) {
+            if (($retval = TripLogsToFeaturesPeer::doValidate($this, $columns)) !== true) {
                 $failureMap = array_merge($failureMap, $retval);
             }
 
@@ -929,7 +611,7 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
      */
     public function getByName($name, $type = BasePeer::TYPE_PHPNAME)
     {
-        $pos = TripLogsPeer::translateFieldName($name, $type, BasePeer::TYPE_NUM);
+        $pos = TripLogsToFeaturesPeer::translateFieldName($name, $type, BasePeer::TYPE_NUM);
         $field = $this->getByPosition($pos);
 
         return $field;
@@ -949,28 +631,13 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
                 return $this->getId();
                 break;
             case 1:
-                return $this->getAddTime();
+                return $this->getGeoobjectId();
                 break;
             case 2:
-                return $this->getTripStartTime();
+                return $this->getTripLogId();
                 break;
             case 3:
-                return $this->getTripEndTime();
-                break;
-            case 4:
-                return $this->getDetails();
-                break;
-            case 5:
-                return $this->getTargetZone();
-                break;
-            case 6:
-                return $this->getType();
-                break;
-            case 7:
-                return $this->getTemporary();
-                break;
-            case 8:
-                return $this->getSummary();
+                return $this->getGeoobjectType();
                 break;
             default:
                 return null;
@@ -994,21 +661,16 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
      */
     public function toArray($keyType = BasePeer::TYPE_PHPNAME, $includeLazyLoadColumns = true, $alreadyDumpedObjects = array())
     {
-        if (isset($alreadyDumpedObjects['TripLogs'][$this->getPrimaryKey()])) {
+        if (isset($alreadyDumpedObjects['TripLogsToFeatures'][$this->getPrimaryKey()])) {
             return '*RECURSION*';
         }
-        $alreadyDumpedObjects['TripLogs'][$this->getPrimaryKey()] = true;
-        $keys = TripLogsPeer::getFieldNames($keyType);
+        $alreadyDumpedObjects['TripLogsToFeatures'][$this->getPrimaryKey()] = true;
+        $keys = TripLogsToFeaturesPeer::getFieldNames($keyType);
         $result = array(
             $keys[0] => $this->getId(),
-            $keys[1] => $this->getAddTime(),
-            $keys[2] => $this->getTripStartTime(),
-            $keys[3] => $this->getTripEndTime(),
-            $keys[4] => $this->getDetails(),
-            $keys[5] => $this->getTargetZone(),
-            $keys[6] => $this->getType(),
-            $keys[7] => $this->getTemporary(),
-            $keys[8] => $this->getSummary(),
+            $keys[1] => $this->getGeoobjectId(),
+            $keys[2] => $this->getTripLogId(),
+            $keys[3] => $this->getGeoobjectType(),
         );
         $virtualColumns = $this->virtualColumns;
         foreach ($virtualColumns as $key => $virtualColumn) {
@@ -1032,7 +694,7 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
      */
     public function setByName($name, $value, $type = BasePeer::TYPE_PHPNAME)
     {
-        $pos = TripLogsPeer::translateFieldName($name, $type, BasePeer::TYPE_NUM);
+        $pos = TripLogsToFeaturesPeer::translateFieldName($name, $type, BasePeer::TYPE_NUM);
 
         $this->setByPosition($pos, $value);
     }
@@ -1052,28 +714,13 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
                 $this->setId($value);
                 break;
             case 1:
-                $this->setAddTime($value);
+                $this->setGeoobjectId($value);
                 break;
             case 2:
-                $this->setTripStartTime($value);
+                $this->setTripLogId($value);
                 break;
             case 3:
-                $this->setTripEndTime($value);
-                break;
-            case 4:
-                $this->setDetails($value);
-                break;
-            case 5:
-                $this->setTargetZone($value);
-                break;
-            case 6:
-                $this->setType($value);
-                break;
-            case 7:
-                $this->setTemporary($value);
-                break;
-            case 8:
-                $this->setSummary($value);
+                $this->setGeoobjectType($value);
                 break;
         } // switch()
     }
@@ -1097,17 +744,12 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
      */
     public function fromArray($arr, $keyType = BasePeer::TYPE_PHPNAME)
     {
-        $keys = TripLogsPeer::getFieldNames($keyType);
+        $keys = TripLogsToFeaturesPeer::getFieldNames($keyType);
 
         if (array_key_exists($keys[0], $arr)) $this->setId($arr[$keys[0]]);
-        if (array_key_exists($keys[1], $arr)) $this->setAddTime($arr[$keys[1]]);
-        if (array_key_exists($keys[2], $arr)) $this->setTripStartTime($arr[$keys[2]]);
-        if (array_key_exists($keys[3], $arr)) $this->setTripEndTime($arr[$keys[3]]);
-        if (array_key_exists($keys[4], $arr)) $this->setDetails($arr[$keys[4]]);
-        if (array_key_exists($keys[5], $arr)) $this->setTargetZone($arr[$keys[5]]);
-        if (array_key_exists($keys[6], $arr)) $this->setType($arr[$keys[6]]);
-        if (array_key_exists($keys[7], $arr)) $this->setTemporary($arr[$keys[7]]);
-        if (array_key_exists($keys[8], $arr)) $this->setSummary($arr[$keys[8]]);
+        if (array_key_exists($keys[1], $arr)) $this->setGeoobjectId($arr[$keys[1]]);
+        if (array_key_exists($keys[2], $arr)) $this->setTripLogId($arr[$keys[2]]);
+        if (array_key_exists($keys[3], $arr)) $this->setGeoobjectType($arr[$keys[3]]);
     }
 
     /**
@@ -1117,17 +759,12 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
      */
     public function buildCriteria()
     {
-        $criteria = new Criteria(TripLogsPeer::DATABASE_NAME);
+        $criteria = new Criteria(TripLogsToFeaturesPeer::DATABASE_NAME);
 
-        if ($this->isColumnModified(TripLogsPeer::ID)) $criteria->add(TripLogsPeer::ID, $this->id);
-        if ($this->isColumnModified(TripLogsPeer::ADD_TIME)) $criteria->add(TripLogsPeer::ADD_TIME, $this->add_time);
-        if ($this->isColumnModified(TripLogsPeer::TRIP_START_TIME)) $criteria->add(TripLogsPeer::TRIP_START_TIME, $this->trip_start_time);
-        if ($this->isColumnModified(TripLogsPeer::TRIP_END_TIME)) $criteria->add(TripLogsPeer::TRIP_END_TIME, $this->trip_end_time);
-        if ($this->isColumnModified(TripLogsPeer::DETAILS)) $criteria->add(TripLogsPeer::DETAILS, $this->details);
-        if ($this->isColumnModified(TripLogsPeer::TARGET_ZONE)) $criteria->add(TripLogsPeer::TARGET_ZONE, $this->target_zone);
-        if ($this->isColumnModified(TripLogsPeer::TYPE)) $criteria->add(TripLogsPeer::TYPE, $this->type);
-        if ($this->isColumnModified(TripLogsPeer::TEMPORARY)) $criteria->add(TripLogsPeer::TEMPORARY, $this->temporary);
-        if ($this->isColumnModified(TripLogsPeer::SUMMARY)) $criteria->add(TripLogsPeer::SUMMARY, $this->summary);
+        if ($this->isColumnModified(TripLogsToFeaturesPeer::ID)) $criteria->add(TripLogsToFeaturesPeer::ID, $this->id);
+        if ($this->isColumnModified(TripLogsToFeaturesPeer::GEOOBJECT_ID)) $criteria->add(TripLogsToFeaturesPeer::GEOOBJECT_ID, $this->geoobject_id);
+        if ($this->isColumnModified(TripLogsToFeaturesPeer::TRIP_LOG_ID)) $criteria->add(TripLogsToFeaturesPeer::TRIP_LOG_ID, $this->trip_log_id);
+        if ($this->isColumnModified(TripLogsToFeaturesPeer::GEOOBJECT_TYPE)) $criteria->add(TripLogsToFeaturesPeer::GEOOBJECT_TYPE, $this->geoobject_type);
 
         return $criteria;
     }
@@ -1142,8 +779,8 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
      */
     public function buildPkeyCriteria()
     {
-        $criteria = new Criteria(TripLogsPeer::DATABASE_NAME);
-        $criteria->add(TripLogsPeer::ID, $this->id);
+        $criteria = new Criteria(TripLogsToFeaturesPeer::DATABASE_NAME);
+        $criteria->add(TripLogsToFeaturesPeer::ID, $this->id);
 
         return $criteria;
     }
@@ -1184,21 +821,16 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
      * If desired, this method can also make copies of all associated (fkey referrers)
      * objects.
      *
-     * @param object $copyObj An object of TripLogs (or compatible) type.
+     * @param object $copyObj An object of TripLogsToFeatures (or compatible) type.
      * @param boolean $deepCopy Whether to also copy all rows that refer (by fkey) to the current row.
      * @param boolean $makeNew Whether to reset autoincrement PKs and make the object new.
      * @throws PropelException
      */
     public function copyInto($copyObj, $deepCopy = false, $makeNew = true)
     {
-        $copyObj->setAddTime($this->getAddTime());
-        $copyObj->setTripStartTime($this->getTripStartTime());
-        $copyObj->setTripEndTime($this->getTripEndTime());
-        $copyObj->setDetails($this->getDetails());
-        $copyObj->setTargetZone($this->getTargetZone());
-        $copyObj->setType($this->getType());
-        $copyObj->setTemporary($this->getTemporary());
-        $copyObj->setSummary($this->getSummary());
+        $copyObj->setGeoobjectId($this->getGeoobjectId());
+        $copyObj->setTripLogId($this->getTripLogId());
+        $copyObj->setGeoobjectType($this->getGeoobjectType());
         if ($makeNew) {
             $copyObj->setNew(true);
             $copyObj->setId(NULL); // this is a auto-increment column, so set to default value
@@ -1214,7 +846,7 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
      * objects.
      *
      * @param boolean $deepCopy Whether to also copy all rows that refer (by fkey) to the current row.
-     * @return TripLogs Clone of current object.
+     * @return TripLogsToFeatures Clone of current object.
      * @throws PropelException
      */
     public function copy($deepCopy = false)
@@ -1234,12 +866,12 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
      * same instance for all member of this class. The method could therefore
      * be static, but this would prevent one from overriding the behavior.
      *
-     * @return TripLogsPeer
+     * @return TripLogsToFeaturesPeer
      */
     public function getPeer()
     {
         if (self::$peer === null) {
-            self::$peer = new TripLogsPeer();
+            self::$peer = new TripLogsToFeaturesPeer();
         }
 
         return self::$peer;
@@ -1251,14 +883,9 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
     public function clear()
     {
         $this->id = null;
-        $this->add_time = null;
-        $this->trip_start_time = null;
-        $this->trip_end_time = null;
-        $this->details = null;
-        $this->target_zone = null;
-        $this->type = null;
-        $this->temporary = null;
-        $this->summary = null;
+        $this->geoobject_id = null;
+        $this->trip_log_id = null;
+        $this->geoobject_type = null;
         $this->alreadyInSave = false;
         $this->alreadyInValidation = false;
         $this->alreadyInClearAllReferencesDeep = false;
@@ -1294,7 +921,7 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
      */
     public function __toString()
     {
-        return (string) $this->exportTo(TripLogsPeer::DEFAULT_STRING_FORMAT);
+        return (string) $this->exportTo(TripLogsToFeaturesPeer::DEFAULT_STRING_FORMAT);
     }
 
     /**

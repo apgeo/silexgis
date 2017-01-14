@@ -43,9 +43,10 @@ class TripLogsTableMap extends TableMap
         $this->addColumn('trip_start_time', 'TripStartTime', 'TIMESTAMP', false, null, null);
         $this->addColumn('trip_end_time', 'TripEndTime', 'TIMESTAMP', false, null, null);
         $this->addColumn('details', 'Details', 'LONGVARCHAR', false, null, null);
-        $this->addColumn('target_zone', 'TargetZone', 'LONGVARCHAR', false, null, null);
+        $this->addColumn('target_zone', 'TargetZone', 'VARCHAR', false, 90, null);
         $this->addColumn('type', 'Type', 'VARCHAR', false, 50, null);
         $this->addColumn('temporary', 'Temporary', 'VARCHAR', false, 1, null);
+        $this->addColumn('summary', 'Summary', 'VARCHAR', false, 500, null);
         // validators
     } // initialize()
 

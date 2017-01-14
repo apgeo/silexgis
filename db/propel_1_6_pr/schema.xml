@@ -113,18 +113,11 @@
       <parameter name="Engine" value="InnoDB"/>
     </vendor>
   </table>
-  <table name="geom2" phpName="Geom2" idMethod="native">
-    <column name="g" phpName="G" type="VARCHAR" sqlType="geometry" required="false"/>
-    <column name="id" phpName="Id" type="BIGINT" sqlType="bigint(20) unsigned" primaryKey="true" autoIncrement="true" required="true"/>
-    <vendor type="mysql">
-      <parameter name="Engine" value="InnoDB"/>
-    </vendor>
-  </table>
   <table name="geoobjects_to_files" phpName="GeoobjectsToFiles" idMethod="native">
     <column name="id" phpName="Id" type="BIGINT" sqlType="bigint(20) unsigned" primaryKey="true" autoIncrement="true" required="true"/>
     <column name="file_id" phpName="FileId" type="BIGINT" sqlType="bigint(20) unsigned" required="true"/>
     <column name="geoobject_id" phpName="GeoobjectId" type="BIGINT" sqlType="bigint(20) unsigned" required="true"/>
-    <column name="geoobject_type" phpName="GeoobjectType" type="CHAR" sqlType="enum('cave','feature','point','cave_entry')" required="true"/>
+    <column name="geoobject_type" phpName="GeoobjectType" type="CHAR" sqlType="enum('cave','feature','cave_entry')" required="true"/>
     <unique name="file_geoobject_id">
       <unique-column name="file_id"/>
       <unique-column name="geoobject_id"/>
@@ -252,9 +245,24 @@
     <column name="trip_start_time" phpName="TripStartTime" type="TIMESTAMP" required="false"/>
     <column name="trip_end_time" phpName="TripEndTime" type="TIMESTAMP" required="false"/>
     <column name="details" phpName="Details" type="LONGVARCHAR" required="false"/>
-    <column name="target_zone" phpName="TargetZone" type="LONGVARCHAR" required="false"/>
+    <column name="target_zone" phpName="TargetZone" type="VARCHAR" size="90" required="false"/>
     <column name="type" phpName="Type" type="VARCHAR" size="50" required="false"/>
     <column name="temporary" phpName="Temporary" type="VARCHAR" size="1" sqlType="bit(1)" required="false"/>
+    <column name="summary" phpName="Summary" type="VARCHAR" size="500" required="false"/>
+    <vendor type="mysql">
+      <parameter name="Engine" value="InnoDB"/>
+    </vendor>
+  </table>
+  <table name="trip_logs_to_features" phpName="TripLogsToFeatures" idMethod="native">
+    <column name="id" phpName="Id" type="BIGINT" sqlType="bigint(20) unsigned" primaryKey="true" autoIncrement="true" required="true"/>
+    <column name="geoobject_id" phpName="GeoobjectId" type="BIGINT" sqlType="bigint(20) unsigned" required="true"/>
+    <column name="trip_log_id" phpName="TripLogId" type="BIGINT" sqlType="bigint(20) unsigned" required="true"/>
+    <column name="geoobject_type" phpName="GeoobjectType" type="CHAR" sqlType="enum('cave','feature','cave_entrance')" required="false"/>
+    <unique name="trip_feature_unique">
+      <unique-column name="geoobject_id"/>
+      <unique-column name="trip_log_id"/>
+      <unique-column name="geoobject_type"/>
+    </unique>
     <vendor type="mysql">
       <parameter name="Engine" value="InnoDB"/>
     </vendor>
@@ -263,6 +271,10 @@
     <column name="id" phpName="Id" type="BIGINT" sqlType="bigint(20) unsigned" primaryKey="true" autoIncrement="true" required="true"/>
     <column name="file_id" phpName="FileId" type="BIGINT" required="true"/>
     <column name="trip_log_id" phpName="TripLogId" type="BIGINT" required="true"/>
+    <unique name="trip_file_unique">
+      <unique-column name="file_id"/>
+      <unique-column name="trip_log_id"/>
+    </unique>
     <vendor type="mysql">
       <parameter name="Engine" value="InnoDB"/>
     </vendor>
@@ -285,6 +297,9 @@
     <column name="password" phpName="Password" type="VARCHAR" size="50" required="true"/>
     <column name="email" phpName="Email" type="VARCHAR" size="50" required="false"/>
     <column name="admin_level" phpName="AdminLevel" type="INTEGER" required="false"/>
+    <column name="language" phpName="Language" type="VARCHAR" size="5" required="false"/>
+    <column name="last_log_in_time" phpName="LastLogInTime" type="TIMESTAMP" required="false"/>
+    <column name="add_time" phpName="AddTime" type="TIMESTAMP" required="true"/>
     <vendor type="mysql">
       <parameter name="Engine" value="MyISAM"/>
     </vendor>

@@ -306,6 +306,8 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 	<script type="text/javascript" src="/speogis/scripts/ol.ordering.js"></script>
 	<script type="text/javascript" src="/speogis/scripts/dbpediasource.js"></script>
 
+	<script type="text/javascript" src="/speogis/scripts/turf.min.js"></script>
+	
 	<link rel="stylesheet" href="style.css" />
 <?php
 	else :
@@ -476,6 +478,8 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 	<!-- lightbox for picture thumbnail browsing -->
 	<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/lightslider/1.1.3/js/lightslider.min.js"></script>
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lightslider/1.1.3/css/lightslider.min.css">
+	
+	<script type="text/javascript" src="/speogis/scripts/turf.min.js"></script>
 <!--
 	 =============================================================================================================================================
 	 =============================================================================================================================================
@@ -515,6 +519,8 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 		<li <?php if ($currentPage == 'trip_reports') echo "class='active'"; ?> ><a href="/speogis/user/trip_reports.php">*{main_map.menu.reports}*</a></li>
 
         <li role="separator" class="divider"></li>
+
+	<?php if ($currentPage == 'index') : ?>
 		
 		<li class="dropdown">
           <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.menu.add}*<span class="caret"></span></a>
@@ -541,7 +547,10 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
         </li>
 
 		<li role="separator" class="divider"></li>
-		
+	
+	<?php else : ?>	  
+	<?php endif; ?>	
+	
 		<li class="dropdown">
 			<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.menu.config}*<span class="caret"></span></a>
 			<ul class="dropdown-menu">
@@ -552,6 +561,8 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 		
 		<li role="separator" class="divider"></li>
 		
+	<?php if ($currentPage == 'index') : ?>
+		
 		<li class="dropdown">
           <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.menu.draw}*<span class="caret"></span></a>
           <ul class="dropdown-menu">
@@ -561,14 +572,23 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
           </ul>
         </li>
 
+	<?php else : ?>	  
+	<?php endif; ?>
+		
 		<li class="dropdown">
-          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.menu.tools}*<span class="caret"></span></a>
-          <ul class="dropdown-menu">
-            <li><a id="export_map" href="#" onclick="" download="map.png" >*{main_map.menu.tools_submenu.export_map}*</a></li>
+          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.menu.tools}*<span class="caret"></span></a>    
+			<ul class="dropdown-menu">
+			
+			<?php if ($currentPage == 'index') : ?>
+			<li><a id="export_map" href="#" onclick="" download="map.png" >*{main_map.menu.tools_submenu.export_map}*</a></li>
+			<?php endif; ?>
+		
 			<li><a id="export_map" href="/speogis/test/CaveView.js-dev/src/html/" >CV 3d test</a></li>
 			<!--<li><a href="#" onclick="exportMap" download="map.png" >Export</a></li>-->
 		  </ul>
-		</li>		
+		</li>
+		
+		<li><a href="#" onclick="enableCaveFeatureEditing();">Test c m</a></li>
 		<!--
         <li class="dropdown">
           <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Dropdown <span class="caret"></span></a>
@@ -640,8 +660,7 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 		
       </form>
 	  -->
-	  <?php else : ?>
-	  
+	  <?php else : ?>	  
 	  <?php endif; ?>
 	  
       <ul class="nav navbar-nav navbar-right">

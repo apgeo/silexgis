@@ -68,14 +68,39 @@
 		
 		foreach ($tripreport_member_ids as $tmId)
 		{
-			$tripLogToTeamMember = new TripLogsToTeamMembers();
+			$tripLogToTeamMember = new TripLogsToTeamMembers();						
 			
 			$tripLogToTeamMember->setIdtriplog($trip_log_id);
-			$tripLogToTeamMember->setIdteammember($tmId);
+			$tripLogToTeamMember->setIdteammember($tmId);			
 			
 			$tripLogToTeamMember->save();
 		}
-	
+
+
+		// clear the previous features
+		$tripLogFeatures = TripLogsToFeaturesQuery::create()->findByTriplogid($trip_log_id);
+		$tripLogFeatures->delete();
+		
+		$tripreport_feature_ids = @split(',', $tripReportData->tripreport_features);
+		
+		
+		foreach ($tripreport_feature_ids as $key_value)
+		if ($key_value)
+		{
+			$tripLogsToFeature = new TripLogsToFeatures();
+
+			$goId = "";
+			$object_type = "";
+			
+			list ($goId , $object_type) = @split('_', $key_value);
+						
+			$tripLogsToFeature->setTriplogid($trip_log_id);
+			$tripLogsToFeature->setGeoobjectid($goId); // $tripLogsToFeature->setFeatureid($fId);
+			$tripLogsToFeature->setGeoobjecttype($object_type);
+			
+			$tripLogsToFeature->save();
+		}
+		
 		$trip_log_result = (object) [
 			'Id' => $trip_log_id,
 		];

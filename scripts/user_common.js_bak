@@ -1,27 +1,99 @@
   var document_onkeyup = undefined;
-  
+    
   var _geofiles = undefined;
   var _team_members = undefined;
   var url_base = 'http://' + window.location.host + "/speogis/";
   //var current_url_path = window.location.host;// + "/speogis";//window.location.pathname;
   
+  console.log(url_base);  
+  
 $(document).ready(function() {
 	//console.log("x1 34");
 	
-	//localize_static_html();
-	//document.getElementsByTagName("html")[0].style.visibility = "visible";	
+	localize_static_html();
+	document.getElementsByTagName("html")[0].style.visibility = "visible";	
 	
 	initTripReportForm();
 	//return;
 	initUploadControls();
-	initCaveDetailsUploadControl();
-	initPicturesUploadControl();
+	//initCaveDetailsUploadControl();
+	//initPicturesUploadControl();
 	
 	//initFeatureSearchControl();
 	initTripFeatureSearchControl();
 
-	initCaveFilesTable();	
+	//initCaveFilesTable();
   });
+
+///////////////////////
+//  begin localization
+//var selected_language = 'en'; // 'ro';
+var selected_language = 'ro';
+
+function _t()
+{
+	return localizedText[selected_language];
+}
+
+function localize_static_html()
+{
+	//var regex = "/(<([^>]+)>)/ig";
+	//var regex = "(?<=\{)(.*?)(?=\})";
+	//var regex = /{(.*)}/
+	
+	var regex = /\*{\s*[\w\.]+\s*}\*/g
+	// var regex = /{{\s*[\w\.]+\s*}}/g
+	
+	//var regex = /^^\s*[\w\.]+\s*^^/g
+	//body = "<p>test</p>"
+
+	// See more at: http://www.jsmantras.com/blog/String-Methods-search-match-and-replace#sthash.MPZVQvuX.dpuf
+	function replacer(match, p1, p2, p3, offset, string)
+	{ // p1 is nondigits, p2 digits, and p3 non-alphanumerics 
+	
+		res = match.match(/[\w\.]+/)[0];
+		console.log(res);
+		var localized_text = eval("_t()." + res);
+		//m_res[0].replace(regex, localized_text);
+		//document.body.innerHTML.replace(m_res[0], "");
+	
+		return localized_text;
+		//return [p1, p2, p3].join(' - '); 
+	}; 
+	
+	//var m_res = document.body.innerHTML.match(regex);
+	//var m_res = document.body.innerHTML.replace(regex, replacer);
+	document.body.innerHTML = document.body.innerHTML.replace(regex, replacer);
+	
+/*	if (m_res)
+	m_res.map(function(x) { 
+		// return x.match(/[\w\.]+/)[0]; 
+		res = x.match(/[\w\.]+/)[0];
+		console.log(res);
+		var localized_text = eval("_t()." + res);
+		m_res[0].replace(regex, localized_text);
+		document.body.innerHTML.replace(m_res[0], "");
+		// return res; 
+		});
+	*/
+	
+	/*if (m_res != null)
+	{
+		var res = m_res[0];
+		console.log(res);
+		//res2 = res.replace('{', '').replace('}', '');
+		console.log(eval("_t()." + res));
+		m_res[0].replace(regex, '$1');
+		
+	}
+	
+	document.body.innerHTML = document.body.innerHTML.replace(regex, "");
+	*/
+}
+
+//  end localization
+///////////////////////
+
 
 //////////////////////////
 // Begin Trip Report form
@@ -34,8 +106,8 @@ function addTripReport()
 	//$('#tripReportModal').modal();
 }
 
-function openTripReportForm(trip_log_id) // cave_id, cave_entrance_id, feature_id
-{			
+function _xxopenTripReportForm(trip_log_id) // cave_id, cave_entrance_id, feature_id
+{				
 	//$('#upload_xx_cave_id').val("");
 	
 	//$('#uploadFilesForm').off('submit');
@@ -55,13 +127,9 @@ function openTripReportForm(trip_log_id) // cave_id, cave_entrance_id, feature_i
 			$('#tripreport_end_time').val(data.Tripendtime);				
 			$('#tripreport_details').val(data.Details);
 			$('#tripreport_place').val(data.Targetzone);
-			
 			//$('#tripreport_members').val(data.Members);
 			
 			//$('#tripreport_members').tagsinput('items');
-			
-			
-			$('#tripreport_members').tagsinput('removeAll');
 			
 			data.Members.forEach(function(team_member) {
 				$('#tripreport_members').tagsinput('add', _team_members[team_member]);
@@ -82,7 +150,6 @@ function openTripReportForm(trip_log_id) // cave_id, cave_entrance_id, feature_i
 		$('#tripreport_place').val("");
 		$('#tripreport_members').val("");
 		$('#tripreport_members').tagsinput('removeAll');
-		$('#tripreport_features').val("");
 		
           var formData = $('#tripReportForm').serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
@@ -131,7 +198,6 @@ function openTripReportForm(trip_log_id) // cave_id, cave_entrance_id, feature_i
 	if (trip_log_id)
 	{
 		refreshTripReportFilesTable(trip_log_id);
-		getFeatureList(trip_log_id);
 	
 		/*$('#uploadFilesModal').on('hidden.bs.modal', function () {
 			//-- this is not executed, maybe ovewritten by the other event
@@ -171,7 +237,6 @@ function initTripReportForm()
 				$('#tripReportModal').modal('toggle'); 
 				
 				showNotification("Trip report <b>" + "" + "</b> was saved.");
-				location.reload();
 				//reloadMapFeatures();
 				/* //-- $("caveModal").modal('hide');*/ 
 			}, 
@@ -220,9 +285,8 @@ function initTripReportForm()
 });
 tm2.initialize();
 */
-var url = url_base + 'data/getTeamMembers.php';
-//var url = 'http://localhost/speogis/data/getTeamMembers.php';
-$.getJSON(url, function( data ) 
+//console.out(current_url_path);
+$.getJSON(url_base + '/getTeamMembers.php', function( data ) 
 {	
 var items = [];
 _team_members = [];
@@ -404,74 +468,6 @@ function openAddFilesToTripReportForm()
 	openUploadFilesForm(undefined, undefined);
 }
 
-function addTripFiles()
-{
-	var trip_log_id = $('#trip_log_id').val();
-	openUploadTripFilesForm(trip_log_id);
-}
-
-function openUploadTripFilesForm(trip_log_id) // cave_id, cave_entrance_id, feature_id
-{			
-	$('#upload_files_cave_id').val("");	
-	
-	$('#uploadFilesModalTitleLabel').text("Edit '" + "" +"'");
-	
-	$('#fileupload_target_type').val("trip_report");
-	$('#fileupload_target_object_id').val(trip_log_id);
-/*	
-	$('#uploadFilesForm').on('submit', function(e) {
-          event.preventDefault();
-
-          var formData = $(this).serializeObject();
-		  //var serializedFormData = JSON.stringify(formData);
-		  
-		  postDataAsync("data/postCave.php", formData, 
-			function(x) 
-			{ 
-				console.log('close');
-				$('#caveModal').modal('toggle'); 
-				last_added_cave_id = undefined; //-- need to return the cave_id from postCave.php or to load load the last added cave in fillCavePicker()
-				
-				showNotification("Cave <b>" + formData.cave_name + "</b> was saved.");
-				reloadMapFeatures();
-				//$("caveModal").modal('hide');
-			}, 
-			function(err) 
-			{ 
-				console.log('error');
-				alert(err);
-			}
-		  ); // { cave: formData }
-		  
-		  //console.log(formData);
-		  //console.log(JSON.stringify($(this).serializeObject()));          
-        });
-*/		
-	//fillCaveEntries();
-	
-	if (trip_log_id)
-	{
-		$('#uploadFilesModal').modal();
-		/*$.getJSON("data/getCave.php?cave_id=" + cave_id, function( data ) {
-			
-			$('#caveModal').modal();
-			
-			$('#cave_id').val(data.Id);
-			$('#cave_name').val(data.Name);				
-			$('#cave_description').val(data.Description);
-			$('#cave_type').val(data.Typeid);
-			$('#cave_identifier').val(data.Locationidentifier);
-
-			$('#cave_type').selectpicker('refresh');
-			
-			//_caveFormServerData = data;
-			//$('#caveModal').modal();
-		});		
-		*/
-	}
-}
-
-
 function refreshTripReportFilesTable(trip_log_id)
 {
 	var form_data = JSON.stringify( { trip_log_id: trip_log_id } );
@@ -487,7 +483,7 @@ function refreshTripReportFilesTable(trip_log_id)
                 success: function(data){
 							var dataSet = [];
 
-							var file_directory = url_base + 'data/uploader/files/';
+							var file_directory = 'data/uploader/files/';
 							
 							data.forEach(function(item) {
 								var file_url = file_directory + item.file_name;
@@ -507,19 +503,15 @@ function refreshTripReportFilesTable(trip_log_id)
 				error:  function(jqXHR, textStatus, errorThrown )
 				{
 					//onFailure(textStatus); //-- show error code returned
-					console.warn(errorThrown);
-					console.warn("Error loading trip report files: " + textStatus + " " + errorThrown);
-					//console.error(errorThrown);
-					//console.error("Error loading trip report files: " + textStatus + " " + errorThrown);
+					console.error(errorThrown);
+					console.error("Error loading trip report files: " + textStatus + " " + errorThrown);
 					//alert(errMsg);
 				}				
      });	
 }
-// End Trip Report form
-///////////////////////
 
-function initTripFeatureSearchControl()
-{
+	function initTripFeatureSearchControl()
+	{
   var engine, remoteHost, template, empty;
   
   remoteHost = '';
@@ -536,7 +528,7 @@ var featuresDataSource = new Bloodhound({
   prefetch: url_base + 'data/getSearchFeatures.php',
   remote: {
     //url: remoteHost + 'data/getSearchFeatures.php?q=%QUERY',
-	url: remoteHost + url_base + 'data/getSearchFeatures.php?q=%QUERY',
+	url: url_base + 'data/getSearchFeatures.php?q=%QUERY',
     wildcard: '%QUERY'
   },
   transform: function(data)
@@ -594,113 +586,13 @@ $('#tripreport_place').typeahead({
 $('#tripreport_place').bind('typeahead:select', function(ev, suggestion) {
   console.log('Selection: ');
   console.log(suggestion);
-  
-  addFeatureToTripReport(suggestion);
-  
-  //-- workaround for afterSelect which is not working; maybe it is not implemented in this version
-  		setTimeout( function() 
-		{ 			
-			console.log('after select timeout: ');
-			$('#tripreport_place').val("");
-		}, 500);
-
   //gotoDbElement(suggestion); // id
   // gotoMapElement(suggestion.point_db_id); // id
 });
-
-$('#tripreport_place').on('typeahead:afterSelect', function(ev, suggestion) {
-  console.log('after select: ');
-  $('#tripreport_place').val("");
-}).on('typeahead:autocompleted', function (e, datum) {
-  console.log('after select: ');  
-  $('#tripreport_place').val("");
-});
-
 	}
 
-
-function addFeatureToTripReport(feature)
-{
-	var gokey = feature.id + "_" + feature.res_type;
-	
-	geoobjects[gokey] =
-	{
-		id: feature.id,
-		name: feature.name,
-	};
-	
-	refreshFeatureList();
-}
-	
-// duplicated from main_map	
-	
-function openUploadPicturesForm(geoobject_id, geoobject_type) // cave_id, cave_entrance_id, feature_id
-{				
-	$('#upload_xx_cave_id').val("");
-	
-	//$('#uploadFilesForm').off('submit');
-	//$("#uploadFilesForm")[0].reset();
-	
-	if (geoobject_id)	
-		$('#uploadPicturesModalTitleLabel').text("Edit '" + "" +"'");
-
-/*	
-	$('#uploadFilesForm').on('submit', function(e) {
-          event.preventDefault();
-
-          var formData = $(this).serializeObject();
-		  //var serializedFormData = JSON.stringify(formData);
-		  
-		  postDataAsync("data/postCave.php", formData, 
-			function(x) 
-			{ 
-				console.log('close');
-				$('#caveModal').modal('toggle'); 
-				last_added_cave_id = undefined; //-- need to return the cave_id from postCave.php or to load load the last added cave in fillCavePicker()
-				
-				showNotification("Cave <b>" + formData.cave_name + "</b> was saved.");
-				reloadMapFeatures();
-				//$("caveModal").modal('hide');
-			}, 
-			function(err) 
-			{ 
-				console.log('error');
-				alert(err);
-			}
-		  ); // { cave: formData }
-		  
-		  //console.log(formData);
-		  //console.log(JSON.stringify($(this).serializeObject()));          
-        });
-*/		
-	//fillCaveEntries();
-	
-	//if (geoobject_id)
-	{
-		$('#uploadPicturesModal').modal();
-		/*$.getJSON("data/getCave.php?cave_id=" + cave_id, function( data ) {
-			
-			$('#caveModal').modal();
-			
-			$('#cave_id').val(data.Id);
-			$('#cave_name').val(data.Name);				
-			$('#cave_description').val(data.Description);
-			$('#cave_type').val(data.Typeid);
-			$('#cave_identifier').val(data.Locationidentifier);
-
-			$('#cave_type').selectpicker('refresh');
-			
-			//_caveFormServerData = data;
-			//$('#caveModal').modal();
-		});		
-		*/
-	}
-}
-
-function addPictures()
-{
-	openUploadPicturesForm(undefined, undefined);
-}
+// End Trip Report form
+///////////////////////
 
 function initPicturesUploadControl()
 {
@@ -775,15 +667,15 @@ function initPicturesUploadControl()
 	*/
 	{
         // Load existing files:
-		console.log('#fileupload_cave');
-		console.log($('#fileupload_cave').fileupload('option', 'url'));
+		console.log('#pictureUploader');
+		console.log($('#pictureUploader').fileupload('option', 'url'));
         //..$('#pictureUploader').addClass('fileupload-processing');
         $.ajax({
             // Uncomment the following to send cross-domain cookies:
             //xhrFields: {withCredentials: true},
-            url: $('#fileupload_cave').fileupload('option', 'url'),
+            url: $('#pictureUploader').fileupload('option', 'url'),
             dataType: 'json',
-            context: $('#fileupload_cave')[0]
+            context: $('#pictureUploader')[0] //xx
         }).always(function () {
             $(this).removeClass('fileupload-processing');
         }).done(function (result) {
@@ -794,58 +686,6 @@ function initPicturesUploadControl()
 	
 	// $('#fileupload').fileupload('destroy');
 }
-
-
-function openAddFilesToTripReportForm()
-{
-	openUploadFilesForm(undefined, undefined);
-}
-
-function refreshTripReportFilesTable(trip_log_id)
-{
-	var form_data = JSON.stringify( { trip_log_id: trip_log_id } );
-	
-    $.ajax({
-                url: url_base + 'data/getTripReportFiles.php?trip_log_id=' + trip_log_id, // point to server-side PHP script 
-                dataType: 'json', // dataType: 'jsonp', //dataType: 'text',  
-                cache: false,
-                contentType: false,
-                processData: false,
-                data: form_data,
-                type: 'post',
-                success: function(data){
-							var dataSet = [];
-
-							var file_directory = 'data/uploader/files/';
-							
-							data.forEach(function(item) {
-								var file_url = file_directory + item.file_name;
-								var file_name_html = "<a href='" + file_url + "' target='_blank' >" + item.file_name + "</a>";
-								dataSet.push([file_name_html, item.size, item.add_time, 0/*item.object_type*/]);
-							});
-							  
-							/*$('#cave_files_table').DataTable({
-								//"ajax": '../ajax/data/arrays.txt'
-								data: dataSet,
-							});*/
-							$('#trip_report_files_table').DataTable().clear();
-							$('#trip_report_files_table').DataTable()
-								.rows.add(dataSet)
-								.draw();
-                },
-				error:  function(jqXHR, textStatus, errorThrown )
-				{
-					//onFailure(textStatus); //-- show error code returned
-					console.warn(errorThrown);
-					console.warn("Error loading trip report files: " + textStatus + " " + errorThrown);
-					//console.error(errorThrown);
-					//console.error("Error loading trip report files: " + textStatus + " " + errorThrown);
-					//alert(errMsg);
-				}				
-     });	
-}
-
-
 
 function initUploadControls()
 {
@@ -858,284 +698,125 @@ function initUploadControls()
 }
 
 
-function initCaveDetailsUploadControl()
+///////////////////////////
+
+function postDataAsync(_url, data, onSuccess, onFailure)
 {
-	/*$('#fileupload').fileupload({
-		//formData: {example: 'test'}
-		url: 'speogis/data/uploader'
-	}).on('fileuploadsubmit', function (e, data) {
-		data.formData = data.context.find(':input').serializeArray();
-	});
-	
-	$('#fileupload').bind('fileuploadsubmit', function (e, data) {
-		// The example input, doesn't have to be part of the upload form:
-		var input = $('#input');
-		data.formData = {example: input.val()};
-		if (!data.formData.example) {
-		  data.context.find('button').prop('disabled', false);
-		  input.focus();
-		  return false;
-		}
-	});
-	*/
-    //'use strict';
-
-    // Initialize the jQuery File Upload widget:
-    /*$('#fileupload').fileupload({
-        // Uncomment the following to send cross-domain cookies:
-        //xhrFields: {withCredentials: true},
-        url: 'data/uploader/'
-		//url: 'data/uploader'
-    });
-	*/
-	
-	 /*$('.fileupload').fileupload({
-        // Uncomment the following to send cross-domain cookies:
-        //xhrFields: {withCredentials: true},
-        //url: 'data/uploader/'
-		//url: 'data/uploader'
-    });*/
-
-
-	/*
-    // Enable iframe cross-domain access via redirect option:
-    $('#fileupload').fileupload(
-        'option',
-        'redirect',
-        window.location.href.replace(
-            /\/[^\/]*$/,
-            '/cors/result.html?%s'
-        )
-    );
-	*/
-	
-	/*
-    if (window.location.hostname === 'blueimp.github.io') {
-        // Demo settings:
-        $('#fileupload').fileupload('option', {
-            url: 'speogis/data/uploader',
-            // Enable image resizing, except for Android and Opera,
-            // which actually support image resizing, but fail to
-            // send Blob objects via XHR requests:
-            disableImageResize: /Android(?!.*Chrome)|Opera/
-                .test(window.navigator.userAgent),
-            maxFileSize: 999000,
-            acceptFileTypes: /(\.|\/)(gif|jpe?g|png)$/i
-        });
-        // Upload server status check for browsers with CORS support:
-        if ($.support.cors) {
-            $.ajax({
-                url: '//jquery-file-upload.appspot.com/',
-                type: 'HEAD'
-            }).fail(function () {
-                $('<div class="alert alert-danger"/>')
-                    .text('Upload server currently unavailable - ' +
-                            new Date())
-                    .appendTo('#fileupload');
-            });
-        }
-    } else 
-	*/
-	{
-        // Load existing files:
-
-		
-        $('.fileupload').addClass('fileupload-processing');		
-        $.ajax({
-            // Uncomment the following to send cross-domain cookies:
-            //xhrFields: {withCredentials: true},
-            url: $('#fileupload_cave').fileupload('option', 'url'),
-            dataType: 'json',
-            context: $('#fileupload_cave')[0]
-        }).always(function () {
-            $(this).removeClass('fileupload-processing');
-        }).done(function (result) {
-            $(this).fileupload('option', 'done')
-                .call(this, $.Event('done'), {result: result});
-        });
-    }	
-	
-	// $('#fileupload').fileupload('destroy');
-	
-	$('#fileupload_cave').on('submit', function(e) {
-          event.preventDefault();
-		  $('#fileupload_cave').modal('toggle'); 
-	});
-	
-}
-
-
-function initCaveFilesTable()
-{
-	//$(document).ready(function() { //});
-	$('#').DataTable({
-		//"ajax": '../ajax/data/arrays.txt'
-	});	
-}
-
-//////////////////////////
-// Feature list
-
-function refreshFeatureList()
-{
-			var html_content = "";
-			
-			html_content += "";
-			
-			var feature_ids = "";
-			
-			for (var f_id in geoobjects) {
-				//if (data.hasOwnProperty(property)) 
-				{
-					var feature_id = geoobjects[f_id].id;
-					var feature_name = geoobjects[f_id].name;
-					var geoobject_type = geoobjects[f_id].res_type; //geoobject_type;
-					
-					var home_icon_name = "house.png";
-										
-					var control = ("<span class='map_view_item' ><img src='" + pointer_icons_base_url + "map.png' height='18'/>&nbsp;&nbsp;" + feature_name + "</span>" +
-					 "<div class='map_view_item_operations' ><span onclick='setDefaultView(" + f_id + ");' class='map_view_item' ><img src='" + pointer_icons_base_url + home_icon_name + "' height='16'/></span>" +
-					 " <span onclick=\"deleteFeatures('" + f_id + "');\" class='map_view_item' ><img src='" + pointer_icons_base_url + "round-delete-button.png' height='16'/></span></div>" + "<br/>");
-
-/*
-					var control = ("<button onclick='showView(" + map_view_id + ");' style='background-color:transparent; border-color:transparent;' ><img src='" + pointer_icons_base_url + "map.png' height='24'/>" + map_view_name + "</button>" +
-					 " <button onclick='setDefaultView(" + map_view_id + ");' style='background-color:transparent; border-color:transparent;' ><img src='" + pointer_icons_base_url + home_icon_name + "' height='16'/></button>" +
-					 " <button onclick='deleteViews(" + map_view_id + ");' style='background-color:transparent; border-color:transparent;' ><img src='" + pointer_icons_base_url + "round-delete-button.png' height='16'/></button> " + "<br/>");
-*/					 
-					html_content += control;
-					//control.appendTo($("#mapViewsControlBox"));
-										
-					feature_ids += f_id + ","; // get_geoobject_key(geoobjects[f_id])
-				}
-			}
-
-			//html_content += "<br/>";
-			
-			//var add_map_view_control = ("<button onclick='addView();' style='background-color:transparent; border-color:transparent;' >Add</button>"); // Add map view
-			//html_content += add_map_view_control;
-			
-			var delete_all_control = ("<button onclick='deleteFeatures(undefined, true);' style='background-color:transparent; border-color:transparent;' >Delete all</button><br/>"); // Delete all map views
-			html_content += delete_all_control;
-			
-			$('#tripreport_features').val("");
-			//html_content += "<br/>";
-			//$("#mapViewsControlBox").append($(html_content));
-			$("#featuresListBox").html("");
-			$("<div>" + html_content + "</div>").appendTo($("#featuresListBox"));
-			
-			$('#tripreport_features').val(feature_ids);
-}
-
-var geoobjects = {};//= [];
-const pointer_icons_base_url = url_base + 'assets/img/';
-
-function getFeatureList(trip_log_id)
-{
-	$("#featuresListBox").empty();
-	$('#tripreport_features').val("");	
-	
-	var form_data = JSON.stringify( { trip_log_id: trip_log_id } );
-	
 	$.ajax({
-		//type: "GET",
-		type: 'post',
-		url: url_base + "data/getTripReportFeatures.php", //"/webservices/PodcastService.asmx/CreateMarkers",
+		type: "POST",
+		url: _url, //"/webservices/PodcastService.asmx/CreateMarkers",
 		// The key needs to match your method's input parameter (case-sensitive).
-		//data: JSON.stringify(data), // JSON.stringify({ Markers: markers })
-		data: form_data,
+		data: JSON.stringify(data), // JSON.stringify({ Markers: markers })
 		contentType: "application/json; charset=utf-8",
-		dataType: "json",		
-		success: function(data) {			
-			geoobjects = {};
-			
-			for (var property in data) {
-				if (data.hasOwnProperty(property))
-				{
-					//featureTypes.push(data[property]);
-					//geoobjects[data[property].id] = data[property];
-					data[property].id = data[property].geoobject_id;
-					data[property].name = data[property].geoobject_name;
-					data[property].res_type = data[property].geoobject_type;
-					
-					geoobjects[get_geoobject_key(data[property])] = data[property];					
-				}
-			};
-			
-			refreshFeatureList();
+		dataType: "json",
+		success: function(data) { 
+			onSuccess(data); 
+			//alert(data); 
 		},
 		//failure: function(errMsg) {
 			//$onFailure(errMsg);
 			//},
 		error:  function(jqXHR, textStatus, errorThrown )
 		{
-			//onFailure(textStatus); //-- show error code returned
-			console.error(errorThrown);
-			console.error("Error loading feature types: " + textStatus + " " + errorThrown);
+			onFailure(textStatus); //-- show error code returned
 			//alert(errMsg);
 		}
+});
+}
+
+function showNotification(message, placement = undefined)
+{
+	// http://bootstrap-notify.remabledesigns.com/#documentation
+	
+	var default_placement = { from: "top", align: "right" };
+	
+	if (placement == undefined)
+		placement = default_placement;
+	
+	var notify = $.notify({
+		// options
+		message: message
+	},{
+		// settings
+		type: 'info',
+		animate: {
+			enter: 'animated fadeInDown',
+			exit: 'animated fadeOutUp'
+		},
+		delay: 5000,
+		timer: 1000,
+		url_target: '_blank',
+		placement: placement,
 	});
 }
-
-function deleteFeatures(feature_id, delete_all = false)
-{
-	if (delete_all)
-		geoobjects = {};
-	else
-		delete geoobjects[feature_id];
-
-	refreshFeatureList();
-		
-	/*
-	var question_text = "";
 	
-	if (delete_all)
-		question_text = "Doriti sa stergeti toate punctele de vizualizare?";
-	else
-		question_text = "Doriti sa stergeti punctul de vizualizare?";
-		
-		
-	var q_res = confirm(String.format(question_text));
-		
-	if (q_res)
-	{
-
-	
-	var feature_delete_data = {
-		feature_id: feature_id,
-		delete_all: delete_all
-	};
-	
-	var feature_name = map_features[map_view_id].feature_name;
-	
-    $.ajax({
-                url: 'data/deleteTripFeature.php', // point to server-side PHP script 
-                dataType: 'text',  // what to expect back from the PHP script, if anything
-				
-				data: JSON.stringify(view_delete_data), // JSON.stringify({ Markers: markers })
-				contentType: "application/json; charset=utf-8",
-				//dataType: "json",
-				
-                cache: false,
-                contentType: false,
-                processData: false,
-                //data: view_data,
-                type: 'post',
-                success: function(php_script_response){					
-					if (php_script_response.indexOf("201") >= 0) // if (php_script_response == "201")
-					{
-						showNotification("Map view <b>" + view_name + "</b> was deleted.", { from: "bottom", align: "right" });
-						refreshViewList();//alert("saved");
-					}
-					else
-						alert(php_script_response); // display response from the PHP script, if any
+    $.fn.serializeObject = function() {
+        var o = {};
+        var a = this.serializeArray();
+        $.each(a, function() {
+            if (o[this.name]) {
+                if (!o[this.name].push) {
+                    o[this.name] = [o[this.name]];
                 }
-     });			 	 	 
-	 }*/
+                o[this.name].push(this.value || '');
+            } else {
+                o[this.name] = this.value || '';
+            }
+        });
+        return o;
+    };
+
+	function rtrim(str, maxLength) {
+		return str.substr(0, maxLength);
+	}
+
+var getUrlParameter = function getUrlParameter(sParam) {
+    var sPageURL = decodeURIComponent(window.location.search.substring(1)),
+        sURLVariables = sPageURL.split('&'),
+        sParameterName,
+        i;
+
+    for (i = 0; i < sURLVariables.length; i++) {
+        sParameterName = sURLVariables[i].split('=');
+
+        if (sParameterName[0] === sParam) {
+            return sParameterName[1] === undefined ? true : sParameterName[1];
+        }
+    }
+};
+
+var typeOf = function(obj){
+    return ({}).toString.call(obj)
+        .match(/\s([a-zA-Z]+)/)[1].toLowerCase();
+};
+function cloneObject(obj){
+    var type = typeOf(obj);
+    if (type == 'object' || type == 'array') {
+        if (obj.clone) {
+            return obj.clone();
+        }
+        var clone = type == 'array' ? [] : {};
+        for (var key in obj) {
+            clone[key] = cloneObject(obj[key]);
+        }
+        return clone;
+    }
+    return obj;
 }
 
-function get_geoobject_key(geoobject)
-{
-	return geoobject.geoobject_id + "_" + geoobject.geoobject_type; //res_type;
+//-- implementation of Object.prototype functions generates errors like  "error SyntaxError: Failed to execute setRequestHeader' on 'XMLHttpRequest' " ?
+
+/*Object.prototype.getName = function() { 
+   var funcNameRegex = /function (.{1,})\(/;
+   var results = (funcNameRegex).exec((this).constructor.toString());
+   return (results && results.length > 1) ? results[1] : "";
+};*/
+
+/*
+Object.prototype.inCollection = function() {
+    for(var i=0; i<arguments.length; i++)
+       if(arguments[i] == this) return true;
+    return false;
 }
-// end feature list
-////////////////////
+*/
+
