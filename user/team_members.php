@@ -1,4 +1,4 @@
-<?php
+<?php	
 	require_once("grid_common.php");  //require_once('utilities.php'); include_once 'db_interface.php'; include_once 'data_interface.php'; require_once 'languages.php'; 	
 ?>
 <?php
@@ -7,8 +7,7 @@
 ## | 1. Creating & Calling:                                                    | 
 ## +---------------------------------------------------------------------------+
 ##  *** only relative (virtual) path (to the current document)
-
-	require_once("grid_common.php");  //require_once('utilities.php'); include_once 'db_interface.php'; include_once 'data_interface.php'; require_once 'languages.php'; 
+	//require_once("grid_common.php");  //require_once('utilities.php'); include_once 'db_interface.php'; include_once 'data_interface.php'; require_once 'languages.php'; 
 
   //echo "<b><h2>Users</h2></b>";
   ##  *** creating variables that we need for database connection 
@@ -52,6 +51,7 @@
     
    print ("<input id='submitButton' type='submit' name='submit' value='Filter' />");
    */
+   
 ob_start();
   $db_conn = DB::factory('mysql'); 
   $db_conn -> connect(DB::parseDSN('mysql://'.$DB_USER.':'.$DB_PASS.'@'.$DB_HOST.'/'.$DB_NAME));
@@ -61,17 +61,17 @@ ob_start();
   $sql = "select team_members.id, 	`first_name`, 	`last_name`, 	`nickname`, 	`group_id`, 	`picture_file_name`, 	`add_time`, 	`description`, 	`email`, 	`phone_number`, 	`notes`, 	`connected_user_id`,
   COUNT(trip_logs_to_team_members.id) as member_trip_count,
   ROUND((COUNT(trip_logs_to_team_members.id) * 100) / (SELECT COUNT(trip_logs.id) FROM trip_logs WHERE trip_logs.temporary != 1), 2) as member_trip_percentage
-FROM team_members
-INNER JOIN trip_logs_to_team_members ON trip_logs_to_team_members.id_team_member = team_members.id
-WHERE 1=1
-GROUP BY team_members.id ;
-  ";
+	FROM team_members
+	LEFT JOIN trip_logs_to_team_members ON trip_logs_to_team_members.id_team_member = team_members.id
+	WHERE 1=1
+	GROUP BY team_members.id ;
+  "; //inner vs left ?
   
   //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
    //." CASE WHEN countries.is_democracy = 1 THEN 'Yes' ELSE 'No' END as is_democracy "   
    
 ##  *** set needed options
-  $debug_mode = !false;
+  $debug_mode = false;
   $messaging = true;
   $unique_prefix = "f_";  
   $dgrid = new DataGrid($debug_mode, $messaging, $unique_prefix, DATAGRID_DIR);
@@ -138,7 +138,7 @@ GROUP BY team_members.id ;
     $vm_columns = array(   
     "first_name"  =>array("header"=>"*{team_members.col_first_name}*", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
     "last_name" =>array("header"=>"*{team_members.col_last_name}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
-	"nickname" =>array("header"=>"*{team_members.col_nickname}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+	//"nickname" =>array("header"=>"*{team_members.col_nickname}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
 	"email" =>array("header"=>"*{team_members.col_email}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
 	"notes" =>array("header"=>"*{team_members.col_notes}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
 	"member_trip_count" =>array("header"=>"*{team_members.col_trip_count}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
@@ -184,8 +184,9 @@ GROUP BY team_members.id ;
   $bottom_paging = array("results"=>true, "results_align"=>"left", "pages"=>true, "pages_align"=>"center", "page_size"=>true, "page_size_align"=>"right");
   $top_paging = array();
   
-  $pages_array = array("25"=>"25", "50"=>"50", "100"=>"100", "250"=>"250", "500"=>"500");
-  $default_page_size = empty($f_page_size) ? 25 : $f_page_size; // echo "default_page_size $default_page_size";
+  $pages_array = array(/*"25"=>"25", */"50"=>"50", "100"=>"100", "250"=>"250", "500"=>"500");
+  //-- 225 page size
+  $default_page_size = empty($f_page_size) ? 225 : $f_page_size; // echo "default_page_size $default_page_size";
   $paging_arrows = array("first"=>"|&lt;&lt;", "previous"=>"&lt;&lt;", "next"=>"&gt;&gt;", "last"=>"&gt;&gt;|");
   $dgrid->SetPagingSettings($bottom_paging, $top_paging, $pages_array, $default_page_size, $paging_arrows);
 

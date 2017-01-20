@@ -38,6 +38,8 @@
 	
 	$feature->setName($featureData->feature_name);
 	$feature->setDescription($featureData->feature_description);
+	
+	//-- on edit feature_type_id normally should not be allowed to be changed (and received as input)
 	$feature->setFeaturetypeid($featureData->feature_type_id);
 
 	$featureGeoJsonString = $featureData->feature_string;

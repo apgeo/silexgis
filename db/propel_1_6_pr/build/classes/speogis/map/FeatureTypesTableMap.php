@@ -47,6 +47,7 @@ class FeatureTypesTableMap extends TableMap
   1 => 'linestring',
   2 => 'polygon',
 ));
+        $this->addColumn('group_type', 'GroupType', 'VARCHAR', false, 20, null);
         // validators
     } // initialize()
 

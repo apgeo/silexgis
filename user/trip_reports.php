@@ -20,6 +20,7 @@
 </script>
 <b><h2>*{trip_reports.page_title}*</h2></b>
 <button type="button" class="btn btn-primary" id="addReport" >*{trip_reports.btn_add_report}*</button>
+<a type="button" class="btn btn-primary" id="teamMembersLink" href="/speogis/user/team_members.php">*{main_map.menu.config_submenu.team_members}*</a>
 <?php
 ################################################################################   
 ## +---------------------------------------------------------------------------+
@@ -76,7 +77,7 @@ ob_start();
   $db_conn -> connect(DB::parseDSN('mysql://'.$DB_USER.':'.$DB_PASS.'@'.$DB_HOST.'/'.$DB_NAME));
 
 ##  *** put a primary key on the first place 
-  $sql="SELECT 	trip_logs.id, 	trip_logs.add_time, 	trip_start_time, 	trip_end_time, 	details, 	target_zone, 	TYPE AS trip_type, 	TEMPORARY AS is_temporary, 'edit' as edit,
+  $sql="SELECT 	trip_logs.id, 	DATE(trip_logs.add_time) as add_time, 	DATE(trip_start_time) as trip_start_time, 	DATE(trip_end_time) as trip_end_time, 	details, 	target_zone, 	TYPE AS trip_type, 	TEMPORARY AS is_temporary, 'edit' as edit,
 (
 SELECT COUNT(team_members.id)	
 FROM team_members 
@@ -99,7 +100,7 @@ WHERE TEMPORARY != 1 OR TEMPORARY IS NULL"; //.(!empty($filter_start_time_min) |
   $unique_prefix = "f_";  
   $dgrid = new DataGrid($debug_mode, $messaging, $unique_prefix, DATAGRID_DIR);
 ##  *** set data source with needed options
-  $default_order_field = "id";
+  $default_order_field = "add_time"; //"id";
   $default_order_type = "ASC";
   $dgrid->dataSource($db_conn, $sql, $default_order_field, $default_order_type);        
 
@@ -157,9 +158,9 @@ WHERE TEMPORARY != 1 OR TEMPORARY IS NULL"; //.(!empty($filter_start_time_min) |
     "target_zone"  =>array("header"=>"*{trip_reports.col_place}*", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
     "trip_start_time" =>array("header"=>"*{trip_reports.col_start}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
     "trip_end_time" => array("header"=>"*{trip_reports.col_end}*", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
-    "details"  => array("header"=>"*{trip_reports.col_details}*",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+    "details"  => array("header"=>"*{trip_reports.col_details}*",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"wrap", "text_length"=>"-1", "case"=>"normal"),
 	//"participant_count" => array("header"=>"Count", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
-    "participants" => array("header"=>"*{trip_reports.col_participants}*", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+    "participants" => array("header"=>"*{trip_reports.col_participants}*", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"wrap", "text_length"=>"-1", "case"=>"normal"),
     "add_time" => array("header"=>"*{trip_reports.col_added_on}*", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    	
 	//"editx"  =>array("header"=>"Edit", "type"=>"link", "width"=>"20px", "align"=>"left", "wrap"=>"nowrap", "target"=>"_self", "href"=>"http:\\localhost"),
 	"edit"  =>array("header"=>"*{trip_reports.col_edit}*",      "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "field_key"=>"id", "field_key_0"=>"id", "field_key_1"=>"id", "field_data"=>"edit", "rel"=>"{0}", "title"=>"{1}", "target"=>"_self", "href"=>"{0}", "on_item_created"=>"console.log(this)", "on_js_event" => "onclick=\"openTripReportForm(this.getAttribute('href')); return false;\"" ),	// "href"=>"{0}", //"field_key_1"=>"edit", 
@@ -209,8 +210,9 @@ WHERE TEMPORARY != 1 OR TEMPORARY IS NULL"; //.(!empty($filter_start_time_min) |
   $bottom_paging = array("results"=>true, "results_align"=>"left", "pages"=>true, "pages_align"=>"center", "page_size"=>true, "page_size_align"=>"right");
   $top_paging = array();
   
-  $pages_array = array("25"=>"25", "50"=>"50", "100"=>"100", "250"=>"250", "500"=>"500");
-  $default_page_size = empty($f_page_size) ? 25 : $f_page_size; // echo "default_page_size $default_page_size";
+  $pages_array = array(/*"25"=>"25", */"50"=>"50", "100"=>"100", "250"=>"250", "500"=>"500");
+  //-- 225 page size
+  $default_page_size = empty($f_page_size) ? 225 : $f_page_size; // echo "default_page_size $default_page_size";
   $paging_arrows = array("first"=>"|&lt;&lt;", "previous"=>"&lt;&lt;", "next"=>"&gt;&gt;", "last"=>"&gt;&gt;|");
   $dgrid->SetPagingSettings($bottom_paging, $top_paging, $pages_array, $default_page_size, $paging_arrows);
 
@@ -244,6 +246,16 @@ WHERE TEMPORARY != 1 OR TEMPORARY IS NULL"; //.(!empty($filter_start_time_min) |
 
     DBCon::close_connection();
     */
+##
+## +---------------------------------------------------------------------------+
+## | 3. Printing & Exporting Settings:                                         | 
+## +---------------------------------------------------------------------------+
+##  *** set printing option: true(default) or false 
+ $printing_option = true;
+ $dgrid->allowPrinting($printing_option);
+##  *** set exporting option: true(default) or false 
+ $exporting_option = true;
+ $dgrid->allowExporting($exporting_option);
 
     $dgrid->bind();        
     ob_end_flush();

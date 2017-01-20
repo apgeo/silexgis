@@ -87,8 +87,8 @@
 
     <div class="form-group row">
 		<label for="tripreport_start_time" class="col-sm-2 control-label">*{trip_reports.trip_edit_form.start}*:</label>
-			<div class='input-group date col-sm-10' id='tripreport_start_time'>
-                    <input type='text' class="form-control" name="tripreport_start_time" />
+			<div class='input-group date col-sm-10' id='tripreportStartTimeControl'>
+                    <input type='text' class="form-control" id='tripreport_start_time' name="tripreport_start_time" />
                     <span class="input-group-addon">
                         <span class="glyphicon glyphicon-calendar"></span>
                     </span>
@@ -97,8 +97,8 @@
 
     <div class="form-group row">
 		<label for="tripreport_end_time" class="col-sm-2 control-label">*{trip_reports.trip_edit_form.end}*:</label>
-			<div class='input-group date col-sm-10' id='tripreport_end_time'>
-                    <input type='text' class="form-control" name="tripreport_end_time" />
+			<div class='input-group date col-sm-10' id='tripreportEndTimeControl'>
+                    <input type='text' class="form-control" id='tripreport_end_time' name="tripreport_end_time" />
                     <span class="input-group-addon">
                         <span class="glyphicon glyphicon-calendar"></span>
                     </span>
@@ -177,7 +177,7 @@
                 </button>
                 <button type="button" class="btn btn-danger delete">
                     <i class="icon-trash icon-white"></i>
-                    <span>*{generic.delete}*</span>
+                    <span>*{generic.del}*</span>
                 </button>
                 <input type="checkbox" class="toggle">
                 <!-- The global file processing state -->
@@ -231,7 +231,7 @@
             {% if (!i && !o.options.autoUpload) { %}
                 <button class="btn btn-primary start" disabled>
                     <i class="glyphicon glyphicon-upload"></i>
-                    <span>*{generic.start}*</span>
+                    <span>*{generic.start_upload}*</span>
                 </button>
             {% } %}
             {% if (!i) { %}
@@ -275,7 +275,7 @@
             {% if (file.deleteUrl) { %}
                 <button class="btn btn-danger delete" data-type="{%=file.deleteType%}" data-url="{%=file.deleteUrl%}"{% if (file.deleteWithCredentials) { %} data-xhr-fields='{"withCredentials":true}'{% } %}>
                     <i class="glyphicon glyphicon-trash"></i>
-                    <span>*{generic.delete}*</span>
+                    <span>*{generic.del}*</span>
                 </button>
                 <input type="checkbox" name="delete" value="1" class="toggle">
             {% } else { %}

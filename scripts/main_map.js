@@ -24,7 +24,7 @@
   var _displayDetailsWindow = undefined;
   var featureTypes = {};//= [];
   var symbols_path = "./assets/feature_symbols/";
-  var _loadFeaturesFunc = undefined;
+  //var _loadFeaturesFunc = undefined;
   var map_views = {};//= [];
   var default_map_view = undefined;
   var default_map_view_id = undefined;
@@ -90,17 +90,20 @@
 
   'Polygon': new ol.style.Style({
     fill: new ol.style.Fill({
-      color: 'rgba(0,255,255,0.2)'
+      color: 'rgba(0,0,255,0.2)'
+	  //color: 'red'
     }),
     stroke: new ol.style.Stroke({
-      color: '#0ff',
-      width: 1
+      color: '#00f',
+      width: 2,//1
     }),
 	text: new ol.style.Text({
-            font: '12px Verdana',
+            font: '14px Verdana',
             text: "not defined",//feature.get('ARESTA'),
-            fill: new ol.style.Fill({color: 'black'}),
-            stroke: new ol.style.Stroke({color: 'white', width: 0.5}),
+            fill: new ol.style.Fill({color: 'black', width: 2.5}),
+			//fill: new ol.style.Fill({color: 'black'}),
+            stroke: new ol.style.Stroke({color: 'red', width: 1.5}),
+			// stroke: new ol.style.Stroke({color: 'white', width: 0.5}),
 			offsetX: 5,
 			offsetY: 5
         })	
@@ -476,6 +479,38 @@ var displayFeatureInfo = function(pixel) {
 
 _displayFeatureInfo = displayFeatureInfo;
 
+function compareCoordinates(coord1, coord2){
+    var
+        lon1 = Math.round(coord1[0]),
+        lon2 = Math.round(coord2[0]),
+        lat1 = Math.round(coord1[1]),
+        lat2 = Math.round(coord2[1]);
+
+    var
+        percent_lon = Math.abs(lon1 / lon2 - 1).toFixed(4),
+        percent_lat = Math.abs(lat1 / lat2 - 1).toFixed(4);
+        percent = (Number(percent_lon) + Number(percent_lat) / 2).toFixed(4);
+
+    return percent;
+}
+
+function between(number, min, max){
+    if(number >= min && number <= max) return true;
+    else return false;
+}
+
+var is_geo_file_layer_changed = false;
+
+setInterval(function()
+{
+	if (is_geo_file_layer_changed)
+	{
+		is_geo_file_layer_changed = false;
+		_geo_file_layer.changed();
+	}
+	//console.log("timer");
+}, 800);
+
 map.on('pointermove', function(evt) {
   if (evt.dragging) {
     return;
@@ -487,7 +522,98 @@ map.on('pointermove', function(evt) {
   
   _current_coordinate = evt.coordinate;
   
-  displayFeatureInfo(pixel);
+  //displayFeatureInfo(pixel);
+  
+  var hoveredFeatures = [];
+  
+  /*var feature = */map.forEachFeatureAtPixel(pixel, function(feature, layer) {
+			if (layer == caveFeaturesLayer)
+			{
+				hoveredFeatures.push(feature);
+				is_geo_file_layer_changed = true;
+			}
+          //return feature;
+        });
+	
+	hoverFeatureOverlay.getSource().clear();
+	hoverFeatureOverlay.getSource().addFeatures(hoveredFeatures);
+	//var _hoveredFeaturesToAdd = [];
+	
+	/*hoveredFeatures.forEach(function (hf)
+	{		
+		if (hoverFeatureOverlay.getSource().getFeatures().indexOf(hf) < 0)
+			_hoveredFeaturesToAdd.push(hf);			
+	});*/
+	
+	
+	/*
+	var toRemoveFeatures = highlightedFeatures.slice();
+	
+	hoveredFeatures.forEach(function (hf)
+	{
+	if (highlightedFeatures[hf] !== undefined)
+	{
+    }
+	else
+	{
+		hoverFeatureOverlay.getSource().addFeature(hf);         
+		highlightedFeatures.push(hf);
+        //highlightedFeatures[hf] = hf;//highlight = feature;
+    }
+	
+	delete toRemoveFeatures[hf];
+	});
+	
+	toRemoveFeatures.forEach(function (rf)
+	{
+		if (hoverFeatureOverlay.getSource().getFeatures().indexOf(rf) >= 0)
+		{
+			hoverFeatureOverlay.getSource().removeFeature(rf);
+			delete highlightedFeatures[rf];
+		}
+	});
+	*/
+	
+	
+/*	if (feature !== highlight) {
+          if (highlight) {
+            hoverFeatureOverlay.getSource().removeFeature(highlight);
+          }
+          if (feature) {
+            hoverFeatureOverlay.getSource().addFeature(feature);
+          }
+          highlight = feature;
+        }*/
+  /*var isHit = map.hasFeatureAtPixel(pixel);
+  
+	if (isHit)
+	{
+        var pointer_coord = map.getEventCoordinate(evt.originalEvent);
+        var closest = caveFeaturesDrawSource.getClosestFeatureToCoordinate(pointer_coord);
+
+        if (closest)
+		{
+            var geometry = closest.getGeometry();
+            var closest_coord = geometry.getClosestPoint(pointer_coord);
+            
+            var coefficient = compareCoordinates(pointer_coord, closest_coord);
+            console.info('closest: ' + closest.getId(), ' coeff: ' + coefficient);
+            
+            if (between(coefficient, 0, 0.01))
+			{
+                //hoverFeatureOverlay.addFeature(closest);                
+				//_geo_file_layer.changed();
+				console.log("> _geo_file_layer.changed();");
+            }
+			else 
+			{
+                hoverFeatureOverlay.removeFeature(closest);
+                hoverFeatureOverlay.getFeatures().clear();
+                hoverInteraction.getFeatures().clear();
+            }
+        }
+    }*/
+	displayFeatureInfo(pixel);
   
   if (user_mouse_interaction_type == POINTER_NEW_CAVE)
   {
@@ -636,8 +762,8 @@ var 				map_layer_osm = new ol.layer.Tile({
 	   	  
 		  
 		  
-	   startLon = 25.36640167236328;//25.416870;
-	   startLat = 45.89311462575596;//45.669245;
+	   //startLon = 25.36640167236328;//25.416870;
+	   //startLat = 45.89311462575596;//45.669245;
 	   
 	   startLon = 23.8366;//25.416870;
 	   startLat = 45.2598;//45.669245;
@@ -774,121 +900,121 @@ console.info(vectorLayer);
 	
 	function initMeasurement()
 	{	
-	var wgs84Sphere = new ol.Sphere(6378137);
+		var wgs84Sphere = new ol.Sphere(6378137);
 
-      // var raster = new ol.layer.Tile({
-        // source: new ol.source.MapQuest({layer: 'sat'})
-      // });
+		  // var raster = new ol.layer.Tile({
+			// source: new ol.source.MapQuest({layer: 'sat'})
+		  // });
 
-      var source = new ol.source.Vector();
+		  var source = new ol.source.Vector();
 
-      var vector = new ol.layer.Vector({
-        source: source,
-		name: 'measurements layer',
-        style: new ol.style.Style({
-          fill: new ol.style.Fill({
-            color: 'rgba(255, 255, 255, 0.2)'
-          }),
-          stroke: new ol.style.Stroke({
-            color: '#ffcc33',
-            width: 2
-          }),
-          image: new ol.style.Circle({
-            radius: 7,
-            fill: new ol.style.Fill({
-              color: '#ffcc33'
-            })
-          })
-        })
-      });
-
-
-      /**
-       * Currently drawn feature.
-       * @type {ol.Feature}
-       */
-      var sketch;
+		  var vector = new ol.layer.Vector({
+			source: source,
+			name: 'measurements layer',
+			style: new ol.style.Style({
+			  fill: new ol.style.Fill({
+				color: 'rgba(255, 255, 255, 0.2)'
+			  }),
+			  stroke: new ol.style.Stroke({
+				color: '#ffcc33',
+				width: 2
+			  }),
+			  image: new ol.style.Circle({
+				radius: 7,
+				fill: new ol.style.Fill({
+				  color: '#ffcc33'
+				})
+			  })
+			})
+		  });
 
 
-      /**
-       * The help tooltip element.
-       * @type {Element}
-       */
-      var helpTooltipElement;
+		  /**
+		   * Currently drawn feature.
+		   * @type {ol.Feature}
+		   */
+		  var sketch;
 
 
-      /**
-       * Overlay to show the help messages.
-       * @type {ol.Overlay}
-       */
-      var helpTooltip;
+		  /**
+		   * The help tooltip element.
+		   * @type {Element}
+		   */
+		  var helpTooltipElement;
 
 
-      /**
-       * The measure tooltip element.
-       * @type {Element}
-       */
-      var measureTooltipElement;
+		  /**
+		   * Overlay to show the help messages.
+		   * @type {ol.Overlay}
+		   */
+		  var helpTooltip;
 
 
-      /**
-       * Overlay to show the measurement.
-       * @type {ol.Overlay}
-       */
-      var measureTooltip;
+		  /**
+		   * The measure tooltip element.
+		   * @type {Element}
+		   */
+		  var measureTooltipElement;
 
 
-      /**
-       * Message to show when the user is drawing a polygon.
-       * @type {string}
-       */
-      var continuePolygonMsg = 'Click to continue the polygon';
+		  /**
+		   * Overlay to show the measurement.
+		   * @type {ol.Overlay}
+		   */
+		  var measureTooltip;
 
 
-      /**
-       * Message to show when the user is drawing a line.
-       * @type {string}
-       */
-      var continueLineMsg = 'Click to continue the line';
+		  /**
+		   * Message to show when the user is drawing a polygon.
+		   * @type {string}
+		   */
+		  var continuePolygonMsg = 'Click to continue the polygon';
 
 
-      /**
-       * Handle pointer move.
-       * @param {ol.MapBrowserEvent} evt The event.
-       */
-      var pointerMoveHandler = function(evt) {
-        if (evt.dragging || (user_mouse_interaction_type != POINTER_MEASURE)) {
-          return;
-        }
-		console.info("user_mouse_interaction_type " +  user_mouse_interaction_type);
-        /** @type {string} */
-        var helpMsg = '';
-
-        if (sketch) {
-          var geom = (sketch.getGeometry());
-          if (geom instanceof ol.geom.Polygon) {
-            helpMsg = continuePolygonMsg;
-          } else if (geom instanceof ol.geom.LineString) {
-            helpMsg = continueLineMsg;
-          }
-        }
-
-        helpTooltipElement.innerHTML = helpMsg;
-        helpTooltip.setPosition(evt.coordinate);
-
-        $(helpTooltipElement).removeClass('hidden');
-      };
+		  /**
+		   * Message to show when the user is drawing a line.
+		   * @type {string}
+		   */
+		  var continueLineMsg = 'Click to continue the line';
 
 
-      // var map = new ol.Map({
-        // layers: [raster, vector],
-        // target: 'map',
-        // view: new ol.View({
-          // center: [-11000000, 4600000],
-          // zoom: 15
-        // })
-      // });
-	map.addLayer(vector);
+		  /**
+		   * Handle pointer move.
+		   * @param {ol.MapBrowserEvent} evt The event.
+		   */
+		  var pointerMoveHandler = function(evt) {
+			if (evt.dragging || (user_mouse_interaction_type != POINTER_MEASURE)) {
+			  return;
+			}
+			console.info("user_mouse_interaction_type " +  user_mouse_interaction_type);
+			/** @type {string} */
+			var helpMsg = '';
+
+			if (sketch) {
+			  var geom = (sketch.getGeometry());
+			  if (geom instanceof ol.geom.Polygon) {
+				helpMsg = continuePolygonMsg;
+			  } else if (geom instanceof ol.geom.LineString) {
+				helpMsg = continueLineMsg;
+			  }
+			}
+
+			helpTooltipElement.innerHTML = helpMsg;
+			helpTooltip.setPosition(evt.coordinate);
+
+			$(helpTooltipElement).removeClass('hidden');
+		  };
+
+
+		  // var map = new ol.Map({
+			// layers: [raster, vector],
+			// target: 'map',
+			// view: new ol.View({
+			  // center: [-11000000, 4600000],
+			  // zoom: 15
+			// })
+		  // });
+		map.addLayer(vector);
 	  
       map.on('pointermove', pointerMoveHandler);
 
@@ -908,6 +1034,7 @@ console.info(vectorLayer);
        * @return {string} The formatted length.
        */
       var formatLength = function(line) {
+		/*
         var length;
         if (geodesicCheckbox.checked) {
           var coordinates = line.getCoordinates();
@@ -931,7 +1058,47 @@ console.info(vectorLayer);
           output = (Math.round(length * 100) / 100) +
               ' ' + 'm';
         }
-        return output;
+        return output;*/
+		
+		// http://turfjs.org/docs/#distance
+
+		//if (line.getCoordinates)
+		
+		//-- turf.distance is wrong when getting off world map bounds when zoom is too low?		
+		//-- native wgs84Sphere.haversineDistance might be better since it is ol native ? ( var wgs84Sphere = new ol.Sphere(6378137); )
+		{
+			var length = 0;
+			
+			var coordinates = line.getCoordinates();
+						
+			var sourceProj = map.getView().getProjection();
+			for (var index = 0, c_length = coordinates.length - 1; index < c_length; ++index) 
+			{
+				if (geodesicCheckbox.checked)
+				{		
+					var sourceProjection = map.getView().getProjection();
+					
+					var p0 = turf.point(ol.proj.transform(line.getCoordinates()[index], sourceProjection, 'EPSG:4326'));
+					var p1 = turf.point(ol.proj.transform(line.getCoordinates()[index + 1], sourceProjection, 'EPSG:4326'));
+
+					length += turf.distance(p0, p1) * 1000; // deafault: kilometers
+				}
+				else 
+				{
+					//-- incorrect ?
+					length = Math.round(line.getLength()); // length += Math.round(line.getLength() * 100) / 100;
+				}
+			}
+			
+			var output;
+			
+			if (length > 100) 
+				output = (Math.round(length / 1000 * 100) / 100) + ' ' + 'km';
+			else 
+				output = (Math.round(length) * 100 / 100) + ' ' + 'm';
+			
+			return output;
+		}
       };
 
 
@@ -1402,109 +1569,9 @@ for (index = 0, z = styles.length; index < z; ++index) {
 			
 		map.addLayer(layers[index]);
 	}
-	
-	function loadFeatures()
-	{
-	if (_db_features_layer)
-		map.removeLayer(_db_features_layer);
-	
-	var db_features_source = new ol.source.Vector({
-      url: 'data/getDBGeoData.php',
-      format: new ol.format.GeoJSON({
-         defaultDataProjection : 'EPSG:4326'//,
-		 //ignoreExtraDims: true		 		
-		})
 		
-		//features: (new ol.format.GeoJSON()).readFeatures(geojsonObject)
-		//features: new ol.format.GeoJSON().readFeatures(geojsonObject,{ featureProjection: 'EPSG:3857' })
-	});
-
-   /*var*/ db_features_layer = new ol.layer.Vector({
-   source: db_features_source ,
-   name: 'database features',
-   style: _feature_styleFunction
-   //projection : 'EPSG:4326' //'EPSG:3857', // 'EPSG:4326'
-   //style: style_1()
-           //style: caveStyle
-		   /*function(feature) {
-          return geoStyle[feature.getGeometry().getType()];
-        }*/
-
-	});
-	
-	_db_features_source = db_features_source;
-	_db_features_layer = db_features_layer;
-	
-	var key = db_features_source.on('change', function(event) {
-        if (db_features_source.getState() == 'ready') {
-			db_features_source.unByKey(key); //-- ??
-		  
-		 //var defaultStyle = geoStyle[feature.getGeometry().getType()];
-		 
-		 
-	   	//db_features_layer.getSource().forEachFeature(function(feature){
-
-		         // Note we use 'getFeatures()' because with forEachFeature we
-                // can not modify feature's geometry or will get a
-                // 'cannot update extent while reading' error.
-		var features = db_features_layer.getSource().getFeatures();
-		
-		for(var index=0; index < features.length; index++) {
-				
-		var feature = features[index];
-		
-		//var defaultStyle = geoStyle[feature.getGeometry().getType()];
-        //console.log(feature.getProperties());
-
-/*		var _point_type = feature.get('_id_point_type');
-		
-		var point_type = feature.get('point_type');
-		
-		if (point_type == "feature")
-		{
-			var feature_type_id = feature.get('feature_type_id');
-			
-			var featureType = featureTypes[feature_type_id];
-			
-			if (featureType)
-				feature.setStyle(featureType.style);
-			else
-				console.log("error: no feature type existent for " + feature_type_id);
-		}
-		else
-		if (point_type == "cave_entrance")
-		{
-			feature.setStyle(caveStyle);
-		}
-*/		
-		/*
-		switch(_point_type) {
-    case 0:
-        feature.setStyle(defaultStyle);
-        break;
-    case 3:
-        feature.setStyle(caveStyle);
-        break;
-	case 4:
-		feature.setStyle(pitStyle);
-		break;
-	case 5:
-		feature.setStyle(sinkholeStyle);
-		break;
-    default:        
-		feature.setStyle(defaultStyle);
-	};
-     */   
-    }//});
-          
-        }
-      });
-	  
-	  map.addLayer(db_features_layer);
-	}
-	
-	loadFeaturesFunc = loadFeatures;
-	loadFeatures();
+	//loadFeaturesFunc = loadFeatures;
+	//loadFeatures();
 	
 	map.addLayer(map_overlay_geo_comana);
 	
@@ -1691,7 +1758,7 @@ $(document).delegate('*[data-toggle="lightbox"]', 'click', function(event) {
 			//map.addEventListener('keyup', function() {			
 				//event.preventDefault();
 				
-			  console.log("document.addEventListener('keyup' global");
+			  console.log("eventListener('keyup' global");
 			  
 			  if (event.keyCode === 27) {
 				console.log("esc pressed");
@@ -1717,13 +1784,132 @@ $(document).delegate('*[data-toggle="lightbox"]', 'click', function(event) {
 				console.log("= pressed");
 				map.getView().setZoom(map.getView().getZoom() + 1);
 			  }
-			});			
+			});
 			
 			//testInitLineSelection(_db_features_layer);
+		
+/*		
+		var hoverInteraction = new ol.interaction.Select({
+			condition: ol.events.condition.pointerMove,
+			layers: [caveFeaturesLayer, _geo_file_layer]
+		});
+		
+		hoverInteraction.on('select', function(evt)
+		{
+			if (evt.selected.length > 0)
+				console.info('selected: ' + evt.selected[0].getId());
+		});
+
+		hoverFeatureOverlay = new ol.Overlay({
+			map: map,
+			style: _test_hoverGeometryStyle
+		});
+		
+		map.addInteraction(hoverInteraction);*/
 }
 	///////////////////////////
 	// end initMap
 	///////////////////////////
+
+	function loadFeatures()
+	{
+		if (_db_features_layer)
+			map.removeLayer(_db_features_layer);
+		
+		var db_features_source = new ol.source.Vector({
+		  url: 'data/getDBGeoData.php' +'?type=surface_feature',
+		  format: new ol.format.GeoJSON({
+			 defaultDataProjection : 'EPSG:4326'//,
+			 //ignoreExtraDims: true		 		
+			})
+			
+			//features: (new ol.format.GeoJSON()).readFeatures(geojsonObject)
+			//features: new ol.format.GeoJSON().readFeatures(geojsonObject,{ featureProjection: 'EPSG:3857' })
+		});
+
+	   /*var*/ db_features_layer = new ol.layer.Vector({
+	   source: db_features_source ,
+	   name: 'database features',
+	   style: _feature_styleFunction
+	   //projection : 'EPSG:4326' //'EPSG:3857', // 'EPSG:4326'
+	   //style: style_1()
+			   //style: caveStyle
+			   /*function(feature) {
+			  return geoStyle[feature.getGeometry().getType()];
+			}*/
+
+		});
+		
+		_db_features_source = db_features_source;
+		_db_features_layer = db_features_layer;
+		
+		var key = db_features_source.on('change', function(event) {
+			if (db_features_source.getState() == 'ready') {
+				db_features_source.unByKey(key); //-- ??
+			  
+			 //var defaultStyle = geoStyle[feature.getGeometry().getType()];
+			 
+			 
+			//db_features_layer.getSource().forEachFeature(function(feature){
+
+					 // Note we use 'getFeatures()' because with forEachFeature we
+					// can not modify feature's geometry or will get a
+					// 'cannot update extent while reading' error.
+			var features = db_features_layer.getSource().getFeatures();
+			
+			for(var index=0; index < features.length; index++) {
+					
+			var feature = features[index];
+			
+			//var defaultStyle = geoStyle[feature.getGeometry().getType()];
+			//console.log(feature.getProperties());
+
+	/*		var _point_type = feature.get('_id_point_type');
+			
+			var point_type = feature.get('point_type');
+			
+			if (point_type == "feature")
+			{
+				var feature_type_id = feature.get('feature_type_id');
+				
+				var featureType = featureTypes[feature_type_id];
+				
+				if (featureType)
+					feature.setStyle(featureType.style);
+				else
+					console.log("error: no feature type existent for " + feature_type_id);
+			}
+			else
+			if (point_type == "cave_entrance")
+			{
+				feature.setStyle(caveStyle);
+			}
+	*/		
+			/*
+			switch(_point_type) {
+		case 0:
+			feature.setStyle(defaultStyle);
+			break;
+		case 3:
+			feature.setStyle(caveStyle);
+			break;
+		case 4:
+			feature.setStyle(pitStyle);
+			break;
+		case 5:
+			feature.setStyle(sinkholeStyle);
+			break;
+		default:        
+			feature.setStyle(defaultStyle);
+		};
+		 */   
+		}//});
+			  
+			}
+		  });
+		  
+		  map.addLayer(db_features_layer);
+	}
 
 function testInitLineSelection(target_layer)
 {
@@ -1736,6 +1922,7 @@ var selectEuropa = new ol.style.Style({
             width: 8
         })
       });			
+
 var selectInteraction = new ol.interaction.Select({
         layers: function(layer) {
 		console.log("selectInteraction function(layer)");
@@ -1887,7 +2074,7 @@ function initThumbnailLoading()
       });	  
 
 	map.addInteraction(modify);
-	//map.getInteractions().extend([selectInteraction, modify]);	  		  
+	//map.getInteractions().extend([selectInteraction, modify]);
 		  
 		  
 			drawInt = new ol.interaction.Draw({
@@ -1895,14 +2082,14 @@ function initThumbnailLoading()
 			  //features: featureOverlay.getFeatures(),
 			  features: features,
 			  type: /** @type {ol.geom.GeometryType} */ drawFeatureType,
-			  //condition: ol.events.condition.singleClick,
+			  condition: ol.events.condition.singleClick,
 			  //freehandCondition: ol.events.condition.noModifierKeys
 			  //freehandCondition: ol.events.condition.always,
 			  //condition: ol.events.condition.never,
 			});
 			map.addInteraction(drawInt);
 			
-			drawInteraction = drawInt;			
+			drawInteraction = drawInt;
   }
 }
 	            function toggleControl(element) {
@@ -1942,7 +2129,9 @@ function initThumbnailLoading()
 	var gpxFormat = new ol.format.GPX({
 		readExtensions: function(x) {
 			  return x;
-			}
+			},
+		extractStyles: false, //-- probably GPX doesn't have styles ? or it has some icons ?
+		extractAttributes: !false			
 		});
 		
 	var kmlFormat = new ol.format.KML({
@@ -2026,13 +2215,13 @@ function initThumbnailLoading()
 							gpxFeatures = geoFormat.readFeatures(data, { dataProjection:'EPSG:4326', featureProjection:'EPSG:3857' });
 							geoFileLayer.getSource().addFeatures(gpxFeatures);
 							
-							testInitLineSelection(geoFileLayer);
+							//testInitLineSelection(geoFileLayer);
 						},
 		error:  function(jqXHR, textStatus, errorThrown )
 		{
 			//onFailure(textStatus); //-- show error code returned
-			console.error(errorThrown);
-			console.error("Error loading feature types: " + textStatus + " " + errorThrown);
+			//console.warn(errorThrown);
+			console.warn("Error loading geo file: " + gf_file_url + " " + textStatus + " " + errorThrown);
 			//alert(errMsg);
 		}
 						
@@ -2048,7 +2237,7 @@ function initThumbnailLoading()
 		{
 			//onFailure(textStatus); //-- show error code returned
 			console.error(errorThrown);
-			console.error("Error loading feature types: " + textStatus + " " + errorThrown);
+			console.error("Error loading geo file list: " + textStatus + " " + errorThrown);
 			//alert(errMsg);
 		}
 	});
@@ -2115,12 +2304,13 @@ var stateResetSettings = {
 	,	west__size:			200
 	,	west__initClosed:	false
 	,	west__initHidden:	false
-	,	east__size:			300
+	*/
+		east__size:			"auto"
 	,	east__initClosed:	false
 	,	east__initHidden:	false
-	*/
-		south__initClosed:	true
-	,	south__initHidden:	!false
+	
+	,	south__initClosed:	true
+	,	south__initHidden:	false
 	,	south__size:		"auto"
 	,	west__initClosed:	false
 	,	west__initHidden:	false
@@ -2151,27 +2341,82 @@ function initDrawObjects()
 			//console.log(data);
 			//featureTypes = {}; // for key/value indexed object
 			
+			var drawFeaturesTreeData = [];
+			
+			var groupElements = {};
+			
 			for (var property in data) {
 				if (data.hasOwnProperty(property)) 
-				{					
+				{
 					//featureTypes.push(data[property]);
 					featureTypes[data[property].Id] = data[property];
 					featureType = featureTypes[data[property].Id];
 					
 					var feature_type_id = data[property].Id;
 					var feature_type_name = data[property].Name;
-					var feature_type_symbol_path = data[property].SymbolPath;					
-					
-					
+					var feature_type_symbol_path = data[property].SymbolPath;
+					var feature_group_type = data[property].GroupType;
+						
 					if (feature_type_symbol_path && feature_type_symbol_path != "null")
 						feature_type_symbol_path = symbols_path + feature_type_symbol_path;
 					else
 						feature_type_symbol_path = symbols_path + "generic_feature.png";
-										
-					var control = $("<button onclick='enableDrawNewFeature(" + feature_type_id + ");' style='background-color:transparent; border-color:transparent;' ><img src='" + feature_type_symbol_path + "' height='16'/>" + feature_type_name + "</button><br/>");
-					// var control = $("<button onclick='console.log(\"" + feature_type_name + "\");' style='background-image: url(" + feature_type_symbol_path + ");background-repeat: no-repeat;background-position: left;padding-left: 16px;' ><img height='16'>" + feature_type_name + "</button><br/>");
-					control.appendTo($("#drawControlBox"));
 					
+					var localized_feature_type_name = eval("_t().feature_types." + feature_type_name.replace(" ", "_"));
+					
+					var index = 0;
+					var groupSubmenuItem = undefined;
+					//var groupElement = undefined;
+					
+					if ((groupSubmenuItem = groupElements[feature_group_type]) === undefined)
+					{
+						var localized_feature_group_type_name = eval("_t().feature_types." + (feature_group_type + "s_group_label").replace(" ", "_"));
+						
+						var _groupSubmenuItem =	{
+							id: feature_group_type,
+							text: localized_feature_group_type_name,
+							//text: feature_group_type,
+							type: "root",
+							children: [],
+							state : {
+								opened : true,
+								//selected : true
+							},							
+							icon: "glyphicon glyphicon-plus",
+							li_attr: {},
+							a_attr: {}
+						};
+						
+						groupSubmenuItem = _groupSubmenuItem;
+						groupElements[feature_group_type] = _groupSubmenuItem;
+						
+						drawFeaturesTreeData.push(groupSubmenuItem);
+					}
+
+					groupSubmenuItem.children.push({
+							//children: true,
+							id: feature_type_name,
+							text: localized_feature_type_name,
+							//text: feature_type_name,							
+							//type: "root",
+							icon: feature_type_symbol_path,
+							feature_type_id: feature_type_id
+						});
+
+					/*if ((groupElement = groupElements[feature_group_type]) === undefined)
+					{						
+						var geControl = $("<li>" + feature_group_type + "<ul id='sbm_" + feature_group_type + "'></ul></li>");
+						geControl.appendTo($("#drawFeaturesTreeControl_root")); // geControl.appendTo($("#drawControlBox"));						
+						groupElements[feature_group_type] = geControl;
+					}
+					//else
+					//	groupElement = groupElements[index];
+					
+					var control = $("<li id='menu_" + feature_type_id + "' icon='" + feature_type_symbol_path + "'><button onclick='enableDrawNewFeature(" + feature_type_id + ");' style='background-color:transparent; border-color:transparent;' ><img src='" + feature_type_symbol_path + "' height='16'/>" + feature_type_name + "</button></li>");
+					// var control = $("<button onclick='enableDrawNewFeature(" + feature_type_id + ");' style='background-color:transparent; border-color:transparent;' ><img src='" + feature_type_symbol_path + "' height='16'/>" + feature_type_name + "</button>");
+					// var control = $("<button onclick='console.log(\"" + feature_type_name + "\");' style='background-image: url(" + feature_type_symbol_path + ");background-repeat: no-repeat;background-position: left;padding-left: 16px;' ><img height='16'>" + feature_type_name + "</button><br/>");
+					control.appendTo($("#" + "sbm_" + feature_group_type));
+					*/
 
 					var symbol_path = undefined;
 					
@@ -2225,7 +2470,7 @@ function initDrawObjects()
 						if (featureType.Type == "polygon")
 							featureStyle = geoStyle["Polygon"];
 					  else
-						console.out("unsupoorted feature type");
+						console.log("unsupoorted feature type");
 					}
 					else
 						featureStyle = new ol.style.Style({
@@ -2253,10 +2498,11 @@ function initDrawObjects()
         })
 							});
 
-					featureType.style = featureStyle;
-				}
-			}			
+					featureType.style = featureStyle;										
+				}								
+			}
 			
+			initDrawFeaturesTreeControl(drawFeaturesTreeData);
 		},
 		//failure: function(errMsg) {
 			//$onFailure(errMsg);
@@ -2296,6 +2542,8 @@ var _feature_styleFunction = function(feature, resolution) {
 		
 		var selectedStyle = undefined;
 		
+		var ftId = feature.get('feature_type_id');
+		
 		if (point_type == "feature")
 		{
 			var feature_type_id = feature.get('feature_type_id');
@@ -2305,8 +2553,8 @@ var _feature_styleFunction = function(feature, resolution) {
 			if (featureType)
 			{
 				//feature.setStyle(featureType.style);
-				selectedStyle = featureType.style;				
-				featureType.style.getText().setText(feature.get('name'));				
+				selectedStyle = featureType.style;
+				featureType.style.getText().setText(feature.get('name'));		
 			}
 			else
 				console.error("no feature type existent for " + feature_type_id);
@@ -2322,7 +2570,36 @@ var _feature_styleFunction = function(feature, resolution) {
 			//feature.setStyle(caveStyle);			
 		}
 		else
-			console.out("point type = " + point_type);
+		//-- workaround, it should be detected cleaner
+		if ((ftId && (featureTypes[ftId]["GroupType"] == "cave_feature")) ||
+			(feature.get("geoobject_type") == "cave_feature") // set for recognising feature type in the map interface for not posted features.		
+		)
+		{
+			var feature_type_id = feature.get('feature_type_id');
+			
+			var featureType = featureTypes[feature_type_id];
+			
+			if (featureType)
+			{
+				//feature.setStyle(featureType.style);
+				selectedStyle = featureType.style;
+				
+				var text = undefined;
+				
+				if (feature.get('cave_feature_name'))
+					text = feature.get('cave_feature_name');
+				else if (feature.get('feature_name'))
+					text = feature.get('feature_name');
+				else if (feature.get('name'))
+					text = feature.get('name');
+				
+				featureType.style.getText().setText(text);		
+			}
+			else
+				console.error("no feature type existent for " + feature_type_id);			
+		}
+		else
+			console.error("point type = " + point_type);
 		
 		return [selectedStyle];
 };
@@ -2335,14 +2612,18 @@ var map_center_set_by_url = false;
 */
 $(document).ready(function() {
   // Handler for .ready() called.  
-	initDrawObjects();
+	//initDrawObjects();
 
+	var _lat = parseFloat(getUrlParameter('lat'));
+	var _long = parseFloat(getUrlParameter('lon'));
+	var point_id = parseFloat(getUrlParameter('point_id'));
+	
 	localize_static_html();
 	document.getElementsByTagName("html")[0].style.visibility = "visible";	
 	
-	initMap();	
+	initMap();
 	initLayout();
-	initNewCaveForm(); //-- might be deffered until new cave form is open
+	initNewCaveForm(); //-- might be deffered until new cave form is open	
 	initNewFeatureForm();
 	
 	initCaveDetailsForm();
@@ -2361,6 +2642,13 @@ $(document).ready(function() {
 	initMapPermalinkControl();
 	initCaveFilesTable();
 	initContextMenu();
+	//initDrawFeaturesTreeControl();
+	initCaveFeaturesHighlighting();
+	
+	initCaveFeaturesCheckBox();
+	
+	initDrawObjects();
+	//loadFeatures();
 	
 	setTimeout( function() 
 	{ 
@@ -2380,17 +2668,27 @@ $(document).ready(function() {
 	}, 1500);
 		
 	initSearchControl();		
+
+	loadCaveFeatures();
+	setTimeout(function() 
+	{			
+		//loadCaveFeatures(); 
+	}, 1000);
 	
 	setTimeout(function() 
 	{			
 		loadGeoFiles(); 
+		loadFeatures();
+		setInitialCaveLayerSettings();
 	}, 2500);
 	//setTimeout(function() {			initFeatureClusteringLayer(); }, 2500);
 	
-	var _lat = parseFloat(getUrlParameter('lat'));
+/*	var _lat = parseFloat(getUrlParameter('lat'));
 	var _long = parseFloat(getUrlParameter('lon'));
 	var point_id = parseFloat(getUrlParameter('point_id'));
-	
+*/	
+
+//-- multiple calls to setView up to this point make initial map loading to flicker and change several times quickly
 	if (_lat && _long)		
 		//if (_long)
 	{
@@ -2448,7 +2746,7 @@ function enableDrawNewFeature(feature_type_id)
 	
 	var featureType = featureTypes[feature_type_id].Type;
 	createGeoElementTooltip();
-	addGeoElemInteraction(featureType);
+	addGeoElemInteraction(featureType, featureTypes[feature_type_id]);
 	_set_user_mouse_interaction_type(POINTER_NEW_FEATURE);
 	//selectDrawFeature('cave');	
 }
@@ -2485,7 +2783,8 @@ function UserException(message) {
 var drawGeoElemInteraction;
 var _draw_source;
 
-      function addGeoElemInteraction(featureType) 
+//-- should send only 2'nd parameter which is the object. Now property is duplicated in first parameter
+      function addGeoElemInteraction(featureType, featureTypeObject = undefined) 
 	  {
 		
         var type = "Point";//(typeSelect.value == 'area' ? 'Polygon' : 'LineString');
@@ -2500,8 +2799,16 @@ var _draw_source;
 		
 		map.removeInteraction(drawGeoElemInteraction);
         
-		var source = new ol.source.Vector();
+		if (/*caveFeaturesDrawSource && */(featureTypeObject["GroupType"] == "cave_feature"))
+		{
+			enableCaveFeatureEditing();			
+			_draw_source = caveFeaturesDrawSource;
+		}
+		else
+		{
+			var source = new ol.source.Vector();		
 			_draw_source = source;
+		}
 /*       var vector = new ol.layer.Vector({
         source: source,
         style: new ol.style.Style({
@@ -2561,7 +2868,7 @@ else
 		//var undo = false;		
 		
         drawGeoElemInteraction = new ol.interaction.Draw({
-          source: source,
+          source: _draw_source,
           type: /** @type {ol.geom.GeometryType} */ (type),
 			  //condition: ol.events.condition.singleClick,
 			  //freehandCondition: ol.events.condition.noModifierKeys
@@ -2573,7 +2880,7 @@ else
             }),
             stroke: new ol.style.Stroke({
               color: 'rgba(0, 0, 0, 0.5)',
-              lineDash: [10, 10],
+              //lineDash: [10, 10],
               width: 2
             }),
             /*image: new ol.style.Circle({
@@ -2689,6 +2996,8 @@ else
 				if (sfr)
 					feature = sfr;
 				
+				//-- ?
+				//caveFeaturesDrawSource = undefined;
 				//console.log(event);
 				saveFeature(feature, event);
             }, this);
@@ -2750,6 +3059,9 @@ function saveFeature(feature)
 		if (selected_new_feature_type == 4)
 			newCaveEntrance(undefined, coordinates, existingSelectedFeature);
 		else
+		if (featureTypes[selected_new_feature_type]["GroupType"] == "cave_feature")
+			newCaveFeature(undefined, coordinates, existingSelectedFeature, selected_new_feature_type); // [long, lat];
+		else
 			newFeature(undefined, coordinates, existingSelectedFeature, selected_new_feature_type); // [long, lat]
 
 			
@@ -2804,6 +3116,7 @@ function openNewFeatureForm(feature_id, coordinates, existingSelectedFeature, ne
 	
 	//-- workaround to avoid selecting an existing multipoint feature on adding a new onerror	
 	
+	/* ??
 	var added_point = new ol.Feature({
 		//name: "point_feature_xx",
 		geometry: new ol.geom.Point(_current_coordinate)
@@ -2812,9 +3125,11 @@ function openNewFeatureForm(feature_id, coordinates, existingSelectedFeature, ne
 	_draw_source.addFeature(added_point);
 	
 	existingSelectedFeature = added_point;
-	
+	*/
 	$('#feature_string').val(getFeatureGeoJsonString(existingSelectedFeature));
 	//console.log($('#feature_string').val());
+	
+	existingSelectedFeature.set("geoobject_type", "surface_feature"); // set for recognising feature type in the map interface for not posted features.
 	
 	$('#feature_type_id').val(featureType.Id);
 	$('#feature_existing_point_id').val("");	
@@ -2864,13 +3179,13 @@ function openNewFeatureForm(feature_id, coordinates, existingSelectedFeature, ne
 	
 	/*	
 	$('#saveCave').on('click', function(event) {
-		//event.preventDefault(); // To prevent following the link (optional)		
+		//event.preventDefault(); // To prevent following the link (optional)
 		//onSaveCave(this);
 		//$(this).submit();
 	});
 	*/
 	$('#featureForm').on('submit', function(e) {
-          event.preventDefault();
+          e.preventDefault();
 
           var formData = $(this).serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
@@ -2900,14 +3215,14 @@ function openNewFeatureForm(feature_id, coordinates, existingSelectedFeature, ne
 	
 	if (feature_id)
 	{
-		$.getJSON("data/getFeature.php?cave_id=" + cave_id, function( data ) {
+		$.getJSON("data/getFeature.php?feature_id=" + feature_id, function( data ) {
 			
 			$('#featureModal').modal();
 			
 			$('#feature_id').val(data.Id);
 			$('#feature_name').val(data.Name);				
 			$('#feature_description').val(data.Description);
-			$('#feature_type_id').val(data.Feature_type_id);
+			$('#feature_type_id').val(data.FeatureTypeId);
 			
 			//_caveFormServerData = data;
 			//$('#featureModal').modal();
@@ -2986,14 +3301,14 @@ function openNewPictureForm(picture_id, coordinates, existingSelectedFeature)
 	}
 	
 	/*	
-	$('#saveCave').on('click', function(event) {
-		//event.preventDefault(); // To prevent following the link (optional)		
+	$('#saveCave').on('click', function(e) {
+		//e.preventDefault(); // To prevent following the link (optional)		
 		//onSaveCave(this);
 		//$(this).submit();
 	});
 	*/
 	$('#pictureForm').on('submit', function(e) {
-			event.preventDefault();
+			e.preventDefault();
 
 			var formInputRegularData = $(this).serializeObject();
 			//var formData = new FormData($(this));
@@ -3154,22 +3469,22 @@ function openNewCaveForm(cave_id, coordinates, existingSelectedFeature)
 		$('#caveModalTitleLabel').text("New cave");
 	
 	/*	
-	$('#saveCave').on('click', function(event) {
-		//event.preventDefault(); // To prevent following the link (optional)		
+	$('#saveCave').on('click', function(e) {
+		//e.preventDefault(); // To prevent following the link (optional)		
 		//onSaveCave(this);
 		//$(this).submit();
 	});
 	*/
 	$('#caveForm').on('submit', function(e) {
 	
-		  //$('#cf_rock_type_id').val(-2);
-
-          event.preventDefault();
+		  //$('#cf_rock_type_id').val(-2);		
+        e.preventDefault();
 
           var formData = $(this).serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
 		  
 		  formData.cf_rock_type_id = -2;
+		  
 		  
 		  postDataAsync("data/postCave.php", formData, 
 			function(x) 
@@ -3289,7 +3604,7 @@ function openCaveDetailsForm(cave_id)
 	*/
 	/*
 	$('#caveForm').on('submit', function(e) {
-          event.preventDefault();
+          e.preventDefault();
 
           var formData = $(this).serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
@@ -3498,7 +3813,7 @@ function initCaveDetailsUploadControl()
 	// $('#fileupload').fileupload('destroy');
 	
 	$('#fileupload_cave').on('submit', function(e) {
-          event.preventDefault();
+          e.preventDefault();
 		  $('#fileupload_cave').modal('toggle'); 
 	});
 	
@@ -3576,14 +3891,14 @@ function openNewCaveEntranceForm(cave_entrance_id, coordinates, existingSelected
 		$('#caveEntranceModalTitleLabel').text("New cave entrance");
 
 	/*	
-	$('#saveCave').on('click', function(event) {
-		//event.preventDefault(); // To prevent following the link (optional)		
+	$('#saveCave').on('click', function(e) {
+		//e.preventDefault(); // To prevent following the link (optional)		
 		//onSaveCave(this);
 		//$(this).submit();
 	});
 	*/
 	$('#caveEntranceForm').on('submit', function(e) {
-          event.preventDefault();
+          e.preventDefault();
 
           var formData = $(this).serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
@@ -3711,7 +4026,7 @@ function postDataAsync(_url, data, onSuccess, onFailure)
 {
 	$.ajax({
 		type: "POST",
-		url: _url, //"/webservices/PodcastService.asmx/CreateMarkers",
+		url: /*"http://localhost/speogis/" + */_url, //"/webservices/PodcastService.asmx/CreateMarkers",
 		// The key needs to match your method's input parameter (case-sensitive).
 		data: JSON.stringify(data), // JSON.stringify({ Markers: markers })
 		contentType: "application/json; charset=utf-8",
@@ -3733,8 +4048,16 @@ function postDataAsync(_url, data, onSuccess, onFailure)
 
 function reloadMapFeatures()
 {
+	//-- better solution might be to reload all layers, or find a way to reload map?
+	/*_geo_file_layer.changed();
+	_db_features_layer.changed();
+	caveFeaturesLayer.changed();*/
+	//? _picturesLayer.changed();
+	
+	//return;
+	//--
 	setTimeout(function()
-	{	
+	{
 	console.log("reloadMapFeatures()");
 	/*
 	_db_features_layer.getSource().changed();
@@ -3774,7 +4097,12 @@ function reloadMapFeatures()
 	
 	initMap();
 	*/
-	loadFeaturesFunc(); //-- should implement better feature reloading: currently the entire layer gets reinstantiated and the new layer is added to map; flicker appears
+	/*_geo_file_layer.changed();
+	_db_features_layer.changed();
+	caveFeaturesLayer.changed();
+	*/
+	loadFeatures(); //-- should implement better feature reloading: currently the entire layer gets reinstantiated and the new layer is added to map; flicker appears
+	loadCaveFeatures();
 	initThumbnailLoading();
 	}, 500);
 }
@@ -4032,7 +4360,7 @@ observer.observe(target, config);
 
 	function gotoDbElement(element)
 	{
-		console.log("gotoMapElement " + element.name);		
+		console.log("gotoMapElement " + element.name);
 		//db_features_layer.getSource().forEachFeature(function(feature){		
 		//var features = db_features_layer.getSource().getFeatures();
 		
@@ -4040,7 +4368,20 @@ observer.observe(target, config);
 
 		var coordinates_espg3857 = ol.proj.transform([element.c_lat, element.c_lon], 'EPSG:4326', 'EPSG:3857');
 		
-		flyToCoordinates(coordinates_espg3857);
+		//-- better cave feature/polygon detection
+		if (element.c_lat === undefined)
+		{
+			caveFeaturesDrawSource.forEachFeature(function (f) 
+			{ 
+					if (f.get("point_id") == element.point_db_id)
+					{
+						flyToCoordinates(undefined, f.getGeometry().getExtent(), {padding: [50, 50, 50, 50]});
+						map.getView().setZoom(map.getView().getZoom() - 1);
+					}
+			});
+		}
+		else
+			flyToCoordinates(coordinates_espg3857);
 		
 		//todo: store feature identifier, after loading features at that poitn, select it on the map (tooltip)
 	}
@@ -4067,7 +4408,7 @@ observer.observe(target, config);
 	
 	//var featureToShowCoordinates = undefined;
 	
-	function flyToCoordinates(coordinates)
+	function flyToCoordinates(coordinates, extent = undefined)
 	{		
 		var view = map.getView()
 		
@@ -4086,7 +4427,12 @@ observer.observe(target, config);
         map.beforeRender(pan
 		, bounce
 		);
-        view.setCenter(coordinates);
+		
+		if (extent)
+			map.getView().fit(extent, map.getSize());
+		else
+			view.setCenter(coordinates);
+		
 		
 		console.log("fly to coordinates");
 		console.log(coordinates);		
@@ -4386,7 +4732,7 @@ function initViews(set_center = undefined)
 			//featureTypes = {}; // for key/value indexed object
 			var html_content = "";
 			
-			html_content += "<b>Map views: </b><br/>";
+			html_content += "";
 			
 			for (var property in data) {
 				if (data.hasOwnProperty(property)) 
@@ -4428,7 +4774,7 @@ function initViews(set_center = undefined)
 				}
 			}
 
-			html_content += "<br/><br/><br/>";
+			html_content += ""; // <br/>
 			
 			var add_map_view_control = ("<button onclick='addView();' style='background-color:transparent; border-color:transparent;' >Add</button>"); // Add map view
 			html_content += add_map_view_control;
@@ -4436,7 +4782,7 @@ function initViews(set_center = undefined)
 			var delete_all_control = ("<button onclick='deleteViews(undefined, true);' style='background-color:transparent; border-color:transparent;' >Delete all</button><br/>"); // Delete all map views
 			html_content += delete_all_control;			
 			
-			html_content += "<br/>";
+			html_content += ""; // <br/>
 			//$("#mapViewsControlBox").append($(html_content));
 			$("<div>" + html_content + "</div>").appendTo($("#mapViewsControlBox"));
 		},
@@ -4469,14 +4815,17 @@ function showView(map_view_id)
 	var coordinates_espg3857 = ol.proj.transform([map_view_center_geometry_lon, map_view_center_geometry_lat], 'EPSG:4326', 'EPSG:3857');
 		
 	flyToCoordinates(coordinates_espg3857);
-		
-	var _map_layers = layers;
-	for (index = 0; index < _map_layers.length; index++)
-		_map_layers[index].setVisible(index == map_view_layer_index);
+	
+	//-- are the following also set in setMapLayerConfiguration?
+	//var _map_layers = layers;
+	//for (index = 0; index < _map_layers.length; index++)
+	//	_map_layers[index].setVisible(index == map_view_layer_index);
 	
 	setMapLayerConfiguration(map_view.properties.map_configuration);
 		
-	map.getView().setZoom(map_view_zoom_level);	
+	map.getView().setZoom(map_view_zoom_level);
+	
+	setInitialCaveLayerSettings();
 }
 
 function refreshViewList()
@@ -4606,8 +4955,15 @@ function setMapLayerConfiguration(configuration)
 			
 			if (layers.item(_layer_index))
 			{
+				// filter out helper layers so their functionality and state is not influenced by map view selecting
+				if (layers == caveFeaturesLayer)
+					continue;
+					
+				if (layers != caveFeaturesLayer)
+				{
 				layers.item(_layer_index).setVisible(layer_list[index].visible),			
 				layers.item(_layer_index).setOpacity(layer_list[index].opacity)
+				}
 			}
 		}
 	}	
@@ -4741,9 +5097,31 @@ function initContextMenu()
 				var cave_entrance_id = feature.getProperties().cave_entrance_id; //feature.getProperties().cave_id;
 				newCaveEntrance(cave_entrance_id);
 			}
+		  }		  
+		];
+		
+		var cave_feature_items = [
+		  //'-', // this is a separator
+		  {
+			text: 'Edit cave feature',
+			//icon: '',
+			callback: function (data)
+			{
+				var feature_id = feature.getProperties().id;
+				openNewCaveFeatureForm(feature_id, undefined, feature, undefined);
+			}
+		  },
+		  {
+			text: 'Delete cave feature',
+			//icon: '',
+			callback: function (data)
+			{
+				//var feature_id = feature.getProperties().feature_id; //feature.getProperties().cave_id;
+				deleteFeature(feature);
+			}
 		  }
 		  
-		];
+		];		
 
 		//contextmenu.extend(add_later);	  
 	
@@ -4752,7 +5130,7 @@ function initContextMenu()
 		
 		if (getFeatureType(feature) == "cave_entrance")
 		{
-		contextmenu.extend(cave_items);
+			contextmenu.extend(cave_items);
 		//contextmenu.push(cave_item);
 		
 		/*removeMarkerItem.data = {
@@ -4760,6 +5138,10 @@ function initContextMenu()
 		};
 		contextmenu.push(removeMarkerItem);
 		*/
+		}
+		else if (getFeatureType(feature) == "cave_feature")
+		{
+			contextmenu.extend(cave_feature_items);
 		}
 		restore = true;
 	  }
@@ -4822,7 +5204,7 @@ function openUploadFilesForm(geoobject_id, geoobject_type) // cave_id, cave_entr
 	$('#fileupload_target_type').val("cave");
 /*	
 	$('#uploadFilesForm').on('submit', function(e) {
-          event.preventDefault();
+          e.preventDefault();
 
           var formData = $(this).serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
@@ -4889,7 +5271,7 @@ function openUploadTripFilesForm(trip_log_id) // cave_id, cave_entrance_id, feat
 	$('#fileupload_target_object_id').val(trip_log_id);
 /*	
 	$('#uploadFilesForm').on('submit', function(e) {
-          event.preventDefault();
+          e.preventDefault();
 
           var formData = $(this).serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
@@ -4952,7 +5334,7 @@ function openUploadPicturesForm(geoobject_id, geoobject_type) // cave_id, cave_e
 
 /*	
 	$('#uploadFilesForm').on('submit', function(e) {
-          event.preventDefault();
+          e.preventDefault();
 
           var formData = $(this).serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
@@ -5410,7 +5792,7 @@ function initTripReportForm()
 	});
 	
 	$('#tripReportForm').on('submit', function(e) {
-          event.preventDefault();
+          e.preventDefault();
 
           var formData = $(this).serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
@@ -5915,6 +6297,7 @@ function initPictureThumbLayer()
 			style: function(f,res){return getFeatureStyle(f,res,true);}
         })
 	map.addInteraction(select);
+	
 	// On selected
 	select.getFeatures().on(['add','remove'], function(e)
 	{	var info = $("#select").html("");
@@ -6031,38 +6414,49 @@ var caveGalleryLinesStyleFunction = function(feature) {
           // linestring
           new ol.style.Style({
             stroke: new ol.style.Stroke({
-              color: '#ffcc33',
-              width: 2
+              color: '#888888',
+              width: 5
             })
           })
         ];
 		var index = 0;
 		
 	 var geometry = feature.getGeometry();
-	 console.log(geometry.getType());
+	 //~~ console.log(geometry.getType());
 	 
 	 //if (geometry.getType() == "LineString") // MultiLineString
 	 if (geometry.getType() == "MultiLineString")
 	 geometry.getLineStrings().forEach(function(ls)
 		{			
-			//console.out(ls);
+			//console.log(ls);
 		//ls = geometry;
-	
+	//if (false)
 	 ls.forEachSegment(function(start, end) {
-          var dx = end[0] - start[0];
-          var dy = end[1] - start[1];
-          var rotation = Math.atan2(dy, dx);
+          //var dx = end[0] - start[0];
+          //var dy = end[1] - start[1];
+          //var rotation = Math.atan2(dy, dx);
 		  
 		  var isInside = false;
 		  
-		  if (selectedCaveFeatures.getArray().length > 0)
+		  //var selectedCaveFeatures = caveFeaturesDrawSource.getFeatures();
+		  var selectedCaveFeatures = hoverFeatureOverlay.getSource().getFeatures();
+		  
+		  if (selectedCaveFeatures.length > 0) // if (selectedCaveFeatures.getArray().length > 0)
 		  {
-			var pt = turf.point(end); // turf.
+			var startPoint = turf.point(start);
+			var endPoint = turf.point(end);
 		  	
 			selectedCaveFeatures.forEach(function (feature)
-			{	
-				var poly = turf.polygon(feature.getGeometry().getCoordinates()); //[[[-81, 41],  [-81, 47],  [-72, 47],  [-72, 41],  [-81, 41]]] 			
-				isInside |= turf.inside(pt, poly);
+			{
+				//-- should test features if they have associated geometries which may not be the case if in the database there is no spatial row associated (point/line/polygon)
+				if (feature.getGeometry().getType() == "Polygon")
+				{
+					var poly = turf.polygon(feature.getGeometry().getCoordinates());
+					//[[[-81, 41],  [-81, 47],  [-72, 47],  [-72, 41],  [-81, 41]]] 			
+					isInside |= turf.inside(startPoint, poly) || turf.inside(endPoint, poly);
+				}
+				else
+					; //-- must be handled
 			});			
 		  }
 		
@@ -6077,8 +6471,9 @@ var caveGalleryLinesStyleFunction = function(feature) {
               rotation: -rotation
             }),*/
 			stroke: new ol.style.Stroke({
-				color: isInside ? "red" : getRandomColor(),
-				width: 2
+				//color: isInside ? "red" : "darkbrown", // getRandomColor()
+				color: isInside ? "#5599FF" : "#991122", // getRandomColor()
+				width: isInside ? 5 : 2,
 			}),
 			/*text: new ol.style.Text({
 				text: "" + (index++),
@@ -6102,6 +6497,7 @@ var caveGalleryLinesStyleFunction = function(feature) {
     for (var i = 0; i < 6; i++ ) {
         color += letters[Math.floor(Math.random() * 16)];
     }
+	
     return color;
 }
 
@@ -6148,6 +6544,9 @@ function (features)
 var caveFeatureDrawInteraction = undefined;
 var caveFeatureDrawType = undefined;
 var selectedCaveFeatures = new ol.Collection();
+//var selectedCaveFeatureSource = undefined;
+var caveFeaturesDrawSource = undefined;
+var caveFeaturesLayer = undefined;
 
 function enableCaveFeatureEditing()
 {
@@ -6157,11 +6556,27 @@ function enableCaveFeatureEditing()
 		
 		map.removeInteraction(drawInteraction);
 		map.removeInteraction(modify);
+
+		/*if (caveFeaturesDrawSource == undefined)
+		{
+			caveFeaturesDrawSource = new ol.source.Vector();
+			caveFeaturesLayer = new ol.layer.Vector(
+			{
+				source: caveFeaturesDrawSource,
+				name: 'cave features drawing',				  
+				style: _feature_styleFunction
+			});
+		}
 		
+		map.addLayer(caveFeaturesLayer);
+		*/		
+		startCaveFeaturesEditing();
+		/*
 		//addFeatureInteraction(featureType);	
       drawModifyInt = new ol.interaction.Modify({
         features: selectedCaveFeatures,//selectInteraction.getFeatures()
-		//source: drawSource
+		//caveFeaturesDrawSource.getFeatures()
+		source: caveFeaturesDrawSource,
 		deleteCondition: function(event) {
     return ol.events.condition.shiftKeyOnly(event) &&
         ol.events.condition.singleClick(event);
@@ -6172,13 +6587,13 @@ function enableCaveFeatureEditing()
 	//map.getInteractions().extend([selectInteraction, modify]);	  		  		  
 		  
 			drawInt = new ol.interaction.Draw({
-			  source: drawSource,
-			  //features: featureOverlay.getFeatures(),
-			  features: selectedCaveFeatures,
-			  type: /** @type {ol.geom.GeometryType} */ caveFeatureDrawType,
-			  condition: ol.events.condition.singleClick,
+				features: selectedCaveFeatures,
+				source: caveFeaturesDrawSource,
+			  
+			  //features: featureOverlay.getFeatures(),			  
+			  type: caveFeatureDrawType, // @type {ol.geom.GeometryType}
 			  //condition: ol.events.condition.singleClick,
-			  //freehandCondition: ol.events.condition.noModifierKeys
+			  //freehandCondition: ol.events.condition.noModifierKeys,
 			  //freehandCondition: ol.events.condition.always,
 			  //condition: ol.events.condition.never,
 			  drawend: function ()
@@ -6191,10 +6606,7 @@ function enableCaveFeatureEditing()
 				console.log("drawend");
 				_geo_file_layer.changed();
 				
-				/*features.forEach(function (feature) 
-				{ 
-					feature.changed();
-				});*/
+				// features.forEach(function (feature) 				{ 					feature.changed();				});
 				// ol.Observable.unByKey(listener);
             };
 			
@@ -6204,9 +6616,445 @@ function enableCaveFeatureEditing()
 		drawModifyInt.on('drawend', onDrawEnd
             , this);
 			
-			map.addInteraction(drawInt);
+				map.addInteraction(drawInt);
 			
-			caveFeatureDrawInteraction = drawInt;		
+		caveFeatureDrawInteraction = drawInt;		
+		*/
+		$("#caveFeaturesEditingCheckBox").prop('checked', caveFeaturesLayer.getVisible());
+}
+
+
+function newCaveFeature(feature_id = undefined, coordinates, existingSelectedFeature, new_feature_type)
+{
+	openNewCaveFeatureForm(feature_id, coordinates, existingSelectedFeature, new_feature_type);
+	
+	if (feature_id == undefined)
+		$('#caveFeatureModal').modal();
+}
+
+// expecting coordinates type [] 'EPSG:3857'
+function openNewCaveFeatureForm(feature_id, coordinates, existingSelectedFeature, new_feature_type)
+{
+	editMode = false;
+	
+	if (feature_id)
+		editMode = true;
+	
+	
+	//$('#saveCave').off('click');		
+	$('#caveFeatureForm').off('submit');
+	
+	//$("#caveForm").find("input, input[type=text], textarea").val("");
+	$('#cave_feature_id').val("");
+	//$('#cave_feature_coords_lon').val("");
+	//$('#cave_feature_coords_lat').val("");
+	
+	//-- workaround to avoid selecting an existing multipoint feature on adding a new onerror	
+	
+	/* ??
+	var added_point = new ol.Feature({
+		//name: "point_feature_xx",
+		geometry: new ol.geom.Point(_current_coordinate)
+	});
+	
+	_draw_source.addFeature(added_point);
+	
+	existingSelectedFeature = added_point;
+	*/
+	$('#cave_feature_string').val(getFeatureGeoJsonString(existingSelectedFeature));
+	
+	//existingSelectedFeature.set('feature_type_id');
+	
+	var featureType = undefined;
+	
+	if (new_feature_type)
+		featureType = featureTypes[new_feature_type];
+	else
+		featureType = featureTypes[existingSelectedFeature.getProperties().feature_type_id];
+	
+	existingSelectedFeature.set('feature_type_id', featureType.Id);
+	existingSelectedFeature.set("geoobject_type", "cave_feature"); // set for recognising feature type in the map interface for not posted features.
+	//	existingSelectedFeature.setProperties({'feature_type_id': featureType});
+	//console.log($('#feature_string').val());
+	
+	$("#caveFeatureForm")[0].reset();
+	
+	$('#cave_feature_type_id').val(featureType.Id);
+	$('#cave_feature_existing_point_id').val("");
+	
+	
+	selFeatureProps = undefined;
+	
+	if (existingSelectedFeature)
+	{
+		selFeatureProps = existingSelectedFeature.getProperties();
+		$('#cave_feature_existing_point_id').val(selFeatureProps.id);
+	}
+	
+	var coord_type = typeof coordinates;
+	var is_point_feature = !(coord_type == 'object' || coord_type == 'array');
+	
+	if (coordinates && is_point_feature)
+	{
+		//espg coordinates
+		
+		var coordinates_espg4326 = ol.proj.transform(coordinates, 'EPSG:3857', 'EPSG:4326');
+		
+		$('#cave_feature_coords_lat').val(coordinates_espg4326[1]);
+		$('#cave_feature_coords_lon').val(coordinates_espg4326[0]);
+		$('#cave_feature_coords_label').text(rtrim(coordinates_espg4326[1]+"", 8) + ",  " + rtrim(coordinates_espg4326[0]+"", 8) + ((selFeatureProps != undefined) ? (" : " + selFeatureProps.gpx_name) : ""));		
+	}	
+		
+	if (editMode)
+		$('#caveFeatureModalTitleLabel').text("Edit cave feature");
+	else
+	{
+		$('#caveFeatureModalTitleLabel').text("New " + featureType.Name);		
+		$('#cave_feature_type_id').val(new_feature_type);
+		
+		
+		feature_type_symbol_path = featureType.SymbolPath;
+		
+		if (feature_type_symbol_path && feature_type_symbol_path != "null")
+		{
+			feature_type_symbol_path = symbols_path + feature_type_symbol_path;
+			$('#caveFeatureModalTitleLabel').prepend("<img src='" + feature_type_symbol_path + "' height='24'/>");
+		}
+	}
+	
+	/*	
+	$('#saveCave').on('click', function(e) {
+		//e.preventDefault(); // To prevent following the link (optional)		
+		//onSaveCave(this);
+		//$(this).submit();
+	});
+	*/
+	$('#caveFeatureForm').on('submit', function(e) {
+          e.preventDefault();
+
+          //var formData = $(this).serializeObject();
+		  
+		var formData = 
+		{
+			feature_description: $("#cave_feature_description").val(),
+			feature_existing_point_id: $("#cave_feature_existing_point_id").val(),
+			feature_id: $("#cave_feature_id").val(),
+			feature_name: $("#cave_feature_name").val(),
+			feature_string: $("#cave_feature_string").val(),
+			feature_type_id: $("#cave_feature_type_id").val(),
+			//feature_group_type: "cave_feature"
+			//feature_coords_label
+			//feature_coords_lon
+			//feature_coords_lat
+		}
+		  //var serializedFormData = JSON.stringify(formData);
+		  
+		  postDataAsync("data/postFeature.php", formData, 
+			function(x) 
+			{ 
+				console.log('close');
+				$('#caveFeatureModal').modal('toggle'); 
+				
+				showNotification("Cave feature <b>" + formData.feature_name + "</b> was saved.");
+				reloadMapFeatures();
+				/* //-- $("caveModal").modal('hide');*/ 
+			}, 
+			function(err) 
+			{ 
+				console.log('error');
+				alert(err);
+			}
+		  ); // { cave: formData }
+		  
+		  //console.log(formData);
+		  //console.log(JSON.stringify($(this).serializeObject()));          
+        });
+		
+	//fillCaveEntries();
+	
+	if (feature_id)
+	{
+		$.getJSON("data/getFeature.php?feature_id=" + feature_id, function( data ) {
+			
+			$('#caveFeatureModal').modal();
+			
+			$('#cave_feature_id').val(data.Id);
+			$('#cave_feature_name').val(data.Name);				
+			$('#cave_feature_description').val(data.Description);
+			$('#cave_feature_type_id').val(data.FeatureTypeId);
+			
+			//_caveFormServerData = data;
+			//$('#featureModal').modal();
+		});
+	}	
+}
+
+	//-- the call to getDBGeoData.php should be made in loadFeatures() as well and filtered per each layer afterwards rather than a separate call
+	function loadCaveFeatures()
+	{
+		//if (selectedCaveFeatureSource)
+		//	selectedCaveFeatureSource = undefined;
+
+		if (caveFeaturesDrawSource)
+			caveFeaturesDrawSource = undefined;
+			
+		if (caveFeaturesLayer)
+		{
+			map.removeLayer(caveFeaturesLayer);
+			caveFeaturesLayer = undefined;
+		}
+		
+		//if (caveFeaturesDrawSource == undefined)
+		
+		var caveFeatureSource = new ol.source.Vector({
+		  url: 'data/getDBGeoData.php'+'?type=cave_feature',
+		  name: 'cave features drawing',
+		  format: new ol.format.GeoJSON({
+			 defaultDataProjection : 'EPSG:4326'//,
+			 //ignoreExtraDims: true		 		
+			}),
+			style: _feature_styleFunction
+			//features: (new ol.format.GeoJSON()).readFeatures(geojsonObject)
+			//features: new ol.format.GeoJSON().readFeatures(geojsonObject,{ featureProjection: 'EPSG:3857' })
+		});
+
+		//-- cave selection not implemented, so it will get all features from all caves in the current view
+		//selectedCaveFeatureSource = caveFeatureSource;
+		caveFeaturesDrawSource = caveFeatureSource;
+		
+		caveFeaturesLayer = new ol.layer.Vector(
+			{
+				source: caveFeaturesDrawSource,
+				name: 'cave features drawing',
+				style: _feature_styleFunction,
+				//visible: false
+			});
+	
+	  setInitialCaveLayerSettings();
+	  
+	  map.addLayer(caveFeaturesLayer);
+	
+	  //map.addLayer(caveFeaturesLayer, false);
+	  //caveFeaturesLayer.setVisible(false);	  	  
+}
+
+function setInitialCaveLayerSettings()
+{
+	  caveFeaturesLayer.setVisible(true);
+	  caveFeaturesLayer.setOpacity(0.14);
+}
+
+function endCaveFeatureEditing()
+{
+	caveFeaturesLayer.setVisible(false);
+	caveFeaturesLayer.setOpacity(0.1);
+
+	//$('#drawFeaturesTreeControl').jstree('open_node', 'cave_feature');
+	$('#drawFeaturesTreeControl').jstree('show_node', 'surface_feature');
+}
+
+function startCaveFeaturesEditing()
+{
+	console.log("startCaveFeaturesEditing()");
+	
+	caveFeaturesLayer.setVisible(true);
+	caveFeaturesLayer.setOpacity(0.9);
+
+	$('#drawFeaturesTreeControl').jstree('close_node', 'surface_feature');	
+	$('#drawFeaturesTreeControl').jstree('open_node', 'cave_feature');
+}
+
+function initCaveFeaturesCheckBox()
+{
+		$("#caveFeaturesEditingCheckBox").change(
+			function() {		
+				if ($(this).is(":checked"))
+					//startCaveFeaturesEditing();
+					enableCaveFeatureEditing();
+				else
+					endCaveFeatureEditing();
+			}
+		);	
+}
+
+
+function initDrawFeaturesTreeControl(drawFeaturesTreeData)
+{
+	/*
+		https://www.jstree.com/
+		https://www.jstree.com/docs/config/
+		https://www.jstree.com/docs/html/
+		https://www.jstree.com/docs/json/
+		https://www.jstree.com/docs/events/
+		https://www.jstree.com/docs/interaction/
+		https://www.jstree.com/demo/
+		https://www.jstree.com/api/
+		https://www.jstree.com/plugins/
+	*/
+	var drawFeaturesTreeControl = $('#drawFeaturesTreeControl');
+	
+	drawFeaturesTreeControl.jstree({
+		core: {
+			data : drawFeaturesTreeData,
+			//stripes : false
+			},
+		plugins : [ "search", /*"state",*/ "wholerow" ]
+	});
+	
+	drawFeaturesTreeControl.jstree('hide_stripes');
+	/*.on("create_node", function (node, parent, position) {
+      console.log("node " + create_node);
+    });*/
+	
+	drawFeaturesTreeControl.on("changed.jstree", function (e, data) {
+		if (data.node.original.feature_type_id)
+			enableDrawNewFeature(data.node.original.feature_type_id);
+	  //console.log(data.selected);
+    });	
+	
+    // 8 interact with the tree - either way is OK
+    /*$('button').on('click', function () {
+      $('#jstree').jstree(true).select_node('child_node_1');
+      $('#jstree').jstree('select_node', 'child_node_1');
+      $.jstree.reference('#jstree').select_node('child_node_1');
+    });*/
+}
+
+function _test_hoverGeometryStyle(feature)
+{
+    var
+        style = [],
+        geometry_type = feature.getGeometry().getType(),
+        white = [255, 255, 255, 1],
+        blue = [0, 153, 255, 1],
+        width = 3;
+        
+    style['LineString'] = [
+        new ol.style.Style({
+            stroke: new ol.style.Stroke({
+                color: white, width: width + 2
+            })
+        }),
+        new ol.style.Style({
+            stroke: new ol.style.Stroke({
+                color: blue, width: width
+            })
+        })
+    ],
+    style['Polygon'] = [
+        new ol.style.Style({
+            fill: new ol.style.Fill({ color: [255, 255, 255, 0.5] })
+        }),
+        new ol.style.Style({
+            stroke: new ol.style.Stroke({
+                color: white, width: 3.5
+            })
+        }),
+        new ol.style.Style({
+            stroke: new ol.style.Stroke({
+                color: blue, width: 2.5
+            })
+        })
+    ],
+    style['Point'] = [
+        new ol.style.Style({
+            image: new ol.style.Circle({
+                radius: width * 2,
+                fill: new ol.style.Fill({color: blue}),
+                stroke: new ol.style.Stroke({
+                    color: white, width: width / 2
+                })
+            })
+        })
+    ];
+    
+    return style[geometry_type];
+}
+
+//var highlight;
+var highlightedFeatures = [];
+var highlightStyleCache = {};
+var hoverFeatureOverlay;
+
+function initCaveFeaturesHighlighting()
+{
+      hoverFeatureOverlay = new ol.layer.Vector({
+        source: new ol.source.Vector(),
+        map: map,
+        style: function(feature, resolution) {
+          var text = resolution < 5000 ? feature.get('name') : '';
+          if (!highlightStyleCache[text]) {
+            highlightStyleCache[text] = new ol.style.Style({
+              stroke: new ol.style.Stroke({
+                color: 'rgba(50,50,50,0.5)', // '#555',
+                width: 1
+              }),
+              fill: new ol.style.Fill({
+                color: 'rgba(255,0,0,0.1)' // 'rgba(255,0,0,0.1)'
+              }),
+              text: new ol.style.Text({
+                font: '25px Calibri,sans-serif',
+                text: text,
+                fill: new ol.style.Fill({
+                  color: '#000'
+                }),
+                stroke: new ol.style.Stroke({
+                  color: '#500',
+                  width: 2
+                })
+              })
+            });
+          }
+          return highlightStyleCache[text];
+        }
+      });
+	  
+	  /*
+	  hoverFeatureOverlay.getSource().on('change', function(event)
+	  {
+			console.log("change " + event);
+			//console.log(event);
+			//console.log(hoverFeatureOverlay.getSource().getFeatures());
+			_geo_file_layer.changed();
+	  });
+	  */
+}
+
+function deleteFeature(feature)
+{		
+	var feature_id = feature.getProperties().id;
+	
+	var feature_delete_data = {
+		feature_id: feature_id,
+		//delete_all: delete_all
+	};
+	
+	//var view_name = map_views[map_view_id].mapview_name;
+	
+    $.ajax({
+                url: 'data/deleteFeature.php', // point to server-side PHP script 
+                dataType: 'text',  // what to expect back from the PHP script, if anything
+				
+				data: JSON.stringify(feature_delete_data), // JSON.stringify({ Markers: markers })
+				contentType: "application/json; charset=utf-8",
+				//dataType: "json",
+				
+                cache: false,
+                contentType: false,
+                processData: false,
+                //data: view_data,
+                type: 'post',
+                success: function(php_script_response){					
+					if (php_script_response.indexOf("201") >= 0) // if (php_script_response == "201")
+					{
+						caveFeaturesDrawSource.removeFeature(feature);
+						showNotification("Feature <b>" + feature.get('name') + "</b> was deleted.", { from: "top", align: "right" });						
+						reloadMapFeatures();
+					}
+					else
+						alert(php_script_response); // display response from the PHP script, if any
+                }
+     });
 }
 
 

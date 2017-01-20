@@ -39,7 +39,7 @@ function localize_static_html()
 	{ // p1 is nondigits, p2 digits, and p3 non-alphanumerics 
 	
 		res = match.match(/[\w\.]+/)[0];
-		console.log(res);
+		//console.log(res);
 		var localized_text = eval("_t()." + res);
 		//m_res[0].replace(regex, localized_text);
 		//document.body.innerHTML.replace(m_res[0], "");

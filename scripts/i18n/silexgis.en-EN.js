@@ -125,12 +125,116 @@ var localizedText = {
 				{
 					export_map: "Export"
 				},
-				
+				search_features_label: "Search features",
 			},
 			user_menu:
 			{
 				user: "User",
 				log_out: "Log out"
+			},
+			body:
+			{
+				measurements_box: 
+				{
+					distances: "Distances",
+					type: "Type",
+					opt_distance: "Distance",
+					opt_area: "Area",
+					opt_geodesic_measurement: "Geodesic measurement"
+				},
+				map_views:
+				{
+					title: "Map views",
+				},
+				features_panel:
+				{					
+					title: "Features",
+					cave_features_editing_checkbox: "Cave features editing",
+				},
+				layer_switcher:
+				{
+					title: "Map layers",
+					opacity_bar_checkbox: "hide opacity bar",
+				}
+			},
+			cave_edit_form:
+			{
+				title_new: "New cave",
+				title_edit: "Edit cave",
+				name: "Name",
+				other_toponyms: "Other toponyms",
+				identification_code: "Identification code",
+				type: "Type",
+				description: "Description",
+				rock_type: "Rock type",
+				rock_age: "Rock age",
+				cave_age: "Cave age",
+				region: "Region",
+				catchement_basin: "Catchement basin", // drainage?
+				valley: "Valley",
+				tributary_river: "Tributary river",
+				closest_address: "Closest address",
+				land_registry_number: "Land registry number",
+				show_cave: "Show cave",
+				show_cave_length: "Show cave length",
+				website: "Website",
+				depth: "Depth",
+				positive_depth: "Positive depth",
+				negative_depth: "Negative depth",
+				potential_depth: "Potential depth",
+				surveyed_length: "Surveyed length",
+				real_extension: "Real extension",
+				projected_extension: "Projected extension",
+				exploration_status: "Exploration status",
+				protection_class: "Protection class",
+				volume_cm: "Volume (cm)",
+				ramification_index: "Ramification index",
+				discovery_date: "Discovery date",
+				discoverers: "Discoverer(s)",
+			},
+			feature_edit_form:
+			{
+				title_new: "New feature",
+				title_edit: "Edit feature",
+				name: "Name",
+				description: "Description",
+			},
+			cave_details_form:
+			{
+				title: "Cave details",				
+			},
+			picture_edit_form:
+			{
+				title_new: "New picture",
+				title_edit: "Edit picture",
+				description: "Description",
+			},
+			cave_entrance_edit_form:
+			{
+				title_new: "New cave entrance",
+				title_edit: "Edit cave entrance",
+				name: "Name",
+				description: "Description",
+				type: "Type",
+				cave: "Cave",
+			},
+			cave_feature_edit_form:
+			{
+				title_new: "New cave feature",
+				title_edit: "Edit cave feature",
+				name: "Name",
+				description: "Description",
+			},
+			upload_files_form: //-- should be moved outside as function is generic
+			{
+				title: "Upload files",
+				//title_edit: "",				
+			},
+			upload_pictures_form: //-- should be moved outside as function is generic
+			{
+				title: "Upload pictures",
+				//title_edit: "",
+				add_pictures: "Add pictures",
 			},
 		},
 			trip_reports:
@@ -228,6 +332,7 @@ var localizedText = {
 				add: "Add",
 				add_files : "Add files",
 				cancel: "Cancel",
+				browse: "Browse",
 				
 				start_upload: "Start upload",
 				end_upload: "End upload",
@@ -243,6 +348,34 @@ var localizedText = {
 					add_time: "Add time",
 					category: "Category",
 				}				
+			},
+			
+			feature_types:
+			{
+				cave: "cave",
+				cave_entrance: "cave entrance",
+				sinkhole: "sinkhole",
+				construction: "construction",
+				lake: "lake",
+				detritus: "detritus",
+				karren: "karren",
+				peak: "peak",
+				canyon: "canyon",
+				spring: "spring",
+				sink: "sink",
+				portal: "portal",
+				well: "well",
+				walls: "walls",
+				pot: "pot",
+				fault: "fault",
+				fracture_line: "fracture line",
+				dry_valley: "dry valley",
+				gallery: "gallery",
+				pitch: "pitch",
+				gallery_area: "gallery area",
+				
+				cave_features_group_label: "Cave features",
+				surface_features_group_label: "Surface features"				
 			}
     },
     'ro': {
@@ -296,13 +429,117 @@ var localizedText = {
 				{
 					export_map: "Exporta ca imagine"
 				},
-				
+				search_features_label: "Cauta locuri",
 			},
 			user_menu:
 			{
 				user: "Utilizator",
 				log_out: "Iesire"
 			},
+			body:
+			{
+				measurements_box: 
+				{
+					distances: "Calc. distanta",
+					type: "tip",
+					opt_distance: "Distanta",
+					opt_area: "Arie",
+					opt_geodesic_measurement: "Distanta geodezica" // geografica / geodezica ? model simplu al suprafetei fara MDE
+				},
+				map_views:
+				{
+					title: "Perspective harta",
+				},
+				features_panel:
+				{					
+					title: "Forme de relief", // obiect geografic
+					cave_features_editing_checkbox: "Editare obiecte pestera",
+				},
+				layer_switcher:
+				{
+					title: "Strate harta",
+					opacity_bar_checkbox: "ascunde control opacitate",
+				}
+			},
+			cave_edit_form:
+			{
+				title_new: "Pestera noua",
+				title_edit: "Editeaza pestera",
+				name: "Nume",
+				other_toponyms: "Alte toponime",
+				identification_code: "Cod de ifentificare",
+				type: "Tip",
+				description: "Descriere",
+				rock_type: "Tip de roca",
+				rock_age: "Varsta rocii",
+				cave_age: "Varsta pesterii ?",
+				region: "Regiune",
+				catchement_basin: "Bazin hidragrafic", // drainage?
+				valley: "Vale",
+				tributary_river: "Afluent",
+				closest_address: "Adresa aproiata",
+				land_registry_number: "Numar cadastru",
+				show_cave: "Turistica",
+				show_cave_length: "Lungime turistica(vizitabila)",
+				website: "Site web",
+				depth: "Adancime",
+				positive_depth: "Denivelare pozitiva",
+				negative_depth: "Denivelare negativa",
+				potential_depth: "Denivelare potentiala",
+				surveyed_length: "Dezvoltare cartata",
+				real_extension: "Extensie reala",
+				projected_extension: "Extensie proiectata",
+				exploration_status: "Stare explorare",
+				protection_class: "Clasa de protectie",
+				volume_cm: "Volum (cm)",
+				ramification_index: "Index de ramificare",
+				discovery_date: "Data descoperire",
+				discoverers: "Descoperitor(i)",
+			},
+			feature_edit_form:
+			{
+				title_new: "Forma de relief noua",
+				title_edit: "Editeaza forma de relief",
+				name: "Nume",
+				description: "Descriere",
+			},
+			cave_details_form:
+			{
+				title: "Cave details",				
+			},
+			picture_edit_form:
+			{
+				title_new: "Poza noua",
+				title_edit: "Editeaza poza",
+				description: "Descriere",
+			},
+			cave_entrance_edit_form:
+			{
+				title_new: "Intrare pestera noua",
+				title_edit: "Editeaza intrare pestera",
+				name: "Nume",
+				description: "Descriere",
+				type: "Tip",
+				cave: "Pestera",
+			},
+			cave_feature_edit_form:
+			{
+				title_new: "Parte de pestera noua",
+				title_edit: "Editeaza parte de pestera",
+				name: "Nume",
+				description: "Descriere",
+			},
+			upload_files_form: //-- should be moved outside as function is generic
+			{
+				title: "Incarca fisiere",
+				//title_edit: "",				
+			},
+			upload_pictures_form: //-- should be moved outside as function is generic
+			{
+				title: "Incarca poze",
+				//title_edit: "",
+				add_pictures: "Adauga poze",
+			},			
 		},
 			trip_reports:
 			{
@@ -358,7 +595,7 @@ var localizedText = {
 				col_last_name: "Nume",
 				col_nickname: "Porecla",
 				col_email: "Email",
-				col_notes: "Note",
+				col_notes: "Detalii",
 				col_trip_count: "Ture",
 				col_trip_percentage: "Procent",
 			},
@@ -399,11 +636,12 @@ var localizedText = {
 				add: "Adauga",
 				add_files : "Adauga fisiere",
 				cancel: "Anuleaza",
-				error: "Eroare",
-				processing: "Proceseaza...",
+				browse: "Descide",
 				
 				start_upload: "Incarca",
 				end_upload: "Opreste", // Stop, Termina
+				error: "Eroare",
+				processing: "Proceseaza...",
 				
 				add_time: "Data adaugarii",				
 				
@@ -414,6 +652,36 @@ var localizedText = {
 					add_time: "Adaugat la",
 					category: "Categorie",
 				}
-			}				
+			},
+			
+			feature_types:
+			{
+				cave: "pestera",
+				cave_entrance: "intrare pestera",
+				sinkhole: "dolina",
+				construction: "constructie",
+				lake: "lac",
+				detritus: "grohotis",
+				karren: "lapiezuri",
+				peak: "varf",
+				canyon: "canion",
+				spring: "izvor",
+				sink: "ponor",
+				portal: "portal",
+				well: "fantana",
+				walls: "walls",
+				pot: "aven",
+				fault: "falie",
+				fracture_line: "fisura",
+				dry_valley: "vale seaca",
+				valley: "vale",
+				gallery: "galerie",
+				pitch: "put",
+				gallery_area: "zona galerii",
+				
+				cave_features_group_label: "Pestera",
+				surface_features_group_label: "Suprafata"
+			}
+			
 	}
 };

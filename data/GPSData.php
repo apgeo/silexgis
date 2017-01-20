@@ -121,7 +121,7 @@
             return $rows;
         }
 		
-        public static function get_features($user_id)
+        public static function get_features($user_id, $feature_type)
         {
             if (empty($user_id) || ($user_id < 0))
             {
@@ -130,13 +130,24 @@
 				
                 //throw new Exception('Title are empty'); //return 0;
             }
+			
+            if (empty($feature_type))
+            {
+                Utils::print_message("feature_type parameter is empty", "argument error", MSG_ERROR);  
+                return false;
+				
+                //throw new Exception('Title are empty'); //return 0;
+            }
+			
 			$tp = GPSData::$tablePrefix;
 			$query = "SELECT 
-						features.*, 						
-						elevation, 
+						features.*,
+						elevation,
 						ASTEXT(spatial_geometry) as sg FROM points
-					  INNER JOIN features ON points.id = features.point_id;"; //where disabled != 1 or disabled is null
-			
+					  INNER JOIN features ON points.id = features.point_id
+					  INNER JOIN feature_types ON features.feature_type_id = feature_types.id
+					  WHERE feature_types.group_type=\"$feature_type\""; //where disabled != 1 or disabled is null
+
 			// X(coords) AS lat_from_point, Y(coords) AS long_from_point, 
 			//$query = "select *, AsWKB(coords) AS wkb FROM {$tp}points"; //where disabled != 1 or disabled is null
             $db_result = DB_Execute(GPSData::$ConId, $query);
@@ -146,7 +157,8 @@
             while ($row = mysql_fetch_array($db_result, MYSQL_ASSOC))
 			{
 				$row["point_type"] = "feature";
-				$row["geoobject_type"] = "cave_entrance";
+				//$row["geoobject_type"] = "cave_entrance or cave or";
+				$row["geoobject_type"] = $feature_type;
                 $rows[/*$row["id"]*/] = $row; // 0 based index
 			}
                 

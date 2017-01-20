@@ -19,7 +19,7 @@
 	{
 		//echo "not logged"; exit;
 
-       header('location: login.php');
+       header('location: /speogis/login.php');
 	   exit;
 	   }
 

@@ -1,6 +1,7 @@
 <?php
 	@session_start(); //-- ?
-    require_once 'auth.php';
+    //GG 
+	require_once 'auth.php';
 	
 	require_once 'config.php';    
 	
@@ -247,7 +248,7 @@ if ($onlineMode) :
 	<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/bs/dt-1.10.12/af-2.1.2/b-1.2.1/b-colvis-1.2.1/cr-1.3.2/fh-3.1.2/r-2.1.0/datatables.css"/> 
 	<script type="text/javascript" src="https://cdn.datatables.net/v/bs/dt-1.10.12/af-2.1.2/b-1.2.1/b-colvis-1.2.1/cr-1.3.2/fh-3.1.2/r-2.1.0/datatables.js"></script>	
 	<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.12/css/jquery.dataTables.min.css"/> 										
-	<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js"/>
+	<script type="text/javascript" src="https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js"></script>
 
 <!--
 https://cdn.datatables.net/1.10.12/js/jquery.dataTables.min.js
@@ -398,7 +399,7 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 	<link rel="stylesheet" type="text/css" href="/speogis/scripts/datatables.css"/> 
 	<script type="text/javascript" src="/speogis/scripts/datatables.js"></script>	
 	<link rel="stylesheet" type="text/css" href="/speogis/scripts/jquery.dataTables.min.css"/> 										
-	<link rel="stylesheet" type="text/css" href="/speogis/scripts/dataTables.bootstrap4.min.js"/>
+	<script type="text/javascript" src="https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js"></script>
 
 <!--
 https://cdn.datatables.net/1.10.12/js/jquery.dataTables.min.js
@@ -480,6 +481,11 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lightslider/1.1.3/css/lightslider.min.css">
 	
 	<script type="text/javascript" src="/speogis/scripts/turf.min.js"></script>
+		
+	<!--<script type="text/javascript" src="/speogis/scripts/bootstrap-treeview-1.2.0/src/js/bootstrap-treeview.js"></script>
+	<link rel="stylesheet" href="/speogis/scripts/bootstrap-treeview-1.2.0/src/css/bootstrap-treeview.css">-->
+	<script type="text/javascript" src="/speogis/scripts/vakata-jstree-9770c67/dist/jstree.js"></script>
+	<link rel="stylesheet" href="/speogis/scripts/vakata-jstree-9770c67/dist/themes/default/style.css">
 <!--
 	 =============================================================================================================================================
 	 =============================================================================================================================================
@@ -614,7 +620,7 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 			-->
 			<div class="input-group" id="searchFeatureControlContainer" >
 				<input class="Typeahead-hint" type="text" tabindex="-1" readonly>
-				<input class="Typeahead-input" type="text" id="searchFeatureControl" placeholder="Search features" > <!-- class="typeahead" -->
+				<input class="Typeahead-input" type="text" id="searchFeatureControl" placeholder="*{main_map.menu.search_features_label}*" > <!-- class="typeahead" -->
 				<div class="Typeahead-menu"></div>
 			</div>		
 			

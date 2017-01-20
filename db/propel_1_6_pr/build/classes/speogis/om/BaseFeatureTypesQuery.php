@@ -10,11 +10,13 @@
  * @method FeatureTypesQuery orderByName($order = Criteria::ASC) Order by the name column
  * @method FeatureTypesQuery orderBySymbolPath($order = Criteria::ASC) Order by the symbol_path column
  * @method FeatureTypesQuery orderByType($order = Criteria::ASC) Order by the type column
+ * @method FeatureTypesQuery orderByGroupType($order = Criteria::ASC) Order by the group_type column
  *
  * @method FeatureTypesQuery groupById() Group by the id column
  * @method FeatureTypesQuery groupByName() Group by the name column
  * @method FeatureTypesQuery groupBySymbolPath() Group by the symbol_path column
  * @method FeatureTypesQuery groupByType() Group by the type column
+ * @method FeatureTypesQuery groupByGroupType() Group by the group_type column
  *
  * @method FeatureTypesQuery leftJoin($relation) Adds a LEFT JOIN clause to the query
  * @method FeatureTypesQuery rightJoin($relation) Adds a RIGHT JOIN clause to the query
@@ -26,11 +28,13 @@
  * @method FeatureTypes findOneByName(string $name) Return the first FeatureTypes filtered by the name column
  * @method FeatureTypes findOneBySymbolPath(string $symbol_path) Return the first FeatureTypes filtered by the symbol_path column
  * @method FeatureTypes findOneByType(string $type) Return the first FeatureTypes filtered by the type column
+ * @method FeatureTypes findOneByGroupType(string $group_type) Return the first FeatureTypes filtered by the group_type column
  *
  * @method array findById(string $id) Return FeatureTypes objects filtered by the id column
  * @method array findByName(string $name) Return FeatureTypes objects filtered by the name column
  * @method array findBySymbolPath(string $symbol_path) Return FeatureTypes objects filtered by the symbol_path column
  * @method array findByType(string $type) Return FeatureTypes objects filtered by the type column
+ * @method array findByGroupType(string $group_type) Return FeatureTypes objects filtered by the group_type column
  *
  * @package    propel.generator.speogis.om
  */
@@ -138,7 +142,7 @@ abstract class BaseFeatureTypesQuery extends ModelCriteria
      */
     protected function findPkSimple($key, $con)
     {
-        $sql = 'SELECT `id`, `name`, `symbol_path`, `type` FROM `feature_types` WHERE `id` = :p0';
+        $sql = 'SELECT `id`, `name`, `symbol_path`, `type`, `group_type` FROM `feature_types` WHERE `id` = :p0';
         try {
             $stmt = $con->prepare($sql);
             $stmt->bindValue(':p0', $key, PDO::PARAM_STR);
@@ -354,6 +358,35 @@ abstract class BaseFeatureTypesQuery extends ModelCriteria
         }
 
         return $this->addUsingAlias(FeatureTypesPeer::TYPE, $type, $comparison);
+    }
+
+    /**
+     * Filter the query on the group_type column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterByGroupType('fooValue');   // WHERE group_type = 'fooValue'
+     * $query->filterByGroupType('%fooValue%'); // WHERE group_type LIKE '%fooValue%'
+     * </code>
+     *
+     * @param     string $groupType The value to use as filter.
+     *              Accepts wildcards (* and % trigger a LIKE)
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return FeatureTypesQuery The current query, for fluid interface
+     */
+    public function filterByGroupType($groupType = null, $comparison = null)
+    {
+        if (null === $comparison) {
+            if (is_array($groupType)) {
+                $comparison = Criteria::IN;
+            } elseif (preg_match('/[\%\*]/', $groupType)) {
+                $groupType = str_replace('*', '%', $groupType);
+                $comparison = Criteria::LIKE;
+            }
+        }
+
+        return $this->addUsingAlias(FeatureTypesPeer::GROUP_TYPE, $groupType, $comparison);
     }
 
     /**

@@ -11,7 +11,7 @@
 	
 	$_user_id = $_SESSION["id_user"];
 
-	if (!DbUtils::checkParameter(@$memberTripReportData->id_team_member, "int", "id_team_member is empty.") 
+	if (!DbUtils::checkParameter(@$memberTripReportData->id_team_member, "int", "id_team_member is empty.")
 		 || !DbUtils::checkParameter(@$memberTripReportData->id_trip_log, "int", "id_trip_log is empty.")
 		)
 		;//exit;

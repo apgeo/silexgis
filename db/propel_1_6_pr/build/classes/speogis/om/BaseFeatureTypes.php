@@ -54,6 +54,12 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
     protected $type;
 
     /**
+     * The value for the group_type field.
+     * @var        string
+     */
+    protected $group_type;
+
+    /**
      * Flag to prevent endless save loop, if this object is referenced
      * by another object which falls in this transaction.
      * @var        boolean
@@ -115,6 +121,17 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
     {
 
         return $this->type;
+    }
+
+    /**
+     * Get the [group_type] column value.
+     *
+     * @return string
+     */
+    public function getGroupType()
+    {
+
+        return $this->group_type;
     }
 
     /**
@@ -202,6 +219,27 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
     } // setType()
 
     /**
+     * Set the value of [group_type] column.
+     *
+     * @param  string $v new value
+     * @return FeatureTypes The current object (for fluent API support)
+     */
+    public function setGroupType($v)
+    {
+        if ($v !== null) {
+            $v = (string) $v;
+        }
+
+        if ($this->group_type !== $v) {
+            $this->group_type = $v;
+            $this->modifiedColumns[] = FeatureTypesPeer::GROUP_TYPE;
+        }
+
+
+        return $this;
+    } // setGroupType()
+
+    /**
      * Indicates whether the columns in this object are only set to default values.
      *
      * This method can be used in conjunction with isModified() to indicate whether an object is both
@@ -237,6 +275,7 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
             $this->name = ($row[$startcol + 1] !== null) ? (string) $row[$startcol + 1] : null;
             $this->symbol_path = ($row[$startcol + 2] !== null) ? (string) $row[$startcol + 2] : null;
             $this->type = ($row[$startcol + 3] !== null) ? (string) $row[$startcol + 3] : null;
+            $this->group_type = ($row[$startcol + 4] !== null) ? (string) $row[$startcol + 4] : null;
             $this->resetModified();
 
             $this->setNew(false);
@@ -246,7 +285,7 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
             }
             $this->postHydrate($row, $startcol, $rehydrate);
 
-            return $startcol + 4; // 4 = FeatureTypesPeer::NUM_HYDRATE_COLUMNS.
+            return $startcol + 5; // 5 = FeatureTypesPeer::NUM_HYDRATE_COLUMNS.
 
         } catch (Exception $e) {
             throw new PropelException("Error populating FeatureTypes object", $e);
@@ -470,6 +509,9 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
         if ($this->isColumnModified(FeatureTypesPeer::TYPE)) {
             $modifiedColumns[':p' . $index++]  = '`type`';
         }
+        if ($this->isColumnModified(FeatureTypesPeer::GROUP_TYPE)) {
+            $modifiedColumns[':p' . $index++]  = '`group_type`';
+        }
 
         $sql = sprintf(
             'INSERT INTO `feature_types` (%s) VALUES (%s)',
@@ -492,6 +534,9 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
                         break;
                     case '`type`':
                         $stmt->bindValue($identifier, $this->type, PDO::PARAM_STR);
+                        break;
+                    case '`group_type`':
+                        $stmt->bindValue($identifier, $this->group_type, PDO::PARAM_STR);
                         break;
                 }
             }
@@ -639,6 +684,9 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
             case 3:
                 return $this->getType();
                 break;
+            case 4:
+                return $this->getGroupType();
+                break;
             default:
                 return null;
                 break;
@@ -671,6 +719,7 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
             $keys[1] => $this->getName(),
             $keys[2] => $this->getSymbolPath(),
             $keys[3] => $this->getType(),
+            $keys[4] => $this->getGroupType(),
         );
         $virtualColumns = $this->virtualColumns;
         foreach ($virtualColumns as $key => $virtualColumn) {
@@ -722,6 +771,9 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
             case 3:
                 $this->setType($value);
                 break;
+            case 4:
+                $this->setGroupType($value);
+                break;
         } // switch()
     }
 
@@ -750,6 +802,7 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
         if (array_key_exists($keys[1], $arr)) $this->setName($arr[$keys[1]]);
         if (array_key_exists($keys[2], $arr)) $this->setSymbolPath($arr[$keys[2]]);
         if (array_key_exists($keys[3], $arr)) $this->setType($arr[$keys[3]]);
+        if (array_key_exists($keys[4], $arr)) $this->setGroupType($arr[$keys[4]]);
     }
 
     /**
@@ -765,6 +818,7 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
         if ($this->isColumnModified(FeatureTypesPeer::NAME)) $criteria->add(FeatureTypesPeer::NAME, $this->name);
         if ($this->isColumnModified(FeatureTypesPeer::SYMBOL_PATH)) $criteria->add(FeatureTypesPeer::SYMBOL_PATH, $this->symbol_path);
         if ($this->isColumnModified(FeatureTypesPeer::TYPE)) $criteria->add(FeatureTypesPeer::TYPE, $this->type);
+        if ($this->isColumnModified(FeatureTypesPeer::GROUP_TYPE)) $criteria->add(FeatureTypesPeer::GROUP_TYPE, $this->group_type);
 
         return $criteria;
     }
@@ -831,6 +885,7 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
         $copyObj->setName($this->getName());
         $copyObj->setSymbolPath($this->getSymbolPath());
         $copyObj->setType($this->getType());
+        $copyObj->setGroupType($this->getGroupType());
         if ($makeNew) {
             $copyObj->setNew(true);
             $copyObj->setId(NULL); // this is a auto-increment column, so set to default value
@@ -886,6 +941,7 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
         $this->name = null;
         $this->symbol_path = null;
         $this->type = null;
+        $this->group_type = null;
         $this->alreadyInSave = false;
         $this->alreadyInValidation = false;
         $this->alreadyInClearAllReferencesDeep = false;

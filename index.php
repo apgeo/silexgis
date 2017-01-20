@@ -2,9 +2,6 @@
     include_once 'header.php';
 	include_once 'main_page_logger.php';
 ?>
-
-
-
 <script type="text/javascript" src="/speogis/scripts/main_map.js"></script>
 <!--<body onload="init();">-->
 
@@ -33,106 +30,89 @@ img.pictureThumbnailListContainer {
 
 <div class="ui-layout-center">						
 	<div id="mapdiv" class="mapdiv" >
-	
-	
-	  <div id="toolbox">
-		<div id="layerswitcher_header" onclick="toggleMapLayerSelector();" > B</div>
-	<ul id="layerswitcher" onchange="switchLayer();" >
-		<li><label><input type="radio" name="layer" value="0" checked="">OSM</label></li>
-		<!--<li><label><input type="radio" name="layer" value="1"> MapQuest Satellitar</label></li>
-		<li><label><input type="radio" name="layer" value="2"> MapQuest Hybrid</label></li>
-		<li><label><input type="radio" name="layer" value="3"> MapQuest OSM</label></li>
-		-->
-		<li><label><input type="radio" name="layer" value="1"> ESRI</label></li>
-		<li><label><input type="radio" name="layer" value="2"> Bing Topo</label></li>
-		<li><label><input type="radio" name="layer" value="3"> Bing Aerial</label></li>
-		<li><label><input type="radio" name="layer" value="4"> Bing labelled</label></li>
-		<!--<li><label><input type="radio" name="layer" value="5"> x1</label></li>
-		<li><label><input type="radio" name="layer" value="6"> x2</label></li>
-		<li><label><input type="radio" name="layer" value="7"> x3</label></li>
-		<li><label><input type="radio" name="layer" value="8"> x4</label></li>-->
-		<!--<li><label><input type="radio" name="layer" value="8"> OpenLayers local</label></li>		-->
-		<!--<li><label><input type="checkbox" name="layer" value="99"> Harta gelogica 1970</label></li>		-->
-	</ul>
-	</div>
+		<div id="toolbox">
+			<div id="layerswitcher_header" onclick="toggleMapLayerSelector();" > B</div>
+			<ul id="layerswitcher" onchange="switchLayer();" >
+				<li><label><input type="radio" name="layer" value="0" checked="">OSM</label></li>
+				<!--<li><label><input type="radio" name="layer" value="1"> MapQuest Satellitar</label></li>
+				<li><label><input type="radio" name="layer" value="2"> MapQuest Hybrid</label></li>
+				<li><label><input type="radio" name="layer" value="3"> MapQuest OSM</label></li>
+				-->
+				<li><label><input type="radio" name="layer" value="1"> ESRI</label></li>
+				<li><label><input type="radio" name="layer" value="2"> Bing Topo</label></li>
+				<li><label><input type="radio" name="layer" value="3"> Bing Aerial</label></li>
+				<li><label><input type="radio" name="layer" value="4"> Bing labelled</label></li>
+				<!--<li><label><input type="radio" name="layer" value="5"> x1</label></li>
+				<li><label><input type="radio" name="layer" value="6"> x2</label></li>
+				<li><label><input type="radio" name="layer" value="7"> x3</label></li>
+				<li><label><input type="radio" name="layer" value="8"> x4</label></li>-->
+				<!--<li><label><input type="radio" name="layer" value="8"> OpenLayers local</label></li>		-->
+				<!--<li><label><input type="checkbox" name="layer" value="99"> Harta gelogica 1970</label></li>		-->
+			</ul>
+		</div>
 
 	<div id="measurementsBox">	
-	<form class="form-inline">
-	  <label><input type="checkbox" onchange="" id="measurementCheckBox" value="99"/>Distances </label>
-      <label>Type:&nbsp;</label>
-        <select id="measure_type">
-          <option value="length">Distance</option>
-          <option value="area">Area</option>
-        </select>
-        <label class="checkbox">
-          <input type="checkbox" id="geodesic"/>
-          Geodesic measurement
-		  
-        </label>
-		<!--
-		<button type="button" onclick="selectDrawFeature('Point');" >Point</button>
-		<button type="button" onclick="selectDrawFeature('LineString');" >Line</button>
-		<button type="button" onclick="selectDrawFeature('Polygon');" >Polygon</button>
-		<button type="button" onclick="selectDrawFeature('MultiPolygon');" >MP</button>
-		-->
-		
-		<!--<button type="button" onclick="enableDrawNewCave();" >Add new cave</button>
-		-->
-		<!--<button type="button" onclick="newCave();" > Adauga pestera</button>-->
-		<!--<button type="button" onclick="newCave(1);" > Editeaza test</button>-->
-		</form>		
-</div>
+		<form class="form-inline">
+			<label><input type="checkbox" onchange="" id="measurementCheckBox" value="99"/>*{main_map.body.measurements_box.distances}*</label>
+			<label>*{main_map.body.measurements_box.type}*:&nbsp;</label>
+			<label>
+			<select id="measure_type" >
+			  <option value="length">*{main_map.body.measurements_box.opt_distance}*</option>
+			  <option value="area">*{main_map.body.measurements_box.opt_area}*</option>
+			</select>		
+			</label>
+			<br/>
+			<label><input type="checkbox" id="geodesic" checked="true" />*{main_map.body.measurements_box.opt_geodesic_measurement}*</label>
+			<!-- <label class="checkbox"-->
+		</form>
+	</div>
 
-<div id="search_popup" class="ol-popup">
-      <a href="#" id="search-popup-closer" class="ol-popup-closer"></a>
-      <div id="search-popup-content"></div>
-    </div>
+		<div id="search_popup" class="ol-popup">
+			<a href="#" id="search-popup-closer" class="ol-popup-closer"></a>
+			<div id="search-popup-content"></div>
+		</div>
 	</div>
-	</div>
+</div>
 <!--<div class="ui-layout-north">North</div>-->
 <div class="ui-layout-south">
-<div class="pictureThumbnailListContainer">
-    <ul id="mapPicturesLightSlider">
-    </ul>
-</div>
+	<div class="pictureThumbnailListContainer">
+		<ul id="mapPicturesLightSlider">
+		</ul>
+	</div>
 
 	<div>
-		<label><input type="checkbox" onchange="" id="hgPersaniCentruCheckBox" value="false"/><a href='./assets/layer_images/persani_comana_geologica.jpg' target='_blank' >Gelogic Map 1970 - persani centru</a><label>
+		<label><input type="checkbox" onchange="" id="hgPersaniCentruCheckBox" value="false"/><a href='./assets/layer_images/persani_comana_geologica.jpg' target='_blank' >Harta geologica 1970 - persani centru</a></label>
 		<div id="slider-id"><div class="ui-slider-handle">X</div></div>
 	</div>
 
 <!--<a href='./assets/layer_images/persani_comana_geologica.jpg' target='_blank' >geologica persani centru</a>-->
 </div>
-
 <div class="ui-layout-east">
+	<b>*{main_map.body.map_views.title}*:</b><br/>
+	<div id="mapViewsControlBox"></div>
+	<br/>
+	<div><input type="checkbox" id="caveFeaturesEditingCheckBox" value="false"/>*{main_map.body.features_panel.cave_features_editing_checkbox}*</div>
+	<!--<div id="drawControlBox" >
+	<b>Features:</b><br/>
 
-<div id="mapViewsControlBox" >
-Map views:
-<br/>
-<br/>
-<br/>
-
-</div>
-
-<div id="drawControlBox" >
-<b>Features:</b><br/>
-
-</div>
-
+	</div>
+	-->
+	<b>*{main_map.body.features_panel.title}*:</b>
+	<div id="drawFeaturesTreeControl">
+	<ul id="drawFeaturesTreeControl_root">
+	</ul>
+	</div>
 </div>
 <div class="ui-layout-west">
-	<div class="layerSwitcher"><b>Map layers</b></div>
+	<div class="layerSwitcher"><b>*{main_map.body.layer_switcher.title}*</b></div>
 	<div class="options">
 		<!--<h2>Options:</h2>-->
 		<!--<input id="dils" type="checkbox" checked="checked" onchange="displayInLayerSwitcher(this.checked);"/>
 		<label for="dils">display "Pirate Map" in LayerSwitcher (zoom out to make it visible).</label>
 		<br/>-->
 		<input id="opb" type="checkbox" onchange="$('body').toggleClass('hideOpacity');" />
-		<label for="opb">hide opacity bar</label>
+		<label for="opb">*{main_map.body.layer_switcher.opacity_bar_checkbox}*</label>
 	</div>
-
-</div>
-
 </div>
 
 	<div id="pointInfoBox" >
@@ -152,7 +132,7 @@ Map views:
     <div class="modal-content">
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-        <h4 class="modal-title" id="caveModalTitleLabel">New cave</h4>
+        <h4 class="modal-title" id="caveModalTitleLabel">*{main_map.cave_edit_form.title_new}*</h4>
 		<h5><i><div id="cave_coords_label"></div></i></h5>
       </div>
       <div class="modal-body">	  
@@ -166,7 +146,7 @@ Map views:
 		 <input type="hidden" id="ce_feature_string" name="ce_feature_string" >
 		 
           <div class="form-group row">
-            <label for="cf_name" class="col-sm-2 control-label">Name:</label>
+            <label for="cf_name" class="col-sm-2 control-label">*{main_map.cave_edit_form.name}*:</label>
 			<div class="col-sm-10">
 				<input type="text" class="form-control" id="cf_name" name="cf_name" >
 			</div>
@@ -174,21 +154,21 @@ Map views:
 
           <div class="form-group row">
             <label for="
-			" class="col-sm-2 control-label">Other toponyms:</label>
+			" class="col-sm-2 control-label">*{main_map.cave_edit_form.other_toponyms}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_other_toponyms" name="cf_other_toponyms" ></textarea>
 			</div>
           </div>		  
 		  
           <div class="form-group row">
-            <label for="cf_identification_code" class="col-sm-2 control-label">Identification code:</label>
+            <label for="cf_identification_code" class="col-sm-2 control-label">*{main_map.cave_edit_form.identification_code}*:</label>
 			<div class="col-sm-10">
 				<input type="text" class="form-control" id="cf_identification_code" name="cf_identification_code" ></textarea>
 			</div>
           </div>		  
 
 	<div class="form-group row">	
-		<label for="cf_cave_type" class="col-sm-2 control-label">Type:</label>	
+		<label for="cf_cave_type" class="col-sm-2 control-label">*{main_map.cave_edit_form.type}*:</label>	
 		<div class="col-sm-10">
 			<select id="cf_cave_type" class="selectpicker form-control" name="cf_cave_type" data-hide-disabled="true" data-max-options="1">
 			</select> <!-- multiple data-size="5"  -->
@@ -196,14 +176,14 @@ Map views:
 	</div>
 		  
           <div class="form-group row">
-            <label for="cf_description" class="col-sm-2 control-label">Description:</label>
+            <label for="cf_description" class="col-sm-2 control-label">*{main_map.cave_edit_form.description}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_description" name="cf_description" ></textarea>
 			</div>
           </div>		  
 
 	<div class="form-group row">	
-		<label for="cf_rock_type_id" class="col-sm-2 control-label">Rock type:</label>	
+		<label for="cf_rock_type_id" class="col-sm-2 control-label">*{main_map.cave_edit_form.rock_type}*:</label>	
 		<div class="col-sm-10">
 			<select id="cf_rock_type_id" class="selectpicker form-control" name="cf_rock_type_id" data-hide-disabled="true" data-max-options="1">
 			</select> <!-- multiple data-size="5"  -->
@@ -211,7 +191,7 @@ Map views:
 	</div>
 		  
           <div class="form-group row">
-            <label for="cf_rock_age" class="col-sm-2 control-label">Rock age:</label>
+            <label for="cf_rock_age" class="col-sm-2 control-label">*{main_map.cave_edit_form.rock_age}*:</label>
 			<div class="col-sm-10">
 				<!--<textarea class="form-control" id="cf_rock_age" name="cf_rock_age" ></textarea>-->
 				<input type="text" id="cf_rock_age" name="cf_rock_age" value="2" />				
@@ -219,161 +199,161 @@ Map views:
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_cave_age" class="col-sm-2 control-label">Cave age:</label>
+            <label for="cf_cave_age" class="col-sm-2 control-label">*{main_map.cave_edit_form.cave_age}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_cave_age" name="cf_cave_age" ></textarea>
 			</div>
           </div>		  
 		  
           <div class="form-group row">
-            <label for="cf_region" class="col-sm-2 control-label">Region:</label>
+            <label for="cf_region" class="col-sm-2 control-label">*{main_map.cave_edit_form.region}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_region" name="cf_region" ></textarea>
 			</div>
           </div>		  
 		  
           <div class="form-group row">
-            <label for="cf_hydrographic_basin" class="col-sm-2 control-label">Catchement basin:</label>
+            <label for="cf_hydrographic_basin" class="col-sm-2 control-label">*{main_map.cave_edit_form.catchement_basin}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_hydrographic_basin" name="cf_hydrographic_basin" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_valley" class="col-sm-2 control-label">Valley:</label>
+            <label for="cf_valley" class="col-sm-2 control-label">*{main_map.cave_edit_form.valley}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_valley" name="cf_valley" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_tributary_river" class="col-sm-2 control-label">Tributary river:</label>
+            <label for="cf_tributary_river" class="col-sm-2 control-label">*{main_map.cave_edit_form.tributary_river}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_tributary_river" name="cf_tributary_river" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_closest_address" class="col-sm-2 control-label">Closest address:</label>
+            <label for="cf_closest_address" class="col-sm-2 control-label">*{main_map.cave_edit_form.closest_address}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_closest_address" name="cf_closest_address" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_land_registry_number" class="col-sm-2 control-label">Land registry number:</label>
+            <label for="cf_land_registry_number" class="col-sm-2 control-label">*{main_map.cave_edit_form.land_registry_number}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_land_registry_number" name="cf_land_registry_number" ></textarea>
 			</div>
           </div>		  
 		  
           <div class="form-group row">
-            <label for="cf_is_show_cave" class="col-sm-2 control-label">Show cave:</label>
+            <label for="cf_is_show_cave" class="col-sm-2 control-label">*{main_map.cave_edit_form.show_cave}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_is_show_cave" name="cf_is_show_cave" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_show_cave_length" class="col-sm-2 control-label">Show cave length:</label>
+            <label for="cf_show_cave_length" class="col-sm-2 control-label">*{main_map.cave_edit_form.show_cave_length}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_show_cave_length" name="cf_show_cave_length" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_website" class="col-sm-2 control-label">Website:</label>
+            <label for="cf_website" class="col-sm-2 control-label">*{main_map.cave_edit_form.website}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_website" name="cf_website" ></textarea>
 			</div>
           </div>		  
 		  
           <div class="form-group row">
-            <label for="cf_depth" class="col-sm-2 control-label">Depth:</label>
+            <label for="cf_depth" class="col-sm-2 control-label">*{main_map.cave_edit_form.depth}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_depth" name="cf_depth" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_positive_depth" class="col-sm-2 control-label">Positive depth:</label>
+            <label for="cf_positive_depth" class="col-sm-2 control-label">*{main_map.cave_edit_form.positive_depth}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_positive_depth" name="cf_positive_depth" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_negative_depth" class="col-sm-2 control-label">Negative depth:</label>
+            <label for="cf_negative_depth" class="col-sm-2 control-label">*{main_map.cave_edit_form.negative_depth}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_negative_depth" name="cf_negative_depth" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_potential_depth" class="col-sm-2 control-label">Potential depth:</label>
+            <label for="cf_potential_depth" class="col-sm-2 control-label">*{main_map.cave_edit_form.potential_depth}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_potential_depth" name="cf_potential_depth" ></textarea>
 			</div>
           </div>		  
 		  
           <div class="form-group row">
-            <label for="cf_surveyed_length" class="col-sm-2 control-label">Surveyed length:</label>
+            <label for="cf_surveyed_length" class="col-sm-2 control-label">*{main_map.cave_edit_form.surveyed_length}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_surveyed_length" name="cf_surveyed_length" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_real_extension" class="col-sm-2 control-label">Real extension:</label>
+            <label for="cf_real_extension" class="col-sm-2 control-label">*{main_map.cave_edit_form.real_extension}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_real_extension" name="cf_real_extension" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_projected_extension" class="col-sm-2 control-label">Projected extension:</label>
+            <label for="cf_projected_extension" class="col-sm-2 control-label">*{main_map.cave_edit_form.projected_extension}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_projected_extension" name="cf_projected_extension" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_exploration_status" class="col-sm-2 control-label">Exploration status:</label>
+            <label for="cf_exploration_status" class="col-sm-2 control-label">*{main_map.cave_edit_form.exploration_status}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_exploration_status" name="cf_exploration_status" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_protection_class" class="col-sm-2 control-label">Protection class:</label>
+            <label for="cf_protection_class" class="col-sm-2 control-label">*{main_map.cave_edit_form.protection_class}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_protection_class" name="cf_protection_class" ></textarea>
 			</div>
           </div>		  
 		  
           <div class="form-group row">
-            <label for="cf_volume" class="col-sm-2 control-label">Volume (cm):</label>
+            <label for="cf_volume" class="col-sm-2 control-label">*{main_map.cave_edit_form.volume_cm}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_volume" name="cf_volume" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_ramification_index" class="col-sm-2 control-label">Ramification index:</label>
+            <label for="cf_ramification_index" class="col-sm-2 control-label">*{main_map.cave_edit_form.ramification_index}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_ramification_index" name="cf_ramification_index" ></textarea>
 			</div>
           </div>		  
 		  
           <div class="form-group row">
-            <label for="cf_discovery_date" class="col-sm-2 control-label">Discovery date:</label>
+            <label for="cf_discovery_date" class="col-sm-2 control-label">*{main_map.cave_edit_form.discovery_date}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_discovery_date" name="cf_discovery_date" ></textarea>
 			</div>
           </div>		  
 
           <div class="form-group row">
-            <label for="cf_discoverer" class="col-sm-2 control-label">Discover(s):</label>
+            <label for="cf_discoverer" class="col-sm-2 control-label">*{main_map.cave_edit_form.discoverers}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cf_discoverer" name="cf_discoverer" ></textarea>
 			</div>
@@ -390,8 +370,8 @@ Map views:
 		</div>		  
 		-->
       <div class="modal-footer">
-        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-        <button type="submit" class="btn btn-primary" id="saveCave" >Save</button>
+        <button type="button" class="btn btn-default" data-dismiss="modal">*{generic.close}*</button>
+        <button type="submit" class="btn btn-primary" id="saveCave" >*{generic.save}*</button>
       </div>	  
 	        </form>
       </div>
@@ -417,7 +397,7 @@ Map views:
     <div class="modal-content">
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-        <h4 class="modal-title" id="featureModalTitleLabel">New feature</h4>
+        <h4 class="modal-title" id="featureModalTitleLabel">*{main_map.feature_edit_form.title_new}*</h4>
 		<h5><i><div id="feature_coords_label"></div></i></h5>
       </div>
       <div class="modal-body">	  
@@ -432,22 +412,22 @@ Map views:
 		 <input type="hidden" id="feature_string" name="feature_string" >
 		 
           <div class="form-group row">
-            <label for="feature_name" class="col-sm-2 control-label">Name:</label>
+            <label for="feature_name" class="col-sm-2 control-label">*{main_map.feature_edit_form.name}*:</label>
 			<div class="col-sm-10">
 				<input type="text" class="form-control focusedInput" id="feature_name" name="feature_name" >
 			</div>
           </div>
 
           <div class="form-group row">
-            <label for="feature_description" class="col-sm-2 control-label">Description:</label>
+            <label for="feature_description" class="col-sm-2 control-label">*{main_map.feature_edit_form.description}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="feature_description" name="feature_description" ></textarea>
 			</div>
           </div>		  
 
 		  <div class="modal-footer">
-			<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-			<button type="submit" class="btn btn-primary" id="saveFeature" >Save</button>
+			<button type="button" class="btn btn-default" data-dismiss="modal" >*{generic.close}*</button>
+			<button type="submit" class="btn btn-primary" id="saveFeature" >*{generic.save}*</button>
 		  </div>
 	  
 	    </form>
@@ -474,7 +454,7 @@ Map views:
     <div class="modal-content">
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-        <h4 class="modal-title" id="caveDetailsModalTitleLabel">Cave details {}</h4>
+        <h4 class="modal-title" id="caveDetailsModalTitleLabel">*{main_map.picture_edit_form.title_new}*</h4>
 		<!--<h5><i><div id="picture_coords_label"></div></i></h5>-->
       </div>
       <div class="modal-body">	  
@@ -501,17 +481,17 @@ Map views:
 <table id="cave_files_table" class="display" cellspacing="0" width="100%">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>Size</th>
-                <th>Add time</th>
-                <th>Category</th>
+				<th>*{generic.file_table.name}*</th>
+				<th>*{generic.file_table.size}*</th>
+				<th>*{generic.file_table.add_time}*</th>
+				<th>*{generic.file_table.category}*</th>
             </tr>
         </thead>
     </table>
 	
 				<button type="button" class="btn btn-success" id="caveDetailsAddFilesButton">
                     <i class="icon-plus icon-white"></i>
-                    <span>Add files...</span>                    
+                    <span>*{generic.add_files}*</span>
                 </button>
 
 
@@ -671,7 +651,7 @@ Map views:
     <div class="modal-content">
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-        <h4 class="modal-title" id="pictureModalTitleLabel">New picture</h4>
+        <h4 class="modal-title" id="pictureModalTitleLabel">*{main_map.picture_edit_form.title_new}*</h4>
 		<h5><i><div id="picture_coords_label"></div></i></h5>
       </div>
       <div class="modal-body">	  
@@ -693,14 +673,14 @@ Map views:
           </div>
 			-->
           <div class="form-group row">
-            <label for="picture_description" class="col-sm-2 control-label">Description:</label>
+            <label for="picture_description" class="col-sm-2 control-label">*{main_map.picture_edit_form.description}*</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="picture_description" name="picture_description" ></textarea>
 			</div>
           </div>		  
 
 		  <label class="btn btn-default btn-file">
-			Browse <input type="file" style="display: none;" id="file" name="file" >
+			*{generic.browse}* <input type="file" style="display: none;" id="file" name="file" >
 		  </label>
 
 		<!--<div class="fileupload fileupload-new" data-provides="fileupload">
@@ -712,8 +692,8 @@ Map views:
 		</div>
 		-->
 		  <div class="modal-footer">
-			<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-			<button type="submit" class="btn btn-primary" id="savePicture" >Save</button>
+			<button type="button" class="btn btn-default" data-dismiss="modal">*{generic.close}*</button>
+			<button type="submit" class="btn btn-primary" id="savePicture" >*{generic.save}*</button>
 		  </div>
 	  
 	    </form>
@@ -740,7 +720,7 @@ Map views:
     <div class="modal-content">
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-        <h4 class="modal-title" id="caveEntranceModalTitleLabel">New cave</h4>
+        <h4 class="modal-title" id="caveEntranceModalTitleLabel">*{main_map.cave_entrance_edit_form.title_new}*</h4>
 		<h5><i><div id="cave_entrance_coords_label"></div></i></h5>
       </div>
       <div class="modal-body">	  
@@ -754,14 +734,14 @@ Map views:
 		 <input type="hidden" id="cave_entrance_feature_string" name="cave_entrance_feature_string" >
 		 
           <div class="form-group row">
-            <label for="cave_entrance_name" class="col-sm-2 control-label">Name:</label>
+            <label for="cave_entrance_name" class="col-sm-2 control-label">*{main_map.cave_entrance_edit_form.name}*:</label>
 			<div class="col-sm-10">
 				<input type="text" class="form-control" id="cave_entrance_name" name="cave_entrance_name" >
 			</div>
           </div>
 
           <div class="form-group row">
-            <label for="cave_entrance_description" class="col-sm-2 control-label">Description:</label>
+            <label for="cave_entrance_description" class="col-sm-2 control-label">*{main_map.cave_entrance_edit_form.description}*:</label>
 			<div class="col-sm-10">
 				<textarea class="form-control" id="cave_entrance_description" name="cave_entrance_description" ></textarea>
 			</div>
@@ -778,7 +758,7 @@ Map views:
 		</div>		  
 		-->
 	<div class="form-group row">	
-		<label for="cave_entrance_type" class="col-sm-2 control-label">Type:</label>	
+		<label for="cave_entrance_type" class="col-sm-2 control-label">*{main_map.cave_entrance_edit_form.type}*:</label>
 		<div class="col-sm-10">
 			<select id="cave_entrance_type" class="selectpicker form-control" name="cave_entrance_type" data-hide-disabled="true" data-max-options="1">
 			</select> <!-- multiple data-size="5"  -->
@@ -786,7 +766,7 @@ Map views:
 	</div>
 
 	<div class="form-group row">	
-		<label for="cave_entrance_cave_id" class="col-sm-2 control-label">Cave:</label>	
+		<label for="cave_entrance_cave_id" class="col-sm-2 control-label">*{main_map.cave_entrance_edit_form.cave}*:</label>	
 		<div class="col-sm-10">
 			<select id="cave_entrance_cave_id" class="selectpicker form-control" name="cave_entrance_cave_id" data-hide-disabled="true" data-max-options="1">
 			</select> <!-- multiple data-size="5"  -->
@@ -794,8 +774,8 @@ Map views:
 	</div>
 
 	<div class="modal-footer">
-        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-        <button type="submit" class="btn btn-primary" id="saveCaveEntrance" >Save</button>
+        <button type="button" class="btn btn-default" data-dismiss="modal">*{generic.close}*</button>
+        <button type="submit" class="btn btn-primary" id="saveCaveEntrance" >*{generic.save}*</button>
       </div>	  
 	        </form>
       </div>
@@ -820,7 +800,7 @@ Map views:
     <div class="modal-content">
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-        <h4 class="modal-title" id="uploadFilesModalTitleLabel">New cave</h4>
+        <h4 class="modal-title" id="uploadFilesModalTitleLabel">*{main_map.upload_files_form.title}*</h4>
 		<h5><i><div id="upload_files_x_label"></div></i></h5>
       </div>
       <div class="modal-body">	  
@@ -836,20 +816,20 @@ Map views:
                 <!-- The fileinput-button span is used to style the file input field as button -->
                 <span class="btn btn-success fileinput-button">
                     <i class="icon-plus icon-white"></i>
-                    <span>Add files...</span>
+                    <span>*{generic.add_files}*</span>
                     <input type="file" name="files[]" multiple>
                 </span>
                 <button type="submit" class="btn btn-primary start">
                     <i class="icon-upload icon-white"></i>
-                    <span>Start upload</span>
+                    <span>*{generic.start_upload}*</span>
                 </button>
                 <button type="reset" class="btn btn-warning cancel">
                     <i class="icon-ban-circle icon-white"></i>
-                    <span>Cancel upload</span>
+                    <span>*{generic.end_upload}*</span>
                 </button>
                 <button type="button" class="btn btn-danger delete">
                     <i class="icon-trash icon-white"></i>
-                    <span>Delete</span>
+                    <span>*{generic.del}*</span>
                 </button>
                 <input type="checkbox" class="toggle">
                 <!-- The global file processing state -->
@@ -896,20 +876,20 @@ Map views:
             <strong class="error text-danger"></strong>
         </td>
         <td>
-            <p class="size">Processing...</p>
+            <p class="size">*{generic.processing}*</p>
             <div class="progress progress-striped active" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-success" style="width:0%;"></div></div>
         </td>
         <td>
             {% if (!i && !o.options.autoUpload) { %}
                 <button class="btn btn-primary start" disabled>
                     <i class="glyphicon glyphicon-upload"></i>
-                    <span>Start</span>
+                    <span>*{generic.start_upload}*</span>
                 </button>
             {% } %}
             {% if (!i) { %}
                 <button class="btn btn-warning cancel">
                     <i class="glyphicon glyphicon-ban-circle"></i>
-                    <span>Cancel</span>
+                    <span>*{generic.cancel}*</span>
                 </button>
             {% } %}
         </td>
@@ -937,7 +917,7 @@ Map views:
                 {% } %}
             </p>
             {% if (file.error) { %}
-                <div><span class="label label-danger">Error</span> {%=file.error%}</div>
+                <div><span class="label label-danger">*{generic.error}*</span> {%=file.error%}</div>
             {% } %}
         </td>
         <td>
@@ -947,13 +927,13 @@ Map views:
             {% if (file.deleteUrl) { %}
                 <button class="btn btn-danger delete" data-type="{%=file.deleteType%}" data-url="{%=file.deleteUrl%}"{% if (file.deleteWithCredentials) { %} data-xhr-fields='{"withCredentials":true}'{% } %}>
                     <i class="glyphicon glyphicon-trash"></i>
-                    <span>Delete</span>
+                    <span>*{generic.del}*</span>
                 </button>
                 <input type="checkbox" name="delete" value="1" class="toggle">
             {% } else { %}
                 <button class="btn btn-warning cancel">
                     <i class="glyphicon glyphicon-ban-circle"></i>
-                    <span>Cancel</span>
+                    <span>*{generic.cancel}*</span>
                 </button>
             {% } %}
         </td>
@@ -962,8 +942,8 @@ Map views:
 </script>
 		 
 	<div class="modal-footer">
-        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-        <button type="submit" class="btn btn-primary" id="saveFileUpload" >Save</button>
+        <button type="button" class="btn btn-default" data-dismiss="modal">*{generic.close}*</button>
+        <button type="submit" class="btn btn-primary" id="saveFileUpload" >*{generic.save}*</button>
       </div>	  
 	  
 	  
@@ -992,7 +972,7 @@ Map views:
     <div class="modal-content">
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-        <h4 class="modal-title" id="uploadPicturesModalTitleLabel">Pictures</h4>
+        <h4 class="modal-title" id="uploadPicturesModalTitleLabel">*{main_map.upload_pictures_form.title}*</h4>
 		<h5><i><div id="upload_files_z_label"></div></i></h5>
       </div>
       <div class="modal-body">	  
@@ -1008,20 +988,20 @@ Map views:
                 <!-- The fileinput-button span is used to style the file input field as button -->
                 <span class="btn btn-success fileinput-button">
                     <i class="icon-plus icon-white"></i>
-                    <span>Add pictures...</span>
+                    <span>*{main_map.upload_pictures_form.add_pictures}*</span>
                     <input type="file" name="files[]" multiple>
                 </span>
                 <button type="submit" class="btn btn-primary start">
                     <i class="icon-upload icon-white"></i>
-                    <span>Start upload</span>
+                    <span>*{generic.start_upload}*</span>
                 </button>
                 <button type="reset" class="btn btn-warning cancel">
                     <i class="icon-ban-circle icon-white"></i>
-                    <span>Cancel upload</span>
+                    <span>*{generic.cancel}*</span>
                 </button>
                 <button type="button" class="btn btn-danger delete">
                     <i class="icon-trash icon-white"></i>
-                    <span>Delete</span>
+                    <span>*{generic.del}*</span>
                 </button>
                 <input type="checkbox" class="toggle">
                 <!-- The global file processing state -->
@@ -1069,20 +1049,20 @@ Map views:
             <strong class="error text-danger"></strong>
         </td>
         <td>
-            <p class="size">Processing...</p>
+            <p class="size">*{generic.processing}*</p>
             <div class="progress progress-striped active" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-success" style="width:0%;"></div></div>
         </td>
         <td>
             {% if (!i && !o.options.autoUpload) { %}
                 <button class="btn btn-primary start" disabled>
                     <i class="glyphicon glyphicon-upload"></i>
-                    <span>Start</span>
+                    <span>*{generic.start_upload}*</span>
                 </button>
             {% } %}
             {% if (!i) { %}
                 <button class="btn btn-warning cancel">
                     <i class="glyphicon glyphicon-ban-circle"></i>
-                    <span>Cancel</span>
+                    <span>*{generic.cancel}*</span>
                 </button>
             {% } %}
         </td>
@@ -1110,7 +1090,7 @@ Map views:
                 {% } %}
             </p>
             {% if (file.error) { %}
-                <div><span class="label label-danger">Error</span> {%=file.error%}</div>
+                <div><span class="label label-danger">*{generic.error}*</span> {%=file.error%}</div>
             {% } %}
         </td>
         <td>
@@ -1120,13 +1100,13 @@ Map views:
             {% if (file.deleteUrl) { %}
                 <button class="btn btn-danger delete" data-type="{%=file.deleteType%}" data-url="{%=file.deleteUrl%}"{% if (file.deleteWithCredentials) { %} data-xhr-fields='{"withCredentials":true}'{% } %}>
                     <i class="glyphicon glyphicon-trash"></i>
-                    <span>Delete</span>
+                    <span>*{generic.del}*</span>
                 </button>
                 <input type="checkbox" name="delete" value="1" class="toggle">
             {% } else { %}
                 <button class="btn btn-warning cancel">
                     <i class="glyphicon glyphicon-ban-circle"></i>
-                    <span>Cancel</span>
+                    <span>*{generic.cancel}*</span>
                 </button>
             {% } %}
         </td>
@@ -1135,8 +1115,8 @@ Map views:
 </script>
 
 	<div class="modal-footer">
-        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-        <button type="submit" class="btn btn-primary" id="savePictureFileUpload" >Save</button>
+        <button type="button" class="btn btn-default" data-dismiss="modal">*{generic.close}*</button>
+        <button type="submit" class="btn btn-primary" id="savePictureFileUpload" >*{generic.save}*</button>
       </div>	  
 	  
 	  
@@ -1152,6 +1132,63 @@ Map views:
 	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
 	end Upload pictures form
 	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+-->
+
+
+<!-- 
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+	New cave feature form
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+-->
+
+<div class="modal fade" id="caveFeatureModal" tabindex="-1" role="dialog" aria-labelledby="caveFeatureModalTitleLabel">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="caveFeatureModalTitleLabel">*{main_map.cave_feature_edit_form.title_new}*</h4>
+		<h5><i><div id="cave_feature_coords_label"></div></i></h5>
+      </div>
+      <div class="modal-body">	  
+        <form id="caveFeatureForm" role="form" > <!-- class="form-inline" -->
+		 
+		 <input type="hidden" id="cave_feature_id" name="cave_feature_id" >
+		 <!--<input type="hidden" id="cave_feature_coords_lat" name="cave_feature_coords_lat" >
+		 <input type="hidden" id="cave_feature_coords_lon" name="cave_feature_coords_lon" >-->
+		 <input type="hidden" id="cave_feature_existing_point_id" name="cave_feature_existing_point_id" >
+		 <input type="hidden" id="cave_feature_type_id" name="cave_feature_type_id" >
+		 
+		 <input type="hidden" id="cave_feature_string" name="cave_feature_string" >
+		 
+          <div class="form-group row">
+            <label for="cave_feature_name" class="col-sm-2 control-label">*{main_map.cave_feature_edit_form.name}*:</label>
+			<div class="col-sm-10">
+				<input type="text" class="form-control focusedInput" id="cave_feature_name" name="cave_feature_name" >
+			</div>
+          </div>
+
+          <div class="form-group row">
+            <label for="cave_feature_description" class="col-sm-2 control-label">*{main_map.cave_feature_edit_form.description}*:</label>
+			<div class="col-sm-10">
+				<textarea class="form-control" id="cave_feature_description" name="cave_feature_description" ></textarea>
+			</div>
+          </div>		  
+
+		  <div class="modal-footer">
+			<button type="button" class="btn btn-default" data-dismiss="modal" >*{generic.close}*</button>
+			<button type="submit" class="btn btn-primary" id="saveCaveFeature" >*{generic.save}*</button>
+		  </div>
+	  
+	    </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+<!--
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ	
+	End New cave feature form
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
 -->
 
 <?php

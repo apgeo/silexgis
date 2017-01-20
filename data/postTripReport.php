@@ -4,7 +4,12 @@
 
 	include_once('../geoPHP/geoPHP.inc');
 	require_once 'db_utilities.php';
+
+	error_reporting(E_ALL);
+	ini_set('display_errors', 'on');
 	
+	try 
+	{
 	$submitData = file_get_contents('php://input'); // $HTTP_RAW_POST_DATA
 		
 	$tripReportData = json_decode($submitData);
@@ -50,7 +55,7 @@
 		$tripLog->setTripendtime($tripReportData->tripreport_end_time);
 		$tripLog->setDetails($tripReportData->tripreport_details);
 		$tripLog->setTargetzone($tripReportData->tripreport_place);
-		
+
 		if (!empty($tripReportData->temporary))
 			$tripLog->setTemporary(1);
 		else
@@ -65,7 +70,6 @@
 		
 		$tripreport_member_ids = @split(',', $tripReportData->tripreport_members);
 		
-		
 		foreach ($tripreport_member_ids as $tmId)
 		{
 			$tripLogToTeamMember = new TripLogsToTeamMembers();						
@@ -76,9 +80,9 @@
 			$tripLogToTeamMember->save();
 		}
 
-
 		// clear the previous features
 		$tripLogFeatures = TripLogsToFeaturesQuery::create()->findByTriplogid($trip_log_id);
+
 		$tripLogFeatures->delete();
 		
 		$tripreport_feature_ids = @split(',', $tripReportData->tripreport_features);
@@ -113,4 +117,9 @@
 	echo json_encode($trip_log_result);
 	//echo "trip_log_id=".$trip_log_id;
 	//echo "201";	
+	} 
+	catch (Exception $e) 
+	{
+		echo 'Caught exception: ',  $e->getMessage(), "\n", $e->getTraceAsString();
+	}	
 ?>

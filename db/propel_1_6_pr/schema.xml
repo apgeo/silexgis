@@ -70,6 +70,7 @@
     <column name="name" phpName="Name" type="VARCHAR" size="50" required="true"/>
     <column name="symbol_path" phpName="SymbolPath" type="VARCHAR" size="500" required="false"/>
     <column name="type" phpName="Type" type="CHAR" sqlType="enum('point','linestring','polygon')" required="true"/>
+    <column name="group_type" phpName="GroupType" type="VARCHAR" size="20" required="false"/>
     <vendor type="mysql">
       <parameter name="Engine" value="MyISAM"/>
     </vendor>

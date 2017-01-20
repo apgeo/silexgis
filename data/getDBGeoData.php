@@ -34,9 +34,13 @@ if (isset($_GET['bbox']) || isset($_POST['bbox'])) {
     $sql = $sql . ' WHERE x <= ' . $bbox[2] . ' AND x >= ' . $bbox[0] . ' AND y <= ' . $bbox[3] . ' AND y >= ' . $bbox[1];
 }
 
+$feature_type = "";
 
+if (isset($_GET['type']))
+	$feature_type = $_GET['type'];
+	
 //$points = GPSData::get_gps_points($user_id);
-$features = GPSData::get_features($user_id);
+$features = GPSData::get_features($user_id, $feature_type);
 $cave_entrances = GPSData::get_cave_entrances($user_id);
 
 $geoobjects = array_merge($features, $cave_entrances);
@@ -61,7 +65,7 @@ foreach ($geoobjects as $row)
 	unset($properties['sg']);
 	unset($properties['spatial_geometry']);
 	
-	$properties['geoobject_type'] = "cave_entrance"; //-- used?
+	//$properties['geoobject_type'] = "cave_entrance"; //-- used?
 	
     $feature = array(
          'type' => 'Feature',
