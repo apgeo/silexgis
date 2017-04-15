@@ -15,4 +15,4 @@ The application is currently under development in a "prealpha" stage.
 * solve plenty bugs
 
 ##Demo
-[http://speosilex.ro/speogis](http://speosilex.ro/speogis)
+[http://speosilex.ro/silexgis/demo/](http://speosilex.ro/silexgis/demo/?lon=21.933717&lat=45.185921&z=14)
