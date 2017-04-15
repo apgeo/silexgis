@@ -2,7 +2,7 @@
     //require_once ("constants.php");
     //require_once("admin_links.php");
     
-    define('DB_HOST', '88.99.34.78');
+    define('DB_HOST', 'localhost');
     define('DB_NAME', 'speogis');
     define('DB_USER', 'root');
     define('DB_PASS', '');
