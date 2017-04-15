@@ -14,6 +14,8 @@
 //require('UploadHandler.php');
 //$upload_handler = new UploadHandler();
 
+	require_once dirname(__DIR__).'/../config.php';
+	
 	include_once '../db_common.php';		
 	require_once '../GPSData.php';
 	

@@ -24,13 +24,13 @@ abstract class BaseFeatureTypesPeer
     const TM_CLASS = 'FeatureTypesTableMap';
 
     /** The total number of columns. */
-    const NUM_COLUMNS = 5;
+    const NUM_COLUMNS = 6;
 
     /** The number of lazy-loaded columns. */
     const NUM_LAZY_LOAD_COLUMNS = 0;
 
     /** The number of columns to hydrate (NUM_COLUMNS - NUM_LAZY_LOAD_COLUMNS) */
-    const NUM_HYDRATE_COLUMNS = 5;
+    const NUM_HYDRATE_COLUMNS = 6;
 
     /** the column name for the id field */
     const ID = 'feature_types.id';
@@ -46,6 +46,9 @@ abstract class BaseFeatureTypesPeer
 
     /** the column name for the group_type field */
     const GROUP_TYPE = 'feature_types.group_type';
+
+    /** the column name for the style_properties field */
+    const STYLE_PROPERTIES = 'feature_types.style_properties';
 
     /** The enumerated values for the type field */
     const TYPE_POINT = 'point';
@@ -71,12 +74,12 @@ abstract class BaseFeatureTypesPeer
      * e.g. FeatureTypesPeer::$fieldNames[FeatureTypesPeer::TYPE_PHPNAME][0] = 'Id'
      */
     protected static $fieldNames = array (
-        BasePeer::TYPE_PHPNAME => array ('Id', 'Name', 'SymbolPath', 'Type', 'GroupType', ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'name', 'symbolPath', 'type', 'groupType', ),
-        BasePeer::TYPE_COLNAME => array (FeatureTypesPeer::ID, FeatureTypesPeer::NAME, FeatureTypesPeer::SYMBOL_PATH, FeatureTypesPeer::TYPE, FeatureTypesPeer::GROUP_TYPE, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'NAME', 'SYMBOL_PATH', 'TYPE', 'GROUP_TYPE', ),
-        BasePeer::TYPE_FIELDNAME => array ('id', 'name', 'symbol_path', 'type', 'group_type', ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, )
+        BasePeer::TYPE_PHPNAME => array ('Id', 'Name', 'SymbolPath', 'Type', 'GroupType', 'StyleProperties', ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'name', 'symbolPath', 'type', 'groupType', 'styleProperties', ),
+        BasePeer::TYPE_COLNAME => array (FeatureTypesPeer::ID, FeatureTypesPeer::NAME, FeatureTypesPeer::SYMBOL_PATH, FeatureTypesPeer::TYPE, FeatureTypesPeer::GROUP_TYPE, FeatureTypesPeer::STYLE_PROPERTIES, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'NAME', 'SYMBOL_PATH', 'TYPE', 'GROUP_TYPE', 'STYLE_PROPERTIES', ),
+        BasePeer::TYPE_FIELDNAME => array ('id', 'name', 'symbol_path', 'type', 'group_type', 'style_properties', ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, )
     );
 
     /**
@@ -86,12 +89,12 @@ abstract class BaseFeatureTypesPeer
      * e.g. FeatureTypesPeer::$fieldNames[BasePeer::TYPE_PHPNAME]['Id'] = 0
      */
     protected static $fieldKeys = array (
-        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'Name' => 1, 'SymbolPath' => 2, 'Type' => 3, 'GroupType' => 4, ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'name' => 1, 'symbolPath' => 2, 'type' => 3, 'groupType' => 4, ),
-        BasePeer::TYPE_COLNAME => array (FeatureTypesPeer::ID => 0, FeatureTypesPeer::NAME => 1, FeatureTypesPeer::SYMBOL_PATH => 2, FeatureTypesPeer::TYPE => 3, FeatureTypesPeer::GROUP_TYPE => 4, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'NAME' => 1, 'SYMBOL_PATH' => 2, 'TYPE' => 3, 'GROUP_TYPE' => 4, ),
-        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'name' => 1, 'symbol_path' => 2, 'type' => 3, 'group_type' => 4, ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, )
+        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'Name' => 1, 'SymbolPath' => 2, 'Type' => 3, 'GroupType' => 4, 'StyleProperties' => 5, ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'name' => 1, 'symbolPath' => 2, 'type' => 3, 'groupType' => 4, 'styleProperties' => 5, ),
+        BasePeer::TYPE_COLNAME => array (FeatureTypesPeer::ID => 0, FeatureTypesPeer::NAME => 1, FeatureTypesPeer::SYMBOL_PATH => 2, FeatureTypesPeer::TYPE => 3, FeatureTypesPeer::GROUP_TYPE => 4, FeatureTypesPeer::STYLE_PROPERTIES => 5, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'NAME' => 1, 'SYMBOL_PATH' => 2, 'TYPE' => 3, 'GROUP_TYPE' => 4, 'STYLE_PROPERTIES' => 5, ),
+        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'name' => 1, 'symbol_path' => 2, 'type' => 3, 'group_type' => 4, 'style_properties' => 5, ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, )
     );
 
     /** The enumerated values for this table */
@@ -224,12 +227,14 @@ abstract class BaseFeatureTypesPeer
             $criteria->addSelectColumn(FeatureTypesPeer::SYMBOL_PATH);
             $criteria->addSelectColumn(FeatureTypesPeer::TYPE);
             $criteria->addSelectColumn(FeatureTypesPeer::GROUP_TYPE);
+            $criteria->addSelectColumn(FeatureTypesPeer::STYLE_PROPERTIES);
         } else {
             $criteria->addSelectColumn($alias . '.id');
             $criteria->addSelectColumn($alias . '.name');
             $criteria->addSelectColumn($alias . '.symbol_path');
             $criteria->addSelectColumn($alias . '.type');
             $criteria->addSelectColumn($alias . '.group_type');
+            $criteria->addSelectColumn($alias . '.style_properties');
         }
     }
 

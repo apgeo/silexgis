@@ -1,15 +1,8 @@
-<form action="./addFiles.php" method="post" enctype="multipart/form-data">
-    Select file to upload:
-    <input type="file" name="multipleFile[]" id="fileToUpload" multiple>
-    <input type="submit" value="Upload file" name="submit">
-</form>
-
 <?php
-    include_once '../header.php';
-    include_once '../data/db_common.php';	
+    include_once("grid_common.php");
 	//var_dump($_FILES);
 	
-	if ($_FILES['multipleFile']) 
+	if (@$_FILES['multipleFile']) 
 	{
 		$file_array = reArrayFiles($_FILES['multipleFile']);
 
@@ -23,7 +16,7 @@
 
 		foreach ($file_array as $uploadedFile)
 		{	
-			$file_path = '../uploads/' . $user_directory . $uploadedFile['name'];
+			$file_path = ROOTPATH.'/uploads/' . $user_directory . $uploadedFile['name'];
 			move_uploaded_file($uploadedFile['tmp_name'], $file_path);
 		
 			print 'File Name: ' . $uploadedFile['name'].' Type: ' . $uploadedFile['type']." size ". $uploadedFile['size']."<br/>";
@@ -80,3 +73,20 @@
 		//var_dump($last_insert_id_obj->last_insert_id);
 	}
 ?>
+
+<form action="<?=WEBROOT?>/user/addFiles.php" method="post" enctype="multipart/form-data">
+	<b><h3>*{add_multiple_files.page_title}*</h3></b>
+	<br/>
+	*{add_multiple_files.description_text}*
+	<br/>
+		
+	<!-- for localization: http://stackoverflow.com/questions/686905/labeling-file-upload-button -->
+    
+	<input type="file" name="multipleFile[]" id="fileUploadControl" multiple>
+    <br/><br/>
+		
+	<input type="submit" value="*{add_multiple_files.upload_file}*" name="submit">	
+	
+	<br/><br/>
+	<a href="<?=WEBROOT?>/user/files.php">*{generic.back}*</a>
+</form>

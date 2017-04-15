@@ -3,12 +3,21 @@
 if (@$_SESSION["logged"]) unset($_SESSION["logged"]);
 $err = @$_SESSION["login_error"];
 if (@$_SESSION["login_error"]) unset($_SESSION["login_error"]);
+
+$redirect_url = "";
+
+if (isset($_REQUEST["redir"]))
+	$redirect_url = $_REQUEST["redir"];
+else
+if (isset($_SERVER['HTTP_REFERER']))
+	$redirect_url = $_SERVER['HTTP_REFERER'];
+
 $login_display =<<<END
 <!DOCTYPE html>
 
 <!-- *********************************************************************************************
 
-Login form - George Barbu
+Login form - George Barbu (modificat)
 
 ********************************************************************************************* -->
 
@@ -39,13 +48,15 @@ Login form - George Barbu
 </head>
 
 <body>
-<form id="login" action="dologin.php" method="post"> 
+<form id="login" action="dologin.php" method="post">
+	<input type="hidden" name="redirurl" value="
+END
+	.$redirect_url.
+<<<END
+" />
 	<div>
-		<b>Test credentials:</b></br>
-		username: <i>user</i></br>
-		password: <i>pass</i></br>
 	</div>
-    <h1>Log In</h1>
+    <h1>Log in</h1>
     <fieldset id="inputs">
         <input id="username" name="username" type="text" placeholder="Username" autofocus required>   
         <input id="password" name="password" type="password" placeholder="Password" required>

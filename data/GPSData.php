@@ -1,5 +1,6 @@
 <?php
-	$root = realpath($_SERVER["DOCUMENT_ROOT"])."/speogis";
+	require_once dirname(__DIR__).'/config.php';
+	$root = realpath($_SERVER["DOCUMENT_ROOT"]).$application_url_root;
 	
     include_once "$root/db_interface.php";
     include_once "$root/config.php";
@@ -121,7 +122,7 @@
             return $rows;
         }
 		
-        public static function get_features($user_id, $feature_type)
+        public static function get_features($user_id, $feature_type, $only_gallery_area)
         {
             if (empty($user_id) || ($user_id < 0))
             {
@@ -139,6 +140,8 @@
                 //throw new Exception('Title are empty'); //return 0;
             }
 			
+			//if ($only_gallery_area)
+			
 			$tp = GPSData::$tablePrefix;
 			$query = "SELECT 
 						features.*,
@@ -146,7 +149,9 @@
 						ASTEXT(spatial_geometry) as sg FROM points
 					  INNER JOIN features ON points.id = features.point_id
 					  INNER JOIN feature_types ON features.feature_type_id = feature_types.id
-					  WHERE feature_types.group_type=\"$feature_type\""; //where disabled != 1 or disabled is null
+					  WHERE feature_types.group_type=\"$feature_type\" AND ".
+					  ($only_gallery_area ? " feature_types.name = 'gallery_area' " : " feature_types.name != 'gallery_area' ");
+					  //where disabled != 1 or disabled is null
 
 			// X(coords) AS lat_from_point, Y(coords) AS long_from_point, 
 			//$query = "select *, AsWKB(coords) AS wkb FROM {$tp}points"; //where disabled != 1 or disabled is null
@@ -295,14 +300,25 @@
 			
 			if (isset($point->coords[2]))
 				$elevation = $point->coords[2];
-			
-            
+			            			
 			$spg = "POINT({$point->coords[1]} {$point->coords[0]})";
+
+			$query = "SELECT 1 FROM points WHERE lat = ROUND({$point->coords[1]}, 6) AND `long` = ROUND({$point->coords[0]}, 6) AND gpx_name = '{$gpx_name}' LIMIT 1";
+			
+			$qres = DB_Execute(GPSData::$ConId, $query);
+
+			//$affected_rows = mysql_affected_rows(GPSData::$ConId);
+			//var_dump(mysql_fetch_object($qres));
+			if(mysql_fetch_object($qres) === false)
+			//if(mysql_fetch_array($qres) === false)
+			{
 			
 			// POINT({$point->coords[1]} {$point->coords[0]}) because openlayers sends point coordinate data in [long, lat] format
             $query = "INSERT INTO `points` 	(`lat`, 	`long`, 	`elevation`, 	`gpx_name`, 	`gpx_sym`, 	`gpx_type`, 	`gpx_cmt`, 	`gpx_sat`, 	`gpx_fix`, 	`gpx_time`, 	`_type`, 	`_details`, 	`added_by_user_id`, 	`add_time`, 	spatial_geometry)
-					  VALUES	('{$point->coords[0]}', 	'{$point->coords[1]}', 	'{$elevation}', 	'{$gpx_name}', 	'{$gpx_sym}', 	'{$gpx_type}', 	'{$gpx_cmt}', 	{$gpx_sat}, 	'{$point->fix}', 	'{$gpx_time}', 	0, 	'', 	$user_id, 	NOW(), GEOMFROMTEXT('$spg'));";
-                                                         echo 'added '.'{$point->coords[0]}', 	'{$point->coords[1]}'.'</br>';
+					  VALUES	({$point->coords[1]}, 	{$point->coords[0]}, 	{$elevation}, 	'{$gpx_name}', 	'{$gpx_sym}', 	'{$gpx_type}', 	'{$gpx_cmt}', 	{$gpx_sat}, 	'{$point->fix}', 	{$gpx_time}, 	0, 	'', 	$user_id, 	NOW(), GEOMFROMTEXT('$spg'));";
+            
+			echo 'added point '."{$point->coords[1]}, 	{$point->coords[0]}".'</br>';
+			
 			//"ON DUPLICATE KEY update title = '$title' ,     sub_title = '$subtitle' ,     view_item_url = '$viewItemURL' ,     gallery_url = '$galleryURL' ,     listing_type = $listing_type_id ,     start_time = '$startTime' ,     end_time = '$endTime' ,     selling_state = $selling_state_id ,     converted_current_price = $convertedCurrentPrice ,     bid_count = $bidCount,    last_update_time = NOW(),    seller_user_name = '$sellerUserName'"; /*,     item_id = $itemId*/ //SELECT `id` FROM `disciplines` WHERE (`title` = '$title' AND `id_provider` = $provider_id)"; //`path` = '$path'
             //GPSData::$comindex++; echo "command ".GPSData::$comindex." <br/>";
             //$last_id = mysql_insert_id(GPSData::$ConId);
@@ -317,6 +333,12 @@
                 return true;
             else
                 return false;
+			}
+			else
+			{
+				echo "duplicate_point<br/>";
+				return "duplicate_point";
+			}
         }		
 
 		public static function add_file($file_path, $user_id)
@@ -342,8 +364,8 @@
 			
             $tp = GPSData::$tablePrefix;
 			
-            $query = "INSERT INTO `{$tp}geofiles` 	(`file_name`, 	`id_user`, 	`add_time`, 	`type`, size, md5_hash	)
-					  VALUES	( '$file_name', 	$user_id, 	NOW(), 	'undefined', $file_size, '$md5_hash');";
+            $query = "INSERT INTO `{$tp}geofiles` 	(`file_name`, 	`id_user`, 	`add_time`, 	`type`, size, md5_hash, enabled	)
+					  VALUES	( '$file_name', 	$user_id, 	NOW(), 	'undefined', $file_size, '$md5_hash', 1);";
                                                                      
             $qres = DB_Execute(GPSData::$ConId, $query);
 
@@ -389,6 +411,7 @@
 						 SELECT id, 'feature' AS object_type FROM features
 						 ) AS geoobjects_vt ON geoobjects_to_files.geoobject_id = geoobjects_vt.id AND object_type = geoobjects_to_files.geoobject_type
 						 INNER JOIN users ON users.id = files.user_id
+						 WHERE enabled = 1 or enabled is null
 						 ORDER BY files.id"; //where disabled != 1 or disabled is null
 			
 			//$query = "select *, AsWKB(coords) AS wkb FROM {$tp}points"; //where disabled != 1 or disabled is null
@@ -563,7 +586,7 @@
 					  VALUES	('0', 	'0', 	'{-1}', 	GEOMFROMTEXT('POINT(0 0)'), '', 	'', 	'', 	'', 	-1, 	'', 	'', 	0, 	'', 	$_user_id, 	NOW(), GEOMFROMTEXT('$featureWKTString')	); "; // SELECT last_insert_id() as last_insert_id;
 					  */
         $query = "INSERT INTO `points` 	(`lat`, 	`long`, 	`elevation`, 	`gpx_name`, 	`gpx_sym`, 	`gpx_type`, 	`gpx_cmt`, 	`gpx_sat`, 	`gpx_fix`, 	`gpx_time`, 	`_type`, 	`_details`, 	`added_by_user_id`, 	`add_time`, spatial_geometry	)
-					 VALUES	('{$coord[0]}', 	'{$coord[1]}', 	'{-1}', 	'', 	'', 	'', 	'', 	-1, 	'', 	'', 	0, 	'', 	$user_id, 	NOW(), GEOMFROMTEXT('POINT({$coord[0]} {$coord[1]})')	); "; // SELECT last_insert_id() as last_insert_id;
+					 VALUES	('{$coord[0]}', 	'{$coord[1]}', 	0, 	'', 	'', 	'', 	'', 	-1, 	'', 	'', 	0, 	'', 	$user_id, 	NOW(), GEOMFROMTEXT('POINT({$coord[0]} {$coord[1]})')	); "; // SELECT last_insert_id() as last_insert_id;
 		
 		//var_dump($query);
 		$stmt = $con->prepare($query);

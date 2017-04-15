@@ -6,6 +6,7 @@
 	
 	$submitData = file_get_contents('php://input'); // $HTTP_RAW_POST_DATA
 	@file_put_contents(basename(__FILE__, '.php')."input_data.log", $submitData); // file_get_contents('php://input')
+
 	
 	$caveData = json_decode($submitData);
 	//$cave->importFrom('JSON', $submitData);	
@@ -55,23 +56,25 @@
 	$cave->setClosestaddress($caveData->cf_closest_address);
 	$cave->setLandregistrynumber($caveData->cf_land_registry_number);
 	$cave->setIsshowcave($caveData->cf_is_show_cave);
-	$cave->setShowcavelength($caveData->cf_show_cave_length);
+	$cave->setShowcavelength(empty($caveData->cf_show_cave_length) ? null : $caveData->cf_show_cave_length);
 	$cave->setWebsite($caveData->cf_website);
-	$cave->setDepth($caveData->cf_depth);
-	$cave->setPositivedepth($caveData->cf_positive_depth);
-	$cave->setNegativedepth($caveData->cf_negative_depth);
-	$cave->setSurveyedlength($caveData->cf_surveyed_length);	
-	$cave->setVolume($caveData->cf_volume);
-	$cave->setRamificationindex($caveData->cf_ramification_index);
+	$cave->setDepth(empty($caveData->cf_depth) ? null : $caveData->cf_depth);
+	$cave->setPositivedepth(empty($caveData->cf_positive_depth) ? null : $caveData->cf_positive_depth);
+	$cave->setNegativedepth(empty($caveData->cf_negative_depth) ? null : $caveData->cf_negative_depth);
+	$cave->setSurveyedlength(empty($caveData->cf_surveyed_length) ? null : $caveData->cf_surveyed_length);
+	$cave->setVolume(empty($caveData->cf_volume) ? null : $caveData->cf_volume);
+	$cave->setRamificationindex(empty($caveData->cf_ramification_index) ? null : $caveData->cf_ramification_index);
 	$cave->setDiscoverydate($caveData->cf_discovery_date);
-	$cave->setCaveage($caveData->cf_cave_age);
+	$cave->setCaveage(empty($caveData->cf_cave_age) ? null : $caveData->cf_cave_age);
 	$cave->setDiscoverer($caveData->cf_discoverer);
 	$cave->setRocktypeid($caveData->cf_rock_type_id);
-	$cave->setRealextension($caveData->cf_real_extension);
-	$cave->setProjectedextension($caveData->cf_projected_extension);
-	$cave->setExplorationstatus($caveData->cf_exploration_status);
-	$cave->setProtectionclass($caveData->cf_protection_class);
-	$cave->setPotentialdepth($caveData->cf_potential_depth);
+	$cave->setRealextension(empty($caveData->cf_real_extension) ? null : $caveData->cf_real_extension);
+	$cave->setProjectedextension(empty($caveData->cf_projected_extension) ? null : $caveData->cf_projected_extension);
+	$cave->setExplorationstatus(empty($caveData->cf_exploration_status) ? null : $caveData->cf_exploration_status);
+	$cave->setProtectionclass(empty($caveData->cf_protection_class) ? null : $caveData->cf_protection_class);
+	$cave->setPotentialdepth(empty($caveData->cf_potential_depth) ? null : $caveData->cf_potential_depth);
+	
+	$cave->setUserid($_user_id);
 	//$cave->set($caveData->);
 	
 	$cave->save(); // or ->update ?
@@ -86,7 +89,7 @@
 		$featureWKTString = json_to_wkt($featureGeoJsonString);
 		
         $query = "INSERT INTO `points` 	(`lat`, 	`long`, 	`elevation`, 	`gpx_name`, 	`gpx_sym`, 	`gpx_type`, 	`gpx_cmt`, 	`gpx_sat`, 	`gpx_fix`, 	`gpx_time`, 	`_type`, 	`_details`, 	`added_by_user_id`, 	`add_time`,	spatial_geometry	)
-					  VALUES	('{$caveData->cave_coords_lat}', 	'{$caveData->cave_coords_lon}', 	'{-1}', 	'', 	'', 	'', 	'', 	-1, 	'', 	'', 	0, 	'', 	$_user_id, 	NOW(), GEOMFROMTEXT('$featureWKTString')	); "; // SELECT last_insert_id() as last_insert_id;
+					  VALUES	('{$caveData->cave_coords_lat}', 	'{$caveData->cave_coords_lon}', 	NULL, 	'', 	'', 	'', 	'', 	-1, 	NULL, 	NULL, 	0, 	'', 	$_user_id, 	NOW(), GEOMFROMTEXT('$featureWKTString')	); "; // SELECT last_insert_id() as last_insert_id;
 
 /*
         $query = "INSERT INTO `points` 	(`lat`, 	`long`, 	`elevation`, 	`coords`, 	`gpx_name`, 	`gpx_sym`, 	`gpx_type`, 	`gpx_cmt`, 	`gpx_sat`, 	`gpx_fix`, 	`gpx_time`, 	`_type`, 	`_details`, 	`added_by_user_id`, 	`add_time`,	spatial_geometry	)
@@ -100,7 +103,8 @@
 		
 		$mainCaveEntrance->setName("default");
 		$mainCaveEntrance->setEntrancetype(0);
-		$mainCaveEntrance->setIsmainentrance(true);
+		
+		//$mainCaveEntrance->setIsmainentrance(true); //--
 		$mainCaveEntrance->setCaveid($cave->getId());
 		$mainCaveEntrance->setPointid($point_id);
 		

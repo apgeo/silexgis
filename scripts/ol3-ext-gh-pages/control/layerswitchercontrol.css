@@ -3,7 +3,73 @@
 	right: 0.5em;
 	text-align: left;
 	top: 3em;
+	max-height: calc(100% - 6em);
+	box-sizing: border-box;
+	overflow: hidden;
 }
+.ol-control.ol-layerswitcher .ol-switchertopdiv,
+.ol-control.ol-layerswitcher .ol-switcherbottomdiv
+{	display: block
+}
+.ol-control.ol-layerswitcher.ol-collapsed .ol-switchertopdiv,
+.ol-control.ol-layerswitcher.ol-collapsed .ol-switcherbottomdiv
+{	display: none;
+}
+.ol-layerswitcher.ol-forceopen.ol-collapsed .ol-switchertopdiv,
+.ol-layerswitcher.ol-forceopen.ol-collapsed .ol-switcherbottomdiv
+{	display: block;
+}
+
+.ol-control.ol-layerswitcher .ol-switchertopdiv,
+.ol-control.ol-layerswitcher .ol-switcherbottomdiv
+{	position: absolute;
+	top:0;
+	left:0;
+	right:0;
+	height: 45px;
+	background: #fff; 
+	z-index:2;
+	opacity:1;
+	cursor: pointer;
+	border-top:2px solid transparent;
+	border-bottom:2px solid #369;
+	margin:0 2px;
+	box-sizing: border-box;
+}
+.ol-control.ol-layerswitcher .ol-switcherbottomdiv
+{	top: auto;
+	bottom: 0;
+	height: 2em;
+	border-top:2px solid #369;
+	border-bottom:2px solid transparent;
+}
+.ol-control.ol-layerswitcher .ol-switchertopdiv:before,
+.ol-control.ol-layerswitcher .ol-switcherbottomdiv:before
+{	content:"";
+	position: absolute;
+	left:50%;
+	top:50%;
+	border:10px solid transparent;
+	width:0;
+	height:0;
+	transform: translate(-50%, -50%);
+	-webkit-transform: translate(-50%, -50%);
+	opacity:0.8;
+}
+
+.ol-control.ol-layerswitcher .ol-switchertopdiv:hover:before,
+.ol-control.ol-layerswitcher .ol-switcherbottomdiv:hover:before
+{	opacity:1;
+}
+.ol-control.ol-layerswitcher .ol-switchertopdiv:before
+{	border-bottom-color: #369;
+	border-top: 0;
+}
+.ol-control.ol-layerswitcher .ol-switcherbottomdiv:before
+{	border-top-color: #369;
+	border-bottom: 0;
+}
+
 .ol-control.ol-layerswitcher .panel 
 {	background-color: #fff;
 	border-radius: 0 0 2px 2px;
@@ -18,6 +84,9 @@
 	overflow: hidden;
 	font-family: Tahoma,Geneva,sans-serif;
 	font-size:0.9em;
+	transition: top 0.3s;
+	position: relative;
+	top:0;
 }
 
 .ol-layerswitcher .panel ul
@@ -27,7 +96,7 @@
 	clear: both;
 }
 
-/** Custumize checkbox
+/** Customize checkbox
 */
 .ol-layerswitcher input[type="radio"],
 .ol-layerswitcher input[type="checkbox"]
@@ -38,12 +107,42 @@
 {	transition: transform 0.2s linear;
 	-weblit-transition: -webkit-transform 0.2s linear;
 	clear: both;
+	display: block;
+	#border:1px solid transparent;
+	box-sizing: border-box;
 }
+/* drag and drop */
 .ol-layerswitcher .panel li.drag
 {	opacity: 0.5;
 	transform:scale(0.8);
-	-webkit-transform:scale(0);
+	-webkit-transform:scale(0.8);
 }
+.ol-dragover
+{	background:rgba(51,102,153,0.5);
+	opacity:0.8;
+}
+.ol-layerswitcher .panel li.forbidden,
+.forbidden .ol-layerswitcher-buttons div,
+.forbidden .layerswitcher-opacity div
+{	background:rgba(255,0,0,0.5);
+	color:#f00!important;
+}
+
+/* cursor management */
+.ol-layerswitcher.drag,
+.ol-layerswitcher.drag *
+{	cursor:not-allowed!important;
+	cursor:no-drop!important;
+}
+.ol-layerswitcher.drag .panel li.dropover,
+.ol-layerswitcher.drag .panel li.dropover *
+{	cursor: pointer!important;
+	cursor: n-resize!important;
+	cursor: ns-resize!important;
+	cursor: grab!important;
+	cursor: grabbing!important;
+}
+
 .ol-layerswitcher .panel li.dropover
 {	background: rgba(51, 102, 153, 0.5);
 }
@@ -85,15 +184,22 @@
 }
 
 .ol-layerswitcher [type="checkbox"]:checked + label:after
-{	border: 0.6em solid #369;
-	border-color: transparent #369;
-	background: transparent;
+{	background: transparent;
+    border-width: 0 3px 3px 0;
+	border-style: solid;
+	border-color: #369;
+    width: 0.7em;
+    height: 1em;
+    -webkit-transform: rotate(45deg);
+    transform: rotate(45deg);
+    left: 0.55em;
+    top: -0.05em;
+    box-shadow: 1px 0px 1px 1px #fff;
 }
 
 .ol-layerswitcher .panel li.ol-layer-hidden
 {	opacity: 0.6;
 }
-
 
 .ol-layerswitcher.ol-collapsed .panel
 {	display:none;
@@ -110,6 +216,8 @@
 	float: right;
 	height: 38px;
 	width: 38px;
+	z-index: 10;
+	position: relative;
 }
 
 .ol-layerswitcher-buttons 
@@ -126,6 +234,10 @@
 	margin:2px;
 }
 
+.ol-layerswitcher .panel li > div
+{	display: inline-block;
+}
+
 /* line break */
 .ol-layerswitcher .ol-separator
 {	display:block;
@@ -135,25 +247,31 @@
 	margin:0;
 }
 
-.ol-layerswitcher .layerup,
-.ol-layerswitcher .layerdown
-{	margin: 0 2px 2px;
-
+.ol-layerswitcher .layerup
+{	float: right;
+	height:2.5em;
+	background-color: #369;
+	opacity: 0.5;
+	cursor: move;
+	cursor: ns-resize;
 }
-.ol-layerswitcher .layerdown:before,
-.ol-layerswitcher .layerup:before
-{	border-color: #369 transparent;
+
+.ol-layerswitcher .layerup:before,
+.ol-layerswitcher .layerup:after
+{	border-color: #fff transparent;
 	border-style: solid;
-	border-width: 0 0.5em 0.5em;
+	border-width: 0.4em 0.4em 0;
 	content: "";
 	height: 0;
 	position: absolute;
-	top: 30%;
-	left: 0;
+	bottom: 3px;
+	left: 0.1em;
 	width: 0;
 }
-.ol-layerswitcher .layerdown:before
-{	border-width: 0.5em 0.5em 0;
+.ol-layerswitcher .layerup:after
+{	border-width: 0 0.4em 0.4em;
+	top:3px;
+	bottom: auto;
 }
 
 .ol-layerswitcher .layerInfo
@@ -258,34 +376,50 @@
 */
 
 .ol-layerswitcher .layerswitcher-opacity
-{	border: 1px solid #369;
-	height: 12px;
-	width: 117px;
-	font-size:0;
-	margin:0 7px 7px 7px;
+{	position:relative;
+	border: 1px solid #369;
+	height: 3px;
+	width: 120px;
+	margin:5px 1em 10px 7px;
 	box-sizing: border-box;
+	border-radius: 2px;
+	background: #69c;
+	cursor:pointer;
+	box-shadow: 1px 1px 1px rgba(0,0,0,0.5);
 }
-.ol-layerswitcher .layerswitcher-opacity div
-{	box-sizing: border-box;
-	cursor: pointer;
-	display: inline-block;
-	height: 100%;
-	width: 9.09%;
-	position:relative;
+
+.ol-layerswitcher .layerswitcher-opacity .layerswitcher-opacity-cursor,
+.ol-layerswitcher .layerswitcher-opacity .layerswitcher-opacity-cursor:before
+{	position: absolute;
+	width: 20px;
+	height: 20px;
+	top: 50%;
+	left: 50%;
+	background: rgba(0,60,136,0.5);
+	border-radius: 50%;
+	-webkit-transform: translate(-50%, -50%);
+	transform: translate(-50%, -50%);
+	z-index: 1;
 }
-.ol-layerswitcher .layerswitcher-opacity-0_5 div 
-{	width: 4.76%;
+.ol-layerswitcher .layerswitcher-opacity .layerswitcher-opacity-cursor:before
+{	content: "";
+	position: absolute;
+	width: 10px;
+	height: 10px;
 }
-.ol-layerswitcher .layerswitcher-opacity div div
-{	background: #369;
-    display: block;
-    height: 100%;
-    width: 100%;
+.ol-touch .ol-layerswitcher .layerswitcher-opacity .layerswitcher-opacity-cursor
+{	width: 26px;
+	height: 26px;
+}
+.ol-touch .ol-layerswitcher .layerswitcher-opacity .layerswitcher-opacity-cursor:before
+{	width: 13px;
+	height: 13px;
 }
 
 .ol-layerswitcher .layerswitcher-progress
 {	display:block;
-	margin:-4px 2em 2px 1.3em;
+	margin:-4px 1em 2px 7px;
+	width: 120px;
 }
 .ol-layerswitcher .layerswitcher-progress div
 {	background-color: #369;
@@ -293,17 +427,3 @@
 	display:block;
 	width:0;
 }
-
-
-.ol-layerswitcher .layerswitcher-opacity div:hover:before,
-.ol-layerswitcher .layerswitcher-opacity div.select:before
-{	content:"";
-	position:absolute;
-	top:-2px;
-	left:-2px;
-	bottom:-2px;
-	right:-2px;
-	border:2px solid #d33;
-	z-index:1;
-}
-

@@ -57,13 +57,14 @@ if (!empty($_FILES['file']) && ($_FILES['file']['error'] != UPLOAD_ERR_OK)) {
     else 
 	{
 		$user_directory = "";
-		$file_path = '../uploads/' . $user_directory . $_FILES['file']['name'];
+		$file_path = ROOTPATH.'/uploads/' . $user_directory . $_FILES['file']['name'];
         move_uploaded_file($_FILES['file']['tmp_name'], $file_path);
 		// set in php.ini post_max_size , upload_max_filesize ... http://php.net/manual/ro/ini.core.php#ini.post-max-size
+		$_user_id = $_SESSION["id_user"];
 		
 		require_once 'GPSFileDataAdder.php';
 		
-		if (@GPSFileDataAdder::saveGPSFileData($file_path))
+		if (@GPSFileDataAdder::saveGPSFileData($file_path, $_user_id))
 			echo "201";
 		else
 			echo "500";

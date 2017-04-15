@@ -2,7 +2,7 @@
     //require_once ("constants.php");
     //require_once("admin_links.php");
     
-    define('DB_HOST', 'localhost');
+    define('DB_HOST', '88.99.34.78');
     define('DB_NAME', 'speogis');
     define('DB_USER', 'root');
     define('DB_PASS', '');
@@ -17,8 +17,10 @@
     {
 		@error_reporting(E_ALL ^ E_DEPRECATED ^ E_STRICT); //error_reporting(E_ALL);
         //@error_reporting(E_ALL  ^ E_DEPRECATED); //error_reporting(E_ALL);
-        ini_set("display_errors", 1); //ini_set("display_errors", 1);
-        @ini_set('error_reporting', E_ALL ^ E_DEPRECATED ^ E_STRICT); //ini_set('error_reporting', E_ALL);
+        
+		//ini_set("display_errors", 1); //ini_set("display_errors", 1);
+        //@ini_set('error_reporting', E_ALL ^ E_DEPRECATED ^ E_STRICT); //ini_set('error_reporting', E_ALL);
+		
 		// @ini_set('error_reporting', E_ALL  ^ E_DEPRECATED); //ini_set('error_reporting', E_ALL);
 	
 //error_reporting(E_ALL ^ (E_NOTICE | E_WARNING | E_DEPRECATED));
@@ -47,4 +49,20 @@
     //ini_set("session.use_only_cookies", 1);
 
     //@header('Content-Type: text/html; charset=utf-8');
+	
+	//global $application_url_root;
+	$application_url_root = "/speogis";
+	define('ROOTPATH', $_SERVER['DOCUMENT_ROOT'].$application_url_root);
+	define('WEBROOT', "http://".$_SERVER['HTTP_HOST'].$application_url_root."/");	
+	// define('WEBROOT', "http://".$_SERVER['HTTP_HOST'].dirname($_SERVER['PHP_SELF'])."/");
+	//$web_root = "http://".$_SERVER['HTTP_HOST'].dirname($_SERVER['PHP_SELF'])."/";
+	//$root = realpath($_SERVER["DOCUMENT_ROOT"]).$application_url_root;
+	//echo "config application_url_root = $application_url_root";
+	
+/*$protocol = $_SERVER['HTTPS'] == '' ? 'http://' : 'https://';
+$folder = $protocol . $_SERVER['HTTP_HOST'];
+
+$protocol = $_SERVER['HTTPS'] == '' ? 'http://' : 'https://';
+$folder = $protocol . $_SERVER['HTTP_HOST'] . '/' . basename($_SERVER['REQUEST_URI']);
+*/
 ?>

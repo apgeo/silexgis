@@ -58,11 +58,11 @@ if (!empty($_FILES['file']) && ($_FILES['file']['error'] != UPLOAD_ERR_OK)) {
     }
     else 			
 	{
-		$root = realpath($_SERVER["DOCUMENT_ROOT"])."/speogis";
+		//$root = ROOTPATH;//realpath($_SERVER["DOCUMENT_ROOT"])."/speogis";
 		
 		$user_directory = "";
-		$upload_dir = $root.'/uploads/' . 'pictures/' . $user_directory;
-		$thumbs_upload_dir = $root.'/uploads/' . 'pictures/' . "thumbnail/" . $user_directory;
+		$upload_dir = ROOTPATH.'/uploads/' . 'pictures/' . $user_directory;
+		$thumbs_upload_dir = ROOTPATH.'/uploads/' . 'pictures/' . "thumbnail/" . $user_directory;
 		//var_dump($_FILES);
 		
 		$file_path = $upload_dir . $_FILES['file']['name'];
@@ -74,8 +74,14 @@ if (!empty($_FILES['file']) && ($_FILES['file']['error'] != UPLOAD_ERR_OK)) {
 		$thumbnail_file_path = $thumbs_upload_dir . $thumbnail_file_name;
 		
 		//echo "$file_path, $thumbnail_file_path";
-		createThumbnail2($file_path, $thumbnail_file_path, 90, 63, $background=!false);
 		
+		// define('KB', 1024);
+		// define('MB', 1048576);
+		// define('GB', 1073741824);
+		// define('TB', 1099511627776);
+		
+		if ($_FILES['file']['size'] < 3*1024*1024)
+			createThumbnail2($file_path, $thumbnail_file_path, 90, 63, $background=!false);
 		
 		// set in php.ini post_max_size , upload_max_filesize ... http://php.net/manual/ro/ini.core.php#ini.post-max-size
 		

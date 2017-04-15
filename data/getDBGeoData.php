@@ -38,9 +38,14 @@ $feature_type = "";
 
 if (isset($_GET['type']))
 	$feature_type = $_GET['type'];
+
+$only_gallery_area = "";
+
+if (isset($_GET['only_gallery_area']))
+	$only_gallery_area = $_GET['only_gallery_area'];
 	
 //$points = GPSData::get_gps_points($user_id);
-$features = GPSData::get_features($user_id, $feature_type);
+$features = GPSData::get_features($user_id, $feature_type, $only_gallery_area);
 $cave_entrances = GPSData::get_cave_entrances($user_id);
 
 $geoobjects = array_merge($features, $cave_entrances);

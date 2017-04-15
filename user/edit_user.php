@@ -1,44 +1,73 @@
-<?php
-	$root = realpath($_SERVER["DOCUMENT_ROOT"])."/speogis";
-	@session_start(); //-- ?
-    require_once "$root/auth.php";
+﻿<?php
+	require_once dirname(__DIR__).'/config.php';
+	$root = realpath($_SERVER["DOCUMENT_ROOT"]).$application_url_root;
 	
-	require_once("$root/config.php");
+	@session_start(); //-- ?
+    require_once("$root/config.php");
+	
+	require_once "$root/auth.php";
 	
 	include_once "$root/header.php";
+	
+	//include_once('../geoPHP/geoPHP.inc');
+	//require_once '../data/db_utilities.php';
+	include_once '../data/db_common.php';
+
+	$_user_id = $_SESSION["id_user"];
+	
+	$user = UsersQuery::create()->findPK($_user_id);
+	
+	//$lang;
+	//$email;
+	//$pass;
+	
+	if (!empty($_POST["language"]))
+	{
+		$lang = $_POST["language"];	
+		$user->setLanguage($lang);						
+	}
+	
+	@$p1 = $_POST["password"];
+	@$p2 = $_POST["password2"];
+	
+			// if (!empty($_POST["password"]) && ($_POST["password"] != "********") && 
+		// !empty($_POST["password"]) && ($_POST["password"] != "********"))
+
+	if (!empty($p1) || !empty($p2))
+	{
+		if (empty($p1) || empty($p2))
+			echo "<h4><b>ambele campuri parola trebuie completate identic</b></h4><br/>";
+		else
+		{
+			if ($p1 === $p2)
+			{
+				$user->setPassword($p1);
+				echo "<h2><b>parola a fost schimbata</b></h2><br/>";
+			}
+			else
+				echo "<h4><b>cele doua parole nu sunt identice</b></h4><br/>";
+		}
+	}
+	
+	if (!empty($_POST["email"]))
+	{		
+		$user->setEmail($_POST["email"]);
+		//echo "<h2><b>parola a fost schimbata</b></h2>";				
+	}
+
+	$user->save();
+	
+	$user = UsersQuery::create()->findPK($_user_id);	
+	
+	$user_language = $user->getLanguage();
+	$user_email = $user->getEmail();
 ?>
-<form class="">
-        <div class="form-group">
-<div class="input-group">
-	Email
-  <input type="text" class="form-control" placeholder="Email" aria-describedby="email" />
-  <!--<span class="input-group-addon" id="email"></span>-->
-</div>
 
-<div class="dropdown">
-  <button class="btn btn-default dropdown-toggle" type="button" id="languageDropdownMenu" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
-    Language:
-    <span class="caret"></span>
-  </button>
-  <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
-    <li><a onclick="createCookie('lang','ro',7); " href="#">Romana</a></li>
-    <li><a onclick="createCookie('lang','en',7); " href="#">English</a></li>
-    <!--<li role="separator" class="divider"></li>-->
-  </ul>
-</div>
-
-
-<div class="button">
-	<button type="submit" class="btn btn-default">Submit</button>
-</div>
-
-</div>
-</form>
 <script>
 
 ///////////////////////
 //  begin localization
-var selected_language = 'en'; // 'ro';
+//var selected_language = 'en'; // 'ro';
 var selected_language = 'ro';
 
 function _t()
@@ -55,10 +84,10 @@ function _t()
 
 function localize_static_html()
 {
-	var x = readCookie('lang');
+	var lang_cookie = readCookie('lang');
 	
-	if (x)
-		selected_language = x;
+	if (lang_cookie)
+		selected_language = lang_cookie;
 	//var regex = "/(<([^>]+)>)/ig";
 	//var regex = "(?<=\{)(.*?)(?=\})";
 	//var regex = /{(.*)}/
@@ -120,10 +149,12 @@ function localize_static_html()
 //  end localization
 ///////////////////////
 
-$(document).ready(function() {
+$(document).ready(function() {	
+	
+	createCookie('lang', <?="'$user_language'" ?>,7);
 	
 	localize_static_html();
-	document.getElementsByTagName("html")[0].style.visibility = "visible";	
+	document.getElementsByTagName("html")[0].style.visibility = "visible";		
 });
 
 function createCookie(name,value,days) {
@@ -150,4 +181,74 @@ function readCookie(name) {
 function eraseCookie(name) {
     createCookie(name,"",-1);
 }
+
+function setLanguage(lang)
+{
+	document.getElementById("language").value = lang;
+	
+	if (lang == 'ro')
+		selectedLanguageDescription = 'Română';
+	else
+	if (lang == 'en')	
+		selectedLanguageDescription = 'English';
+	else
+		selectedLanguageDescription = 'Unknown';
+	
+	document.getElementById("selectedLanguageDescription").innerText = selectedLanguageDescription;
+}
 </script>
+
+<form class="" method="post">
+<br/><br/>
+        <div class="form-group">
+<div class="input-group form-group row">
+	<label for="email" class="col-sm-2 control-label">Email:</label>
+	<div class="col-sm-10">
+		<input type="text" name="email" value="<?=$user_email ?>" class="form-control" placeholder="Email" aria-describedby="email" />
+	</div>
+  <!--<span class="input-group-addon" id="email"></span>-->
+</div>
+
+<div class="input-group form-group row">
+	<label for="password" class="col-sm-2 control-label">Parola noua:</label>
+	<div class="col-sm-10">
+		<input type="text" name="password" class="form-control" placeholder="Parola" aria-describedby="password" />
+		<!-- value="" -->
+	</div>
+  <!--<span class="input-group-addon" id="email"></span>-->
+</div>
+
+<div class="input-group form-group row">
+	<label for="password2" class="col-sm-2 control-label">Confirmare parola:</label>
+	<div class="col-sm-10">
+		<input type="text" name="password2" class="form-control" placeholder="Parola" aria-describedby="password2" />
+	</div>
+  <!--<span class="input-group-addon" id="email"></span>-->
+</div>
+
+<div class="dropdown">
+  <button class="btn btn-default dropdown-toggle" type="button" id="languageDropdownMenu" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    Language:
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
+    <li><a onclick="setLanguage('ro');" href="#">Română</a></li>
+    <li><a onclick="setLanguage('en');" href="#">English</a></li>
+    <!--<li role="separator" class="divider"></li>-->
+  </ul>
+  <span id="selectedLanguageDescription" ></span>
+</div>
+
+
+<input type="hidden" name="language" id="language" />
+
+
+<div class="button">
+	<button type="submit" class="btn btn-default">Submit</button>
+</div>
+
+</div>
+</form>
+
+</body>
+</html>

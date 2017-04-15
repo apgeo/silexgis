@@ -1,6 +1,6 @@
 <?php
     include_once 'db_common.php';
-	include_once 'db_utilities.php';	
+	include_once 'db_utilities.php';
 	include_once '../db_interface.php';
 	require_once 'GPSData.php';
 	

@@ -1,21 +1,22 @@
 <?php
-	include_once("grid_common.php");
-?>
-<a href="/speogis/user/addFile.php" >Add file</a>
-<a href="/speogis/user/addFiles.php" >Add multiple files</a>
-<?php
 ################################################################################   
 ## +---------------------------------------------------------------------------+
 ## | 1. Creating & Calling:                                                    | 
 ## +---------------------------------------------------------------------------+
 ##  *** only relative (virtual) path (to the current document)
+	
+	require_once("grid_common.php");  
+	//include_once "../header.php"; // include_once 'db_interface.php'; require_once('utilities.php'); 
+  //require_once('utilities.php'); include_once 'db_interface.php'; include_once 'data_interface.php'; require_once 'languages.php'; 
 
-  //require_once("grid_common.php");
-
-  echo "<b><h3>Geo files</h3></b>";
+?>
+<b><h3>*{exploration_points.page_title}*</h3></b>
+<br/>
+*{exploration_points.page_description}*
+<?php
   ##  *** creating variables that we need for database connection 
   
-  $DB_USER= DB_USER;
+  $DB_USER= DB_USER;            
   $DB_PASS= DB_PASS;
   $DB_HOST= DB_HOST;       
   $DB_NAME= DB_NAME;
@@ -53,21 +54,20 @@
 
     
    print ("<input id='submitButton' type='submit' name='submit' value='Filter' />");
-   */   
-
+   */
 ob_start();
   $db_conn = DB::factory('mysql'); 
   $db_conn -> connect(DB::parseDSN('mysql://'.$DB_USER.':'.$DB_PASS.'@'.$DB_HOST.'/'.$DB_NAME));
 
 ##  *** put a primary key on the first place 
-  //$sql="SELECT files.id, X(coords) as lat, Y(coords) as lon, elevation, gpx_name, gpx_time, `_details`, files._id_point_type FROM files"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
-   //  WHERE caves.id = $cave_id
+  //$sql="SELECT points.id, X(coords) as lat, Y(coords) as lon, elevation, gpx_name, gpx_time, `_details`, points._id_point_type FROM points"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
    
-  $sql="SELECT files.id, file_name, user_id, add_time, geofiles.file_type as file_type, size, md5_hash
-	FROM geofiles";
- // ORDER BY files.id
- //GROUP BY files.id 
-  //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
+  $sql="SELECT points.id AS pid, TRUNCATE(X(spatial_geometry), 5) AS lat,  TRUNCATE(Y(spatial_geometry), 5) AS lon, elevation, features.name AS feature_name, description, user_id, 'mergi acolo' AS view_on_map FROM points
+		INNER JOIN features ON features.point_id = points.id
+		INNER JOIN feature_types ON features.feature_type_id = feature_types.id
+		WHERE features.feature_type_id = 36";
+		
+  //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : "");
    
 ##  *** set needed options
   $debug_mode = false;
@@ -75,39 +75,12 @@ ob_start();
   $unique_prefix = "f_";  
   $dgrid = new DataGrid($debug_mode, $messaging, $unique_prefix, DATAGRID_DIR);
 ##  *** set data source with needed options
-  $default_order_field = "geofiles.id";
+  $default_order_field = "pid";
   $default_order_type = "ASC";
   $dgrid->dataSource($db_conn, $sql, $default_order_field, $default_order_type);        
 
   
-{
-
-// querstring: f_new $_GET['f_rid']
-
-  // add new row into project_schedule table
-$mode = (isset($_REQUEST[$unique_prefix.'mode'])) ? $_REQUEST[$unique_prefix.'mode'] : '';
-$rid = (isset($_REQUEST[$unique_prefix.'rid'])) ? $_REQUEST[$unique_prefix.'rid'] : '';
-$pid = (isset($_REQUEST[$unique_prefix.'pid'])) ? $_REQUEST[$unique_prefix.'pid'] : '';
-
-
-  if(($mode == "update") && ($rid == "-1") ){//&& $dgrid->IsOperationCompleted()
-  $_rid = $dgrid->GetCurrentId();
-  $_rid = $dgrid->rid;
-  //GetCurrentId()
-  //var_dump("z: $last_insert_id");
-   //-- $sql = "INSERT INTO `speogis`.`geoobjects_to_files` (`file_id`, 	`geoobject_id`, 	`geoobject_type`	)	VALUES	('$_rid', 	'0', 	''	);";
-   // $sql = "INSERT INTO project_schedule (project_id, task_id) VALUES (".$pid.",".$dgrid->rid.") ";
-   
-   $dSet = $dgrid->ExecuteSQL($sql);
-   //mysql_query($sql);
-   //var_dump("update");
-   /*if(mysql_insert_id() > 0){
-        echo "OK";
-   }else{
-       echo "Error!";
-   }*/
-}
-} 
+  
 ##
 ##
 ## +---------------------------------------------------------------------------+
@@ -133,11 +106,11 @@ $pid = (isset($_REQUEST[$unique_prefix.'pid'])) ? $_REQUEST[$unique_prefix.'pid'
 ##  *** set modes for operations ("type" => "link|button|image") 
 ##  *** "byFieldValue"=>"fieldName" - make the field to be a link to edit mode page
  $modes = array(
-    "add"	 =>array("view"=>true, "edit"=>false, "type"=>"link"),
-    "edit"	 =>array("view"=>true, "edit"=>true,  "type"=>"link", "byFieldValue"=>""),
-    "cancel"  =>array("view"=>true, "edit"=>true,  "type"=>"link"),
-    "details" =>array("view"=>true, "edit"=>false, "type"=>"link"),
-    "delete"  =>array("view"=>true, "edit"=>true,  "type"=>"image")
+    "add"	 =>array("view"=>!true, "edit"=>false, "type"=>"link"),
+    "edit"	 =>array("view"=>!true, "edit"=>!true,  "type"=>"link", "byFieldValue"=>""),
+    "cancel"  =>array("view"=>!true, "edit"=>!true,  "type"=>"link"),
+    "details" =>array("view"=>!true, "edit"=>!false, "type"=>"link"),
+    "delete"  =>array("view"=>!true, "edit"=>!true,  "type"=>"image")
  );
  $dgrid->setModes($modes);
 ##  *** allow scrolling on datagrid
@@ -149,13 +122,12 @@ $pid = (isset($_REQUEST[$unique_prefix.'pid'])) ? $_REQUEST[$unique_prefix.'pid'
 /// $dgrid->setScrollingSettings($scrolling_width, $scrolling_height);
 ##  *** allow mulirow operations
  $multirow_option = true;
- //$dgrid->allowMultirowOperations($multirow_option);
+ //z $dgrid->allowMultirowOperations($multirow_option);
  $multirow_operations = array(
-	"edit"	 => array("view"=>true),	
-	"delete"  => array("view"=>true),
-    "details" => array("view"=>true)
+    "delete"  => array("view"=>!true),
+    "details" => array("view"=>!true)
  );
- $dgrid->setMultirowOperations($multirow_operations);  
+ //z $dgrid->setMultirowOperations($multirow_operations);  
 ##  *** set CSS class for datagrid
 ##  *** "default" or "blue" or "gray" or "green" or your css file relative path with name
  $css_class = "default";
@@ -172,7 +144,7 @@ $pid = (isset($_REQUEST[$unique_prefix.'pid'])) ? $_REQUEST[$unique_prefix.'pid'
  $dgrid->setAnotherDatagrids($anotherDatagrids);  
 
  
-  $paging_option = true;
+   $paging_option = true;
   $rows_numeration = false;
   $numeration_sign = "N #";
   $dropdown_paging = true;
@@ -209,13 +181,13 @@ $pid = (isset($_REQUEST[$unique_prefix.'pid'])) ? $_REQUEST[$unique_prefix.'pid'
   //$fill_from_array = array("10000"=>"10000", "250000"=>"250000", "5000000"=>"5000000", "25000000"=>"25000000", "100000000"=>"100000000");
   $filtering_fields = array(
     //"Browser title"     =>array("table"=>"user_activity_reports", "field"=>"browser_title", "source"=>"self", "operator"=>true, "default_operator"=>"like", "type"=>"textbox", "case_sensitive"=>true,  "comparison_type"=>"string"),
-    //"lat"      =>array("table"=>"files",   "field"=>"lat", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"binary"),
-    //"lon"      =>array("table"=>"files",   "field"=>"lon", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"binary"),
-    //"User"      =>array("table"=>"users",   "field"=>"username", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"binary"),
-    "Name"      =>array("table"=>"geofiles",   "field"=>"file_name", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "default_operator"=>"like", "comparison_type"=>"string"),
-    "Time"      =>array("table"=>"geofiles",   "field"=>"add_time", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"date"),
-    //"Type"      =>array("table"=>"files",   "field"=>"file_type", "source"=>"self", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"string"),    
-    "Size"      =>array("table"=>"files",   "field"=>"size", "source"=>"self", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"numeric"),
+    //"lat"      =>array("table"=>"points",   "field"=>"lat", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"binary"),
+    //"lon"      =>array("table"=>"points",   "field"=>"lon", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"binary"),
+    "Altitude"      =>array("table"=>"points",   "field"=>"elevation", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"binary"),
+    "Name"      =>array("table"=>"points",   "field"=>"gpx_name", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "default_operator"=>"like", "comparison_type"=>"string"),
+    //"time"      =>array("table"=>"points",   "field"=>"gpx_time", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"date"),
+    //"Type"      =>array("table"=>"feature_types",   "field"=>"name", "source"=>"self", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"string"),    
+    //"User ID"      =>array("table"=>"user_activity_reports",   "field"=>"user_id", "source"=>"self", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"numeric"),
     //"Date"        =>array("table"=>"user_activity_reports", "field"=>"time", "source"=>"self", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"string"),      
     //"Population"  =>array("table"=>"countries", "field"=>"population", "source"=>$fill_from_array, "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false, "comparison_type"=>"numeric")	
   );
@@ -229,12 +201,29 @@ $pid = (isset($_REQUEST[$unique_prefix.'pid'])) ? $_REQUEST[$unique_prefix.'pid'
   $dgrid->setAutoColumnsInViewMode(false);  
 
     $vm_columns = array(   
-    
-    "file_name" => array("header"=>"Name", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "readonly"=>true),
-    "add_time"  => array("header"=>"Time", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "readonly"=>true),
-    "file_type" => array("header"=>"Type", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "readonly"=>true),
-	"size" => array("header"=>"Size", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "readonly"=>true),
-    "username"  => array("header"=>"User", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "readonly"=>true),
+    //"elevation" => array("header"=>"*{exploration_points.col_alt}*", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
+    "feature_name"  => array("header"=>"*{exploration_points.col_name}*",      "type"=>"label", "width"=>"80px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),            
+    "description"  => array("header"=>"*{exploration_points.details}*",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"wrap", "text_length"=>"-1", "case"=>"normal"),
+    "lat"  =>array("header"=>"*{exploration_points.col_lat}*", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "readonly"=>true),    
+    "lon" =>array("header"=>"*{exploration_points.col_long}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "readonly"=>true),
+	//"view_on_map"  => array("header"=>"Map",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "summarize"=>false, "on_js_event"=>"", "target_path"=>"http://localhost/speogis/?long=23.49174&lat=43.20218" ),    
+    //"pic"  =>array("header"=>"Pic",      "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "field_key"=>"pic", "field_key_1"=>"pic", "field_data"=>"x", "rel"=>"", "title"=>"", "target"=>"_self", "href"=>"{0}"),
+    //"gallery_url"  =>array("header"=>"Pic",      "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "field_key"=>"gallery_url", "field_key_1"=>"gallery_url", "field_data"=>"{1}", "rel"=>"{0}", "title"=>"{0}", "target"=>"_self", "href"=>"{0}"),
+    //"pic"=>array("header"=>"pic", "type"=>"image",      "align"=>"left", "width"=>"20px", "wrap"=>"wrap", "text_length"=>"-1", "field_key"=>"gallery_url", "target_path"=>"{0}", "default"=>"def", "image_width"=>"50px", "image_height"=>"50px", "linkto"=>"{0}", "magnify"=>"true", "magnify_type"=>"lightbox", "magnify_power"=>"2"),
+	"view_on_map" =>array("header"=>"*{exploration_points.col_map_location}*",    "visible"=>"true", "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal",	
+	
+	 "field_key"=>"lat", 
+  "field_key_1"=>"lon", 
+  "field_key_2"=>"pid", 
+  "field_data"=>"view_on_map", 
+  
+	/*"_lat"=>"lat",
+"_long"=>"lon",*/
+
+//"field_data"=>"field_name_2",
+"href"=>WEBROOT."?lat={1}&long={0}&z=19", // &point_id={2}
+"target"=>"_blank"
+)
   );
   
   $dgrid->setColumnsInViewMode($vm_columns);
@@ -245,19 +234,19 @@ $pid = (isset($_REQUEST[$unique_prefix.'pid'])) ? $_REQUEST[$unique_prefix.'pid'
 ## | 7. Add/Edit/Details Mode settings:                                        | 
 ## +---------------------------------------------------------------------------+
 ##  ***  set settings for edit/details mode
-  $table_name = "files";
-  $primary_key = "id";
+  $table_name = "points";
+  $primary_key = "pid";
   $condition = "";
-  //$condition = "files.id = ".$dgrid->f_rid." ";  
+  //$condition = "points.id = ".$dgrid->f_rid." ";  
   
      $em_table_properties = array("width"=>"70%");
-     $dgrid->setEditModeTableProperties($em_table_properties);
+     //z $dgrid->setEditModeTableProperties($em_table_properties);
     // ##  *** set details mode table properties
       $dm_table_properties = array("width"=>"70%");
-      $dgrid->setDetailsModeTableProperties($dm_table_properties);
+      //z $dgrid->setDetailsModeTableProperties($dm_table_properties);
     // ##  ***  set settings for add/edit/details modes
       
-      $dgrid->setTableEdit($table_name, $primary_key, $condition);
+      //z $dgrid->setTableEdit($table_name, $primary_key, $condition);
 	  
     // ##  *** set columns in edit mode
     // ##  *** first letter: r - required, s - simple (not required)
@@ -269,35 +258,34 @@ $pid = (isset($_REQUEST[$unique_prefix.'pid'])) ? $_REQUEST[$unique_prefix.'pid'
     // ##  *** Ex.: type = textbox|textarea|label|date(yyyy-mm-dd)|datedmy(dd-mm-yyyy)|datetime(yyyy-mm-dd hh:mm:ss)|datetimedmy(dd-mm-yyyy hh:mm:ss)|image|password|enum|print|checkbox
     // ##  *** make sure your WYSIWYG dir has 777 permissions
     // $fill_from_array = array("0"=>"No", "1"=>"Yes", "2"=>"Don't know", "3"=>"My be"); /* as "value"=>"option" */
-	
      $em_columns = array(
-	 
-		// "lat"  =>array("header"=>"Lat",    "type"=>"textbox",  "width"=>"160px", "req_type"=>"rf", "title"=>"Lat", "readonly"=>!false /*"readonly"=>true*/),      
-		// "long"  =>array("header"=>"Lon",    "type"=>"textbox",  "width"=>"160px", "req_type"=>"rf", "title"=>"Lon", "readonly"=>!false /*"readonly"=>true*/),      	 
-          "file_name"  =>array("header"=>"Name",    "type"=>"textbox",  "width"=>"160px", "req_type"=>"rt", "title"=>"Name", "readonly"=>false, "view_type"=>"textbox"),      
-		 
-         // //"gpx_time"       =>array("header"=>"Time",       "type"=>"textbox",  "width"=>"140px", "req_type"=>"rt", "title"=>"Time", "readonly"=>false, "view_type"=>"textbox"),
-         // "_id_point_type"  =>array("header"=>"Tip", "type"=>"enum",     "req_type"=>"st", "width"=>"210px", "title"=>"Type", "readonly"=>false, "maxlength"=>"-1", "default"=>"", "unique"=>false, "unique_condition"=>"", "on_js_event"=>"alert('x');", "source"=>"self", "view_type"=>"dropdownlist"),
-		 // "_details"  =>array("header"=>"Detalii",    "type"=>"textarea",  "width"=>"160px", "req_type"=>"st", "title"=>"Detalii", "readonly"=>false, "view_type"=>"textarea",  "rows"=>"7", "cols"=>"50"),      
+		"lat"  =>array("header"=>"Lat",    "type"=>"textbox",  "width"=>"160px", "req_type"=>"rf", "title"=>"Lat", "readonly"=>!false /*"readonly"=>true*/),      
+		"long"  =>array("header"=>"Lon",    "type"=>"textbox",  "width"=>"160px", "req_type"=>"rf", "title"=>"Lon", "readonly"=>!false /*"readonly"=>true*/),      	 
+         "gpx_name"  =>array("header"=>"Nume",    "type"=>"textbox",  "width"=>"160px", "req_type"=>"rt", "title"=>"Name", "readonly"=>false, "view_type"=>"textbox"),      
+         //"gpx_time"       =>array("header"=>"Time",       "type"=>"textbox",  "width"=>"140px", "req_type"=>"rt", "title"=>"Time", "readonly"=>false, "view_type"=>"textbox"),
+         "_id_point_type"  =>array("header"=>"Tip", "type"=>"enum",     "req_type"=>"st", "width"=>"210px", "title"=>"Type", "readonly"=>false, "maxlength"=>"-1", "default"=>"", "unique"=>false, "unique_condition"=>"", "on_js_event"=>"alert('x');", "source"=>"self", "view_type"=>"dropdownlist"),
+		 "_details"  =>array("header"=>"Detalii",    "type"=>"textarea",  "width"=>"160px", "req_type"=>"st", "title"=>"Detalii", "readonly"=>false, "view_type"=>"textarea",  "rows"=>"7", "cols"=>"50"),      
      );
 	 
 	 //"ForeignKey_2"=>array("table"=>"TableName_2", "field_key"=>"FieldKey_2", "field_name"=>"FieldName_2", "view_type"=>"dropdownlist(default)|radiobutton|textbox", "condition"=>"", "order_by_field"=>"Field_Name", "order_type"=>"ASC|DESC", "on_js_event"=>"")
-      $dgrid->setColumnsInEditMode($em_columns);
+      
+	  //z $dgrid->setColumnsInEditMode($em_columns);
     // ##  *** set auto-genereted columns in edit mode
-     $auto_column_in_edit_mode = false;
-     $dgrid->setAutoColumnsInEditMode($auto_column_in_edit_mode);
+     
+	 //z $auto_column_in_edit_mode = false;
+     //z $dgrid->setAutoColumnsInEditMode($auto_column_in_edit_mode);
 	 
-	$dgrid->setAutoColumnsInEditMode(false); // $dgrid->setAutoColumnsInEditMode(true);
+	 //$dgrid->setAutoColumnsInEditMode(false); // $dgrid->setAutoColumnsInEditMode(true);
 	 
     // ##  *** set foreign keys for add/edit/details modes (if there are linked tables)
     // ##  *** Ex.: "condition"=>"TableName_1.FieldName > 'a' AND TableName_1.FieldName < 'c'"
     // ##  *** Ex.: "on_js_event"=>"onclick='alert(\"Yes!!!\");'"
   
-	$foreign_keys = array(
-          //"_id_point_type"=>array("table"=>"feature_types", "field_key"=>"id", "field_name"=>"name", "view_type"=>"dropdownbox", "condition"=>"")
+  $foreign_keys = array(
+          "_id_point_type"=>array("table"=>"feature_types", "field_key"=>"id", "field_name"=>"name", "view_type"=>"dropdownbox", "condition"=>"")
          //"ForeignKey_2"=>array("table"=>"TableName_2", "field_key"=>"FieldKey_2", "field_name"=>"FieldName_2", "view_type"=>"dropdownlist(default)|radiobutton|textbox", "condition"=>"", "order_by_field"=>"Field_Name", "order_type"=>"ASC|DESC", "on_js_event"=>"")
       ); 
-      $dgrid->setForeignKeysEdit($foreign_keys);
+      //z $dgrid->setForeignKeysEdit($foreign_keys);
 
   ////}
 ## +---------------------------------------------------------------------------+
@@ -312,23 +300,23 @@ $pid = (isset($_REQUEST[$unique_prefix.'pid'])) ? $_REQUEST[$unique_prefix.'pid'
     $conid = DB_Connect();
     DBCon::open_connection();
     
-    $query = "select count(distinct(user_id)) as unique_files from user_activity_reports ".(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : "");
+    $query = "select count(distinct(user_id)) as unique_points from user_activity_reports ".(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : "");
     
     $db_result = DB_Execute($conid, $query, 1);      
     
-    $unique_files = -1;
+    $unique_points = -1;
     
     if ($row = mysql_fetch_array($db_result, MYSQL_ASSOC))
-        $unique_files = $row['unique_files'];
+        $unique_points = $row['unique_points'];
 
     echo "<br/>";
 
     echo "<div>";
     echo "<div style='float:left;padding-left:20px;'>";
         
-    if (!empty($unique_files))
+    if (!empty($unique_points))
     {
-        echo "Unique files: <b>".$unique_files."</b><br/>";
+        echo "Unique points: <b>".$unique_points."</b><br/>";
     }
     
     echo "</div>";

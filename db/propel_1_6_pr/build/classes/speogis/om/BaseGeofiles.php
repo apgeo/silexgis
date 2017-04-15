@@ -72,6 +72,19 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
     protected $md5_hash;
 
     /**
+     * The value for the enabled field.
+     * Note: this column has a database default value of: 'b\'1\''
+     * @var        string
+     */
+    protected $enabled;
+
+    /**
+     * The value for the extract_style field.
+     * @var        string
+     */
+    protected $extract_style;
+
+    /**
      * Flag to prevent endless save loop, if this object is referenced
      * by another object which falls in this transaction.
      * @var        boolean
@@ -90,6 +103,27 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
      * @var        boolean
      */
     protected $alreadyInClearAllReferencesDeep = false;
+
+    /**
+     * Applies default values to this object.
+     * This method should be called from the object's constructor (or
+     * equivalent initialization method).
+     * @see        __construct()
+     */
+    public function applyDefaultValues()
+    {
+        $this->enabled = 'b\'1\'';
+    }
+
+    /**
+     * Initializes internal state of BaseGeofiles object.
+     * @see        applyDefaults()
+     */
+    public function __construct()
+    {
+        parent::__construct();
+        $this->applyDefaultValues();
+    }
 
     /**
      * Get the [id] column value.
@@ -195,6 +229,28 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
     {
 
         return $this->md5_hash;
+    }
+
+    /**
+     * Get the [enabled] column value.
+     *
+     * @return string
+     */
+    public function getEnabled()
+    {
+
+        return $this->enabled;
+    }
+
+    /**
+     * Get the [extract_style] column value.
+     *
+     * @return string
+     */
+    public function getExtractStyle()
+    {
+
+        return $this->extract_style;
     }
 
     /**
@@ -347,6 +403,48 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
     } // setMd5Hash()
 
     /**
+     * Set the value of [enabled] column.
+     *
+     * @param  string $v new value
+     * @return Geofiles The current object (for fluent API support)
+     */
+    public function setEnabled($v)
+    {
+        if ($v !== null) {
+            $v = (string) $v;
+        }
+
+        if ($this->enabled !== $v) {
+            $this->enabled = $v;
+            $this->modifiedColumns[] = GeofilesPeer::ENABLED;
+        }
+
+
+        return $this;
+    } // setEnabled()
+
+    /**
+     * Set the value of [extract_style] column.
+     *
+     * @param  string $v new value
+     * @return Geofiles The current object (for fluent API support)
+     */
+    public function setExtractStyle($v)
+    {
+        if ($v !== null) {
+            $v = (string) $v;
+        }
+
+        if ($this->extract_style !== $v) {
+            $this->extract_style = $v;
+            $this->modifiedColumns[] = GeofilesPeer::EXTRACT_STYLE;
+        }
+
+
+        return $this;
+    } // setExtractStyle()
+
+    /**
      * Indicates whether the columns in this object are only set to default values.
      *
      * This method can be used in conjunction with isModified() to indicate whether an object is both
@@ -356,6 +454,10 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
      */
     public function hasOnlyDefaultValues()
     {
+            if ($this->enabled !== 'b\'1\'') {
+                return false;
+            }
+
         // otherwise, everything was equal, so return true
         return true;
     } // hasOnlyDefaultValues()
@@ -385,6 +487,8 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
             $this->type = ($row[$startcol + 4] !== null) ? (string) $row[$startcol + 4] : null;
             $this->size = ($row[$startcol + 5] !== null) ? (int) $row[$startcol + 5] : null;
             $this->md5_hash = ($row[$startcol + 6] !== null) ? (string) $row[$startcol + 6] : null;
+            $this->enabled = ($row[$startcol + 7] !== null) ? (string) $row[$startcol + 7] : null;
+            $this->extract_style = ($row[$startcol + 8] !== null) ? (string) $row[$startcol + 8] : null;
             $this->resetModified();
 
             $this->setNew(false);
@@ -394,7 +498,7 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
             }
             $this->postHydrate($row, $startcol, $rehydrate);
 
-            return $startcol + 7; // 7 = GeofilesPeer::NUM_HYDRATE_COLUMNS.
+            return $startcol + 9; // 9 = GeofilesPeer::NUM_HYDRATE_COLUMNS.
 
         } catch (Exception $e) {
             throw new PropelException("Error populating Geofiles object", $e);
@@ -627,6 +731,12 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
         if ($this->isColumnModified(GeofilesPeer::MD5_HASH)) {
             $modifiedColumns[':p' . $index++]  = '`md5_hash`';
         }
+        if ($this->isColumnModified(GeofilesPeer::ENABLED)) {
+            $modifiedColumns[':p' . $index++]  = '`enabled`';
+        }
+        if ($this->isColumnModified(GeofilesPeer::EXTRACT_STYLE)) {
+            $modifiedColumns[':p' . $index++]  = '`extract_style`';
+        }
 
         $sql = sprintf(
             'INSERT INTO `geofiles` (%s) VALUES (%s)',
@@ -658,6 +768,12 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
                         break;
                     case '`md5_hash`':
                         $stmt->bindValue($identifier, $this->md5_hash, PDO::PARAM_STR);
+                        break;
+                    case '`enabled`':
+                        $stmt->bindValue($identifier, $this->enabled, PDO::PARAM_STR);
+                        break;
+                    case '`extract_style`':
+                        $stmt->bindValue($identifier, $this->extract_style, PDO::PARAM_STR);
                         break;
                 }
             }
@@ -814,6 +930,12 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
             case 6:
                 return $this->getMd5Hash();
                 break;
+            case 7:
+                return $this->getEnabled();
+                break;
+            case 8:
+                return $this->getExtractStyle();
+                break;
             default:
                 return null;
                 break;
@@ -849,6 +971,8 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
             $keys[4] => $this->getType(),
             $keys[5] => $this->getSize(),
             $keys[6] => $this->getMd5Hash(),
+            $keys[7] => $this->getEnabled(),
+            $keys[8] => $this->getExtractStyle(),
         );
         $virtualColumns = $this->virtualColumns;
         foreach ($virtualColumns as $key => $virtualColumn) {
@@ -909,6 +1033,12 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
             case 6:
                 $this->setMd5Hash($value);
                 break;
+            case 7:
+                $this->setEnabled($value);
+                break;
+            case 8:
+                $this->setExtractStyle($value);
+                break;
         } // switch()
     }
 
@@ -940,6 +1070,8 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
         if (array_key_exists($keys[4], $arr)) $this->setType($arr[$keys[4]]);
         if (array_key_exists($keys[5], $arr)) $this->setSize($arr[$keys[5]]);
         if (array_key_exists($keys[6], $arr)) $this->setMd5Hash($arr[$keys[6]]);
+        if (array_key_exists($keys[7], $arr)) $this->setEnabled($arr[$keys[7]]);
+        if (array_key_exists($keys[8], $arr)) $this->setExtractStyle($arr[$keys[8]]);
     }
 
     /**
@@ -958,6 +1090,8 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
         if ($this->isColumnModified(GeofilesPeer::TYPE)) $criteria->add(GeofilesPeer::TYPE, $this->type);
         if ($this->isColumnModified(GeofilesPeer::SIZE)) $criteria->add(GeofilesPeer::SIZE, $this->size);
         if ($this->isColumnModified(GeofilesPeer::MD5_HASH)) $criteria->add(GeofilesPeer::MD5_HASH, $this->md5_hash);
+        if ($this->isColumnModified(GeofilesPeer::ENABLED)) $criteria->add(GeofilesPeer::ENABLED, $this->enabled);
+        if ($this->isColumnModified(GeofilesPeer::EXTRACT_STYLE)) $criteria->add(GeofilesPeer::EXTRACT_STYLE, $this->extract_style);
 
         return $criteria;
     }
@@ -1027,6 +1161,8 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
         $copyObj->setType($this->getType());
         $copyObj->setSize($this->getSize());
         $copyObj->setMd5Hash($this->getMd5Hash());
+        $copyObj->setEnabled($this->getEnabled());
+        $copyObj->setExtractStyle($this->getExtractStyle());
         if ($makeNew) {
             $copyObj->setNew(true);
             $copyObj->setId(NULL); // this is a auto-increment column, so set to default value
@@ -1085,10 +1221,13 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
         $this->type = null;
         $this->size = null;
         $this->md5_hash = null;
+        $this->enabled = null;
+        $this->extract_style = null;
         $this->alreadyInSave = false;
         $this->alreadyInValidation = false;
         $this->alreadyInClearAllReferencesDeep = false;
         $this->clearAllReferences();
+        $this->applyDefaultValues();
         $this->resetModified();
         $this->setNew(true);
         $this->setDeleted(false);

@@ -66,7 +66,7 @@
 					  VALUES	('0', 	'0', 	'{-1}', 	GEOMFROMTEXT('POINT(0 0)'), '', 	'', 	'', 	'', 	-1, 	'', 	'', 	0, 	'', 	$_user_id, 	NOW(), GEOMFROMTEXT('$featureWKTString')	); "; // SELECT last_insert_id() as last_insert_id;
 					  */
         $query = "INSERT INTO `points` 	(`lat`, 	`long`, 	`elevation`, 	`gpx_name`, 	`gpx_sym`, 	`gpx_type`, 	`gpx_cmt`, 	`gpx_sat`, 	`gpx_fix`, 	`gpx_time`, 	`_type`, 	`_details`, 	`added_by_user_id`, 	`add_time`, spatial_geometry	)
-					 VALUES	('{$pictureData->point_coords_lat}', 	'{$pictureData->point_coords_lon}', 	'{-1}', 	'', 	'', 	'', 	'', 	-1, 	'', 	'', 	0, 	'', 	$_user_id, 	NOW(), GEOMFROMTEXT('POINT({$pictureData->point_coords_lat} {$pictureData->point_coords_lon})')	); "; // SELECT last_insert_id() as last_insert_id;
+					 VALUES	('{$pictureData->point_coords_lat}', 	'{$pictureData->point_coords_lon}', 	NULL, 	'', 	'', 	'', 	'', 	-1, 	NULL, 	NULL, 	0, 	'', 	$_user_id, 	NOW(), GEOMFROMTEXT('POINT({$pictureData->point_coords_lat} {$pictureData->point_coords_lon})')	); "; // SELECT last_insert_id() as last_insert_id;
 		
 		//var_dump($query);
 		$stmt = $con->prepare($query);

@@ -1,8 +1,11 @@
 <?php
     include_once 'header.php';
 	include_once 'main_page_logger.php';
+	
+	//echo "zzzz $application_url_root";
 ?>
-<script type="text/javascript" src="/speogis/scripts/main_map.js"></script>
+<script type="text/javascript" src="<?=$application_url_root ?>/scripts/main_map.js"></script>
+<script type="text/javascript" src="<?=$application_url_root ?>/scripts/trip_report.js"></script>
 <!--<body onload="init();">-->
 
 <style>
@@ -79,12 +82,12 @@ img.pictureThumbnailListContainer {
 		<ul id="mapPicturesLightSlider">
 		</ul>
 	</div>
-
+<!--
 	<div>
 		<label><input type="checkbox" onchange="" id="hgPersaniCentruCheckBox" value="false"/><a href='./assets/layer_images/persani_comana_geologica.jpg' target='_blank' >Harta geologica 1970 - persani centru</a></label>
 		<div id="slider-id"><div class="ui-slider-handle">X</div></div>
 	</div>
-
+-->
 <!--<a href='./assets/layer_images/persani_comana_geologica.jpg' target='_blank' >geologica persani centru</a>-->
 </div>
 <div class="ui-layout-east">
@@ -654,7 +657,7 @@ img.pictureThumbnailListContainer {
         <h4 class="modal-title" id="pictureModalTitleLabel">*{main_map.picture_edit_form.title_new}*</h4>
 		<h5><i><div id="picture_coords_label"></div></i></h5>
       </div>
-      <div class="modal-body">	  
+      <div class="modal-body">
         <form id="pictureForm" role="form" enctype="multipart/form-data" > <!-- class="form-inline" -->										   
 		 
 		 <input type="hidden" id="picture_id" name="picture_id" >
@@ -679,10 +682,8 @@ img.pictureThumbnailListContainer {
 			</div>
           </div>		  
 
-		  <label class="btn btn-default btn-file">
-			*{generic.browse}* <input type="file" style="display: none;" id="file" name="file" >
-		  </label>
-
+		  <!--<label class="btn btn-default btn-file">*{generic.browse}*<input type="file" style="display: none;" id="file" name="file" ></label>-->
+		  <input id="pictureUploadControl" name="file" type="file" class="filex" data-preview-file-type="text">
 		<!--<div class="fileupload fileupload-new" data-provides="fileupload">
 		  <div class="fileupload-preview thumbnail" style="width: 200px; height: 150px;"></div>
 		  <div>
@@ -790,176 +791,6 @@ img.pictureThumbnailListContainer {
 -->
 
 
-<!-- 
-	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
-	Begin Upload files form
-	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
--->
-<div class="modal fade modal-child" id="uploadFilesModal" tabindex="-1" role="dialog" aria-labelledby="uploadFilesModalTitleLabel" data-modal-parent="#tripReportModal">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-        <h4 class="modal-title" id="uploadFilesModalTitleLabel">*{main_map.upload_files_form.title}*</h4>
-		<h5><i><div id="upload_files_x_label"></div></i></h5>
-      </div>
-      <div class="modal-body">	  
-        <!--<form id="uploadFilesForm" role="form" >
-		-->
-		
-    <form class="fileupload" id="fileupload_cave" action="./data/uploader/index.php" method="POST" enctype="multipart/form-data"> <!-- id="fileupload" -->
-        <!-- The fileupload-buttonbar contains buttons to add/delete files and start/cancel the upload -->
-       <div class="row fileupload-buttonbar">
-            <div class="col-lg-7">
-				<input type="hidden" id="fileupload_target_type" name="fileupload_target_type" >
-				<input type="hidden" id="fileupload_target_object_id" name="fileupload_target_object_id" >
-                <!-- The fileinput-button span is used to style the file input field as button -->
-                <span class="btn btn-success fileinput-button">
-                    <i class="icon-plus icon-white"></i>
-                    <span>*{generic.add_files}*</span>
-                    <input type="file" name="files[]" multiple>
-                </span>
-                <button type="submit" class="btn btn-primary start">
-                    <i class="icon-upload icon-white"></i>
-                    <span>*{generic.start_upload}*</span>
-                </button>
-                <button type="reset" class="btn btn-warning cancel">
-                    <i class="icon-ban-circle icon-white"></i>
-                    <span>*{generic.end_upload}*</span>
-                </button>
-                <button type="button" class="btn btn-danger delete">
-                    <i class="icon-trash icon-white"></i>
-                    <span>*{generic.del}*</span>
-                </button>
-                <input type="checkbox" class="toggle">
-                <!-- The global file processing state -->
-                <span class="fileupload-process"></span>
-            </div>
-            <!-- The global progress state -->
-            <div class="col-lg-5 fileupload-progress">
-                <!-- The global progress bar -->
-                <div class="progress progress-striped active" role="progressbar" aria-valuemin="0" aria-valuemax="100">
-                    <div class="progress-bar progress-bar-success" style="width:0%;"></div>
-                </div>
-                <!-- The extended global progress state -->
-                <div class="progress-extended">&nbsp;</div>
-            </div>
-        </div>
-        <!-- The table listing the files available for upload/download -->
-        <table role="presentation" class="table table-striped"><tbody class="files"></tbody></table>
-
-		<input type="hidden" id="upload_file_cave_id" name="upload_file_cave_id" >
-<!--
-<label class="title">
-    <span>Title:</span><br>
-    <input name="title[]" class="form-control">
-</label>
-<label class="description">
-    <span>Description:</span><br>
-    <input name="description[]" class="form-control">
-</label>
-
-<p class="title"><strong>{%=file.title||''%}</strong></p>
-<p class="description">{%=file.description||''%}</p>
--->
-		
-    </form>
-<!-- The template to display files available for upload -->
-<script id="template-upload" type="text/x-tmpl">
-{% for (var i=0, file; file=o.files[i]; i++) { %}
-    <tr class="template-upload">
-        <td>
-            <span class="preview"></span>
-        </td>
-        <td>
-            <p class="name">{%=file.name%}</p>
-            <strong class="error text-danger"></strong>
-        </td>
-        <td>
-            <p class="size">*{generic.processing}*</p>
-            <div class="progress progress-striped active" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-success" style="width:0%;"></div></div>
-        </td>
-        <td>
-            {% if (!i && !o.options.autoUpload) { %}
-                <button class="btn btn-primary start" disabled>
-                    <i class="glyphicon glyphicon-upload"></i>
-                    <span>*{generic.start_upload}*</span>
-                </button>
-            {% } %}
-            {% if (!i) { %}
-                <button class="btn btn-warning cancel">
-                    <i class="glyphicon glyphicon-ban-circle"></i>
-                    <span>*{generic.cancel}*</span>
-                </button>
-            {% } %}
-        </td>
-    </tr>
-{% } %}
-</script>
-<!-- The template to display files available for download -->
-
-<script id="template-download" type="text/x-tmpl">
-{% for (var i=0, file; file=o.files[i]; i++) { %}
-    <tr class="template-download">
-        <td>
-            <span class="preview">
-                {% if (file.thumbnailUrl) { %}
-                    <a href="{%=file.url%}" title="{%=file.name%}" download="{%=file.name%}" data-gallery><img src="{%=file.thumbnailUrl%}"></a>
-                {% } %}
-            </span>
-        </td>
-        <td>
-            <p class="name">
-                {% if (file.url) { %}
-                    <a href="{%=file.url%}" title="{%=file.name%}" download="{%=file.name%}" {%=file.thumbnailUrl?'data-gallery':''%}>{%=file.name%}</a>
-                {% } else { %}
-                    <span>{%=file.name%}</span>
-                {% } %}
-            </p>
-            {% if (file.error) { %}
-                <div><span class="label label-danger">*{generic.error}*</span> {%=file.error%}</div>
-            {% } %}
-        </td>
-        <td>
-            <span class="size">{%=o.formatFileSize(file.size)%}</span>
-        </td>
-        <td>
-            {% if (file.deleteUrl) { %}
-                <button class="btn btn-danger delete" data-type="{%=file.deleteType%}" data-url="{%=file.deleteUrl%}"{% if (file.deleteWithCredentials) { %} data-xhr-fields='{"withCredentials":true}'{% } %}>
-                    <i class="glyphicon glyphicon-trash"></i>
-                    <span>*{generic.del}*</span>
-                </button>
-                <input type="checkbox" name="delete" value="1" class="toggle">
-            {% } else { %}
-                <button class="btn btn-warning cancel">
-                    <i class="glyphicon glyphicon-ban-circle"></i>
-                    <span>*{generic.cancel}*</span>
-                </button>
-            {% } %}
-        </td>
-    </tr>
-{% } %}
-</script>
-		 
-	<div class="modal-footer">
-        <button type="button" class="btn btn-default" data-dismiss="modal">*{generic.close}*</button>
-        <button type="submit" class="btn btn-primary" id="saveFileUpload" >*{generic.save}*</button>
-      </div>	  
-	  
-	  
-	        <!--</form>
-			-->
-      </div>
-
-    </div>
-  </div>
-</div>
-
-<!-- 
-	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
-	end Upload files form
-	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
--->
 
 
 <!-- 
@@ -981,7 +812,7 @@ img.pictureThumbnailListContainer {
 		
 			<!--<input type="hidden" id="upload_files_cave_id" name="upload_files_cave_id" >-->
 			
-    <form class="fileupload" id="pictureUploader" action="./data/uploader/picture_uploader.php" method="POST" enctype="multipart/form-data"> <!-- id="pictureUploader" -->
+    <form class="fileupload" id="pictureUploader" action="<?=WEBROOT ?>/data/uploader/picture_uploader.php" method="POST" enctype="multipart/form-data"> <!-- id="pictureUploader" -->
         <!-- The fileupload-buttonbar contains buttons to add/delete files and start/cancel the upload -->
        <div class="row fileupload-buttonbar">
             <div class="col-lg-7">
@@ -1185,6 +1016,7 @@ img.pictureThumbnailListContainer {
     </div>
   </div>
 </div>
+
 <!--
 	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ	
 	End New cave feature form
@@ -1192,7 +1024,8 @@ img.pictureThumbnailListContainer {
 -->
 
 <?php
-    include_once 'trip_report_form.php';
+    include_once ROOTPATH.'/user/trip_report_form.php';
+	include_once ROOTPATH.'/user/georeferenced_map_form.php';
 ?>
 
 <!--

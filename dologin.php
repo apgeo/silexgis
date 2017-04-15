@@ -35,9 +35,8 @@ if($username=="") {
 		$userObj = $res[0];
         $_SESSION["username"] = $userObj["username"];
         $_SESSION["logged"] = 1;
-        $_SESSION["username"] = $userObj["username"];
         //$_SESSION["email"] = $rw["email"];
-        $_SESSION["id_user"] = $userObj["id"];           
+        $_SESSION["id_user"] = $userObj["id"];
     }
     else 
 	{
@@ -50,8 +49,17 @@ if($username=="") {
 			//echo "error";
             header("Location: login.php");
         } else {
-			//echo "logged in"; exit;
-            header("Location: index.php");
+			//echo "logged in"; exit;            
+						
+			$url = "index.php";
+			
+			if(isset($_REQUEST['redirurl']) && !empty($_REQUEST['redirurl'])) 
+				$url = $_REQUEST['redirurl']; // holds url for last page visited.
+			else 
+				$url = "index.php";
+			
+			//echo "logged in redirect: _{$url}_"; exit;
+			header("Location: $url");
         }
 
             /* Error */
@@ -62,7 +70,7 @@ if($username=="") {
     else
 		printf("Problem in authentication");
 	
-	DBCon::close_connection();    
+	DBCon::close_connection();
 }
 
 ?>

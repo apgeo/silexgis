@@ -95,7 +95,15 @@ var localizedText = {
 			{
 				map: "Map",
 				data: "Data",
-				files: "Files",				
+				data_submenu:
+				{
+					points: "Points",
+					exploration_points: "Exploration points",
+					geofiles: "Geofiles",
+					files: "Files",
+					georeferenced_maps: "Georeferenced maps"
+				},
+				files: "Files",
 				users: "Users",				
 				reports: "Reports",
 				add: "Add",
@@ -105,6 +113,7 @@ var localizedText = {
 					pictures: "Pictures",
 					view: "View",
 					trip_report: "Trip report",
+					georeferenced_map: "Georeferenced map"
 				},
 				config: "Config",
 				config_submenu:
@@ -130,6 +139,7 @@ var localizedText = {
 			user_menu:
 			{
 				user: "User",
+				edit_settings: "Settings",
 				log_out: "Log out"
 			},
 			body:
@@ -155,6 +165,17 @@ var localizedText = {
 				{
 					title: "Map layers",
 					opacity_bar_checkbox: "hide opacity bar",
+					cave_features: "cave features",
+					cave_zones: "cave zones",
+					cave_features: "cave features",
+					surface_features: "surface features",
+					pictures_layer: "Pictures",
+					drawings: "Drawings",
+					measurements_layer: "Measurements",
+					geo_files: "Geo files",
+					bing_labels: "Labels",
+					bing_aerial: "Aerial",
+					bing_road: "Road",
 				}
 			},
 			cave_edit_form:
@@ -274,8 +295,40 @@ var localizedText = {
 				col_language: "Language",
 				col_last_log_in_time: "Last log in time",
 			},
+
+			add_file:
+			{
+				page_title: "Add file",
+				description_text: "Select file",
+				choose_file: "Choose file",
+				upload_file: "Upload file"
+			},
 			
-			feature_types:
+			add_multiple_files:
+			{
+				page_title: "Add files",
+				description_text: "Select file",
+				choose_file: "Choose files",
+				upload_file: "Upload files"
+			},
+			
+			add_geofile:
+			{
+				page_title: "Add file with geographic data",
+				description_text: "Select file (GPX, KML, GeoJSON, Shapefile)",
+				choose_file: "Choose file",
+				upload_file: "Upload file"
+			},
+			
+			add_multiple_geofiles:
+			{
+				page_title: "Add files with geographic data",
+				description_text: "Select file (GPX, KML, GeoJSON, Shapefile)",
+				choose_file: "Choose files",
+				upload_file: "Upload files"
+			},
+			
+			feature_types_page:
 			{
 				page_title: "Feature types",
 				col_name: "Name",
@@ -302,6 +355,13 @@ var localizedText = {
 				add_file: "Add file",
 				add_multiple_files: "Add multiple files",				
 			},
+
+			geofiles:
+			{
+				page_title: "Geo files",
+				add_geofile: "Add geofile",
+				add_multiple_geofiles: "Add multiple geofiles",				
+			},
 			
 			gps_points:
 			{
@@ -317,6 +377,43 @@ var localizedText = {
 				show_point: "show point",
 				details: "Details",
 			},
+
+			exploration_points:
+			{
+				page_title: "Exploration points",
+				page_description: "Exploration points are added on the map (using the exploration point feature/object type)",
+				col_lat: "Latitude",
+				col_long: "Longitude",
+				col_alt: "Altitude",
+				col_name: "Name",
+				col_time: "Time",
+				col_type: "Type",
+				col_map_location: "Location",
+				col_view: "Details",
+				col_description: "Description",
+				show_point: "show point",
+				details: "Details",
+			},
+			
+			georeferenced_maps:
+			{
+				title_new_georeferenced_map_form: "Add georeferenced map",
+				title: "Map title",
+				description: "Description",
+				boundaries: "Boundaries",
+				boundary_north: "North",
+				boundary_west: "West",
+				boundary_south: "South",
+				boundary_east: "East"
+			},
+
+			georeferenced_maps_page:
+			{
+				page_title: "Georeferenced maps",
+				description_text: "Georeferenced map explanation",
+				btn_add_georeferenced_image: "Add georeferenced image"
+			},
+
 			
 			configuration:
 			{
@@ -340,6 +437,8 @@ var localizedText = {
 				processing: "Processing",				
 				
 				add_time: "Add time",
+				
+				back: "Back",
 				
 				file_table:
 				{
@@ -373,6 +472,16 @@ var localizedText = {
 				gallery: "gallery",
 				pitch: "pitch",
 				gallery_area: "gallery area",
+				approximated_gallery: "approx. gallery",
+				gallery_line: "gallery line",
+				chimney: "chimney",
+				lake: "lake",
+				water_flow: "water flow",
+				bivouac: "bivouac",
+				desobstruction: "desobstruction",
+				flag: "flag", 
+				red_flag: "red flag",
+				exploration_point: "exploration point",
 				
 				cave_features_group_label: "Cave features",
 				surface_features_group_label: "Surface features"				
@@ -399,6 +508,14 @@ var localizedText = {
 			{
 				map: "Harta",
 				data: "Date",
+				data_submenu:
+				{
+					points: "Puncte",
+					exploration_points: "Obiective explorare",
+					geofiles: "Fisiere geografice",
+					files: "Fisiere",
+					georeferenced_maps: "Harti georeferentiate"
+				},				
 				files: "Fisiere",
 				users: "Utilizatori",				
 				reports: "Rapoarte",
@@ -409,6 +526,7 @@ var localizedText = {
 					pictures: "Poze",
 					view: "Detalii harta",
 					trip_report: "Raport de tura",
+					georeferenced_map: "Harta georeferentiata"
 				},
 				config: "Configuratie",
 				config_submenu:
@@ -434,6 +552,7 @@ var localizedText = {
 			user_menu:
 			{
 				user: "Utilizator",
+				edit_settings: "Setari",
 				log_out: "Iesire"
 			},
 			body:
@@ -459,6 +578,16 @@ var localizedText = {
 				{
 					title: "Strate harta",
 					opacity_bar_checkbox: "ascunde control opacitate",
+					cave_zones: "zone pestera",
+					cave_features: "puncte pestera",
+					surface_features: "forme suprafata",
+					pictures_layer: "Fotografii",
+					drawings: "schite",
+					measurements_layer: "masuratori",
+					geo_files: "fisiere geo",
+					bing_labels: "etichete",
+					bing_aerial: "Aerial",
+					bing_road: "Drumuri",
 				}
 			},
 			cave_edit_form:
@@ -568,6 +697,38 @@ var localizedText = {
 				}
 			},
 			
+			add_file:
+			{
+				page_title: "Adauga fisier",
+				description_text: "Selecteaza fisierul",
+				choose_file: "Selecteaza fisier",
+				upload_file: "Incarca fisier"
+			},
+
+			add_multiple_files:
+			{
+				page_title: "Adauga fisiere",
+				description_text: "Selecteaza fisierele",
+				choose_file: "Selecteaza fisiere",
+				upload_file: "Incarca fisiere"
+			},
+
+			add_geofile:
+			{
+				page_title: "Adauga fisier cu date geografice",
+				description_text: "Selecteaza fisierul (GPX, KML, GeoJSON, Shapefile)",
+				choose_file: "Selecteaza fisier",
+				upload_file: "Incarca fisier"
+			},
+
+			add_multiple_geofiles:
+			{
+				page_title: "Adauga fisiere cu date geografice",
+				description_text: "Selecteaza fisierele (GPX, KML, GeoJSON, Shapefile)",
+				choose_file: "Selecteaza fisiere",
+				upload_file: "Incarca fisiere"
+			},
+			
 			users:
 			{
 				page_title: "Utilizatori",
@@ -579,7 +740,7 @@ var localizedText = {
 				col_last_log_in_time: "Ultima autentificare",
 			},
 			
-			feature_types:
+			feature_types_page:
 			{
 				page_title: "Tipuri de geoobiecte",
 				col_name: "Nume",
@@ -606,6 +767,13 @@ var localizedText = {
 				add_file: "Adauga fisier",
 				add_multiple_files: "Adauga fisiere multiple",
 			},
+
+			geofiles:
+			{
+				page_title: "Fisiere cu date geografice",
+				add_geofile: "Adauga fisier",
+				add_multiple_geofiles: "Adauga fisiere multiple",
+			},
 			
 			gps_points:
 			{
@@ -622,6 +790,42 @@ var localizedText = {
 				details: "Detalii",
 			},
 			
+			exploration_points:
+			{
+				page_title: "Obiective explorare",
+				page_description: "Obiective de explorare se adauga pe harta folosind tipul de obiect 'obiective de explorare'",
+				col_lat: "Latitudine",
+				col_long: "Longitudine",
+				col_alt: "Altitudine",
+				col_name: "Nume",
+				col_time: "Data/timp",
+				col_type: "Tip",
+				col_map_location: "Localizare",
+				col_view: "Detalii",
+				col_description: "Descriere",				
+				show_point: "mergi acolo",
+				details: "Detalii",
+			},
+
+			georeferenced_maps:
+			{
+				title_new_georeferenced_map_form: "Adauga harta georeferentiata",
+				title: "Titlul hartii",
+				description: "Descriere",
+				boundaries: "Limite",
+				boundary_north: "Nord",
+				boundary_west: "Vest",
+				boundary_south: "Sud",
+				boundary_east: "Est"
+			},
+			
+			georeferenced_maps_page:
+			{
+				page_title: "Harti georeferentiate",
+				description_text: "Harti georeferentiate sunt fisiere imagine cu harti care au asociate si coordonate geografice pentru punctele de pe harta pentru a putea fi suprapuse geografic peste alte straturi cu harti.",
+				btn_add_georeferenced_image: "Adauga imagine georeferentiata"
+			},
+
 			configuration:
 			{
 				page_title: "Configuratie",
@@ -644,6 +848,8 @@ var localizedText = {
 				processing: "Proceseaza...",
 				
 				add_time: "Data adaugarii",				
+				
+				back: "Inapoi",
 				
 				file_table:
 				{
@@ -669,7 +875,7 @@ var localizedText = {
 				sink: "ponor",
 				portal: "portal",
 				well: "fantana",
-				walls: "walls",
+				walls: "pereti",
 				pot: "aven",
 				fault: "falie",
 				fracture_line: "fisura",
@@ -678,6 +884,17 @@ var localizedText = {
 				gallery: "galerie",
 				pitch: "put",
 				gallery_area: "zona galerii",
+				approximated_gallery: "galerie approx.",
+				gallery_line: "galerie(linie)",
+				chimney: "horn",
+				lake: "lac",
+				water_flow: "parau permanent",
+				bivouac: "bivuac",
+				desobstruction: "dezobstructie",
+				flag: "steag", 
+				red_flag: "steagu rosu",
+				exploration_point: "ob. explorare",
+				
 				
 				cave_features_group_label: "Pestera",
 				surface_features_group_label: "Suprafata"

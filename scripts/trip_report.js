@@ -1,26 +1,27 @@
-  var document_onkeyup = undefined;
+  //var document_onkeyup = undefined;
   
-  var _geofiles = undefined;
+  //var _geofiles = undefined;
   var _team_members = undefined;
-  var url_base = 'http://' + window.location.host + "/speogis/";
+  //var url_base = 'http://' + window.location.host + "/speogis/";
   //var current_url_path = window.location.host;// + "/speogis";//window.location.pathname;
   
 $(document).ready(function() {
 	//console.log("x1 34");
 	
 	//localize_static_html();
+	//localize_static_html(); // again?
 	//document.getElementsByTagName("html")[0].style.visibility = "visible";	
 	
 	initTripReportForm();
 	//return;
-	initUploadControls();
+	initTripFormUploadControls();
 	initCaveDetailsUploadControl();
 	initPicturesUploadControl();
 	
 	//initFeatureSearchControl();
 	initTripFeatureSearchControl();
 
-	initCaveFilesTable();	
+	initCaveFilesTable();
   });
 
 //////////////////////////
@@ -51,10 +52,19 @@ function openTripReportForm(trip_log_id) // cave_id, cave_entrance_id, feature_i
 			//$('#tripReportModal').modal();
 			
 			$('#trip_log_id').val(data.Id);
-			$('#tripreport_start_time').val(data.Tripstarttime);
-			$('#tripreport_end_time').val(data.Tripendtime);				
+			
+			//-- keep only one
+			//$('#tripreportStartTimeControl').datetimepicker().val(data.TripStartTime);
+			//$('#tripreportEndTimeControl').datetimepicker().val(data.TripEndTime);
+
+			//$('#tripreportStartTimeControl').data("DateTimePicker").date(data.TripStartTime);
+			//$('#tripreportEndTimeControl').data("DateTimePicker").date(data.TripEndTime);
+			
+			$('#tripreport_start_time').val(data.TripStartTime);
+			$('#tripreport_end_time').val(data.TripEndTime);
+			
 			$('#tripreport_details').val(data.Details);
-			$('#tripreport_place').val(data.Targetzone);
+			$('#tripreport_place').val(data.TargetZone);
 			
 			//$('#tripreport_members').val(data.Members);
 			
@@ -150,8 +160,8 @@ function initTripReportForm()
         //"ajax": '../ajax/data/arrays.txt'
     } );
 
-	$('#addFilesToTripReport').on('click', function(event) {
-		event.preventDefault(); // To prevent following the link (optional)		
+	$('#addFilesToTripReport').on('click', function(e) {
+		e.preventDefault(); // To prevent following the link (optional)		
 		addTripFiles();
 		
 		//onSaveCave(this);
@@ -159,7 +169,7 @@ function initTripReportForm()
 	});
 	
 	$('#tripReportForm').on('submit', function(e) {
-          event.preventDefault();
+          e.preventDefault();
 
           var formData = $(this).serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
@@ -188,7 +198,7 @@ function initTripReportForm()
 		
 	//fillCaveEntries();	
 	
-	$('#tripreport_start_time').datetimepicker({
+	$('#tripreportStartTimeControl').datetimepicker({
 		//defaultDate: "11/1/2013",
         /*disabledDates: [
 							moment("12/25/2013"),
@@ -198,7 +208,7 @@ function initTripReportForm()
 						*/
 	});	
 
-	$('#tripreport_end_time').datetimepicker({
+	$('#tripreportEndTimeControl').datetimepicker({
 		//defaultDate: "11/1/2013",
         /*disabledDates: [
 							moment("12/25/2013"),
@@ -412,15 +422,41 @@ function addTripFiles()
 
 function openUploadTripFilesForm(trip_log_id) // cave_id, cave_entrance_id, feature_id
 {			
+	//localize_static_html(); //-- could do something wrong to mangle html
 	$('#upload_files_cave_id').val("");	
 	
-	$('#uploadFilesModalTitleLabel').text("Edit '" + "" +"'");
+	$('#uploadFilesModalTitleLabel').text("Edit new trip report");
+	// $('#uploadFilesModalTitleLabel').text("Edit new trip report '" + "" +"'");
 	
 	$('#fileupload_target_type').val("trip_report");
 	$('#fileupload_target_object_id').val(trip_log_id);
-/*	
+	
+	/*$('#fileupload_cave').on('click', function (event) 
+		{
+			event.preventDefault();
+			$('#caveModal').modal('toggle'); 
+		});
+	*/
+	/*$('#saveFileUpload').on('click', function () {
+		//$('#uploadFilesModal').modal();
+	});
+	*/
+
+	// workaround for localization problem
+	
+	$('#start_upload_button').text(_t().generic.start_upload);
+	$('#cancel_upload_button').text(_t().generic.cancel);
+	
+	
+	$('#fileupload_cave').off('submit');
+	$('#fileupload_cave').on('submit', function(e) {
+		e.preventDefault();
+		$('#uploadFilesModal').modal('toggle'); 
+	});
+	
+	/*
 	$('#uploadFilesForm').on('submit', function(e) {
-          event.preventDefault();
+          e.preventDefault();
 
           var formData = $(this).serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
@@ -472,7 +508,7 @@ function openUploadTripFilesForm(trip_log_id) // cave_id, cave_entrance_id, feat
 }
 
 
-function refreshTripReportFilesTable(trip_log_id)
+/*function refreshTripReportFilesTable(trip_log_id)
 {
 	var form_data = JSON.stringify( { trip_log_id: trip_log_id } );
 	
@@ -492,13 +528,10 @@ function refreshTripReportFilesTable(trip_log_id)
 							data.forEach(function(item) {
 								var file_url = file_directory + item.file_name;
 								var file_name_html = "<a href='" + file_url + "' target='_blank' >" + item.file_name + "</a>";
-								dataSet.push([file_name_html, item.size, item.add_time, 0/*item.object_type*/]);
+								dataSet.push([file_name_html, item.size, item.add_time, 0 //item.object_type
+								]);
 							});
 							  
-							/*$('#cave_files_table').DataTable({
-								//"ajax": '../ajax/data/arrays.txt'
-								data: dataSet,
-							});*/
 							$('#trip_report_files_table').DataTable().clear();
 							$('#trip_report_files_table').DataTable()
 								.rows.add(dataSet)
@@ -515,6 +548,7 @@ function refreshTripReportFilesTable(trip_log_id)
 				}				
      });	
 }
+*/
 // End Trip Report form
 ///////////////////////
 
@@ -646,7 +680,7 @@ function openUploadPicturesForm(geoobject_id, geoobject_type) // cave_id, cave_e
 
 /*	
 	$('#uploadFilesForm').on('submit', function(e) {
-          event.preventDefault();
+          e.preventDefault();
 
           var formData = $(this).serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
@@ -816,7 +850,7 @@ function refreshTripReportFilesTable(trip_log_id)
                 success: function(data){
 							var dataSet = [];
 
-							var file_directory = 'data/uploader/files/';
+							var file_directory = url_base + 'data/uploader/files/';
 							
 							data.forEach(function(item) {
 								var file_url = file_directory + item.file_name;
@@ -847,7 +881,7 @@ function refreshTripReportFilesTable(trip_log_id)
 
 
 
-function initUploadControls()
+function initTripFormUploadControls()
 {
 	 $('.fileupload').fileupload({
         // Uncomment the following to send cross-domain cookies:
@@ -958,7 +992,7 @@ function initCaveDetailsUploadControl()
 	// $('#fileupload').fileupload('destroy');
 	
 	$('#fileupload_cave').on('submit', function(e) {
-          event.preventDefault();
+          e.preventDefault();
 		  $('#fileupload_cave').modal('toggle'); 
 	});
 	
@@ -993,9 +1027,9 @@ function refreshFeatureList()
 					
 					var home_icon_name = "house.png";
 										
-					var control = ("<span class='map_view_item' ><img src='" + pointer_icons_base_url + "map.png' height='18'/>&nbsp;&nbsp;" + feature_name + "</span>" +
-					 "<div class='map_view_item_operations' ><span onclick='setDefaultView(" + f_id + ");' class='map_view_item' ><img src='" + pointer_icons_base_url + home_icon_name + "' height='16'/></span>" +
-					 " <span onclick=\"deleteFeatures('" + f_id + "');\" class='map_view_item' ><img src='" + pointer_icons_base_url + "round-delete-button.png' height='16'/></span></div>" + "<br/>");
+					var control = ("<span class='map_view_item' ><img src='" + __pointer_icons_base_url + "map.png' height='18'/>&nbsp;&nbsp;" + feature_name + "</span>" +
+					 "<div class='map_view_item_operations' ><span onclick='setDefaultView(" + f_id + ");' class='map_view_item' ><img src='" + __pointer_icons_base_url + home_icon_name + "' height='16'/></span>" +
+					 " <span onclick=\"deleteFeatures('" + f_id + "');\" class='map_view_item' ><img src='" + __pointer_icons_base_url + "round-delete-button.png' height='16'/></span></div>" + "<br/>");
 
 /*
 					var control = ("<button onclick='showView(" + map_view_id + ");' style='background-color:transparent; border-color:transparent;' ><img src='" + pointer_icons_base_url + "map.png' height='24'/>" + map_view_name + "</button>" +
@@ -1027,7 +1061,7 @@ function refreshFeatureList()
 }
 
 var geoobjects = {};//= [];
-const pointer_icons_base_url = url_base + 'assets/img/';
+const __pointer_icons_base_url = url_base + 'assets/img/';
 
 function getFeatureList(trip_log_id)
 {

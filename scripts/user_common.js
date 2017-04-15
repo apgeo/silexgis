@@ -5,17 +5,17 @@
   var url_base = 'http://' + window.location.host + "/speogis/";
   //var current_url_path = window.location.host;// + "/speogis";//window.location.pathname;
   
-  console.log(url_base);  
+  //console.log(url_base);
   
 $(document).ready(function() {
 	localize_static_html();
-	document.getElementsByTagName("html")[0].style.visibility = "visible";	
+	document.getElementsByTagName("html")[0].style.visibility = "visible";
 });
 
 ///////////////////////
 //  begin localization
-//var selected_language = 'en'; // 'ro';
-var selected_language = 'ro';
+var selected_language = 'en'; // 'ro';
+//var selected_language = 'ro';
 
 function _t()
 {
@@ -24,6 +24,11 @@ function _t()
 
 function localize_static_html()
 {
+	selected_language = $('#user_language').text();
+
+	if ((selected_language == undefined) || (selected_language == ""))
+		selected_language = 'ro';
+
 	//var regex = "/(<([^>]+)>)/ig";
 	//var regex = "(?<=\{)(.*?)(?=\})";
 	//var regex = /{(.*)}/

@@ -1,9 +1,23 @@
 <?php
 	@session_start(); //-- ?
     //GG 
+	header('Content-Type: text/html; charset=utf-8');
+	require_once 'config.php';		
+	
 	require_once 'auth.php';
 	
-	require_once 'config.php';    
+	include_once 'page_logger.php';	
+	
+	include_once ROOTPATH.'/data/db_common.php';
+		
+	$_user_id = $_SESSION["id_user"];
+	$user = UsersQuery::create()->findPK($_user_id);
+	
+	$user_language = "ro";
+	
+	if ($user)
+		$user_language = $user->getLanguage();
+
 	
 	$currentPage = "";
 	
@@ -16,6 +30,9 @@
 	if (strpos($_SERVER['PHP_SELF'], 'points.php')) 
 		$currentPage = "points";
 	else
+	if (strpos($_SERVER['PHP_SELF'], 'exploration_points.php')) 
+		$currentPage = "exploration_points";
+	else
 	if (strpos($_SERVER['PHP_SELF'], 'team_members.php')) 
 		$currentPage = "team_members";
 	else
@@ -25,7 +42,16 @@
 	if (strpos($_SERVER['PHP_SELF'], 'trip_reports.php')) 
 		$currentPage = "feature_types";
 	else
-		$currentPage = "?";	
+	if (strpos($_SERVER['PHP_SELF'], 'files.php') && !strpos($_SERVER['PHP_SELF'], 'geofiles.php')) //-- string identification problem
+		$currentPage = "files";
+	else
+	if (strpos($_SERVER['PHP_SELF'], 'geofiles.php')) 
+		$currentPage = "geofiles";		
+	else
+	if (strpos($_SERVER['PHP_SELF'], 'georeferenced_maps.php')) 
+		$currentPage = "georeferenced_maps";		
+	else
+		$currentPage = "?";							
 ?>
 <!DOCTYPE html>
 <html>
@@ -180,7 +206,7 @@ if ($onlineMode) :
 	<!--<script src="http://openlayers.org/en/v3.12.1/build/ol-debug.js" type="text/javascript"></script>-->
 	<!--<script src="http://openlayers.org/en/v3.2.0/build/ol-debug.js" type="text/javascript"></script>-->
 	
-	<link rel="stylesheet" href="/speogis/scripts/layout/layout-default-latest.css">
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/layout/layout-default-latest.css">
 	
 	<!--<script src="http://openlayers.org/en/v3.15.0/build/ol-debug.js" type="text/javascript"></script>-->	
 	<!--<link rel="stylesheet" href="http://openlayers.org/en/v3.12.1/css/ol.css" type="text/css">    -->
@@ -193,8 +219,8 @@ if ($onlineMode) :
 	<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.11.4/jquery-ui.min.js"></script>	
 	<link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.11.4/themes/ui-lightness/jquery-ui.css" type="text/css">
 
-	<script src="/speogis/scripts/ol3-popup-master/src/ol3-popup.js"></script>
-	<link rel="stylesheet" href="/speogis/scripts/ol3-popup-master/src/ol3-popup.css" />
+	<script src="<?=$application_url_root ?>/scripts/ol3-popup-master/src/ol3-popup.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/ol3-popup-master/src/ol3-popup.css" />
 
 	<!-- Bootstrap Only -->
 	<!-- Latest compiled and minified CSS -->	
@@ -219,28 +245,28 @@ if ($onlineMode) :
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/react-bootstrap/<version>/react-bootstrap.min.js"></script>	-->
 	
 	<!--
-	<script src="/speogis/scripts/bootstrap-select-1.10.0/dist/js/bootstrap-select.js"></script>
-	<link rel="stylesheet" href="/speogis/scripts/bootstrap-select-1.10.0/dist/css/bootstrap-select.css">
+	<script src="<?=$application_url_root ?>/scripts/bootstrap-select-1.10.0/dist/js/bootstrap-select.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/bootstrap-select-1.10.0/dist/css/bootstrap-select.css">
 	-->
 	<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.6.3/css/bootstrap-select.min.css"/>	
 	<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.6.3/js/bootstrap-select.min.js"></script>
 	
-	<link rel="stylesheet" href="/speogis/scripts/Ajax-Bootstrap-Select-master/dist/css/ajax-bootstrap-select.css"/>
-	<script type="text/javascript" src="/speogis/scripts/Ajax-Bootstrap-Select-master/dist/js/ajax-bootstrap-select.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/Ajax-Bootstrap-Select-master/dist/css/ajax-bootstrap-select.css"/>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/Ajax-Bootstrap-Select-master/dist/js/ajax-bootstrap-select.js"></script>
 	
 	
-	<!--<script type="text/javascript" src="/speogis/scripts/splitter.js"></script>-->
+	<!--<script type="text/javascript" src="<?=$application_url_root ?>/scripts/splitter.js"></script>-->
 
-	<script src="/speogis/scripts/layout/jquery.layout-latest.js"></script>
+	<script src="<?=$application_url_root ?>/scripts/layout/jquery.layout-latest.js"></script>
 	
-	<link rel="stylesheet" href="/speogis/scripts/lightbox-master/dist/ekko-lightbox.min.css"/>
-	<script type="text/javascript" src="/speogis/scripts/lightbox-master/dist/ekko-lightbox.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/lightbox-master/dist/ekko-lightbox.min.css"/>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/lightbox-master/dist/ekko-lightbox.js"></script>
 	
-	<script type="text/javascript" src="/speogis/scripts/typeahead.bundle.js"></script>
-	<link rel="stylesheet" href="/speogis/scripts/search_typeahead.css"/>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/typeahead.bundle.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/search_typeahead.css"/>
 	
-	<script type="text/javascript" src="/speogis/scripts/handlebars-v4.0.5.js"></script>
-	<!--<link rel="stylesheet" href="/speogis/scripts/_typeahead_normalize.min.css">-->
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/handlebars-v4.0.5.js"></script>
+	<!--<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/_typeahead_normalize.min.css">-->
 	
 	<link href="//cdn.jsdelivr.net/openlayers.geocoder/latest/ol3-geocoder.min.css" rel="stylesheet">
 	<script src="//cdn.jsdelivr.net/openlayers.geocoder/latest/ol3-geocoder.js"></script>	
@@ -255,59 +281,59 @@ https://cdn.datatables.net/1.10.12/js/jquery.dataTables.min.js
 https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js	
 -->
 <!--<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>-->
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/vendor/jquery.ui.widget.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/vendor/jquery.ui.widget.js"></script>
 <script src="//blueimp.github.io/JavaScript-Templates/js/tmpl.min.js"></script>
 <script src="//blueimp.github.io/JavaScript-Load-Image/js/load-image.all.min.js"></script>
 <script src="//blueimp.github.io/JavaScript-Canvas-to-Blob/js/canvas-to-blob.min.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.iframe-transport.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload.js"></script>	
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.iframe-transport.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload.js"></script>	
 
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-process.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-image.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-audio.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-video.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-validate.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-ui.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-process.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-image.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-audio.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-video.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-validate.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-ui.js"></script>
 
 <!--<script src="//code.jquery.com/qunit/qunit-1.15.0.js"></script>-->
 
-<link rel="stylesheet" href="/speogis/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload.css">
-<link rel="stylesheet" href="/speogis/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload-ui.css">
+<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload.css">
+<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload-ui.css">
 <!-- CSS adjustments for browsers with JavaScript disabled -->
-<noscript><link rel="stylesheet" href="/speogis/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload-noscript.css"></noscript>
-<noscript><link rel="stylesheet" href="/speogis/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload-ui-noscript.css"></noscript>
+<noscript><link rel="stylesheet" href="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload-noscript.css"></noscript>
+<noscript><link rel="stylesheet" href="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload-ui-noscript.css"></noscript>
 
 
 	<!-- Control -->
-	<link rel="stylesheet" href="/speogis/scripts/ol3-ext-gh-pages/control/layerswitchercontrol.css" />
-	<script type="text/javascript" src="/speogis/scripts/ol3-ext-gh-pages/control/layerswitchercontrol.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/ol3-ext-gh-pages/control/layerswitchercontrol.css" />
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/ol3-ext-gh-pages/control/layerswitchercontrol.js"></script>
 
-	<link rel="stylesheet" href="/speogis/scripts/ol3_ext_style.css" />
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/ol3_ext_style.css" />
 
-	<link rel="stylesheet" href="/speogis/scripts/ol3-ext-gh-pages/control/permalinkcontrol.css" />
-	<script type="text/javascript" src="/speogis/scripts/ol3-ext-gh-pages/control/permalinkcontrol.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/ol3-ext-gh-pages/control/permalinkcontrol.css" />
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/ol3-ext-gh-pages/control/permalinkcontrol.js"></script>
 	
-	<link rel="stylesheet" href="/speogis/scripts/main_map.css" />
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/main_map.css" />
 	
 	<link href="//cdn.jsdelivr.net/openlayers.contextmenu/latest/ol3-contextmenu.min.css" rel="stylesheet">
 	<script src="//cdn.jsdelivr.net/openlayers.contextmenu/latest/ol3-contextmenu.js"></script>
 
-	<!--<script src="/speogis/scripts/bootstrap-notify-master/bootstrap-notify.min.js"></script>-->
-	<script src="/speogis/scripts/bootstrap-notify-master/bootstrap-notify.js"></script>
+	<!--<script src="<?=$application_url_root ?>/scripts/bootstrap-notify-master/bootstrap-notify.min.js"></script>-->
+	<script src="<?=$application_url_root ?>/scripts/bootstrap-notify-master/bootstrap-notify.js"></script>
 	
-	<script src="/speogis/scripts/i18n/silexgis.en-EN.js"></script>
+	<script src="<?=$application_url_root ?>/scripts/i18n/silexgis.en-EN.js"></script>
 	
-	<link href="/speogis/scripts/bootstrap-spinedit/js/bootstrap-spinedit.css" rel="stylesheet">
-	<script src="/speogis/scripts/bootstrap-spinedit/js/bootstrap-spinedit.js"></script>
+	<link href="<?=$application_url_root ?>/scripts/bootstrap-spinedit/js/bootstrap-spinedit.css" rel="stylesheet">
+	<script src="<?=$application_url_root ?>/scripts/bootstrap-spinedit/js/bootstrap-spinedit.js"></script>
 	
 	<!-- Photo styles -->
-	<script type="text/javascript" src="/speogis/scripts/photostyle.js"></script>
-	<script type="text/javascript" src="/speogis/scripts/OL3-AnimatedCluster-gh-pages/layer/animatedclusterlayer.js"></script>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/photostyle.js"></script>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/OL3-AnimatedCluster-gh-pages/layer/animatedclusterlayer.js"></script>
 
-	<script type="text/javascript" src="/speogis/scripts/ol.ordering.js"></script>
-	<script type="text/javascript" src="/speogis/scripts/dbpediasource.js"></script>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/ol.ordering.js"></script>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/dbpediasource.js"></script>
 
-	<script type="text/javascript" src="/speogis/scripts/turf.min.js"></script>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/turf.min.js"></script>
 	
 	<link rel="stylesheet" href="style.css" />
 <?php
@@ -330,34 +356,38 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 	<!--<script src="http://openlayers.org/en/v3.12.1/build/ol-debug.js" type="text/javascript"></script>-->
 	<!--<script src="http://openlayers.org/en/v3.2.0/build/ol-debug.js" type="text/javascript"></script>-->
 	
-	<link rel="stylesheet" href="/speogis/scripts/layout/layout-default-latest.css">
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/layout/layout-default-latest.css">
 	
 	
-	<!--<script src="/speogis/temp_offline_scripts/ol-debug.js" type="text/javascript"></script>-->
+	<!--<script src="<?=$application_url_root ?>/temp_offline_scripts/ol-debug.js" type="text/javascript"></script>-->
 	<!--<script type="text/javascript" src="./OL3-ext_ DBPedia layer_files/ol.js"></script>-->
-	<!--<script src="/speogis/scripts/ol v3.19.1-dist/ol-debug.js" type="text/javascript"></script>-->
-	<script src="/speogis/scripts/ol v3.19.1-dist/ol.js" type="text/javascript"></script>
+	<!--<script src="<?=$application_url_root ?>/scripts/ol v3.19.1-dist/ol-debug.js" type="text/javascript"></script>-->
+	<script src="<?=$application_url_root ?>/scripts/ol v3.19.1-dist/ol.js" type="text/javascript"></script>
 	
-	<link rel="stylesheet" href="/speogis/temp_offline_scripts/ol.css" type="text/css">    
+	<link rel="stylesheet" href="<?=$application_url_root ?>/temp_offline_scripts/ol.css" type="text/css">    
 	
 
-	<script type="text/javascript" src="/speogis/temp_offline_scripts/jquery.min.js"></script>
+	<script type="text/javascript" src="<?=$application_url_root ?>/temp_offline_scripts/jquery.min.js"></script>
     
-	<script type="text/javascript" src="/speogis/temp_offline_scripts/jquery-ui.min.js"></script>	
-	<link rel="stylesheet" href="/speogis/temp_offline_scripts/jquery-ui.css" type="text/css">
+	<script type="text/javascript" src="<?=$application_url_root ?>/temp_offline_scripts/jquery-ui.min.js"></script>	
+	<link rel="stylesheet" href="<?=$application_url_root ?>/temp_offline_scripts/jquery-ui.css" type="text/css">
 
-	<script src="/speogis/scripts/ol3-popup-master/src/ol3-popup.js"></script>
-	<link rel="stylesheet" href="/speogis/scripts/ol3-popup-master/src/ol3-popup.css" />
+	<script src="<?=$application_url_root ?>/scripts/ol3-popup-master/src/ol3-popup.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/ol3-popup-master/src/ol3-popup.css" />
 
+	
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/georeferenced_image.js"></script>	
+		
+		
 	<!-- Bootstrap Only -->
 	<!-- Latest compiled and minified CSS -->	
-	<link rel="stylesheet" href="/speogis/temp_offline_scripts//bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+	<link rel="stylesheet" href="<?=$application_url_root ?>/temp_offline_scripts//bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
 
 	<!-- Optional theme -->
-	<link rel="stylesheet" href="/speogis/temp_offline_scripts/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
+	<link rel="stylesheet" href="<?=$application_url_root ?>/temp_offline_scripts/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
 
 	<!-- Latest compiled and minified JavaScript -->
-	<script src="/speogis/temp_offline_scripts/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+	<script src="<?=$application_url_root ?>/temp_offline_scripts/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 	
 
 	<!-- React Bootstrap-->
@@ -371,34 +401,34 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/react/<react-version>/react-dom.min.js"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/react-bootstrap/<version>/react-bootstrap.min.js"></script>	-->
 
-	<link rel="stylesheet" href="/speogis/scripts/bootstrap-select.min.css"/>	
-	<script type="text/javascript" src="/speogis/scripts/bootstrap-select.min.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/bootstrap-select.min.css"/>	
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/bootstrap-select.min.js"></script>
 		
-	<link rel="stylesheet" href="/speogis/scripts/bootstrap-select-1.10.0/dist/css/bootstrap-select.css">
-	<script src="/speogis/scripts/bootstrap-select-1.10.0/dist/js/bootstrap-select.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/bootstrap-select-1.10.0/dist/css/bootstrap-select.css">
+	<script src="<?=$application_url_root ?>/scripts/bootstrap-select-1.10.0/dist/js/bootstrap-select.js"></script>
 
 	
-	<link rel="stylesheet" href="/speogis/scripts/Ajax-Bootstrap-Select-master/dist/css/ajax-bootstrap-select.css"/>
-	<script type="text/javascript" src="/speogis/scripts/Ajax-Bootstrap-Select-master/dist/js/ajax-bootstrap-select.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/Ajax-Bootstrap-Select-master/dist/css/ajax-bootstrap-select.css"/>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/Ajax-Bootstrap-Select-master/dist/js/ajax-bootstrap-select.js"></script>
 
 	
-	<script src="/speogis/scripts/layout/jquery.layout-latest.js"></script>	
+	<script src="<?=$application_url_root ?>/scripts/layout/jquery.layout-latest.js"></script>	
 	
-	<link rel="stylesheet" href="/speogis/scripts/lightbox-master/dist/ekko-lightbox.min.css"/>
-	<script type="text/javascript" src="/speogis/scripts/lightbox-master/dist/ekko-lightbox.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/lightbox-master/dist/ekko-lightbox.min.css"/>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/lightbox-master/dist/ekko-lightbox.js"></script>
 	
-	<script type="text/javascript" src="/speogis/scripts/typeahead.bundle.js"></script>
-	<link rel="stylesheet" href="/speogis/scripts/search_typeahead.css"/>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/typeahead.bundle.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/search_typeahead.css"/>
 	
-	<script type="text/javascript" src="/speogis/scripts/handlebars-v4.0.5.js"></script>
-	<!--<link rel="stylesheet" href="/speogis/scripts/_typeahead_normalize.min.css">-->
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/handlebars-v4.0.5.js"></script>
+	<!--<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/_typeahead_normalize.min.css">-->
 	
-	<link href="/speogis/scripts/ol3-geocoder.min.css" rel="stylesheet">
-	<script src="/speogis/scripts/ol3-geocoder.js"></script>	
+	<link href="<?=$application_url_root ?>/scripts/ol3-geocoder.min.css" rel="stylesheet">
+	<script src="<?=$application_url_root ?>/scripts/ol3-geocoder.js"></script>	
 	
-	<link rel="stylesheet" type="text/css" href="/speogis/scripts/datatables.css"/> 
-	<script type="text/javascript" src="/speogis/scripts/datatables.js"></script>	
-	<link rel="stylesheet" type="text/css" href="/speogis/scripts/jquery.dataTables.min.css"/> 										
+	<link rel="stylesheet" type="text/css" href="<?=$application_url_root ?>/scripts/datatables.css"/> 
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/datatables.js"></script>	
+	<link rel="stylesheet" type="text/css" href="<?=$application_url_root ?>/scripts/jquery.dataTables.min.css"/> 										
 	<script type="text/javascript" src="https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js"></script>
 
 <!--
@@ -406,50 +436,50 @@ https://cdn.datatables.net/1.10.12/js/jquery.dataTables.min.js
 https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js	
 -->
 <!--<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>-->
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/vendor/jquery.ui.widget.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/vendor/jquery.ui.widget.js"></script>
 <script src="//blueimp.github.io/JavaScript-Templates/js/tmpl.min.js"></script>
 <script src="//blueimp.github.io/JavaScript-Load-Image/js/load-image.all.min.js"></script>
 <script src="//blueimp.github.io/JavaScript-Canvas-to-Blob/js/canvas-to-blob.min.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.iframe-transport.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload.js"></script>	
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.iframe-transport.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload.js"></script>	
 
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-process.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-image.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-audio.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-video.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-validate.js"></script>
-<script src="/speogis/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-ui.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-process.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-image.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-audio.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-video.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-validate.js"></script>
+<script src="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/js/jquery.fileupload-ui.js"></script>
 
 <!--<script src="//code.jquery.com/qunit/qunit-1.15.0.js"></script>-->
 
-<link rel="stylesheet" href="/speogis/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload.css">
-<link rel="stylesheet" href="/speogis/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload-ui.css">
+<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload.css">
+<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload-ui.css">
 <!-- CSS adjustments for browsers with JavaScript disabled -->
-<noscript><link rel="stylesheet" href="/speogis/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload-noscript.css"></noscript>
-<noscript><link rel="stylesheet" href="/speogis/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload-ui-noscript.css"></noscript>
+<noscript><link rel="stylesheet" href="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload-noscript.css"></noscript>
+<noscript><link rel="stylesheet" href="<?=$application_url_root ?>/scripts/jQuery-File-Upload-9.12.5/css/jquery.fileupload-ui-noscript.css"></noscript>
 
 
 	<!-- Control -->
-	<link rel="stylesheet" href="/speogis/scripts/ol3-ext-gh-pages/control/layerswitchercontrol.css" />
-	<script type="text/javascript" src="/speogis/scripts/ol3-ext-gh-pages/control/layerswitchercontrol.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/ol3-ext-gh-pages/control/layerswitchercontrol.css" />
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/ol3-ext-gh-pages/control/layerswitchercontrol.js"></script>
 
-	<link rel="stylesheet" href="/speogis/scripts/ol3_ext_style.css" />
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/ol3_ext_style.css" />
 
-	<link rel="stylesheet" href="/speogis/scripts/ol3-ext-gh-pages/control/permalinkcontrol.css" />
-	<script type="text/javascript" src="/speogis/scripts/ol3-ext-gh-pages/control/permalinkcontrol.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/ol3-ext-gh-pages/control/permalinkcontrol.css" />
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/ol3-ext-gh-pages/control/permalinkcontrol.js"></script>
 	
-	<link rel="stylesheet" href="/speogis/scripts/main_map.css" />
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/main_map.css" />
 	
-	<link href="/speogis/scripts/ol3-contextmenu.min.css" rel="stylesheet">
-	<script src="/speogis/scripts/ol3-contextmenu.js"></script>
+	<link href="<?=$application_url_root ?>/scripts/ol3-contextmenu.min.css" rel="stylesheet">
+	<script src="<?=$application_url_root ?>/scripts/ol3-contextmenu.js"></script>
 
-	<!--<script src="/speogis/scripts/bootstrap-notify-master/bootstrap-notify.min.js"></script>-->
-	<script src="/speogis/scripts/bootstrap-notify-master/bootstrap-notify.js"></script>
+	<!--<script src="<?=$application_url_root ?>/scripts/bootstrap-notify-master/bootstrap-notify.min.js"></script>-->
+	<script src="<?=$application_url_root ?>/scripts/bootstrap-notify-master/bootstrap-notify.js"></script>
 	
-	<script src="/speogis/scripts/i18n/silexgis.en-EN.js"></script>
+	<script src="<?=$application_url_root ?>/scripts/i18n/silexgis.en-EN.js"></script>
 
-	<link href="/speogis/scripts/bootstrap-spinedit/css/bootstrap-spinedit.css" rel="stylesheet">
-	<script src="/speogis/scripts/bootstrap-spinedit/js/bootstrap-spinedit.js"></script>
+	<link href="<?=$application_url_root ?>/scripts/bootstrap-spinedit/css/bootstrap-spinedit.css" rel="stylesheet">
+	<script src="<?=$application_url_root ?>/scripts/bootstrap-spinedit/js/bootstrap-spinedit.js"></script>
 
 	<!-- Latest compiled and minified CSS --
     <link rel="stylesheet" href="//www.fuelcdn.com/fuelux/3.13.0/css/fuelux.min.css">
@@ -457,35 +487,40 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
     <script src="//www.fuelcdn.com/fuelux/3.13.0/js/fuelux.min.js"></script>
 	-->
 
-	<link href="/speogis/scripts/bootstrap-touchspin/src/jquery.bootstrap-touchspin.css" rel="stylesheet">
-	<script src="/speogis/scripts/bootstrap-touchspin/src/jquery.bootstrap-touchspin.js"></script>
+	<link href="<?=$application_url_root ?>/scripts/bootstrap-touchspin/src/jquery.bootstrap-touchspin.css" rel="stylesheet">
+	<script src="<?=$application_url_root ?>/scripts/bootstrap-touchspin/src/jquery.bootstrap-touchspin.js"></script>
 
 <link href="//cdn.rawgit.com/Eonasdan/bootstrap-datetimepicker/e8bddc60e73c1ec2475f827be36e1957af72e2ea/build/css/bootstrap-datetimepicker.css" rel="stylesheet">	
 <script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.9.0/moment-with-locales.js"></script>
 <script src="//cdn.rawgit.com/Eonasdan/bootstrap-datetimepicker/e8bddc60e73c1ec2475f827be36e1957af72e2ea/src/js/bootstrap-datetimepicker.js"></script>
 
-<link rel="stylesheet" href="/speogis/scripts/bootstrap-tagsinput-master/dist/bootstrap-tagsinput.css">
-	<script src="/speogis/scripts/bootstrap-tagsinput-master/dist/bootstrap-tagsinput.js"></script>
+<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/bootstrap-tagsinput-master/dist/bootstrap-tagsinput.css">
+	<script src="<?=$application_url_root ?>/scripts/bootstrap-tagsinput-master/dist/bootstrap-tagsinput.js"></script>
 	
 	<!-- Photo styles -->
-	<script type="text/javascript" src="/speogis/scripts/photostyle.js"></script>
-	<script type="text/javascript" src="/speogis/scripts/OL3-AnimatedCluster-gh-pages/layer/animatedclusterlayer.js"></script>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/photostyle.js"></script>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/OL3-AnimatedCluster-gh-pages/layer/animatedclusterlayer.js"></script>
 
-	<script type="text/javascript" src="/speogis/scripts/ol.ordering.js"></script>
-	<script type="text/javascript" src="/speogis/scripts/dbpediasource.js"></script>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/ol.ordering.js"></script>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/dbpediasource.js"></script>
 
-	<!--<link rel="stylesheet" href="/speogis/OL3-ext_ DBPedia layer_files/style.css" />-->
+	<!--<link rel="stylesheet" href="<?=$application_url_root ?>/OL3-ext_ DBPedia layer_files/style.css" />-->
 	
 	<!-- lightbox for picture thumbnail browsing -->
 	<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/lightslider/1.1.3/js/lightslider.min.js"></script>
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lightslider/1.1.3/css/lightslider.min.css">
 	
-	<script type="text/javascript" src="/speogis/scripts/turf.min.js"></script>
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/turf.min.js"></script>
 		
-	<!--<script type="text/javascript" src="/speogis/scripts/bootstrap-treeview-1.2.0/src/js/bootstrap-treeview.js"></script>
-	<link rel="stylesheet" href="/speogis/scripts/bootstrap-treeview-1.2.0/src/css/bootstrap-treeview.css">-->
-	<script type="text/javascript" src="/speogis/scripts/vakata-jstree-9770c67/dist/jstree.js"></script>
-	<link rel="stylesheet" href="/speogis/scripts/vakata-jstree-9770c67/dist/themes/default/style.css">
+	<!--<script type="text/javascript" src="<?=$application_url_root ?>/scripts/bootstrap-treeview-1.2.0/src/js/bootstrap-treeview.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/bootstrap-treeview-1.2.0/src/css/bootstrap-treeview.css">-->
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/vakata-jstree-9770c67/dist/jstree.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/vakata-jstree-9770c67/dist/themes/default/style.css">
+	
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/kartik-v-bootstrap-fileinput-v4.3.8-5-gfb58354/kartik-v-bootstrap-fileinput-fb58354/js/fileinput.js"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/kartik-v-bootstrap-fileinput-v4.3.8-5-gfb58354/kartik-v-bootstrap-fileinput-fb58354/css/fileinput.css">
+	
+	<!--<script type="text/javascript" src="<?=$application_url_root ?>/scripts/georeferenced_image.js"></script>-->
 <!--
 	 =============================================================================================================================================
 	 =============================================================================================================================================
@@ -500,7 +535,7 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
   
 </head>
 <body>
-
+<span id="user_language" style="visibility:hidden" ><?="$user_language" ?></span>
 <!-- doc: http://getbootstrap.com/components/#navbar-fixed-top -->
 <nav class="navbar navbar-default navbar-fixed-top" > <!--role="navigation" --> 
   <div class="container-fluid">
@@ -512,17 +547,27 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
         <span class="icon-bar"></span>
         <span class="icon-bar"></span>
       </button>
-      <a class="navbar-brand" href="index.php">SilexGIS</a>
+      <a class="navbar-brand" href="<?=WEBROOT ?>">SilexGIS</a>
     </div>
 
     <!-- Collect the nav links, forms, and other content for toggling -->
     <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
       <ul class="nav navbar-nav">
-        <li <?php if ($currentPage == 'index') echo "class='active'"; ?> ><a href="/speogis/index.php">*{main_map.menu.map}*<span class="sr-only">(current)</span></a></li>
-        <li <?php if ($currentPage == 'points') echo "class='active'"; ?> ><a href="/speogis/user/points.php">*{main_map.menu.data}*</a></li>
-		<li <?php if ($currentPage == 'files') echo "class='active'"; ?> ><a href="/speogis/user/files.php">*{main_map.menu.files}*</a></li>
-		<li <?php if ($currentPage == 'users') echo "class='active'"; ?> ><a href="/speogis/user/users.php">*{main_map.menu.users}*</a></li>
-		<li <?php if ($currentPage == 'trip_reports') echo "class='active'"; ?> ><a href="/speogis/user/trip_reports.php">*{main_map.menu.reports}*</a></li>
+        <li <?php if ($currentPage == 'index') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/index.php">*{main_map.menu.map}*<span class="sr-only">(current)</span></a></li>
+        		
+		<li class="dropdown">
+			<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.menu.data}*<span class="caret"></span></a>
+			<ul class="dropdown-menu">
+				<li <?php if ($currentPage == 'points') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/points.php">*{main_map.menu.data_submenu.points}*</a></li>
+				<li <?php if ($currentPage == 'geofiles') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/geofiles.php">*{main_map.menu.data_submenu.geofiles}*</a></li>
+				<li <?php if ($currentPage == 'georeferenced_maps') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/georeferenced_maps.php">*{main_map.menu.data_submenu.georeferenced_maps}*</a></li>
+				<li <?php if ($currentPage == 'exploration_points') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/exploration_points.php">*{main_map.menu.data_submenu.exploration_points}*</a></li>
+				
+			</ul>
+        </li>
+
+		<li <?php if ($currentPage == 'files') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/files.php">*{main_map.menu.data_submenu.files}*</a></li>		
+		<li <?php if ($currentPage == 'trip_reports') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/trip_reports.php">*{main_map.menu.reports}*</a></li>
 
         <li role="separator" class="divider"></li>
 
@@ -536,7 +581,7 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 			<li><a href="#" onclick="addPictures();" >*{main_map.menu.add_submenu.pictures}*</a></li>
 			<li><a href="#" onclick="addView();" >*{main_map.menu.add_submenu.view}*</a></li>
 			<li><a href="#" onclick="addTripReport();" >*{main_map.menu.add_submenu.trip_report}*</a></li>
-
+			<li><a href="#" onclick="addGeoreferencedMap();" >*{main_map.menu.add_submenu.georeferenced_map}*</a></li>
 			<!--
 			<li role="separator" class="divider"></li>
 
@@ -560,8 +605,9 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 		<li class="dropdown">
 			<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.menu.config}*<span class="caret"></span></a>
 			<ul class="dropdown-menu">
-				<li <?php if ($currentPage == 'feature_types') echo "class='active'"; ?> ><a href="/speogis/user/feature_types.php">*{main_map.menu.config_submenu.feature_types}*<span class="sr-only">(current)</span></a></li>          
-				<li <?php if ($currentPage == 'team_members') echo "class='active'"; ?> ><a href="/speogis/user/team_members.php">*{main_map.menu.config_submenu.team_members}*<span class="sr-only">(current)</span></a></li>          
+				<li <?php if ($currentPage == 'feature_types') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/feature_types.php">*{main_map.menu.config_submenu.feature_types}*<span class="sr-only">(current)</span></a></li>          
+				<li <?php if ($currentPage == 'team_members') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/team_members.php">*{main_map.menu.config_submenu.team_members}*<span class="sr-only">(current)</span></a></li>
+				<li <?php if ($currentPage == 'users') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/users.php">*{main_map.menu.users}*</a></li>
 			</ul>
         </li>
 		
@@ -589,12 +635,12 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 			<li><a id="export_map" href="#" onclick="" download="map.png" >*{main_map.menu.tools_submenu.export_map}*</a></li>
 			<?php endif; ?>
 		
-			<li><a id="export_map" href="/speogis/test/CaveView.js-dev/src/html/" >CV 3d test</a></li>
+			<li><a id="export_map" href="<?=$application_url_root ?>/test/CaveView.js-dev/src/html/" >CV 3d test</a></li>
 			<!--<li><a href="#" onclick="exportMap" download="map.png" >Export</a></li>-->
 		  </ul>
 		</li>
 		
-		<li><a href="#" onclick="enableCaveFeatureEditing();">Test c m</a></li>
+		<!--<li><a href="#" onclick="enableCaveFeatureEditing();">Test c m</a></li>-->
 		<!--
         <li class="dropdown">
           <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Dropdown <span class="caret"></span></a>
@@ -674,7 +720,8 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
         <li class="dropdown">
           <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">*{main_map.user_menu.user}*<span class="caret"></span></a>
           <ul class="dropdown-menu">
-            <li><a href="/speogis/logout.php">*{main_map.user_menu.log_out}*</a></li>
+			<li><a href="<?=$application_url_root ?>/user/edit_user.php">*{main_map.user_menu.edit_settings}*</a></li>
+            <li><a href="<?=$application_url_root ?>/logout.php">*{main_map.user_menu.log_out}*</a></li>
             <!--
 			<li><a href="#">Another action</a></li>
             <li><a href="#">Something else here</a></li>
@@ -709,6 +756,11 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
     <script id="empty-template" type="text/x-handlebars-template">
       <div class="EmptyMessage">No results</div>
 	  <!-- Your search turned up 0 results. If there should be data haere, there is a problem with the backend or the backend is down! -->
-    </script>	
+    </script>
 
+	<script>
+		var url_base = 'http://' + window.location.host + "/speogis/";		
+	</script>
+	
+	<span id="user_language" style="visibility:hidden" ><?="$user_language" ?></span>
 <?php ?>

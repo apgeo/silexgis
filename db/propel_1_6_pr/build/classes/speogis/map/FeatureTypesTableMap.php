@@ -48,6 +48,7 @@ class FeatureTypesTableMap extends TableMap
   2 => 'polygon',
 ));
         $this->addColumn('group_type', 'GroupType', 'VARCHAR', false, 20, null);
+        $this->addColumn('style_properties', 'StyleProperties', 'LONGVARCHAR', false, null, null);
         // validators
     } // initialize()
 

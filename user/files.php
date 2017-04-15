@@ -1,8 +1,10 @@
 <?php
 	include_once("grid_common.php");
+	//include_once(ROOTPATH."/user/grid_common.php");	
 ?>
-<a href="/speogis/user/addFile.php" >*{files.add_file}*</a>
-<a href="/speogis/user/addFiles.php" >*{files.add_multiple_files}*</a>
+<b><h3>*{files.page_title}*</h3></b>
+<a class="btn btn-primary" href="<?=WEBROOT ?>/user/add_file.php" >*{files.add_file}*</a>
+<a class="btn btn-primary" href="<?=WEBROOT ?>/user/add_multiple_files.php" >*{files.add_multiple_files}*</a>
 <?php
 ################################################################################   
 ## +---------------------------------------------------------------------------+
@@ -12,7 +14,6 @@
 
   //require_once("grid_common.php");
 
-  echo "<b><h3>*{files.page_title}*</h3></b>";
   ##  *** creating variables that we need for database connection 
   
   $DB_USER= DB_USER;
@@ -63,7 +64,7 @@ ob_start();
   //$sql="SELECT files.id, X(coords) as lat, Y(coords) as lon, elevation, gpx_name, gpx_time, `_details`, files._id_point_type FROM files"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
    //  WHERE caves.id = $cave_id
    
-  $sql="SELECT files.id, file_name, user_id, add_time, files.file_type as file_type, size, md5_hash, geoobjects_to_files.id, t, username
+/*  $sql="SELECT files.id, file_name, user_id, files.add_time, files.file_type as file_type, size, md5_hash, geoobjects_to_files.id, t, username
 	FROM files
 	INNER JOIN geoobjects_to_files ON geoobjects_to_files.file_id = files.id
 	INNER JOIN 
@@ -72,18 +73,21 @@ ob_start();
 	 SELECT id, 'feature' AS t FROM features
 	 ) AS geoobjects_vt ON geoobjects_to_files.geoobject_id = geoobjects_vt.id AND t = geoobjects_to_files.geoobject_type
 	 INNER JOIN users ON users.id = files.user_id
- ";
+ ";*/
+  $sql="SELECT files.id, file_name, user_id, files.add_time, files.file_type as file_type, size, md5_hash, username FROM files
+		INNER JOIN users ON users.id = files.user_id";
+ 
  // ORDER BY files.id
  //GROUP BY files.id 
   //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
    
 ##  *** set needed options
-  $debug_mode = !false;
+  $debug_mode = false;
   $messaging = true;
   $unique_prefix = "f_";  
   $dgrid = new DataGrid($debug_mode, $messaging, $unique_prefix, DATAGRID_DIR);
 ##  *** set data source with needed options
-  $default_order_field = "files.id";
+  $default_order_field = "id";//"files.id";
   $default_order_type = "ASC";
   $dgrid->dataSource($db_conn, $sql, $default_order_field, $default_order_type);        
 
@@ -103,7 +107,7 @@ $pid = (isset($_REQUEST[$unique_prefix.'pid'])) ? $_REQUEST[$unique_prefix.'pid'
   $_rid = $dgrid->rid;
   //GetCurrentId()
   //var_dump("z: $last_insert_id");
-   $sql = "INSERT INTO `speogis`.`geoobjects_to_files` (`file_id`, 	`geoobject_id`, 	`geoobject_type`	)	VALUES	('$_rid', 	'0', 	''	);";
+   $sql = "INSERT INTO `geoobjects_to_files` (`file_id`, 	`geoobject_id`, 	`geoobject_type`	)	VALUES	('$_rid', 	'0', 	''	);";
    // $sql = "INSERT INTO project_schedule (project_id, task_id) VALUES (".$pid.",".$dgrid->rid.") ";
    
    $dSet = $dgrid->ExecuteSQL($sql);
@@ -136,18 +140,18 @@ $pid = (isset($_REQUEST[$unique_prefix.'pid'])) ? $_REQUEST[$unique_prefix.'pid'
  $direction = "ltr";
  $dgrid->setDirection($direction);
 ##  *** set layouts: 0 - tabular(horizontal) - default, 1 - columnar(vertical) 
- $layouts = array("view"=>0, "edit"=>1, "filter"=>1); 
+ $layouts = array("view"=>0, "edit"=>1, "filter"=>1, "add"=>1); 
  $dgrid->setLayouts($layouts);
 ##  *** set modes for operations ("type" => "link|button|image") 
 ##  *** "byFieldValue"=>"fieldName" - make the field to be a link to edit mode page
- $modes = array(
-    "add"	 =>array("view"=>true, "edit"=>false, "type"=>"link"),
-    "edit"	 =>array("view"=>true, "edit"=>true,  "type"=>"link", "byFieldValue"=>""),
+/* $modes = array(
+    "add"	 =>array("view"=>!true, "edit"=>!false, "type"=>"link"),
+    "edit"	 =>array("view"=>!true, "edit"=>!true,  "type"=>"link", "byFieldValue"=>""),
     "cancel"  =>array("view"=>true, "edit"=>true,  "type"=>"link"),
-    "details" =>array("view"=>true, "edit"=>false, "type"=>"link"),
+    "details" =>array("view"=>!true, "edit"=>false, "type"=>"link"),
     "delete"  =>array("view"=>true, "edit"=>true,  "type"=>"image")
  );
- $dgrid->setModes($modes);
+ $dgrid->setModes($modes);*/
 ##  *** allow scrolling on datagrid
 /// $scrolling_option = false;
 /// $dgrid->allowScrollingSettings($scrolling_option);  
@@ -159,9 +163,9 @@ $pid = (isset($_REQUEST[$unique_prefix.'pid'])) ? $_REQUEST[$unique_prefix.'pid'
  $multirow_option = true;
  //$dgrid->allowMultirowOperations($multirow_option);
  $multirow_operations = array(
-	"edit"	 => array("view"=>true),	
+	"edit"	 => array("view"=>!true),	
 	"delete"  => array("view"=>true),
-    "details" => array("view"=>true)
+    "details" => array("view"=>!true)
  );
  $dgrid->setMultirowOperations($multirow_operations);  
 ##  *** set CSS class for datagrid
@@ -290,23 +294,30 @@ $pid = (isset($_REQUEST[$unique_prefix.'pid'])) ? $_REQUEST[$unique_prefix.'pid'
      );
 	 
 	 //"ForeignKey_2"=>array("table"=>"TableName_2", "field_key"=>"FieldKey_2", "field_name"=>"FieldName_2", "view_type"=>"dropdownlist(default)|radiobutton|textbox", "condition"=>"", "order_by_field"=>"Field_Name", "order_type"=>"ASC|DESC", "on_js_event"=>"")
-      $dgrid->setColumnsInEditMode($em_columns);
+      //zz $dgrid->setColumnsInEditMode($em_columns);
     // ##  *** set auto-genereted columns in edit mode
-     $auto_column_in_edit_mode = false;
-     $dgrid->setAutoColumnsInEditMode($auto_column_in_edit_mode);
+     //$auto_column_in_edit_mode = false;
+     //$dgrid->setAutoColumnsInEditMode($auto_column_in_edit_mode);
 	 
-	$dgrid->setAutoColumnsInEditMode(false); // $dgrid->setAutoColumnsInEditMode(true);
+	$dgrid->setAutoColumnsInEditMode(!false); // $dgrid->setAutoColumnsInEditMode(true);
 	 
+	    $modes = array(
+    "add"     =>array("view"=>0, "edit"=>1, "type"=>"link"),
+	"edit"     =>array("view"=>0, "edit"=>0,  "type"=>"link", "byFieldValue"=>""),
+    "cancel"  =>array("view"=>true, "edit"=>true,  "type"=>"link"),
+    "delete"  =>array("view"=>true, "edit"=>true,  "type"=>"image")
+ );
+$dgrid->setModes($modes);
     // ##  *** set foreign keys for add/edit/details modes (if there are linked tables)
     // ##  *** Ex.: "condition"=>"TableName_1.FieldName > 'a' AND TableName_1.FieldName < 'c'"
     // ##  *** Ex.: "on_js_event"=>"onclick='alert(\"Yes!!!\");'"
-  
+  /*
 	$foreign_keys = array(
           //"_id_point_type"=>array("table"=>"feature_types", "field_key"=>"id", "field_name"=>"name", "view_type"=>"dropdownbox", "condition"=>"")
          //"ForeignKey_2"=>array("table"=>"TableName_2", "field_key"=>"FieldKey_2", "field_name"=>"FieldName_2", "view_type"=>"dropdownlist(default)|radiobutton|textbox", "condition"=>"", "order_by_field"=>"Field_Name", "order_type"=>"ASC|DESC", "on_js_event"=>"")
       ); 
       $dgrid->setForeignKeysEdit($foreign_keys);
-
+*/
   ////}
 ## +---------------------------------------------------------------------------+
 ## | 8. Bind the DataGrid:                                                     | 

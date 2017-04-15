@@ -14,13 +14,15 @@
 //require('UploadHandler.php');
 //$upload_handler = new UploadHandler();
 
-	include_once '../db_common.php';		
+	require_once dirname(__DIR__).'/../config.php';	
+	
+	include_once '../db_common.php';
 	require_once '../GPSData.php';
 	
 	include_once('../../geoPHP/geoPHP.inc');
 	
 	require_once('../FileSaver.php');
-
+	
 $options = array(
     'delete_type' => 'POST',
     'db_host' => 'localhost',
@@ -115,8 +117,9 @@ class CustomUploadHandler extends UploadHandler {
 		
 	 
 	//$file_path = saveFile2();
-	
-	define('ROOTPATH', $_SERVER['DOCUMENT_ROOT']."/speogis"); //-- not flexible
+	//echo "index zz xx application_url_root = $application_url_root";
+	//$ROOTPATH = $_SERVER['DOCUMENT_ROOT'].$application_url_root;
+	//define('ROOTPATH', $_SERVER['DOCUMENT_ROOT'].$application_url_root); //-- not flexible
 	$user_directory = "";
 	$upload_dir = ROOTPATH.'/data/uploader/' . 'files/' . $user_directory;	 
 	$file_path = $upload_dir . $name;

@@ -11,3 +11,7 @@
 /.git-rewrite
 /bak
 /database_schema/bak
+*.bak
+*.old
+*.zip
+*.rar

@@ -1,5 +1,3 @@
-<?php
-?>
 <!-- 
 	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
 	New Trip Report form
@@ -14,8 +12,8 @@
         <h4 class="modal-title" id="tripReportModalTitleLabel">*{trip_reports.title_new_trip_report_form}*</h4>
 		<h5><i><div id="trip_report_label"></div></i></h5>
       </div>
-      <div class="modal-body">	  
-        <form id="tripReportForm" role="form" enctype="multipart/form-data" > <!-- class="form-inline" -->										   
+      <div class="modal-body">
+        <form id="tripReportForm" role="form" enctype="multipart/form-data" > <!-- class="form-inline" -->										   		
 		
 		 <input type="hidden" id="trip_log_id" name="trip_log_id" >
 		 <!--<input type="hidden" id="picture_id" name="picture_id" >
@@ -152,7 +150,7 @@
         <!--<form id="uploadFilesForm" role="form" >
 		-->
 		
-    <form class="fileupload" id="fileupload_cave" action="../data/uploader/index.php" method="POST" enctype="multipart/form-data"> <!-- id="fileupload" -->
+    <form class="fileupload" id="fileupload_cave" role="form" action="<?=WEBROOT?>/data/uploader/index.php" method="POST" enctype="multipart/form-data"> <!-- id="fileupload" -->
 	<!--action="./data/uploader/index.php" -->
 	<!--<form class="fileupload" id="fileupload_cave" action="./data/uploader/index.php" method="POST" enctype="multipart/form-data"> <!-- id="fileupload" -->
 	
@@ -211,7 +209,7 @@
 <p class="description">{%=file.description||''%}</p>
 -->
 		
-    </form>
+    <!--</form>-->
 <!-- The template to display files available for upload -->
 <script id="template-upload" type="text/x-tmpl">
 {% for (var i=0, file; file=o.files[i]; i++) { %}
@@ -231,13 +229,15 @@
             {% if (!i && !o.options.autoUpload) { %}
                 <button class="btn btn-primary start" disabled>
                     <i class="glyphicon glyphicon-upload"></i>
-                    <span>*{generic.start_upload}*</span>
+                    <span id="start_upload_button" >Start</span>
+					<!-- *{generic.start_upload}* -->
                 </button>
             {% } %}
             {% if (!i) { %}
                 <button class="btn btn-warning cancel">
                     <i class="glyphicon glyphicon-ban-circle"></i>
-                    <span>*{generic.cancel}*</span>
+                    <span id="cancel_upload_button">Cancel</span>
+					<!-- *{generic.cancel}* -->
                 </button>
             {% } %}
         </td>
@@ -290,10 +290,11 @@
 </script>
 		 
 	<div class="modal-footer">
-        <button type="button" class="btn btn-default" data-dismiss="modal">*{generic.close}*</button>
+        <button type="button" class="btn btn-default" data-dismiss="modal" >*{generic.close}*</button>
         <button type="submit" class="btn btn-primary" id="saveFileUpload" >*{generic.save}*</button>
-      </div>	  
-	  
+
+    </div>	  	  
+	  </form>
 	  
 	        <!--</form>
 			-->
@@ -308,7 +309,3 @@
 	end Upload files form
 	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
 -->
-
-
-
-

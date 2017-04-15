@@ -71,6 +71,7 @@
     <column name="symbol_path" phpName="SymbolPath" type="VARCHAR" size="500" required="false"/>
     <column name="type" phpName="Type" type="CHAR" sqlType="enum('point','linestring','polygon')" required="true"/>
     <column name="group_type" phpName="GroupType" type="VARCHAR" size="20" required="false"/>
+    <column name="style_properties" phpName="StyleProperties" type="LONGVARCHAR" required="false"/>
     <vendor type="mysql">
       <parameter name="Engine" value="MyISAM"/>
     </vendor>
@@ -110,6 +111,8 @@
     <column name="type" phpName="Type" type="CHAR" sqlType="enum('GPX','KML','undefined')" required="false"/>
     <column name="size" phpName="Size" type="INTEGER" required="true"/>
     <column name="md5_hash" phpName="Md5Hash" type="VARCHAR" size="50" required="false"/>
+    <column name="enabled" phpName="Enabled" type="VARCHAR" size="1" sqlType="bit(1)" required="true" defaultValue="b'1'"/>
+    <column name="extract_style" phpName="ExtractStyle" type="VARCHAR" size="1" sqlType="bit(1)" required="true"/>
     <vendor type="mysql">
       <parameter name="Engine" value="InnoDB"/>
     </vendor>
@@ -124,6 +127,20 @@
       <unique-column name="geoobject_id"/>
       <unique-column name="geoobject_type"/>
     </unique>
+    <vendor type="mysql">
+      <parameter name="Engine" value="InnoDB"/>
+    </vendor>
+  </table>
+  <table name="georeferenced_maps" phpName="GeoreferencedMaps" idMethod="native">
+    <column name="id" phpName="Id" type="BIGINT" sqlType="bigint(20) unsigned" primaryKey="true" autoIncrement="true" required="true"/>
+    <column name="description" phpName="Description" type="VARCHAR" size="500" required="false"/>
+    <column name="boundary_north" phpName="BoundaryNorth" type="DECIMAL" size="9" scale="6" required="true"/>
+    <column name="boundary_east" phpName="BoundaryEast" type="DECIMAL" size="9" scale="6" required="true"/>
+    <column name="boundary_south" phpName="BoundarySouth" type="DECIMAL" size="9" scale="6" required="true"/>
+    <column name="boundary_west" phpName="BoundaryWest" type="DECIMAL" size="9" scale="6" sqlType="decimal(9,6) unsigned" required="true"/>
+    <column name="image_id" phpName="ImageId" type="BIGINT" required="true"/>
+    <column name="enabled" phpName="Enabled" type="VARCHAR" size="1" sqlType="bit(1)" required="true" defaultValue="b'1'"/>
+    <column name="title" phpName="Title" type="VARCHAR" size="90" required="false"/>
     <vendor type="mysql">
       <parameter name="Engine" value="InnoDB"/>
     </vendor>

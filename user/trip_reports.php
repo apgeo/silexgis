@@ -1,26 +1,20 @@
 <?php
-	require_once("grid_common.php");  //require_once('utilities.php'); include_once 'db_interface.php'; include_once 'data_interface.php'; require_once 'languages.php'; 
-	include_once '../trip_report_form.php';//require_once("grid_common.php");
+	require_once("grid_common.php");
+	//require_once('utilities.php'); include_once 'db_interface.php'; include_once 'data_interface.php'; require_once 'languages.php'; 
+	include_once ROOTPATH."/user/trip_report_form.php";
+	//require_once("grid_common.php");
 ?>
-<script type="text/javascript" src="/speogis/scripts/trip_report.js"></script>
+<script type="text/javascript" src="<?=WEBROOT?>/scripts/trip_report.js"></script>
 <script>
 	$(document).ready(function() {
-		//initTripReportForm();
-		
 		$('#addReport').on('click', function(event) {
 			addTripReport();
 		});
-		
-		/*$('#tripReportModal').on('submit', function(e) 
-		{
-			event.preventDefault();
-			//location.reload();
-		}*/
 	});
 </script>
-<b><h2>*{trip_reports.page_title}*</h2></b>
+<b><h2>*{trip_reports.page_title}*</h2></b><br/>
 <button type="button" class="btn btn-primary" id="addReport" >*{trip_reports.btn_add_report}*</button>
-<a type="button" class="btn btn-primary" id="teamMembersLink" href="/speogis/user/team_members.php">*{main_map.menu.config_submenu.team_members}*</a>
+<a type="button" class="btn btn-primary" id="teamMembersLink" href="<?=WEBROOT ?>/user/team_members.php">*{main_map.menu.config_submenu.team_members}*</a>
 <?php
 ################################################################################   
 ## +---------------------------------------------------------------------------+

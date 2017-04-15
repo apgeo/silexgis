@@ -19,10 +19,8 @@
 		{
 		}
 		*/
-		public function saveGPSFileData($file_path)
-		{
-		$user_id = 1;
-
+		public function saveGPSFileData($file_path, $user_id)
+		{		
 		$conid = DBCon::open_connection();    
 		GPSData::$ConId = DBCon::get_connection_id();								
 		

@@ -60,7 +60,7 @@
 			$featureWKTString = DbUtils::json_to_wkt($featureGeoJsonString);
 		
         $query = "INSERT INTO `points` 	(`lat`, 	`long`, 	`elevation`, 	`gpx_name`, 	`gpx_sym`, 	`gpx_type`, 	`gpx_cmt`, 	`gpx_sat`, 	`gpx_fix`, 	`gpx_time`, 	`_type`, 	`_details`, 	`added_by_user_id`, 	`add_time` ".(!empty($featureWKTString) ? ",	spatial_geometry" : "")."	)
-					  VALUES	('{$caveEntranceData->cave_coords_lat}', 	'{$caveEntranceData->cave_coords_lon}', 	'{-1}', 	'', 	'', 	'', 	'', 	-1, 	'', 	'', 	0, 	'', 	$_user_id, 	NOW() ".(!empty($featureWKTString) ? ", GEOMFROMTEXT('$featureWKTString')" : "")."	); "; // SELECT last_insert_id() as last_insert_id;
+					  VALUES	('{$caveEntranceData->cave_coords_lat}', 	'{$caveEntranceData->cave_coords_lon}', 	NULL, 	'', 	'', 	NULL, 	NULL, 	-1, 	'', 	'', 	0, 	'', 	$_user_id, 	NOW() ".(!empty($featureWKTString) ? ", GEOMFROMTEXT('$featureWKTString')" : "")."	); "; // SELECT last_insert_id() as last_insert_id;
 
 /*        $query = "INSERT INTO `points` 	(`lat`, 	`long`, 	`elevation`, 	`coords`, 	`gpx_name`, 	`gpx_sym`, 	`gpx_type`, 	`gpx_cmt`, 	`gpx_sat`, 	`gpx_fix`, 	`gpx_time`, 	`_type`, 	`_details`, 	`added_by_user_id`, 	`add_time` ".(!empty($featureWKTString) ? ",	spatial_geometry" : "")."	)
 					  VALUES	('{$caveEntranceData->cave_coords_lat}', 	'{$caveEntranceData->cave_coords_lon}', 	'{-1}', 	GEOMFROMTEXT('POINT({$caveEntranceData->cave_coords_lat} {$caveEntranceData->cave_coords_lon})'), '', 	'', 	'', 	'', 	-1, 	'', 	'', 	0, 	'', 	$_user_id, 	NOW() ".(!empty($featureWKTString) ? ", GEOMFROMTEXT('$featureWKTString')" : "")."	); "; // SELECT last_insert_id() as last_insert_id;

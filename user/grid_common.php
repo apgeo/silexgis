@@ -1,7 +1,7 @@
 <?php
 	//session_start();
     $root = realpath($_SERVER["DOCUMENT_ROOT"])."/speogis";
-
+	
 	require_once "$root/auth.php";
 	//echo "<header__>";
 	include_once "$root/header.php";
@@ -25,9 +25,10 @@
 	//require_once "$root/vendor/Propel/runtime/lib/Propel.php";
 	//Propel::init("$root/db/propel_1_6_pr/build/conf/speogis-conf.php");
 	//set_include_path("$root/db/propel_1_6_pr/build/classes" . PATH_SEPARATOR . get_include_path());
+	
+	//<!--<script>
+	//$(document).ready(function() {
+	//});
+	//</script>-->
 ?>
-<script>
-	$(document).ready(function() {
-	});
-</script>
-<script type="text/javascript" src="/speogis/scripts/user_common.js"></script>
+<script type="text/javascript" src="<?=WEBROOT ?>scripts/user_common.js"></script>

@@ -50,6 +50,8 @@ class GeofilesTableMap extends TableMap
 ));
         $this->addColumn('size', 'Size', 'INTEGER', true, null, null);
         $this->addColumn('md5_hash', 'Md5Hash', 'VARCHAR', false, 50, null);
+        $this->addColumn('enabled', 'Enabled', 'VARCHAR', true, 1, 'b\'1\'');
+        $this->addColumn('extract_style', 'ExtractStyle', 'VARCHAR', true, 1, null);
         // validators
     } // initialize()
 

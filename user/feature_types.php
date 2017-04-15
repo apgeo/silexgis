@@ -4,10 +4,10 @@
 ## | 1. Creating & Calling:                                                    | 
 ## +---------------------------------------------------------------------------+
 ##  *** only relative (virtual) path (to the current document)
+
+  require_once("grid_common.php");
 	
-	require_once("grid_common.php");
-	
-  echo "<b><h3>Feature types</h3></b>";
+  echo "<b><h3>*{feature_types_page.page_title}*</h3></b>";
   ##  *** creating variables that we need for database connection 
   
   $DB_USER= DB_USER;    
@@ -16,6 +16,7 @@
   $DB_NAME= DB_NAME;
 
   $upload_path = "../assets/feature_symbols/";
+  //$upload_path = WEBROOT."/assets/feature_symbols/";
   /*define('USER_INTERFACE_TIMEZONE', '+00:00');  
   @$filter_start_time_min = $_REQUEST['filter_start_time_min'];
   @$filter_start_time_max = $_REQUEST['filter_start_time_max'];
@@ -60,7 +61,7 @@ ob_start();
   $sql="SELECT 	id, 	name, 	symbol_path, type FROM 	feature_types"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
    
 ##  *** set needed options
-  $debug_mode = false;
+  $debug_mode = !false;
   $messaging = true;
   $unique_prefix = "f_";  
   $dgrid = new DataGrid($debug_mode, $messaging, $unique_prefix, DATAGRID_DIR);
@@ -98,7 +99,7 @@ ob_start();
 ##  *** set modes for operations ("type" => "link|button|image") 
 ##  *** "byFieldValue"=>"fieldName" - make the field to be a link to edit mode page
  $modes = array(
-    "add"	 =>array("view"=>true, "edit"=>false, "type"=>"link"),
+    "add"	 =>array("view"=>true, "edit"=>!false, "type"=>"link"),
     "edit"	 =>array("view"=>true, "edit"=>true,  "type"=>"link", "byFieldValue"=>""),
     "cancel"  =>array("view"=>true, "edit"=>true,  "type"=>"link"),
     "details" =>array("view"=>true, "edit"=>false, "type"=>"link"),

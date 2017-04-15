@@ -8,7 +8,7 @@
 
   var map;
   var layers = [];
-  var map_overlay_geo_comana;
+  //var map_overlay_geo_comana;
   var user_mouse_interaction_type = POINTER_INSPECT_FEATURE;
   var drawInteraction;//drawControls;
   var drawSource;
@@ -38,7 +38,7 @@
   var current_point_pixel;
   
   var _geofiles = undefined;
-  var _team_members = undefined;
+  //zz var _team_members = undefined;
   
   var _pictureThumbnailLightSlider;
   var _map_pictures;
@@ -47,31 +47,35 @@
   
   var geoStyle = {
         'Point': new ol.style.Style({
-          image: new ol.style.Circle({
-            fill: new ol.style.Fill({
-              color: 'rgba(255,255,0,0.4)'
-            }),
-            radius: 5,
-            stroke: new ol.style.Stroke({
-              color: '#ff0',
-              width: 1
-            }),
-										text: new ol.style.Text({
-            font: '12px Verdana',
-            text: "not defined",//feature.get('ARESTA'),
-            fill: new ol.style.Fill({color: 'black'}),
-            stroke: new ol.style.Stroke({color: 'white', width: 0.5}),
-			offsetX: 5,
-			offsetY: 5
-        })
-          })
+			image: new ol.style.Circle({
+				fill: new ol.style.Fill({
+				  color: 'rgba(255,255,0,0.4)'
+				}),
+				radius: 5,
+				stroke: new ol.style.Stroke({
+				  color: '#ff0',
+				  width: 1
+				})
+			}),
+			text: new ol.style.Text({
+				font: '12px Verdana',
+				//text: "not defined",//feature.get('ARESTA'),
+				text: "x",
+				fill: new ol.style.Fill({color: 'black'}),
+				stroke: new ol.style.Stroke({color: 'white', width: 0.5}),
+				offsetX: 25,
+				offsetY: 20
+			})
         }),
         'LineString': new ol.style.Style({
           stroke: new ol.style.Stroke({
-            color: '#f00',
+            //color: '#900',
+			color: 'rgba(200, 0, 0, 0.5)',
             width: 3
+			// color: 'rgba(0, 0, 0, 0.5)',
+			// lineDash: [10, 10],
           }),
-							text: new ol.style.Text({
+			text: new ol.style.Text({
             font: '12px Verdana',
             text: "not defined",//feature.get('ARESTA'),
             fill: new ol.style.Fill({color: 'black'}),
@@ -80,6 +84,22 @@
 			offsetY: 5
         })
         }),
+       'approximateGalleryDashedLineString': new ol.style.Style({
+          stroke: new ol.style.Stroke({
+            color: '#f00',
+            width: 3,
+			// color: 'rgba(0, 0, 0, 0.5)',
+			lineDash: [10, 10],
+          }),
+			text: new ol.style.Text({
+            font: '12px Verdana',
+            text: "not defined",//feature.get('ARESTA'),
+            fill: new ol.style.Fill({color: 'black'}),
+            stroke: new ol.style.Stroke({color: 'white', width: 0.5}),
+			offsetX: 5,
+			offsetY: 5
+        })
+        }),		
         'MultiLineString': new ol.style.Style({
           stroke: new ol.style.Stroke({
             color: '#0f0',
@@ -107,14 +127,13 @@
 			offsetX: 5,
 			offsetY: 5
         })	
-  })
-		,
+  }),/*
         'cave': new ol.style.Style({
           stroke: new ol.style.Stroke({
             color: '#8f9',
             width: 9
           })
-        })
+        })*/
 		
       };
 
@@ -126,10 +145,41 @@ var _caveStyle = new ol.style.Style({
           opacity: 0.75,
           scale: 0.5,
           src: 'assets/img/cave.png'
-        })
+        }),
+	text: new ol.style.Text({
+            font: '11px Verdana',
+            text: "not defined",//feature.get('ARESTA'),
+            //fill: new ol.style.Fill({color: 'black', width: 2.5}),
+			//fill: new ol.style.Fill({color: 'black'}),
+            //stroke: new ol.style.Stroke({color: 'red', width: 1.5}),
+			// stroke: new ol.style.Stroke({color: 'white', width: 0.5}),
+			offsetX: 45,
+			offsetY: 9
+        })			
   });		
 	  
-    function initMap() {
+var _invisibleStyle = new ol.style.Style({
+  /*image: new ol.style.Icon({
+          anchor: [0.5, 0.5],
+          size: [32, 32],
+          //offset: [52, 0],
+          opacity: 0.75,
+          scale: 0.5,
+          //src: 'assets/img/cave.png'
+        }),*/
+	/*text: new ol.style.Text({
+            font: '11px Verdana',
+            //text: "not defined",//feature.get('ARESTA'),
+            //fill: new ol.style.Fill({color: 'black', width: 2.5}),
+			//fill: new ol.style.Fill({color: 'black'}),
+            //stroke: new ol.style.Stroke({color: 'red', width: 1.5}),
+			// stroke: new ol.style.Stroke({color: 'white', width: 0.5}),
+			offsetX: 45,
+			offsetY: 9
+        })			*/
+  });		
+
+  function initMap() {
 		//console.info('init()');
 		
        //var epsg4326 =  new ol.proj.Projection("EPSG:4326"); //WGS 1984 projection
@@ -527,7 +577,7 @@ map.on('pointermove', function(evt) {
   var hoveredFeatures = [];
   
   /*var feature = */map.forEachFeatureAtPixel(pixel, function(feature, layer) {
-			if (layer == caveFeaturesLayer)
+			if (layer == caveFeaturesGalleryZonesLayer)
 			{
 				hoveredFeatures.push(feature);
 				is_geo_file_layer_changed = true;
@@ -626,164 +676,158 @@ map.on('pointermove', function(evt) {
   
 });
 
-      map.on('mouseout', function() {
-        $(addGeoElementTooltipElement).addClass('hidden');
-      });
-
-map.on('click', function(evt) {
-  //displayFeatureInfo(evt.pixel);
-  displayDetailsWindow(evt.pixel);
-  //console.info(evt);
-	
-	if (user_mouse_interaction_type == POINTER_INSPECT_FEATURE)
-	{
-		var clickedFeature = map.forEachFeatureAtPixel(evt.pixel, function(feature, layer) { return feature; });
-		// var clickedFeature = map.forEachFeatureAtPixel(evt.pixel, function(feature, layer) { return feature; }, this, mainLayerFilter, this);
-		
-		if (clickedFeature)
-		{
-			var url = clickedFeature.getProperties().url;
-			var description = clickedFeature.getProperties().description;
-			var pictureName = clickedFeature.getProperties().file_path;
-			
-			if (url)
-			{
-				var url = '.' + url;
-				
-				$("#thumbPictureHolder").attr("href", url);
-				$("#thumbPictureHolder").attr("data-footer", description);
-				$("#thumbPictureHolder").attr("data-title", pictureName);
-								
-				$("#thumbPictureHolder").ekkoLightbox(
-				//{ remote: url }
-				);
-			}
-		}
-	}
-	else
-	if (user_mouse_interaction_type == POINTER_NEW_CAVE && false)
-	{	
-		var coordinates = undefined;
-		
-		//var features = db_features_layer.getSource().getFeatures();
-		
-		var features = [];
-		
-		var pixel = map.getEventPixel(evt.originalEvent);
-		map.forEachFeatureAtPixel(pixel, function(feature, layer) { features.push(feature); }, this, mainLayerFilter, this);
-		
-		var existingSelectedFeature = features[0];
-		
-		if (existingSelectedFeature)
-			coordinates = [existingSelectedFeature.getProperties().long, existingSelectedFeature.getProperties().lat];
-		else
-			coordinates = evt.coordinate; // OL coord format 'EPSG:3857'
-		 // coordinates = ol.proj.transform(evt.coordinate, 'EPSG:3857', 'EPSG:4326'); // [long, lat]
-			
-		newCave(cave_id = undefined, coordinates, existingSelectedFeature); // [long, lat]
-	}
-	else
-	if (user_mouse_interaction_type == POINTER_NEW_FEATURE ) // && false
-	{	
-		return;
-		var coordinates = undefined;
-		
-		//var features = db_features_layer.getSource().getFeatures();
-		
-		var features = [];
-		
-		var pixel = map.getEventPixel(evt.originalEvent);
-		map.forEachFeatureAtPixel(pixel, function(feature, layer) { features.push(feature); }, this, mainLayerFilter, this);
-		
-		var existingSelectedFeature = features[0];
-		
-		if (existingSelectedFeature)
-			coordinates = [existingSelectedFeature.getProperties().long, existingSelectedFeature.getProperties().lat];
-		else
-			coordinates = evt.coordinate; // OL coord format 'EPSG:3857'
-			// coordinates = ol.proj.transform(evt.coordinate, 'EPSG:3857', 'EPSG:4326'); // [long, lat]
-				
-		newFeature(cave_id = undefined, coordinates, existingSelectedFeature, selected_new_feature_type); // [long, lat]
-	}
-	else
-	if (user_mouse_interaction_type == POINTER_NEW_PICTURE)
-	{	
-		var coordinates = undefined;
-		
-		//var features = db_features_layer.getSource().getFeatures();
-		
-		var features = [];
-		
-		var pixel = map.getEventPixel(evt.originalEvent);
-		map.forEachFeatureAtPixel(pixel, function(feature, layer) { features.push(feature); }, this, mainLayerFilter, this);
-		
-		var existingSelectedFeature = features[0];
-		
-		if (existingSelectedFeature)
-			coordinates = [existingSelectedFeature.getProperties().long, existingSelectedFeature.getProperties().lat];
-		else
-			coordinates = evt.coordinate; // OL coord format 'EPSG:3857'
-			//coordinates = ol.proj.transform(evt.coordinate, 'EPSG:3857', 'EPSG:4326'); // [long, lat]
-				
-		newPicture(cave_id = undefined, coordinates, existingSelectedFeature); // [long, lat]
-	}
-});
-
-map.on('doubleclick', function(evt) {
-  //displayFeatureInfo(evt.pixel);
-  console.info(evt);
-});
-
-var 				map_layer_osm = new ol.layer.Tile({
-				  source: new ol.source.OSM(),
-				  name: 'OpenStreetMap',
-				})
-//map.addLayer(map_layer_osm);
-	   
-	   var map_attribution_arcgis = new ol.Attribution({
-  html: 'Tiles &copy; <a href="http://services.arcgisonline.com/ArcGIS/' +
-      'rest/services/World_Topo_Map/MapServer">ArcGIS</a>'
-});
-
-	     var map_layer_arcgis = new ol.layer.Tile({
-      source: new ol.source.XYZ({
-        attributions: [map_attribution_arcgis],
-        url: 'http://server.arcgisonline.com/ArcGIS/rest/services/' +
-            'World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
-			name: 'ArcGIS Topo',
-		crossOrigin: 'anonymous', // to prevent error "Tainted canvases may not be exported."
-      })
+    map.on('mouseout', function() {
+		$(addGeoElementTooltipElement).addClass('hidden');
     });
-	//map.addLayer(map_layer_arcgis);
+
+	map.on('click', function(evt) {
+	  //displayFeatureInfo(evt.pixel);
+	  displayDetailsWindow(evt.pixel);
+	  //console.info(evt);
+		
+		if (user_mouse_interaction_type == POINTER_INSPECT_FEATURE)
+		{
+			var clickedFeature = map.forEachFeatureAtPixel(evt.pixel, function(feature, layer) { return feature; });
+			// var clickedFeature = map.forEachFeatureAtPixel(evt.pixel, function(feature, layer) { return feature; }, this, mainLayerFilter, this);
+			
+			/*if (clickedFeature)
+			{
+				var url = clickedFeature.getProperties().url;
+				var description = clickedFeature.getProperties().description;
+				var pictureName = clickedFeature.getProperties().file_path;
+				
+				if (url)
+				{
+					var url = '.' + url;
+					
+					$("#thumbPictureHolder").attr("href", url);
+					$("#thumbPictureHolder").attr("data-footer", description);
+					$("#thumbPictureHolder").attr("data-title", pictureName);
+									
+					$("#thumbPictureHolder").ekkoLightbox(
+					//{ remote: url }
+					);
+				}
+			}*/
+		}
+		else
+		if (user_mouse_interaction_type == POINTER_NEW_CAVE && false)
+		{	
+			var coordinates = undefined;
+			
+			//var features = db_features_layer.getSource().getFeatures();
+			
+			var features = [];
+			
+			var pixel = map.getEventPixel(evt.originalEvent);
+			map.forEachFeatureAtPixel(pixel, function(feature, layer) { features.push(feature); }, this, mainLayerFilter, this);
+			
+			var existingSelectedFeature = features[0];
+			
+			if (existingSelectedFeature)
+				coordinates = [existingSelectedFeature.getProperties().long, existingSelectedFeature.getProperties().lat];
+			else
+				coordinates = evt.coordinate; // OL coord format 'EPSG:3857'
+			 // coordinates = ol.proj.transform(evt.coordinate, 'EPSG:3857', 'EPSG:4326'); // [long, lat]
+				
+			newCave(cave_id = undefined, coordinates, existingSelectedFeature); // [long, lat]
+		}
+		else
+		if (user_mouse_interaction_type == POINTER_NEW_FEATURE ) // && false
+		{	
+			return;
+			var coordinates = undefined;
+			
+			//var features = db_features_layer.getSource().getFeatures();
+			
+			var features = [];
+			
+			var pixel = map.getEventPixel(evt.originalEvent);
+			map.forEachFeatureAtPixel(pixel, function(feature, layer) { features.push(feature); }, this, mainLayerFilter, this);
+			
+			var existingSelectedFeature = features[0];
+			
+			if (existingSelectedFeature)
+				coordinates = [existingSelectedFeature.getProperties().long, existingSelectedFeature.getProperties().lat];
+			else
+				coordinates = evt.coordinate; // OL coord format 'EPSG:3857'
+				// coordinates = ol.proj.transform(evt.coordinate, 'EPSG:3857', 'EPSG:4326'); // [long, lat]
+					
+			newFeature(cave_id = undefined, coordinates, existingSelectedFeature, selected_new_feature_type); // [long, lat]
+		}
+		else
+		if (user_mouse_interaction_type == POINTER_NEW_PICTURE)
+		{	
+			var coordinates = undefined;
+			
+			//var features = db_features_layer.getSource().getFeatures();
+			
+			var features = [];
+			
+			var pixel = map.getEventPixel(evt.originalEvent);
+			map.forEachFeatureAtPixel(pixel, function(feature, layer) { features.push(feature); }, this, mainLayerFilter, this);
+			
+			var existingSelectedFeature = features[0];
+			
+			
+			/*
+			// commented to avoid adding picture to a polygon, maybe should filter to send connrdintaes when clicked only on points, not on other features
+			if (existingSelectedFeature)
+				coordinates = [existingSelectedFeature.getProperties().long, existingSelectedFeature.getProperties().lat];
+			else*/
+				coordinates = evt.coordinate; // OL coord format 'EPSG:3857'
+				//coordinates = ol.proj.transform(evt.coordinate, 'EPSG:3857', 'EPSG:4326'); // [long, lat]
+					
+			newPicture(cave_id = undefined, coordinates, existingSelectedFeature); // [long, lat]
+		}
+	});
+
+	map.on('doubleclick', function(evt) {
+	  //displayFeatureInfo(evt.pixel);
+	  console.info(evt);
+	});
+
+	/*var map_layer_osm = new ol.layer.Tile({
+		source: new ol.source.OSM(),
+		name: 'Open Street Map',
+	});
+	   
+	var map_attribution_arcgis = new ol.Attribution({
+		html: 'Tiles &copy; <a href="http://services.arcgisonline.com/ArcGIS/' +
+		'rest/services/World_Topo_Map/MapServer">ArcGIS</a>'
+	});
+
+	var map_layer_arcgis = new ol.layer.Tile({
+		source: new ol.source.XYZ({
+			attributions: [map_attribution_arcgis],
+			url: 'http://server.arcgisonline.com/ArcGIS/rest/services/' +
+			'World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+			name: 'ArcGIS Topo',
+			crossOrigin: 'anonymous', // to prevent error "Tainted canvases may not be exported."
+		})
+    });	
 	
 
-	   map_layer_osm.setVisible(false);
-	   map_layer_arcgis.setVisible(true);
-	   	  
-		  
-		  
-	   //startLon = 25.36640167236328;//25.416870;
-	   //startLat = 45.89311462575596;//45.669245;
-	   
+	map_layer_osm.setVisible(false);
+	map_layer_arcgis.setVisible(true);
+	*/  
+	
+	/*
 	   startLon = 23.8366;//25.416870;
 	   startLat = 45.2598;//45.669245;
-	   
+
+		
 	   // 25.416870, 45.669245
-	   
-	   //var position       = new OpenLayers.LonLat(startLon, startLat).transform(fromProjection, toProjection);
-       var zoom           = 11;//12;
-	   //var zoom           =2;
+	   	   
+       var zoom           = 11;//12;	   
 	   //var zoom = map.getZoomForResolution(76.43702827453613);
-	   //var position       = new OpenLayers.LonLat(25.416870, 45.669245).transform(new ol.proj.Projection('EPSG:4326'), new ol.proj.Projection('EPSG:3857'));
-	   
-	   //var position       = new OpenLayers.LonLat(startLon, startLat);//.transform(map.displayProjection, map.baseLayer.projection);
 	   
 	   var coord = [startLon, startLat];
 	   
 	   var position = ol.proj.transform(coord, "EPSG:4326", 'EPSG:3857'); // map.getProjectionObject()
 	   // var position = ol.proj.fromLonLat(coord).transform(new ol.proj.Projection("EPSG:4326"), new ol.proj.Projection('EPSG:3857')); // map.getProjectionObject()
 	   //document.getElementById("header").innerHTML = "displayProjection = " + map.displayProjection + "  baseLayerProjection = " + map.baseLayer.projection;
-	   console.info("displayProjection = " + map.displayProjection + "  baseLayerProjection = ?" /*+ map.baseLayer.projection*/);
+	   console.info("displayProjection = " + map.displayProjection + "  baseLayerProjection = ?" + map.baseLayer.projection);
 	   //map.setDisplayProjection(new ol.proj.Projection('EPSG:3857'));
 	   
 	   //map.setCenter(position, zoom);
@@ -791,6 +835,24 @@ var 				map_layer_osm = new ol.layer.Tile({
 		center: position,
 		zoom: zoom
 	  }));
+	*/
+	
+	
+	//-- loading a location because we need one to avoid errors later in initialization
+	//-- to fix it here (synchonously) probably the center from the default view or the last browsed location should be loaded
+	   var startLon = 23.8366;
+	   var startLat = 45.2598;
+	   
+	   var coord = [startLon, startLat];
+	   
+	   var zoom = 11;
+	   var position = ol.proj.transform(coord, "EPSG:4326", 'EPSG:3857');
+
+	   map.setView(new ol.View({
+		center: position,
+		zoom: zoom
+	  }));
+	////////////////////////
 
 	function initEditing()
 	{
@@ -880,12 +942,13 @@ var 				map_layer_osm = new ol.layer.Tile({
 /** @type {olx.style.IconOptions} */ 
 
 var vectorSource = new ol.source.Vector({
-  features: [iconFeature]
+  features: [iconFeature],
+  name: 'vector source',  
 });
 
 var vectorLayer = new ol.layer.Vector({
   source: vectorSource,
-name: 'vector layer',  
+  name: 'vector layer',  
 });
 
 map.addLayer(vectorLayer);
@@ -908,7 +971,7 @@ console.info(vectorLayer);
 
 		  var source = new ol.source.Vector();
 
-		  var vector = new ol.layer.Vector({
+		  var measurementsLayer = new ol.layer.Vector({
 			source: source,
 			name: 'measurements layer',
 			style: new ol.style.Style({
@@ -1006,15 +1069,7 @@ console.info(vectorLayer);
 		  };
 
 
-		  // var map = new ol.Map({
-			// layers: [raster, vector],
-			// target: 'map',
-			// view: new ol.View({
-			  // center: [-11000000, 4600000],
-			  // zoom: 15
-			// })
-		  // });
-		map.addLayer(vector);
+	  map.addLayer(measurementsLayer);
 	  
       map.on('pointermove', pointerMoveHandler);
 
@@ -1394,7 +1449,7 @@ return [X, Y];
 	map_layer_osm = new ol.layer.Tile({ source: new ol.source.OSM({ 
 											crossOrigin: 'anonymous' // to prevent error "Tainted canvases may not be exported."
 											}), 
-										name: 'OpenStreetMap', 
+										name: 'Open Street Map', 
 									 });
 
 	var map_attribution_arcgis = new ol.Attribution({html: 'Tiles &copy; <a href="http://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer">ArcGIS</a>'});
@@ -1414,9 +1469,9 @@ return [X, Y];
 	//layers[1] = map_layer_arcgis;
 
 var styles = [
-  'Road',
-  'Aerial',
-  'AerialWithLabels',
+  _t().main_map.body.layer_switcher.bing_road,
+  _t().main_map.body.layer_switcher.bing_aerial,
+  '+' + _t().main_map.body.layer_switcher.bing_labels, //'AerialWithLabels',
   //'collinsBart',
   //'ordnanceSurvey'
 ];
@@ -1450,7 +1505,8 @@ for (index = 0, z = styles.length; index < z; ++index) {
             source: new ol.source.TileWMS({
               url: 'http://demo.opengeo.org/geoserver/wms',
               params: {LAYERS: 'nasa:bluemarble', VERSION: '1.1.1'}
-            })
+            }),
+			name: 'opengeo.org Global Imagery', 
           });
 		  
 	var blg_layer = new ol.layer.Tile({
@@ -1459,7 +1515,8 @@ for (index = 0, z = styles.length; index < z; ++index) {
             url: 'http://demo.boundlessgeo.com/geoserver/wms',
             params: {'LAYERS': 'topp:states', 'TILED': true},
             serverType: 'geoserver'
-          })
+          }),
+		  name: 'BoundlessGeo', 
         });
 		
 	
@@ -1467,131 +1524,23 @@ for (index = 0, z = styles.length; index < z; ++index) {
     var mapbox_layer = new ol.layer.Tile({
       source: new ol.source.XYZ({
         url: 'https://api.mapbox.com/styles/v1/mapbox/streets-v9/tiles/256/{z}/{x}/{y}?access_token=<your access token here>'
-      })
+      }),
+	  name: 'MapBox', 
     });
   	
-	layers = new Array(map_layer_osm, map_layer_arcgis, bing_layers[0], bing_layers[1], bing_layers[2], gi_layer, blg_layer, mapbox_layer);
+	layers = new Array(map_layer_osm, map_layer_arcgis, bing_layers[0], bing_layers[1], bing_layers[2]/*, gi_layer *//*,blg_layer, */ /*mapbox_layer,*/);
 	
 	
-	//map.addLayer(localLayer);
-	
-	//layers[8] = bing_layers[3];
-	//layers[9] = bing_layers[4];
-	
-	
-	//var imageExtent = [0, 0, 7000, 8000];
-	
-	      
-		  var extent = [24.247375, 44.832892, 24.5004861, 45.0000083];
-		  // var extent = [25.247375, 45.832892, 25.5004861, 46.0000083];
-		  //var extent = [-111110, -111110, -1114460, 1112945];      
-		  
-	  var projection = new ol.proj.Projection({
-        code: 'xkcd-image',
-        units: 'pixels',
-        //extent: extent
-      });
-
-	      map_overlay_geo_comana = //new ol.layer.Group({ layers: [
-		  new ol.layer.Image({
-			//extent: [-13884991, 2870341, -7455066, 6338219],
-          // source: new ol.source.ImageWMS({
-            // //url: './persani_comana_geologica_cropped_rectified.tif',
-			// url: './persani_comana_geologica_cropped_rectified.jpg',
-            // params: {'LAYERS': 'topp:states'},
-            // serverType: 'geoserver'
-          // })
-		  name: 'geologic test',
-				//extent: extent,
-		     source: new ol.source.ImageStatic({
-			 //opacity: 0.5,
-				//url: './persani_comana_geologica_cropped_rectified.jpg',
-				url: './assets/layer_images/persani_comana_geologica_cropped_rectified_mercator.jpg',
-				imageSize: [4460, 2945],
-              //crossOrigin: '',			  
-              projection: ol.proj.get('EPSG:4326'),//projection,//"epsg:900913", // ol.proj.get('EPSG:3857')
-			  //"espg:4326" wgs84; "epsg:900913" mercator  , // epsg4326,
-              imageExtent: extent,
-			  name: 'geologic test'
-            })
-		  		          
-             //extent: extent,
-          // source: new ol.source.ImageWMS({
-            // url: './persani_comana_geologica_cropped_rectified.jpg',
-            // params: {},
-            // //serverType: 'geoserver'
-        //})
-        })
-		//]
-		//})
-		;
-		
-	// center: ol.proj.transform(
-              //ol.extent.getCenter(imageExtent), 'EPSG:27700', 'EPSG:3857'),
-			  
-	//layers[8] = map_overlay_geo_comana;
-	//map.addLayer(map_overlay_geo_comana);
-	 //map.addOverlay(map_overlay_geo_comana);
-
-	 
-	 /*var geoJsonProc = new ol.format.GeoJSON.writeFeatures(features4326, {
-  dataProjection: 'EPSG:3857',
-  featureProjection: 'EPSG:4326'
-});
-*/
-		///////////////////////////
-		// database geojson layer with points
-		
-	/*	var geojsonObject = {
-    'type': 'FeatureCollection',
-    'features': [
-        {
-            'type': 'Feature',
-            'geometry': {
-                'coordinates': [ 25.314217, 45.915094 ], // [ 45.915094, 25.314217 ], 
-                'type': 'Point'
-            },
-        }
-    ]
-	};*/
-	
-/*	
 	for (index = 0; index < layers.length; index++)
 	{		
 		layers[index].setVisible(index == 0);
 			
 		map.addLayer(layers[index]);
 	}
-*/	
-	for (index = 0; index < layers.length; index++)
-	{		
-		layers[index].setVisible(index == 0);
 			
-		map.addLayer(layers[index]);
-	}
-		
-	//loadFeaturesFunc = loadFeatures;
-	//loadFeatures();
-	
-	map.addLayer(map_overlay_geo_comana);
-	
-	//map.addLayer(db_features_layer);
-	
-	/*
-	map.addLayer(map_layer_osm);
-	map.addLayer(map_layer_mapquest_sat);
-	map.addLayer(map_layer_mapquest_hyb);
-	map.addLayer(map_layer_mapquest_osm);
-	map.addLayer(map_layer_arcgis);
-	(/
-
-	switchLayer();
-	$(function() { switchLayer() } );
-	$("#layerswitcher input[name=layer]").change(function() { switchLayer() } );
-	*/
-	
 	/////////////////////////////////////////////
-	
+
+/*	
 $("#slider-id").slider({
     value: 100,
     slide: function(e, ui) {
@@ -1606,16 +1555,13 @@ $("#hgPersaniCentruCheckBox").change(
 		  //map_overlay_geo_comana.setOpacity(50 / 100);
     }
 );
-
+*/
 // $("#measurementCheckBox").change(
     // function() {		
 		// user_mouse_interaction_type = $(this).is(":checked") ? 1 : 0;
     // }
 // );
 
-map_overlay_geo_comana.setVisible(!false);
-
-$("#hgPersaniCentruCheckBox").prop('checked', map_overlay_geo_comana.getVisible());
 //$("#hgPersaniCentruCheckBox").prop('checked', map_overlay_geo_comana.getVisible());
 
 //////////////////
@@ -1637,7 +1583,7 @@ map.on('singleclick', function(evt) {
 				var pointLayer = new ol.layer.Vector(
 				{
 				  source: drawSource,
-				  name: 'drawing',				  
+				  name: _t().main_map.body.layer_switcher.drawings,				  
   style: new ol.style.Style({
     fill: new ol.style.Fill({
       color: 'rgba(255, 255, 255, 0.2)'
@@ -1806,6 +1752,42 @@ $(document).delegate('*[data-toggle="lightbox"]', 'click', function(event) {
 		});
 		
 		map.addInteraction(hoverInteraction);*/
+		
+	 map.getCurrentScale = function () {
+				//var map = this.getMap();
+				var map = this;
+				var view = map.getView();
+				var resolution = view.getResolution();
+				var units = map.getView().getProjection().getUnits();
+				var dpi = 25.4 / 0.28;
+				var mpu = ol.proj.METERS_PER_UNIT[units];
+				var scale = resolution * mpu * 39.37 * dpi;
+				return scale;
+
+			};
+			
+    map.getView().on('change:resolution', function(evt){
+
+        //var divScale = 60;// to adjusting
+        //var radius =  map.getCurrentScale()/divScale;
+        //feature.getStyle().getGeometry().setRadius(radius);
+		
+		for (var key in __zoom_dependent_features)
+			if(__zoom_dependent_features.hasOwnProperty(key))
+			{
+				var f = __zoom_dependent_features[key];
+				
+				if (map.getCurrentScale() < 700)
+				{
+					if (f.getStyle() != __zoom_dependent_styles[key])
+						f.setStyle(__zoom_dependent_styles[key]);
+				}
+				else
+					if (f.getStyle() != _invisibleStyle)
+						f.setStyle(_invisibleStyle);
+			}
+    });
+		
 }
 	///////////////////////////
 	// end initMap
@@ -1817,7 +1799,7 @@ $(document).delegate('*[data-toggle="lightbox"]', 'click', function(event) {
 			map.removeLayer(_db_features_layer);
 		
 		var db_features_source = new ol.source.Vector({
-		  url: 'data/getDBGeoData.php' +'?type=surface_feature',
+		  url: url_base + '/data/getDBGeoData.php' +'?type=surface_feature',
 		  format: new ol.format.GeoJSON({
 			 defaultDataProjection : 'EPSG:4326'//,
 			 //ignoreExtraDims: true		 		
@@ -1829,7 +1811,7 @@ $(document).delegate('*[data-toggle="lightbox"]', 'click', function(event) {
 
 	   /*var*/ db_features_layer = new ol.layer.Vector({
 	   source: db_features_source ,
-	   name: 'database features',
+	   name: _t().main_map.body.layer_switcher.surface_features, // name: 'database features',
 	   style: _feature_styleFunction
 	   //projection : 'EPSG:4326' //'EPSG:3857', // 'EPSG:4326'
 	   //style: style_1()
@@ -1842,6 +1824,8 @@ $(document).delegate('*[data-toggle="lightbox"]', 'click', function(event) {
 		
 		_db_features_source = db_features_source;
 		_db_features_layer = db_features_layer;
+		
+		_db_features_layer.setZIndex(88);
 		
 		var key = db_features_source.on('change', function(event) {
 			if (db_features_source.getState() == 'ready') {
@@ -2006,6 +1990,7 @@ function initThumbnailLoading()
       style: pictureStyle
     });
 
+	picturesLayer.setZIndex(22);
 	map.addLayer(picturesLayer);
 
 	_picturesLayer = picturesLayer;
@@ -2132,7 +2117,7 @@ function initThumbnailLoading()
 			},
 		extractStyles: false, //-- probably GPX doesn't have styles ? or it has some icons ?
 		extractAttributes: !false			
-		});
+	});
 		
 	var kmlFormat = new ol.format.KML({
 		readExtensions: function(x) {
@@ -2141,7 +2126,15 @@ function initThumbnailLoading()
 		extractStyles: false,
 		extractAttributes: !false
 	});
-		
+
+	var kmlFormatWithStyles = new ol.format.KML({
+		readExtensions: function(x) {
+			  return x;
+			},
+		extractStyles: !false,
+		extractAttributes: !false
+	});
+	
 	var gpxFeatures;
 
 	var geoFileLayer = new ol.layer.Vector({
@@ -2149,14 +2142,15 @@ function initThumbnailLoading()
 		    //features: ,
 			//projection: new ol.proj.Projection({ code: "ESPG:4326"})
 		}),
-		name: 'geo files',
+		name: _t().main_map.body.layer_switcher.geo_files,
 		//style: function(feature) {
 		//	  return geoStyle[feature.getGeometry().getType()];
 		//}
 		//style: geoStyle['LineString'] // defaultStyle
-		style: caveGalleryLinesStyleFunction
+		style: caveGalleryLinesStyleFunction //-- this should be only for cave galleries, not all geofiles
 		});
 	
+	geoFileLayer.setZIndex(14);
 	map.addLayer(geoFileLayer);
 	
 	_geo_file_layer = geoFileLayer;
@@ -2183,6 +2177,7 @@ function initThumbnailLoading()
 					var geofile_name = data[property].FileName;
 					var geofile_type = data[property].Type;
 					var gf_file_url = './uploads/' + geofile_name;
+					var extract_style = parseInt(data[property].ExtractStyle);
 					
 					// from http://gis.stackexchange.com/questions/175592/read-gpx-file-from-desktop-in-openlayers-3 | http://gis.stackexchange.com/a/175637
 					
@@ -2196,25 +2191,33 @@ function initThumbnailLoading()
 						geoFormat = gpxFormat;
 					else
 					if (geofile_type == "KML")
-						geoFormat = kmlFormat;
+					{
+						if (extract_style)
+							geoFormat = kmlFormatWithStyles;
+						else
+							geoFormat = kmlFormat;						
+					}
 					else
 					{
 						//console.error("unsupported geo format: " + geofile_type);
 						// console.warn("unsupported geo format: " + geofile_type);
 						console.info("unsupported geo format: " + geofile_type + " url: " + gf_file_url);
 						geoFormat = undefined;
-						return;
+						//return;
+						continue;
 					}
-						
+					
+					console.log("started loading " + gf_file_url);
+					
 					$.ajax({  
 						url: gf_file_url,
 						dataType: "text",  
 						async: false,
-						success: function(data)
+						success: function(data, textStatus, jqXHR)
 						{
 							gpxFeatures = geoFormat.readFeatures(data, { dataProjection:'EPSG:4326', featureProjection:'EPSG:3857' });
 							geoFileLayer.getSource().addFeatures(gpxFeatures);
-							
+							console.log("loaded " + gf_file_url);
 							//testInitLineSelection(geoFileLayer);
 						},
 		error:  function(jqXHR, textStatus, errorThrown )
@@ -2275,10 +2278,15 @@ function initThumbnailLoading()
   };
 }
 
+var layoutControl;
+var _stateResetSettings;
+
 function initLayout()
 {
+  // http://layout.jquery-dev.com/
   //$(".simple").splitter();
-  $('body').layout({ applyDefaultStyles: true,
+  layoutControl = $('body').layout({ 
+	applyDefaultStyles: true,
     /*onopen_start: function () {
 		
         // STOP the pane from opening
@@ -2290,8 +2298,16 @@ function initLayout()
 		console.log("onresize");
 		map.updateSize();
         // STOP the pane from opening
-        //return false; // false = Cancel
-    }
+        // return false; // false = Cancel
+    },
+	/*east : {
+       resizable : false,
+	   size: "auto"
+    },
+	south: {
+       resizable : false,
+	   size: "auto"
+    }*/
 });
 
 var stateResetSettings = {
@@ -2308,22 +2324,25 @@ var stateResetSettings = {
 		east__size:			"auto"
 	,	east__initClosed:	false
 	,	east__initHidden:	false
+	,	east__resizable: 	!false
+	//,   east__size:			100
 	
-	,	south__initClosed:	true
+	,	south__initClosed:	!true
 	,	south__initHidden:	false
 	,	south__size:		"auto"
+	
 	,	west__initClosed:	false
 	,	west__initHidden:	false
-
+	,	west__size:			"auto"
+	,	west__resizable: 	false
 	//,	east__initClosed:	true
 	//,	east__initHidden:	false
 
 	};
 
-$('body').layout().loadState(stateResetSettings);
-
-
-
+	_stateResetSettings = stateResetSettings;
+	
+	$('body').layout().loadState(stateResetSettings);
 }
 
 function initDrawObjects()
@@ -2362,7 +2381,23 @@ function initDrawObjects()
 					else
 						feature_type_symbol_path = symbols_path + "generic_feature.png";
 					
-					var localized_feature_type_name = eval("_t().feature_types." + feature_type_name.replace(" ", "_"));
+					var localized_feature_type_name = "_error_";
+					
+					
+					if (feature_type_name.trim() === "")
+					{
+						console.info("error on feature type localization for '" + feature_type_name + " ': feature_type_name is empty");
+						continue;
+					}
+					
+					try
+					{
+						localized_feature_type_name = eval("_t().feature_types." + feature_type_name.replace(" ", "_"));
+					}
+					catch(err)
+					{
+						console.info("error on feature type localization for '" + feature_type_name + " ': " + err.message);
+					}
 					
 					var index = 0;
 					var groupSubmenuItem = undefined;
@@ -2383,7 +2418,7 @@ function initDrawObjects()
 								//selected : true
 							},							
 							icon: "glyphicon glyphicon-plus",
-							li_attr: {},
+							li_attr: {}, //"style='font-weight: bold;'" 
 							a_attr: {}
 						};
 						
@@ -2465,10 +2500,16 @@ function initDrawObjects()
 					  });
 					  else
 						if (featureType.Type == "linestring")
+						{
 							featureStyle = geoStyle['LineString'];
+							
+							// style_properties
+							if (featureType.StyleProperties == "dashed_line")
+								featureStyle = geoStyle['approximateGalleryDashedLineString'];
+						}
 					  else					  
 						if (featureType.Type == "polygon")
-							featureStyle = geoStyle["Polygon"];
+							featureStyle = geoStyle["Polygon"];				
 					  else
 						console.log("unsupoorted feature type");
 					}
@@ -2517,6 +2558,9 @@ function initDrawObjects()
 	});
 }
 
+var __zoom_dependent_features = {};
+var __zoom_dependent_styles = {};
+
 var _feature_styleFunction = function(feature, resolution) {
     /*
 	var geometries = feature.getGeometry().getGeometries();
@@ -2553,21 +2597,37 @@ var _feature_styleFunction = function(feature, resolution) {
 			if (featureType)
 			{
 				//feature.setStyle(featureType.style);
+				featureType.style.getText().setText(feature.get('name')); 
 				selectedStyle = featureType.style;
-				featureType.style.getText().setText(feature.get('name'));		
+				
+				//feature.
+				//-- should use setStyle()
+				
+				if (featureType.Name == "exploration_point")
+				{
+					__zoom_dependent_features[feature.get('id')] = feature;
+					__zoom_dependent_styles[feature.get('id')] = selectedStyle;
+				}
+					
+				/*	
+				if (resolution > 0.2 && featureType.Name == "exploration_point")
+					feature.setStyle(_invisibleStyle);
+				else
+					feature.setStyle(selectedStyle);					
+				*/
 			}
 			else
 				console.error("no feature type existent for " + feature_type_id);
 		}
 		else
 		if (point_type == "cave_entrance")
-		{
-			//selectedStyle = _caveStyle;
+		{			
 			var featureType = featureTypes[3];
 			selectedStyle = featureType.style;
 			
 			selectedStyle = _caveStyle;
-			//feature.setStyle(caveStyle);			
+			//feature.setStyle(caveStyle);
+			selectedStyle.getText().setText(feature.get('cave_name')); //-- a new style instance for each feature? performance?
 		}
 		else
 		//-- workaround, it should be detected cleaner
@@ -2593,7 +2653,7 @@ var _feature_styleFunction = function(feature, resolution) {
 				else if (feature.get('name'))
 					text = feature.get('name');
 				
-				featureType.style.getText().setText(text);		
+				featureType.style.getText().setText(text);
 			}
 			else
 				console.error("no feature type existent for " + feature_type_id);			
@@ -2617,30 +2677,32 @@ $(document).ready(function() {
 	var _lat = parseFloat(getUrlParameter('lat'));
 	var _long = parseFloat(getUrlParameter('lon'));
 	var point_id = parseFloat(getUrlParameter('point_id'));
+	var _zoom = parseFloat(getUrlParameter('z'));
 	
 	localize_static_html();
 	document.getElementsByTagName("html")[0].style.visibility = "visible";	
 	
 	initMap();
+	
 	initLayout();
 	initNewCaveForm(); //-- might be deffered until new cave form is open	
 	initNewFeatureForm();
 	
 	initCaveDetailsForm();
 	initNewCaveEntranceForm(); //-- deffer init only for the form loading moment?
-	initTripReportForm();
+	//zz initTripReportForm();
 	
 	initUploadControls();
-	initCaveDetailsUploadControl();
+	//zz initCaveDetailsUploadControl();
 	initPicturesUploadControl();
 	
 	initFeatureSearchControl();
-	initTripFeatureSearchControl();
+	//zz initTripFeatureSearchControl();
 
 	initGeocoderSearch();
 	initMapLayerSwitcherControl();
 	initMapPermalinkControl();
-	initCaveFilesTable();
+	//zz initCaveFilesTable();
 	initContextMenu();
 	//initDrawFeaturesTreeControl();
 	initCaveFeaturesHighlighting();
@@ -2648,39 +2710,62 @@ $(document).ready(function() {
 	initCaveFeaturesCheckBox();
 	
 	initDrawObjects();
+	
+	//InitGeoreferencedMaps();
 	//loadFeatures();
+	//initLayout();
+	setTimeout(function()
+	{
+		//InitGeoreferencedMaps();
+		//initMapLayerSwitcherControl();
+		//initLayout();
+		//map.updateSize();
+	}, 2500);
 	
 	setTimeout( function() 
-	{ 
+	{ 		
 		initPictureThumbLayer();
-	}, 1000);
+	}, 2500);
+	// }, 1000);
 	
 	init_export_map_as_image();
 	
 	setTimeout( function() 
 	{ 
 		//initThumbnailLoading();			
-	}, 500);
+	}, 2500);
 
 	setTimeout( function()
 	{ 
 		initViews(set_center = true);
-	}, 1500);
+	}, 500);
 		
 	initSearchControl();		
 
-	loadCaveFeatures();
+	// 	loadCaveFeatures();
 	setTimeout(function() 
 	{			
-		//loadCaveFeatures(); 
-	}, 1000);
+		loadCaveFeatures();
+	}, 5000);
 	
 	setTimeout(function() 
-	{			
-		loadGeoFiles(); 
+	{
+		loadGeoFiles();
 		loadFeatures();
 		setInitialCaveLayerSettings();
-	}, 2500);
+		//loadCaveFeatures();
+	}, 3250);
+	
+	setTimeout(function()
+	{
+		InitGeoreferencedMaps();
+	}, 4500);
+	
+	/*setTimeout(function() 
+	{			
+		initLayout();
+	}, 3200);
+	*/
 	//setTimeout(function() {			initFeatureClusteringLayer(); }, 2500);
 	
 /*	var _lat = parseFloat(getUrlParameter('lat'));
@@ -2688,14 +2773,15 @@ $(document).ready(function() {
 	var point_id = parseFloat(getUrlParameter('point_id'));
 */	
 
-//-- multiple calls to setView up to this point make initial map loading to flicker and change several times quickly
-	if (_lat && _long)		
+	//-- multiple calls to setView up to this point make initial map loading to flicker and change several times quickly
+	if (_lat && _long)
 		//if (_long)
 	{
 		map_center_set_by_url = true;
 		
 		parametrizedCenter = ol.proj.transform([_long, _lat], 'EPSG:4326', 'EPSG:3857');
 		map.getView().setCenter(parametrizedCenter);
+		map.getView().setZoom(_zoom);
 
 		if (point_id)
 		{
@@ -2704,7 +2790,7 @@ $(document).ready(function() {
 			}, 2500);
 		}
 		// gotoMapElement(point_id);
-	}	
+	}
 /*	else
 		if (default_map_view_id)
 		{
@@ -2714,7 +2800,7 @@ $(document).ready(function() {
 			showView(default_map_view_id)
 		}
 	*/
-	map.updateSize();	
+	map.updateSize();
   });
 
 
@@ -2799,7 +2885,9 @@ var _draw_source;
 		
 		map.removeInteraction(drawGeoElemInteraction);
         
-		if (/*caveFeaturesDrawSource && */(featureTypeObject["GroupType"] == "cave_feature"))
+		if (/*caveFeaturesDrawSource && */
+		(featureTypeObject !== undefined) &&
+		(featureTypeObject["GroupType"] == "cave_feature"))
 		{
 			enableCaveFeatureEditing();			
 			_draw_source = caveFeaturesDrawSource;
@@ -2991,15 +3079,15 @@ else
 
 				var sfr = get_selected_feature(event);				
 				
-				var feature = event.feature;
+				var new_feature = event.feature;
 				
-				if (sfr)
-					feature = sfr;
+				//if (sfr)
+				//	feature = sfr;
 				
 				//-- ?
 				//caveFeaturesDrawSource = undefined;
 				//console.log(event);
-				saveFeature(feature, event);
+				saveFeature(new_feature, sfr, event);
             }, this);
 
         
@@ -3032,7 +3120,7 @@ function getInteractionPointerIconUrl(interactionType)
 		return undefined;
 }
 	
-function saveFeature(feature)
+function saveFeature(new_feature, selected_feature, event)
 {
 	
 		//var coordinates = undefined;
@@ -3044,25 +3132,41 @@ function saveFeature(feature)
 		//var pixel = map.getEventPixel(evt.originalEvent);
 		//map.forEachFeatureAtPixel(pixel, function(feature, layer) { features.push(feature); }, this, mainLayerFilter, this);
 		
-		var existingSelectedFeature = feature;
+		var existingSelectedFeature = selected_feature;
 		
-		//if (existingSelectedFeature)
+		//if (existingSelectedFeature)		
+		//coordinates = existingSelectedFeature.getGeometry().getCoordinates();
+		coordinates = new_feature.getGeometry().getCoordinates();
 			
-		coordinates = existingSelectedFeature.getGeometry().getCoordinates();
 			// coordinates = [existingSelectedFeature.getProperties().long, existingSelectedFeature.getProperties().lat];
 		//else
 		//	coordinates = ol.proj.transform(evt.coordinate, 'EPSG:3857', 'EPSG:4326'); // [long, lat]		
 		
+		
+		//-- keep only point features for defining a new feature ?
+		if (existingSelectedFeature)
+		{
+			if (existingSelectedFeature.getGeometry().getType() != "Point")
+				existingSelectedFeature = undefined;
+			else
+			{
+				coordinates = existingSelectedFeature.getGeometry().getCoordinates();
+				new_feature = existingSelectedFeature;
+			}
+		}
+		
+		//var feature = new_feature;
+		
 		if (selected_new_feature_type == 3)
-			newCave(undefined, coordinates, existingSelectedFeature);
+			newCave(undefined, coordinates, new_feature);
 		else
 		if (selected_new_feature_type == 4)
-			newCaveEntrance(undefined, coordinates, existingSelectedFeature);
+			newCaveEntrance(undefined, coordinates, new_feature);
 		else
 		if (featureTypes[selected_new_feature_type]["GroupType"] == "cave_feature")
-			newCaveFeature(undefined, coordinates, existingSelectedFeature, selected_new_feature_type); // [long, lat];
+			newCaveFeature(undefined, coordinates, new_feature, selected_new_feature_type); // [long, lat];
 		else
-			newFeature(undefined, coordinates, existingSelectedFeature, selected_new_feature_type); // [long, lat]
+			newFeature(undefined, coordinates, new_feature, selected_new_feature_type); // [long, lat]
 
 			
 }
@@ -3314,7 +3418,8 @@ function openNewPictureForm(picture_id, coordinates, existingSelectedFeature)
 			//var formData = new FormData($(this));
 			formData = new FormData($(this));
 			formData.append( 'form_data', JSON.stringify(formInputRegularData));
-			formData.append( 'file', $( '#file' )[0].files[0] );
+			formData.append( 'file', $( '#pictureUploadControl' )[0].files[0] );
+			//formData.append( 'file', $( '#file' )[0].files[0] );
 			
 			/*formData.append('picture_coords_lat', $('#picture_coords_lat').val());
 			formData.append('picture_coords_lon', $('#picture_coords_lon').val());
@@ -4104,6 +4209,7 @@ function reloadMapFeatures()
 	loadFeatures(); //-- should implement better feature reloading: currently the entire layer gets reinstantiated and the new layer is added to map; flicker appears
 	loadCaveFeatures();
 	initThumbnailLoading();
+	map.render();
 	}, 500);
 }
 
@@ -4885,6 +4991,8 @@ function initCaveFilesTable()
 	});	
 }
 
+var _external_switcher;
+
 function initMapLayerSwitcherControl()
 {
 	// Add a layer switcher outside the map
@@ -4893,10 +5001,12 @@ function initMapLayerSwitcherControl()
 			target:$(".layerSwitcher").get(0),
 			show_progress:true,
 			extent: true,
-			trash: true,			
+			trash: true,
 			oninfo: function (layer) { alert(layer.get("name")); }
 		});
-		
+	
+	_external_switcher = external_switcher;
+	
 	map.addControl(external_switcher);
 	
 	// Insert mapbox layer in layer switcher
@@ -4956,10 +5066,10 @@ function setMapLayerConfiguration(configuration)
 			if (layers.item(_layer_index))
 			{
 				// filter out helper layers so their functionality and state is not influenced by map view selecting
-				if (layers == caveFeaturesLayer)
+				if (layers == caveFeaturesGalleryZonesLayer)
 					continue;
 					
-				if (layers != caveFeaturesLayer)
+				if (layers != caveFeaturesGalleryZonesLayer)
 				{
 				layers.item(_layer_index).setVisible(layer_list[index].visible),			
 				layers.item(_layer_index).setOpacity(layer_list[index].opacity)
@@ -5100,8 +5210,18 @@ function initContextMenu()
 		  }		  
 		];
 		
+		//contextmenu.extend(add_later);	  
+	
+	if (feature) {
+	var feature_name = feature.getProperties().name;
+		
 		var cave_feature_items = [
 		  //'-', // this is a separator
+		  {
+			text: feature_name,
+			classname: 'map_context_menu_feature_header', // add some CSS rules
+		  },
+		  "-",
 		  {
 			text: 'Edit cave feature',
 			//icon: '',
@@ -5122,10 +5242,7 @@ function initContextMenu()
 		  }
 		  
 		];		
-
-		//contextmenu.extend(add_later);	  
-	
-	if (feature) {
+		
 		contextmenu.clear();
 		
 		if (getFeatureType(feature) == "cave_entrance")
@@ -5255,73 +5372,6 @@ function openUploadFilesForm(geoobject_id, geoobject_type) // cave_id, cave_entr
 	}
 }
 
-function addTripFiles()
-{
-	var trip_log_id = $('#trip_log_id').val();
-	openUploadTripFilesForm(trip_log_id);
-}
-
-function openUploadTripFilesForm(trip_log_id) // cave_id, cave_entrance_id, feature_id
-{			
-	$('#upload_files_cave_id').val("");	
-	
-	$('#uploadFilesModalTitleLabel').text("Edit '" + "" +"'");
-	
-	$('#fileupload_target_type').val("trip_report");
-	$('#fileupload_target_object_id').val(trip_log_id);
-/*	
-	$('#uploadFilesForm').on('submit', function(e) {
-          e.preventDefault();
-
-          var formData = $(this).serializeObject();
-		  //var serializedFormData = JSON.stringify(formData);
-		  
-		  postDataAsync("data/postCave.php", formData, 
-			function(x) 
-			{ 
-				console.log('close');
-				$('#caveModal').modal('toggle'); 
-				last_added_cave_id = undefined; //-- need to return the cave_id from postCave.php or to load load the last added cave in fillCavePicker()
-				
-				showNotification("Cave <b>" + formData.cave_name + "</b> was saved.");
-				reloadMapFeatures();
-				//$("caveModal").modal('hide');
-			}, 
-			function(err) 
-			{ 
-				console.log('error');
-				alert(err);
-			}
-		  ); // { cave: formData }
-		  
-		  //console.log(formData);
-		  //console.log(JSON.stringify($(this).serializeObject()));          
-        });
-*/		
-	//fillCaveEntries();
-	
-	if (trip_log_id)
-	{
-		$('#uploadFilesModal').modal();
-		/*$.getJSON("data/getCave.php?cave_id=" + cave_id, function( data ) {
-			
-			$('#caveModal').modal();
-			
-			$('#cave_id').val(data.Id);
-			$('#cave_name').val(data.Name);				
-			$('#cave_description').val(data.Description);
-			$('#cave_type').val(data.Typeid);
-			$('#cave_identifier').val(data.Locationidentifier);
-
-			$('#cave_type').selectpicker('refresh');
-			
-			//_caveFormServerData = data;
-			//$('#caveModal').modal();
-		});		
-		*/
-	}
-}
-
 function openUploadPicturesForm(geoobject_id, geoobject_type) // cave_id, cave_entrance_id, feature_id
 {				
 	$('#upload_xx_cave_id').val("");
@@ -5389,6 +5439,50 @@ function addPictures()
 {
 	openUploadPicturesForm(undefined, undefined);
 }
+
+function deletePictures(picture_id)
+{
+	var question_text = "";
+	
+	question_text = "Doriti sa stergeti poza?";
+	var q_res = confirm(String.format(question_text));
+		
+	if (q_res)
+	{		
+		var picture_delete_data = {
+			picture_id: picture_id,		
+		};
+	
+	//var view_name = map_views[map_view_id].mapview_name;
+	
+    $.ajax({
+                url: 'data/deletePictures.php', // point to server-side PHP script 
+                dataType: 'text',  // what to expect back from the PHP script, if anything
+				
+				data: JSON.stringify(picture_delete_data), // JSON.stringify({ Markers: markers })
+				contentType: "application/json; charset=utf-8",
+				//dataType: "json",
+				
+                cache: false,
+                contentType: false,
+                processData: false,
+                //data: view_data,
+                type: 'post',
+                success: function(php_script_response){					
+					if (php_script_response.indexOf("201") >= 0) // if (php_script_response == "201")
+					{
+						closePictureBox();
+						showNotification("Picture <b>" + "" + "</b> was deleted.", { from: "bottom", align: "right" });
+						//refreshViewList();//alert("saved");
+						//-- must delete the thumbnails from map and from slider
+					}
+					else
+						alert(php_script_response); // display response from the PHP script, if any
+                }
+     });			 	 	 
+	 }
+}
+
 
 function initPicturesUploadControl()
 {
@@ -5485,11 +5579,15 @@ function initPicturesUploadControl()
 
 ///////////////////////
 //  begin localization
-//var selected_language = 'en'; // 'ro';
 var selected_language = 'ro';
+//var selected_language = undefined; // 'ro';
+//var selected_language = 'ro';
 
 function _t()
 {
+	if ((selected_language == undefined) || (selected_language == ""))
+		throw "selected_language is undefined or empty";
+		
 	try
 	{
 		return localizedText[selected_language];
@@ -5502,6 +5600,15 @@ function _t()
 
 function localize_static_html()
 {
+	selected_language = $('#user_language').text();
+
+	if ((selected_language == undefined) || (selected_language == ""))
+		selected_language = 'ro';
+	// var lang_cookie = readCookie('lang');
+	
+	//if (lang_cookie)
+	//	selected_language = lang_cookie;
+
 	//var regex = "/(<([^>]+)>)/ig";
 	//var regex = "(?<=\{)(.*?)(?=\})";
 	//var regex = /{(.*)}/
@@ -5515,7 +5622,8 @@ function localize_static_html()
 	// See more at: http://www.jsmantras.com/blog/String-Methods-search-match-and-replace#sthash.MPZVQvuX.dpuf
 	function replacer(match, p1, p2, p3, offset, string)
 	{ // p1 is nondigits, p2 digits, and p3 non-alphanumerics 
-	
+		try 
+		{
 		res = match.match(/[\w\.]+/)[0];
 		//console.log(res);
 		
@@ -5525,7 +5633,12 @@ function localize_static_html()
 			return "*not found*";
 		//m_res[0].replace(regex, localized_text);
 		//document.body.innerHTML.replace(m_res[0], "");
-	
+		}
+		catch(err) {
+			return "*error*";
+			//return "error localizing: " + err;
+		}
+		
 		return localized_text;
 		//return [p1, p2, p3].join(' - '); 
 	}; 
@@ -5660,509 +5773,22 @@ function initUploadControls()
         //url: 'data/uploader/'
 		//url: 'data/uploader'
     });
-}
-
-//////////////////////////
-// Begin Trip Report form
-
-function addTripReport()
-{
-	openTripReportForm(undefined);
 	
-	//if (feature_id == undefined)
-	//$('#tripReportModal').modal();
-}
-
-function openTripReportForm(trip_log_id) // cave_id, cave_entrance_id, feature_id
-{			
-	//$('#upload_xx_cave_id').val("");
-	
-	//$('#uploadFilesForm').off('submit');
-	//$("#uploadFilesForm")[0].reset();
-	
-	if (trip_log_id)
-		$('#tripReportModalTitleLabel').text("Edit '" + "" +"'");
-
-	if (trip_log_id)
-	{
-		$.getJSON("data/getTripReport.php?trip_log_id=" + trip_log_id, function( data ) {
-			
-			//$('#tripReportModal').modal();
-			
-			$('#trip_log_id').val(data.Id);
-			$('#tripreport_start_time').val(data.Tripstarttime);
-			$('#tripreport_end_time').val(data.Tripendtime);				
-			$('#tripreport_details').val(data.Details);
-			$('#tripreport_place').val(data.Targetzone);
-			//$('#tripreport_members').val(data.Members);
-			
-			//$('#tripreport_members').tagsinput('items');
-			
-			data.Members.forEach(function(team_member) {
-				$('#tripreport_members').tagsinput('add', _team_members[team_member]);
-			});
-			
-			$('#tripreport_members').tagsinput('refresh');
-			//$('#').val(data.Feature_type_id);
-									
-			$('#tripReportModal').modal();
-		});
-	}
-	else
-	{
-		$('#trip_log_id').val("");
-		$('#tripreport_start_time').val("");
-		$('#tripreport_end_time').val("");				
-		$('#tripreport_details').val("");
-		$('#tripreport_place').val("");
-		$('#tripreport_members').val("");
-		$('#tripreport_members').tagsinput('removeAll');
-		
-          var formData = $('#tripReportForm').serializeObject();
-		  //var serializedFormData = JSON.stringify(formData);
-		  formData.temporary = 1;
-		  
-		  postDataAsync("data/postTripReport.php", formData, 
-			function(response) 
-			{ 
-		$('#trip_log_id').val(response.Id);
-		// $('#tripreport_start_time').val("");
-		// $('#tripreport_end_time').val("");				
-		// $('#tripreport_details').val("");
-		// $('#tripreport_members').val("");
-		// $('#tripreport_members').tagsinput('removeAll');
-		
-		$('#tripReportModal').modal();
-			
-				//console.log('close');
-				//$('#tripReportModal').modal('toggle'); 
-				
-				showNotification("temp Trip report");
-				//reloadMapFeatures();
-				/* //-- $("caveModal").modal('hide');*/ 
-			}, 
-			function(err) 
-			{ 
-				console.log('error');
-				alert(err);
-			}
-		  ); // { cave: formData }
-	
-		// $.getJSON("data/getTripReport.php?trip_log_id=" + trip_log_id, function( data ) {				
-
-		// // $('#trip_log_id').val("");
-		// // $('#tripreport_start_time').val("");
-		// // $('#tripreport_end_time').val("");				
-		// // $('#tripreport_details').val("");
-		// // $('#tripreport_members').val("");
-		// // $('#tripreport_members').tagsinput('removeAll');
-		
-		// // $('#tripReportModal').modal();
-		// });
-		
-	}
-	
-	if (trip_log_id)
-	{
-		refreshTripReportFilesTable(trip_log_id);
-	
-		/*$('#uploadFilesModal').on('hidden.bs.modal', function () {
-			//-- this is not executed, maybe ovewritten by the other event
-			refreshTripReportFilesTable(trip_log_id);
-		});
-		*/
-	}
-	
-	$('#trip_report_files_table').DataTable().clear();
-	$('#trip_report_files_table').DataTable().draw();	
-}
-
-function initTripReportForm()
-{
-	$('#trip_report_files_table').DataTable( {
-        //"ajax": '../ajax/data/arrays.txt'
-    } );
-
-	$('#addFilesToTripReport').on('click', function(event) {
-		event.preventDefault(); // To prevent following the link (optional)		
-		addTripFiles();
-		
-		//onSaveCave(this);
-		//$(this).submit();
+	$("#pictureUploadControl").fileinput({
+	//'showUpload':!false, 
+	//'previewFileType':'any'
 	});
-	
-	$('#tripReportForm').on('submit', function(e) {
-          e.preventDefault();
-
-          var formData = $(this).serializeObject();
-		  //var serializedFormData = JSON.stringify(formData);
-		  
-		  postDataAsync("data/postTripReport.php", formData, 
-			function(x) 
-			{ 
-				console.log('close');
-				$('#tripReportModal').modal('toggle'); 
-				
-				showNotification("Trip report <b>" + "" + "</b> was saved.");
-				//reloadMapFeatures();
-				/* //-- $("caveModal").modal('hide');*/ 
-			}, 
-			function(err) 
-			{ 
-				console.log('error');
-				alert(err);
-			}
-		  ); // { cave: formData }
-		  
-		  //console.log(formData);
-		  //console.log(JSON.stringify($(this).serializeObject()));          
-        });
-		
-	//fillCaveEntries();	
-	
-	$('#tripreport_start_time').datetimepicker({
-		//defaultDate: "11/1/2013",
-        /*disabledDates: [
-							moment("12/25/2013"),
-							new Date(2013, 11 - 1, 21),
-							"11/22/2013 00:53"
-						]
-						*/
-	});	
-
-	$('#tripreport_end_time').datetimepicker({
-		//defaultDate: "11/1/2013",
-        /*disabledDates: [
-							moment("12/25/2013"),
-							new Date(2013, 11 - 1, 21),
-							"11/22/2013 00:53"
-						]*/
-	});	
-
-/*var tm2 = new Bloodhound({
-  datumTokenizer: Bloodhound.tokenizers.obj.whitespace('name'),
-  queryTokenizer: Bloodhound.tokenizers.whitespace,
-  prefetch: {
-    url: 'data/getTeamMembers.php',
-    filter: function(list) {
-      return $.map(list, function(cityname) {
-        return { name: cityname }; });
-    }
-  }
-});
-tm2.initialize();
-*/
-$.getJSON('data/getTeamMembers.php', function( data ) 
-{	
-var items = [];
-_team_members = [];
-
-$.each( data, function( key, val ) {
-		
-		//val.short_name = val.FirstName + " " + val.LastName;
-		val.short_name = val.FirstName;
-		
-		if (val.LastName && val.LastName.length > 0)
-			val.short_name += " " + val.LastName.substr(0, 1) + ".";
-			
-		items.push(val);
-		_team_members[val.Id] = val;
-	});
-	
-	
-var teamMembers = new Bloodhound({
-  datumTokenizer: function (item) 
-  {
-	//return [item.FirstName + " " + item.LastName];
-	return [item.FirstName, item.LastName, item.FirstName + " " + item.LastName, item.short_name];
-  }, //Bloodhound.tokenizers.obj.whitespace('FirstName'),
-  queryTokenizer: Bloodhound.tokenizers.whitespace,
-  //queryTokenizer: Bloodhound.tokenizers.obj.whitespace('FirstName'),
-  //prefetch: 'data/getTeamMembers.php',
-  
-  // prefetch: {
-    // url: 'data/getTeamMembers.php',
-    // /*filter: function(list) {
-      // return $.map(list, function(cityname) {
-        // return { name: cityname }; });
-    // }*/
-	// },
-  identify: function(obj) { console.log("identify" + obj); return obj.Id; },
-  dupDetector: function(a, b) { return a.Id === b.Id; },
-  //prefetch: 'data/getSearchFeatures.php',
-  /*remote: {
-    url: 'data/getTeamMembers.php',
-    //wildcard: '%QUERY'
-  },*/
-  transform: function(data)
-  {
-	console.log('p: ' + data);
-  },
-  local: items
-  	/*local: function(query) {
-		var items = [];
-      $.getJSON('data/getTeamMembers.php', function( data ) {
-	  
-	$.each( data, function( key, val ) {
-		items.push(val);
-	});
-	
-	
-	});
-	return items;
-    }
-	*/
-});
-
-teamMembers.initialize();
-
-/**
- * Typeahead
- */
-/*var elt = $('.example_typeahead > > input');
-elt.tagsinput({
-  typeaheadjs: {
-    name: 'citynames',
-    displayKey: 'name',
-    valueKey: 'name',
-    source: tm2.ttAdapter()
-  }
-});
-*/
-
-/**
- * Objects as tags
- */
-elt = $('#tripreport_members');
-elt.tagsinput({
-  itemValue: 'Id',
-  //itemText: 'FirstName',
-  itemText: 'short_name',
-  typeaheadjs: {
-/*
-  hint: $('.Typeahead-hint'),
-  menu: $('.Typeahead-menu'),
-  //hint: true,
-  highlight: true,
-  minLength: 1,
-  classNames: {
-      open: 'is-open',
-      empty: 'is-empty',
-      cursor: 'is-active',
-      suggestion: 'Typeahead-suggestion',
-      selectable: 'Typeahead-selectable'
-    },
-*/  
-    name: 'teamMembers',
-    //displayKey: 'FirstName',
-	displayKey: 'short_name',
-	confirmKeys: [13, 44, 188],
-    source: teamMembers.ttAdapter(),
-	//limit: 9
-    /*source: function(query) {
-      return $.getJSON('data/getTeamMembers.php');
-    }*/	
-  }
-});
-
-//elt.tagsinput('add', { "Id": 21 , "FirstName": "Amsterdam" });
-//elt.tagsinput('add', { "Id": 32 , "FirstName": "xx" });
-
-// elt.tagsinput('add', { "value": 1 , "text": "Amsterdam"   , "continent": "Europe"    });
-// elt.tagsinput('add', { "value": 2 , "text": "xx"   , "continent": "zz"    });
-
-	
-	// $('#membersTagsControl').tagsinput({
-	/*
-	$('#tripreport_members').tagsinput({
-	  itemValue: 'Id',
-	  itemText: 'FirstName',
-	  typeahead: {
-		source: function(query) {
-		  return $.getJSON('data/getTeamMembers.php');
-		}
-	  }
-	});	
-	
-var cities = new Bloodhound({
-  datumTokenizer: Bloodhound.tokenizers.obj.whitespace('text'),
-  queryTokenizer: Bloodhound.tokenizers.whitespace,
-  prefetch: 'assets/cities.json'
-});
-cities.initialize();
-
-var elt = $('input');
-elt.tagsinput({
-  itemValue: 'value',
-  itemText: 'text',
-  typeaheadjs: {
-    name: 'cities',
-    displayKey: 'text',
-    source: cities.ttAdapter()
-  }
-});
-elt.tagsinput('add', { "value": 1 , "text": "Amsterdam"   , "continent": "Europe"    });
-elt.tagsinput('add', { "value": 4 , "text": "Washington"  , "continent": "America"   });
-elt.tagsinput('add', { "value": 7 , "text": "Sydney"      , "continent": "Australia" });
-elt.tagsinput('add', { "value": 10, "text": "Beijing"     , "continent": "Asia"      });
-elt.tagsinput('add', { "value": 13, "text": "Cairo"       , "continent": "Africa"    });	
-*/
-
-// HACK: overrule hardcoded display inline-block of typeahead.js
-	$(".twitter-typeahead").css('display', 'inline');
-	
-    });
-	
-	$('.modal-child').on('show.bs.modal', function () {
-        var modalParent = $(this).attr('data-modal-parent');
-        //$(modalParent).css('opacity', 0);
-		$(modalParent).hide();
-    });
-	
-    $('.modal-child').on('hidden.bs.modal', function () {
-        var modalParent = $(this).attr('data-modal-parent');
-        //$(modalParent).css('opacity', 1);
-		$(modalParent).show();
-		
-		var trip_log_id = $('#trip_log_id').val();
-		refreshTripReportFilesTable(trip_log_id);
-    });	
 }
-
-function openAddFilesToTripReportForm()
-{
-	openUploadFilesForm(undefined, undefined);
-}
-
-function refreshTripReportFilesTable(trip_log_id)
-{
-	var form_data = JSON.stringify( { trip_log_id: trip_log_id } );
 	
-    $.ajax({
-                url: 'data/getTripReportFiles.php?trip_log_id=' + trip_log_id, // point to server-side PHP script 
-                dataType: 'json', // dataType: 'jsonp', //dataType: 'text',  
-                cache: false,
-                contentType: false,
-                processData: false,
-                data: form_data,
-                type: 'post',
-                success: function(data){
-							var dataSet = [];
+var _pictures = []; //-- ? all pictures
+var DBPediaVectorLayer;
 
-							var file_directory = 'data/uploader/files/';
-							
-							data.forEach(function(item) {
-								var file_url = file_directory + item.file_name;
-								var file_name_html = "<a href='" + file_url + "' target='_blank' >" + item.file_name + "</a>";
-								dataSet.push([file_name_html, item.size, item.add_time, 0/*item.object_type*/]);
-							});
-							  
-							/*$('#cave_files_table').DataTable({
-								//"ajax": '../ajax/data/arrays.txt'
-								data: dataSet,
-							});*/
-							$('#trip_report_files_table').DataTable().clear();
-							$('#trip_report_files_table').DataTable()
-								.rows.add(dataSet)
-								.draw();
-                },
-				error:  function(jqXHR, textStatus, errorThrown )
-				{
-					//onFailure(textStatus); //-- show error code returned
-					console.warn(errorThrown);
-					console.warn("Error loading trip report files: " + textStatus + " " + errorThrown);
-					//console.error(errorThrown);
-					//console.error("Error loading trip report files: " + textStatus + " " + errorThrown);
-					//alert(errMsg);
-				}				
-     });	
-}
-// End Trip Report form
-///////////////////////
+var _onPicturesLoad_counter = 0;
 
-function initTripFeatureSearchControl()
-{
-  var engine, remoteHost, template, empty;
-  
-  remoteHost = '';
-  template = Handlebars.compile($("#result-template").html());
-  empty = Handlebars.compile($("#empty-template").html());
-  
-var featuresDataSource = new Bloodhound({
-  datumTokenizer: Bloodhound.tokenizers.obj.whitespace('name'),  
-  queryTokenizer: Bloodhound.tokenizers.whitespace,
-  //datumTokenizer: Bloodhound.tokenizers.obj.whitespace('name', 'name'),  
-  
-  identify: function(obj) { console.log("identify" + obj); return obj.id; },
-  dupDetector: function(a, b) { return a.id === b.id; },
-  prefetch: 'data/getSearchFeatures.php',
-  remote: {
-    url: remoteHost + 'data/getSearchFeatures.php?q=%QUERY',
-    wildcard: '%QUERY'
-  },
-  transform: function(data)
-  {
-	console.log('p: ' + data);
-  }
-});
-
-featuresDataSource.initialize();
-
-$('#tripreport_place').typeahead({
- //$('#searchFeatureControl .typeahead').typeahead({
-  hint: $('.Typeahead-hint_2'),
-  menu: $('.Typeahead-menu_2'),
-  //hint: true,
-  highlight: true,
-  minLength: 1,
-  classNames: {
-      open: 'is-open',
-      empty: 'is-empty',
-      cursor: 'is-active',
-      suggestion: 'Typeahead-suggestion',
-      selectable: 'Typeahead-selectable'
-    },
-  //display: 'name',  
-  //limit: 9
-  //suggestion: Handlebars.compile('<div><strong>{{value}}</strong> – {{year}}</div>')
-  /*
-  filter: function (parsedResponse) {
-            // parsedResponse is the array returned from your backend
-            console.log(parsedResponse);
-
-            // do whatever processing you need here
-            return parsedResponse;
-        }
-		*/
-},
-{
-  name: 'features',
-  source: featuresDataSource, //substringMatcher(states)
-  displayKey: 'name',
-    templates: {
-      suggestion: template,
-      empty: empty,
-	  //header: '<h3 class="league-name">Teams</h3>'
-    },
-})
-/*.on('typeahead:asyncrequest', function() {
-    $('.Typeahead-spinner').show();
-  })
-  .on('typeahead:asynccancel typeahead:asyncreceive', function() {
-    $('.Typeahead-spinner').hide();
-  })*/;	
-
-$('#tripreport_place').bind('typeahead:select', function(ev, suggestion) {
-  //console.log('Selection: ');
-  console.log(suggestion);
-  
-  //gotoDbElement(suggestion); // id
-  // gotoMapElement(suggestion.point_db_id); // id
-});
-	}
-	
 function initPictureThumbLayer()
 {
+	console.log("initPictureThumbLayer()");	
+	
 	initPictureThumbnailLightSlider();
 	// Style
 	var styleCache={};
@@ -6185,7 +5811,7 @@ function initPictureThumbLayer()
 					crop: true,
 					kind: (nb>1) ? "folio":"square",
 					shadow: true,
-					onload: function() { vector.changed(); },
+					onload: function() { DBPediaVectorLayer.changed(); },
 					stroke: new ol.style.Stroke(
 					{	width: sel ? 5 : 3,
 						color: sel ? 'red' : '#fff'
@@ -6242,6 +5868,8 @@ function initPictureThumbLayer()
 				//console.log(feature);
 				var image_id = feature.getProperties()["image_id"]; 
 				_map_pictures[image_id] = feature.getProperties();
+				
+				_pictures[image_id] = feature.getProperties();
 				// feature.getProperties()["thumbnail"]
 				
 				addSlide(image_id);
@@ -6250,11 +5878,19 @@ function initPictureThumbLayer()
 			_pictureThumbnailLightSlider.refresh();
 			//console.log("_pictureThumbnailLightSlider.refresh();");
 			
-			setTimeout( function() 
-			{ 
-				$('body').layout().resizeAll(); //--
-			}, 1500);
-			
+			setTimeout( function()
+			{
+				console.log("resize onPicturesLoad");
+				$('body').layout().resizeAll(); //-- it ruins the layer switcher layout by resizing its container
+				
+				if (_onPicturesLoad_counter == 0)
+				{
+					_onPicturesLoad_counter++;
+					$('body').layout().loadState(_stateResetSettings); //-- so we need this afterfix ( but a better way should be found using http://layout.jquery-dev.com/documentation.cfm
+				}
+				
+				// $('body').layout().resize();
+			}, 1500);			
 		}
 	});
 
@@ -6278,8 +5914,9 @@ function initPictureThumbLayer()
 		source: vectorSource
 	});
 
-	var vector = new ol.layer.AnimatedCluster(
-	{	name: 'Pictures layer',
+	/*var */DBPediaVectorLayer = new ol.layer.AnimatedCluster(
+	{
+		name: _t().main_map.body.layer_switcher.pictures_layer,
 		source: clusterSource,
 		// Limit resolution to avoid large area request
 		maxResolution: 40, // > zoom 12
@@ -6289,7 +5926,8 @@ function initPictureThumbLayer()
 		style: getFeatureStyle
 	});
 
-	map.addLayer(vector);
+	DBPediaVectorLayer.setZIndex(89);
+	map.addLayer(DBPediaVectorLayer);
 
 	// Control Select 
 	var select = new ol.interaction.Select(
@@ -6317,28 +5955,83 @@ function initPictureThumbLayer()
 				$("<p>").text(el.get("abstract")).appendTo(info);
 				*/
 				if (el.get("url"))
-					showPicture(el.get("url"), "", "");
+					showPicture(el.get("url"), "", "", el.get("image_id"));
 			}
 		}
 	});
 	
 }
 
-function showPicture(url, title, footer)
+var currentEkkoLightbox = undefined;
+
+function showPicture(url, title, footer, picture_id)
 {
 			//var url = clickedFeature.getProperties().url;
 			//var description = clickedFeature.getProperties().description;
 			//var pictureName = clickedFeature.getProperties().file_path;
 
 				//var url = '.' + url;
+				//_map_pictures[picture_id].description;
+				
+				var controls_html =
+					"<span id='deletePictureSpan' onclick='deletePictures(" + picture_id + ");' class='' ><img src='" + pointer_icons_base_url + "garbage.png' height='32'/></span> " +
+					"<span id='gotoPictureSpan' onclick='gotoPicture(" + picture_id + ");' class='' ><img src='" + pointer_icons_base_url + "worldwide.png' height='32'/>[localizeaza] </span> ";
+				var pic_desc_html = "<span id='pictureDescriptionSpan'></span>";
 				
 				$("#thumbPictureHolder").attr("href", url);
-				$("#thumbPictureHolder").attr("data-footer", "");
+				$("#thumbPictureHolder").attr("data-footer", controls_html + " " + pic_desc_html); // + "<br/>"
 				$("#thumbPictureHolder").attr("data-title", "");
-								
-				$("#thumbPictureHolder").ekkoLightbox(
-				//{ remote: url }
-				);	
+
+				//currentEkkoLightbox = 
+				$("#thumbPictureHolder").ekkoLightbox({
+					//{ remote: url }
+					// workaround for closing as described in: http://stackoverflow.com/a/37284873
+					onShown: function() {
+							var lightbox = this;
+							document.addEventListener('emulatedEkkoLightboxCloseEvent', function () {
+								lightbox.close();
+							});
+					},
+					href: url,
+					footer: controls_html + " " + pic_desc_html,
+					title: ""			
+				});
+				//.attr("href", url).attr("data-footer", controls_html + " " + _pictures[picture_id].description);
+				
+				$("#pictureDescriptionSpan").text(_pictures[picture_id].description);
+				
+				$("#deletePictureSpan").removeAttr('onclick');
+				$("#deletePictureSpan").prop('onclick', null);
+				//$("#deletePictureSpan").prop('onclick', "deletePictures(" + picture_id + ");");
+				$("#deletePictureSpan").on('click', () => { deletePictures(picture_id)});
+
+				$("#gotoPictureSpan").removeAttr('onclick');
+				$("#gotoPictureSpan").prop('onclick', null);
+				//$("#deletePictureSpan").prop('onclick', "deletePictures(" + picture_id + ");");
+				$("#gotoPictureSpan").on('click', () => { gotoPicture(picture_id)});
+			}
+
+function closePictureBox()
+{
+	//$("#thumbPictureHolder").close();
+	
+	// workaround for closing as described in: http://stackoverflow.com/a/37284873
+
+	var event = new CustomEvent('emulatedEkkoLightboxCloseEvent');
+	document.dispatchEvent(event);
+}
+
+function gotoPicture(picture_id)
+{
+	closePictureBox();
+	
+	flyToCoordinates(_map_pictures[picture_id].geometry.getCoordinates());
+	// flyToCoordinates(undefined, _map_pictures[picture_id].geometry.getExtent() /*, {padding: [50, 50, 50, 50]}*/);
+	map.getView().setZoom(map.getView().getZoom() - 1);
+	
+	//-- ? valid only form OSM and other layers with this zoom scale
+	if (map.getView().getZoom() < 19)
+		map.getView().setZoom(19);
 }
 
 function initPictureThumbnailLightSlider()
@@ -6354,6 +6047,7 @@ function initPictureThumbnailLightSlider()
 		thumbItem: 20,
 		//verticalHeight:50,
 		autoWidth:false,
+		//autoHeight:false,
 		slideMargin: 10,
 		//controls: true,
 		thumbMargin: 10,
@@ -6369,7 +6063,7 @@ function addSlide(image_id) // url
 	//if (_map_pictures[image_id])
 	{
 	var image_thumb_url = _map_pictures[image_id]["thumbnail"];
-	//var image_id = _map_pictures[image_id]["image_id"];
+	//var image_id = [image_id]["image_id"];
 	//var image_url = _map_pictures[image_id]["url"];
 	
 	// Class 'lslide' needs to be added with new slide item
@@ -6406,11 +6100,12 @@ function selectThumbPicture(image_id)
 {
 	//_map_pictures[image_id] = 
 	
-	showPicture(_map_pictures[image_id]["url"], "", "");
+	showPicture(_map_pictures[image_id]["url"], "", "", image_id);
 }
 
-var caveGalleryLinesStyleFunction = function(feature) {
-	 var styles = [
+var caveGalleryLinesStyleFunction = function(feature) 
+{
+	var styles = [
           // linestring
           new ol.style.Style({
             stroke: new ol.style.Stroke({
@@ -6421,75 +6116,84 @@ var caveGalleryLinesStyleFunction = function(feature) {
         ];
 		var index = 0;
 		
-	 var geometry = feature.getGeometry();
+	var geometry = feature.getGeometry();
 	 //~~ console.log(geometry.getType());
 	 
 	 //if (geometry.getType() == "LineString") // MultiLineString
-	 if (geometry.getType() == "MultiLineString")
-	 geometry.getLineStrings().forEach(function(ls)
-		{			
+	if (geometry.getType() == "MultiLineString")
+	{
+		geometry.getLineStrings().forEach(function(ls)
+		{
 			//console.log(ls);
 		//ls = geometry;
 	//if (false)
-	 ls.forEachSegment(function(start, end) {
-          //var dx = end[0] - start[0];
-          //var dy = end[1] - start[1];
-          //var rotation = Math.atan2(dy, dx);
-		  
-		  var isInside = false;
-		  
-		  //var selectedCaveFeatures = caveFeaturesDrawSource.getFeatures();
-		  var selectedCaveFeatures = hoverFeatureOverlay.getSource().getFeatures();
-		  
-		  if (selectedCaveFeatures.length > 0) // if (selectedCaveFeatures.getArray().length > 0)
-		  {
-			var startPoint = turf.point(start);
-			var endPoint = turf.point(end);
-		  	
-			selectedCaveFeatures.forEach(function (feature)
+			ls.forEachSegment(function(start, end)
 			{
-				//-- should test features if they have associated geometries which may not be the case if in the database there is no spatial row associated (point/line/polygon)
-				if (feature.getGeometry().getType() == "Polygon")
+			  //var dx = end[0] - start[0];
+			  //var dy = end[1] - start[1];
+			  //var rotation = Math.atan2(dy, dx);
+		  
+				var isInside = false;
+				  
+				//var selectedCaveFeatures = caveFeaturesDrawSource.getFeatures();
+				var selectedCaveFeatures = hoverFeatureOverlay.getSource().getFeatures();
+				  
+				if (selectedCaveFeatures.length > 0) // if (selectedCaveFeatures.getArray().length > 0)
 				{
-					var poly = turf.polygon(feature.getGeometry().getCoordinates());
-					//[[[-81, 41],  [-81, 47],  [-72, 47],  [-72, 41],  [-81, 41]]] 			
-					isInside |= turf.inside(startPoint, poly) || turf.inside(endPoint, poly);
+					var startPoint = turf.point(start);
+					var endPoint = turf.point(end);
+						
+					selectedCaveFeatures.forEach(function (feature)
+					{
+							//-- should test features if they have associated geometries which may not be the case if in the database there is no spatial row associated (point/line/polygon)
+							if (feature.getGeometry().getType() == "Polygon")
+							{
+								var poly = turf.polygon(feature.getGeometry().getCoordinates());
+								//[[[-81, 41],  [-81, 47],  [-72, 47],  [-72, 41],  [-81, 41]]] 			
+								isInside |= turf.inside(startPoint, poly) || turf.inside(endPoint, poly);
+							}
+							else
+								; //-- must be handled
+					});
 				}
-				else
-					; //-- must be handled
-			});			
-		  }
-		
-          // arrows
-          styles.push(new ol.style.Style({
-            //geometry: new ol.geom.Point(end),
-			geometry: new ol.geom.LineString([start, end]),
-            /*image: new ol.style.Icon({
-              src: 'http://openlayers.org/en/v3.20.1/examples/data/arrow.png',
-              anchor: [0.75, 0.5],
-              rotateWithView: true,
-              rotation: -rotation
-            }),*/
-			stroke: new ol.style.Stroke({
-				//color: isInside ? "red" : "darkbrown", // getRandomColor()
-				color: isInside ? "#5599FF" : "#991122", // getRandomColor()
-				width: isInside ? 5 : 2,
-			}),
-			/*text: new ol.style.Text({
-				text: "" + (index++),
-				scale: 1.3,
-				fill: new ol.style.Fill({
-				color: '#000000'
-				}),
-			})
-			*/
-          }));
-	});
+					
+					  // arrows
+				styles.push(new ol.style.Style({
+						//geometry: new ol.geom.Point(end),
+						geometry: new ol.geom.LineString([start, end]),
+						/*image: new ol.style.Icon({
+						  src: 'http://openlayers.org/en/v3.20.1/examples/data/arrow.png',
+						  anchor: [0.75, 0.5],
+						  rotateWithView: true,
+						  rotation: -rotation
+						}),*/
+						stroke: new ol.style.Stroke({
+							//color: isInside ? "red" : "darkbrown", // getRandomColor()
+							color: isInside ? "#5599FF" : "#991122", // getRandomColor()
+							width: isInside ? 5 : 2,
+						}),
+						/*text: new ol.style.Text({
+							text: "" + (index++),
+							scale: 1.3,
+							fill: new ol.style.Fill({
+							color: '#000000'
+							}),
+						})
+						*/
+				}));
+			});
+		});
 	}
-	);
+	else
+	{
+		//feature.getGeometry().getType() == "Point"
+		var ftstyle = geoStyle[feature.getGeometry().getType()]
+		ftstyle.getText().setText(feature.get('name')); 
+		styles.push(ftstyle);
+	}
 	
-		return styles;
-	}
+	return styles;
+}
 	
 	function getRandomColor() {
     var letters = '0123456789ABCDEF';
@@ -6546,7 +6250,10 @@ var caveFeatureDrawType = undefined;
 var selectedCaveFeatures = new ol.Collection();
 //var selectedCaveFeatureSource = undefined;
 var caveFeaturesDrawSource = undefined;
+var caveGalleryZonesDrawSource = undefined;
+
 var caveFeaturesLayer = undefined;
+var caveFeaturesGalleryZonesLayer = undefined;
 
 function enableCaveFeatureEditing()
 {
@@ -6797,7 +6504,13 @@ function openNewCaveFeatureForm(feature_id, coordinates, existingSelectedFeature
 
 		if (caveFeaturesDrawSource)
 			caveFeaturesDrawSource = undefined;
-			
+
+		if (caveFeaturesGalleryZonesLayer)
+		{
+			map.removeLayer(caveFeaturesGalleryZonesLayer);
+			caveFeaturesGalleryZonesLayer = undefined;
+		}
+		
 		if (caveFeaturesLayer)
 		{
 			map.removeLayer(caveFeaturesLayer);
@@ -6807,8 +6520,8 @@ function openNewCaveFeatureForm(feature_id, coordinates, existingSelectedFeature
 		//if (caveFeaturesDrawSource == undefined)
 		
 		var caveFeatureSource = new ol.source.Vector({
-		  url: 'data/getDBGeoData.php'+'?type=cave_feature',
-		  name: 'cave features drawing',
+		  url: url_base + '/data/getDBGeoData.php'+'?type=cave_feature',
+		  name: 'cave features src',
 		  format: new ol.format.GeoJSON({
 			 defaultDataProjection : 'EPSG:4326'//,
 			 //ignoreExtraDims: true		 		
@@ -6825,29 +6538,70 @@ function openNewCaveFeatureForm(feature_id, coordinates, existingSelectedFeature
 		caveFeaturesLayer = new ol.layer.Vector(
 			{
 				source: caveFeaturesDrawSource,
-				name: 'cave features drawing',
+				name: _t().main_map.body.layer_switcher.cave_features,
 				style: _feature_styleFunction,
 				//visible: false
 			});
-	
-	  setInitialCaveLayerSettings();
-	  
-	  map.addLayer(caveFeaturesLayer);
-	
+		
+		setInitialCaveLayerSettings();		
+		
+
+		caveGalleryZonesDrawSource = new ol.source.Vector({
+		  url: 'data/getDBGeoData.php'+'?type=cave_feature&only_gallery_area=1',
+		  name: 'cave zones src',
+		  format: new ol.format.GeoJSON({
+			 defaultDataProjection : 'EPSG:4326'//,
+			 //ignoreExtraDims: true		 		
+			}),
+			style: _feature_styleFunction
+			//features: (new ol.format.GeoJSON()).readFeatures(geojsonObject)
+			//features: new ol.format.GeoJSON().readFeatures(geojsonObject,{ featureProjection: 'EPSG:3857' })
+		});
+
+		//-- cave selection not implemented, so it will get all features from all caves in the current view
+		//selectedCaveFeatureSource = caveFeatureSource;
+		//caveFeaturesDrawSource = caveFeatureSource;
+		
+		caveFeaturesGalleryZonesLayer = new ol.layer.Vector(
+			{
+				source: caveGalleryZonesDrawSource,
+				name: _t().main_map.body.layer_switcher.cave_zones,
+				style: _feature_styleFunction,
+				//visible: false
+			});				  
+
+		caveFeaturesGalleryZonesLayer.setZIndex(2);
+		caveFeaturesLayer.setZIndex(99);
+		
+		setInitialCaveGalleryZonesLayerSettings();
+				
+		map.addLayer(caveFeaturesGalleryZonesLayer);
+		map.addLayer(caveFeaturesLayer);
+		
+		//map.addLayer(caveFeaturesLayer);
+		
 	  //map.addLayer(caveFeaturesLayer, false);
 	  //caveFeaturesLayer.setVisible(false);	  	  
 }
 
+function setInitialCaveGalleryZonesLayerSettings()
+{
+	if (caveFeaturesGalleryZonesLayer.getVisible())
+		caveFeaturesGalleryZonesLayer.setVisible(true);
+	
+	caveFeaturesGalleryZonesLayer.setOpacity(0.09);
+}
+
 function setInitialCaveLayerSettings()
 {
-	  caveFeaturesLayer.setVisible(true);
-	  caveFeaturesLayer.setOpacity(0.14);
+	  //caveFeaturesGalleryZonesLayer.setVisible(true);
+	  //caveFeaturesGalleryZonesLayer.setOpacity(0.14);
 }
 
 function endCaveFeatureEditing()
 {
-	caveFeaturesLayer.setVisible(false);
-	caveFeaturesLayer.setOpacity(0.1);
+	caveFeaturesGalleryZonesLayer.setVisible(false);
+	caveFeaturesGalleryZonesLayer.setOpacity(0.1);
 
 	//$('#drawFeaturesTreeControl').jstree('open_node', 'cave_feature');
 	$('#drawFeaturesTreeControl').jstree('show_node', 'surface_feature');
@@ -6857,8 +6611,8 @@ function startCaveFeaturesEditing()
 {
 	console.log("startCaveFeaturesEditing()");
 	
-	caveFeaturesLayer.setVisible(true);
-	caveFeaturesLayer.setOpacity(0.9);
+	caveFeaturesGalleryZonesLayer.setVisible(true);
+	caveFeaturesGalleryZonesLayer.setOpacity(0.9);
 
 	$('#drawFeaturesTreeControl').jstree('close_node', 'surface_feature');	
 	$('#drawFeaturesTreeControl').jstree('open_node', 'cave_feature');
@@ -7056,6 +6810,190 @@ function deleteFeature(feature)
                 }
      });
 }
+
+
+/*function LoadGeoreferencedImages()
+{
+		// n 45.23013176365708 w 23.807130330481343 e 23.820431034760784 s 45.22220297044059
+		
+		var n = 45.23013176365708;
+		var w = 23.807130330481343;
+		var e = 23.820431034760784;
+		var s = 45.22220297044059;
+		
+		var geo_extent_espg4326 = [w, s, e, n];
+		
+		var ws_corner = ol.proj.transform(ol.proj.fromLonLat([w, s]), new ol.proj.Projection("EPSG:4326"), new ol.proj.Projection('EPSG:3857'));
+		var en_corner = ol.proj.transform(ol.proj.fromLonLat([e, n]), new ol.proj.Projection("EPSG:4326"), new ol.proj.Projection('EPSG:3857'));
+		
+		var geo_extent_espg3857 = [ws_corner[0], ws_corner[1], en_corner[0], en_corner[1]];
+		
+		var geo_extent = geo_extent_espg3857;
+		//var position = ol.proj.fromLonLat(coord).transform(new ol.proj.Projection("EPSG:4326"), new ol.proj.Projection('EPSG:3857')); // map.getProjectionObject()
+		
+	      var map_overlay_ps = //new ol.layer.Group({ layers: [
+		  new ol.layer.Image({
+			extent: geo_extent,
+          // source: new ol.source.ImageWMS({
+            // //url: './persani_comana_geologica_cropped_rectified.tif',
+			// url: './persani_comana_geologica_cropped_rectified.jpg',
+            // params: {'LAYERS': 'topp:states'},
+            // serverType: 'geoserver'
+          // })
+			name: 'P. Susp. pic',
+				//extent: extent,
+		     source: new ol.source.ImageStatic({
+			 //opacity: 0.5,
+				//url: './persani_comana_geologica_cropped_rectified.jpg',
+				url: './assets/layer_images/psx_modified_pol1_14cpts_cub.png',
+				imageSize: [1082, 645],
+              //crossOrigin: '',			  
+              //projection: ol.proj.get('EPSG:4326'),//projection,//"epsg:900913", // ol.proj.get('EPSG:3857')
+			  //"espg:4326" wgs84; "epsg:900913" mercator  , // epsg4326,
+              imageExtent: geo_extent
+            })
+		  		          
+             //extent: extent,
+          // source: new ol.source.ImageWMS({
+            // url: './persani_comana_geologica_cropped_rectified.jpg',
+            // params: {},
+            // //serverType: 'geoserver'
+        //})
+        })
+		//]
+		//})
+		;
+	
+	map_overlay_ps.setVisible(false);
+	map_overlay_ps.setOpacity(0.5);
+	
+	map_overlay_ps.setZIndex(1);
+	map.addLayer(map_overlay_ps);
+}
+*/
+
+function InitGeoreferencedMaps()
+{
+	$.ajax({
+		type: "GET",
+		url: "data/getGeoreferencedMaps.php", //"/webservices/PodcastService.asmx/CreateMarkers",
+		// The key needs to match your method's input parameter (case-sensitive).
+		//data: JSON.stringify(data), // JSON.stringify({ Markers: markers })
+		contentType: "application/json; charset=utf-8",
+		dataType: "json",
+		success: function(data) {
+			//console.log(data);
+			//featureTypes = {}; // for key/value indexed object
+			var html_content = "";
+			
+			for (var property in data) {
+				if (data.hasOwnProperty(property)) 
+				{
+					//featureTypes.push(data[property]);
+					//map_views[data[property].id] = data[property];					
+					
+					/*
+					var georeferencedMapId = data[property].id;
+					var georeferencedMapTitle = data[property].title;
+					var georeferencedMapDescription = data[property].description;
+					var georeferencedMapBoundaryNorth = data[property].boundary_north;
+					var georeferencedMapBoundaryWest = data[property].boundary_west;
+					var georeferencedMapBoundarySouth = data[property].boundary_south;
+					var georeferencedMapBoundaryEast = data[property].boundary_east;
+					var georeferencedMapFilePath = data[property].file_path;
+					var georeferencedMapThumbFilePath = data[property].thumb_file_path;
+					*/
+					
+					var georeferencedMapFilePath = url_base + "/uploads/pictures/" + data[property].file_path;
+					
+					LoadGeoreferencedMapLayer(
+						data[property].title,
+						parseFloat(data[property].boundary_north),
+						parseFloat(data[property].boundary_west),
+						parseFloat(data[property].boundary_south),
+						parseFloat(data[property].boundary_east),
+						georeferencedMapFilePath,
+						data[property].width,
+						data[property].height
+					);
+					
+				}
+			}
+		},
+		//failure: function(errMsg) {
+			//$onFailure(errMsg);
+			//},
+		error:  function(jqXHR, textStatus, errorThrown )
+		{
+			//onFailure(textStatus); //-- show error code returned
+			console.error(errorThrown);
+			console.error("Error loading feature types: " + textStatus + " " + errorThrown);
+			//alert(errMsg);
+		}
+	});
+}
+
+function LoadGeoreferencedMapLayer(title, boundary_north, boundary_west, boundary_south, boundary_east, file_url_path, image_width, image_height)
+{
+		// n 45.23013176365708 w 23.807130330481343 e 23.820431034760784 s 45.22220297044059
+		/*
+		var n = 45.23013176365708;
+		var w = 23.807130330481343;
+		var e = 23.820431034760784;
+		var s = 45.22220297044059;
+		*/
+		
+		//var geo_extent_espg4326 = [boundary_west, boundary_south, boundary_east, boundary_north];
+		
+		var ws_corner = ol.proj.transform(ol.proj.fromLonLat([boundary_west, boundary_south]), new ol.proj.Projection("EPSG:4326"), new ol.proj.Projection('EPSG:3857'));
+		var en_corner = ol.proj.transform(ol.proj.fromLonLat([boundary_east, boundary_north]), new ol.proj.Projection("EPSG:4326"), new ol.proj.Projection('EPSG:3857'));
+		
+		var geo_extent_espg3857 = [ws_corner[0], ws_corner[1], en_corner[0], en_corner[1]];
+		
+		var geo_extent = geo_extent_espg3857;
+		//var position = ol.proj.fromLonLat(coord).transform(new ol.proj.Projection("EPSG:4326"), new ol.proj.Projection('EPSG:3857')); // map.getProjectionObject()
+		
+	      var map_overlay = //new ol.layer.Group({ layers: [
+		  new ol.layer.Image({
+			extent: geo_extent,
+          // source: new ol.source.ImageWMS({
+            // //url: './persani_comana_geologica_cropped_rectified.tif',
+			// url: './persani_comana_geologica_cropped_rectified.jpg',
+            // params: {'LAYERS': 'topp:states'},
+            // serverType: 'geoserver'
+          // })
+			name: title,
+				//extent: extent,
+		     source: new ol.source.ImageStatic({
+			 //opacity: 0.5,
+				//url: './persani_comana_geologica_cropped_rectified.jpg',
+				url: file_url_path,
+				imageSize: [image_width, image_height],
+              //crossOrigin: '',			  
+              //projection: ol.proj.get('EPSG:4326'),//projection,//"epsg:900913", // ol.proj.get('EPSG:3857')
+			  //"espg:4326" wgs84; "epsg:900913" mercator  , // epsg4326,
+              imageExtent: geo_extent
+            })
+		  		          
+             //extent: extent,
+          // source: new ol.source.ImageWMS({
+            // url: './persani_comana_geologica_cropped_rectified.jpg',
+            // params: {},
+            // //serverType: 'geoserver'
+        //})
+        })
+		//]
+		//})
+		;
+	
+	map_overlay.setVisible(!false);
+	//map_overlay.setOpacity(1);
+	map_overlay.setOpacity(0.5);
+	
+	map_overlay.setZIndex(1);
+	map.addLayer(map_overlay);
+}
+
 
 
 

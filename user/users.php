@@ -54,7 +54,8 @@ ob_start();
   $db_conn -> connect(DB::parseDSN('mysql://'.$DB_USER.':'.$DB_PASS.'@'.$DB_HOST.'/'.$DB_NAME));
 
 ##  *** put a primary key on the first place 
-  $sql="select     id, username, password, email      from     users"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
+  $sql="select     id, username, '*****' as password, email      from     users"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
+  // $sql="select     id, username, password, email      from     users"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
    //." CASE WHEN countries.is_democracy = 1 THEN 'Yes' ELSE 'No' END as is_democracy "   
    
 ##  *** set needed options
@@ -130,7 +131,26 @@ ob_start();
   );
   
   $dgrid->setColumnsInViewMode($vm_columns);   
-  $dgrid->setAutoColumnsInEditMode(true);
+
+  //$dgrid->setAutoColumnsInEditMode(true);
+  $dgrid->setAutoColumnsInEditMode(false);
+  
+   $ed_columns = array(      
+    "username"  =>array("header"=>"Utilizator", "type"=>"textbox", "title"=>"Utilizator", "req_type"=>"rt", "align"=>"left", "width"=>"250px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
+    //"password" =>array("header"=>"Parola",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+    "email" => array("header"=>"Email", "type"=>"textbox", "title"=>"Email", "req_type"=>"rt", "align"=>"left", "width"=>"250px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
+    // "browser_language"  => array("header"=>"Browser language",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+    // "user_ip" => array("header"=>"User ip", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+    // "os_title"  => array("header"=>"OS title",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+    // "os_version"  => array("header"=>"OS version",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+    // "time"  => array("header"=>"time",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal")    
+    //"pic"  =>array("header"=>"Pic",      "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "field_key"=>"pic", "field_key_1"=>"pic", "field_data"=>"x", "rel"=>"", "title"=>"", "target"=>"_self", "href"=>"{0}"),
+    //"gallery_url"  =>array("header"=>"Pic",      "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "field_key"=>"gallery_url", "field_key_1"=>"gallery_url", "field_data"=>"{1}", "rel"=>"{0}", "title"=>"{0}", "target"=>"_self", "href"=>"{0}"),
+    //"pic"=>array("header"=>"pic", "type"=>"image",      "align"=>"left", "width"=>"20px", "wrap"=>"wrap", "text_length"=>"-1", "field_key"=>"gallery_url", "target_path"=>"{0}", "default"=>"def", "image_width"=>"50px", "image_height"=>"50px", "linkto"=>"{0}", "magnify"=>"true", "magnify_type"=>"lightbox", "magnify_power"=>"2"),
+  );
+  
+  $dgrid->setColumnsInEditMode($ed_columns);
+
 
 ##  *** set layouts: 0 - tabular(horizontal) - default, 1 - columnar(vertical) 
  $layouts = array("view"=>0, "edit"=>1, "add"=>1, "filter"=>1); 

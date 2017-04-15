@@ -24,13 +24,13 @@ abstract class BaseGeofilesPeer
     const TM_CLASS = 'GeofilesTableMap';
 
     /** The total number of columns. */
-    const NUM_COLUMNS = 7;
+    const NUM_COLUMNS = 9;
 
     /** The number of lazy-loaded columns. */
     const NUM_LAZY_LOAD_COLUMNS = 0;
 
     /** The number of columns to hydrate (NUM_COLUMNS - NUM_LAZY_LOAD_COLUMNS) */
-    const NUM_HYDRATE_COLUMNS = 7;
+    const NUM_HYDRATE_COLUMNS = 9;
 
     /** the column name for the id field */
     const ID = 'geofiles.id';
@@ -52,6 +52,12 @@ abstract class BaseGeofilesPeer
 
     /** the column name for the md5_hash field */
     const MD5_HASH = 'geofiles.md5_hash';
+
+    /** the column name for the enabled field */
+    const ENABLED = 'geofiles.enabled';
+
+    /** the column name for the extract_style field */
+    const EXTRACT_STYLE = 'geofiles.extract_style';
 
     /** The enumerated values for the type field */
     const TYPE_GPX = 'GPX';
@@ -77,12 +83,12 @@ abstract class BaseGeofilesPeer
      * e.g. GeofilesPeer::$fieldNames[GeofilesPeer::TYPE_PHPNAME][0] = 'Id'
      */
     protected static $fieldNames = array (
-        BasePeer::TYPE_PHPNAME => array ('Id', 'FileName', 'IdUser', 'AddTime', 'Type', 'Size', 'Md5Hash', ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'fileName', 'idUser', 'addTime', 'type', 'size', 'md5Hash', ),
-        BasePeer::TYPE_COLNAME => array (GeofilesPeer::ID, GeofilesPeer::FILE_NAME, GeofilesPeer::ID_USER, GeofilesPeer::ADD_TIME, GeofilesPeer::TYPE, GeofilesPeer::SIZE, GeofilesPeer::MD5_HASH, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'FILE_NAME', 'ID_USER', 'ADD_TIME', 'TYPE', 'SIZE', 'MD5_HASH', ),
-        BasePeer::TYPE_FIELDNAME => array ('id', 'file_name', 'id_user', 'add_time', 'type', 'size', 'md5_hash', ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, )
+        BasePeer::TYPE_PHPNAME => array ('Id', 'FileName', 'IdUser', 'AddTime', 'Type', 'Size', 'Md5Hash', 'Enabled', 'ExtractStyle', ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'fileName', 'idUser', 'addTime', 'type', 'size', 'md5Hash', 'enabled', 'extractStyle', ),
+        BasePeer::TYPE_COLNAME => array (GeofilesPeer::ID, GeofilesPeer::FILE_NAME, GeofilesPeer::ID_USER, GeofilesPeer::ADD_TIME, GeofilesPeer::TYPE, GeofilesPeer::SIZE, GeofilesPeer::MD5_HASH, GeofilesPeer::ENABLED, GeofilesPeer::EXTRACT_STYLE, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'FILE_NAME', 'ID_USER', 'ADD_TIME', 'TYPE', 'SIZE', 'MD5_HASH', 'ENABLED', 'EXTRACT_STYLE', ),
+        BasePeer::TYPE_FIELDNAME => array ('id', 'file_name', 'id_user', 'add_time', 'type', 'size', 'md5_hash', 'enabled', 'extract_style', ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, )
     );
 
     /**
@@ -92,12 +98,12 @@ abstract class BaseGeofilesPeer
      * e.g. GeofilesPeer::$fieldNames[BasePeer::TYPE_PHPNAME]['Id'] = 0
      */
     protected static $fieldKeys = array (
-        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'FileName' => 1, 'IdUser' => 2, 'AddTime' => 3, 'Type' => 4, 'Size' => 5, 'Md5Hash' => 6, ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'fileName' => 1, 'idUser' => 2, 'addTime' => 3, 'type' => 4, 'size' => 5, 'md5Hash' => 6, ),
-        BasePeer::TYPE_COLNAME => array (GeofilesPeer::ID => 0, GeofilesPeer::FILE_NAME => 1, GeofilesPeer::ID_USER => 2, GeofilesPeer::ADD_TIME => 3, GeofilesPeer::TYPE => 4, GeofilesPeer::SIZE => 5, GeofilesPeer::MD5_HASH => 6, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'FILE_NAME' => 1, 'ID_USER' => 2, 'ADD_TIME' => 3, 'TYPE' => 4, 'SIZE' => 5, 'MD5_HASH' => 6, ),
-        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'file_name' => 1, 'id_user' => 2, 'add_time' => 3, 'type' => 4, 'size' => 5, 'md5_hash' => 6, ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, )
+        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'FileName' => 1, 'IdUser' => 2, 'AddTime' => 3, 'Type' => 4, 'Size' => 5, 'Md5Hash' => 6, 'Enabled' => 7, 'ExtractStyle' => 8, ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'fileName' => 1, 'idUser' => 2, 'addTime' => 3, 'type' => 4, 'size' => 5, 'md5Hash' => 6, 'enabled' => 7, 'extractStyle' => 8, ),
+        BasePeer::TYPE_COLNAME => array (GeofilesPeer::ID => 0, GeofilesPeer::FILE_NAME => 1, GeofilesPeer::ID_USER => 2, GeofilesPeer::ADD_TIME => 3, GeofilesPeer::TYPE => 4, GeofilesPeer::SIZE => 5, GeofilesPeer::MD5_HASH => 6, GeofilesPeer::ENABLED => 7, GeofilesPeer::EXTRACT_STYLE => 8, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'FILE_NAME' => 1, 'ID_USER' => 2, 'ADD_TIME' => 3, 'TYPE' => 4, 'SIZE' => 5, 'MD5_HASH' => 6, 'ENABLED' => 7, 'EXTRACT_STYLE' => 8, ),
+        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'file_name' => 1, 'id_user' => 2, 'add_time' => 3, 'type' => 4, 'size' => 5, 'md5_hash' => 6, 'enabled' => 7, 'extract_style' => 8, ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, )
     );
 
     /** The enumerated values for this table */
@@ -232,6 +238,8 @@ abstract class BaseGeofilesPeer
             $criteria->addSelectColumn(GeofilesPeer::TYPE);
             $criteria->addSelectColumn(GeofilesPeer::SIZE);
             $criteria->addSelectColumn(GeofilesPeer::MD5_HASH);
+            $criteria->addSelectColumn(GeofilesPeer::ENABLED);
+            $criteria->addSelectColumn(GeofilesPeer::EXTRACT_STYLE);
         } else {
             $criteria->addSelectColumn($alias . '.id');
             $criteria->addSelectColumn($alias . '.file_name');
@@ -240,6 +248,8 @@ abstract class BaseGeofilesPeer
             $criteria->addSelectColumn($alias . '.type');
             $criteria->addSelectColumn($alias . '.size');
             $criteria->addSelectColumn($alias . '.md5_hash');
+            $criteria->addSelectColumn($alias . '.enabled');
+            $criteria->addSelectColumn($alias . '.extract_style');
         }
     }
 

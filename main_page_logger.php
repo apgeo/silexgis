@@ -1,16 +1,23 @@
 <?php
+try
+{
 $file = fopen("ip.txt","a");
 $ip=$_SERVER['REMOTE_ADDR'];
 
-// now try it
-$ua=getBrowser();
-$yourbrowser= "Your browser: " . $ua['name'] . " " . $ua['version'] . " on " .$ua['platform'] . " reports: <br >" . $ua['userAgent'];
+$_user_id = $_SESSION["id_user"];
+$username = $_SESSION["username"];
 
+// now try it
+$ua=getBrowserMP();
+$yourbrowser= "Your browser: " . $ua['name'] . " " . $ua['version'] . " on " .$ua['platform'] . " reports: <br >" . $ua['userAgent'] . " u: " .$username;
 
 fwrite($file, date('m/d/Y h:i:s a', time())."  ".$ip." ".$yourbrowser."\r\n");
 fclose($file);
+} catch ( Exception $e ) {
+      // send error message if you can
+} 
 
-function getBrowser() 
+function getBrowserMP()
 { 
     $u_agent = $_SERVER['HTTP_USER_AGENT']; 
     $bname = 'Unknown';

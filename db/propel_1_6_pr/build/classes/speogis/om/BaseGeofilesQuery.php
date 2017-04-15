@@ -13,6 +13,8 @@
  * @method GeofilesQuery orderByType($order = Criteria::ASC) Order by the type column
  * @method GeofilesQuery orderBySize($order = Criteria::ASC) Order by the size column
  * @method GeofilesQuery orderByMd5Hash($order = Criteria::ASC) Order by the md5_hash column
+ * @method GeofilesQuery orderByEnabled($order = Criteria::ASC) Order by the enabled column
+ * @method GeofilesQuery orderByExtractStyle($order = Criteria::ASC) Order by the extract_style column
  *
  * @method GeofilesQuery groupById() Group by the id column
  * @method GeofilesQuery groupByFileName() Group by the file_name column
@@ -21,6 +23,8 @@
  * @method GeofilesQuery groupByType() Group by the type column
  * @method GeofilesQuery groupBySize() Group by the size column
  * @method GeofilesQuery groupByMd5Hash() Group by the md5_hash column
+ * @method GeofilesQuery groupByEnabled() Group by the enabled column
+ * @method GeofilesQuery groupByExtractStyle() Group by the extract_style column
  *
  * @method GeofilesQuery leftJoin($relation) Adds a LEFT JOIN clause to the query
  * @method GeofilesQuery rightJoin($relation) Adds a RIGHT JOIN clause to the query
@@ -35,6 +39,8 @@
  * @method Geofiles findOneByType(string $type) Return the first Geofiles filtered by the type column
  * @method Geofiles findOneBySize(int $size) Return the first Geofiles filtered by the size column
  * @method Geofiles findOneByMd5Hash(string $md5_hash) Return the first Geofiles filtered by the md5_hash column
+ * @method Geofiles findOneByEnabled(string $enabled) Return the first Geofiles filtered by the enabled column
+ * @method Geofiles findOneByExtractStyle(string $extract_style) Return the first Geofiles filtered by the extract_style column
  *
  * @method array findById(string $id) Return Geofiles objects filtered by the id column
  * @method array findByFileName(string $file_name) Return Geofiles objects filtered by the file_name column
@@ -43,6 +49,8 @@
  * @method array findByType(string $type) Return Geofiles objects filtered by the type column
  * @method array findBySize(int $size) Return Geofiles objects filtered by the size column
  * @method array findByMd5Hash(string $md5_hash) Return Geofiles objects filtered by the md5_hash column
+ * @method array findByEnabled(string $enabled) Return Geofiles objects filtered by the enabled column
+ * @method array findByExtractStyle(string $extract_style) Return Geofiles objects filtered by the extract_style column
  *
  * @package    propel.generator.speogis.om
  */
@@ -150,7 +158,7 @@ abstract class BaseGeofilesQuery extends ModelCriteria
      */
     protected function findPkSimple($key, $con)
     {
-        $sql = 'SELECT `id`, `file_name`, `id_user`, `add_time`, `type`, `size`, `md5_hash` FROM `geofiles` WHERE `id` = :p0';
+        $sql = 'SELECT `id`, `file_name`, `id_user`, `add_time`, `type`, `size`, `md5_hash`, `enabled`, `extract_style` FROM `geofiles` WHERE `id` = :p0';
         try {
             $stmt = $con->prepare($sql);
             $stmt->bindValue(':p0', $key, PDO::PARAM_STR);
@@ -493,6 +501,64 @@ abstract class BaseGeofilesQuery extends ModelCriteria
         }
 
         return $this->addUsingAlias(GeofilesPeer::MD5_HASH, $md5Hash, $comparison);
+    }
+
+    /**
+     * Filter the query on the enabled column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterByEnabled('fooValue');   // WHERE enabled = 'fooValue'
+     * $query->filterByEnabled('%fooValue%'); // WHERE enabled LIKE '%fooValue%'
+     * </code>
+     *
+     * @param     string $enabled The value to use as filter.
+     *              Accepts wildcards (* and % trigger a LIKE)
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return GeofilesQuery The current query, for fluid interface
+     */
+    public function filterByEnabled($enabled = null, $comparison = null)
+    {
+        if (null === $comparison) {
+            if (is_array($enabled)) {
+                $comparison = Criteria::IN;
+            } elseif (preg_match('/[\%\*]/', $enabled)) {
+                $enabled = str_replace('*', '%', $enabled);
+                $comparison = Criteria::LIKE;
+            }
+        }
+
+        return $this->addUsingAlias(GeofilesPeer::ENABLED, $enabled, $comparison);
+    }
+
+    /**
+     * Filter the query on the extract_style column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterByExtractStyle('fooValue');   // WHERE extract_style = 'fooValue'
+     * $query->filterByExtractStyle('%fooValue%'); // WHERE extract_style LIKE '%fooValue%'
+     * </code>
+     *
+     * @param     string $extractStyle The value to use as filter.
+     *              Accepts wildcards (* and % trigger a LIKE)
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return GeofilesQuery The current query, for fluid interface
+     */
+    public function filterByExtractStyle($extractStyle = null, $comparison = null)
+    {
+        if (null === $comparison) {
+            if (is_array($extractStyle)) {
+                $comparison = Criteria::IN;
+            } elseif (preg_match('/[\%\*]/', $extractStyle)) {
+                $extractStyle = str_replace('*', '%', $extractStyle);
+                $comparison = Criteria::LIKE;
+            }
+        }
+
+        return $this->addUsingAlias(GeofilesPeer::EXTRACT_STYLE, $extractStyle, $comparison);
     }
 
     /**

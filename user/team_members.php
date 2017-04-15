@@ -142,7 +142,7 @@ ob_start();
 	"email" =>array("header"=>"*{team_members.col_email}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
 	"notes" =>array("header"=>"*{team_members.col_notes}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
 	"member_trip_count" =>array("header"=>"*{team_members.col_trip_count}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
-	"member_trip_percentage" =>array("header"=>"*{team_members.col_trip_percentage}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+	//"member_trip_percentage" =>array("header"=>"*{team_members.col_trip_percentage}*",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
     //"email" => array("header"=>"Email", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
     // "browser_language"  => array("header"=>"Browser language",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
     // "user_ip" => array("header"=>"User ip", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),

@@ -21,6 +21,11 @@
 */
 
 
+.map_context_menu_feature_header {
+	font-weight: bold;
+	font-size: 14px;    
+}
+
 /* tags
 */
 .icon-github {

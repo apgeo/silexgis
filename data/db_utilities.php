@@ -1,6 +1,8 @@
 <?php
-$root = realpath($_SERVER["DOCUMENT_ROOT"])."/speogis";
-include_once("$root/geoPHP/geoPHP.inc");
+	require_once dirname(__DIR__).'/config.php';
+
+	$root = realpath($_SERVER["DOCUMENT_ROOT"]).$application_url_root;
+	include_once("$root/geoPHP/geoPHP.inc");
 
 class DbUtils
 {    
