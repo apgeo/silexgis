@@ -47,17 +47,27 @@ if($username=="") {
 		
         if($_SESSION["login_error"]!="") {
 			//echo "error";
-            header("Location: login.php");
+			
+			//-- redirect breaks if first login is failed for subsequent attempts
+			if(isset($_REQUEST['redirurl']) && !empty($_REQUEST['redirurl']))
+            	header("Location: login.php?redirurl=".urldecode($_REQUEST['redirurl']));
+			else
+				header("Location: login.php");
         } else {
 			//echo "logged in"; exit;            
 						
 			$url = "index.php";
 			
 			if(isset($_REQUEST['redirurl']) && !empty($_REQUEST['redirurl'])) 
+			{
 				$url = $_REQUEST['redirurl']; // holds url for last page visited.
+
+				if (strpos($url, "login.php"))
+					$url = "index.php";
+			}
 			else 
 				$url = "index.php";
-			
+						
 			//echo "logged in redirect: _{$url}_"; exit;
 			header("Location: $url");
         }
