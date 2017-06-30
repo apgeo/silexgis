@@ -15,3 +15,12 @@
 *.old
 *.zip
 *.rar
+*.log
+Thumbs.db
+/uploads/pictures/*
+/uploads/pictures/thumbnail/*
+/uploads/pictures/thumbnail
+/todo.txt
+*ip*.txt*
+
+
