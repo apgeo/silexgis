@@ -162,7 +162,7 @@ class CustomUploadHandler extends UploadHandler {
 		$tripLogToFile->setFileid($file_id);
 		$tripLogToFile->setTriplogid($trip_log_id);
 			
-		$tripLogToFile->save(); // or ->update ?		
+		$tripLogToFile->save(); // or ->update ?
 	}
 	else
 	if ($fileupload_target_type == "cave")

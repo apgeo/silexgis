@@ -43,7 +43,7 @@
 	
 	$mapView = MapViewsQuery::create()->findPK($mapview_id);
 		
-	$mapView->setIsDefault(true);	
+	$mapView->setIsDefault(true);
 
 	$mapView->save();
 	

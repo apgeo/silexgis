@@ -45,6 +45,11 @@ class ImagesTableMap extends TableMap
         $this->addColumn('point_id', 'PointId', 'BIGINT', false, null, null);
         $this->addColumn('description', 'Description', 'VARCHAR', false, 500, null);
         $this->addColumn('thumb_file_path', 'ThumbFilePath', 'VARCHAR', true, 2000, null);
+        $this->addColumn('picture_storage_type', 'PictureStorageType', 'CHAR', true, null, null);
+        $this->getColumn('picture_storage_type', false)->setValueSet(array (
+  0 => 'local',
+  1 => 'AmazonS3',
+));
         // validators
     } // initialize()
 

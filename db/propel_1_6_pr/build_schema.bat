@@ -1,1 +1,1 @@
-D:\wamp\www\speogis\vendor\Propel\generator\bin\propel-gen.bat D:\wamp\www\speogis\db\propel_1_6_pr\ reverse
+D:\wamp64\www\speogis\vendor\Propel\generator\bin\propel-gen.bat D:\wamp64\www\speogis\db\propel_1_6_pr\ reverse

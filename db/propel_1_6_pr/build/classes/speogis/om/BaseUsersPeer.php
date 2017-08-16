@@ -24,13 +24,13 @@ abstract class BaseUsersPeer
     const TM_CLASS = 'UsersTableMap';
 
     /** The total number of columns. */
-    const NUM_COLUMNS = 8;
+    const NUM_COLUMNS = 9;
 
     /** The number of lazy-loaded columns. */
     const NUM_LAZY_LOAD_COLUMNS = 0;
 
     /** The number of columns to hydrate (NUM_COLUMNS - NUM_LAZY_LOAD_COLUMNS) */
-    const NUM_HYDRATE_COLUMNS = 8;
+    const NUM_HYDRATE_COLUMNS = 9;
 
     /** the column name for the id field */
     const ID = 'users.id';
@@ -56,6 +56,13 @@ abstract class BaseUsersPeer
     /** the column name for the add_time field */
     const ADD_TIME = 'users.add_time';
 
+    /** the column name for the picture_storage_type field */
+    const PICTURE_STORAGE_TYPE = 'users.picture_storage_type';
+
+    /** The enumerated values for the picture_storage_type field */
+    const PICTURE_STORAGE_TYPE_LOCAL = 'local';
+    const PICTURE_STORAGE_TYPE_AMAZONS3 = 'AmazonS3';
+
     /** The default string format for model objects of the related table **/
     const DEFAULT_STRING_FORMAT = 'YAML';
 
@@ -75,12 +82,12 @@ abstract class BaseUsersPeer
      * e.g. UsersPeer::$fieldNames[UsersPeer::TYPE_PHPNAME][0] = 'Id'
      */
     protected static $fieldNames = array (
-        BasePeer::TYPE_PHPNAME => array ('Id', 'Username', 'Password', 'Email', 'AdminLevel', 'Language', 'LastLogInTime', 'AddTime', ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'username', 'password', 'email', 'adminLevel', 'language', 'lastLogInTime', 'addTime', ),
-        BasePeer::TYPE_COLNAME => array (UsersPeer::ID, UsersPeer::USERNAME, UsersPeer::PASSWORD, UsersPeer::EMAIL, UsersPeer::ADMIN_LEVEL, UsersPeer::LANGUAGE, UsersPeer::LAST_LOG_IN_TIME, UsersPeer::ADD_TIME, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'USERNAME', 'PASSWORD', 'EMAIL', 'ADMIN_LEVEL', 'LANGUAGE', 'LAST_LOG_IN_TIME', 'ADD_TIME', ),
-        BasePeer::TYPE_FIELDNAME => array ('id', 'username', 'password', 'email', 'admin_level', 'language', 'last_log_in_time', 'add_time', ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, )
+        BasePeer::TYPE_PHPNAME => array ('Id', 'Username', 'Password', 'Email', 'AdminLevel', 'Language', 'LastLogInTime', 'AddTime', 'PictureStorageType', ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'username', 'password', 'email', 'adminLevel', 'language', 'lastLogInTime', 'addTime', 'pictureStorageType', ),
+        BasePeer::TYPE_COLNAME => array (UsersPeer::ID, UsersPeer::USERNAME, UsersPeer::PASSWORD, UsersPeer::EMAIL, UsersPeer::ADMIN_LEVEL, UsersPeer::LANGUAGE, UsersPeer::LAST_LOG_IN_TIME, UsersPeer::ADD_TIME, UsersPeer::PICTURE_STORAGE_TYPE, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'USERNAME', 'PASSWORD', 'EMAIL', 'ADMIN_LEVEL', 'LANGUAGE', 'LAST_LOG_IN_TIME', 'ADD_TIME', 'PICTURE_STORAGE_TYPE', ),
+        BasePeer::TYPE_FIELDNAME => array ('id', 'username', 'password', 'email', 'admin_level', 'language', 'last_log_in_time', 'add_time', 'picture_storage_type', ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, )
     );
 
     /**
@@ -90,12 +97,20 @@ abstract class BaseUsersPeer
      * e.g. UsersPeer::$fieldNames[BasePeer::TYPE_PHPNAME]['Id'] = 0
      */
     protected static $fieldKeys = array (
-        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'Username' => 1, 'Password' => 2, 'Email' => 3, 'AdminLevel' => 4, 'Language' => 5, 'LastLogInTime' => 6, 'AddTime' => 7, ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'username' => 1, 'password' => 2, 'email' => 3, 'adminLevel' => 4, 'language' => 5, 'lastLogInTime' => 6, 'addTime' => 7, ),
-        BasePeer::TYPE_COLNAME => array (UsersPeer::ID => 0, UsersPeer::USERNAME => 1, UsersPeer::PASSWORD => 2, UsersPeer::EMAIL => 3, UsersPeer::ADMIN_LEVEL => 4, UsersPeer::LANGUAGE => 5, UsersPeer::LAST_LOG_IN_TIME => 6, UsersPeer::ADD_TIME => 7, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'USERNAME' => 1, 'PASSWORD' => 2, 'EMAIL' => 3, 'ADMIN_LEVEL' => 4, 'LANGUAGE' => 5, 'LAST_LOG_IN_TIME' => 6, 'ADD_TIME' => 7, ),
-        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'username' => 1, 'password' => 2, 'email' => 3, 'admin_level' => 4, 'language' => 5, 'last_log_in_time' => 6, 'add_time' => 7, ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, )
+        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'Username' => 1, 'Password' => 2, 'Email' => 3, 'AdminLevel' => 4, 'Language' => 5, 'LastLogInTime' => 6, 'AddTime' => 7, 'PictureStorageType' => 8, ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'username' => 1, 'password' => 2, 'email' => 3, 'adminLevel' => 4, 'language' => 5, 'lastLogInTime' => 6, 'addTime' => 7, 'pictureStorageType' => 8, ),
+        BasePeer::TYPE_COLNAME => array (UsersPeer::ID => 0, UsersPeer::USERNAME => 1, UsersPeer::PASSWORD => 2, UsersPeer::EMAIL => 3, UsersPeer::ADMIN_LEVEL => 4, UsersPeer::LANGUAGE => 5, UsersPeer::LAST_LOG_IN_TIME => 6, UsersPeer::ADD_TIME => 7, UsersPeer::PICTURE_STORAGE_TYPE => 8, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'USERNAME' => 1, 'PASSWORD' => 2, 'EMAIL' => 3, 'ADMIN_LEVEL' => 4, 'LANGUAGE' => 5, 'LAST_LOG_IN_TIME' => 6, 'ADD_TIME' => 7, 'PICTURE_STORAGE_TYPE' => 8, ),
+        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'username' => 1, 'password' => 2, 'email' => 3, 'admin_level' => 4, 'language' => 5, 'last_log_in_time' => 6, 'add_time' => 7, 'picture_storage_type' => 8, ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, )
+    );
+
+    /** The enumerated values for this table */
+    protected static $enumValueSets = array(
+        UsersPeer::PICTURE_STORAGE_TYPE => array(
+            UsersPeer::PICTURE_STORAGE_TYPE_LOCAL,
+            UsersPeer::PICTURE_STORAGE_TYPE_AMAZONS3,
+        ),
     );
 
     /**
@@ -138,6 +153,51 @@ abstract class BaseUsersPeer
     }
 
     /**
+     * Gets the list of values for all ENUM columns
+     * @return array
+     */
+    public static function getValueSets()
+    {
+      return UsersPeer::$enumValueSets;
+    }
+
+    /**
+     * Gets the list of values for an ENUM column
+     *
+     * @param string $colname The ENUM column name.
+     *
+     * @return array list of possible values for the column
+     */
+    public static function getValueSet($colname)
+    {
+        $valueSets = UsersPeer::getValueSets();
+
+        if (!isset($valueSets[$colname])) {
+            throw new PropelException(sprintf('Column "%s" has no ValueSet.', $colname));
+        }
+
+        return $valueSets[$colname];
+    }
+
+    /**
+     * Gets the SQL value for the ENUM column value
+     *
+     * @param string $colname ENUM column name.
+     * @param string $enumVal ENUM value.
+     *
+     * @return int SQL value
+     */
+    public static function getSqlValueForEnum($colname, $enumVal)
+    {
+        $values = UsersPeer::getValueSet($colname);
+        if (!in_array($enumVal, $values)) {
+            throw new PropelException(sprintf('Value "%s" is not accepted in this enumerated column', $colname));
+        }
+
+        return array_search($enumVal, $values);
+    }
+
+    /**
      * Convenience method which changes table.column to alias.column.
      *
      * Using this method you can maintain SQL abstraction while using column aliases.
@@ -177,6 +237,7 @@ abstract class BaseUsersPeer
             $criteria->addSelectColumn(UsersPeer::LANGUAGE);
             $criteria->addSelectColumn(UsersPeer::LAST_LOG_IN_TIME);
             $criteria->addSelectColumn(UsersPeer::ADD_TIME);
+            $criteria->addSelectColumn(UsersPeer::PICTURE_STORAGE_TYPE);
         } else {
             $criteria->addSelectColumn($alias . '.id');
             $criteria->addSelectColumn($alias . '.username');
@@ -186,6 +247,7 @@ abstract class BaseUsersPeer
             $criteria->addSelectColumn($alias . '.language');
             $criteria->addSelectColumn($alias . '.last_log_in_time');
             $criteria->addSelectColumn($alias . '.add_time');
+            $criteria->addSelectColumn($alias . '.picture_storage_type');
         }
     }
 

@@ -13,6 +13,7 @@
  * @method ImagesQuery orderByPointId($order = Criteria::ASC) Order by the point_id column
  * @method ImagesQuery orderByDescription($order = Criteria::ASC) Order by the description column
  * @method ImagesQuery orderByThumbFilePath($order = Criteria::ASC) Order by the thumb_file_path column
+ * @method ImagesQuery orderByPictureStorageType($order = Criteria::ASC) Order by the picture_storage_type column
  *
  * @method ImagesQuery groupById() Group by the id column
  * @method ImagesQuery groupByFilePath() Group by the file_path column
@@ -21,6 +22,7 @@
  * @method ImagesQuery groupByPointId() Group by the point_id column
  * @method ImagesQuery groupByDescription() Group by the description column
  * @method ImagesQuery groupByThumbFilePath() Group by the thumb_file_path column
+ * @method ImagesQuery groupByPictureStorageType() Group by the picture_storage_type column
  *
  * @method ImagesQuery leftJoin($relation) Adds a LEFT JOIN clause to the query
  * @method ImagesQuery rightJoin($relation) Adds a RIGHT JOIN clause to the query
@@ -35,6 +37,7 @@
  * @method Images findOneByPointId(string $point_id) Return the first Images filtered by the point_id column
  * @method Images findOneByDescription(string $description) Return the first Images filtered by the description column
  * @method Images findOneByThumbFilePath(string $thumb_file_path) Return the first Images filtered by the thumb_file_path column
+ * @method Images findOneByPictureStorageType(string $picture_storage_type) Return the first Images filtered by the picture_storage_type column
  *
  * @method array findById(string $id) Return Images objects filtered by the id column
  * @method array findByFilePath(string $file_path) Return Images objects filtered by the file_path column
@@ -43,6 +46,7 @@
  * @method array findByPointId(string $point_id) Return Images objects filtered by the point_id column
  * @method array findByDescription(string $description) Return Images objects filtered by the description column
  * @method array findByThumbFilePath(string $thumb_file_path) Return Images objects filtered by the thumb_file_path column
+ * @method array findByPictureStorageType(string $picture_storage_type) Return Images objects filtered by the picture_storage_type column
  *
  * @package    propel.generator.speogis.om
  */
@@ -150,7 +154,7 @@ abstract class BaseImagesQuery extends ModelCriteria
      */
     protected function findPkSimple($key, $con)
     {
-        $sql = 'SELECT `id`, `file_path`, `user_id`, `add_time`, `point_id`, `description`, `thumb_file_path` FROM `images` WHERE `id` = :p0';
+        $sql = 'SELECT `id`, `file_path`, `user_id`, `add_time`, `point_id`, `description`, `thumb_file_path`, `picture_storage_type` FROM `images` WHERE `id` = :p0';
         try {
             $stmt = $con->prepare($sql);
             $stmt->bindValue(':p0', $key, PDO::PARAM_STR);
@@ -493,6 +497,35 @@ abstract class BaseImagesQuery extends ModelCriteria
         }
 
         return $this->addUsingAlias(ImagesPeer::THUMB_FILE_PATH, $thumbFilePath, $comparison);
+    }
+
+    /**
+     * Filter the query on the picture_storage_type column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterByPictureStorageType('fooValue');   // WHERE picture_storage_type = 'fooValue'
+     * $query->filterByPictureStorageType('%fooValue%'); // WHERE picture_storage_type LIKE '%fooValue%'
+     * </code>
+     *
+     * @param     string $pictureStorageType The value to use as filter.
+     *              Accepts wildcards (* and % trigger a LIKE)
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return ImagesQuery The current query, for fluid interface
+     */
+    public function filterByPictureStorageType($pictureStorageType = null, $comparison = null)
+    {
+        if (null === $comparison) {
+            if (is_array($pictureStorageType)) {
+                $comparison = Criteria::IN;
+            } elseif (preg_match('/[\%\*]/', $pictureStorageType)) {
+                $pictureStorageType = str_replace('*', '%', $pictureStorageType);
+                $comparison = Criteria::LIKE;
+            }
+        }
+
+        return $this->addUsingAlias(ImagesPeer::PICTURE_STORAGE_TYPE, $pictureStorageType, $comparison);
     }
 
     /**

@@ -165,10 +165,23 @@ ol.source.DBPedia.prototype._loaderFn = function(extent, resolution, projection)
 				feature.set('long', item.geometry.coordinates[1]); // coordinate[1]
 				//feature.set('label', "z");
 				//feature.set('thumbnail', item.properties.thumbUrl);
-				feature.set('thumbnail', './' + item.properties.thumbUrl);
+				if (item.properties.picture_storage_type == "local")
+				{
+					feature.set('thumbnail', './' + item.properties.thumbUrl);
+					feature.set('url', './' + item.properties.url);
+				}
+				else
+					if (item.properties.picture_storage_type == "AmazonS3")
+					{
+						feature.set('thumbnail', item.properties.thumbUrl);
+						feature.set('url', item.properties.url);
+					}
+					else
+						throw "unknown picture storage type";
+				
 				//feature.set('abstract', "");
 				feature.set('type', "");
-				feature.set('url', './' + item.properties.url);
+				
 				feature.set('image_id', item.properties.image_id);
 				//feature.set('', "");
 

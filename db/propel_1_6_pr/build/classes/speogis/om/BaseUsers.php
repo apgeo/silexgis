@@ -78,6 +78,12 @@ abstract class BaseUsers extends BaseObject implements Persistent
     protected $add_time;
 
     /**
+     * The value for the picture_storage_type field.
+     * @var        string
+     */
+    protected $picture_storage_type;
+
+    /**
      * Flag to prevent endless save loop, if this object is referenced
      * by another object which falls in this transaction.
      * @var        boolean
@@ -241,6 +247,17 @@ abstract class BaseUsers extends BaseObject implements Persistent
 
         return $dt->format($format);
 
+    }
+
+    /**
+     * Get the [picture_storage_type] column value.
+     *
+     * @return string
+     */
+    public function getPictureStorageType()
+    {
+
+        return $this->picture_storage_type;
     }
 
     /**
@@ -416,6 +433,27 @@ abstract class BaseUsers extends BaseObject implements Persistent
     } // setAddTime()
 
     /**
+     * Set the value of [picture_storage_type] column.
+     *
+     * @param  string $v new value
+     * @return Users The current object (for fluent API support)
+     */
+    public function setPictureStorageType($v)
+    {
+        if ($v !== null) {
+            $v = (string) $v;
+        }
+
+        if ($this->picture_storage_type !== $v) {
+            $this->picture_storage_type = $v;
+            $this->modifiedColumns[] = UsersPeer::PICTURE_STORAGE_TYPE;
+        }
+
+
+        return $this;
+    } // setPictureStorageType()
+
+    /**
      * Indicates whether the columns in this object are only set to default values.
      *
      * This method can be used in conjunction with isModified() to indicate whether an object is both
@@ -455,6 +493,7 @@ abstract class BaseUsers extends BaseObject implements Persistent
             $this->language = ($row[$startcol + 5] !== null) ? (string) $row[$startcol + 5] : null;
             $this->last_log_in_time = ($row[$startcol + 6] !== null) ? (string) $row[$startcol + 6] : null;
             $this->add_time = ($row[$startcol + 7] !== null) ? (string) $row[$startcol + 7] : null;
+            $this->picture_storage_type = ($row[$startcol + 8] !== null) ? (string) $row[$startcol + 8] : null;
             $this->resetModified();
 
             $this->setNew(false);
@@ -464,7 +503,7 @@ abstract class BaseUsers extends BaseObject implements Persistent
             }
             $this->postHydrate($row, $startcol, $rehydrate);
 
-            return $startcol + 8; // 8 = UsersPeer::NUM_HYDRATE_COLUMNS.
+            return $startcol + 9; // 9 = UsersPeer::NUM_HYDRATE_COLUMNS.
 
         } catch (Exception $e) {
             throw new PropelException("Error populating Users object", $e);
@@ -700,6 +739,9 @@ abstract class BaseUsers extends BaseObject implements Persistent
         if ($this->isColumnModified(UsersPeer::ADD_TIME)) {
             $modifiedColumns[':p' . $index++]  = '`add_time`';
         }
+        if ($this->isColumnModified(UsersPeer::PICTURE_STORAGE_TYPE)) {
+            $modifiedColumns[':p' . $index++]  = '`picture_storage_type`';
+        }
 
         $sql = sprintf(
             'INSERT INTO `users` (%s) VALUES (%s)',
@@ -734,6 +776,9 @@ abstract class BaseUsers extends BaseObject implements Persistent
                         break;
                     case '`add_time`':
                         $stmt->bindValue($identifier, $this->add_time, PDO::PARAM_STR);
+                        break;
+                    case '`picture_storage_type`':
+                        $stmt->bindValue($identifier, $this->picture_storage_type, PDO::PARAM_STR);
                         break;
                 }
             }
@@ -893,6 +938,9 @@ abstract class BaseUsers extends BaseObject implements Persistent
             case 7:
                 return $this->getAddTime();
                 break;
+            case 8:
+                return $this->getPictureStorageType();
+                break;
             default:
                 return null;
                 break;
@@ -929,6 +977,7 @@ abstract class BaseUsers extends BaseObject implements Persistent
             $keys[5] => $this->getLanguage(),
             $keys[6] => $this->getLastLogInTime(),
             $keys[7] => $this->getAddTime(),
+            $keys[8] => $this->getPictureStorageType(),
         );
         $virtualColumns = $this->virtualColumns;
         foreach ($virtualColumns as $key => $virtualColumn) {
@@ -992,6 +1041,9 @@ abstract class BaseUsers extends BaseObject implements Persistent
             case 7:
                 $this->setAddTime($value);
                 break;
+            case 8:
+                $this->setPictureStorageType($value);
+                break;
         } // switch()
     }
 
@@ -1024,6 +1076,7 @@ abstract class BaseUsers extends BaseObject implements Persistent
         if (array_key_exists($keys[5], $arr)) $this->setLanguage($arr[$keys[5]]);
         if (array_key_exists($keys[6], $arr)) $this->setLastLogInTime($arr[$keys[6]]);
         if (array_key_exists($keys[7], $arr)) $this->setAddTime($arr[$keys[7]]);
+        if (array_key_exists($keys[8], $arr)) $this->setPictureStorageType($arr[$keys[8]]);
     }
 
     /**
@@ -1043,6 +1096,7 @@ abstract class BaseUsers extends BaseObject implements Persistent
         if ($this->isColumnModified(UsersPeer::LANGUAGE)) $criteria->add(UsersPeer::LANGUAGE, $this->language);
         if ($this->isColumnModified(UsersPeer::LAST_LOG_IN_TIME)) $criteria->add(UsersPeer::LAST_LOG_IN_TIME, $this->last_log_in_time);
         if ($this->isColumnModified(UsersPeer::ADD_TIME)) $criteria->add(UsersPeer::ADD_TIME, $this->add_time);
+        if ($this->isColumnModified(UsersPeer::PICTURE_STORAGE_TYPE)) $criteria->add(UsersPeer::PICTURE_STORAGE_TYPE, $this->picture_storage_type);
 
         return $criteria;
     }
@@ -1113,6 +1167,7 @@ abstract class BaseUsers extends BaseObject implements Persistent
         $copyObj->setLanguage($this->getLanguage());
         $copyObj->setLastLogInTime($this->getLastLogInTime());
         $copyObj->setAddTime($this->getAddTime());
+        $copyObj->setPictureStorageType($this->getPictureStorageType());
         if ($makeNew) {
             $copyObj->setNew(true);
             $copyObj->setId(NULL); // this is a auto-increment column, so set to default value
@@ -1172,6 +1227,7 @@ abstract class BaseUsers extends BaseObject implements Persistent
         $this->language = null;
         $this->last_log_in_time = null;
         $this->add_time = null;
+        $this->picture_storage_type = null;
         $this->alreadyInSave = false;
         $this->alreadyInValidation = false;
         $this->alreadyInClearAllReferencesDeep = false;

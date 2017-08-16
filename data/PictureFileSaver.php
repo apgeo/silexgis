@@ -98,18 +98,35 @@ if (!empty($_FILES['file']) && ($_FILES['file']['error'] != UPLOAD_ERR_OK)) {
     }
 	}
 	
-	function getPictureURL($file_name)
+	function getPictureURL($file_name, $pic_storage_type)
 	{
 		$user_directory = "";
-		$file_url = '/uploads/' . 'pictures/'. $user_directory . $file_name;
+        $file_url = "";
+
+        if ($pic_storage_type == "local")
+		    $file_url = '/uploads/' . 'pictures/'. $user_directory . $file_name;
+        else
+            if ($pic_storage_type == "AmazonS3")                
+                $file_url = $file_name; // the aws s3 url
+        else
+            throw new Exception("unknown picture storage type");
 		
 		return $file_url;
 	}	
 
-	function getPictureThumbURL($file_name)
+	function getPictureThumbURL($file_name, $pic_storage_type)
 	{
 		$user_directory = "";
-		$file_url = '/uploads/' . 'pictures/thumbnail/'. $user_directory . $file_name;
+        $file_url = "";
+
+        if ($pic_storage_type == "local")
+		    $file_url = '/uploads/' . 'pictures/thumbnail/'. $user_directory . $file_name;
+        else
+            if ($pic_storage_type == "AmazonS3")                
+                $file_url = $file_name; // the aws s3 url
+                //-- add picture thumbnail
+        else
+            throw new Exception("unknown picture storage type");        	        
 		
 		return $file_url;
 	}	

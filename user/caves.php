@@ -1,3 +1,4 @@
+<b><h3>*{caves.page_title}*</h3></b>
 <?php
 ################################################################################   
 ## +---------------------------------------------------------------------------+
@@ -5,7 +6,7 @@
 ## +---------------------------------------------------------------------------+
 ##  *** only relative (virtual) path (to the current document)
 	
-	require_once("grid_common.php");  //require_once('utilities.php'); include_once 'db_interface.php'; include_once 'data_interface.php'; require_once 'languages.php'; 
+require_once("grid_common.php");  //require_once('utilities.php'); include_once 'db_interface.php'; include_once 'data_interface.php'; require_once 'languages.php'; 
 
   //echo "<b><h3>Caves</h3></b>";
   ##  *** creating variables that we need for database connection 
@@ -49,17 +50,18 @@
     
    print ("<input id='submitButton' type='submit' name='submit' value='Filter' />");
    */
-ob_start();
+  ob_start();
+
   $db_conn = DB::factory('mysql'); 
   $db_conn -> connect(DB::parseDSN('mysql://'.$DB_USER.':'.$DB_PASS.'@'.$DB_HOST.'/'.$DB_NAME));
 
 ##  *** put a primary key on the first place 
   //$sql="SELECT points.id, X(coords) as lat, Y(coords) as lon, elevation, gpx_name, gpx_time, `_details`, pointrs._id_point_type FROM points"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
    
-  $sql="SELECT 	`id`, 	`name`, 	`typeId`, 	`locationIdentifier`, 	`description` FROM 	caves"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
+  $sql="SELECT 	`id`, 	`name`, 	`type_id`, 	`description` FROM 	caves"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
 
 ##  *** set needed options
-  $debug_mode = false;
+  $debug_mode = !false;
   $messaging = true;
   $unique_prefix = "f_";  
   $dgrid = new DataGrid($debug_mode, $messaging, $unique_prefix, DATAGRID_DIR);
@@ -173,9 +175,9 @@ ob_start();
     //"lat"      =>array("table"=>"points",   "field"=>"lat", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"binary"),
     //"lon"      =>array("table"=>"points",   "field"=>"lon", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"binary"),    
     "Nume"      =>array("table"=>"points",   "field"=>"name", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"string"),
-	"Tip"      =>array("table"=>"points",   "field"=>"typeId", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"binary"),	
+	//"Tip"      =>array("table"=>"points",   "field"=>"typeId", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"binary"),	
     //"time"      =>array("table"=>"points",   "field"=>"gpx_time", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"date"),
-    "Tip"      =>array("table"=>"point_types",   "field"=>"name", "source"=>"self", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"string"),    
+    //"Tip"      =>array("table"=>"point_types",   "field"=>"name", "source"=>"self", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"string"),    
     //"User ID"      =>array("table"=>"user_activity_reports",   "field"=>"user_id", "source"=>"self", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"numeric"),
     //"Date"        =>array("table"=>"user_activity_reports", "field"=>"time", "source"=>"self", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"string"),      
     //"Population"  =>array("table"=>"countries", "field"=>"population", "source"=>$fill_from_array, "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false, "comparison_type"=>"numeric")
@@ -195,7 +197,7 @@ ob_start();
     "elevation" => array("header"=>"altitudine", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
     "name"  => array("header"=>"Nume",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),        
     "typeId"  => array("header"=>"Tip",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
-    "description"  => array("header"=>"Descriere",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal")    
+    "description"  => array("header"=>"Descriere",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
 	"locationIdentifier"  => array("header"=>"identificator",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal")
     //"pic"  =>array("header"=>"Pic",      "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "field_key"=>"pic", "field_key_1"=>"pic", "field_data"=>"x", "rel"=>"", "title"=>"", "target"=>"_self", "href"=>"{0}"),
     //"gallery_url"  =>array("header"=>"Pic",      "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "field_key"=>"gallery_url", "field_key_1"=>"gallery_url", "field_data"=>"{1}", "rel"=>"{0}", "title"=>"{0}", "target"=>"_self", "href"=>"{0}"),

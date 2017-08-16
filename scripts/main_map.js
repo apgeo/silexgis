@@ -1986,7 +1986,7 @@ function initThumbnailLoading()
 	
     var picturesLayer = new ol.layer.Vector({
       source: pictureSource,
-		name: 'pictures',	  
+		name: 'pictures',
       style: pictureStyle
     });
 
@@ -1995,7 +1995,7 @@ function initThumbnailLoading()
 
 	_picturesLayer = picturesLayer;
 	
-    function successHandler(data) {
+    function getPictureSuccessHandler(data) {
       var transform = ol.proj.getTransform('EPSG:4326', 'EPSG:3857');
       data.features.forEach(function(item) {
         var feature = new ol.Feature(); // var feature = new ol.Feature(item);
@@ -2016,8 +2016,8 @@ function initThumbnailLoading()
       url: 'data/getPictures.php?bbox=' + bbox[0] + ',' + bbox[1] + ',' + bbox[2] + ',' + bbox[3],
       dataType: 'json', // dataType: 'jsonp',
       //jsonpCallback: 'jsonFlickrFeed',
-      success: successHandler,
-		error:  function(jqXHR, textStatus, errorThrown )
+      success: getPictureSuccessHandler,
+		error:  function(jqXHR, textStatus, errorThrown)
 		{
 			//onFailure(textStatus); //-- show error code returned
 			console.error(errorThrown);
@@ -4649,7 +4649,7 @@ $('#searchFeatureControl').typeahead({
     },
   //display: 'name',  
   //limit: 9
-  //suggestion: Handlebars.compile('<div><strong>{{value}}</strong> – {{year}}</div>')
+  //suggestion: Handlebars.compile('<div><strong>{{value}}</strong> ï¿½ {{year}}</div>')
   /*
   filter: function (parsedResponse) {
             // parsedResponse is the array returned from your backend

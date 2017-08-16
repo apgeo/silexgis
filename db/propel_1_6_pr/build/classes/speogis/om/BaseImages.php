@@ -72,6 +72,12 @@ abstract class BaseImages extends BaseObject implements Persistent
     protected $thumb_file_path;
 
     /**
+     * The value for the picture_storage_type field.
+     * @var        string
+     */
+    protected $picture_storage_type;
+
+    /**
      * Flag to prevent endless save loop, if this object is referenced
      * by another object which falls in this transaction.
      * @var        boolean
@@ -195,6 +201,17 @@ abstract class BaseImages extends BaseObject implements Persistent
     {
 
         return $this->thumb_file_path;
+    }
+
+    /**
+     * Get the [picture_storage_type] column value.
+     *
+     * @return string
+     */
+    public function getPictureStorageType()
+    {
+
+        return $this->picture_storage_type;
     }
 
     /**
@@ -347,6 +364,27 @@ abstract class BaseImages extends BaseObject implements Persistent
     } // setThumbFilePath()
 
     /**
+     * Set the value of [picture_storage_type] column.
+     *
+     * @param  string $v new value
+     * @return Images The current object (for fluent API support)
+     */
+    public function setPictureStorageType($v)
+    {
+        if ($v !== null) {
+            $v = (string) $v;
+        }
+
+        if ($this->picture_storage_type !== $v) {
+            $this->picture_storage_type = $v;
+            $this->modifiedColumns[] = ImagesPeer::PICTURE_STORAGE_TYPE;
+        }
+
+
+        return $this;
+    } // setPictureStorageType()
+
+    /**
      * Indicates whether the columns in this object are only set to default values.
      *
      * This method can be used in conjunction with isModified() to indicate whether an object is both
@@ -385,6 +423,7 @@ abstract class BaseImages extends BaseObject implements Persistent
             $this->point_id = ($row[$startcol + 4] !== null) ? (string) $row[$startcol + 4] : null;
             $this->description = ($row[$startcol + 5] !== null) ? (string) $row[$startcol + 5] : null;
             $this->thumb_file_path = ($row[$startcol + 6] !== null) ? (string) $row[$startcol + 6] : null;
+            $this->picture_storage_type = ($row[$startcol + 7] !== null) ? (string) $row[$startcol + 7] : null;
             $this->resetModified();
 
             $this->setNew(false);
@@ -394,7 +433,7 @@ abstract class BaseImages extends BaseObject implements Persistent
             }
             $this->postHydrate($row, $startcol, $rehydrate);
 
-            return $startcol + 7; // 7 = ImagesPeer::NUM_HYDRATE_COLUMNS.
+            return $startcol + 8; // 8 = ImagesPeer::NUM_HYDRATE_COLUMNS.
 
         } catch (Exception $e) {
             throw new PropelException("Error populating Images object", $e);
@@ -627,6 +666,9 @@ abstract class BaseImages extends BaseObject implements Persistent
         if ($this->isColumnModified(ImagesPeer::THUMB_FILE_PATH)) {
             $modifiedColumns[':p' . $index++]  = '`thumb_file_path`';
         }
+        if ($this->isColumnModified(ImagesPeer::PICTURE_STORAGE_TYPE)) {
+            $modifiedColumns[':p' . $index++]  = '`picture_storage_type`';
+        }
 
         $sql = sprintf(
             'INSERT INTO `images` (%s) VALUES (%s)',
@@ -658,6 +700,9 @@ abstract class BaseImages extends BaseObject implements Persistent
                         break;
                     case '`thumb_file_path`':
                         $stmt->bindValue($identifier, $this->thumb_file_path, PDO::PARAM_STR);
+                        break;
+                    case '`picture_storage_type`':
+                        $stmt->bindValue($identifier, $this->picture_storage_type, PDO::PARAM_STR);
                         break;
                 }
             }
@@ -814,6 +859,9 @@ abstract class BaseImages extends BaseObject implements Persistent
             case 6:
                 return $this->getThumbFilePath();
                 break;
+            case 7:
+                return $this->getPictureStorageType();
+                break;
             default:
                 return null;
                 break;
@@ -849,6 +897,7 @@ abstract class BaseImages extends BaseObject implements Persistent
             $keys[4] => $this->getPointId(),
             $keys[5] => $this->getDescription(),
             $keys[6] => $this->getThumbFilePath(),
+            $keys[7] => $this->getPictureStorageType(),
         );
         $virtualColumns = $this->virtualColumns;
         foreach ($virtualColumns as $key => $virtualColumn) {
@@ -909,6 +958,9 @@ abstract class BaseImages extends BaseObject implements Persistent
             case 6:
                 $this->setThumbFilePath($value);
                 break;
+            case 7:
+                $this->setPictureStorageType($value);
+                break;
         } // switch()
     }
 
@@ -940,6 +992,7 @@ abstract class BaseImages extends BaseObject implements Persistent
         if (array_key_exists($keys[4], $arr)) $this->setPointId($arr[$keys[4]]);
         if (array_key_exists($keys[5], $arr)) $this->setDescription($arr[$keys[5]]);
         if (array_key_exists($keys[6], $arr)) $this->setThumbFilePath($arr[$keys[6]]);
+        if (array_key_exists($keys[7], $arr)) $this->setPictureStorageType($arr[$keys[7]]);
     }
 
     /**
@@ -958,6 +1011,7 @@ abstract class BaseImages extends BaseObject implements Persistent
         if ($this->isColumnModified(ImagesPeer::POINT_ID)) $criteria->add(ImagesPeer::POINT_ID, $this->point_id);
         if ($this->isColumnModified(ImagesPeer::DESCRIPTION)) $criteria->add(ImagesPeer::DESCRIPTION, $this->description);
         if ($this->isColumnModified(ImagesPeer::THUMB_FILE_PATH)) $criteria->add(ImagesPeer::THUMB_FILE_PATH, $this->thumb_file_path);
+        if ($this->isColumnModified(ImagesPeer::PICTURE_STORAGE_TYPE)) $criteria->add(ImagesPeer::PICTURE_STORAGE_TYPE, $this->picture_storage_type);
 
         return $criteria;
     }
@@ -1027,6 +1081,7 @@ abstract class BaseImages extends BaseObject implements Persistent
         $copyObj->setPointId($this->getPointId());
         $copyObj->setDescription($this->getDescription());
         $copyObj->setThumbFilePath($this->getThumbFilePath());
+        $copyObj->setPictureStorageType($this->getPictureStorageType());
         if ($makeNew) {
             $copyObj->setNew(true);
             $copyObj->setId(NULL); // this is a auto-increment column, so set to default value
@@ -1085,6 +1140,7 @@ abstract class BaseImages extends BaseObject implements Persistent
         $this->point_id = null;
         $this->description = null;
         $this->thumb_file_path = null;
+        $this->picture_storage_type = null;
         $this->alreadyInSave = false;
         $this->alreadyInValidation = false;
         $this->alreadyInClearAllReferencesDeep = false;

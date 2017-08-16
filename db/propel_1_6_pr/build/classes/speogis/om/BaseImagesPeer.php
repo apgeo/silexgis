@@ -24,13 +24,13 @@ abstract class BaseImagesPeer
     const TM_CLASS = 'ImagesTableMap';
 
     /** The total number of columns. */
-    const NUM_COLUMNS = 7;
+    const NUM_COLUMNS = 8;
 
     /** The number of lazy-loaded columns. */
     const NUM_LAZY_LOAD_COLUMNS = 0;
 
     /** The number of columns to hydrate (NUM_COLUMNS - NUM_LAZY_LOAD_COLUMNS) */
-    const NUM_HYDRATE_COLUMNS = 7;
+    const NUM_HYDRATE_COLUMNS = 8;
 
     /** the column name for the id field */
     const ID = 'images.id';
@@ -53,6 +53,13 @@ abstract class BaseImagesPeer
     /** the column name for the thumb_file_path field */
     const THUMB_FILE_PATH = 'images.thumb_file_path';
 
+    /** the column name for the picture_storage_type field */
+    const PICTURE_STORAGE_TYPE = 'images.picture_storage_type';
+
+    /** The enumerated values for the picture_storage_type field */
+    const PICTURE_STORAGE_TYPE_LOCAL = 'local';
+    const PICTURE_STORAGE_TYPE_AMAZONS3 = 'AmazonS3';
+
     /** The default string format for model objects of the related table **/
     const DEFAULT_STRING_FORMAT = 'YAML';
 
@@ -72,12 +79,12 @@ abstract class BaseImagesPeer
      * e.g. ImagesPeer::$fieldNames[ImagesPeer::TYPE_PHPNAME][0] = 'Id'
      */
     protected static $fieldNames = array (
-        BasePeer::TYPE_PHPNAME => array ('Id', 'FilePath', 'UserId', 'AddTime', 'PointId', 'Description', 'ThumbFilePath', ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'filePath', 'userId', 'addTime', 'pointId', 'description', 'thumbFilePath', ),
-        BasePeer::TYPE_COLNAME => array (ImagesPeer::ID, ImagesPeer::FILE_PATH, ImagesPeer::USER_ID, ImagesPeer::ADD_TIME, ImagesPeer::POINT_ID, ImagesPeer::DESCRIPTION, ImagesPeer::THUMB_FILE_PATH, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'FILE_PATH', 'USER_ID', 'ADD_TIME', 'POINT_ID', 'DESCRIPTION', 'THUMB_FILE_PATH', ),
-        BasePeer::TYPE_FIELDNAME => array ('id', 'file_path', 'user_id', 'add_time', 'point_id', 'description', 'thumb_file_path', ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, )
+        BasePeer::TYPE_PHPNAME => array ('Id', 'FilePath', 'UserId', 'AddTime', 'PointId', 'Description', 'ThumbFilePath', 'PictureStorageType', ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'filePath', 'userId', 'addTime', 'pointId', 'description', 'thumbFilePath', 'pictureStorageType', ),
+        BasePeer::TYPE_COLNAME => array (ImagesPeer::ID, ImagesPeer::FILE_PATH, ImagesPeer::USER_ID, ImagesPeer::ADD_TIME, ImagesPeer::POINT_ID, ImagesPeer::DESCRIPTION, ImagesPeer::THUMB_FILE_PATH, ImagesPeer::PICTURE_STORAGE_TYPE, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'FILE_PATH', 'USER_ID', 'ADD_TIME', 'POINT_ID', 'DESCRIPTION', 'THUMB_FILE_PATH', 'PICTURE_STORAGE_TYPE', ),
+        BasePeer::TYPE_FIELDNAME => array ('id', 'file_path', 'user_id', 'add_time', 'point_id', 'description', 'thumb_file_path', 'picture_storage_type', ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, )
     );
 
     /**
@@ -87,12 +94,20 @@ abstract class BaseImagesPeer
      * e.g. ImagesPeer::$fieldNames[BasePeer::TYPE_PHPNAME]['Id'] = 0
      */
     protected static $fieldKeys = array (
-        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'FilePath' => 1, 'UserId' => 2, 'AddTime' => 3, 'PointId' => 4, 'Description' => 5, 'ThumbFilePath' => 6, ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'filePath' => 1, 'userId' => 2, 'addTime' => 3, 'pointId' => 4, 'description' => 5, 'thumbFilePath' => 6, ),
-        BasePeer::TYPE_COLNAME => array (ImagesPeer::ID => 0, ImagesPeer::FILE_PATH => 1, ImagesPeer::USER_ID => 2, ImagesPeer::ADD_TIME => 3, ImagesPeer::POINT_ID => 4, ImagesPeer::DESCRIPTION => 5, ImagesPeer::THUMB_FILE_PATH => 6, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'FILE_PATH' => 1, 'USER_ID' => 2, 'ADD_TIME' => 3, 'POINT_ID' => 4, 'DESCRIPTION' => 5, 'THUMB_FILE_PATH' => 6, ),
-        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'file_path' => 1, 'user_id' => 2, 'add_time' => 3, 'point_id' => 4, 'description' => 5, 'thumb_file_path' => 6, ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, )
+        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'FilePath' => 1, 'UserId' => 2, 'AddTime' => 3, 'PointId' => 4, 'Description' => 5, 'ThumbFilePath' => 6, 'PictureStorageType' => 7, ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'filePath' => 1, 'userId' => 2, 'addTime' => 3, 'pointId' => 4, 'description' => 5, 'thumbFilePath' => 6, 'pictureStorageType' => 7, ),
+        BasePeer::TYPE_COLNAME => array (ImagesPeer::ID => 0, ImagesPeer::FILE_PATH => 1, ImagesPeer::USER_ID => 2, ImagesPeer::ADD_TIME => 3, ImagesPeer::POINT_ID => 4, ImagesPeer::DESCRIPTION => 5, ImagesPeer::THUMB_FILE_PATH => 6, ImagesPeer::PICTURE_STORAGE_TYPE => 7, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'FILE_PATH' => 1, 'USER_ID' => 2, 'ADD_TIME' => 3, 'POINT_ID' => 4, 'DESCRIPTION' => 5, 'THUMB_FILE_PATH' => 6, 'PICTURE_STORAGE_TYPE' => 7, ),
+        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'file_path' => 1, 'user_id' => 2, 'add_time' => 3, 'point_id' => 4, 'description' => 5, 'thumb_file_path' => 6, 'picture_storage_type' => 7, ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, )
+    );
+
+    /** The enumerated values for this table */
+    protected static $enumValueSets = array(
+        ImagesPeer::PICTURE_STORAGE_TYPE => array(
+            ImagesPeer::PICTURE_STORAGE_TYPE_LOCAL,
+            ImagesPeer::PICTURE_STORAGE_TYPE_AMAZONS3,
+        ),
     );
 
     /**
@@ -135,6 +150,51 @@ abstract class BaseImagesPeer
     }
 
     /**
+     * Gets the list of values for all ENUM columns
+     * @return array
+     */
+    public static function getValueSets()
+    {
+      return ImagesPeer::$enumValueSets;
+    }
+
+    /**
+     * Gets the list of values for an ENUM column
+     *
+     * @param string $colname The ENUM column name.
+     *
+     * @return array list of possible values for the column
+     */
+    public static function getValueSet($colname)
+    {
+        $valueSets = ImagesPeer::getValueSets();
+
+        if (!isset($valueSets[$colname])) {
+            throw new PropelException(sprintf('Column "%s" has no ValueSet.', $colname));
+        }
+
+        return $valueSets[$colname];
+    }
+
+    /**
+     * Gets the SQL value for the ENUM column value
+     *
+     * @param string $colname ENUM column name.
+     * @param string $enumVal ENUM value.
+     *
+     * @return int SQL value
+     */
+    public static function getSqlValueForEnum($colname, $enumVal)
+    {
+        $values = ImagesPeer::getValueSet($colname);
+        if (!in_array($enumVal, $values)) {
+            throw new PropelException(sprintf('Value "%s" is not accepted in this enumerated column', $colname));
+        }
+
+        return array_search($enumVal, $values);
+    }
+
+    /**
      * Convenience method which changes table.column to alias.column.
      *
      * Using this method you can maintain SQL abstraction while using column aliases.
@@ -173,6 +233,7 @@ abstract class BaseImagesPeer
             $criteria->addSelectColumn(ImagesPeer::POINT_ID);
             $criteria->addSelectColumn(ImagesPeer::DESCRIPTION);
             $criteria->addSelectColumn(ImagesPeer::THUMB_FILE_PATH);
+            $criteria->addSelectColumn(ImagesPeer::PICTURE_STORAGE_TYPE);
         } else {
             $criteria->addSelectColumn($alias . '.id');
             $criteria->addSelectColumn($alias . '.file_path');
@@ -181,6 +242,7 @@ abstract class BaseImagesPeer
             $criteria->addSelectColumn($alias . '.point_id');
             $criteria->addSelectColumn($alias . '.description');
             $criteria->addSelectColumn($alias . '.thumb_file_path');
+            $criteria->addSelectColumn($alias . '.picture_storage_type');
         }
     }
 

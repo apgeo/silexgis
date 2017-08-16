@@ -29,7 +29,7 @@ if($username=="") {
 	
 	if (is_array($res))
 	{	
-	if ( (count($res) == 1))
+	if ((count($res) == 1))
 	{		
 		 
 		$userObj = $res[0];

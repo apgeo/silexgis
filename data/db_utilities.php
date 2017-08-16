@@ -7,9 +7,7 @@
 class DbUtils
 {    
 
-static function x($z)    {    }		
-
-static function point_to_json($lat, $long) 
+static function point_to_json($lat, $long)
 // function wkb_to_json($wkb)	
 {			
 // open layers wants the returned objects to have the coordinates as long, lat -> so custom formatting needs to be done before feeding geoPHP		
@@ -204,16 +202,22 @@ class GeoUtils
 		
 		//var_dump($exif_data);
 		
-		$lon = GeoUtils::getGps($exif_data["GPS"]["GPSLongitude"], $exif_data["GPS"]['GPSLongitudeRef']);
-		$lat = GeoUtils::getGps($exif_data["GPS"]["GPSLatitude"], $exif_data["GPS"]['GPSLatitudeRef']);
-		//$lon = GeoUtils::getGps($exif_data["GPSLongitude"]);
-		//$lat = GeoUtils::getGps($exif_data["GPSLatitude"]);
-		//$lon = self::getGps($exif_data["GPSLongitude"], $exif_data['GPSLongitudeRef']);
-		//$lat = getGps($exif["GPSLatitude"], $exif['GPSLatitudeRef']);
-		//var_dump($lat, $lon);
-		
-		return [$lat, $lon];
-		//GeoUtils::getGps();
+        //-- should consider if there are other possible identifiers/keys
+        if (array_key_exists("GPS", $exif_data))
+        {
+            $lon = GeoUtils::getGps($exif_data["GPS"]["GPSLongitude"], $exif_data["GPS"]['GPSLongitudeRef']);
+            $lat = GeoUtils::getGps($exif_data["GPS"]["GPSLatitude"], $exif_data["GPS"]['GPSLatitudeRef']);
+            //$lon = GeoUtils::getGps($exif_data["GPSLongitude"]);
+            //$lat = GeoUtils::getGps($exif_data["GPSLatitude"]);
+            //$lon = self::getGps($exif_data["GPSLongitude"], $exif_data['GPSLongitudeRef']);
+            //$lat = getGps($exif["GPSLatitude"], $exif['GPSLatitudeRef']);
+            //var_dump($lat, $lon);
+            
+            return [$lat, $lon];
+        }
+        else
+            return null;
+        //GeoUtils::getGps();
 	}
 
 ////////////

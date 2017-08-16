@@ -60,8 +60,8 @@ foreach ($pictures as $row)
 	unset($properties['sg']);
 	unset($properties['spatial_geometry']);
 	
-	$properties["url"] = getPictureURL($properties["file_path"]);
-	$properties["thumbUrl"] = getPictureThumbURL($properties["thumb_file_path"]);
+	$properties["url"] = getPictureURL($properties["file_path"], $properties['picture_storage_type']);
+	$properties["thumbUrl"] = getPictureThumbURL($properties["thumb_file_path"], $properties['picture_storage_type']);
 	
     $feature = array(
          'type' => 'Feature',

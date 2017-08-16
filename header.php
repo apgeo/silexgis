@@ -49,9 +49,13 @@
 		$currentPage = "geofiles";		
 	else
 	if (strpos($_SERVER['PHP_SELF'], 'georeferenced_maps.php')) 
-		$currentPage = "georeferenced_maps";		
+		$currentPage = "georeferenced_maps";
+	else
+	if (strpos($_SERVER['PHP_SELF'], 'caves.php'))
+		$currentPage = "caves";
 	else
 		$currentPage = "?";							
+		
 ?>
 <!DOCTYPE html>
 <html>
@@ -562,7 +566,7 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 				<li <?php if ($currentPage == 'geofiles') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/geofiles.php">*{main_map.menu.data_submenu.geofiles}*</a></li>
 				<li <?php if ($currentPage == 'georeferenced_maps') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/georeferenced_maps.php">*{main_map.menu.data_submenu.georeferenced_maps}*</a></li>
 				<li <?php if ($currentPage == 'exploration_points') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/exploration_points.php">*{main_map.menu.data_submenu.exploration_points}*</a></li>
-				
+				<li <?php if ($currentPage == 'caves') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/caves.php">pesteri</a></li>
 			</ul>
         </li>
 
@@ -584,16 +588,7 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 			<li><a href="#" onclick="addGeoreferencedMap();" >*{main_map.menu.add_submenu.georeferenced_map}*</a></li>
 			<!--
 			<li role="separator" class="divider"></li>
-
-			<!--
-            <li><a href="#">Surface features</a></li>			
-			
-				<li><a href="#" onclick="enableDrawNewFeature('sinkhole');" >Sinkhole</a></li>				
-				<li><a href="#" onclick="" >Portal</a></li>
-				<li><a href="#" onclick="" >...</a></li>
 			-->
-			
-			
           </ul>
         </li>
 

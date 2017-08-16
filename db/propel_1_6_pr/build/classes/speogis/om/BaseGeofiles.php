@@ -80,6 +80,7 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
 
     /**
      * The value for the extract_style field.
+     * Note: this column has a database default value of: 'b\'1\''
      * @var        string
      */
     protected $extract_style;
@@ -113,6 +114,7 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
     public function applyDefaultValues()
     {
         $this->enabled = 'b\'1\'';
+        $this->extract_style = 'b\'1\'';
     }
 
     /**
@@ -455,6 +457,10 @@ abstract class BaseGeofiles extends BaseObject implements Persistent
     public function hasOnlyDefaultValues()
     {
             if ($this->enabled !== 'b\'1\'') {
+                return false;
+            }
+
+            if ($this->extract_style !== 'b\'1\'') {
                 return false;
             }
 

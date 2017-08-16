@@ -8,6 +8,15 @@
     define('DB_PASS', '');
     define('APPLICATION_ROOT', dirname(__FILE__) . DIRECTORY_SEPARATOR); // define('DOMAIN_ROOT', 'http://'.$_SERVER['HTTP_HOST']);
 	
+    
+    // PICTURE_STORAGE_TYPE =
+    // local_filesystem - for storing as a local file
+    // s3               - for storing on AWS S3
+    // define('PICTURE_STORAGE_TYPE', 's3');
+    define('PICTURE_STORAGE_TYPE', 'local_filesystem');
+    define('S3_CREDENTIALS_FILEPATH', 'C:/Users/User/.aws/credentials');
+    define('S3_BUCKET', 'picsgtmp');
+
 	//error_reporting(E_ERROR);
     
     define("DEBUG", 1); // define("DEBUG", 1);

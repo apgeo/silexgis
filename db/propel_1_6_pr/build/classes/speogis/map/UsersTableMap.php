@@ -45,7 +45,12 @@ class UsersTableMap extends TableMap
         $this->addColumn('admin_level', 'AdminLevel', 'INTEGER', false, null, null);
         $this->addColumn('language', 'Language', 'VARCHAR', false, 5, null);
         $this->addColumn('last_log_in_time', 'LastLogInTime', 'TIMESTAMP', false, null, null);
-        $this->addColumn('add_time', 'AddTime', 'TIMESTAMP', true, null, null);
+        $this->addColumn('add_time', 'AddTime', 'TIMESTAMP', false, null, null);
+        $this->addColumn('picture_storage_type', 'PictureStorageType', 'CHAR', true, null, null);
+        $this->getColumn('picture_storage_type', false)->setValueSet(array (
+  0 => 'local',
+  1 => 'AmazonS3',
+));
         // validators
     } // initialize()
 

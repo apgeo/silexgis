@@ -17,16 +17,21 @@
 	
 	$user = UsersQuery::create()->findPK($_user_id);
 	
-	//$lang;
-	//$email;
-	//$pass;
-	
+	$picture_storage_type;
+	$lang;
+
 	if (!empty($_POST["language"]))
 	{
-		$lang = $_POST["language"];	
-		$user->setLanguage($lang);						
+		$lang = $_POST["language"];
+		$user->setLanguage($lang);
 	}
-	
+
+	if (!empty($_POST["picture_storage_type"]))
+	{
+		$picture_storage_type = $_POST["picture_storage_type"];
+		$user->setPictureStorageType($picture_storage_type);
+	}
+
 	@$p1 = $_POST["password"];
 	@$p2 = $_POST["password2"];
 	
@@ -61,6 +66,8 @@
 	
 	$user_language = $user->getLanguage();
 	$user_email = $user->getEmail();
+
+	$user_picture_storage_type = $user->getPictureStorageType();
 ?>
 
 <script>
@@ -154,7 +161,9 @@ $(document).ready(function() {
 	createCookie('lang', <?="'$user_language'" ?>,7);
 	
 	localize_static_html();
-	document.getElementsByTagName("html")[0].style.visibility = "visible";		
+	document.getElementsByTagName("html")[0].style.visibility = "visible";
+
+	setPictureStorageType(<?="'$user_picture_storage_type'" ?>);
 });
 
 function createCookie(name,value,days) {
@@ -196,6 +205,22 @@ function setLanguage(lang)
 	
 	document.getElementById("selectedLanguageDescription").innerText = selectedLanguageDescription;
 }
+
+function setPictureStorageType(pst)
+{
+	document.getElementById("picture_storage_type").value = pst;
+	
+	if (pst == 'local')
+		pictureStorageType = 'local';
+	else
+	if (pst == 'AmazonS3')	
+		pictureStorageType = 'Amazon S3';
+	else
+		pictureStorageType = 'Unknown';
+	
+	document.getElementById("pictureStorageType").innerText = pictureStorageType;
+}
+
 </script>
 
 <form class="" method="post">
@@ -240,7 +265,21 @@ function setLanguage(lang)
 </div>
 
 
+<div class="dropdown">
+  <button class="btn btn-default dropdown-toggle" type="button" id="pictureStorageTypeDropdownMenu" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    Default picture storage:
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="picture_storage_type">
+    <li><a onclick="setPictureStorageType('local');" href="#">Server local storage</a></li>
+    <li><a onclick="setPictureStorageType('AmazonS3');" href="#">Amazon S3</a></li>
+    <!--<li role="separator" class="divider"></li>-->
+  </ul>
+  <span id="pictureStorageType" ></span>
+</div>
+
 <input type="hidden" name="language" id="language" />
+<input type="hidden" name="picture_storage_type" id="picture_storage_type" />
 
 
 <div class="button">

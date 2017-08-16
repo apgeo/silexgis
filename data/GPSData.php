@@ -100,7 +100,8 @@
 						thumb_file_path,
 						images.add_time as image_add_time,
 						point_id,												
-						elevation, 
+						elevation,
+                        picture_storage_type, 
 						ASTEXT(spatial_geometry) AS sg FROM points
 						INNER JOIN images ON points.id = images.point_id
 						WHERE CONTAINS(GEOMFROMTEXT('Polygon(($bbox_polygon_text))'), spatial_geometry)"; //where disabled != 1 or disabled is null
@@ -550,7 +551,7 @@
 */			
         }
 		
-		public static function add_picture($user_id, $file_name, $thumbnail_file_name, $coord)
+		public static function add_picture($user_id, $file_name, $thumbnail_file_name, $coord, $pic_storage_type)
 		{
 	$image = null;
 	
@@ -562,7 +563,7 @@
 	{
 		$image = new Images();
 	}
-	
+        
 	//$file_path = "";//$pictureData->
 		
 	//$thumbnail_file_name = "thumb".$_FILES['file']['name']; //- should be returned by savePictureFile
@@ -573,6 +574,22 @@
 	$image->setUserid($user_id);
 	$image->setThumbfilepath($thumbnail_file_name);	
 	$image->setAddtime(time());
+    $image->setPicturestoragetype($pic_storage_type);
+
+    $lat = 'NULL';
+    $long = 'NULL';
+
+    $lat_string = 'NULL';
+    $long_string = 'NULL';
+    
+    if (!is_null($coord))
+    {
+        $lat = "'".$coord[0]."'";
+        $long = "'".$coord[1]."'";
+
+        $lat_string = $coord[0];
+        $long_string = $coord[1];
+    }
 
 	// add new point if in insert mode (new cave)
 	if (empty($picture_id)) //!isset($mainCaveEntrance)) // insert
@@ -585,10 +602,9 @@
         $query = "INSERT INTO `points` 	(`lat`, 	`long`, 	`elevation`, 	`coords`, 	`gpx_name`, 	`gpx_sym`, 	`gpx_type`, 	`gpx_cmt`, 	`gpx_sat`, 	`gpx_fix`, 	`gpx_time`, 	`_type`, 	`_details`, 	`added_by_user_id`, 	`add_time`, spatial_geometry	)
 					  VALUES	('0', 	'0', 	'{-1}', 	GEOMFROMTEXT('POINT(0 0)'), '', 	'', 	'', 	'', 	-1, 	'', 	'', 	0, 	'', 	$_user_id, 	NOW(), GEOMFROMTEXT('$featureWKTString')	); "; // SELECT last_insert_id() as last_insert_id;
 					  */
-        $query = "INSERT INTO `points` 	(`lat`, 	`long`, 	`elevation`, 	`gpx_name`, 	`gpx_sym`, 	`gpx_type`, 	`gpx_cmt`, 	`gpx_sat`, 	`gpx_fix`, 	`gpx_time`, 	`_type`, 	`_details`, 	`added_by_user_id`, 	`add_time`, spatial_geometry	)
-					 VALUES	('{$coord[0]}', 	'{$coord[1]}', 	0, 	'', 	'', 	'', 	'', 	-1, 	'', 	'', 	0, 	'', 	$user_id, 	NOW(), GEOMFROMTEXT('POINT({$coord[0]} {$coord[1]})')	); "; // SELECT last_insert_id() as last_insert_id;
-		
-		//var_dump($query);
+        $query = "INSERT INTO `points` 	(`lat`, 	`long`, 	`elevation`, 	`gpx_name`, 	`gpx_sym`, 	`gpx_type`, 	`gpx_cmt`, 	`gpx_sat`, 	`gpx_fix`, 	`gpx_time`, 	`_type`, 	`_details`, 	`added_by_user_id`, 	`add_time`, spatial_geometry)
+					 VALUES	({$lat}, 	{$long}, 	0, 	'', 	'', 	'', 	'', 	-1, 	'', 	NULL, 	0, 	'', 	$user_id, 	NOW(), ".(is_null($coord) ? "NULL" : "GEOMFROMTEXT('POINT({$lat_string} {$long_string})')")."); "; // SELECT last_insert_id() as last_insert_id;
+				
 		$stmt = $con->prepare($query);
 		$res = $stmt->execute(); //$res = $stmt->fetch(PDO::FETCH_OBJ);//var_dump($res);		
 		$point_id = self::get_last_inserted_id();
