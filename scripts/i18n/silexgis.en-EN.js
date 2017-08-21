@@ -24,7 +24,8 @@ var localizedText = {
 					exploration_points: "Exploration points",
 					geofiles: "Geofiles",
 					files: "Files",
-					georeferenced_maps: "Georeferenced maps"
+					georeferenced_maps: "Georeferenced maps",
+					caves: "Caves"
 				},
 				files: "Files",
 				users: "Users",				
@@ -101,6 +102,15 @@ var localizedText = {
 					bing_road: "Road",
 				}
 			},
+			map_context_menu:
+			{
+				show_cave_details: "Cave details",
+				edit_cave_details: "Edit cave details",
+				delete_cave: "Detele cave",
+				edit_cave_entrance_details: "Edit cave entrance details",
+				delete_cave_entrance: "Delete cave entrance",				
+			},
+
 			cave_edit_form:
 			{
 				title_new: "New cave",
@@ -131,7 +141,8 @@ var localizedText = {
 				projected_extension: "Projected extension",
 				exploration_status: "Exploration status",
 				protection_class: "Protection class",
-				volume_cm: "Volume (cm)",
+				area_m2: "Area (m²)",
+				volume_m3: "Volume (m³)",
 				ramification_index: "Ramification index",
 				discovery_date: "Discovery date",
 				discoverers: "Discoverer(s)",
@@ -161,6 +172,7 @@ var localizedText = {
 				description: "Description",
 				type: "Type",
 				cave: "Cave",
+				cave_search_control_placeholder: "Search cave"
 			},
 			cave_feature_edit_form:
 			{
@@ -412,7 +424,27 @@ var localizedText = {
 				
 				cave_features_group_label: "Cave features",
 				surface_features_group_label: "Surface features"				
+			},
+
+			measurement_units:
+			{
+				metre_singular: "metre",
+				metres: "metres",
+				metre_short: "m",
+
+				kilometre_singular: "kilometres",
+				kilometres: "kilometres",
+				kilometre_short: "km",
+
+				litre_singular: "litre",
+				litres: "litres",
+				litre_short: "l",
+
+				year_singular: "year",
+				years: "years",
+				years_short: "yr.",
 			}
+
     },
     'ro': {
         /**
@@ -441,7 +473,8 @@ var localizedText = {
 					exploration_points: "Obiective explorare",
 					geofiles: "Fisiere geografice",
 					files: "Fisiere",
-					georeferenced_maps: "Harti georeferentiate"
+					georeferenced_maps: "Harti georeferentiate",
+					caves: "Peșteri"
 				},				
 				files: "Fisiere",
 				users: "Utilizatori",				
@@ -499,63 +532,73 @@ var localizedText = {
 				features_panel:
 				{					
 					title: "Forme de relief", // obiect geografic
-					cave_features_editing_checkbox: "Editare obiecte pestera",
+					cave_features_editing_checkbox: "Editare obiecte peșteră",
 				},
 				layer_switcher:
 				{
 					title: "Strate harta",
 					opacity_bar_checkbox: "ascunde control opacitate",
-					cave_zones: "zone pestera",
-					cave_features: "puncte pestera",
+					cave_zones: "zone peșteră",
+					cave_features: "puncte peșteră",
 					surface_features: "forme suprafata",
 					pictures_layer: "Fotografii",
 					drawings: "schite",
 					measurements_layer: "masuratori",
 					geo_files: "fisiere geo",
-					bing_labels: "etichete",
+					bing_labels: "Etichete",
 					bing_aerial: "Aerial",
 					bing_road: "Drumuri",
 				}
 			},
+			map_context_menu:
+			{
+				show_cave_details: "Detalii peșteră",
+				edit_cave_details: "Editează peșteră",
+				delete_cave: "Șterge peșteră",
+				edit_cave_entrance_details: "Editează intrarea peșterii",
+				delete_cave_entrance: "Șterge intrarea peșterii",				
+			},
+
 			cave_edit_form:
 			{
-				title_new: "Pestera noua",
-				title_edit: "Editeaza pestera",
+				title_new: "Peșteră nouă",
+				title_edit: "Editeaza peșteră",
 				name: "Nume",
 				other_toponyms: "Alte toponime",
 				identification_code: "Cod de ifentificare",
 				type: "Tip",
 				description: "Descriere",
-				rock_type: "Tip de roca",
-				rock_age: "Varsta rocii",
-				cave_age: "Varsta pesterii ?",
+				rock_type: "Tip de rocă",
+				rock_age: "Vârsta rocii",
+				cave_age: "Vârsta peșterii ?",
 				region: "Regiune",
 				catchement_basin: "Bazin hidragrafic", // drainage?
 				valley: "Vale",
 				tributary_river: "Afluent",
-				closest_address: "Adresa aproiata",
-				land_registry_number: "Numar cadastru",
-				show_cave: "Turistica",
-				show_cave_length: "Lungime turistica(vizitabila)",
+				closest_address: "Adresă apropiată",
+				land_registry_number: "Număr cadastru",
+				show_cave: "Turistică",
+				show_cave_length: "Lungime turistică(vizitabilă)",
 				website: "Site web",
-				depth: "Adancime",
-				positive_depth: "Denivelare pozitiva",
-				negative_depth: "Denivelare negativa",
-				potential_depth: "Denivelare potentiala",
-				surveyed_length: "Dezvoltare cartata",
-				real_extension: "Extensie reala",
-				projected_extension: "Extensie proiectata",
+				depth: "Adâncime",
+				positive_depth: "Denivelare pozitivă",
+				negative_depth: "Denivelare negativă",
+				potential_depth: "Denivelare potențială",
+				surveyed_length: "Dezvoltare cartată",
+				real_extension: "Extensie reală",
+				projected_extension: "Extensie proiectată",
 				exploration_status: "Stare explorare",
-				protection_class: "Clasa de protectie",
-				volume_cm: "Volum (cm)",
+				protection_class: "Clasă de protecție",
+				area_m2: "Arie (m²)",
+				volume_m3: "Volum (m³)",
 				ramification_index: "Index de ramificare",
-				discovery_date: "Data descoperire",
+				discovery_date: "Dată descoperire",
 				discoverers: "Descoperitor(i)",
 			},
 			feature_edit_form:
 			{
-				title_new: "Forma de relief noua",
-				title_edit: "Editeaza forma de relief",
+				title_new: "Formă de relief nouă",
+				title_edit: "Editează forma de relief",
 				name: "Nume",
 				description: "Descriere",
 			},
@@ -565,23 +608,24 @@ var localizedText = {
 			},
 			picture_edit_form:
 			{
-				title_new: "Poza noua",
-				title_edit: "Editeaza poza",
+				title_new: "Poză nouă",
+				title_edit: "Editează poză",
 				description: "Descriere",
 			},
 			cave_entrance_edit_form:
 			{
-				title_new: "Intrare pestera noua",
-				title_edit: "Editeaza intrare pestera",
+				title_new: "Intrare peșteră nouă",
+				title_edit: "Editeaza intrare peșteră",
 				name: "Nume",
 				description: "Descriere",
 				type: "Tip",
-				cave: "Pestera",
+				cave: "Peșteră",
+				cave_search_control_placeholder: "Caută peșteră"
 			},
 			cave_feature_edit_form:
 			{
-				title_new: "Parte de pestera noua",
-				title_edit: "Editeaza parte de pestera",
+				title_new: "Parte de peșteră nouă",
+				title_edit: "Editeaza parte de peșteră",
 				name: "Nume",
 				description: "Descriere",
 			},
@@ -620,7 +664,7 @@ var localizedText = {
 					start : "Inceput",
 					end : "Sfarsit",
 					details : "Detalii",
-					participants : "Participanti",					
+					participants : "Participanti",
 				}
 			},
 			
@@ -772,7 +816,7 @@ var localizedText = {
 				add: "Adauga",
 				add_files : "Adauga fisiere",
 				cancel: "Anuleaza",
-				browse: "Descide",
+				browse: "Deschide",
 				
 				start_upload: "Incarca",
 				end_upload: "Opreste", // Stop, Termina
@@ -794,8 +838,8 @@ var localizedText = {
 			
 			feature_types:
 			{
-				cave: "pestera",
-				cave_entrance: "intrare pestera",
+				cave: "peșteră",
+				cave_entrance: "intrare peșteră",
 				sinkhole: "dolina",
 				construction: "constructie",
 				lake: "lac",
@@ -828,8 +872,27 @@ var localizedText = {
 				exploration_point: "ob. explorare",
 				
 				
-				cave_features_group_label: "Pestera",
+				cave_features_group_label: "Peșteră",
 				surface_features_group_label: "Suprafata"
+			},
+
+			measurement_units:
+			{
+				metre_singular: "metru",
+				metres: "metri",
+				metre_short: "m",
+
+				kilometre_singular: "kilometru",
+				kilometres: "kilometri",
+				kilometre_short: "km",
+
+				litre_singular: "litru",
+				litres: "litri",
+				litre_short: "l",
+
+				year_singular: "an",
+				years: "ani",
+				years_short: "ani",
 			}
 			
 	}

@@ -61,7 +61,7 @@ abstract class BaseCaveEntrances extends BaseObject implements Persistent
 
     /**
      * The value for the is_main_entrance field.
-     * @var        string
+     * @var        boolean
      */
     protected $is_main_entrance;
 
@@ -155,7 +155,7 @@ abstract class BaseCaveEntrances extends BaseObject implements Persistent
     /**
      * Get the [is_main_entrance] column value.
      *
-     * @return string
+     * @return boolean
      */
     public function getIsMainEntrance()
     {
@@ -291,15 +291,23 @@ abstract class BaseCaveEntrances extends BaseObject implements Persistent
     } // setDescription()
 
     /**
-     * Set the value of [is_main_entrance] column.
+     * Sets the value of the [is_main_entrance] column.
+     * Non-boolean arguments are converted using the following rules:
+     *   * 1, '1', 'true',  'on',  and 'yes' are converted to boolean true
+     *   * 0, '0', 'false', 'off', and 'no'  are converted to boolean false
+     * Check on string values is case insensitive (so 'FaLsE' is seen as 'false').
      *
-     * @param  string $v new value
+     * @param boolean|integer|string $v The new value
      * @return CaveEntrances The current object (for fluent API support)
      */
     public function setIsMainEntrance($v)
     {
         if ($v !== null) {
-            $v = (string) $v;
+            if (is_string($v)) {
+                $v = in_array(strtolower($v), array('false', 'off', '-', 'no', 'n', '0', '')) ? false : true;
+            } else {
+                $v = (boolean) $v;
+            }
         }
 
         if ($this->is_main_entrance !== $v) {
@@ -390,7 +398,7 @@ abstract class BaseCaveEntrances extends BaseObject implements Persistent
             $this->point_id = ($row[$startcol + 2] !== null) ? (string) $row[$startcol + 2] : null;
             $this->entrancetype = ($row[$startcol + 3] !== null) ? (string) $row[$startcol + 3] : null;
             $this->description = ($row[$startcol + 4] !== null) ? (string) $row[$startcol + 4] : null;
-            $this->is_main_entrance = ($row[$startcol + 5] !== null) ? (string) $row[$startcol + 5] : null;
+            $this->is_main_entrance = ($row[$startcol + 5] !== null) ? (boolean) $row[$startcol + 5] : null;
             $this->hydrologic_type = ($row[$startcol + 6] !== null) ? (string) $row[$startcol + 6] : null;
             $this->cave_id = ($row[$startcol + 7] !== null) ? (string) $row[$startcol + 7] : null;
             $this->resetModified();
@@ -665,7 +673,7 @@ abstract class BaseCaveEntrances extends BaseObject implements Persistent
                         $stmt->bindValue($identifier, $this->description, PDO::PARAM_STR);
                         break;
                     case '`is_main_entrance`':
-                        $stmt->bindValue($identifier, $this->is_main_entrance, PDO::PARAM_STR);
+                        $stmt->bindValue($identifier, (int) $this->is_main_entrance, PDO::PARAM_INT);
                         break;
                     case '`hydrologic_type`':
                         $stmt->bindValue($identifier, $this->hydrologic_type, PDO::PARAM_STR);

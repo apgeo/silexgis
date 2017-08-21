@@ -19,7 +19,7 @@ ol.Overlay.Popup = function(opt_options) {
 
     this.ani = options.ani;
     if (this.ani === undefined) {
-        this.ani = ol.animation.pan;
+        //olv4 this.ani = ol.animation.pan;
     }
 
     this.ani_opts = options.ani_opts;

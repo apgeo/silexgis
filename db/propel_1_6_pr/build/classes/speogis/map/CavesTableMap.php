@@ -51,7 +51,7 @@ class CavesTableMap extends TableMap
         $this->addColumn('valley', 'Valley', 'VARCHAR', false, 50, null);
         $this->addColumn('tributary_river', 'TributaryRiver', 'VARCHAR', false, 50, null);
         $this->addColumn('closest_address', 'ClosestAddress', 'VARCHAR', false, 200, null);
-        $this->addColumn('is_show_cave', 'IsShowCave', 'VARCHAR', false, 1, null);
+        $this->addColumn('is_show_cave', 'IsShowCave', 'BOOLEAN', false, 1, null);
         $this->addColumn('show_cave_length', 'ShowCaveLength', 'SMALLINT', false, null, null);
         $this->addColumn('website', 'Website', 'VARCHAR', false, 255, null);
         $this->addColumn('land_registry_number', 'LandRegistryNumber', 'VARCHAR', false, 50, null);
@@ -61,6 +61,7 @@ class CavesTableMap extends TableMap
         $this->addColumn('discovery_date', 'DiscoveryDate', 'VARCHAR', false, 50, null);
         $this->addColumn('discoverer', 'Discoverer', 'VARCHAR', false, 50, null);
         $this->addColumn('volume', 'Volume', 'INTEGER', false, null, null);
+        $this->addColumn('area', 'Area', 'INTEGER', false, null, null);
         $this->addColumn('positive_depth', 'PositiveDepth', 'SMALLINT', false, null, null);
         $this->addColumn('negative_depth', 'NegativeDepth', 'SMALLINT', false, null, null);
         $this->addColumn('ramification_index', 'RamificationIndex', 'TINYINT', false, null, null);
@@ -76,6 +77,8 @@ class CavesTableMap extends TableMap
 ));
         $this->addColumn('protection_class', 'ProtectionClass', 'VARCHAR', false, 20, null);
         $this->addColumn('potential_depth', 'PotentialDepth', 'SMALLINT', false, null, null);
+        $this->addColumn('estimated_length', 'EstimatedLength', 'INTEGER', false, null, null);
+        $this->addColumn('altitude', 'Altitude', 'SMALLINT', false, null, null);
         // validators
     } // initialize()
 

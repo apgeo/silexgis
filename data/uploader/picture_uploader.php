@@ -149,7 +149,7 @@ class CustomUploadHandler extends UploadHandler {
 
 		$picture_url = $name; // by default in local storage type it is only file name without path component
 		$thumbnail_picture_url = $name; // by default in local storage type it is only file name without path component (thumbnail directory being deducted on retrieval)
-
+		
 		// PICTURE_STORAGE_TYPE = 'local_filesystem'
 		if (PICTURE_STORAGE_TYPE == 's3')
 		{
@@ -189,6 +189,7 @@ class CustomUploadHandler extends UploadHandler {
 			// fclose($myfile);
 
 			// $res = unlink($thumbnail_file_path);
+
 
 			//-- test result of unlink
 		}

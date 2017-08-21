@@ -711,7 +711,7 @@ map.on('pointermove', function(evt) {
 			}*/
 		}
 		else
-		if (user_mouse_interaction_type == POINTER_NEW_CAVE && false)
+		if (user_mouse_interaction_type == POINTER_NEW_CAVE && false) //-- unreacheble code
 		{	
 			var coordinates = undefined;
 			
@@ -735,7 +735,7 @@ map.on('pointermove', function(evt) {
 		else
 		if (user_mouse_interaction_type == POINTER_NEW_FEATURE ) // && false
 		{	
-			return;
+			return; //-= unreacheble code
 			var coordinates = undefined;
 			
 			//var features = db_features_layer.getSource().getFeatures();
@@ -2675,10 +2675,25 @@ $(document).ready(function() {
 	//initDrawObjects();
 
 	var _lat = parseFloat(getUrlParameter('lat'));
-	var _long = parseFloat(getUrlParameter('lon'));
-	var point_id = parseFloat(getUrlParameter('point_id'));
+	var _long = parseFloat(getUrlParameter('lon'));	
 	var _zoom = parseFloat(getUrlParameter('z'));
 	
+	var point_id = parseFloat(getUrlParameter('point_id'));
+
+	var cave_id = parseFloat(getUrlParameter('cave_id'));
+	var cave_entrance_id = parseFloat(getUrlParameter('cave_entrance_id'));
+	var picture_id = parseFloat(getUrlParameter('picture_id'));
+	var feature_id = parseFloat(getUrlParameter('feature_id'));
+
+	if (isNaN(_lat)) _lat = undefined;
+	if (isNaN(_long)) _long = undefined;
+	if (isNaN(_zoom)) _zoom = undefined;
+	if (isNaN(point_id)) point_id = undefined;
+	if (isNaN(cave_id)) cave_id = undefined;
+	if (isNaN(cave_entrance_id)) cave_entrance_id = undefined;
+	if (isNaN(picture_id)) picture_id = undefined;
+	if (isNaN(feature_id)) feature_id = undefined;
+
 	localize_static_html();
 	document.getElementsByTagName("html")[0].style.visibility = "visible";	
 	
@@ -2697,6 +2712,7 @@ $(document).ready(function() {
 	initPicturesUploadControl();
 	
 	initFeatureSearchControl();
+	initCaveSearchControl();
 	//zz initTripFeatureSearchControl();
 
 	initGeocoderSearch();
@@ -2711,6 +2727,7 @@ $(document).ready(function() {
 	
 	initDrawObjects();
 	
+	initCaveEntrancesTable();
 	//InitGeoreferencedMaps();
 	//loadFeatures();
 	//initLayout();
@@ -2774,22 +2791,59 @@ $(document).ready(function() {
 */	
 
 	//-- multiple calls to setView up to this point make initial map loading to flicker and change several times quickly
-	if (_lat && _long)
+	//if (_lat && _long)
 		//if (_long)
 	{
-		map_center_set_by_url = true;
 		
-		parametrizedCenter = ol.proj.transform([_long, _lat], 'EPSG:4326', 'EPSG:3857');
-		map.getView().setCenter(parametrizedCenter);
-		map.getView().setZoom(_zoom);
+		
+		// parametrizedCenter = ol.proj.transform([_long, _lat], 'EPSG:4326', 'EPSG:3857');
+		// map.getView().setCenter(parametrizedCenter);
+		// map.getView().setZoom(_zoom);
 
-		if (point_id)
+		if ((feature_id != undefined) || 
+			(picture_id != undefined) || 
+			(cave_entrance_id != undefined) || 
+			(cave_id!= undefined))
 		{
-			setTimeout(function() {			
-				gotoMapElement(point_id);
+			map_center_set_by_url = true;
+
+			setTimeout(function() {
+				if (feature_id != undefined)
+					gotoMapObject(feature_id, "feature");
+				else
+				if (picture_id != undefined)
+					gotoMapObject(picture_id, "picture");
+				else
+				if (cave_entrance_id != undefined)
+					gotoMapObject(cave_entrance_id, "cave_entrance");
+				else
+				if (cave_id != undefined)
+					gotoMapObject(cave_id, "cave");
 			}, 2500);
 		}
-		// gotoMapElement(point_id);
+		else
+			if (point_id != undefined) //-- eventually test if the feature/object was found and, if not, fall back to coordinates fix
+			{
+				map_center_set_by_url = true;
+
+				setTimeout(function() {
+					gotoMapElementPoint(point_id);
+				}, 2500);
+			}
+			else
+			{
+				if (_lat && _long)
+				{
+				map_center_set_by_url = true;
+						
+				parametrizedCenter = ol.proj.transform([_long, _lat], 'EPSG:4326', 'EPSG:3857');
+				map.getView().setCenter(parametrizedCenter);
+				map.getView().setZoom(_zoom);
+				}
+			}
+
+
+		// gotoMapElementPoint(point_id);
 	}
 /*	else
 		if (default_map_view_id)
@@ -3588,9 +3642,12 @@ function openNewCaveForm(cave_id, coordinates, existingSelectedFeature)
           var formData = $(this).serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
 		  
-		  formData.cf_rock_type_id = -2;
+		//   formData.cf_rock_type_id = -2; //-- assign after serialization?
 		  
 		  
+			// formData.cf_is_show_cave = (formData.cf_is_show_cave == "") ? 1 : 0;	//if is present then it is checked
+			formData.cf_is_show_cave = $("#cf_is_show_cave").prop('checked');
+
 		  postDataAsync("data/postCave.php", formData, 
 			function(x) 
 			{ 
@@ -3614,52 +3671,60 @@ function openNewCaveForm(cave_id, coordinates, existingSelectedFeature)
         });
 		
 	//fillCaveEntries();
-	
+	// $('.checkbox-btn-group').button();
+
 	if (cave_id)
 	{
-		$.getJSON("data/getCave.php?cave_id=" + cave_id, function( data ) {
+		// getCave.php is the simple form witout children objects
+		$.getJSON("data/getCaveDetails.php?cave_id=" + cave_id, function( data ) {
 			
 			$('#caveModal').modal();
 			
 			$('#cave_id').val(data.Id);
 			$('#cf_name').val(data.Name);
-			$('#cf_other_toponyms').val(data.Othertoponyms);
-			$('#cf_identification_code').val(data.Identificationcode);
+			$('#cf_other_toponyms').val(data.OtherToponyms);
+			$('#cf_identification_code').val(data.IdentificationCode);
 			$('#cf_description').val(data.Description);
-			$('#cf_rock_age').val(data.Rockage);
+			$('#cf_rock_age').val(data.RockAge);
 			$('#cf_region').val(data.Region);
-			$('#cf_hydrographic_basin').val(data.Hydrographicbasin);
+			$('#cf_hydrographic_basin').val(data.HydrographicBasin);
 			$('#cf_valley').val(data.Valley);
-			$('#cf_tributary_river').val(data.Tributaryriver);
-			$('#cf_closest_address').val(data.Closestaddress);
-			$('#cf_land_registry_number').val(data.Landregistrynumber);
-			$('#cf_is_show_cave').val(data.Isshowcave);
-			$('#cf_show_cave_length').val(data.Showcavelength);
+			$('#cf_tributary_river').val(data.TributaryRiver);
+			$('#cf_closest_address').val(data.ClosestAddress);
+			$('#cf_land_registry_number').val(data.LandRegistryNumber);
+			
+			// $('#cf_is_show_cave').val(data.Isshowcave);
+			$("#cf_is_show_cave").prop('checked', data.IsShowCave);
+
+			$('#cf_show_cave_length').val(data.ShowCaveLength);
 			$('#cf_website').val(data.Website);
 			$('#cf_depth').val(data.Depth);
-			$('#cf_positive_depth').val(data.Positivedepth);
-			$('#cf_negative_depth').val(data.Negativedepth);
-			$('#cf_surveyed_length').val(data.Surveyedlength);
-			$('#cf_straight_length').val(data.Straightlength);
+			$('#cf_positive_depth').val(data.PositiveDepth);
+			$('#cf_negative_depth').val(data.NegativeDepth);
+			$('#cf_surveyed_length').val(data.SurveyedLength);
+			$('#cf_straight_length').val(data.StraightLength);
+			$('#cf_area').val(data.Area);
 			$('#cf_volume').val(data.Volume);
-			$('#cf_ramification_index').val(data.Ramificationindex);
-			$('#cf_discovery_date').val(data.Discoverydate);
+			$('#cf_ramification_index').val(data.RamificationIndex);
+			$('#cf_discovery_date').val(data.DiscoveryDate);
 			$('#cf_discoverer').val(data.Discoverer);
-			$('#cf_real_extension').val(data.Realextension);
-			$('#cf_projected_extension').val(data.Projectedextension);
-			$('#cf_exploration_status').val(data.Explorationstatus);
-			$('#cf_protection_class').val(data.Protectionclass);
-			$('#cf_potential_depth').val(data.Potentialdepth);
+			$('#cf_real_extension').val(data.RealExtension);
+			$('#cf_projected_extension').val(data.ProjectedExtension);
+			$('#cf_exploration_status').val(data.ExplorationStatus);
+			$('#cf_protection_class').val(data.ProtectionClass);
+			$('#cf_potential_depth').val(data.PotentialDepth);
 			
-			$('#cf_cave_type').val(data.Typeid);
-			$('#cf_rock_type_id').val(data.Rocktypeid);
-			$('#cf_cave_age').val(data.Caveage);
+			$('#cf_cave_type').val(data.TypeId);
+			$('#cf_rock_type_id').val(data.RockTypeId);
+			$('#cf_cave_age').val(data.CaveAge);
 			//$('#').val(data.);
 			
 			$('#cf_cave_type').selectpicker('refresh');
 			$('#cf_cave_age').selectpicker('refresh');
 			$('#cf_rock_type_id').selectpicker('refresh');
+			$('#cf_exploration_status').selectpicker('refresh');
 			
+			refreshCaveEntrancesTable(data);
 			//_caveFormServerData = data;
 			//$('#caveModal').modal();
 		});		
@@ -3751,14 +3816,54 @@ function openCaveDetailsForm(cave_id)
 			$('#caveDetailsModal').modal();
 			
 			$('#cd_cave_id').val(data.Id);
-			$('#cd_cave_name').val(data.Name);				
-			$('#cd_cave_description').val(data.Description);
-			$('#cd_cave_type').val(data.Typeid);
-			$('#cd_cave_identifier').val(data.Locationidentifier);
+			// $('#cd_cave_name').val(data.Name);				
+			// $('#cd_cave_description').val(data.Description);
+			// $('#cd_cave_type').val(data.Typeid);
+			// $('#cd_cave_identifier').val(data.Locationidentifier);
 
 			$('#upload_file_cave_id').val(data.Id);
 			
 			$('#cave_type').selectpicker('refresh');
+
+			// $('#cave_id').val(data.Id);
+			$('#cd_name').val(data.Name);
+			$('#cd_other_toponyms').val(data.Othertoponyms);
+			$('#cd_identification_code').val(data.Identificationcode);
+			$('#cd_description').val(data.Description);
+			$('#cd_rock_age').val(data.Rockage);
+			$('#cd_region').val(data.Region);
+			$('#cd_hydrographic_basin').val(data.Hydrographicbasin);
+			$('#cd_valley').val(data.Valley);
+			$('#cd_tributary_river').val(data.Tributaryriver);
+			$('#cd_closest_address').val(data.Closestaddress);
+			$('#cd_land_registry_number').val(data.Landregistrynumber);
+			$('#cd_is_show_cave').val(data.Isshowcave);
+			$('#cd_show_cave_length').val(data.Showcavelength);
+			$('#cd_website').val(data.Website);
+			$('#cd_depth').val(data.Depth);
+			$('#cd_positive_depth').val(data.Positivedepth);
+			$('#cd_negative_depth').val(data.Negativedepth);
+			$('#cd_surveyed_length').val(data.Surveyedlength);
+			$('#cd_straight_length').val(data.Straightlength);
+			$('#cd_area').val(data.Area);
+			$('#cd_volume').val(data.Volume);
+			$('#cd_ramification_index').val(data.Ramificationindex);
+			$('#cd_discovery_date').val(data.Discoverydate);
+			$('#cd_discoverer').val(data.Discoverer);
+			$('#cd_real_extension').val(data.Realextension);
+			$('#cd_projected_extension').val(data.Projectedextension);
+			$('#cd_exploration_status').val(data.Explorationstatus);
+			$('#cd_protection_class').val(data.Protectionclass);
+			$('#cd_potential_depth').val(data.Potentialdepth);
+			
+			$('#cd_cave_type').val(data.Typeid);
+			$('#cd_rock_type_id').val(data.Rocktypeid);
+			$('#cd_cave_age').val(data.Caveage);
+			//$('#').val(data.);
+			
+			$('#cd_cave_type').selectpicker('refresh');
+			$('#cd_cave_age').selectpicker('refresh');
+			$('#cd_rock_type_id').selectpicker('refresh');
 			
 			
 			//_caveFormServerData = data;
@@ -3947,7 +4052,8 @@ function openNewCaveEntranceForm(cave_entrance_id, coordinates, existingSelected
 	if (cave_entrance_id)
 		editMode = true;
 
-	fillCavePicker(); //- must wait for list of caves to load (async operation) to open new cave entrance form
+	var local_existingSelectedFeature = existingSelectedFeature;
+	//fillCavePicker(); //- must wait for list of caves to load (async operation) to open new cave entrance form
 	
 	//$('#saveCave').off('click');
 	$('#caveEntranceForm').off('submit');
@@ -3968,10 +4074,11 @@ function openNewCaveEntranceForm(cave_entrance_id, coordinates, existingSelected
 		$('#cave_entrance_feature_string').val(getFeatureGeoJsonString(existingSelectedFeature));
 	
 	if (last_added_cave_id !== undefined)
-	{
+	{		
+		$('#cave_entrance_cave_control').selectpicker('refresh');
 		$('#cave_entrance_cave_id').val(last_added_cave_id);
-		$('#cave_entrance_cave_id').selectpicker('refresh');
 	}
+
 
 	selFeatureProps = undefined;
 	
@@ -3987,7 +4094,9 @@ function openNewCaveEntranceForm(cave_entrance_id, coordinates, existingSelected
 		
 		$('#cave_entrance_coords_lat').val(coordinates_espg4326[1]);
 		$('#cave_entrance_coords_lon').val(coordinates_espg4326[0]);
-		$('#cave_entrance_coords_label').text(rtrim(coordinates_espg4326[1]+"", 8) + ",  " + rtrim(coordinates_espg4326[0]+"", 8) + ((selFeatureProps != undefined) ? (" : " + selFeatureProps.gpx_name) : ""));
+		$('#cave_entrance_coords_label').text(rtrim(coordinates_espg4326[1]+"", 8) + ",  " + rtrim(coordinates_espg4326[0]+"", 8) + ((selFeatureProps != undefined) ? ((selFeatureProps.gpx_name != undefined) ? " : " + selFeatureProps.gpx_name : "") : ""));
+
+
 	}	
 	
 	if (editMode)
@@ -4005,12 +4114,24 @@ function openNewCaveEntranceForm(cave_entrance_id, coordinates, existingSelected
 	$('#caveEntranceForm').on('submit', function(e) {
           e.preventDefault();
 
+		  // update coordinates based on form input value
+		  var flat = $('#cave_entrance_coords_lat').val();
+		  var flon = $('#cave_entrance_coords_lon').val();
+  		  
+		  var coordinates_espg3857 = ol.proj.transform([parseFloat(flon), parseFloat(flat)], 'EPSG:4326', 'EPSG:3857'); 
+
+		  local_existingSelectedFeature.getGeometry().setCoordinates(coordinates_espg3857);
+
+		  //if (existingSelectedFeature) //-- ?
+		  $('#cave_entrance_feature_string').val(getFeatureGeoJsonString(local_existingSelectedFeature));
+
+		  
           var formData = $(this).serializeObject();
 		  //var serializedFormData = JSON.stringify(formData);
 		  
 		  postDataAsync("data/postCaveEntrance.php", formData, 
 			function(x) 
-			{ 
+			{
 				console.log('close');
 				$('#caveEntranceModal').modal('toggle'); 
 				
@@ -4041,12 +4162,14 @@ function openNewCaveEntranceForm(cave_entrance_id, coordinates, existingSelected
 			$('#cave_entrance_id').val(data.Id);
 			$('#cave_entrance_name').val(data.Name);				
 			$('#cave_entrance_description').val(data.Description);
-			$('#cave_entrance_type').val(data.Typeid);
-			$('#cave_entrance_cave_id').val(data.Caveid);
+			$('#cave_entrance_type').val(data.Typeid);			
 
 			$('#cave_entrance_type').selectpicker('refresh');
-			$('#cave_entrance_cave_id').selectpicker('refresh');
-			
+			$('#cave_entrance_cave_control').selectpicker('refresh');
+			$('#cave_entrance_cave_control').val(data.CaveName);
+
+			$('#cave_entrance_cave_id').val(data.CaveId);
+
 			$('#caveEntranceModalTitleLabel').text("Edit cave entrance '" + data.Name +"'");				
 				
 			
@@ -4103,26 +4226,26 @@ function initNewCaveEntranceForm()
 			*/
 }
 
-function fillCavePicker()
-{ 
-	$.getJSON("data/getCaves.php", function( data ) {
-	var items = [];
+// function fillCavePicker()
+// { 
+// 	$.getJSON("data/getCaves.php", function( data ) {
+// 	var items = [];
 	
-	$('#cave_entrance_cave_id').find('option').remove();
+// 	$('#cave_entrance_cave_control').find('option').remove();
 	
-	$.each( data, function( key, val ) {
-		//items.push( "<li id='" + key + "'>" + val + "</li>" );
-		//$('#cave_type').append('<li id="' + val.Id + '" type_name="' + val.Id + '" ><a href="#">' + val.Name + '</a></li>'); // $('#cave_type').append('<li id="' + val.Id + '" type_name="' + val.Name + '" ><a href="#">' + val.Name + '</a></li>');
-		$('#cave_entrance_cave_id').append('<option value="' + val.Id + '" >' + val.Name + '</option>');
+// 	$.each( data, function( key, val ) {
+// 		//items.push( "<li id='" + key + "'>" + val + "</li>" );
+// 		//$('#cave_type').append('<li id="' + val.Id + '" type_name="' + val.Id + '" ><a href="#">' + val.Name + '</a></li>'); // $('#cave_type').append('<li id="' + val.Id + '" type_name="' + val.Name + '" ><a href="#">' + val.Name + '</a></li>');
+// 		$('#cave_entrance_cave_control').append('<option value="' + val.Id + '" >' + val.Name + '</option>');
 		
-		last_added_cave_id = val.Id; //-- workaround to get last added cave, but must wait for list of caves to load to open new cave entrance form
-	});
+// 		last_added_cave_id = val.Id; //-- workaround to get last added cave, but must wait for list of caves to load to open new cave entrance form
+// 	});
 	
-	$('#cave_entrance_cave_id').selectpicker('refresh');
+// 	$('#cave_entrance_cave_control').selectpicker('refresh');
 	
-	//console.log("_caveFormServerData.Typeid = " + _caveFormServerData.Typeid);		
-	});
-}
+// 	//console.log("_caveFormServerData.Typeid = " + _caveFormServerData.Typeid);		
+// 	});
+// }
 
 // end Cave entrance form
 ////////////////////////////
@@ -4138,6 +4261,57 @@ function postDataAsync(_url, data, onSuccess, onFailure)
 		dataType: "json",
 		success: function(data) { 
 			onSuccess(data); 
+			//alert(data); 
+		},
+		//failure: function(errMsg) {
+			//$onFailure(errMsg);
+			//},
+		error:  function(jqXHR, textStatus, errorThrown )
+		{
+			onFailure(textStatus); //-- show error code returned
+			//alert(errMsg);
+		}
+});
+}
+
+function getDataAsync(_url, data, onSuccess, onFailure)
+{
+	$.ajax({
+		type: "GET",
+		url: /*"http://localhost/speogis/" + */_url, //"/webservices/PodcastService.asmx/CreateMarkers",
+		// The key needs to match your method's input parameter (case-sensitive).
+		data: JSON.stringify(data), // JSON.stringify({ Markers: markers })
+		contentType: "application/json; charset=utf-8",
+		dataType: "json",
+		success: function(data) { 
+			onSuccess(data); 
+			//alert(data); 
+		},
+		//failure: function(errMsg) {
+			//$onFailure(errMsg);
+			//},
+		error:  function(jqXHR, textStatus, errorThrown )
+		{
+			onFailure(textStatus); //-- show error code returned
+			//alert(errMsg);
+		}
+});
+}
+
+function getDataSync(_url, /*onSuccess,*/ onFailure)
+{
+	return $.ajax({
+		type: "GET",
+		url: /*"http://localhost/speogis/" + */_url, //"/webservices/PodcastService.asmx/CreateMarkers",
+		// The key needs to match your method's input parameter (case-sensitive).		
+		contentType: "application/json; charset=utf-8",
+		dataType: "json",
+		
+		async: false,
+
+		success: function(data) { 
+			return data;
+			//onSuccess(data); 
 			//alert(data); 
 		},
 		//failure: function(errMsg) {
@@ -4394,12 +4568,11 @@ observer.observe(target, config);
 		
 		//var selectedText = $(this).find("option:selected").text();
 		var selectedValue = $(this).find("option:selected").val();
-		
+		console.log("on change> " + $(this).val() );
+
 		//gotoMapElement($(this).val());
 		//gotoDbElement
 		throw "not implemented";
-		
-		console.log("on change> " + $(this).val() );		
 		
 		//$(this).val("");
 		//$(this).text("");
@@ -4436,9 +4609,9 @@ observer.observe(target, config);
 	
 }
 
-	function gotoMapElement(elementDbId)
+	function gotoMapElementPoint(elementDbPointId)
 	{
-		console.log("gotoMapElement " + elementDbId);		
+		console.log("gotoMapElement " + elementDbPointId);		
 		//db_features_layer.getSource().forEachFeature(function(feature){		
 		//var features = db_features_layer.getSource().getFeatures();
 		
@@ -4447,7 +4620,7 @@ observer.observe(target, config);
 		var found = false;
 		for(var index=0; index < features.length; index++)
 		//if (features[index].getProperties().id == elementDbId)
-		if (features[index].getProperties().point_id == elementDbId)
+		if (features[index].getProperties().point_id == elementDbPointId)
 		{
 			//console.log("found");
 			//console.log(features[index]);
@@ -4481,7 +4654,8 @@ observer.observe(target, config);
 			{ 
 					if (f.get("point_id") == element.point_db_id)
 					{
-						flyToCoordinates(undefined, f.getGeometry().getExtent(), {padding: [50, 50, 50, 50]});
+						flyToCoordinates(undefined, f.getGeometry().getExtent());
+						//flyToCoordinates(undefined, f.getGeometry().getExtent(), {padding: [50, 50, 50, 50]});
 						map.getView().setZoom(map.getView().getZoom() - 1);
 					}
 			});
@@ -4514,9 +4688,11 @@ observer.observe(target, config);
 	
 	//var featureToShowCoordinates = undefined;
 	
-	function flyToCoordinates(coordinates, extent = undefined)
+	function flyToCoordinates(coordinates, extent = undefined
+	, zoom_level = undefined
+	)
 	{		
-		var view = map.getView()
+		var view = map.getView();
 		
         var duration = 2000;
         var start = +new Date();
@@ -4530,15 +4706,15 @@ observer.observe(target, config);
           resolution: 4 * view.getResolution(),
           start: start
         });
-        map.beforeRender(pan
-		, bounce
-		);
+        map.beforeRender(pan, bounce);
 		
 		if (extent)
 			map.getView().fit(extent, map.getSize());
 		else
 			view.setCenter(coordinates);
 		
+		if (zoom_level != undefined)
+			map.getView().setZoom(zoom_level); //-- should be specified somewhere above in the animation or as extent (second parameter)
 		
 		console.log("fly to coordinates");
 		console.log(coordinates);		
@@ -4986,9 +5162,9 @@ function initGeocoderSearch()
 function initCaveFilesTable()
 {
 	//$(document).ready(function() { //});
-	$('#').DataTable({
-		//"ajax": '../ajax/data/arrays.txt'
-	});	
+	// $('#').DataTable({
+	// 	//"ajax": '../ajax/data/arrays.txt'
+	// });	
 }
 
 var _external_switcher;
@@ -5184,36 +5360,72 @@ function initContextMenu()
 	
 	contextmenu.on('open', function(evt)
 	{
-		var feature = map.forEachFeatureAtPixel(evt.pixel, function(ft, l){
+		var selected_feature = map.forEachFeatureAtPixel(evt.pixel, function(ft, l){
 			return ft;
 		});
 	  
 		var cave_items = [
 		  //'-', // this is a separator
 		  {
-			text: 'Cave details',
+			text: _t().main_map.map_context_menu.show_cave_details, //'Cave details',
 			//icon: '',
 			callback: function (data)
 			{
-				var cave_id = feature.getProperties().cave_id;
+				var cave_id = selected_feature.getProperties().cave_id;
 				openCaveDetailsForm(cave_id);
 			}
 		  },
+
 		  {
-			text: 'Edit cave entrance details',
+			text: _t().main_map.map_context_menu.edit_cave_details,
 			//icon: '',
 			callback: function (data)
 			{
-				var cave_entrance_id = feature.getProperties().cave_entrance_id; //feature.getProperties().cave_id;
-				newCaveEntrance(cave_entrance_id);
+				var cave_id = selected_feature.getProperties().cave_id;
+				//newCaveEntrance(cave_entrance_id);
+				newCave(cave_id, coordinates = undefined, selected_feature);
 			}
-		  }		  
+		  },
+		  {
+			text: _t().main_map.map_context_menu.delete_cave,
+			//icon: '',
+			callback: function (data)
+			{
+				// var cave_id = selected_feature.getProperties().cave_id;
+				//newCaveEntrance(cave_entrance_id);
+				//newCave(cave_id, coordinates = undefined, selected_feature);
+				deleteCave(selected_feature); //-- also send name to show what was deleted
+			}
+		  },
+
+		  "-",
+
+		  {
+			text: _t().main_map.map_context_menu.edit_cave_entrance_details,
+			//icon: '',
+			callback: function (data)
+			{
+				var cave_entrance_id = selected_feature.getProperties().cave_entrance_id; //selected_feature.getProperties().cave_id;
+				newCaveEntrance(cave_entrance_id, selected_feature.getGeometry().getCoordinates(), selected_feature);
+			}
+		  },
+		  {
+			text: _t().main_map.map_context_menu.delete_cave_entrance,
+			//icon: '',
+			callback: function (data)
+			{
+				// var cave_id = selected_feature.getProperties().cave_id;
+				//newCaveEntrance(cave_entrance_id);
+				deleteCaveEntrance(selected_feature);
+			}
+		  },
+
 		];
 		
 		//contextmenu.extend(add_later);	  
 	
-	if (feature) {
-	var feature_name = feature.getProperties().name;
+	if (selected_feature) {
+	var feature_name = selected_feature.getProperties().name;
 		
 		var cave_feature_items = [
 		  //'-', // this is a separator
@@ -5227,8 +5439,8 @@ function initContextMenu()
 			//icon: '',
 			callback: function (data)
 			{
-				var feature_id = feature.getProperties().id;
-				openNewCaveFeatureForm(feature_id, undefined, feature, undefined);
+				var feature_id = selected_feature.getProperties().id;
+				openNewCaveFeatureForm(feature_id, undefined, selected_feature, undefined);
 			}
 		  },
 		  {
@@ -5237,7 +5449,7 @@ function initContextMenu()
 			callback: function (data)
 			{
 				//var feature_id = feature.getProperties().feature_id; //feature.getProperties().cave_id;
-				deleteFeature(feature);
+				deleteFeature(selected_feature);
 			}
 		  }
 		  
@@ -5245,7 +5457,7 @@ function initContextMenu()
 		
 		contextmenu.clear();
 		
-		if (getFeatureType(feature) == "cave_entrance")
+		if (getFeatureType(selected_feature) == "cave_entrance")
 		{
 			contextmenu.extend(cave_items);
 		//contextmenu.push(cave_item);
@@ -5256,7 +5468,7 @@ function initContextMenu()
 		contextmenu.push(removeMarkerItem);
 		*/
 		}
-		else if (getFeatureType(feature) == "cave_feature")
+		else if (getFeatureType(selected_feature) == "cave_feature")
 		{
 			contextmenu.extend(cave_feature_items);
 		}
@@ -6811,6 +7023,79 @@ function deleteFeature(feature)
      });
 }
 
+function deleteCave(cave_entrance)
+{		
+	// var feature_id = feature.getProperties().id;
+	
+	var cave_delete_data = {
+		cave_id: cave_entrance.getProperties().cave_id,
+		//delete_all: delete_all
+	};
+	
+	//var view_name = map_views[map_view_id].mapview_name;
+	
+    $.ajax({
+                url: 'data/deleteCave.php', // point to server-side PHP script 
+                dataType: 'text',  // what to expect back from the PHP script, if anything
+				
+				data: JSON.stringify(cave_delete_data), // JSON.stringify({ Markers: markers })
+				contentType: "application/json; charset=utf-8",
+				//dataType: "json",
+				
+                cache: false,
+                contentType: false,
+                processData: false,
+                //data: view_data,
+                type: 'post',
+                success: function(php_script_response){					
+					if (php_script_response.indexOf("201") >= 0) // if (php_script_response == "201")
+					{
+						caveFeaturesDrawSource.removeFeature(cave_entrance);
+						showNotification("Cave from <b>" + cave_entrance.get('name') + "</b> was deleted.", { from: "top", align: "right" });						
+						reloadMapFeatures();
+					}
+					else
+						alert(php_script_response); // display response from the PHP script, if any
+                }
+     });
+}
+
+function deleteCaveEntrance(cave_entrance)
+{		
+	// var feature_id = feature.getProperties().id;
+	
+	var cave_entrance_delete_data = {
+		cave_entrance_id: cave_entrance.getProperties().cave_entrance_id,
+		//delete_all: delete_all
+	};
+	
+	//var view_name = map_views[map_view_id].mapview_name;
+	
+    $.ajax({
+                url: 'data/deleteCaveEntrance.php', // point to server-side PHP script 
+                dataType: 'text',  // what to expect back from the PHP script, if anything
+				
+				data: JSON.stringify(cave_entrance_delete_data), // JSON.stringify({ Markers: markers })
+				contentType: "application/json; charset=utf-8",
+				//dataType: "json",
+				
+                cache: false,
+                contentType: false,
+                processData: false,
+                //data: view_data,
+                type: 'post',
+                success: function(php_script_response){					
+					if (php_script_response.indexOf("201") >= 0) // if (php_script_response == "201")
+					{
+						caveFeaturesDrawSource.removeFeature(cave_entrance);
+						showNotification("Cave entrance <b>" + cave_entrance.get('name') + "</b> was deleted.", { from: "top", align: "right" });						
+						reloadMapFeatures();
+					}
+					else
+						alert(php_script_response); // display response from the PHP script, if any
+                }
+     });
+}
 
 /*function LoadGeoreferencedImages()
 {
@@ -6994,7 +7279,209 @@ function LoadGeoreferencedMapLayer(title, boundary_north, boundary_west, boundar
 	map.addLayer(map_overlay);
 }
 
+function gotoMapObject(object_db_id, object_type)
+{
+	if (object_type == 'cave')
+	{
+		var cave = getCave(object_db_id);
 
+		for (var key in cave.CaveEntrances) {
+    		if( cave.CaveEntrances.hasOwnProperty(key) ) {
+				if (cave.CaveEntrances[key].IsMainEntrance)
+				{
+					var point = cave.CaveEntrances[key].Point;
+					var coordinates_espg3857 = ol.proj.transform([point.Long, point.Lat], 'EPSG:4326', 'EPSG:3857');
+					flyToCoordinates(coordinates_espg3857, undefined, 17);
+					
+					setTimeout( function() 
+					{ 						
+						//gotoMapElementPoint(parseInt(cave.CaveEntrances[key].PointId)); // or caveEntrance.Point.id if available
+					}, 5500);
+
+					// gotoMapElementPoint(parseInt(cave.CaveEntrances[key].PointId)); // or caveEntrance.Point.id if available
+				}
+      			//cave.CaveEntrances[key];
+    		} 
+  		}
+
+		//cave.CaveEntrances.forEach(function(caveEntrance) {
+		// $.each(cave.CaveEntrances, function(key, value) {
+		// 	if (value.IsMainEntrance)
+		// 		gotoMapElementPoint(value.PointId); // or caveEntrance.Point.id if available
+		// }, this);
+	}
+}
+
+function getCave(cave_id)
+{
+	// var cave_identification_data = {
+	// 	cave_id: cave_id
+	// };
+
+	var response = getDataSync("data/getCaveDetails.php?cave_id=" + cave_id, 
+		// function(cave_data_object) 
+		// { 
+		// 	return cave_data_object;
+		// }, 
+		function(err)
+		{ 
+			console.log('error: '.err);
+		}
+	);
+	
+	var cave_data_object = response.responseJSON;
+	//var cave_data_object = response.responseJSON[Object.keys(response.responseJSON)[0]];
+	
+	return cave_data_object;
+}
+
+
+function initCaveSearchControl()
+{
+  var engine, remoteHost, template, empty;
+  
+  remoteHost = '';
+  template = Handlebars.compile($("#result-template").html());
+  empty = Handlebars.compile($("#empty-template").html());
+  
+var featuresDataSource = new Bloodhound({
+  datumTokenizer: Bloodhound.tokenizers.obj.whitespace('name'),  
+  queryTokenizer: Bloodhound.tokenizers.whitespace,
+  //datumTokenizer: Bloodhound.tokenizers.obj.whitespace('name', 'name'),  
+  
+  identify: function(obj) { console.log("identify" + obj); return obj.id; },
+  dupDetector: function(a, b) { return a.id === b.id; },
+  prefetch: url_base + 'data/getSearchFeatures.php?type=caves&orphans=1',
+  remote: {
+    //url: remoteHost + 'data/getSearchFeatures.php?q=%QUERY',
+	url: remoteHost + url_base + 'data/getSearchFeatures.php?q=%QUERY&type=caves&orphans=1',
+    wildcard: '%QUERY'
+  },
+  transform: function(data)
+  {
+	console.log('p: ' + data);
+  }
+});
+
+featuresDataSource.initialize();
+
+$('#cave_entrance_cave_control').typeahead({
+ //$('#searchFeatureControl .typeahead').typeahead({
+  hint: $('.Typeahead-hint_2'),
+  menu: $('.Typeahead-menu_2'),
+  //hint: true,
+  highlight: true,
+  minLength: 1,
+  classNames: {
+      open: 'is-open',
+      empty: 'is-empty',
+      cursor: 'is-active',
+      suggestion: 'Typeahead-suggestion',
+      selectable: 'Typeahead-selectable'
+    },
+  //display: 'name',  
+  //limit: 9
+  //suggestion: Handlebars.compile('<div><strong>{{value}}</strong> � {{year}}</div>')
+  /*
+  filter: function (parsedResponse) {
+            // parsedResponse is the array returned from your backend
+            console.log(parsedResponse);
+
+            // do whatever processing you need here
+            return parsedResponse;
+        }
+		*/
+},
+{
+  name: 'features',
+  source: featuresDataSource, //substringMatcher(states)
+  displayKey: 'name',
+    templates: {
+      suggestion: template,
+      empty: empty,
+	  //header: '<h3 class="league-name">Teams</h3>'
+    },
+})
+/*.on('typeahead:asyncrequest', function() {
+    $('.Typeahead-spinner').show();
+  })
+  .on('typeahead:asynccancel typeahead:asyncreceive', function() {
+    $('.Typeahead-spinner').hide();
+  })*/;	
+
+$('#cave_entrance_cave_control').bind('typeahead:select', function(ev, suggestion) {
+  console.log('Selection: ');
+  console.log(suggestion);
+  
+  $('#cave_entrance_cave_id').val(suggestion.id);
+  //addFeatureToTripReport(suggestion);
+  
+  //-- workaround for afterSelect which is not working; maybe it is not implemented in this version
+  		setTimeout( function() 
+		{ 			
+			console.log('after select timeout: ');
+			// $('#cave_entrance_cave_id').val("");
+		}, 500);
+
+  //gotoDbElement(suggestion); // id
+  // gotoMapElement(suggestion.point_db_id); // id
+});
+
+$('#cave_entrance_cave_control').on('typeahead:afterSelect', function(ev, suggestion) {
+  console.log('after select: ');
+//   $('#cave_entrance_cave_id').val("");
+}).on('typeahead:autocompleted', function (e, datum) {
+  console.log('after select: ');  
+//   $('#cave_entrance_cave_id').val("");
+});
+
+}
+
+
+///////////////////////
+// Cave entrances table
+
+function refreshCaveEntrancesTable(cave) // cave_id
+{
+	var dataSet = [];
+
+	
+	for (var cave_entrance_key in cave.CaveEntrances)
+	{
+		if (cave.CaveEntrances.hasOwnProperty(cave_entrance_key)) 
+		{
+			cave_entrance = cave.CaveEntrances[cave_entrance_key];
+			dataSet.push([cave_entrance.Id, cave_entrance.Name, cave_entrance.Point.Elevation, "<a href='#'>go to</a>"]);
+		}
+	}
+							
+	/*$('#cave_files_table').DataTable({
+		//"ajax": '../ajax/data/arrays.txt'
+		data: dataSet,
+	});*/
+
+	$('#cave_entrances_table').DataTable().clear();
+	$('#cave_entrances_table').DataTable()
+		.rows.add(dataSet)
+		.draw();
+}
+
+function initCaveEntrancesTable()
+{
+	$('#cave_entrances_table').DataTable({
+        "columnDefs": [
+            {
+                "targets": [ 0 ],
+                "visible": false,
+                "searchable": false
+            },
+        ]
+	});
+
+}
+
+// end Cave entrances table
+///////////////////////////
 
 
 

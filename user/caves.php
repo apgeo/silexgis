@@ -1,4 +1,128 @@
+<?php
+	require_once("grid_common.php");
+
+    @$filter_cave_name = $_REQUEST['filter_cave_name'];
+        
+    @$filter_length_min = $_REQUEST['filter_length_min'];
+    @$filter_length_max = $_REQUEST['filter_length_max'];
+
+    @$filter_depth_min = $_REQUEST['filter_depth_min'];
+    @$filter_depth_max = $_REQUEST['filter_depth_max'];
+
+    @$filter_elevation_min = $_REQUEST['filter_elevation_min'];
+    @$filter_elevation_max = $_REQUEST['filter_elevation_max'];
+?>
+
 <b><h3>*{caves.page_title}*</h3></b>
+
+<script>
+	$(document).ready(function() {
+        
+        // $('#filter_length_min').spinedit({    minimum: -10000,    maximum: 10000,    step: 100,    value: 0,    numberOfDecimals: 0});
+        // $('#filter_length_max').spinedit();
+
+        // $('#').bootstrapSlider({
+        //     formatter: function(value) {
+        //         return 'Lungimea pesterii intre: ' + value;
+        //     }
+        // });
+   
+        $('#reset_filter_form_button').on('click', function(event) {
+            event.preventDefault(); // To prevent following the link (optional)
+            $('#filter_form')[0].reset();
+        });
+
+        $('#clear_filter_form_button').on('click', function(event) {
+            $(':input').val('');
+        });
+    });
+</script>
+
+ <button data-toggle="collapse" data-target="#collapse_filter_form_panel" class="btn info">Show filters</button>
+
+<div id="collapse_filter_form_panel" class="collapse">
+
+
+<form id="filter_form" method="post">
+<div class="form-group">
+
+
+    <div class="input-group form-group row">
+        <label for="cave_name" class="col-sm-3 control-label">Cave name:</label>
+        <div class="col-sm-8">
+            <input id='filter_length_min' name='filter_cave_name' type='text' size='25' value='<?=$filter_cave_name?>' class="form-control" placeholder="Cave name" aria-describedby="cave_name" >
+        </div>
+    </div>
+    
+    <div class="input-group form-group row">
+        <label for="length" class="col-sm-3 control-label">Length range:</label>
+        <div class="col-sm-2">
+            <input id='filter_length_min' name='filter_length_min' type='number' size='5' value='<?=$filter_length_min?>' class="form-control" placeholder="min" aria-describedby="length" />
+        </div>
+        <label class="col-xs-1 control-label">-</label>
+        <div class="col-sm-2">
+            <input id='filter_length_max' name='filter_length_max' type='number' size='5' value='<?=$filter_length_max?>' class="form-control" placeholder="max" aria-describedby="length" />
+        </div>
+        <label class="col-xs-1 control-label">[m]</label>
+    </div>
+
+   
+   
+    <!--. . . . . 
+   <input id='ex1' data-slider-id='caveLengthSliderControl' type='text' data-slider-min='0' data-slider-max='9999' data-slider-step='1' data-slider-value='[200,2000]'/>-->
+
+    <div class="input-group form-group row">
+        <label for="depth" class="col-sm-3 control-label">Depth range:</label>
+        <div class="col-sm-2">
+            <input id='filter_depth_min' name='filter_depth_min' type='number' size='5' value='<?=$filter_depth_min?>' class="form-control" placeholder="min" aria-describedby="depth" >
+        </div>
+        <label class="col-xs-1 control-label">-</label>
+        <div class="col-sm-2">
+            <input id='filter_depth_max' name='filter_depth_max' type='number' size='5' value='<?=$filter_depth_max?>' class="form-control" placeholder="max" aria-describedby="depth">
+        </div>
+        <label class="col-xs-1 control-label">[m]</label>
+    </div>
+
+    <div class="input-group form-group row">
+        <label for="elevation" class="col-sm-3 control-label">Entrance elevation range:</label>
+        <div class="col-sm-2">
+            <input id='filter_elevation_min' name='filter_elevation_min' type='number' size='5' value='<?=$filter_elevation_min?>' class="form-control" placeholder="min" aria-describedby="elevation" >
+        </div>
+        <label class="col-xs-1 control-label">-</label>
+        <div class="col-sm-2">
+            <input id='filter_elevation_max' name='filter_elevation_max' type='number' size='5' value='<?=$filter_elevation_max?>' class="form-control" placeholder="max" aria-describedby="elevation">
+        </div>
+        <label class="col-xs-1 control-label">[m]</label>
+    </div>
+
+    <div class="input-group form-group row">
+
+        <div class="col-sm-4" class="button">
+            <button type="submit" class="btn btn-default">Search</button>
+        </div>
+
+        <div class="col-sm-3" class="button">
+            <button id="reset_filter_form_button" class="btn info" style="background: #88DDEE;color: #ffffff;">Reset</button>
+        </div>        
+        <div class="col-sm-3" class="button">
+            <button id="clear_filter_form_button" class="btn info" style="background: #88DDEE;color: #ffffff;" >Clear</button>
+        </div>        
+   </div>
+
+   <!--<input id='filter_depth_min' name='filter_depth_min' type='text' size='25' value='<?=$filter_depth_min?>'>
+    and 
+   <input id='filter_depth_max' name='filter_depth_max' type='text' size='25' value='<?=$filter_depth_max?>'>
+
+   Entrance elevation between:
+   <input id='filter_elevation_min' name='filter_elevation_min' type='text' size='25' value='<?=$filter_elevation_min?>'>
+    and 
+   <input id='filter_elevation_max' name='filter_elevation_max' type='text' size='25' value='<?=$filter_elevation_max?>'>-->
+
+</div>
+</form>
+
+</div>
+
 <?php
 ################################################################################   
 ## +---------------------------------------------------------------------------+
@@ -6,14 +130,15 @@
 ## +---------------------------------------------------------------------------+
 ##  *** only relative (virtual) path (to the current document)
 	
-require_once("grid_common.php");  //require_once('utilities.php'); include_once 'db_interface.php'; include_once 'data_interface.php'; require_once 'languages.php'; 
+// require_once("grid_common.php");
+require_once('../utilities.php'); // include_once 'db_interface.php'; include_once 'data_interface.php'; require_once 'languages.php'; 
 
   //echo "<b><h3>Caves</h3></b>";
   ##  *** creating variables that we need for database connection 
   
-  $DB_USER= DB_USER;            
+  $DB_USER= DB_USER;
   $DB_PASS= DB_PASS;
-  $DB_HOST= DB_HOST;       
+  $DB_HOST= DB_HOST;
   $DB_NAME= DB_NAME;
 
   /*define('USER_INTERFACE_TIMEZONE', '+00:00');  
@@ -50,6 +175,36 @@ require_once("grid_common.php");  //require_once('utilities.php'); include_once 
     
    print ("<input id='submitButton' type='submit' name='submit' value='Filter' />");
    */
+
+//   define('USER_INTERFACE_TIMEZONE', '+00:00');  
+
+//   @$filter_length_min = $_REQUEST['filter_length_min'];
+//   @$filter_length_max = $_REQUEST['filter_length_max'];
+
+//   @$filter_length_min = $_REQUEST['filter_length_min'];
+//   @$filter_length_max = $_REQUEST['filter_length_max'];
+//   @$filter_length_min = $_REQUEST['filter_length_min'];
+//   @$filter_length_max = $_REQUEST['filter_length_max'];
+  
+//    if (!empty($filter_length_max)) 
+//    {
+//         // if (defined('USER_INTERFACE_TIMEZONE'))
+//         //     $filter_start_time_max = date( 'Y-m-d H:i:s', convert_to_timezone($filter_start_time_max, USER_INTERFACE_TIMEZONE));            
+//         // else
+//         //     $filter_start_time_max = date( 'Y-m-d H:i:s', strtotime($filter_start_time_max));        
+//    }        
+
+//   if (!empty($filter_start_time_min)) 
+//    {
+//         // if (defined('USER_INTERFACE_TIMEZONE'))
+//         //     $filter_start_time_min = date( 'Y-m-d H:i:s', convert_to_timezone($filter_start_time_min, USER_INTERFACE_TIMEZONE));            
+//         // else
+//         //     $filter_start_time_min = date( 'Y-m-d H:i:s', strtotime($filter_start_time_min));
+//    }
+   
+   print ("<form name='mainform' method='get' >"); // action='feed_stats.php'  //("<form action='$PHP_SELF'>");
+   // <script type='text/javascript' src='datetimep/datetimepicker_css.js'/>
+
   ob_start();
 
   $db_conn = DB::factory('mysql'); 
@@ -58,12 +213,21 @@ require_once("grid_common.php");  //require_once('utilities.php'); include_once 
 ##  *** put a primary key on the first place 
   //$sql="SELECT points.id, X(coords) as lat, Y(coords) as lon, elevation, gpx_name, gpx_time, `_details`, pointrs._id_point_type FROM points"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
    
-  $sql="SELECT 	`id`, 	`name`, 	`type_id`, 	`description` FROM 	caves"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
+  $sql="SELECT 	caves.id, caves.name, caves.depth, caves.estimated_length, caves.altitude, caves.surveyed_length, caves.type_id, 	caves.description, 'Show cave' as view_on_map, 'Go to main entrance' as view_main_entrance_on_map, caves.id as cave_id, cave_entrances.id as main_cave_entrances_id  FROM 	caves
+        INNER JOIN cave_entrances ON cave_entrances.cave_id = caves.id AND cave_entrances.is_main_entrance = 1".
+        // INNER JOIN points ON cave_entrances.point_id = points.id";
+        //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? 
+        " WHERE 1 = 1 "
+        .getSQLFilterString("surveyed_length", $filter_length_min, $filter_length_max, "") 
+        .getSQLFilterString("depth", $filter_depth_min, $filter_depth_max, "")
+        .getSQLFilterString("elevation", $filter_elevation_min, $filter_elevation_max, "")
+        .(!empty($filter_cave_name) ? " AND cave.name LIKE '%".$filter_cave_name."%'" : "")//: "")
+        ; 
 
 ##  *** set needed options
-  $debug_mode = !false;
+  $debug_mode = false;
   $messaging = true;
-  $unique_prefix = "f_";  
+  $unique_prefix = "f_";
   $dgrid = new DataGrid($debug_mode, $messaging, $unique_prefix, DATAGRID_DIR);
 ##  *** set data source with needed options
   $default_order_field = "caves.id";
@@ -174,13 +338,14 @@ require_once("grid_common.php");  //require_once('utilities.php'); include_once 
     //"Browser title"     =>array("table"=>"user_activity_reports", "field"=>"browser_title", "source"=>"self", "operator"=>true, "default_operator"=>"like", "type"=>"textbox", "case_sensitive"=>true,  "comparison_type"=>"string"),
     //"lat"      =>array("table"=>"points",   "field"=>"lat", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"binary"),
     //"lon"      =>array("table"=>"points",   "field"=>"lon", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"binary"),    
-    "Nume"      =>array("table"=>"points",   "field"=>"name", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"string"),
+    "Nume"      =>array("table"=>"caves",   "field"=>"name", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"string"),
 	//"Tip"      =>array("table"=>"points",   "field"=>"typeId", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"binary"),	
     //"time"      =>array("table"=>"points",   "field"=>"gpx_time", "source"=>"self", "order"=>"DESC", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"date"),
     //"Tip"      =>array("table"=>"point_types",   "field"=>"name", "source"=>"self", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false,  "comparison_type"=>"string"),    
     //"User ID"      =>array("table"=>"user_activity_reports",   "field"=>"user_id", "source"=>"self", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"numeric"),
     //"Date"        =>array("table"=>"user_activity_reports", "field"=>"time", "source"=>"self", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"string"),      
     //"Population"  =>array("table"=>"countries", "field"=>"population", "source"=>$fill_from_array, "order"=>"DESC", "operator"=>true, "type"=>"dropdownlist", "case_sensitive"=>false, "comparison_type"=>"numeric")
+    "Dezvoltare"      =>array("table"=>"caves",   "field"=>"surveyed_length", "source"=>"self", "operator"=>true, "type"=>"textbox", "case_sensitive"=>false,  "comparison_type"=>"numeric"),    
   );
   
   $dgrid->setFieldsFiltering($filtering_fields);
@@ -189,20 +354,57 @@ require_once("grid_common.php");  //require_once('utilities.php'); include_once 
 ## | 6. View Mode Settings:                                                    | 
 ## +---------------------------------------------------------------------------+
 ##  *** set columns in view mode
-  $dgrid->setAutoColumnsInViewMode(false);  
+$dgrid->setAutoColumnsInViewMode(false);  
 
-    $vm_columns = array(   
+$vm_columns = array(
     "lat"  =>array("header"=>"lat", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "readonly"=>true),    
     "lon" =>array("header"=>"lon",     "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "readonly"=>true),
-    "elevation" => array("header"=>"altitudine", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
+    // "elevation" => array("header"=>"altitudine", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
     "name"  => array("header"=>"Nume",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),        
     "typeId"  => array("header"=>"Tip",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
     "description"  => array("header"=>"Descriere",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
-	"locationIdentifier"  => array("header"=>"identificator",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal")
+    "surveyed_length" => array("header"=>"Dezvoltare", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
+    "depth" => array("header"=>"Denivelare", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
+    "altitude" => array("header"=>"Altitudine", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
+    // "altitude" => array("header"=>"altitudine", "type"=>"label", "align"=>"left", "width"=>"20px", "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),    
+
+    "locationIdentifier"  => array("header"=>"identificator",      "type"=>"label", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal"),
+    "view_on_map" =>array("header"=>"*{gps_points.col_map_location}*",    "visible"=>"true", "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal",
+    	
+	    "field_key"=>"lat",
+        "field_key_1"=>"lon",
+        "field_key_2"=>"cave_id",
+        "field_data"=>"view_on_map",
+  
+	    /*"_lat"=>"lat",
+        "_long"=>"lon",*/
+
+        //"field_data"=>"field_name_2",
+        "href"=>"/speogis/?lat={1}&lon={0}&cave_id={2}",
+        // "href"=>"/speogis/?lat={1}&long={0}&point_id={2}",
+        "target"=>"_self"
+    ),
+    "view_main_entrance_on_map" =>array("header"=>"*{gps_points.col_map_location}*",    "visible"=>"true", "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal",
+    	
+	    "field_key"=>"lat",
+        "field_key_1"=>"lon",
+        "field_key_2"=>"main_cave_entrances_id",
+        "field_data"=>"view_main_entrance_on_map",
+  
+	    /*"_lat"=>"lat",
+        "_long"=>"lon",*/
+
+        //"field_data"=>"field_name_2",
+        "href"=>"/speogis/?lat={1}&lon={0}&cave_entrance_id={2}",
+        // "href"=>"/speogis/?lat={1}&long={0}&point_id={2}",
+        "target"=>"_self"
+    )
+    
+
     //"pic"  =>array("header"=>"Pic",      "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "case"=>"normal", "field_key"=>"pic", "field_key_1"=>"pic", "field_data"=>"x", "rel"=>"", "title"=>"", "target"=>"_self", "href"=>"{0}"),
     //"gallery_url"  =>array("header"=>"Pic",      "type"=>"link", "width"=>"20px", "align"=>"left",   "wrap"=>"nowrap", "text_length"=>"-1", "field_key"=>"gallery_url", "field_key_1"=>"gallery_url", "field_data"=>"{1}", "rel"=>"{0}", "title"=>"{0}", "target"=>"_self", "href"=>"{0}"),
     //"pic"=>array("header"=>"pic", "type"=>"image",      "align"=>"left", "width"=>"20px", "wrap"=>"wrap", "text_length"=>"-1", "field_key"=>"gallery_url", "target_path"=>"{0}", "default"=>"def", "image_width"=>"50px", "image_height"=>"50px", "linkto"=>"{0}", "magnify"=>"true", "magnify_type"=>"lightbox", "magnify_power"=>"2"),
-  );
+);
   
   $dgrid->setColumnsInViewMode($vm_columns);
   
@@ -360,3 +562,6 @@ require_once("grid_common.php");  //require_once('utilities.php'); include_once 
         return  strtotime($date_str) + $offset;
     }
 ?>
+
+</body>
+</html>

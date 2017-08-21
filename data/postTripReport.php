@@ -60,7 +60,7 @@
 			$tripLog->setTemporary(1);
 		else
 			$tripLog->setTemporary(false);
-				
+		
 		$tripLog->save();
 		$trip_log_id = $tripLog->getId();
 		
@@ -75,6 +75,10 @@
 			$tripLogToTeamMember = new TripLogsToTeamMembers();						
 			
 			$tripLogToTeamMember->setIdtriplog($trip_log_id);
+			
+			if (empty($tmId))
+				$tmId = 0;
+
 			$tripLogToTeamMember->setIdteammember($tmId);			
 			
 			$tripLogToTeamMember->save();

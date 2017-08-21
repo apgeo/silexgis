@@ -4,7 +4,7 @@
 
 	$submitData = file_get_contents('php://input'); // $HTTP_RAW_POST_DATA
 	
-	$deleteCaveEntrance = json_decode($submitData);
+	$deleteCaveData = json_decode($submitData);
 	
 	$_user_id = $_SESSION["id_user"];
 	
@@ -17,10 +17,10 @@
 	//if (empty($mapViewData->mapview_name) || ctype_space($mapViewData->mapview_name))  // might need trim($featureData->feature_name) if not done on client side?
 	//	raise_error("MapView name is empty.");
 	
-	if (!empty($deleteCaveEntrance->cave_entrance_id))
+	if (!empty($deleteCaveData->cave_id))
 	{
-		$caveEntrance = CaveEntrancesQuery::create()->findById($deleteCaveEntrance->cave_entrance_id); //-- filter by user id
-		$caveEntrance->delete();
+		$cave = CavesQuery::create()->findById($deleteCaveData->cave_id); //-- filter by user id
+		$cave->delete();
 		
 		//-- probably in certain cases should also delete associated points (point_id fk) and cave entrances, maybe mark pictures and other files as orphaned (or give user choice to delete them)
 	}

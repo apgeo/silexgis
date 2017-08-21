@@ -214,9 +214,12 @@ if ($onlineMode) :
 	
 	<!--<script src="http://openlayers.org/en/v3.15.0/build/ol-debug.js" type="text/javascript"></script>-->	
 	<!--<link rel="stylesheet" href="http://openlayers.org/en/v3.12.1/css/ol.css" type="text/css">    -->
-	
-	<script src="http://openlayers.org/en/v3.16.0/build/ol-debug.js" type="text/javascript"></script>
-	<link rel="stylesheet" href="http://openlayers.org/en/v3.16.0/css/ol.css" type="text/css">    
+
+	<!--<script src="http://openlayers.org/en/v3.16.0/build/ol-debug.js" type="text/javascript"></script>
+	<link rel="stylesheet" href="http://openlayers.org/en/v3.16.0/css/ol.css" type="text/css">    -->
+
+	<script src="http://openlayers.org/en/4.3.1/build/ol-debug.js" type="text/javascript"></script>
+	<link rel="stylesheet" href="http://openlayers.org/en/4.3.1/css/ol.css" type="text/css">
 
 	<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
     
@@ -327,7 +330,7 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 	
 	<script src="<?=$application_url_root ?>/scripts/i18n/silexgis.en-EN.js"></script>
 	
-	<link href="<?=$application_url_root ?>/scripts/bootstrap-spinedit/js/bootstrap-spinedit.css" rel="stylesheet">
+	<link href="<?=$application_url_root ?>/scripts/bootstrap-spinedit/css/bootstrap-spinedit.css" rel="stylesheet">
 	<script src="<?=$application_url_root ?>/scripts/bootstrap-spinedit/js/bootstrap-spinedit.js"></script>
 	
 	<!-- Photo styles -->
@@ -339,6 +342,11 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 
 	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/turf.min.js"></script>
 	
+
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/bootstrap-slider/src/js/bootstrap-slider.js"></script>
+	<link href="<?=$application_url_root ?>/scripts/bootstrap-slider/src/imported_css/bootstrap-slider.css" rel="stylesheet">
+
+
 	<link rel="stylesheet" href="style.css" />
 <?php
 	else :
@@ -365,10 +373,14 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 	
 	<!--<script src="<?=$application_url_root ?>/temp_offline_scripts/ol-debug.js" type="text/javascript"></script>-->
 	<!--<script type="text/javascript" src="./OL3-ext_ DBPedia layer_files/ol.js"></script>-->
-	<!--<script src="<?=$application_url_root ?>/scripts/ol v3.19.1-dist/ol-debug.js" type="text/javascript"></script>-->
-	<script src="<?=$application_url_root ?>/scripts/ol v3.19.1-dist/ol.js" type="text/javascript"></script>
 	
-	<link rel="stylesheet" href="<?=$application_url_root ?>/temp_offline_scripts/ol.css" type="text/css">    
+	<script src="<?=$application_url_root ?>/scripts/ol v3.19.1-dist/ol-debug.js" type="text/javascript"></script>
+	<!--<script src="<?=$application_url_root ?>/scripts/ol v3.19.1-dist/ol.js" type="text/javascript"></script>-->
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/ol v3.19.1-dist/ol.css" type="text/css"> 	
+	
+
+	<!--<script src="<?=$application_url_root ?>/scripts/ol v4.3.1-dist/ol.js" type="text/javascript"></script>
+	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/ol v4.3.1-dist/ol.css" type="text/css">   -->
 	
 
 	<script type="text/javascript" src="<?=$application_url_root ?>/temp_offline_scripts/jquery.min.js"></script>
@@ -524,6 +536,8 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/kartik-v-bootstrap-fileinput-v4.3.8-5-gfb58354/kartik-v-bootstrap-fileinput-fb58354/js/fileinput.js"></script>
 	<link rel="stylesheet" href="<?=$application_url_root ?>/scripts/kartik-v-bootstrap-fileinput-v4.3.8-5-gfb58354/kartik-v-bootstrap-fileinput-fb58354/css/fileinput.css">
 	
+	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/bootstrap-slider/src/js/bootstrap-slider.js"></script>
+	<link href="<?=$application_url_root ?>/scripts/bootstrap-slider/src/imported_css/bootstrap-slider.css" rel="stylesheet">
 	<!--<script type="text/javascript" src="<?=$application_url_root ?>/scripts/georeferenced_image.js"></script>-->
 <!--
 	 =============================================================================================================================================
@@ -566,7 +580,7 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 				<li <?php if ($currentPage == 'geofiles') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/geofiles.php">*{main_map.menu.data_submenu.geofiles}*</a></li>
 				<li <?php if ($currentPage == 'georeferenced_maps') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/georeferenced_maps.php">*{main_map.menu.data_submenu.georeferenced_maps}*</a></li>
 				<li <?php if ($currentPage == 'exploration_points') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/exploration_points.php">*{main_map.menu.data_submenu.exploration_points}*</a></li>
-				<li <?php if ($currentPage == 'caves') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/caves.php">pesteri</a></li>
+				<li <?php if ($currentPage == 'caves') echo "class='active'"; ?> ><a href="<?=$application_url_root ?>/user/caves.php">*{main_map.menu.data_submenu.caves}*</a></li>
 			</ul>
         </li>
 

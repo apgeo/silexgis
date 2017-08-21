@@ -43,7 +43,7 @@ class CaveEntrancesTableMap extends TableMap
         $this->addColumn('point_id', 'PointId', 'BIGINT', false, null, null);
         $this->addColumn('entranceType', 'Entrancetype', 'BIGINT', true, null, null);
         $this->addColumn('description', 'Description', 'VARCHAR', false, 2000, null);
-        $this->addColumn('is_main_entrance', 'IsMainEntrance', 'VARCHAR', false, 1, null);
+        $this->addColumn('is_main_entrance', 'IsMainEntrance', 'BOOLEAN', false, 1, null);
         $this->addColumn('hydrologic_type', 'HydrologicType', 'BIGINT', false, null, null);
         $this->addColumn('cave_id', 'CaveId', 'BIGINT', true, null, null);
         // validators

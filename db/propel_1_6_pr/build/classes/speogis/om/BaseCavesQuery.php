@@ -29,6 +29,7 @@
  * @method CavesQuery orderByDiscoveryDate($order = Criteria::ASC) Order by the discovery_date column
  * @method CavesQuery orderByDiscoverer($order = Criteria::ASC) Order by the discoverer column
  * @method CavesQuery orderByVolume($order = Criteria::ASC) Order by the volume column
+ * @method CavesQuery orderByArea($order = Criteria::ASC) Order by the area column
  * @method CavesQuery orderByPositiveDepth($order = Criteria::ASC) Order by the positive_depth column
  * @method CavesQuery orderByNegativeDepth($order = Criteria::ASC) Order by the negative_depth column
  * @method CavesQuery orderByRamificationIndex($order = Criteria::ASC) Order by the ramification_index column
@@ -38,6 +39,8 @@
  * @method CavesQuery orderByExplorationStatus($order = Criteria::ASC) Order by the exploration_status column
  * @method CavesQuery orderByProtectionClass($order = Criteria::ASC) Order by the protection_class column
  * @method CavesQuery orderByPotentialDepth($order = Criteria::ASC) Order by the potential_depth column
+ * @method CavesQuery orderByEstimatedLength($order = Criteria::ASC) Order by the estimated_length column
+ * @method CavesQuery orderByAltitude($order = Criteria::ASC) Order by the altitude column
  *
  * @method CavesQuery groupById() Group by the id column
  * @method CavesQuery groupByName() Group by the name column
@@ -62,6 +65,7 @@
  * @method CavesQuery groupByDiscoveryDate() Group by the discovery_date column
  * @method CavesQuery groupByDiscoverer() Group by the discoverer column
  * @method CavesQuery groupByVolume() Group by the volume column
+ * @method CavesQuery groupByArea() Group by the area column
  * @method CavesQuery groupByPositiveDepth() Group by the positive_depth column
  * @method CavesQuery groupByNegativeDepth() Group by the negative_depth column
  * @method CavesQuery groupByRamificationIndex() Group by the ramification_index column
@@ -71,6 +75,8 @@
  * @method CavesQuery groupByExplorationStatus() Group by the exploration_status column
  * @method CavesQuery groupByProtectionClass() Group by the protection_class column
  * @method CavesQuery groupByPotentialDepth() Group by the potential_depth column
+ * @method CavesQuery groupByEstimatedLength() Group by the estimated_length column
+ * @method CavesQuery groupByAltitude() Group by the altitude column
  *
  * @method CavesQuery leftJoin($relation) Adds a LEFT JOIN clause to the query
  * @method CavesQuery rightJoin($relation) Adds a RIGHT JOIN clause to the query
@@ -91,7 +97,7 @@
  * @method Caves findOneByValley(string $valley) Return the first Caves filtered by the valley column
  * @method Caves findOneByTributaryRiver(string $tributary_river) Return the first Caves filtered by the tributary_river column
  * @method Caves findOneByClosestAddress(string $closest_address) Return the first Caves filtered by the closest_address column
- * @method Caves findOneByIsShowCave(string $is_show_cave) Return the first Caves filtered by the is_show_cave column
+ * @method Caves findOneByIsShowCave(boolean $is_show_cave) Return the first Caves filtered by the is_show_cave column
  * @method Caves findOneByShowCaveLength(int $show_cave_length) Return the first Caves filtered by the show_cave_length column
  * @method Caves findOneByWebsite(string $website) Return the first Caves filtered by the website column
  * @method Caves findOneByLandRegistryNumber(string $land_registry_number) Return the first Caves filtered by the land_registry_number column
@@ -101,6 +107,7 @@
  * @method Caves findOneByDiscoveryDate(string $discovery_date) Return the first Caves filtered by the discovery_date column
  * @method Caves findOneByDiscoverer(string $discoverer) Return the first Caves filtered by the discoverer column
  * @method Caves findOneByVolume(int $volume) Return the first Caves filtered by the volume column
+ * @method Caves findOneByArea(int $area) Return the first Caves filtered by the area column
  * @method Caves findOneByPositiveDepth(int $positive_depth) Return the first Caves filtered by the positive_depth column
  * @method Caves findOneByNegativeDepth(int $negative_depth) Return the first Caves filtered by the negative_depth column
  * @method Caves findOneByRamificationIndex(int $ramification_index) Return the first Caves filtered by the ramification_index column
@@ -110,6 +117,8 @@
  * @method Caves findOneByExplorationStatus(string $exploration_status) Return the first Caves filtered by the exploration_status column
  * @method Caves findOneByProtectionClass(string $protection_class) Return the first Caves filtered by the protection_class column
  * @method Caves findOneByPotentialDepth(int $potential_depth) Return the first Caves filtered by the potential_depth column
+ * @method Caves findOneByEstimatedLength(int $estimated_length) Return the first Caves filtered by the estimated_length column
+ * @method Caves findOneByAltitude(int $altitude) Return the first Caves filtered by the altitude column
  *
  * @method array findById(string $id) Return Caves objects filtered by the id column
  * @method array findByName(string $name) Return Caves objects filtered by the name column
@@ -124,7 +133,7 @@
  * @method array findByValley(string $valley) Return Caves objects filtered by the valley column
  * @method array findByTributaryRiver(string $tributary_river) Return Caves objects filtered by the tributary_river column
  * @method array findByClosestAddress(string $closest_address) Return Caves objects filtered by the closest_address column
- * @method array findByIsShowCave(string $is_show_cave) Return Caves objects filtered by the is_show_cave column
+ * @method array findByIsShowCave(boolean $is_show_cave) Return Caves objects filtered by the is_show_cave column
  * @method array findByShowCaveLength(int $show_cave_length) Return Caves objects filtered by the show_cave_length column
  * @method array findByWebsite(string $website) Return Caves objects filtered by the website column
  * @method array findByLandRegistryNumber(string $land_registry_number) Return Caves objects filtered by the land_registry_number column
@@ -134,6 +143,7 @@
  * @method array findByDiscoveryDate(string $discovery_date) Return Caves objects filtered by the discovery_date column
  * @method array findByDiscoverer(string $discoverer) Return Caves objects filtered by the discoverer column
  * @method array findByVolume(int $volume) Return Caves objects filtered by the volume column
+ * @method array findByArea(int $area) Return Caves objects filtered by the area column
  * @method array findByPositiveDepth(int $positive_depth) Return Caves objects filtered by the positive_depth column
  * @method array findByNegativeDepth(int $negative_depth) Return Caves objects filtered by the negative_depth column
  * @method array findByRamificationIndex(int $ramification_index) Return Caves objects filtered by the ramification_index column
@@ -143,6 +153,8 @@
  * @method array findByExplorationStatus(string $exploration_status) Return Caves objects filtered by the exploration_status column
  * @method array findByProtectionClass(string $protection_class) Return Caves objects filtered by the protection_class column
  * @method array findByPotentialDepth(int $potential_depth) Return Caves objects filtered by the potential_depth column
+ * @method array findByEstimatedLength(int $estimated_length) Return Caves objects filtered by the estimated_length column
+ * @method array findByAltitude(int $altitude) Return Caves objects filtered by the altitude column
  *
  * @package    propel.generator.speogis.om
  */
@@ -250,7 +262,7 @@ abstract class BaseCavesQuery extends ModelCriteria
      */
     protected function findPkSimple($key, $con)
     {
-        $sql = 'SELECT `id`, `name`, `type_id`, `identification_code`, `description`, `user_id`, `other_toponyms`, `rock_type_id`, `rock_age`, `hydrographic_basin`, `valley`, `tributary_river`, `closest_address`, `is_show_cave`, `show_cave_length`, `website`, `land_registry_number`, `region`, `depth`, `surveyed_length`, `discovery_date`, `discoverer`, `volume`, `positive_depth`, `negative_depth`, `ramification_index`, `real_extension`, `cave_age`, `projected_extension`, `exploration_status`, `protection_class`, `potential_depth` FROM `caves` WHERE `id` = :p0';
+        $sql = 'SELECT `id`, `name`, `type_id`, `identification_code`, `description`, `user_id`, `other_toponyms`, `rock_type_id`, `rock_age`, `hydrographic_basin`, `valley`, `tributary_river`, `closest_address`, `is_show_cave`, `show_cave_length`, `website`, `land_registry_number`, `region`, `depth`, `surveyed_length`, `discovery_date`, `discoverer`, `volume`, `area`, `positive_depth`, `negative_depth`, `ramification_index`, `real_extension`, `cave_age`, `projected_extension`, `exploration_status`, `protection_class`, `potential_depth`, `estimated_length`, `altitude` FROM `caves` WHERE `id` = :p0';
         try {
             $stmt = $con->prepare($sql);
             $stmt->bindValue(':p0', $key, PDO::PARAM_STR);
@@ -773,25 +785,23 @@ abstract class BaseCavesQuery extends ModelCriteria
      *
      * Example usage:
      * <code>
-     * $query->filterByIsShowCave('fooValue');   // WHERE is_show_cave = 'fooValue'
-     * $query->filterByIsShowCave('%fooValue%'); // WHERE is_show_cave LIKE '%fooValue%'
+     * $query->filterByIsShowCave(true); // WHERE is_show_cave = true
+     * $query->filterByIsShowCave('yes'); // WHERE is_show_cave = true
      * </code>
      *
-     * @param     string $isShowCave The value to use as filter.
-     *              Accepts wildcards (* and % trigger a LIKE)
+     * @param     boolean|string $isShowCave The value to use as filter.
+     *              Non-boolean arguments are converted using the following rules:
+     *                * 1, '1', 'true',  'on',  and 'yes' are converted to boolean true
+     *                * 0, '0', 'false', 'off', and 'no'  are converted to boolean false
+     *              Check on string values is case insensitive (so 'FaLsE' is seen as 'false').
      * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
      *
      * @return CavesQuery The current query, for fluid interface
      */
     public function filterByIsShowCave($isShowCave = null, $comparison = null)
     {
-        if (null === $comparison) {
-            if (is_array($isShowCave)) {
-                $comparison = Criteria::IN;
-            } elseif (preg_match('/[\%\*]/', $isShowCave)) {
-                $isShowCave = str_replace('*', '%', $isShowCave);
-                $comparison = Criteria::LIKE;
-            }
+        if (is_string($isShowCave)) {
+            $isShowCave = in_array(strtolower($isShowCave), array('false', 'off', '-', 'no', 'n', '0', '')) ? false : true;
         }
 
         return $this->addUsingAlias(CavesPeer::IS_SHOW_CAVE, $isShowCave, $comparison);
@@ -1108,6 +1118,48 @@ abstract class BaseCavesQuery extends ModelCriteria
         }
 
         return $this->addUsingAlias(CavesPeer::VOLUME, $volume, $comparison);
+    }
+
+    /**
+     * Filter the query on the area column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterByArea(1234); // WHERE area = 1234
+     * $query->filterByArea(array(12, 34)); // WHERE area IN (12, 34)
+     * $query->filterByArea(array('min' => 12)); // WHERE area >= 12
+     * $query->filterByArea(array('max' => 12)); // WHERE area <= 12
+     * </code>
+     *
+     * @param     mixed $area The value to use as filter.
+     *              Use scalar values for equality.
+     *              Use array values for in_array() equivalent.
+     *              Use associative array('min' => $minValue, 'max' => $maxValue) for intervals.
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return CavesQuery The current query, for fluid interface
+     */
+    public function filterByArea($area = null, $comparison = null)
+    {
+        if (is_array($area)) {
+            $useMinMax = false;
+            if (isset($area['min'])) {
+                $this->addUsingAlias(CavesPeer::AREA, $area['min'], Criteria::GREATER_EQUAL);
+                $useMinMax = true;
+            }
+            if (isset($area['max'])) {
+                $this->addUsingAlias(CavesPeer::AREA, $area['max'], Criteria::LESS_EQUAL);
+                $useMinMax = true;
+            }
+            if ($useMinMax) {
+                return $this;
+            }
+            if (null === $comparison) {
+                $comparison = Criteria::IN;
+            }
+        }
+
+        return $this->addUsingAlias(CavesPeer::AREA, $area, $comparison);
     }
 
     /**
@@ -1460,6 +1512,90 @@ abstract class BaseCavesQuery extends ModelCriteria
         }
 
         return $this->addUsingAlias(CavesPeer::POTENTIAL_DEPTH, $potentialDepth, $comparison);
+    }
+
+    /**
+     * Filter the query on the estimated_length column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterByEstimatedLength(1234); // WHERE estimated_length = 1234
+     * $query->filterByEstimatedLength(array(12, 34)); // WHERE estimated_length IN (12, 34)
+     * $query->filterByEstimatedLength(array('min' => 12)); // WHERE estimated_length >= 12
+     * $query->filterByEstimatedLength(array('max' => 12)); // WHERE estimated_length <= 12
+     * </code>
+     *
+     * @param     mixed $estimatedLength The value to use as filter.
+     *              Use scalar values for equality.
+     *              Use array values for in_array() equivalent.
+     *              Use associative array('min' => $minValue, 'max' => $maxValue) for intervals.
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return CavesQuery The current query, for fluid interface
+     */
+    public function filterByEstimatedLength($estimatedLength = null, $comparison = null)
+    {
+        if (is_array($estimatedLength)) {
+            $useMinMax = false;
+            if (isset($estimatedLength['min'])) {
+                $this->addUsingAlias(CavesPeer::ESTIMATED_LENGTH, $estimatedLength['min'], Criteria::GREATER_EQUAL);
+                $useMinMax = true;
+            }
+            if (isset($estimatedLength['max'])) {
+                $this->addUsingAlias(CavesPeer::ESTIMATED_LENGTH, $estimatedLength['max'], Criteria::LESS_EQUAL);
+                $useMinMax = true;
+            }
+            if ($useMinMax) {
+                return $this;
+            }
+            if (null === $comparison) {
+                $comparison = Criteria::IN;
+            }
+        }
+
+        return $this->addUsingAlias(CavesPeer::ESTIMATED_LENGTH, $estimatedLength, $comparison);
+    }
+
+    /**
+     * Filter the query on the altitude column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterByAltitude(1234); // WHERE altitude = 1234
+     * $query->filterByAltitude(array(12, 34)); // WHERE altitude IN (12, 34)
+     * $query->filterByAltitude(array('min' => 12)); // WHERE altitude >= 12
+     * $query->filterByAltitude(array('max' => 12)); // WHERE altitude <= 12
+     * </code>
+     *
+     * @param     mixed $altitude The value to use as filter.
+     *              Use scalar values for equality.
+     *              Use array values for in_array() equivalent.
+     *              Use associative array('min' => $minValue, 'max' => $maxValue) for intervals.
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return CavesQuery The current query, for fluid interface
+     */
+    public function filterByAltitude($altitude = null, $comparison = null)
+    {
+        if (is_array($altitude)) {
+            $useMinMax = false;
+            if (isset($altitude['min'])) {
+                $this->addUsingAlias(CavesPeer::ALTITUDE, $altitude['min'], Criteria::GREATER_EQUAL);
+                $useMinMax = true;
+            }
+            if (isset($altitude['max'])) {
+                $this->addUsingAlias(CavesPeer::ALTITUDE, $altitude['max'], Criteria::LESS_EQUAL);
+                $useMinMax = true;
+            }
+            if ($useMinMax) {
+                return $this;
+            }
+            if (null === $comparison) {
+                $comparison = Criteria::IN;
+            }
+        }
+
+        return $this->addUsingAlias(CavesPeer::ALTITUDE, $altitude, $comparison);
     }
 
     /**

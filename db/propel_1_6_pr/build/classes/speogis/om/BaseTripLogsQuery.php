@@ -39,7 +39,7 @@
  * @method TripLogs findOneByDetails(string $details) Return the first TripLogs filtered by the details column
  * @method TripLogs findOneByTargetZone(string $target_zone) Return the first TripLogs filtered by the target_zone column
  * @method TripLogs findOneByType(string $type) Return the first TripLogs filtered by the type column
- * @method TripLogs findOneByTemporary(string $temporary) Return the first TripLogs filtered by the temporary column
+ * @method TripLogs findOneByTemporary(boolean $temporary) Return the first TripLogs filtered by the temporary column
  * @method TripLogs findOneBySummary(string $summary) Return the first TripLogs filtered by the summary column
  *
  * @method array findById(string $id) Return TripLogs objects filtered by the id column
@@ -49,7 +49,7 @@
  * @method array findByDetails(string $details) Return TripLogs objects filtered by the details column
  * @method array findByTargetZone(string $target_zone) Return TripLogs objects filtered by the target_zone column
  * @method array findByType(string $type) Return TripLogs objects filtered by the type column
- * @method array findByTemporary(string $temporary) Return TripLogs objects filtered by the temporary column
+ * @method array findByTemporary(boolean $temporary) Return TripLogs objects filtered by the temporary column
  * @method array findBySummary(string $summary) Return TripLogs objects filtered by the summary column
  *
  * @package    propel.generator.speogis.om
@@ -510,25 +510,23 @@ abstract class BaseTripLogsQuery extends ModelCriteria
      *
      * Example usage:
      * <code>
-     * $query->filterByTemporary('fooValue');   // WHERE temporary = 'fooValue'
-     * $query->filterByTemporary('%fooValue%'); // WHERE temporary LIKE '%fooValue%'
+     * $query->filterByTemporary(true); // WHERE temporary = true
+     * $query->filterByTemporary('yes'); // WHERE temporary = true
      * </code>
      *
-     * @param     string $temporary The value to use as filter.
-     *              Accepts wildcards (* and % trigger a LIKE)
+     * @param     boolean|string $temporary The value to use as filter.
+     *              Non-boolean arguments are converted using the following rules:
+     *                * 1, '1', 'true',  'on',  and 'yes' are converted to boolean true
+     *                * 0, '0', 'false', 'off', and 'no'  are converted to boolean false
+     *              Check on string values is case insensitive (so 'FaLsE' is seen as 'false').
      * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
      *
      * @return TripLogsQuery The current query, for fluid interface
      */
     public function filterByTemporary($temporary = null, $comparison = null)
     {
-        if (null === $comparison) {
-            if (is_array($temporary)) {
-                $comparison = Criteria::IN;
-            } elseif (preg_match('/[\%\*]/', $temporary)) {
-                $temporary = str_replace('*', '%', $temporary);
-                $comparison = Criteria::LIKE;
-            }
+        if (is_string($temporary)) {
+            $temporary = in_array(strtolower($temporary), array('false', 'off', '-', 'no', 'n', '0', '')) ? false : true;
         }
 
         return $this->addUsingAlias(TripLogsPeer::TEMPORARY, $temporary, $comparison);

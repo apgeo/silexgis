@@ -403,7 +403,7 @@
                 //throw new Exception('Title are empty'); //return 0;
             }
 			
-			$query = "SELECT files.id, file_name, user_id, add_time, file_type, size, md5_hash, geoobjects_to_files.id, object_type
+			$query = "SELECT files.id, file_name, user_id, files.add_time, file_type, size, md5_hash, geoobjects_to_files.id, object_type
 						FROM files
 						INNER JOIN geoobjects_to_files ON geoobjects_to_files.file_id = files.id
 						INNER JOIN 
@@ -412,8 +412,9 @@
 						 SELECT id, 'feature' AS object_type FROM features
 						 ) AS geoobjects_vt ON geoobjects_to_files.geoobject_id = geoobjects_vt.id AND object_type = geoobjects_to_files.geoobject_type
 						 INNER JOIN users ON users.id = files.user_id
-						 WHERE enabled = 1 or enabled is null
+						 
 						 ORDER BY files.id"; //where disabled != 1 or disabled is null
+                        //  WHERE enabled = 1 or enabled is null
 			
 			//$query = "select *, AsWKB(coords) AS wkb FROM {$tp}points"; //where disabled != 1 or disabled is null
             $db_result = DB_Execute(GPSData::$ConId, $query);
@@ -425,7 +426,7 @@
 				//$row["file_type"] = "cave";
                 $rows[/*$row["id"]*/] = $row; // 0 based index
 			}
-                
+            
             return $rows;
         }
 		

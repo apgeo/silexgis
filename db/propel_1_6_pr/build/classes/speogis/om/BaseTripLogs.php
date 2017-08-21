@@ -73,7 +73,7 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
 
     /**
      * The value for the temporary field.
-     * @var        string
+     * @var        boolean
      */
     protected $temporary;
 
@@ -270,7 +270,7 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
     /**
      * Get the [temporary] column value.
      *
-     * @return string
+     * @return boolean
      */
     public function getTemporary()
     {
@@ -443,15 +443,23 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
     } // setType()
 
     /**
-     * Set the value of [temporary] column.
+     * Sets the value of the [temporary] column.
+     * Non-boolean arguments are converted using the following rules:
+     *   * 1, '1', 'true',  'on',  and 'yes' are converted to boolean true
+     *   * 0, '0', 'false', 'off', and 'no'  are converted to boolean false
+     * Check on string values is case insensitive (so 'FaLsE' is seen as 'false').
      *
-     * @param  string $v new value
+     * @param boolean|integer|string $v The new value
      * @return TripLogs The current object (for fluent API support)
      */
     public function setTemporary($v)
     {
         if ($v !== null) {
-            $v = (string) $v;
+            if (is_string($v)) {
+                $v = in_array(strtolower($v), array('false', 'off', '-', 'no', 'n', '0', '')) ? false : true;
+            } else {
+                $v = (boolean) $v;
+            }
         }
 
         if ($this->temporary !== $v) {
@@ -523,7 +531,7 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
             $this->details = ($row[$startcol + 4] !== null) ? (string) $row[$startcol + 4] : null;
             $this->target_zone = ($row[$startcol + 5] !== null) ? (string) $row[$startcol + 5] : null;
             $this->type = ($row[$startcol + 6] !== null) ? (string) $row[$startcol + 6] : null;
-            $this->temporary = ($row[$startcol + 7] !== null) ? (string) $row[$startcol + 7] : null;
+            $this->temporary = ($row[$startcol + 7] !== null) ? (boolean) $row[$startcol + 7] : null;
             $this->summary = ($row[$startcol + 8] !== null) ? (string) $row[$startcol + 8] : null;
             $this->resetModified();
 
@@ -806,7 +814,7 @@ abstract class BaseTripLogs extends BaseObject implements Persistent
                         $stmt->bindValue($identifier, $this->type, PDO::PARAM_STR);
                         break;
                     case '`temporary`':
-                        $stmt->bindValue($identifier, $this->temporary, PDO::PARAM_STR);
+                        $stmt->bindValue($identifier, (int) $this->temporary, PDO::PARAM_INT);
                         break;
                     case '`summary`':
                         $stmt->bindValue($identifier, $this->summary, PDO::PARAM_STR);

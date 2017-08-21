@@ -214,7 +214,7 @@ ob_start();
 "_long"=>"lon",*/
 
 //"field_data"=>"field_name_2",
-"href"=>"/speogis/?lat={1}&long={0}&point_id={2}",
+"href"=>"/speogis/?lat={1}&lon={0}&point_id={2}",
 "target"=>"_self"
 )
   );

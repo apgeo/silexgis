@@ -109,7 +109,7 @@ abstract class BaseCaves extends BaseObject implements Persistent
 
     /**
      * The value for the is_show_cave field.
-     * @var        string
+     * @var        boolean
      */
     protected $is_show_cave;
 
@@ -168,6 +168,12 @@ abstract class BaseCaves extends BaseObject implements Persistent
     protected $volume;
 
     /**
+     * The value for the area field.
+     * @var        int
+     */
+    protected $area;
+
+    /**
      * The value for the positive_depth field.
      * @var        int
      */
@@ -220,6 +226,18 @@ abstract class BaseCaves extends BaseObject implements Persistent
      * @var        int
      */
     protected $potential_depth;
+
+    /**
+     * The value for the estimated_length field.
+     * @var        int
+     */
+    protected $estimated_length;
+
+    /**
+     * The value for the altitude field.
+     * @var        int
+     */
+    protected $altitude;
 
     /**
      * Flag to prevent endless save loop, if this object is referenced
@@ -387,7 +405,7 @@ abstract class BaseCaves extends BaseObject implements Persistent
     /**
      * Get the [is_show_cave] column value.
      *
-     * @return string
+     * @return boolean
      */
     public function getIsShowCave()
     {
@@ -495,6 +513,17 @@ abstract class BaseCaves extends BaseObject implements Persistent
     }
 
     /**
+     * Get the [area] column value.
+     *
+     * @return int
+     */
+    public function getArea()
+    {
+
+        return $this->area;
+    }
+
+    /**
      * Get the [positive_depth] column value.
      *
      * @return int
@@ -591,6 +620,28 @@ abstract class BaseCaves extends BaseObject implements Persistent
     {
 
         return $this->potential_depth;
+    }
+
+    /**
+     * Get the [estimated_length] column value.
+     *
+     * @return int
+     */
+    public function getEstimatedLength()
+    {
+
+        return $this->estimated_length;
+    }
+
+    /**
+     * Get the [altitude] column value.
+     *
+     * @return int
+     */
+    public function getAltitude()
+    {
+
+        return $this->altitude;
     }
 
     /**
@@ -867,15 +918,23 @@ abstract class BaseCaves extends BaseObject implements Persistent
     } // setClosestAddress()
 
     /**
-     * Set the value of [is_show_cave] column.
+     * Sets the value of the [is_show_cave] column.
+     * Non-boolean arguments are converted using the following rules:
+     *   * 1, '1', 'true',  'on',  and 'yes' are converted to boolean true
+     *   * 0, '0', 'false', 'off', and 'no'  are converted to boolean false
+     * Check on string values is case insensitive (so 'FaLsE' is seen as 'false').
      *
-     * @param  string $v new value
+     * @param boolean|integer|string $v The new value
      * @return Caves The current object (for fluent API support)
      */
     public function setIsShowCave($v)
     {
         if ($v !== null) {
-            $v = (string) $v;
+            if (is_string($v)) {
+                $v = in_array(strtolower($v), array('false', 'off', '-', 'no', 'n', '0', '')) ? false : true;
+            } else {
+                $v = (boolean) $v;
+            }
         }
 
         if ($this->is_show_cave !== $v) {
@@ -1077,6 +1136,27 @@ abstract class BaseCaves extends BaseObject implements Persistent
     } // setVolume()
 
     /**
+     * Set the value of [area] column.
+     *
+     * @param  int $v new value
+     * @return Caves The current object (for fluent API support)
+     */
+    public function setArea($v)
+    {
+        if ($v !== null && is_numeric($v)) {
+            $v = (int) $v;
+        }
+
+        if ($this->area !== $v) {
+            $this->area = $v;
+            $this->modifiedColumns[] = CavesPeer::AREA;
+        }
+
+
+        return $this;
+    } // setArea()
+
+    /**
      * Set the value of [positive_depth] column.
      *
      * @param  int $v new value
@@ -1266,6 +1346,48 @@ abstract class BaseCaves extends BaseObject implements Persistent
     } // setPotentialDepth()
 
     /**
+     * Set the value of [estimated_length] column.
+     *
+     * @param  int $v new value
+     * @return Caves The current object (for fluent API support)
+     */
+    public function setEstimatedLength($v)
+    {
+        if ($v !== null && is_numeric($v)) {
+            $v = (int) $v;
+        }
+
+        if ($this->estimated_length !== $v) {
+            $this->estimated_length = $v;
+            $this->modifiedColumns[] = CavesPeer::ESTIMATED_LENGTH;
+        }
+
+
+        return $this;
+    } // setEstimatedLength()
+
+    /**
+     * Set the value of [altitude] column.
+     *
+     * @param  int $v new value
+     * @return Caves The current object (for fluent API support)
+     */
+    public function setAltitude($v)
+    {
+        if ($v !== null && is_numeric($v)) {
+            $v = (int) $v;
+        }
+
+        if ($this->altitude !== $v) {
+            $this->altitude = $v;
+            $this->modifiedColumns[] = CavesPeer::ALTITUDE;
+        }
+
+
+        return $this;
+    } // setAltitude()
+
+    /**
      * Indicates whether the columns in this object are only set to default values.
      *
      * This method can be used in conjunction with isModified() to indicate whether an object is both
@@ -1310,7 +1432,7 @@ abstract class BaseCaves extends BaseObject implements Persistent
             $this->valley = ($row[$startcol + 10] !== null) ? (string) $row[$startcol + 10] : null;
             $this->tributary_river = ($row[$startcol + 11] !== null) ? (string) $row[$startcol + 11] : null;
             $this->closest_address = ($row[$startcol + 12] !== null) ? (string) $row[$startcol + 12] : null;
-            $this->is_show_cave = ($row[$startcol + 13] !== null) ? (string) $row[$startcol + 13] : null;
+            $this->is_show_cave = ($row[$startcol + 13] !== null) ? (boolean) $row[$startcol + 13] : null;
             $this->show_cave_length = ($row[$startcol + 14] !== null) ? (int) $row[$startcol + 14] : null;
             $this->website = ($row[$startcol + 15] !== null) ? (string) $row[$startcol + 15] : null;
             $this->land_registry_number = ($row[$startcol + 16] !== null) ? (string) $row[$startcol + 16] : null;
@@ -1320,15 +1442,18 @@ abstract class BaseCaves extends BaseObject implements Persistent
             $this->discovery_date = ($row[$startcol + 20] !== null) ? (string) $row[$startcol + 20] : null;
             $this->discoverer = ($row[$startcol + 21] !== null) ? (string) $row[$startcol + 21] : null;
             $this->volume = ($row[$startcol + 22] !== null) ? (int) $row[$startcol + 22] : null;
-            $this->positive_depth = ($row[$startcol + 23] !== null) ? (int) $row[$startcol + 23] : null;
-            $this->negative_depth = ($row[$startcol + 24] !== null) ? (int) $row[$startcol + 24] : null;
-            $this->ramification_index = ($row[$startcol + 25] !== null) ? (int) $row[$startcol + 25] : null;
-            $this->real_extension = ($row[$startcol + 26] !== null) ? (int) $row[$startcol + 26] : null;
-            $this->cave_age = ($row[$startcol + 27] !== null) ? (int) $row[$startcol + 27] : null;
-            $this->projected_extension = ($row[$startcol + 28] !== null) ? (int) $row[$startcol + 28] : null;
-            $this->exploration_status = ($row[$startcol + 29] !== null) ? (string) $row[$startcol + 29] : null;
-            $this->protection_class = ($row[$startcol + 30] !== null) ? (string) $row[$startcol + 30] : null;
-            $this->potential_depth = ($row[$startcol + 31] !== null) ? (int) $row[$startcol + 31] : null;
+            $this->area = ($row[$startcol + 23] !== null) ? (int) $row[$startcol + 23] : null;
+            $this->positive_depth = ($row[$startcol + 24] !== null) ? (int) $row[$startcol + 24] : null;
+            $this->negative_depth = ($row[$startcol + 25] !== null) ? (int) $row[$startcol + 25] : null;
+            $this->ramification_index = ($row[$startcol + 26] !== null) ? (int) $row[$startcol + 26] : null;
+            $this->real_extension = ($row[$startcol + 27] !== null) ? (int) $row[$startcol + 27] : null;
+            $this->cave_age = ($row[$startcol + 28] !== null) ? (int) $row[$startcol + 28] : null;
+            $this->projected_extension = ($row[$startcol + 29] !== null) ? (int) $row[$startcol + 29] : null;
+            $this->exploration_status = ($row[$startcol + 30] !== null) ? (string) $row[$startcol + 30] : null;
+            $this->protection_class = ($row[$startcol + 31] !== null) ? (string) $row[$startcol + 31] : null;
+            $this->potential_depth = ($row[$startcol + 32] !== null) ? (int) $row[$startcol + 32] : null;
+            $this->estimated_length = ($row[$startcol + 33] !== null) ? (int) $row[$startcol + 33] : null;
+            $this->altitude = ($row[$startcol + 34] !== null) ? (int) $row[$startcol + 34] : null;
             $this->resetModified();
 
             $this->setNew(false);
@@ -1338,7 +1463,7 @@ abstract class BaseCaves extends BaseObject implements Persistent
             }
             $this->postHydrate($row, $startcol, $rehydrate);
 
-            return $startcol + 32; // 32 = CavesPeer::NUM_HYDRATE_COLUMNS.
+            return $startcol + 35; // 35 = CavesPeer::NUM_HYDRATE_COLUMNS.
 
         } catch (Exception $e) {
             throw new PropelException("Error populating Caves object", $e);
@@ -1619,6 +1744,9 @@ abstract class BaseCaves extends BaseObject implements Persistent
         if ($this->isColumnModified(CavesPeer::VOLUME)) {
             $modifiedColumns[':p' . $index++]  = '`volume`';
         }
+        if ($this->isColumnModified(CavesPeer::AREA)) {
+            $modifiedColumns[':p' . $index++]  = '`area`';
+        }
         if ($this->isColumnModified(CavesPeer::POSITIVE_DEPTH)) {
             $modifiedColumns[':p' . $index++]  = '`positive_depth`';
         }
@@ -1645,6 +1773,12 @@ abstract class BaseCaves extends BaseObject implements Persistent
         }
         if ($this->isColumnModified(CavesPeer::POTENTIAL_DEPTH)) {
             $modifiedColumns[':p' . $index++]  = '`potential_depth`';
+        }
+        if ($this->isColumnModified(CavesPeer::ESTIMATED_LENGTH)) {
+            $modifiedColumns[':p' . $index++]  = '`estimated_length`';
+        }
+        if ($this->isColumnModified(CavesPeer::ALTITUDE)) {
+            $modifiedColumns[':p' . $index++]  = '`altitude`';
         }
 
         $sql = sprintf(
@@ -1697,7 +1831,7 @@ abstract class BaseCaves extends BaseObject implements Persistent
                         $stmt->bindValue($identifier, $this->closest_address, PDO::PARAM_STR);
                         break;
                     case '`is_show_cave`':
-                        $stmt->bindValue($identifier, $this->is_show_cave, PDO::PARAM_STR);
+                        $stmt->bindValue($identifier, (int) $this->is_show_cave, PDO::PARAM_INT);
                         break;
                     case '`show_cave_length`':
                         $stmt->bindValue($identifier, $this->show_cave_length, PDO::PARAM_INT);
@@ -1726,6 +1860,9 @@ abstract class BaseCaves extends BaseObject implements Persistent
                     case '`volume`':
                         $stmt->bindValue($identifier, $this->volume, PDO::PARAM_INT);
                         break;
+                    case '`area`':
+                        $stmt->bindValue($identifier, $this->area, PDO::PARAM_INT);
+                        break;
                     case '`positive_depth`':
                         $stmt->bindValue($identifier, $this->positive_depth, PDO::PARAM_INT);
                         break;
@@ -1752,6 +1889,12 @@ abstract class BaseCaves extends BaseObject implements Persistent
                         break;
                     case '`potential_depth`':
                         $stmt->bindValue($identifier, $this->potential_depth, PDO::PARAM_INT);
+                        break;
+                    case '`estimated_length`':
+                        $stmt->bindValue($identifier, $this->estimated_length, PDO::PARAM_INT);
+                        break;
+                    case '`altitude`':
+                        $stmt->bindValue($identifier, $this->altitude, PDO::PARAM_INT);
                         break;
                 }
             }
@@ -1957,31 +2100,40 @@ abstract class BaseCaves extends BaseObject implements Persistent
                 return $this->getVolume();
                 break;
             case 23:
-                return $this->getPositiveDepth();
+                return $this->getArea();
                 break;
             case 24:
-                return $this->getNegativeDepth();
+                return $this->getPositiveDepth();
                 break;
             case 25:
-                return $this->getRamificationIndex();
+                return $this->getNegativeDepth();
                 break;
             case 26:
-                return $this->getRealExtension();
+                return $this->getRamificationIndex();
                 break;
             case 27:
-                return $this->getCaveAge();
+                return $this->getRealExtension();
                 break;
             case 28:
-                return $this->getProjectedExtension();
+                return $this->getCaveAge();
                 break;
             case 29:
-                return $this->getExplorationStatus();
+                return $this->getProjectedExtension();
                 break;
             case 30:
-                return $this->getProtectionClass();
+                return $this->getExplorationStatus();
                 break;
             case 31:
+                return $this->getProtectionClass();
+                break;
+            case 32:
                 return $this->getPotentialDepth();
+                break;
+            case 33:
+                return $this->getEstimatedLength();
+                break;
+            case 34:
+                return $this->getAltitude();
                 break;
             default:
                 return null;
@@ -2034,15 +2186,18 @@ abstract class BaseCaves extends BaseObject implements Persistent
             $keys[20] => $this->getDiscoveryDate(),
             $keys[21] => $this->getDiscoverer(),
             $keys[22] => $this->getVolume(),
-            $keys[23] => $this->getPositiveDepth(),
-            $keys[24] => $this->getNegativeDepth(),
-            $keys[25] => $this->getRamificationIndex(),
-            $keys[26] => $this->getRealExtension(),
-            $keys[27] => $this->getCaveAge(),
-            $keys[28] => $this->getProjectedExtension(),
-            $keys[29] => $this->getExplorationStatus(),
-            $keys[30] => $this->getProtectionClass(),
-            $keys[31] => $this->getPotentialDepth(),
+            $keys[23] => $this->getArea(),
+            $keys[24] => $this->getPositiveDepth(),
+            $keys[25] => $this->getNegativeDepth(),
+            $keys[26] => $this->getRamificationIndex(),
+            $keys[27] => $this->getRealExtension(),
+            $keys[28] => $this->getCaveAge(),
+            $keys[29] => $this->getProjectedExtension(),
+            $keys[30] => $this->getExplorationStatus(),
+            $keys[31] => $this->getProtectionClass(),
+            $keys[32] => $this->getPotentialDepth(),
+            $keys[33] => $this->getEstimatedLength(),
+            $keys[34] => $this->getAltitude(),
         );
         $virtualColumns = $this->virtualColumns;
         foreach ($virtualColumns as $key => $virtualColumn) {
@@ -2152,31 +2307,40 @@ abstract class BaseCaves extends BaseObject implements Persistent
                 $this->setVolume($value);
                 break;
             case 23:
-                $this->setPositiveDepth($value);
+                $this->setArea($value);
                 break;
             case 24:
-                $this->setNegativeDepth($value);
+                $this->setPositiveDepth($value);
                 break;
             case 25:
-                $this->setRamificationIndex($value);
+                $this->setNegativeDepth($value);
                 break;
             case 26:
-                $this->setRealExtension($value);
+                $this->setRamificationIndex($value);
                 break;
             case 27:
-                $this->setCaveAge($value);
+                $this->setRealExtension($value);
                 break;
             case 28:
-                $this->setProjectedExtension($value);
+                $this->setCaveAge($value);
                 break;
             case 29:
-                $this->setExplorationStatus($value);
+                $this->setProjectedExtension($value);
                 break;
             case 30:
-                $this->setProtectionClass($value);
+                $this->setExplorationStatus($value);
                 break;
             case 31:
+                $this->setProtectionClass($value);
+                break;
+            case 32:
                 $this->setPotentialDepth($value);
+                break;
+            case 33:
+                $this->setEstimatedLength($value);
+                break;
+            case 34:
+                $this->setAltitude($value);
                 break;
         } // switch()
     }
@@ -2225,15 +2389,18 @@ abstract class BaseCaves extends BaseObject implements Persistent
         if (array_key_exists($keys[20], $arr)) $this->setDiscoveryDate($arr[$keys[20]]);
         if (array_key_exists($keys[21], $arr)) $this->setDiscoverer($arr[$keys[21]]);
         if (array_key_exists($keys[22], $arr)) $this->setVolume($arr[$keys[22]]);
-        if (array_key_exists($keys[23], $arr)) $this->setPositiveDepth($arr[$keys[23]]);
-        if (array_key_exists($keys[24], $arr)) $this->setNegativeDepth($arr[$keys[24]]);
-        if (array_key_exists($keys[25], $arr)) $this->setRamificationIndex($arr[$keys[25]]);
-        if (array_key_exists($keys[26], $arr)) $this->setRealExtension($arr[$keys[26]]);
-        if (array_key_exists($keys[27], $arr)) $this->setCaveAge($arr[$keys[27]]);
-        if (array_key_exists($keys[28], $arr)) $this->setProjectedExtension($arr[$keys[28]]);
-        if (array_key_exists($keys[29], $arr)) $this->setExplorationStatus($arr[$keys[29]]);
-        if (array_key_exists($keys[30], $arr)) $this->setProtectionClass($arr[$keys[30]]);
-        if (array_key_exists($keys[31], $arr)) $this->setPotentialDepth($arr[$keys[31]]);
+        if (array_key_exists($keys[23], $arr)) $this->setArea($arr[$keys[23]]);
+        if (array_key_exists($keys[24], $arr)) $this->setPositiveDepth($arr[$keys[24]]);
+        if (array_key_exists($keys[25], $arr)) $this->setNegativeDepth($arr[$keys[25]]);
+        if (array_key_exists($keys[26], $arr)) $this->setRamificationIndex($arr[$keys[26]]);
+        if (array_key_exists($keys[27], $arr)) $this->setRealExtension($arr[$keys[27]]);
+        if (array_key_exists($keys[28], $arr)) $this->setCaveAge($arr[$keys[28]]);
+        if (array_key_exists($keys[29], $arr)) $this->setProjectedExtension($arr[$keys[29]]);
+        if (array_key_exists($keys[30], $arr)) $this->setExplorationStatus($arr[$keys[30]]);
+        if (array_key_exists($keys[31], $arr)) $this->setProtectionClass($arr[$keys[31]]);
+        if (array_key_exists($keys[32], $arr)) $this->setPotentialDepth($arr[$keys[32]]);
+        if (array_key_exists($keys[33], $arr)) $this->setEstimatedLength($arr[$keys[33]]);
+        if (array_key_exists($keys[34], $arr)) $this->setAltitude($arr[$keys[34]]);
     }
 
     /**
@@ -2268,6 +2435,7 @@ abstract class BaseCaves extends BaseObject implements Persistent
         if ($this->isColumnModified(CavesPeer::DISCOVERY_DATE)) $criteria->add(CavesPeer::DISCOVERY_DATE, $this->discovery_date);
         if ($this->isColumnModified(CavesPeer::DISCOVERER)) $criteria->add(CavesPeer::DISCOVERER, $this->discoverer);
         if ($this->isColumnModified(CavesPeer::VOLUME)) $criteria->add(CavesPeer::VOLUME, $this->volume);
+        if ($this->isColumnModified(CavesPeer::AREA)) $criteria->add(CavesPeer::AREA, $this->area);
         if ($this->isColumnModified(CavesPeer::POSITIVE_DEPTH)) $criteria->add(CavesPeer::POSITIVE_DEPTH, $this->positive_depth);
         if ($this->isColumnModified(CavesPeer::NEGATIVE_DEPTH)) $criteria->add(CavesPeer::NEGATIVE_DEPTH, $this->negative_depth);
         if ($this->isColumnModified(CavesPeer::RAMIFICATION_INDEX)) $criteria->add(CavesPeer::RAMIFICATION_INDEX, $this->ramification_index);
@@ -2277,6 +2445,8 @@ abstract class BaseCaves extends BaseObject implements Persistent
         if ($this->isColumnModified(CavesPeer::EXPLORATION_STATUS)) $criteria->add(CavesPeer::EXPLORATION_STATUS, $this->exploration_status);
         if ($this->isColumnModified(CavesPeer::PROTECTION_CLASS)) $criteria->add(CavesPeer::PROTECTION_CLASS, $this->protection_class);
         if ($this->isColumnModified(CavesPeer::POTENTIAL_DEPTH)) $criteria->add(CavesPeer::POTENTIAL_DEPTH, $this->potential_depth);
+        if ($this->isColumnModified(CavesPeer::ESTIMATED_LENGTH)) $criteria->add(CavesPeer::ESTIMATED_LENGTH, $this->estimated_length);
+        if ($this->isColumnModified(CavesPeer::ALTITUDE)) $criteria->add(CavesPeer::ALTITUDE, $this->altitude);
 
         return $criteria;
     }
@@ -2362,6 +2532,7 @@ abstract class BaseCaves extends BaseObject implements Persistent
         $copyObj->setDiscoveryDate($this->getDiscoveryDate());
         $copyObj->setDiscoverer($this->getDiscoverer());
         $copyObj->setVolume($this->getVolume());
+        $copyObj->setArea($this->getArea());
         $copyObj->setPositiveDepth($this->getPositiveDepth());
         $copyObj->setNegativeDepth($this->getNegativeDepth());
         $copyObj->setRamificationIndex($this->getRamificationIndex());
@@ -2371,6 +2542,8 @@ abstract class BaseCaves extends BaseObject implements Persistent
         $copyObj->setExplorationStatus($this->getExplorationStatus());
         $copyObj->setProtectionClass($this->getProtectionClass());
         $copyObj->setPotentialDepth($this->getPotentialDepth());
+        $copyObj->setEstimatedLength($this->getEstimatedLength());
+        $copyObj->setAltitude($this->getAltitude());
         if ($makeNew) {
             $copyObj->setNew(true);
             $copyObj->setId(NULL); // this is a auto-increment column, so set to default value
@@ -2445,6 +2618,7 @@ abstract class BaseCaves extends BaseObject implements Persistent
         $this->discovery_date = null;
         $this->discoverer = null;
         $this->volume = null;
+        $this->area = null;
         $this->positive_depth = null;
         $this->negative_depth = null;
         $this->ramification_index = null;
@@ -2454,6 +2628,8 @@ abstract class BaseCaves extends BaseObject implements Persistent
         $this->exploration_status = null;
         $this->protection_class = null;
         $this->potential_depth = null;
+        $this->estimated_length = null;
+        $this->altitude = null;
         $this->alreadyInSave = false;
         $this->alreadyInValidation = false;
         $this->alreadyInClearAllReferencesDeep = false;

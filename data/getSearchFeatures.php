@@ -7,22 +7,24 @@
 	$submitData = file_get_contents('php://input'); // $HTTP_RAW_POST_DATA
 	@file_put_contents(basename(__FILE__, '.php')."_input_data.log", $submitData); // file_get_contents('php://input')
 		
-	$text =  $_GET["q"]; //$text = $_POST["q"];
-	
+	$text =  $_GET["q"];
+	$type =  @$_GET["type"];
+	$return_orphans =  @$_GET["orphans"];	
 	//header('Content-Type: application/json');
 	
 	if (empty($text)) // alternate JSON request
 	{
-	$searchDetails = json_decode($submitData);
-	//$cave->importFrom('JSON', $submitData);	
-	
-	$text = $searchDetails->text;
+		$searchDetails = json_decode($submitData);
+		//$cave->importFrom('JSON', $submitData);
+		
+		$text = $searchDetails->text;
+		$type =	$searchDetails->type;
 	}
 	
 	$_user_id = $_SESSION["id_user"];
-
+	
 	/*if (!GPSData::user_has_modify_right($_user_id, -1))
-	{	
+	{
 		echo "Access not granted";
 		exit;
 	}*/
@@ -32,108 +34,141 @@
 	
 	$results = array();
 	
-	$caves = CavesQuery::create()->filterByName("%".$text."%")->find();
-	
-	foreach ($caves as $cave)
+	if (empty($type) || ($type == "caves"))
 	{
-		//-- should filter by main cave entrance and use ->find() instead of ->findOne()
-		$caveEntrance = CaveEntrancesQuery::create()->filterByCaveid($cave->getId())->findOne(); 
+		$caves = CavesQuery::create()->filterByName("%".$text."%")->find();
 		
-		$mainEntrance = null;
-		$main_entrance_point_db_id = null;
-		
-		if (!empty($caveEntrance))
+		foreach ($caves as $cave)
 		{
-			$mainEntrance = $caveEntrance;			
-			$main_entrance_db_id = $mainEntrance->getId();
+			//-- should filter by main cave entrance and use ->find() instead of ->findOne()
+			$caveEntrance = CaveEntrancesQuery::create()->filterByCaveid($cave->getId())->findOne();
 			
-			$main_entrance_point_db_id = $mainEntrance->getPointid();
-			//$caveEntrance = PointsQuery::create()->filterByCaveid($cave->getId())->findOne(); 
+			$mainEntrance = null;
+			$main_entrance_point_db_id = null;
 			
-			$main_entrance_point = PointsQuery::create()->filterById($main_entrance_point_db_id)->findOne(); 
-			
-			$wkb = $main_entrance_point->getSpatialgeometry();
-			
-			//var_dump(bin2hex($wkb));
-			//$unpacked = unpack('H*', $wkb);
-			// var_dump($unpacked);
-			//-- bit order apparently differs between x86 and x64: http://php.net/manual/ro/function.unpack.php#106041
-			//var_dump($wkb);
-			
-			$geometry = unpack('Lpadding/corder/Lgtype/dlatitude/dlongitude', $wkb);			
-			//var_dump($geometry);
-						
-			$wkt = 0;
-			$latitude = null;
-			$longitude = null;
-			
-			if ($geometry['gtype'] == 1) {
-				$latitude = $geometry['latitude'];
-				$longitude = $geometry['longitude'];			
+			if (!empty($caveEntrance))
+			{
+				$mainEntrance = $caveEntrance;
+				$main_entrance_db_id = $mainEntrance->getId();
 				
-				$wkt = "POINT($latitude $longitude)";
-			}
-			else
-				throw new Exception("not supported geometry type for wkb->wkt conversion");
-			
-			
-			//var_dump($main_entrance_point->getSpatialgeometry());			
-			//wkt_to_json($wkt);
-		//}
-		
-		$cave_result = (object) [
-			'id' => $cave->getId(),
-			'name' => $cave->getName(),
-			'res_type' => 'cave',
-			'point_db_id' => $main_entrance_point_db_id,
-			'c_lat' => $latitude,
-			'c_lon' => $longitude,
-			
-			//main_entrance_point_db_id
-			//'point_id'
-		];
-		
-		$results[] = $cave_result;
-		}
-	};
-	
-	$features = FeaturesQuery::create()->filterByName("%".$text."%")->find();
+				$main_entrance_point_db_id = $mainEntrance->getPointId();
+				
+				//$caveEntrance = PointsQuery::create()->filterByCaveid($cave->getId())->findOne(); 
+				
+				$main_entrance_point = PointsQuery::create()->filterById($main_entrance_point_db_id)->findOne();
+				
+				if (empty($main_entrance_point))
+					throw new Exception("main_entrance_point is empty");
 
-	foreach ($features as $feature)
-	{	
-		//-- should filter by main cave entrance and use ->find() instead of ->findOne()
-		//$caveEntrance = FeaturesQuery::create()->filterByFeatureid($cave->getId())->findOne(); 
+				$wkb = $main_entrance_point->getSpatialgeometry();
 				
-		$feature_result = (object) [
-			'id' => "f_"+$feature->getId(),
-			'name' => $feature->getName(),
-			'res_type' => 'feature',
-			'point_db_id' => $feature->getPointid(),
-			//main_entrance_point_db_id
-			//'point_id'
-		];
-		
-		$results[] = $feature_result;
-	};
+				//var_dump(bin2hex($wkb));
+				//$unpacked = unpack('H*', $wkb);
+				// var_dump($unpacked);
+				//-- bit order apparently differs between x86 and x64: http://php.net/manual/ro/function.unpack.php#106041
+				//var_dump($wkb);
+				
+				$geometry = unpack('Lpadding/corder/Lgtype/dlatitude/dlongitude', $wkb);
+				//var_dump($geometry);
+							
+				$wkt = 0;
+				$latitude = null;
+				$longitude = null;
+				
+				if ($geometry['gtype'] == 1) {
+					$latitude = $geometry['latitude'];
+					$longitude = $geometry['longitude'];			
+					
+					$wkt = "POINT($latitude $longitude)";
+				}
+				else
+					throw new Exception("not supported geometry type for wkb->wkt conversion");
+				
+				
+				//var_dump($main_entrance_point->getSpatialgeometry());			
+				//wkt_to_json($wkt);
+			//}
+			
+			$cave_result = (object) [
+				'id' => $cave->getId(),
+				'name' => $cave->getName(),
+				'res_type' => 'cave',
+				'point_db_id' => $main_entrance_point_db_id,
+				'c_lat' => $latitude,
+				'c_lon' => $longitude,
+				
+				//main_entrance_point_db_id
+				//'point_id'
+			];
+			
+			$results[] = $cave_result;
+			}
+			else // if there is no cave entrance associated = probably the main entrance was associated to another cave
+			{
+				if (!empty($return_orphans))
+				{
+					$cave_result = (object) [
+						'id' => $cave->getId(),
+						'name' => $cave->getName(),
+						'res_type' => 'cave',
+						// 'point_db_id' => $main_entrance_point_db_id,
+						// 'c_lat' => $latitude,
+						// 'c_lon' => $longitude,
+						
+						//main_entrance_point_db_id
+						//'point_id'
+					];	
+					
+					$results[] = $cave_result;
+				}
+			}
+		};
+	}
 	
-	$points = PointsQuery::create()->filterByGpxname("%".$text."%")->find();
-	//$points = get_gps_points_by_text
-	foreach ($points as $point)
-	{	
-		//-- should filter by main cave entrance and use ->find() instead of ->findOne()
-		//$caveEntrance = FeaturesQuery::create()->filterByFeatureid($cave->getId())->findOne(); 
-				
-		$point_result = (object) [
-			'id' => "f_"+$point->getId(),
-			'name' => $point->getGpxname(),
-			'res_type' => 'point',
-			'point_db_id' => $point->getId(),
-			//main_entrance_point_db_id
-			//'point_id'
-		];
-		
-		$results[] = $point_result;
-	};
+	
+	if (empty($type) || ($type == "features"))
+	{
+		$features = FeaturesQuery::create()->filterByName("%".$text."%")->find();
+
+		foreach ($features as $feature)
+		{	
+			//-- should filter by main cave entrance and use ->find() instead of ->findOne()
+			//$caveEntrance = FeaturesQuery::create()->filterByFeatureid($cave->getId())->findOne(); 
+					
+			$feature_result = (object) [
+				'id' => "f_"+$feature->getId(),
+				'name' => $feature->getName(),
+				'res_type' => 'feature',
+				'point_db_id' => $feature->getPointid(),
+				//main_entrance_point_db_id
+				//'point_id'
+			];
+			
+			$results[] = $feature_result;
+		};
+	}
+
+	if (empty($type) || ($type == "points"))
+	{
+		$points = PointsQuery::create()->filterByGpxname("%".$text."%")->find();
+		//$points = get_gps_points_by_text
+		foreach ($points as $point)
+		{	
+			//-- should filter by main cave entrance and use ->find() instead of ->findOne()
+			//$caveEntrance = FeaturesQuery::create()->filterByFeatureid($cave->getId())->findOne(); 
+					
+			$point_result = (object) [
+				'id' => "f_"+$point->getId(),
+				'name' => $point->getGpxname(),
+				'res_type' => 'point',
+				'point_db_id' => $point->getId(),
+				//main_entrance_point_db_id
+				//'point_id'
+			];
+			
+			$results[] = $point_result;
+		};
+	}
 	
 	echo json_encode($results);
 	//echo "201";

@@ -6,5 +6,8 @@
 	
 	$caveEntrance = CaveEntrancesQuery::create()->findPK($cave_entrance_id);
 
+	$cave = CavesQuery::create()->findPK($caveEntrance->getCaveId());
+	$caveEntrance->setVirtualColumn('CaveName', $cave->getName());
+
 	echo $caveEntrance->toJSON();
 ?>

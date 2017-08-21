@@ -35,7 +35,7 @@
  * @method CaveEntrances findOneByPointId(string $point_id) Return the first CaveEntrances filtered by the point_id column
  * @method CaveEntrances findOneByEntrancetype(string $entranceType) Return the first CaveEntrances filtered by the entranceType column
  * @method CaveEntrances findOneByDescription(string $description) Return the first CaveEntrances filtered by the description column
- * @method CaveEntrances findOneByIsMainEntrance(string $is_main_entrance) Return the first CaveEntrances filtered by the is_main_entrance column
+ * @method CaveEntrances findOneByIsMainEntrance(boolean $is_main_entrance) Return the first CaveEntrances filtered by the is_main_entrance column
  * @method CaveEntrances findOneByHydrologicType(string $hydrologic_type) Return the first CaveEntrances filtered by the hydrologic_type column
  * @method CaveEntrances findOneByCaveId(string $cave_id) Return the first CaveEntrances filtered by the cave_id column
  *
@@ -44,7 +44,7 @@
  * @method array findByPointId(string $point_id) Return CaveEntrances objects filtered by the point_id column
  * @method array findByEntrancetype(string $entranceType) Return CaveEntrances objects filtered by the entranceType column
  * @method array findByDescription(string $description) Return CaveEntrances objects filtered by the description column
- * @method array findByIsMainEntrance(string $is_main_entrance) Return CaveEntrances objects filtered by the is_main_entrance column
+ * @method array findByIsMainEntrance(boolean $is_main_entrance) Return CaveEntrances objects filtered by the is_main_entrance column
  * @method array findByHydrologicType(string $hydrologic_type) Return CaveEntrances objects filtered by the hydrologic_type column
  * @method array findByCaveId(string $cave_id) Return CaveEntrances objects filtered by the cave_id column
  *
@@ -432,25 +432,23 @@ abstract class BaseCaveEntrancesQuery extends ModelCriteria
      *
      * Example usage:
      * <code>
-     * $query->filterByIsMainEntrance('fooValue');   // WHERE is_main_entrance = 'fooValue'
-     * $query->filterByIsMainEntrance('%fooValue%'); // WHERE is_main_entrance LIKE '%fooValue%'
+     * $query->filterByIsMainEntrance(true); // WHERE is_main_entrance = true
+     * $query->filterByIsMainEntrance('yes'); // WHERE is_main_entrance = true
      * </code>
      *
-     * @param     string $isMainEntrance The value to use as filter.
-     *              Accepts wildcards (* and % trigger a LIKE)
+     * @param     boolean|string $isMainEntrance The value to use as filter.
+     *              Non-boolean arguments are converted using the following rules:
+     *                * 1, '1', 'true',  'on',  and 'yes' are converted to boolean true
+     *                * 0, '0', 'false', 'off', and 'no'  are converted to boolean false
+     *              Check on string values is case insensitive (so 'FaLsE' is seen as 'false').
      * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
      *
      * @return CaveEntrancesQuery The current query, for fluid interface
      */
     public function filterByIsMainEntrance($isMainEntrance = null, $comparison = null)
     {
-        if (null === $comparison) {
-            if (is_array($isMainEntrance)) {
-                $comparison = Criteria::IN;
-            } elseif (preg_match('/[\%\*]/', $isMainEntrance)) {
-                $isMainEntrance = str_replace('*', '%', $isMainEntrance);
-                $comparison = Criteria::LIKE;
-            }
+        if (is_string($isMainEntrance)) {
+            $isMainEntrance = in_array(strtolower($isMainEntrance), array('false', 'off', '-', 'no', 'n', '0', '')) ? false : true;
         }
 
         return $this->addUsingAlias(CaveEntrancesPeer::IS_MAIN_ENTRANCE, $isMainEntrance, $comparison);

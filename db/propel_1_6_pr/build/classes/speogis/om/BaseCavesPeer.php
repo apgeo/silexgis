@@ -24,13 +24,13 @@ abstract class BaseCavesPeer
     const TM_CLASS = 'CavesTableMap';
 
     /** The total number of columns. */
-    const NUM_COLUMNS = 32;
+    const NUM_COLUMNS = 35;
 
     /** The number of lazy-loaded columns. */
     const NUM_LAZY_LOAD_COLUMNS = 0;
 
     /** The number of columns to hydrate (NUM_COLUMNS - NUM_LAZY_LOAD_COLUMNS) */
-    const NUM_HYDRATE_COLUMNS = 32;
+    const NUM_HYDRATE_COLUMNS = 35;
 
     /** the column name for the id field */
     const ID = 'caves.id';
@@ -101,6 +101,9 @@ abstract class BaseCavesPeer
     /** the column name for the volume field */
     const VOLUME = 'caves.volume';
 
+    /** the column name for the area field */
+    const AREA = 'caves.area';
+
     /** the column name for the positive_depth field */
     const POSITIVE_DEPTH = 'caves.positive_depth';
 
@@ -128,6 +131,12 @@ abstract class BaseCavesPeer
     /** the column name for the potential_depth field */
     const POTENTIAL_DEPTH = 'caves.potential_depth';
 
+    /** the column name for the estimated_length field */
+    const ESTIMATED_LENGTH = 'caves.estimated_length';
+
+    /** the column name for the altitude field */
+    const ALTITUDE = 'caves.altitude';
+
     /** The enumerated values for the exploration_status field */
     const EXPLORATION_STATUS_UNKNOWN = 'Unknown';
     const EXPLORATION_STATUS_NOT_EXPLORED = 'Not explored';
@@ -153,12 +162,12 @@ abstract class BaseCavesPeer
      * e.g. CavesPeer::$fieldNames[CavesPeer::TYPE_PHPNAME][0] = 'Id'
      */
     protected static $fieldNames = array (
-        BasePeer::TYPE_PHPNAME => array ('Id', 'Name', 'TypeId', 'IdentificationCode', 'Description', 'UserId', 'OtherToponyms', 'RockTypeId', 'RockAge', 'HydrographicBasin', 'Valley', 'TributaryRiver', 'ClosestAddress', 'IsShowCave', 'ShowCaveLength', 'Website', 'LandRegistryNumber', 'Region', 'Depth', 'SurveyedLength', 'DiscoveryDate', 'Discoverer', 'Volume', 'PositiveDepth', 'NegativeDepth', 'RamificationIndex', 'RealExtension', 'CaveAge', 'ProjectedExtension', 'ExplorationStatus', 'ProtectionClass', 'PotentialDepth', ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'name', 'typeId', 'identificationCode', 'description', 'userId', 'otherToponyms', 'rockTypeId', 'rockAge', 'hydrographicBasin', 'valley', 'tributaryRiver', 'closestAddress', 'isShowCave', 'showCaveLength', 'website', 'landRegistryNumber', 'region', 'depth', 'surveyedLength', 'discoveryDate', 'discoverer', 'volume', 'positiveDepth', 'negativeDepth', 'ramificationIndex', 'realExtension', 'caveAge', 'projectedExtension', 'explorationStatus', 'protectionClass', 'potentialDepth', ),
-        BasePeer::TYPE_COLNAME => array (CavesPeer::ID, CavesPeer::NAME, CavesPeer::TYPE_ID, CavesPeer::IDENTIFICATION_CODE, CavesPeer::DESCRIPTION, CavesPeer::USER_ID, CavesPeer::OTHER_TOPONYMS, CavesPeer::ROCK_TYPE_ID, CavesPeer::ROCK_AGE, CavesPeer::HYDROGRAPHIC_BASIN, CavesPeer::VALLEY, CavesPeer::TRIBUTARY_RIVER, CavesPeer::CLOSEST_ADDRESS, CavesPeer::IS_SHOW_CAVE, CavesPeer::SHOW_CAVE_LENGTH, CavesPeer::WEBSITE, CavesPeer::LAND_REGISTRY_NUMBER, CavesPeer::REGION, CavesPeer::DEPTH, CavesPeer::SURVEYED_LENGTH, CavesPeer::DISCOVERY_DATE, CavesPeer::DISCOVERER, CavesPeer::VOLUME, CavesPeer::POSITIVE_DEPTH, CavesPeer::NEGATIVE_DEPTH, CavesPeer::RAMIFICATION_INDEX, CavesPeer::REAL_EXTENSION, CavesPeer::CAVE_AGE, CavesPeer::PROJECTED_EXTENSION, CavesPeer::EXPLORATION_STATUS, CavesPeer::PROTECTION_CLASS, CavesPeer::POTENTIAL_DEPTH, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'NAME', 'TYPE_ID', 'IDENTIFICATION_CODE', 'DESCRIPTION', 'USER_ID', 'OTHER_TOPONYMS', 'ROCK_TYPE_ID', 'ROCK_AGE', 'HYDROGRAPHIC_BASIN', 'VALLEY', 'TRIBUTARY_RIVER', 'CLOSEST_ADDRESS', 'IS_SHOW_CAVE', 'SHOW_CAVE_LENGTH', 'WEBSITE', 'LAND_REGISTRY_NUMBER', 'REGION', 'DEPTH', 'SURVEYED_LENGTH', 'DISCOVERY_DATE', 'DISCOVERER', 'VOLUME', 'POSITIVE_DEPTH', 'NEGATIVE_DEPTH', 'RAMIFICATION_INDEX', 'REAL_EXTENSION', 'CAVE_AGE', 'PROJECTED_EXTENSION', 'EXPLORATION_STATUS', 'PROTECTION_CLASS', 'POTENTIAL_DEPTH', ),
-        BasePeer::TYPE_FIELDNAME => array ('id', 'name', 'type_id', 'identification_code', 'description', 'user_id', 'other_toponyms', 'rock_type_id', 'rock_age', 'hydrographic_basin', 'valley', 'tributary_river', 'closest_address', 'is_show_cave', 'show_cave_length', 'website', 'land_registry_number', 'region', 'depth', 'surveyed_length', 'discovery_date', 'discoverer', 'volume', 'positive_depth', 'negative_depth', 'ramification_index', 'real_extension', 'cave_age', 'projected_extension', 'exploration_status', 'protection_class', 'potential_depth', ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, )
+        BasePeer::TYPE_PHPNAME => array ('Id', 'Name', 'TypeId', 'IdentificationCode', 'Description', 'UserId', 'OtherToponyms', 'RockTypeId', 'RockAge', 'HydrographicBasin', 'Valley', 'TributaryRiver', 'ClosestAddress', 'IsShowCave', 'ShowCaveLength', 'Website', 'LandRegistryNumber', 'Region', 'Depth', 'SurveyedLength', 'DiscoveryDate', 'Discoverer', 'Volume', 'Area', 'PositiveDepth', 'NegativeDepth', 'RamificationIndex', 'RealExtension', 'CaveAge', 'ProjectedExtension', 'ExplorationStatus', 'ProtectionClass', 'PotentialDepth', 'EstimatedLength', 'Altitude', ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'name', 'typeId', 'identificationCode', 'description', 'userId', 'otherToponyms', 'rockTypeId', 'rockAge', 'hydrographicBasin', 'valley', 'tributaryRiver', 'closestAddress', 'isShowCave', 'showCaveLength', 'website', 'landRegistryNumber', 'region', 'depth', 'surveyedLength', 'discoveryDate', 'discoverer', 'volume', 'area', 'positiveDepth', 'negativeDepth', 'ramificationIndex', 'realExtension', 'caveAge', 'projectedExtension', 'explorationStatus', 'protectionClass', 'potentialDepth', 'estimatedLength', 'altitude', ),
+        BasePeer::TYPE_COLNAME => array (CavesPeer::ID, CavesPeer::NAME, CavesPeer::TYPE_ID, CavesPeer::IDENTIFICATION_CODE, CavesPeer::DESCRIPTION, CavesPeer::USER_ID, CavesPeer::OTHER_TOPONYMS, CavesPeer::ROCK_TYPE_ID, CavesPeer::ROCK_AGE, CavesPeer::HYDROGRAPHIC_BASIN, CavesPeer::VALLEY, CavesPeer::TRIBUTARY_RIVER, CavesPeer::CLOSEST_ADDRESS, CavesPeer::IS_SHOW_CAVE, CavesPeer::SHOW_CAVE_LENGTH, CavesPeer::WEBSITE, CavesPeer::LAND_REGISTRY_NUMBER, CavesPeer::REGION, CavesPeer::DEPTH, CavesPeer::SURVEYED_LENGTH, CavesPeer::DISCOVERY_DATE, CavesPeer::DISCOVERER, CavesPeer::VOLUME, CavesPeer::AREA, CavesPeer::POSITIVE_DEPTH, CavesPeer::NEGATIVE_DEPTH, CavesPeer::RAMIFICATION_INDEX, CavesPeer::REAL_EXTENSION, CavesPeer::CAVE_AGE, CavesPeer::PROJECTED_EXTENSION, CavesPeer::EXPLORATION_STATUS, CavesPeer::PROTECTION_CLASS, CavesPeer::POTENTIAL_DEPTH, CavesPeer::ESTIMATED_LENGTH, CavesPeer::ALTITUDE, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'NAME', 'TYPE_ID', 'IDENTIFICATION_CODE', 'DESCRIPTION', 'USER_ID', 'OTHER_TOPONYMS', 'ROCK_TYPE_ID', 'ROCK_AGE', 'HYDROGRAPHIC_BASIN', 'VALLEY', 'TRIBUTARY_RIVER', 'CLOSEST_ADDRESS', 'IS_SHOW_CAVE', 'SHOW_CAVE_LENGTH', 'WEBSITE', 'LAND_REGISTRY_NUMBER', 'REGION', 'DEPTH', 'SURVEYED_LENGTH', 'DISCOVERY_DATE', 'DISCOVERER', 'VOLUME', 'AREA', 'POSITIVE_DEPTH', 'NEGATIVE_DEPTH', 'RAMIFICATION_INDEX', 'REAL_EXTENSION', 'CAVE_AGE', 'PROJECTED_EXTENSION', 'EXPLORATION_STATUS', 'PROTECTION_CLASS', 'POTENTIAL_DEPTH', 'ESTIMATED_LENGTH', 'ALTITUDE', ),
+        BasePeer::TYPE_FIELDNAME => array ('id', 'name', 'type_id', 'identification_code', 'description', 'user_id', 'other_toponyms', 'rock_type_id', 'rock_age', 'hydrographic_basin', 'valley', 'tributary_river', 'closest_address', 'is_show_cave', 'show_cave_length', 'website', 'land_registry_number', 'region', 'depth', 'surveyed_length', 'discovery_date', 'discoverer', 'volume', 'area', 'positive_depth', 'negative_depth', 'ramification_index', 'real_extension', 'cave_age', 'projected_extension', 'exploration_status', 'protection_class', 'potential_depth', 'estimated_length', 'altitude', ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, )
     );
 
     /**
@@ -168,12 +177,12 @@ abstract class BaseCavesPeer
      * e.g. CavesPeer::$fieldNames[BasePeer::TYPE_PHPNAME]['Id'] = 0
      */
     protected static $fieldKeys = array (
-        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'Name' => 1, 'TypeId' => 2, 'IdentificationCode' => 3, 'Description' => 4, 'UserId' => 5, 'OtherToponyms' => 6, 'RockTypeId' => 7, 'RockAge' => 8, 'HydrographicBasin' => 9, 'Valley' => 10, 'TributaryRiver' => 11, 'ClosestAddress' => 12, 'IsShowCave' => 13, 'ShowCaveLength' => 14, 'Website' => 15, 'LandRegistryNumber' => 16, 'Region' => 17, 'Depth' => 18, 'SurveyedLength' => 19, 'DiscoveryDate' => 20, 'Discoverer' => 21, 'Volume' => 22, 'PositiveDepth' => 23, 'NegativeDepth' => 24, 'RamificationIndex' => 25, 'RealExtension' => 26, 'CaveAge' => 27, 'ProjectedExtension' => 28, 'ExplorationStatus' => 29, 'ProtectionClass' => 30, 'PotentialDepth' => 31, ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'name' => 1, 'typeId' => 2, 'identificationCode' => 3, 'description' => 4, 'userId' => 5, 'otherToponyms' => 6, 'rockTypeId' => 7, 'rockAge' => 8, 'hydrographicBasin' => 9, 'valley' => 10, 'tributaryRiver' => 11, 'closestAddress' => 12, 'isShowCave' => 13, 'showCaveLength' => 14, 'website' => 15, 'landRegistryNumber' => 16, 'region' => 17, 'depth' => 18, 'surveyedLength' => 19, 'discoveryDate' => 20, 'discoverer' => 21, 'volume' => 22, 'positiveDepth' => 23, 'negativeDepth' => 24, 'ramificationIndex' => 25, 'realExtension' => 26, 'caveAge' => 27, 'projectedExtension' => 28, 'explorationStatus' => 29, 'protectionClass' => 30, 'potentialDepth' => 31, ),
-        BasePeer::TYPE_COLNAME => array (CavesPeer::ID => 0, CavesPeer::NAME => 1, CavesPeer::TYPE_ID => 2, CavesPeer::IDENTIFICATION_CODE => 3, CavesPeer::DESCRIPTION => 4, CavesPeer::USER_ID => 5, CavesPeer::OTHER_TOPONYMS => 6, CavesPeer::ROCK_TYPE_ID => 7, CavesPeer::ROCK_AGE => 8, CavesPeer::HYDROGRAPHIC_BASIN => 9, CavesPeer::VALLEY => 10, CavesPeer::TRIBUTARY_RIVER => 11, CavesPeer::CLOSEST_ADDRESS => 12, CavesPeer::IS_SHOW_CAVE => 13, CavesPeer::SHOW_CAVE_LENGTH => 14, CavesPeer::WEBSITE => 15, CavesPeer::LAND_REGISTRY_NUMBER => 16, CavesPeer::REGION => 17, CavesPeer::DEPTH => 18, CavesPeer::SURVEYED_LENGTH => 19, CavesPeer::DISCOVERY_DATE => 20, CavesPeer::DISCOVERER => 21, CavesPeer::VOLUME => 22, CavesPeer::POSITIVE_DEPTH => 23, CavesPeer::NEGATIVE_DEPTH => 24, CavesPeer::RAMIFICATION_INDEX => 25, CavesPeer::REAL_EXTENSION => 26, CavesPeer::CAVE_AGE => 27, CavesPeer::PROJECTED_EXTENSION => 28, CavesPeer::EXPLORATION_STATUS => 29, CavesPeer::PROTECTION_CLASS => 30, CavesPeer::POTENTIAL_DEPTH => 31, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'NAME' => 1, 'TYPE_ID' => 2, 'IDENTIFICATION_CODE' => 3, 'DESCRIPTION' => 4, 'USER_ID' => 5, 'OTHER_TOPONYMS' => 6, 'ROCK_TYPE_ID' => 7, 'ROCK_AGE' => 8, 'HYDROGRAPHIC_BASIN' => 9, 'VALLEY' => 10, 'TRIBUTARY_RIVER' => 11, 'CLOSEST_ADDRESS' => 12, 'IS_SHOW_CAVE' => 13, 'SHOW_CAVE_LENGTH' => 14, 'WEBSITE' => 15, 'LAND_REGISTRY_NUMBER' => 16, 'REGION' => 17, 'DEPTH' => 18, 'SURVEYED_LENGTH' => 19, 'DISCOVERY_DATE' => 20, 'DISCOVERER' => 21, 'VOLUME' => 22, 'POSITIVE_DEPTH' => 23, 'NEGATIVE_DEPTH' => 24, 'RAMIFICATION_INDEX' => 25, 'REAL_EXTENSION' => 26, 'CAVE_AGE' => 27, 'PROJECTED_EXTENSION' => 28, 'EXPLORATION_STATUS' => 29, 'PROTECTION_CLASS' => 30, 'POTENTIAL_DEPTH' => 31, ),
-        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'name' => 1, 'type_id' => 2, 'identification_code' => 3, 'description' => 4, 'user_id' => 5, 'other_toponyms' => 6, 'rock_type_id' => 7, 'rock_age' => 8, 'hydrographic_basin' => 9, 'valley' => 10, 'tributary_river' => 11, 'closest_address' => 12, 'is_show_cave' => 13, 'show_cave_length' => 14, 'website' => 15, 'land_registry_number' => 16, 'region' => 17, 'depth' => 18, 'surveyed_length' => 19, 'discovery_date' => 20, 'discoverer' => 21, 'volume' => 22, 'positive_depth' => 23, 'negative_depth' => 24, 'ramification_index' => 25, 'real_extension' => 26, 'cave_age' => 27, 'projected_extension' => 28, 'exploration_status' => 29, 'protection_class' => 30, 'potential_depth' => 31, ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, )
+        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'Name' => 1, 'TypeId' => 2, 'IdentificationCode' => 3, 'Description' => 4, 'UserId' => 5, 'OtherToponyms' => 6, 'RockTypeId' => 7, 'RockAge' => 8, 'HydrographicBasin' => 9, 'Valley' => 10, 'TributaryRiver' => 11, 'ClosestAddress' => 12, 'IsShowCave' => 13, 'ShowCaveLength' => 14, 'Website' => 15, 'LandRegistryNumber' => 16, 'Region' => 17, 'Depth' => 18, 'SurveyedLength' => 19, 'DiscoveryDate' => 20, 'Discoverer' => 21, 'Volume' => 22, 'Area' => 23, 'PositiveDepth' => 24, 'NegativeDepth' => 25, 'RamificationIndex' => 26, 'RealExtension' => 27, 'CaveAge' => 28, 'ProjectedExtension' => 29, 'ExplorationStatus' => 30, 'ProtectionClass' => 31, 'PotentialDepth' => 32, 'EstimatedLength' => 33, 'Altitude' => 34, ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'name' => 1, 'typeId' => 2, 'identificationCode' => 3, 'description' => 4, 'userId' => 5, 'otherToponyms' => 6, 'rockTypeId' => 7, 'rockAge' => 8, 'hydrographicBasin' => 9, 'valley' => 10, 'tributaryRiver' => 11, 'closestAddress' => 12, 'isShowCave' => 13, 'showCaveLength' => 14, 'website' => 15, 'landRegistryNumber' => 16, 'region' => 17, 'depth' => 18, 'surveyedLength' => 19, 'discoveryDate' => 20, 'discoverer' => 21, 'volume' => 22, 'area' => 23, 'positiveDepth' => 24, 'negativeDepth' => 25, 'ramificationIndex' => 26, 'realExtension' => 27, 'caveAge' => 28, 'projectedExtension' => 29, 'explorationStatus' => 30, 'protectionClass' => 31, 'potentialDepth' => 32, 'estimatedLength' => 33, 'altitude' => 34, ),
+        BasePeer::TYPE_COLNAME => array (CavesPeer::ID => 0, CavesPeer::NAME => 1, CavesPeer::TYPE_ID => 2, CavesPeer::IDENTIFICATION_CODE => 3, CavesPeer::DESCRIPTION => 4, CavesPeer::USER_ID => 5, CavesPeer::OTHER_TOPONYMS => 6, CavesPeer::ROCK_TYPE_ID => 7, CavesPeer::ROCK_AGE => 8, CavesPeer::HYDROGRAPHIC_BASIN => 9, CavesPeer::VALLEY => 10, CavesPeer::TRIBUTARY_RIVER => 11, CavesPeer::CLOSEST_ADDRESS => 12, CavesPeer::IS_SHOW_CAVE => 13, CavesPeer::SHOW_CAVE_LENGTH => 14, CavesPeer::WEBSITE => 15, CavesPeer::LAND_REGISTRY_NUMBER => 16, CavesPeer::REGION => 17, CavesPeer::DEPTH => 18, CavesPeer::SURVEYED_LENGTH => 19, CavesPeer::DISCOVERY_DATE => 20, CavesPeer::DISCOVERER => 21, CavesPeer::VOLUME => 22, CavesPeer::AREA => 23, CavesPeer::POSITIVE_DEPTH => 24, CavesPeer::NEGATIVE_DEPTH => 25, CavesPeer::RAMIFICATION_INDEX => 26, CavesPeer::REAL_EXTENSION => 27, CavesPeer::CAVE_AGE => 28, CavesPeer::PROJECTED_EXTENSION => 29, CavesPeer::EXPLORATION_STATUS => 30, CavesPeer::PROTECTION_CLASS => 31, CavesPeer::POTENTIAL_DEPTH => 32, CavesPeer::ESTIMATED_LENGTH => 33, CavesPeer::ALTITUDE => 34, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'NAME' => 1, 'TYPE_ID' => 2, 'IDENTIFICATION_CODE' => 3, 'DESCRIPTION' => 4, 'USER_ID' => 5, 'OTHER_TOPONYMS' => 6, 'ROCK_TYPE_ID' => 7, 'ROCK_AGE' => 8, 'HYDROGRAPHIC_BASIN' => 9, 'VALLEY' => 10, 'TRIBUTARY_RIVER' => 11, 'CLOSEST_ADDRESS' => 12, 'IS_SHOW_CAVE' => 13, 'SHOW_CAVE_LENGTH' => 14, 'WEBSITE' => 15, 'LAND_REGISTRY_NUMBER' => 16, 'REGION' => 17, 'DEPTH' => 18, 'SURVEYED_LENGTH' => 19, 'DISCOVERY_DATE' => 20, 'DISCOVERER' => 21, 'VOLUME' => 22, 'AREA' => 23, 'POSITIVE_DEPTH' => 24, 'NEGATIVE_DEPTH' => 25, 'RAMIFICATION_INDEX' => 26, 'REAL_EXTENSION' => 27, 'CAVE_AGE' => 28, 'PROJECTED_EXTENSION' => 29, 'EXPLORATION_STATUS' => 30, 'PROTECTION_CLASS' => 31, 'POTENTIAL_DEPTH' => 32, 'ESTIMATED_LENGTH' => 33, 'ALTITUDE' => 34, ),
+        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'name' => 1, 'type_id' => 2, 'identification_code' => 3, 'description' => 4, 'user_id' => 5, 'other_toponyms' => 6, 'rock_type_id' => 7, 'rock_age' => 8, 'hydrographic_basin' => 9, 'valley' => 10, 'tributary_river' => 11, 'closest_address' => 12, 'is_show_cave' => 13, 'show_cave_length' => 14, 'website' => 15, 'land_registry_number' => 16, 'region' => 17, 'depth' => 18, 'surveyed_length' => 19, 'discovery_date' => 20, 'discoverer' => 21, 'volume' => 22, 'area' => 23, 'positive_depth' => 24, 'negative_depth' => 25, 'ramification_index' => 26, 'real_extension' => 27, 'cave_age' => 28, 'projected_extension' => 29, 'exploration_status' => 30, 'protection_class' => 31, 'potential_depth' => 32, 'estimated_length' => 33, 'altitude' => 34, ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, )
     );
 
     /** The enumerated values for this table */
@@ -325,6 +334,7 @@ abstract class BaseCavesPeer
             $criteria->addSelectColumn(CavesPeer::DISCOVERY_DATE);
             $criteria->addSelectColumn(CavesPeer::DISCOVERER);
             $criteria->addSelectColumn(CavesPeer::VOLUME);
+            $criteria->addSelectColumn(CavesPeer::AREA);
             $criteria->addSelectColumn(CavesPeer::POSITIVE_DEPTH);
             $criteria->addSelectColumn(CavesPeer::NEGATIVE_DEPTH);
             $criteria->addSelectColumn(CavesPeer::RAMIFICATION_INDEX);
@@ -334,6 +344,8 @@ abstract class BaseCavesPeer
             $criteria->addSelectColumn(CavesPeer::EXPLORATION_STATUS);
             $criteria->addSelectColumn(CavesPeer::PROTECTION_CLASS);
             $criteria->addSelectColumn(CavesPeer::POTENTIAL_DEPTH);
+            $criteria->addSelectColumn(CavesPeer::ESTIMATED_LENGTH);
+            $criteria->addSelectColumn(CavesPeer::ALTITUDE);
         } else {
             $criteria->addSelectColumn($alias . '.id');
             $criteria->addSelectColumn($alias . '.name');
@@ -358,6 +370,7 @@ abstract class BaseCavesPeer
             $criteria->addSelectColumn($alias . '.discovery_date');
             $criteria->addSelectColumn($alias . '.discoverer');
             $criteria->addSelectColumn($alias . '.volume');
+            $criteria->addSelectColumn($alias . '.area');
             $criteria->addSelectColumn($alias . '.positive_depth');
             $criteria->addSelectColumn($alias . '.negative_depth');
             $criteria->addSelectColumn($alias . '.ramification_index');
@@ -367,6 +380,8 @@ abstract class BaseCavesPeer
             $criteria->addSelectColumn($alias . '.exploration_status');
             $criteria->addSelectColumn($alias . '.protection_class');
             $criteria->addSelectColumn($alias . '.potential_depth');
+            $criteria->addSelectColumn($alias . '.estimated_length');
+            $criteria->addSelectColumn($alias . '.altitude');
         }
     }
 
