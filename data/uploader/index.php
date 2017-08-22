@@ -94,6 +94,10 @@ class CustomUploadHandler extends UploadHandler {
 	
 	//$cave_id = $fileData->cave_id;
 	$cave_id = $_REQUEST['upload_file_cave_id'];
+
+	if (empty($_REQUEST['upload_file_cave_id']))
+		$cave_id = $_REQUEST['upload_cave_files_cave_id'];
+
 	$_user_id = $_SESSION["id_user"];
 	$fileupload_target_type = $_REQUEST["fileupload_target_type"];
 	

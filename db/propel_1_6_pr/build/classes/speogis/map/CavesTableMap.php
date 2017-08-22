@@ -45,7 +45,19 @@ class CavesTableMap extends TableMap
         $this->addColumn('description', 'Description', 'LONGVARCHAR', false, null, null);
         $this->addColumn('user_id', 'UserId', 'BIGINT', true, null, null);
         $this->addColumn('other_toponyms', 'OtherToponyms', 'VARCHAR', false, 250, null);
-        $this->addColumn('rock_type_id', 'RockTypeId', 'BIGINT', false, null, null);
+        $this->addColumn('rock_type_id', 'RockTypeId', 'CHAR', false, null, null);
+        $this->getColumn('rock_type_id', false)->setValueSet(array (
+  0 => 'unknown',
+  1 => 'limestone',
+  2 => 'basalt',
+  3 => 'gypsum',
+  4 => 'dolomite',
+  5 => 'crystalline_schist',
+  6 => 'ice',
+  7 => 'lava',
+  8 => 'chalk',
+  9 => 'other',
+));
         $this->addColumn('rock_age', 'RockAge', 'VARCHAR', false, 50, null);
         $this->addColumn('hydrographic_basin', 'HydrographicBasin', 'VARCHAR', false, 100, null);
         $this->addColumn('valley', 'Valley', 'VARCHAR', false, 50, null);

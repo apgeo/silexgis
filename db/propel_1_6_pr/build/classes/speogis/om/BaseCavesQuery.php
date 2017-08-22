@@ -598,37 +598,24 @@ abstract class BaseCavesQuery extends ModelCriteria
      *
      * Example usage:
      * <code>
-     * $query->filterByRockTypeId(1234); // WHERE rock_type_id = 1234
-     * $query->filterByRockTypeId(array(12, 34)); // WHERE rock_type_id IN (12, 34)
-     * $query->filterByRockTypeId(array('min' => 12)); // WHERE rock_type_id >= 12
-     * $query->filterByRockTypeId(array('max' => 12)); // WHERE rock_type_id <= 12
+     * $query->filterByRockTypeId('fooValue');   // WHERE rock_type_id = 'fooValue'
+     * $query->filterByRockTypeId('%fooValue%'); // WHERE rock_type_id LIKE '%fooValue%'
      * </code>
      *
-     * @param     mixed $rockTypeId The value to use as filter.
-     *              Use scalar values for equality.
-     *              Use array values for in_array() equivalent.
-     *              Use associative array('min' => $minValue, 'max' => $maxValue) for intervals.
+     * @param     string $rockTypeId The value to use as filter.
+     *              Accepts wildcards (* and % trigger a LIKE)
      * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
      *
      * @return CavesQuery The current query, for fluid interface
      */
     public function filterByRockTypeId($rockTypeId = null, $comparison = null)
     {
-        if (is_array($rockTypeId)) {
-            $useMinMax = false;
-            if (isset($rockTypeId['min'])) {
-                $this->addUsingAlias(CavesPeer::ROCK_TYPE_ID, $rockTypeId['min'], Criteria::GREATER_EQUAL);
-                $useMinMax = true;
-            }
-            if (isset($rockTypeId['max'])) {
-                $this->addUsingAlias(CavesPeer::ROCK_TYPE_ID, $rockTypeId['max'], Criteria::LESS_EQUAL);
-                $useMinMax = true;
-            }
-            if ($useMinMax) {
-                return $this;
-            }
-            if (null === $comparison) {
+        if (null === $comparison) {
+            if (is_array($rockTypeId)) {
                 $comparison = Criteria::IN;
+            } elseif (preg_match('/[\%\*]/', $rockTypeId)) {
+                $rockTypeId = str_replace('*', '%', $rockTypeId);
+                $comparison = Criteria::LIKE;
             }
         }
 

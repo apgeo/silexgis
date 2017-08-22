@@ -15,7 +15,7 @@ $(document).ready(function() {
 	initTripReportForm();
 	//return;
 	initTripFormUploadControls();
-	initCaveDetailsUploadControl();
+	initTripReportUploadControl();
 	initPicturesUploadControl();
 	
 	//initFeatureSearchControl();
@@ -597,7 +597,7 @@ $('#tripreport_place').typeahead({
     },
   //display: 'name',  
   //limit: 9
-  //suggestion: Handlebars.compile('<div><strong>{{value}}</strong> – {{year}}</div>')
+  //suggestion: Handlebars.compile('<div><strong>{{value}}</strong> ï¿½ {{year}}</div>')
   /*
   filter: function (parsedResponse) {
             // parsedResponse is the array returned from your backend
@@ -811,6 +811,7 @@ function initPicturesUploadControl()
         // Load existing files:
 		console.log('#fileupload_cave');
 		console.log($('#fileupload_cave').fileupload('option', 'url'));
+
         //..$('#pictureUploader').addClass('fileupload-processing');
         $.ajax({
             // Uncomment the following to send cross-domain cookies:
@@ -883,7 +884,9 @@ function refreshTripReportFilesTable(trip_log_id)
 
 function initTripFormUploadControls()
 {
-	 $('.fileupload').fileupload({
+	 $('#fileupload_cave').fileupload({
+		// $('.fileupload').fileupload({
+
         // Uncomment the following to send cross-domain cookies:
         //xhrFields: {withCredentials: true},
         //url: 'data/uploader/'
@@ -892,7 +895,7 @@ function initTripFormUploadControls()
 }
 
 
-function initCaveDetailsUploadControl()
+function initTripReportUploadControl()
 {
 	/*$('#fileupload').fileupload({
 		//formData: {example: 'test'}
@@ -974,7 +977,9 @@ function initCaveDetailsUploadControl()
         // Load existing files:
 
 		
-        $('.fileupload').addClass('fileupload-processing');		
+		// $('.fileupload').addClass('fileupload-processing');		
+		$('#fileupload_cave').addClass('fileupload-processing');		
+
         $.ajax({
             // Uncomment the following to send cross-domain cookies:
             //xhrFields: {withCredentials: true},

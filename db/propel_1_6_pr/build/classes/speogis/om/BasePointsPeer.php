@@ -24,13 +24,13 @@ abstract class BasePointsPeer
     const TM_CLASS = 'PointsTableMap';
 
     /** The total number of columns. */
-    const NUM_COLUMNS = 17;
+    const NUM_COLUMNS = 18;
 
     /** The number of lazy-loaded columns. */
     const NUM_LAZY_LOAD_COLUMNS = 0;
 
     /** The number of columns to hydrate (NUM_COLUMNS - NUM_LAZY_LOAD_COLUMNS) */
-    const NUM_HYDRATE_COLUMNS = 17;
+    const NUM_HYDRATE_COLUMNS = 18;
 
     /** the column name for the id field */
     const ID = 'points.id';
@@ -83,6 +83,9 @@ abstract class BasePointsPeer
     /** the column name for the spatial_geometry field */
     const SPATIAL_GEOMETRY = 'points.spatial_geometry';
 
+    /** the column name for the update_time field */
+    const UPDATE_TIME = 'points.update_time';
+
     /** The default string format for model objects of the related table **/
     const DEFAULT_STRING_FORMAT = 'YAML';
 
@@ -102,12 +105,12 @@ abstract class BasePointsPeer
      * e.g. PointsPeer::$fieldNames[PointsPeer::TYPE_PHPNAME][0] = 'Id'
      */
     protected static $fieldNames = array (
-        BasePeer::TYPE_PHPNAME => array ('Id', 'Lat', 'Long', 'Elevation', 'GpxName', 'GpxSym', 'GpxType', 'GpxCmt', 'GpxSat', 'GpxFix', 'GpxTime', 'Type', 'Details', 'AddedByUserId', 'AddTime', 'IdPointType', 'SpatialGeometry', ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'lat', 'long', 'elevation', 'gpxName', 'gpxSym', 'gpxType', 'gpxCmt', 'gpxSat', 'gpxFix', 'gpxTime', 'type', 'details', 'addedByUserId', 'addTime', 'idPointType', 'spatialGeometry', ),
-        BasePeer::TYPE_COLNAME => array (PointsPeer::ID, PointsPeer::LAT, PointsPeer::LONG, PointsPeer::ELEVATION, PointsPeer::GPX_NAME, PointsPeer::GPX_SYM, PointsPeer::GPX_TYPE, PointsPeer::GPX_CMT, PointsPeer::GPX_SAT, PointsPeer::GPX_FIX, PointsPeer::GPX_TIME, PointsPeer::_TYPE, PointsPeer::_DETAILS, PointsPeer::ADDED_BY_USER_ID, PointsPeer::ADD_TIME, PointsPeer::_ID_POINT_TYPE, PointsPeer::SPATIAL_GEOMETRY, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'LAT', 'LONG', 'ELEVATION', 'GPX_NAME', 'GPX_SYM', 'GPX_TYPE', 'GPX_CMT', 'GPX_SAT', 'GPX_FIX', 'GPX_TIME', '_TYPE', '_DETAILS', 'ADDED_BY_USER_ID', 'ADD_TIME', '_ID_POINT_TYPE', 'SPATIAL_GEOMETRY', ),
-        BasePeer::TYPE_FIELDNAME => array ('id', 'lat', 'long', 'elevation', 'gpx_name', 'gpx_sym', 'gpx_type', 'gpx_cmt', 'gpx_sat', 'gpx_fix', 'gpx_time', '_type', '_details', 'added_by_user_id', 'add_time', '_id_point_type', 'spatial_geometry', ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, )
+        BasePeer::TYPE_PHPNAME => array ('Id', 'Lat', 'Long', 'Elevation', 'GpxName', 'GpxSym', 'GpxType', 'GpxCmt', 'GpxSat', 'GpxFix', 'GpxTime', 'Type', 'Details', 'AddedByUserId', 'AddTime', 'IdPointType', 'SpatialGeometry', 'UpdateTime', ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id', 'lat', 'long', 'elevation', 'gpxName', 'gpxSym', 'gpxType', 'gpxCmt', 'gpxSat', 'gpxFix', 'gpxTime', 'type', 'details', 'addedByUserId', 'addTime', 'idPointType', 'spatialGeometry', 'updateTime', ),
+        BasePeer::TYPE_COLNAME => array (PointsPeer::ID, PointsPeer::LAT, PointsPeer::LONG, PointsPeer::ELEVATION, PointsPeer::GPX_NAME, PointsPeer::GPX_SYM, PointsPeer::GPX_TYPE, PointsPeer::GPX_CMT, PointsPeer::GPX_SAT, PointsPeer::GPX_FIX, PointsPeer::GPX_TIME, PointsPeer::_TYPE, PointsPeer::_DETAILS, PointsPeer::ADDED_BY_USER_ID, PointsPeer::ADD_TIME, PointsPeer::_ID_POINT_TYPE, PointsPeer::SPATIAL_GEOMETRY, PointsPeer::UPDATE_TIME, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID', 'LAT', 'LONG', 'ELEVATION', 'GPX_NAME', 'GPX_SYM', 'GPX_TYPE', 'GPX_CMT', 'GPX_SAT', 'GPX_FIX', 'GPX_TIME', '_TYPE', '_DETAILS', 'ADDED_BY_USER_ID', 'ADD_TIME', '_ID_POINT_TYPE', 'SPATIAL_GEOMETRY', 'UPDATE_TIME', ),
+        BasePeer::TYPE_FIELDNAME => array ('id', 'lat', 'long', 'elevation', 'gpx_name', 'gpx_sym', 'gpx_type', 'gpx_cmt', 'gpx_sat', 'gpx_fix', 'gpx_time', '_type', '_details', 'added_by_user_id', 'add_time', '_id_point_type', 'spatial_geometry', 'update_time', ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, )
     );
 
     /**
@@ -117,12 +120,12 @@ abstract class BasePointsPeer
      * e.g. PointsPeer::$fieldNames[BasePeer::TYPE_PHPNAME]['Id'] = 0
      */
     protected static $fieldKeys = array (
-        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'Lat' => 1, 'Long' => 2, 'Elevation' => 3, 'GpxName' => 4, 'GpxSym' => 5, 'GpxType' => 6, 'GpxCmt' => 7, 'GpxSat' => 8, 'GpxFix' => 9, 'GpxTime' => 10, 'Type' => 11, 'Details' => 12, 'AddedByUserId' => 13, 'AddTime' => 14, 'IdPointType' => 15, 'SpatialGeometry' => 16, ),
-        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'lat' => 1, 'long' => 2, 'elevation' => 3, 'gpxName' => 4, 'gpxSym' => 5, 'gpxType' => 6, 'gpxCmt' => 7, 'gpxSat' => 8, 'gpxFix' => 9, 'gpxTime' => 10, 'type' => 11, 'details' => 12, 'addedByUserId' => 13, 'addTime' => 14, 'idPointType' => 15, 'spatialGeometry' => 16, ),
-        BasePeer::TYPE_COLNAME => array (PointsPeer::ID => 0, PointsPeer::LAT => 1, PointsPeer::LONG => 2, PointsPeer::ELEVATION => 3, PointsPeer::GPX_NAME => 4, PointsPeer::GPX_SYM => 5, PointsPeer::GPX_TYPE => 6, PointsPeer::GPX_CMT => 7, PointsPeer::GPX_SAT => 8, PointsPeer::GPX_FIX => 9, PointsPeer::GPX_TIME => 10, PointsPeer::_TYPE => 11, PointsPeer::_DETAILS => 12, PointsPeer::ADDED_BY_USER_ID => 13, PointsPeer::ADD_TIME => 14, PointsPeer::_ID_POINT_TYPE => 15, PointsPeer::SPATIAL_GEOMETRY => 16, ),
-        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'LAT' => 1, 'LONG' => 2, 'ELEVATION' => 3, 'GPX_NAME' => 4, 'GPX_SYM' => 5, 'GPX_TYPE' => 6, 'GPX_CMT' => 7, 'GPX_SAT' => 8, 'GPX_FIX' => 9, 'GPX_TIME' => 10, '_TYPE' => 11, '_DETAILS' => 12, 'ADDED_BY_USER_ID' => 13, 'ADD_TIME' => 14, '_ID_POINT_TYPE' => 15, 'SPATIAL_GEOMETRY' => 16, ),
-        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'lat' => 1, 'long' => 2, 'elevation' => 3, 'gpx_name' => 4, 'gpx_sym' => 5, 'gpx_type' => 6, 'gpx_cmt' => 7, 'gpx_sat' => 8, 'gpx_fix' => 9, 'gpx_time' => 10, '_type' => 11, '_details' => 12, 'added_by_user_id' => 13, 'add_time' => 14, '_id_point_type' => 15, 'spatial_geometry' => 16, ),
-        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, )
+        BasePeer::TYPE_PHPNAME => array ('Id' => 0, 'Lat' => 1, 'Long' => 2, 'Elevation' => 3, 'GpxName' => 4, 'GpxSym' => 5, 'GpxType' => 6, 'GpxCmt' => 7, 'GpxSat' => 8, 'GpxFix' => 9, 'GpxTime' => 10, 'Type' => 11, 'Details' => 12, 'AddedByUserId' => 13, 'AddTime' => 14, 'IdPointType' => 15, 'SpatialGeometry' => 16, 'UpdateTime' => 17, ),
+        BasePeer::TYPE_STUDLYPHPNAME => array ('id' => 0, 'lat' => 1, 'long' => 2, 'elevation' => 3, 'gpxName' => 4, 'gpxSym' => 5, 'gpxType' => 6, 'gpxCmt' => 7, 'gpxSat' => 8, 'gpxFix' => 9, 'gpxTime' => 10, 'type' => 11, 'details' => 12, 'addedByUserId' => 13, 'addTime' => 14, 'idPointType' => 15, 'spatialGeometry' => 16, 'updateTime' => 17, ),
+        BasePeer::TYPE_COLNAME => array (PointsPeer::ID => 0, PointsPeer::LAT => 1, PointsPeer::LONG => 2, PointsPeer::ELEVATION => 3, PointsPeer::GPX_NAME => 4, PointsPeer::GPX_SYM => 5, PointsPeer::GPX_TYPE => 6, PointsPeer::GPX_CMT => 7, PointsPeer::GPX_SAT => 8, PointsPeer::GPX_FIX => 9, PointsPeer::GPX_TIME => 10, PointsPeer::_TYPE => 11, PointsPeer::_DETAILS => 12, PointsPeer::ADDED_BY_USER_ID => 13, PointsPeer::ADD_TIME => 14, PointsPeer::_ID_POINT_TYPE => 15, PointsPeer::SPATIAL_GEOMETRY => 16, PointsPeer::UPDATE_TIME => 17, ),
+        BasePeer::TYPE_RAW_COLNAME => array ('ID' => 0, 'LAT' => 1, 'LONG' => 2, 'ELEVATION' => 3, 'GPX_NAME' => 4, 'GPX_SYM' => 5, 'GPX_TYPE' => 6, 'GPX_CMT' => 7, 'GPX_SAT' => 8, 'GPX_FIX' => 9, 'GPX_TIME' => 10, '_TYPE' => 11, '_DETAILS' => 12, 'ADDED_BY_USER_ID' => 13, 'ADD_TIME' => 14, '_ID_POINT_TYPE' => 15, 'SPATIAL_GEOMETRY' => 16, 'UPDATE_TIME' => 17, ),
+        BasePeer::TYPE_FIELDNAME => array ('id' => 0, 'lat' => 1, 'long' => 2, 'elevation' => 3, 'gpx_name' => 4, 'gpx_sym' => 5, 'gpx_type' => 6, 'gpx_cmt' => 7, 'gpx_sat' => 8, 'gpx_fix' => 9, 'gpx_time' => 10, '_type' => 11, '_details' => 12, 'added_by_user_id' => 13, 'add_time' => 14, '_id_point_type' => 15, 'spatial_geometry' => 16, 'update_time' => 17, ),
+        BasePeer::TYPE_NUM => array (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, )
     );
 
     /**
@@ -213,6 +216,7 @@ abstract class BasePointsPeer
             $criteria->addSelectColumn(PointsPeer::ADD_TIME);
             $criteria->addSelectColumn(PointsPeer::_ID_POINT_TYPE);
             $criteria->addSelectColumn(PointsPeer::SPATIAL_GEOMETRY);
+            $criteria->addSelectColumn(PointsPeer::UPDATE_TIME);
         } else {
             $criteria->addSelectColumn($alias . '.id');
             $criteria->addSelectColumn($alias . '.lat');
@@ -231,6 +235,7 @@ abstract class BasePointsPeer
             $criteria->addSelectColumn($alias . '.add_time');
             $criteria->addSelectColumn($alias . '._id_point_type');
             $criteria->addSelectColumn($alias . '.spatial_geometry');
+            $criteria->addSelectColumn($alias . '.update_time');
         }
     }
 

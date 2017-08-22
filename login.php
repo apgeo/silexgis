@@ -1,4 +1,26 @@
 <?php
+
+function get_browser_ex()
+{
+    $browser = '';
+    $ua = strtolower($_SERVER['HTTP_USER_AGENT']);
+    if (preg_match('~(?:msie ?|trident.+?; ?rv: ?)(\d+)~', $ua, $matches)) $browser = 'ie ie'.$matches[1];
+    elseif (preg_match('~(safari|chrome|firefox)~', $ua, $matches)) $browser = $matches[1];
+
+    return $browser;
+}
+
+if (preg_match('/MSIE\s(?P<v>\d+)/i', @$_SERVER['HTTP_USER_AGENT'], $B) || (strpos(get_browser_ex(), "ie11") !== false)) { //&& $B['v'] <= 8
+    echo "SilexGIS nu functioneaza pe Internet Explorer. 
+    Recomandarea este sa folsiti browserul <a href='https://www.google.com/chrome/index.html'>Google Chrome</a> sau <a href='https://www.mozilla.org/ro/firefox/new/'>Mozilla Firefox</a>.
+    <br/>
+    <br/>
+    SilexGIS is not working with Internet Explorer. 
+    The recommended browser is <a href='https://www.google.com/chrome/index.html'>Google Chrome</a> or <a href='https://www.mozilla.org/en-US/en/firefox/new/'>Mozilla Firefox</a>.
+    ";
+    exit;
+}
+
 //include_once("conf/config.php");
 if (@$_SESSION["logged"]) unset($_SESSION["logged"]);
 $err = @$_SESSION["login_error"];

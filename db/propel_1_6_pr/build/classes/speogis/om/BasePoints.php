@@ -132,6 +132,12 @@ abstract class BasePoints extends BaseObject implements Persistent
     protected $spatial_geometry;
 
     /**
+     * The value for the update_time field.
+     * @var        string
+     */
+    protected $update_time;
+
+    /**
      * Flag to prevent endless save loop, if this object is referenced
      * by another object which falls in this transaction.
      * @var        boolean
@@ -394,6 +400,46 @@ abstract class BasePoints extends BaseObject implements Persistent
     {
 
         return $this->spatial_geometry;
+    }
+
+    /**
+     * Get the [optionally formatted] temporal [update_time] column value.
+     *
+     *
+     * @param string $format The date/time format string (either date()-style or strftime()-style).
+     *				 If format is null, then the raw DateTime object will be returned.
+     * @return mixed Formatted date/time value as string or DateTime object (if format is null), null if column is null, and 0 if column value is 0000-00-00 00:00:00
+     * @throws PropelException - if unable to parse/validate the date/time value.
+     */
+    public function getUpdateTime($format = 'Y-m-d H:i:s')
+    {
+        if ($this->update_time === null) {
+            return null;
+        }
+
+        if ($this->update_time === '0000-00-00 00:00:00') {
+            // while technically this is not a default value of null,
+            // this seems to be closest in meaning.
+            return null;
+        }
+
+        try {
+            $dt = new DateTime($this->update_time);
+        } catch (Exception $x) {
+            throw new PropelException("Internally stored date/time/timestamp value could not be converted to DateTime: " . var_export($this->update_time, true), $x);
+        }
+
+        if ($format === null) {
+            // Because propel.useDateTimeClass is true, we return a DateTime object.
+            return $dt;
+        }
+
+        if (strpos($format, '%') !== false) {
+            return strftime($format, $dt->format('U'));
+        }
+
+        return $dt->format($format);
+
     }
 
     /**
@@ -758,6 +804,29 @@ abstract class BasePoints extends BaseObject implements Persistent
     } // setSpatialGeometry()
 
     /**
+     * Sets the value of [update_time] column to a normalized version of the date/time value specified.
+     *
+     * @param mixed $v string, integer (timestamp), or DateTime value.
+     *               Empty strings are treated as null.
+     * @return Points The current object (for fluent API support)
+     */
+    public function setUpdateTime($v)
+    {
+        $dt = PropelDateTime::newInstance($v, null, 'DateTime');
+        if ($this->update_time !== null || $dt !== null) {
+            $currentDateAsString = ($this->update_time !== null && $tmpDt = new DateTime($this->update_time)) ? $tmpDt->format('Y-m-d H:i:s') : null;
+            $newDateAsString = $dt ? $dt->format('Y-m-d H:i:s') : null;
+            if ($currentDateAsString !== $newDateAsString) {
+                $this->update_time = $newDateAsString;
+                $this->modifiedColumns[] = PointsPeer::UPDATE_TIME;
+            }
+        } // if either are not null
+
+
+        return $this;
+    } // setUpdateTime()
+
+    /**
      * Indicates whether the columns in this object are only set to default values.
      *
      * This method can be used in conjunction with isModified() to indicate whether an object is both
@@ -806,6 +875,7 @@ abstract class BasePoints extends BaseObject implements Persistent
             $this->add_time = ($row[$startcol + 14] !== null) ? (string) $row[$startcol + 14] : null;
             $this->_id_point_type = ($row[$startcol + 15] !== null) ? (string) $row[$startcol + 15] : null;
             $this->spatial_geometry = ($row[$startcol + 16] !== null) ? (string) $row[$startcol + 16] : null;
+            $this->update_time = ($row[$startcol + 17] !== null) ? (string) $row[$startcol + 17] : null;
             $this->resetModified();
 
             $this->setNew(false);
@@ -815,7 +885,7 @@ abstract class BasePoints extends BaseObject implements Persistent
             }
             $this->postHydrate($row, $startcol, $rehydrate);
 
-            return $startcol + 17; // 17 = PointsPeer::NUM_HYDRATE_COLUMNS.
+            return $startcol + 18; // 18 = PointsPeer::NUM_HYDRATE_COLUMNS.
 
         } catch (Exception $e) {
             throw new PropelException("Error populating Points object", $e);
@@ -1078,6 +1148,9 @@ abstract class BasePoints extends BaseObject implements Persistent
         if ($this->isColumnModified(PointsPeer::SPATIAL_GEOMETRY)) {
             $modifiedColumns[':p' . $index++]  = '`spatial_geometry`';
         }
+        if ($this->isColumnModified(PointsPeer::UPDATE_TIME)) {
+            $modifiedColumns[':p' . $index++]  = '`update_time`';
+        }
 
         $sql = sprintf(
             'INSERT INTO `points` (%s) VALUES (%s)',
@@ -1139,6 +1212,9 @@ abstract class BasePoints extends BaseObject implements Persistent
                         break;
                     case '`spatial_geometry`':
                         $stmt->bindValue($identifier, $this->spatial_geometry, PDO::PARAM_STR);
+                        break;
+                    case '`update_time`':
+                        $stmt->bindValue($identifier, $this->update_time, PDO::PARAM_STR);
                         break;
                 }
             }
@@ -1325,6 +1401,9 @@ abstract class BasePoints extends BaseObject implements Persistent
             case 16:
                 return $this->getSpatialGeometry();
                 break;
+            case 17:
+                return $this->getUpdateTime();
+                break;
             default:
                 return null;
                 break;
@@ -1370,6 +1449,7 @@ abstract class BasePoints extends BaseObject implements Persistent
             $keys[14] => $this->getAddTime(),
             $keys[15] => $this->getIdPointType(),
             $keys[16] => $this->getSpatialGeometry(),
+            $keys[17] => $this->getUpdateTime(),
         );
         $virtualColumns = $this->virtualColumns;
         foreach ($virtualColumns as $key => $virtualColumn) {
@@ -1460,6 +1540,9 @@ abstract class BasePoints extends BaseObject implements Persistent
             case 16:
                 $this->setSpatialGeometry($value);
                 break;
+            case 17:
+                $this->setUpdateTime($value);
+                break;
         } // switch()
     }
 
@@ -1501,6 +1584,7 @@ abstract class BasePoints extends BaseObject implements Persistent
         if (array_key_exists($keys[14], $arr)) $this->setAddTime($arr[$keys[14]]);
         if (array_key_exists($keys[15], $arr)) $this->setIdPointType($arr[$keys[15]]);
         if (array_key_exists($keys[16], $arr)) $this->setSpatialGeometry($arr[$keys[16]]);
+        if (array_key_exists($keys[17], $arr)) $this->setUpdateTime($arr[$keys[17]]);
     }
 
     /**
@@ -1529,6 +1613,7 @@ abstract class BasePoints extends BaseObject implements Persistent
         if ($this->isColumnModified(PointsPeer::ADD_TIME)) $criteria->add(PointsPeer::ADD_TIME, $this->add_time);
         if ($this->isColumnModified(PointsPeer::_ID_POINT_TYPE)) $criteria->add(PointsPeer::_ID_POINT_TYPE, $this->_id_point_type);
         if ($this->isColumnModified(PointsPeer::SPATIAL_GEOMETRY)) $criteria->add(PointsPeer::SPATIAL_GEOMETRY, $this->spatial_geometry);
+        if ($this->isColumnModified(PointsPeer::UPDATE_TIME)) $criteria->add(PointsPeer::UPDATE_TIME, $this->update_time);
 
         return $criteria;
     }
@@ -1608,6 +1693,7 @@ abstract class BasePoints extends BaseObject implements Persistent
         $copyObj->setAddTime($this->getAddTime());
         $copyObj->setIdPointType($this->getIdPointType());
         $copyObj->setSpatialGeometry($this->getSpatialGeometry());
+        $copyObj->setUpdateTime($this->getUpdateTime());
         if ($makeNew) {
             $copyObj->setNew(true);
             $copyObj->setId(NULL); // this is a auto-increment column, so set to default value
@@ -1676,6 +1762,7 @@ abstract class BasePoints extends BaseObject implements Persistent
         $this->add_time = null;
         $this->_id_point_type = null;
         $this->spatial_geometry = null;
+        $this->update_time = null;
         $this->alreadyInSave = false;
         $this->alreadyInValidation = false;
         $this->alreadyInClearAllReferencesDeep = false;

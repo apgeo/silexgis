@@ -403,7 +403,7 @@
                 //throw new Exception('Title are empty'); //return 0;
             }
 			
-			$query = "SELECT files.id, file_name, user_id, files.add_time, file_type, size, md5_hash, geoobjects_to_files.id, object_type
+			$query = "SELECT files.id as fid, file_name, user_id, files.add_time, file_type, size, md5_hash, geoobjects_to_files.id, object_type
 						FROM files
 						INNER JOIN geoobjects_to_files ON geoobjects_to_files.file_id = files.id
 						INNER JOIN 

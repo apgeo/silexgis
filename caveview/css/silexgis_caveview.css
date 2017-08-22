@@ -1,0 +1,15 @@
+/* custom CaveView CSS for SilexGIS */
+
+#scene {
+	width: 100%;
+	height: 800px;
+	position: relative;
+}
+
+/* select colour redefined for overloading bootstrap css */
+select{
+	color: #000;
+}
+option:not(first-child) {
+	color: #000;
+}

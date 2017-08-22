@@ -55,6 +55,7 @@ class PointsTableMap extends TableMap
         $this->addColumn('add_time', 'AddTime', 'TIMESTAMP', true, null, null);
         $this->addColumn('_id_point_type', 'IdPointType', 'BIGINT', false, null, null);
         $this->addColumn('spatial_geometry', 'SpatialGeometry', 'VARCHAR', false, null, null);
+        $this->addColumn('update_time', 'UpdateTime', 'TIMESTAMP', false, null, null);
         // validators
     } // initialize()
 

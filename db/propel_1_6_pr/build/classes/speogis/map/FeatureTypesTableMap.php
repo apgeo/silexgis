@@ -49,6 +49,8 @@ class FeatureTypesTableMap extends TableMap
 ));
         $this->addColumn('group_type', 'GroupType', 'VARCHAR', false, 20, null);
         $this->addColumn('style_properties', 'StyleProperties', 'LONGVARCHAR', false, null, null);
+        $this->addColumn('order_index', 'OrderIndex', 'INTEGER', false, null, null);
+        $this->addColumn('disabled', 'Disabled', 'INTEGER', false, null, null);
         // validators
     } // initialize()
 

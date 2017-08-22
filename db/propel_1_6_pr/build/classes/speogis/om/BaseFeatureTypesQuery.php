@@ -12,6 +12,8 @@
  * @method FeatureTypesQuery orderByType($order = Criteria::ASC) Order by the type column
  * @method FeatureTypesQuery orderByGroupType($order = Criteria::ASC) Order by the group_type column
  * @method FeatureTypesQuery orderByStyleProperties($order = Criteria::ASC) Order by the style_properties column
+ * @method FeatureTypesQuery orderByOrderIndex($order = Criteria::ASC) Order by the order_index column
+ * @method FeatureTypesQuery orderByDisabled($order = Criteria::ASC) Order by the disabled column
  *
  * @method FeatureTypesQuery groupById() Group by the id column
  * @method FeatureTypesQuery groupByName() Group by the name column
@@ -19,6 +21,8 @@
  * @method FeatureTypesQuery groupByType() Group by the type column
  * @method FeatureTypesQuery groupByGroupType() Group by the group_type column
  * @method FeatureTypesQuery groupByStyleProperties() Group by the style_properties column
+ * @method FeatureTypesQuery groupByOrderIndex() Group by the order_index column
+ * @method FeatureTypesQuery groupByDisabled() Group by the disabled column
  *
  * @method FeatureTypesQuery leftJoin($relation) Adds a LEFT JOIN clause to the query
  * @method FeatureTypesQuery rightJoin($relation) Adds a RIGHT JOIN clause to the query
@@ -32,6 +36,8 @@
  * @method FeatureTypes findOneByType(string $type) Return the first FeatureTypes filtered by the type column
  * @method FeatureTypes findOneByGroupType(string $group_type) Return the first FeatureTypes filtered by the group_type column
  * @method FeatureTypes findOneByStyleProperties(string $style_properties) Return the first FeatureTypes filtered by the style_properties column
+ * @method FeatureTypes findOneByOrderIndex(int $order_index) Return the first FeatureTypes filtered by the order_index column
+ * @method FeatureTypes findOneByDisabled(int $disabled) Return the first FeatureTypes filtered by the disabled column
  *
  * @method array findById(string $id) Return FeatureTypes objects filtered by the id column
  * @method array findByName(string $name) Return FeatureTypes objects filtered by the name column
@@ -39,6 +45,8 @@
  * @method array findByType(string $type) Return FeatureTypes objects filtered by the type column
  * @method array findByGroupType(string $group_type) Return FeatureTypes objects filtered by the group_type column
  * @method array findByStyleProperties(string $style_properties) Return FeatureTypes objects filtered by the style_properties column
+ * @method array findByOrderIndex(int $order_index) Return FeatureTypes objects filtered by the order_index column
+ * @method array findByDisabled(int $disabled) Return FeatureTypes objects filtered by the disabled column
  *
  * @package    propel.generator.speogis.om
  */
@@ -146,7 +154,7 @@ abstract class BaseFeatureTypesQuery extends ModelCriteria
      */
     protected function findPkSimple($key, $con)
     {
-        $sql = 'SELECT `id`, `name`, `symbol_path`, `type`, `group_type`, `style_properties` FROM `feature_types` WHERE `id` = :p0';
+        $sql = 'SELECT `id`, `name`, `symbol_path`, `type`, `group_type`, `style_properties`, `order_index`, `disabled` FROM `feature_types` WHERE `id` = :p0';
         try {
             $stmt = $con->prepare($sql);
             $stmt->bindValue(':p0', $key, PDO::PARAM_STR);
@@ -420,6 +428,90 @@ abstract class BaseFeatureTypesQuery extends ModelCriteria
         }
 
         return $this->addUsingAlias(FeatureTypesPeer::STYLE_PROPERTIES, $styleProperties, $comparison);
+    }
+
+    /**
+     * Filter the query on the order_index column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterByOrderIndex(1234); // WHERE order_index = 1234
+     * $query->filterByOrderIndex(array(12, 34)); // WHERE order_index IN (12, 34)
+     * $query->filterByOrderIndex(array('min' => 12)); // WHERE order_index >= 12
+     * $query->filterByOrderIndex(array('max' => 12)); // WHERE order_index <= 12
+     * </code>
+     *
+     * @param     mixed $orderIndex The value to use as filter.
+     *              Use scalar values for equality.
+     *              Use array values for in_array() equivalent.
+     *              Use associative array('min' => $minValue, 'max' => $maxValue) for intervals.
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return FeatureTypesQuery The current query, for fluid interface
+     */
+    public function filterByOrderIndex($orderIndex = null, $comparison = null)
+    {
+        if (is_array($orderIndex)) {
+            $useMinMax = false;
+            if (isset($orderIndex['min'])) {
+                $this->addUsingAlias(FeatureTypesPeer::ORDER_INDEX, $orderIndex['min'], Criteria::GREATER_EQUAL);
+                $useMinMax = true;
+            }
+            if (isset($orderIndex['max'])) {
+                $this->addUsingAlias(FeatureTypesPeer::ORDER_INDEX, $orderIndex['max'], Criteria::LESS_EQUAL);
+                $useMinMax = true;
+            }
+            if ($useMinMax) {
+                return $this;
+            }
+            if (null === $comparison) {
+                $comparison = Criteria::IN;
+            }
+        }
+
+        return $this->addUsingAlias(FeatureTypesPeer::ORDER_INDEX, $orderIndex, $comparison);
+    }
+
+    /**
+     * Filter the query on the disabled column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterByDisabled(1234); // WHERE disabled = 1234
+     * $query->filterByDisabled(array(12, 34)); // WHERE disabled IN (12, 34)
+     * $query->filterByDisabled(array('min' => 12)); // WHERE disabled >= 12
+     * $query->filterByDisabled(array('max' => 12)); // WHERE disabled <= 12
+     * </code>
+     *
+     * @param     mixed $disabled The value to use as filter.
+     *              Use scalar values for equality.
+     *              Use array values for in_array() equivalent.
+     *              Use associative array('min' => $minValue, 'max' => $maxValue) for intervals.
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return FeatureTypesQuery The current query, for fluid interface
+     */
+    public function filterByDisabled($disabled = null, $comparison = null)
+    {
+        if (is_array($disabled)) {
+            $useMinMax = false;
+            if (isset($disabled['min'])) {
+                $this->addUsingAlias(FeatureTypesPeer::DISABLED, $disabled['min'], Criteria::GREATER_EQUAL);
+                $useMinMax = true;
+            }
+            if (isset($disabled['max'])) {
+                $this->addUsingAlias(FeatureTypesPeer::DISABLED, $disabled['max'], Criteria::LESS_EQUAL);
+                $useMinMax = true;
+            }
+            if ($useMinMax) {
+                return $this;
+            }
+            if (null === $comparison) {
+                $comparison = Criteria::IN;
+            }
+        }
+
+        return $this->addUsingAlias(FeatureTypesPeer::DISABLED, $disabled, $comparison);
     }
 
     /**

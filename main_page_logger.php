@@ -35,6 +35,8 @@ function getBrowserMP()
         $platform = 'windows';
     }
     
+    $ub = "unknown";
+
     // Next get the name of the useragent yes seperately and for good reason
     if(preg_match('/MSIE/i',$u_agent) && !preg_match('/Opera/i',$u_agent)) 
     { 
@@ -67,6 +69,9 @@ function getBrowserMP()
         $ub = "Netscape"; 
     } 
     
+    if ($ub == "unknown")
+        return null;
+        
     // finally get the correct version number
     $known = array('Version', $ub, 'other');
     $pattern = '#(?<browser>' . join('|', $known) .

@@ -2,7 +2,7 @@
 	@session_start(); //-- ?
     //GG 
 	header('Content-Type: text/html; charset=utf-8');
-	require_once 'config.php';		
+	require_once 'config.php';
 	
 	require_once 'auth.php';
 	
@@ -328,7 +328,7 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 	<!--<script src="<?=$application_url_root ?>/scripts/bootstrap-notify-master/bootstrap-notify.min.js"></script>-->
 	<script src="<?=$application_url_root ?>/scripts/bootstrap-notify-master/bootstrap-notify.js"></script>
 	
-	<script src="<?=$application_url_root ?>/scripts/i18n/silexgis.en-EN.js"></script>
+	<script src="<?=$application_url_root ?>/scripts/i18n/silexgis.all.js"></script>
 	
 	<link href="<?=$application_url_root ?>/scripts/bootstrap-spinedit/css/bootstrap-spinedit.css" rel="stylesheet">
 	<script src="<?=$application_url_root ?>/scripts/bootstrap-spinedit/js/bootstrap-spinedit.js"></script>
@@ -492,7 +492,7 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 	<!--<script src="<?=$application_url_root ?>/scripts/bootstrap-notify-master/bootstrap-notify.min.js"></script>-->
 	<script src="<?=$application_url_root ?>/scripts/bootstrap-notify-master/bootstrap-notify.js"></script>
 	
-	<script src="<?=$application_url_root ?>/scripts/i18n/silexgis.en-EN.js"></script>
+	<script src="<?=$application_url_root ?>/scripts/i18n/silexgis.all.js"></script>
 
 	<link href="<?=$application_url_root ?>/scripts/bootstrap-spinedit/css/bootstrap-spinedit.css" rel="stylesheet">
 	<script src="<?=$application_url_root ?>/scripts/bootstrap-spinedit/js/bootstrap-spinedit.js"></script>
@@ -538,6 +538,10 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 	
 	<script type="text/javascript" src="<?=$application_url_root ?>/scripts/bootstrap-slider/src/js/bootstrap-slider.js"></script>
 	<link href="<?=$application_url_root ?>/scripts/bootstrap-slider/src/imported_css/bootstrap-slider.css" rel="stylesheet">
+
+	<link type="text/css" href="<?=WEBROOT ?>vendor/CaveView.js/build/CaveView/css/caveview.css" rel="stylesheet"/>
+	<link type="text/css" href="<?=WEBROOT ?>caveview/css/silexgis_caveview.css" rel="stylesheet"/>
+	
 	<!--<script type="text/javascript" src="<?=$application_url_root ?>/scripts/georeferenced_image.js"></script>-->
 <!--
 	 =============================================================================================================================================
@@ -641,10 +645,10 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 			<ul class="dropdown-menu">
 			
 			<?php if ($currentPage == 'index') : ?>
-			<li><a id="export_map" href="#" onclick="" download="map.png" >*{main_map.menu.tools_submenu.export_map}*</a></li>
+				<li><a id="export_map" href="#" onclick="" download="map.png" >*{main_map.menu.tools_submenu.export_map}*</a></li>
 			<?php endif; ?>
 		
-			<li><a id="export_map" href="<?=$application_url_root ?>/test/CaveView.js-dev/src/html/" >CV 3d test</a></li>
+			<li><a id="show_cave_view_3d_section" href="<?=$application_url_root ?>/caveview/show_model.php?file_id=all" target="_blank">Show 3d models</a></li>
 			<!--<li><a href="#" onclick="exportMap" download="map.png" >Export</a></li>-->
 		  </ul>
 		</li>
@@ -768,7 +772,7 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
     </script>
 
 	<script>
-		var url_base = 'http://' + window.location.host + "/speogis/";		
+		var url_base = 'http://' + window.location.host + '<?=$application_url_root?>' + "/";
 	</script>
 	
 	<span id="user_language" style="visibility:hidden" ><?="$user_language" ?></span>

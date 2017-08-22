@@ -66,6 +66,18 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
     protected $style_properties;
 
     /**
+     * The value for the order_index field.
+     * @var        int
+     */
+    protected $order_index;
+
+    /**
+     * The value for the disabled field.
+     * @var        int
+     */
+    protected $disabled;
+
+    /**
      * Flag to prevent endless save loop, if this object is referenced
      * by another object which falls in this transaction.
      * @var        boolean
@@ -149,6 +161,28 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
     {
 
         return $this->style_properties;
+    }
+
+    /**
+     * Get the [order_index] column value.
+     *
+     * @return int
+     */
+    public function getOrderIndex()
+    {
+
+        return $this->order_index;
+    }
+
+    /**
+     * Get the [disabled] column value.
+     *
+     * @return int
+     */
+    public function getDisabled()
+    {
+
+        return $this->disabled;
     }
 
     /**
@@ -278,6 +312,48 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
     } // setStyleProperties()
 
     /**
+     * Set the value of [order_index] column.
+     *
+     * @param  int $v new value
+     * @return FeatureTypes The current object (for fluent API support)
+     */
+    public function setOrderIndex($v)
+    {
+        if ($v !== null && is_numeric($v)) {
+            $v = (int) $v;
+        }
+
+        if ($this->order_index !== $v) {
+            $this->order_index = $v;
+            $this->modifiedColumns[] = FeatureTypesPeer::ORDER_INDEX;
+        }
+
+
+        return $this;
+    } // setOrderIndex()
+
+    /**
+     * Set the value of [disabled] column.
+     *
+     * @param  int $v new value
+     * @return FeatureTypes The current object (for fluent API support)
+     */
+    public function setDisabled($v)
+    {
+        if ($v !== null && is_numeric($v)) {
+            $v = (int) $v;
+        }
+
+        if ($this->disabled !== $v) {
+            $this->disabled = $v;
+            $this->modifiedColumns[] = FeatureTypesPeer::DISABLED;
+        }
+
+
+        return $this;
+    } // setDisabled()
+
+    /**
      * Indicates whether the columns in this object are only set to default values.
      *
      * This method can be used in conjunction with isModified() to indicate whether an object is both
@@ -315,6 +391,8 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
             $this->type = ($row[$startcol + 3] !== null) ? (string) $row[$startcol + 3] : null;
             $this->group_type = ($row[$startcol + 4] !== null) ? (string) $row[$startcol + 4] : null;
             $this->style_properties = ($row[$startcol + 5] !== null) ? (string) $row[$startcol + 5] : null;
+            $this->order_index = ($row[$startcol + 6] !== null) ? (int) $row[$startcol + 6] : null;
+            $this->disabled = ($row[$startcol + 7] !== null) ? (int) $row[$startcol + 7] : null;
             $this->resetModified();
 
             $this->setNew(false);
@@ -324,7 +402,7 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
             }
             $this->postHydrate($row, $startcol, $rehydrate);
 
-            return $startcol + 6; // 6 = FeatureTypesPeer::NUM_HYDRATE_COLUMNS.
+            return $startcol + 8; // 8 = FeatureTypesPeer::NUM_HYDRATE_COLUMNS.
 
         } catch (Exception $e) {
             throw new PropelException("Error populating FeatureTypes object", $e);
@@ -554,6 +632,12 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
         if ($this->isColumnModified(FeatureTypesPeer::STYLE_PROPERTIES)) {
             $modifiedColumns[':p' . $index++]  = '`style_properties`';
         }
+        if ($this->isColumnModified(FeatureTypesPeer::ORDER_INDEX)) {
+            $modifiedColumns[':p' . $index++]  = '`order_index`';
+        }
+        if ($this->isColumnModified(FeatureTypesPeer::DISABLED)) {
+            $modifiedColumns[':p' . $index++]  = '`disabled`';
+        }
 
         $sql = sprintf(
             'INSERT INTO `feature_types` (%s) VALUES (%s)',
@@ -582,6 +666,12 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
                         break;
                     case '`style_properties`':
                         $stmt->bindValue($identifier, $this->style_properties, PDO::PARAM_STR);
+                        break;
+                    case '`order_index`':
+                        $stmt->bindValue($identifier, $this->order_index, PDO::PARAM_INT);
+                        break;
+                    case '`disabled`':
+                        $stmt->bindValue($identifier, $this->disabled, PDO::PARAM_INT);
                         break;
                 }
             }
@@ -735,6 +825,12 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
             case 5:
                 return $this->getStyleProperties();
                 break;
+            case 6:
+                return $this->getOrderIndex();
+                break;
+            case 7:
+                return $this->getDisabled();
+                break;
             default:
                 return null;
                 break;
@@ -769,6 +865,8 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
             $keys[3] => $this->getType(),
             $keys[4] => $this->getGroupType(),
             $keys[5] => $this->getStyleProperties(),
+            $keys[6] => $this->getOrderIndex(),
+            $keys[7] => $this->getDisabled(),
         );
         $virtualColumns = $this->virtualColumns;
         foreach ($virtualColumns as $key => $virtualColumn) {
@@ -826,6 +924,12 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
             case 5:
                 $this->setStyleProperties($value);
                 break;
+            case 6:
+                $this->setOrderIndex($value);
+                break;
+            case 7:
+                $this->setDisabled($value);
+                break;
         } // switch()
     }
 
@@ -856,6 +960,8 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
         if (array_key_exists($keys[3], $arr)) $this->setType($arr[$keys[3]]);
         if (array_key_exists($keys[4], $arr)) $this->setGroupType($arr[$keys[4]]);
         if (array_key_exists($keys[5], $arr)) $this->setStyleProperties($arr[$keys[5]]);
+        if (array_key_exists($keys[6], $arr)) $this->setOrderIndex($arr[$keys[6]]);
+        if (array_key_exists($keys[7], $arr)) $this->setDisabled($arr[$keys[7]]);
     }
 
     /**
@@ -873,6 +979,8 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
         if ($this->isColumnModified(FeatureTypesPeer::TYPE)) $criteria->add(FeatureTypesPeer::TYPE, $this->type);
         if ($this->isColumnModified(FeatureTypesPeer::GROUP_TYPE)) $criteria->add(FeatureTypesPeer::GROUP_TYPE, $this->group_type);
         if ($this->isColumnModified(FeatureTypesPeer::STYLE_PROPERTIES)) $criteria->add(FeatureTypesPeer::STYLE_PROPERTIES, $this->style_properties);
+        if ($this->isColumnModified(FeatureTypesPeer::ORDER_INDEX)) $criteria->add(FeatureTypesPeer::ORDER_INDEX, $this->order_index);
+        if ($this->isColumnModified(FeatureTypesPeer::DISABLED)) $criteria->add(FeatureTypesPeer::DISABLED, $this->disabled);
 
         return $criteria;
     }
@@ -941,6 +1049,8 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
         $copyObj->setType($this->getType());
         $copyObj->setGroupType($this->getGroupType());
         $copyObj->setStyleProperties($this->getStyleProperties());
+        $copyObj->setOrderIndex($this->getOrderIndex());
+        $copyObj->setDisabled($this->getDisabled());
         if ($makeNew) {
             $copyObj->setNew(true);
             $copyObj->setId(NULL); // this is a auto-increment column, so set to default value
@@ -998,6 +1108,8 @@ abstract class BaseFeatureTypes extends BaseObject implements Persistent
         $this->type = null;
         $this->group_type = null;
         $this->style_properties = null;
+        $this->order_index = null;
+        $this->disabled = null;
         $this->alreadyInSave = false;
         $this->alreadyInValidation = false;
         $this->alreadyInClearAllReferencesDeep = false;

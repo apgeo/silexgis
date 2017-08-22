@@ -23,6 +23,7 @@
  * @method PointsQuery orderByAddTime($order = Criteria::ASC) Order by the add_time column
  * @method PointsQuery orderByIdPointType($order = Criteria::ASC) Order by the _id_point_type column
  * @method PointsQuery orderBySpatialGeometry($order = Criteria::ASC) Order by the spatial_geometry column
+ * @method PointsQuery orderByUpdateTime($order = Criteria::ASC) Order by the update_time column
  *
  * @method PointsQuery groupById() Group by the id column
  * @method PointsQuery groupByLat() Group by the lat column
@@ -41,6 +42,7 @@
  * @method PointsQuery groupByAddTime() Group by the add_time column
  * @method PointsQuery groupByIdPointType() Group by the _id_point_type column
  * @method PointsQuery groupBySpatialGeometry() Group by the spatial_geometry column
+ * @method PointsQuery groupByUpdateTime() Group by the update_time column
  *
  * @method PointsQuery leftJoin($relation) Adds a LEFT JOIN clause to the query
  * @method PointsQuery rightJoin($relation) Adds a RIGHT JOIN clause to the query
@@ -65,6 +67,7 @@
  * @method Points findOneByAddTime(string $add_time) Return the first Points filtered by the add_time column
  * @method Points findOneByIdPointType(string $_id_point_type) Return the first Points filtered by the _id_point_type column
  * @method Points findOneBySpatialGeometry(string $spatial_geometry) Return the first Points filtered by the spatial_geometry column
+ * @method Points findOneByUpdateTime(string $update_time) Return the first Points filtered by the update_time column
  *
  * @method array findById(string $id) Return Points objects filtered by the id column
  * @method array findByLat(double $lat) Return Points objects filtered by the lat column
@@ -83,6 +86,7 @@
  * @method array findByAddTime(string $add_time) Return Points objects filtered by the add_time column
  * @method array findByIdPointType(string $_id_point_type) Return Points objects filtered by the _id_point_type column
  * @method array findBySpatialGeometry(string $spatial_geometry) Return Points objects filtered by the spatial_geometry column
+ * @method array findByUpdateTime(string $update_time) Return Points objects filtered by the update_time column
  *
  * @package    propel.generator.speogis.om
  */
@@ -190,7 +194,7 @@ abstract class BasePointsQuery extends ModelCriteria
      */
     protected function findPkSimple($key, $con)
     {
-        $sql = 'SELECT `id`, `lat`, `long`, `elevation`, `gpx_name`, `gpx_sym`, `gpx_type`, `gpx_cmt`, `gpx_sat`, `gpx_fix`, `gpx_time`, `_type`, `_details`, `added_by_user_id`, `add_time`, `_id_point_type`, `spatial_geometry` FROM `points` WHERE `id` = :p0';
+        $sql = 'SELECT `id`, `lat`, `long`, `elevation`, `gpx_name`, `gpx_sym`, `gpx_type`, `gpx_cmt`, `gpx_sat`, `gpx_fix`, `gpx_time`, `_type`, `_details`, `added_by_user_id`, `add_time`, `_id_point_type`, `spatial_geometry`, `update_time` FROM `points` WHERE `id` = :p0';
         try {
             $stmt = $con->prepare($sql);
             $stmt->bindValue(':p0', $key, PDO::PARAM_STR);
@@ -902,6 +906,49 @@ abstract class BasePointsQuery extends ModelCriteria
         }
 
         return $this->addUsingAlias(PointsPeer::SPATIAL_GEOMETRY, $spatialGeometry, $comparison);
+    }
+
+    /**
+     * Filter the query on the update_time column
+     *
+     * Example usage:
+     * <code>
+     * $query->filterByUpdateTime('2011-03-14'); // WHERE update_time = '2011-03-14'
+     * $query->filterByUpdateTime('now'); // WHERE update_time = '2011-03-14'
+     * $query->filterByUpdateTime(array('max' => 'yesterday')); // WHERE update_time < '2011-03-13'
+     * </code>
+     *
+     * @param     mixed $updateTime The value to use as filter.
+     *              Values can be integers (unix timestamps), DateTime objects, or strings.
+     *              Empty strings are treated as NULL.
+     *              Use scalar values for equality.
+     *              Use array values for in_array() equivalent.
+     *              Use associative array('min' => $minValue, 'max' => $maxValue) for intervals.
+     * @param     string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
+     *
+     * @return PointsQuery The current query, for fluid interface
+     */
+    public function filterByUpdateTime($updateTime = null, $comparison = null)
+    {
+        if (is_array($updateTime)) {
+            $useMinMax = false;
+            if (isset($updateTime['min'])) {
+                $this->addUsingAlias(PointsPeer::UPDATE_TIME, $updateTime['min'], Criteria::GREATER_EQUAL);
+                $useMinMax = true;
+            }
+            if (isset($updateTime['max'])) {
+                $this->addUsingAlias(PointsPeer::UPDATE_TIME, $updateTime['max'], Criteria::LESS_EQUAL);
+                $useMinMax = true;
+            }
+            if ($useMinMax) {
+                return $this;
+            }
+            if (null === $comparison) {
+                $comparison = Criteria::IN;
+            }
+        }
+
+        return $this->addUsingAlias(PointsPeer::UPDATE_TIME, $updateTime, $comparison);
     }
 
     /**

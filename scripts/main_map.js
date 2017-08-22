@@ -5,6 +5,7 @@
   const POINTER_NEW_FEATURE = 4;
   const POINTER_NEW_PICTURE = 5;
   const POINTER_DEFINE_CAVE_FEATURES = 6;
+  const POINTER_MOVE_FEATURE = 7;
 
   var map;
   var layers = [];
@@ -2887,7 +2888,14 @@ function enableDrawNewFeature(feature_type_id)
 	var featureType = featureTypes[feature_type_id].Type;
 	createGeoElementTooltip();
 	addGeoElemInteraction(featureType, featureTypes[feature_type_id]);
-	_set_user_mouse_interaction_type(POINTER_NEW_FEATURE);
+
+	if (featureTypes[feature_type_id].Name == "select")
+		_set_user_mouse_interaction_type(POINTER_INSPECT_FEATURE);
+	else
+		if (featureTypes[feature_type_id].Name == "move")
+			_set_user_mouse_interaction_type(POINTER_MOVE_FEATURE);
+			else
+				_set_user_mouse_interaction_type(POINTER_NEW_FEATURE);
 	//selectDrawFeature('cave');	
 }
 
@@ -3566,6 +3574,11 @@ function newCave(cave_id = undefined, coordinates, existingSelectedFeature)
 function initNewCaveForm()
 {
 	fillCaveTypeEntries();
+
+	// initCaveDetailsUploadControl();
+	initCaveDetailsUploadControl();
+	initCaveFilesTable();
+	initCavesUploadControl();	
 }
 
 function initNewFeatureForm()
@@ -3581,7 +3594,9 @@ function openNewCaveForm(cave_id, coordinates, existingSelectedFeature)
 	
 	if (cave_id)
 		editMode = true;
-		
+	
+	$('#upload_cave_files_cave_id').val(cave_id);
+
 	//$('#saveCave').off('click');
 	$('#caveForm').off('submit');
 	
@@ -3638,8 +3653,14 @@ function openNewCaveForm(cave_id, coordinates, existingSelectedFeature)
 	
 		  //$('#cf_rock_type_id').val(-2);		
         e.preventDefault();
-
-          var formData = $(this).serializeObject();
+	
+		  var formData = $(this).serializeObject();
+		  
+		  if (!isNaN(formData.cf_name))
+			{
+				alert("Cave name cannot be a number!");
+				return;
+			}			  
 		  //var serializedFormData = JSON.stringify(formData);
 		  
 		//   formData.cf_rock_type_id = -2; //-- assign after serialization?
@@ -3675,6 +3696,8 @@ function openNewCaveForm(cave_id, coordinates, existingSelectedFeature)
 
 	if (cave_id)
 	{
+		refreshCaveFilesTable(cave_id);
+
 		// getCave.php is the simple form witout children objects
 		$.getJSON("data/getCaveDetails.php?cave_id=" + cave_id, function( data ) {
 			
@@ -3805,7 +3828,7 @@ function openCaveDetailsForm(cave_id)
 	});
 
 	//-- cave form?
-	$('#caveDetailsAddFilesButton').on('hidden.bs.modal', function () {
+	$('#caveDetailsModal').on('hidden.bs.modal', function () {
 		refreshCaveFilesTable(cave_id);
 	});
 	
@@ -3875,159 +3898,161 @@ function openCaveDetailsForm(cave_id)
 	refreshCaveFilesTable(cave_id);
 }
 	
-function refreshCaveFilesTable(cave_id)
-{
-	var form_data = JSON.stringify( { cave_id: cave_id } );
+// function refreshCaveFilesTable(cave_id)
+// {
+// 	var form_data = JSON.stringify( { cave_id: cave_id } );
 	
-    $.ajax({
-                url: 'data/getFiles.php', // point to server-side PHP script 
-                dataType: 'json', // dataType: 'jsonp', //dataType: 'text',  
-                cache: false,
-                contentType: false,
-                processData: false,
-                data: form_data,
-                type: 'post',
-                success: function(data){
-							var dataSet = [];
+//     $.ajax({
+//                 url: 'data/getFiles.php', // point to server-side PHP script 
+//                 dataType: 'json', // dataType: 'jsonp', //dataType: 'text',  
+//                 cache: false,
+//                 contentType: false,
+//                 processData: false,
+//                 data: form_data,
+//                 type: 'post',
+//                 success: function(data){
+// 							var dataSet = [];
 
-							var file_directory = 'data/uploader/files/';
+// 							var file_directory = 'data/uploader/files/';
 							
-							data.forEach(function(item) {
-								var file_url = file_directory + item.file_name;
-								var file_name_html = "<a href='" + file_url + "' target='_blank' >" + item.file_name + "</a>";
-								dataSet.push([file_name_html, item.size, item.add_time, item.object_type]);
-							});							
+// 							data.forEach(function(item) {
+// 								var file_url = file_directory + item.file_name;
+// 								var file_name_html = "<a href='" + file_url + "' target='_blank' >" + item.file_name + "</a>";
+// 								dataSet.push([file_name_html, item.size, item.add_time, item.object_type]);
+// 							});							
 							  
-							/*$('#cave_files_table').DataTable({
-								//"ajax": '../ajax/data/arrays.txt'
-								data: dataSet,
-							});*/
-							$('#cave_files_table').DataTable().clear();
-							$('#cave_files_table').DataTable()
-								.rows.add(dataSet)
-								.draw();
-                },
-				error:  function(jqXHR, textStatus, errorThrown )
-				{
-					//onFailure(textStatus); //-- show error code returned
-					console.error(errorThrown);
-					console.error("Error loading feature types: " + textStatus + " " + errorThrown);
-					//alert(errMsg);
-				}				
-     });	
+// 							/*$('#cave_files_table').DataTable({
+// 								//"ajax": '../ajax/data/arrays.txt'
+// 								data: dataSet,
+// 							});*/
+// 							$('#cave_files_table').DataTable().clear();
+// 							$('#cave_files_table').DataTable()
+// 								.rows.add(dataSet)
+// 								.draw();
+//                 },
+// 				error:  function(jqXHR, textStatus, errorThrown )
+// 				{
+// 					//onFailure(textStatus); //-- show error code returned
+// 					console.error(errorThrown);
+// 					console.error("Error loading feature types: " + textStatus + " " + errorThrown);
+// 					//alert(errMsg);
+// 				}				
+//      });	
 
 /*	$('#cave_files_table').DataTable( {
         "ajax": '../ajax/data/arrays.txt'
     } );*/
 
-}
+// }
 
 
-function initCaveDetailsUploadControl()
-{
-	/*$('#fileupload').fileupload({
-		//formData: {example: 'test'}
-		url: 'speogis/data/uploader'
-	}).on('fileuploadsubmit', function (e, data) {
-		data.formData = data.context.find(':input').serializeArray();
-	});
+// function initCaveDetailsUploadControl()
+// {
+// 	throw "this doesn't belong here? unmatched_serial_development_confusion_exception";
+// 	/*$('#fileupload').fileupload({
+// 		//formData: {example: 'test'}
+// 		url: 'speogis/data/uploader'
+// 	}).on('fileuploadsubmit', function (e, data) {
+// 		data.formData = data.context.find(':input').serializeArray();
+// 	});
 	
-	$('#fileupload').bind('fileuploadsubmit', function (e, data) {
-		// The example input, doesn't have to be part of the upload form:
-		var input = $('#input');
-		data.formData = {example: input.val()};
-		if (!data.formData.example) {
-		  data.context.find('button').prop('disabled', false);
-		  input.focus();
-		  return false;
-		}
-	});
-	*/
-    //'use strict';
+// 	$('#fileupload').bind('fileuploadsubmit', function (e, data) {
+// 		// The example input, doesn't have to be part of the upload form:
+// 		var input = $('#input');
+// 		data.formData = {example: input.val()};
+// 		if (!data.formData.example) {
+// 		  data.context.find('button').prop('disabled', false);
+// 		  input.focus();
+// 		  return false;
+// 		}
+// 	});
+// 	*/
+//     //'use strict';
 
-    // Initialize the jQuery File Upload widget:
-    /*$('#fileupload').fileupload({
-        // Uncomment the following to send cross-domain cookies:
-        //xhrFields: {withCredentials: true},
-        url: 'data/uploader/'
-		//url: 'data/uploader'
-    });
-	*/
+//     // Initialize the jQuery File Upload widget:
+//     /*$('#fileupload').fileupload({
+//         // Uncomment the following to send cross-domain cookies:
+//         //xhrFields: {withCredentials: true},
+//         url: 'data/uploader/'
+// 		//url: 'data/uploader'
+//     });
+// 	*/
 	
-	 /*$('.fileupload').fileupload({
-        // Uncomment the following to send cross-domain cookies:
-        //xhrFields: {withCredentials: true},
-        //url: 'data/uploader/'
-		//url: 'data/uploader'
-    });*/
+// 	 /*$('.fileupload').fileupload({
+//         // Uncomment the following to send cross-domain cookies:
+//         //xhrFields: {withCredentials: true},
+//         //url: 'data/uploader/'
+// 		//url: 'data/uploader'
+//     });*/
 
 
-	/*
-    // Enable iframe cross-domain access via redirect option:
-    $('#fileupload').fileupload(
-        'option',
-        'redirect',
-        window.location.href.replace(
-            /\/[^\/]*$/,
-            '/cors/result.html?%s'
-        )
-    );
-	*/
+// 	/*
+//     // Enable iframe cross-domain access via redirect option:
+//     $('#fileupload').fileupload(
+//         'option',
+//         'redirect',
+//         window.location.href.replace(
+//             /\/[^\/]*$/,
+//             '/cors/result.html?%s'
+//         )
+//     );
+// 	*/
 	
-	/*
-    if (window.location.hostname === 'blueimp.github.io') {
-        // Demo settings:
-        $('#fileupload').fileupload('option', {
-            url: 'speogis/data/uploader',
-            // Enable image resizing, except for Android and Opera,
-            // which actually support image resizing, but fail to
-            // send Blob objects via XHR requests:
-            disableImageResize: /Android(?!.*Chrome)|Opera/
-                .test(window.navigator.userAgent),
-            maxFileSize: 999000,
-            acceptFileTypes: /(\.|\/)(gif|jpe?g|png)$/i
-        });
-        // Upload server status check for browsers with CORS support:
-        if ($.support.cors) {
-            $.ajax({
-                url: '//jquery-file-upload.appspot.com/',
-                type: 'HEAD'
-            }).fail(function () {
-                $('<div class="alert alert-danger"/>')
-                    .text('Upload server currently unavailable - ' +
-                            new Date())
-                    .appendTo('#fileupload');
-            });
-        }
-    } else 
-	*/
-	{
-        // Load existing files:
+// 	/*
+//     if (window.location.hostname === 'blueimp.github.io') {
+//         // Demo settings:
+//         $('#fileupload').fileupload('option', {
+//             url: 'speogis/data/uploader',
+//             // Enable image resizing, except for Android and Opera,
+//             // which actually support image resizing, but fail to
+//             // send Blob objects via XHR requests:
+//             disableImageResize: /Android(?!.*Chrome)|Opera/
+//                 .test(window.navigator.userAgent),
+//             maxFileSize: 999000,
+//             acceptFileTypes: /(\.|\/)(gif|jpe?g|png)$/i
+//         });
+//         // Upload server status check for browsers with CORS support:
+//         if ($.support.cors) {
+//             $.ajax({
+//                 url: '//jquery-file-upload.appspot.com/',
+//                 type: 'HEAD'
+//             }).fail(function () {
+//                 $('<div class="alert alert-danger"/>')
+//                     .text('Upload server currently unavailable - ' +
+//                             new Date())
+//                     .appendTo('#fileupload');
+//             });
+//         }
+//     } else 
+// 	*/
+// 	{
+//         // Load existing files:
 
 		
-        $('.fileupload').addClass('fileupload-processing');		
-        $.ajax({
-            // Uncomment the following to send cross-domain cookies:
-            //xhrFields: {withCredentials: true},
-            url: $('#fileupload_cave').fileupload('option', 'url'),
-            dataType: 'json',
-            context: $('#fileupload_cave')[0]
-        }).always(function () {
-            $(this).removeClass('fileupload-processing');
-        }).done(function (result) {
-            $(this).fileupload('option', 'done')
-                .call(this, $.Event('done'), {result: result});
-        });
-    }	
+// 		$('#cave_files_fileupload_form').addClass('fileupload-processing');		
+// 		// $('.fileupload').addClass('fileupload-processing');		
+//         $.ajax({
+//             // Uncomment the following to send cross-domain cookies:
+//             //xhrFields: {withCredentials: true},
+//             url: $('#cave_files_fileupload_form').fileupload('option', 'url'),
+//             dataType: 'json',
+//             context: $('#cave_files_fileupload_form')[0]
+//         }).always(function () {
+//             $(this).removeClass('fileupload-processing');
+//         }).done(function (result) {
+//             $(this).fileupload('option', 'done')
+//                 .call(this, $.Event('done'), {result: result});
+//         });
+//     }	
 	
-	// $('#fileupload').fileupload('destroy');
+// 	// $('#fileupload').fileupload('destroy');
 	
-	$('#fileupload_cave').on('submit', function(e) {
-          e.preventDefault();
-		  $('#fileupload_cave').modal('toggle'); 
-	});
+// 	$('#fileupload_cave').on('submit', function(e) {
+//           e.preventDefault();
+// 		  $('#fileupload_cave').modal('toggle'); 
+// 	});
 	
-}
+// }
 // end Cave details form
 ////////////////////////////
 
@@ -5520,8 +5545,6 @@ function showNotification(message, placement = undefined)
 
 function openUploadFilesForm(geoobject_id, geoobject_type) // cave_id, cave_entrance_id, feature_id
 {			
-	
-		
 	$('#upload_files_cave_id').val("");
 	
 	//$('#uploadFilesForm').off('submit');
@@ -7451,12 +7474,15 @@ function refreshCaveEntrancesTable(cave) // cave_id
 		if (cave.CaveEntrances.hasOwnProperty(cave_entrance_key)) 
 		{
 			cave_entrance = cave.CaveEntrances[cave_entrance_key];
-			dataSet.push([cave_entrance.Id, cave_entrance.Name, cave_entrance.Point.Elevation, "<a href='#'>go to</a>"]);
+			dataSet.push([cave_entrance.Id, cave_entrance.Name, cave_entrance.Point.Elevation, "<a href='" + url_base + "?z=15&cave_entrance_id=" + cave_entrance.Id + "' >" + _t().main_map.cave_edit_form.view_on_map + "</a>"]);
 		}
 	}
 							
 	/*$('#cave_files_table').DataTable({
 		//"ajax": '../ajax/data/arrays.txt'
+        "language": {
+        	"url": ""
+        },		
 		data: dataSet,
 	});*/
 
@@ -7468,7 +7494,16 @@ function refreshCaveEntrancesTable(cave) // cave_id
 
 function initCaveEntrancesTable()
 {
+	var datatables_lang_identifier_opt = "dataTables." + _t().misc.datatables_lang_identifier + ".lang";
+
 	$('#cave_entrances_table').DataTable({
+		"searching": false,
+		"paging": false,
+		"bPaginate": false,
+		"bFilter": false,
+        "language": {
+        	"url": url_base + '/scripts/i18n/' + datatables_lang_identifier_opt
+        },		
         "columnDefs": [
             {
                 "targets": [ 0 ],
@@ -7482,6 +7517,378 @@ function initCaveEntrancesTable()
 
 // end Cave entrances table
 ///////////////////////////
+
+
+/////////////////////////////
+// cave files list and upload
+
+function openAddFilesToCaveForm()
+{
+	openUploadCaveFilesForm(undefined, undefined);
+}
+
+function addCaveFiles()
+{
+	var cave_id = $('#upload_cave_files_cave_id').val();
+	openUploadCaveFilesForm(cave_id);
+}
+
+function openUploadCaveFilesForm(cave_id) // cave_id, cave_entrance_id, feature_id
+{
+	//localize_static_html(); //-- could do something wrong to mangle html
+	
+	//$('#upload_cave_files_cave_id').val("");	
+	
+	$('#uploadFilesModalTitleLabel').text("Edit new trip report");
+	// $('#uploadFilesModalTitleLabel').text("Edit new trip report '" + "" +"'");
+	
+	$('#fileupload_target_type').val("cave");
+	$('#fileupload_target_object_id').val(cave_id);
+	
+	/*$('#fileupload_cave').on('click', function (event) 
+		{
+			event.preventDefault();
+			$('#caveModal').modal('toggle'); 
+		});
+	*/
+	/*$('#saveFileUpload').on('click', function () {
+		//$('#uploadFilesModal').modal();
+	});
+	*/
+
+	// workaround for localization problem
+	
+	$('#start_upload_button').text(_t().generic.start_upload);
+	$('#cancel_upload_button').text(_t().generic.cancel);
+	
+	
+	$('#cave_files_fileupload_form').off('submit');
+	$('#cave_files_fileupload_form').on('submit', function(e) {
+		e.preventDefault();
+		$('#caveUploadFilesModal').modal('toggle'); 
+	});
+
+	$('#caveUploadFilesModal').on('hidden.bs.modal', function () {
+		refreshCaveFilesTable(cave_id);
+	});
+
+	
+	/*
+	$('#uploadFilesForm').on('submit', function(e) {
+          e.preventDefault();
+
+          var formData = $(this).serializeObject();
+		  //var serializedFormData = JSON.stringify(formData);
+		  
+		  postDataAsync("data/postCave.php", formData, 
+			function(x) 
+			{ 
+				console.log('close');
+				$('#caveModal').modal('toggle'); 
+				last_added_cave_id = undefined; //-- need to return the cave_id from postCave.php or to load load the last added cave in fillCavePicker()
+				
+				showNotification("Cave <b>" + formData.cave_name + "</b> was saved.");
+				reloadMapFeatures();
+				//$("caveModal").modal('hide');
+			}, 
+			function(err) 
+			{ 
+				console.log('error');
+				alert(err);
+			}
+		  ); // { cave: formData }
+		  
+		  //console.log(formData);
+		  //console.log(JSON.stringify($(this).serializeObject()));          
+        });
+*/		
+	//fillCaveEntries();
+	
+	if (cave_id)
+	{
+		$('#caveUploadFilesModal').modal();
+		/*$.getJSON("data/getCave.php?cave_id=" + cave_id, function( data ) {
+			
+			$('#caveModal').modal();
+			
+			$('#cave_id').val(data.Id);
+			$('#cave_name').val(data.Name);				
+			$('#cave_description').val(data.Description);
+			$('#cave_type').val(data.Typeid);
+			$('#cave_identifier').val(data.Locationidentifier);
+
+			$('#cave_type').selectpicker('refresh');
+			
+			//_caveFormServerData = data;
+			//$('#caveModal').modal();
+		});		
+		*/
+	}
+	else
+		{
+			alert("Please save the new cave first, then reopen the edit cave form. ...feature ;)");
+			return;
+		}
+}
+
+
+/*function refreshTripReportFilesTable(trip_log_id)
+{
+	var form_data = JSON.stringify( { trip_log_id: trip_log_id } );
+	
+    $.ajax({
+                url: url_base + 'data/getTripReportFiles.php?trip_log_id=' + trip_log_id, // point to server-side PHP script 
+                dataType: 'json', // dataType: 'jsonp', //dataType: 'text',  
+                cache: false,
+                contentType: false,
+                processData: false,
+                data: form_data,
+                type: 'post',
+                success: function(data){
+							var dataSet = [];
+
+							var file_directory = url_base + 'data/uploader/files/';
+							
+							data.forEach(function(item) {
+								var file_url = file_directory + item.file_name;
+								var file_name_html = "<a href='" + file_url + "' target='_blank' >" + item.file_name + "</a>";
+								dataSet.push([file_name_html, item.size, item.add_time, 0 //item.object_type
+								]);
+							});
+							  
+							$('#trip_report_files_table').DataTable().clear();
+							$('#trip_report_files_table').DataTable()
+								.rows.add(dataSet)
+								.draw();
+                },
+				error:  function(jqXHR, textStatus, errorThrown )
+				{
+					//onFailure(textStatus); //-- show error code returned
+					console.warn(errorThrown);
+					console.warn("Error loading trip report files: " + textStatus + " " + errorThrown);
+					//console.error(errorThrown);
+					//console.error("Error loading trip report files: " + textStatus + " " + errorThrown);
+					//alert(errMsg);
+				}				
+     });	
+}
+*/
+
+function openUploadCavesForm(geoobject_id, geoobject_type) // cave_id, cave_entrance_id, feature_id
+{				
+	$('#upload_xx_cave_id').val("");
+	
+	//$('#uploadFilesForm').off('submit');
+	//$("#uploadFilesForm")[0].reset();
+	
+	if (geoobject_id)	
+		$('#uploadPicturesModalTitleLabel').text("Edit '" + "" +"'");
+
+/*	
+	$('#uploadFilesForm').on('submit', function(e) {
+          e.preventDefault();
+
+          var formData = $(this).serializeObject();
+		  //var serializedFormData = JSON.stringify(formData);
+		  
+		  postDataAsync("data/postCave.php", formData, 
+			function(x) 
+			{ 
+				console.log('close');
+				$('#caveModal').modal('toggle'); 
+				last_added_cave_id = undefined; //-- need to return the cave_id from postCave.php or to load load the last added cave in fillCavePicker()
+				
+				showNotification("Cave <b>" + formData.cave_name + "</b> was saved.");
+				reloadMapFeatures();
+				//$("caveModal").modal('hide');
+			}, 
+			function(err) 
+			{ 
+				console.log('error');
+				alert(err);
+			}
+		  ); // { cave: formData }
+		  
+		  //console.log(formData);
+		  //console.log(JSON.stringify($(this).serializeObject()));          
+        });
+*/		
+	//fillCaveEntries();
+	
+	//if (geoobject_id)
+	{
+		$('#uploadPicturesModal').modal();
+		/*$.getJSON("data/getCave.php?cave_id=" + cave_id, function( data ) {
+			
+			$('#caveModal').modal();
+			
+			$('#cave_id').val(data.Id);
+			$('#cave_name').val(data.Name);				
+			$('#cave_description').val(data.Description);
+			$('#cave_type').val(data.Typeid);
+			$('#cave_identifier').val(data.Locationidentifier);
+
+			$('#cave_type').selectpicker('refresh');
+			
+			//_caveFormServerData = data;
+			//$('#caveModal').modal();
+		});		
+		*/
+	}
+}
+
+function initCavesUploadControl()
+{
+	$('#addFilesToCave').on('click', function(e) {
+		e.preventDefault(); // To prevent following the link (optional)		
+		addCaveFiles();
+	});
+
+	{
+        // Load existing files:
+		
+		// console.log('#cave_files_fileupload_form');
+		// console.log($('#cave_files_fileupload_form').fileupload('option', 'url'));
+
+        //..$('#pictureUploader').addClass('fileupload-processing');
+        $.ajax({
+            // Uncomment the following to send cross-domain cookies:
+            //xhrFields: {withCredentials: true},
+            url: $('#cave_files_fileupload_form').fileupload('option', 'url'),
+            dataType: 'json',
+            context: $('#cave_files_fileupload_form')[0]
+        }).always(function () {
+            $(this).removeClass('fileupload-processing');
+        }).done(function (result) {
+            $(this).fileupload('option', 'done')
+                .call(this, $.Event('done'), {result: result});
+        });
+    }	
+	
+	// $('#fileupload').fileupload('destroy');
+}
+
+function openAddFilesToCaveForm()
+{
+	openUploadCaveFilesForm(undefined, undefined);
+}
+
+function refreshCaveFilesTable(cave_id)
+{
+	var form_data = JSON.stringify( { cave_id: cave_id } );
+	
+    $.ajax({
+                url: url_base + 'data/getCaveFiles.php', // ?cave_id=' + cave_id, // point to server-side PHP script 
+                dataType: 'json', // dataType: 'jsonp', //dataType: 'text',  
+                cache: false,
+                contentType: false,
+                processData: false,
+                data: form_data,
+                type: 'post',
+                success: function(data){
+							var dataSet = [];
+
+							var file_directory = url_base + 'data/uploader/files/';
+							
+							data.forEach(function(item) {
+								var file_url = file_directory + item.file_name;
+
+								if ((item.file_name.indexOf(".lox") !== -1) ||
+									(item.file_name.indexOf(".3d") !== -1)
+								   )
+									file_url = url_base + "caveview/show_model.php?file_id=" + item.fid;
+
+								var file_name_html = "<a href='" + file_url + "' target='_blank' >" + item.file_name + "</a>";
+								dataSet.push([file_name_html, item.size, item.add_time, 0/*item.object_type*/]);
+							});
+							  
+							/*$('#cave_files_table').DataTable({
+								//"ajax": '../ajax/data/arrays.txt'
+								data: dataSet,
+							});*/
+							$('#cave_edit_files_table').DataTable().clear();
+							$('#cave_edit_files_table').DataTable()
+								.rows.add(dataSet)
+								.draw();
+                },
+				error:  function(jqXHR, textStatus, errorThrown )
+				{
+					//onFailure(textStatus); //-- show error code returned
+					console.warn(errorThrown);
+					console.warn("Error loading trip report files: " + textStatus + " " + errorThrown);
+					//console.error(errorThrown);
+					//console.error("Error loading trip report files: " + textStatus + " " + errorThrown);
+					//alert(errMsg);
+				}
+     });	
+}
+
+
+function initCaveDetailsUploadControl()
+{
+	{
+        // Load existing files:
+		
+		// $('.fileupload').addClass('fileupload-processing');		
+		$('#cave_files_fileupload_form').fileupload(); // 'option', 'url'
+		$('#cave_files_fileupload_form').addClass('fileupload-processing');
+
+        $.ajax({
+            // Uncomment the following to send cross-domain cookies:
+            //xhrFields: {withCredentials: true},
+            url: $('#cave_files_fileupload_form').fileupload('option', 'url'),
+            dataType: 'json',
+            context: $('#cave_files_fileupload_form')[0]
+        }).always(function () {
+            $(this).removeClass('fileupload-processing');
+        }).done(function (result) {
+            $(this).fileupload('option', 'done')
+                .call(this, $.Event('done'), {result: result});
+        });
+    }
+	
+	// $('#fileupload').fileupload('destroy');
+	
+	$('#cave_files_fileupload_form').on('submit', function(e) {
+          e.preventDefault();
+		  $('#cave_files_fileupload_form').modal('toggle'); 
+	});
+	
+}
+
+
+function initCaveFilesTable()
+{
+	//$(document).ready(function() { //});
+
+	var datatables_lang_identifier_opt = "dataTables." + _t().misc.datatables_lang_identifier + ".lang";
+	
+	//$('.fileupload').fileupload({
+	$('#cave_files_fileupload_form').fileupload({
+		// Uncomment the following to send cross-domain cookies:
+		//xhrFields: {withCredentials: true},
+		//url: 'data/uploader/'
+		
+		// "searching": false,
+		// "paging": false,
+		// "bPaginate": false,
+		// "bFilter": false,
+		"language": {
+			"url": url_base + '/scripts/i18n/' + datatables_lang_identifier_opt
+		},
+		// "columnDefs": [
+		// 	{
+		// 		"targets": [ 0 ],
+		// 		"visible": false,
+		// 		"searchable": false
+		// 	},
+		// ]
+	});
+}
+
+// end cave files
+/////////////////////////////
+
 
 
 

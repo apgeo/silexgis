@@ -137,6 +137,18 @@ abstract class BaseCavesPeer
     /** the column name for the altitude field */
     const ALTITUDE = 'caves.altitude';
 
+    /** The enumerated values for the rock_type_id field */
+    const ROCK_TYPE_ID_UNKNOWN = 'unknown';
+    const ROCK_TYPE_ID_LIMESTONE = 'limestone';
+    const ROCK_TYPE_ID_BASALT = 'basalt';
+    const ROCK_TYPE_ID_GYPSUM = 'gypsum';
+    const ROCK_TYPE_ID_DOLOMITE = 'dolomite';
+    const ROCK_TYPE_ID_CRYSTALLINE_SCHIST = 'crystalline_schist';
+    const ROCK_TYPE_ID_ICE = 'ice';
+    const ROCK_TYPE_ID_LAVA = 'lava';
+    const ROCK_TYPE_ID_CHALK = 'chalk';
+    const ROCK_TYPE_ID_OTHER = 'other';
+
     /** The enumerated values for the exploration_status field */
     const EXPLORATION_STATUS_UNKNOWN = 'Unknown';
     const EXPLORATION_STATUS_NOT_EXPLORED = 'Not explored';
@@ -187,6 +199,18 @@ abstract class BaseCavesPeer
 
     /** The enumerated values for this table */
     protected static $enumValueSets = array(
+        CavesPeer::ROCK_TYPE_ID => array(
+            CavesPeer::ROCK_TYPE_ID_UNKNOWN,
+            CavesPeer::ROCK_TYPE_ID_LIMESTONE,
+            CavesPeer::ROCK_TYPE_ID_BASALT,
+            CavesPeer::ROCK_TYPE_ID_GYPSUM,
+            CavesPeer::ROCK_TYPE_ID_DOLOMITE,
+            CavesPeer::ROCK_TYPE_ID_CRYSTALLINE_SCHIST,
+            CavesPeer::ROCK_TYPE_ID_ICE,
+            CavesPeer::ROCK_TYPE_ID_LAVA,
+            CavesPeer::ROCK_TYPE_ID_CHALK,
+            CavesPeer::ROCK_TYPE_ID_OTHER,
+        ),
         CavesPeer::EXPLORATION_STATUS => array(
             CavesPeer::EXPLORATION_STATUS_UNKNOWN,
             CavesPeer::EXPLORATION_STATUS_NOT_EXPLORED,
