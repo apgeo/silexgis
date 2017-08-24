@@ -104,7 +104,7 @@ var localizedText = {
 					bing_labels: "Labels",
 					bing_aerial: "Aerial",
 					bing_road: "Road",
-				}
+				}				
 			},
 			map_context_menu:
 			{
@@ -211,7 +211,12 @@ var localizedText = {
 			about_form:
 			{
 				title: "About SilexGIS",
-			},			
+			},
+			notifications:
+			{
+				saved_cave_entrance: "Cave entrance <b>%s</b> was saved.",
+				saved_entrance: "Cave <b>%s</b> was saved."
+			}
 		},
 			trip_reports:
 			{
@@ -513,15 +518,15 @@ var localizedText = {
 				{
 					points: "Puncte",
 					exploration_points: "Obiective explorare",
-					geofiles: "Fisiere geografice",
-					files: "Fisiere",
+					geofiles: "fișiere geografice",
+					files: "fișiere",
 					georeferenced_maps: "Harti georeferentiate",
 					caves: "Peșteri"
 				},				
-				files: "Fisiere",
+				files: "fișiere",
 				users: "Utilizatori",				
 				reports: "Rapoarte",
-				add: "Adauga",
+				add: "Adaugă",
 				add_submenu:
 				{
 					picture: "Poza",
@@ -590,7 +595,7 @@ var localizedText = {
 					pictures_layer: "Fotografii",
 					drawings: "schite",
 					measurements_layer: "masuratori",
-					geo_files: "fisiere geo",
+					geo_files: "fișiere geo",
 					bing_labels: "Etichete",
 					bing_aerial: "Aerial",
 					bing_road: "Drumuri",
@@ -683,83 +688,88 @@ var localizedText = {
 			cave_feature_edit_form:
 			{
 				title_new: "Parte de peșteră nouă",
-				title_edit: "Editeaza parte de peșteră",
+				title_edit: "Editează parte de peșteră",
 				name: "Nume",
 				description: "Descriere",
 			},
 			upload_files_form: //-- should be moved outside as function is generic
 			{
-				title: "Incarca fisiere",
+				title: "Incarcă fișiere",
 				//title_edit: "",				
 			},
 			upload_pictures_form: //-- should be moved outside as function is generic
 			{
-				title: "Incarca poze",
+				title: "Incarcă poze",
 				//title_edit: "",
-				add_pictures: "Adauga poze",
+				add_pictures: "Adaugă poze",
 			},			
 			about_form:
 			{
 				title: "Despre SilexGIS",
 			},
+			notifications:
+			{
+				saved_cave_entrance: "Intrarea <b>%s</b> a fost salvată.",
+				saved_entrance: "Peștera <b>%s</b> a fost salvată."
+			}			
 		},
 			trip_reports:
 			{
-				page_title: "Rapoarte de tura",
-				title_new_trip_report_form: "Raport now",
-				title_edit_trip_report_form: "Editeaza raport",
-				btn_add_report: "Adauga raport",
+				page_title: "Rapoarte de tură",
+				title_new_trip_report_form: "Raport nou",
+				title_edit_trip_report_form: "Editează raport",
+				btn_add_report: "Adaugă raport",
 				col_place: "Loc",
-				col_start : "Inceput",
-				col_end : "Sfarsit",
+				col_start : "Început",
+				col_end : "Sfarșit",
 				col_details : "Detalii",
-				col_participants : "Participanti",
-				col_added_on : "Adaugat la",
-				col_edit : "Editeaza",
-				col_delete : "Sterge",
-				edit_link : "editeaza",
+				col_participants : "Participanți",
+				col_added_on : "Adăugat la",
+				col_edit : "Editează",
+				col_delete : "Șterge",
+				edit_link : "editează",
 				pages_label : "?",
 				
 				trip_edit_form:
 				{
-					place: "Adauga loc(uri)",
-					start : "Inceput",
-					end : "Sfarsit",
+					place: "Adaugă loc(uri)",
+					start : "Început",
+					end : "Sfârșit",
 					details : "Detalii",
-					participants : "Participanti",
+					participants : "Participanți",
 				}
 			},
 			
 			add_file:
 			{
-				page_title: "Adauga fisier",
-				description_text: "Selecteaza fisierul",
-				choose_file: "Selecteaza fisier",
-				upload_file: "Incarca fisier"
+				page_title: "Adaugă fișier",
+				description_text: "Selectează fișierul",
+				choose_file: "Selectează fișier",
+				upload_file: "Incarcă fișier"
 			},
 
 			add_multiple_files:
 			{
-				page_title: "Adauga fisiere",
-				description_text: "Selecteaza fisierele",
-				choose_file: "Selecteaza fisiere",
-				upload_file: "Incarca fisiere"
+				page_title: "Adaugă fișiere",
+				description_text: "Selectează fișierele",
+				choose_file: "Selectează fișiere",
+				upload_file: "Incarcă fișiere"
 			},
 
 			add_geofile:
 			{
-				page_title: "Adauga fisier cu date geografice",
-				description_text: "Selecteaza fisierul (GPX, KML, GeoJSON, Shapefile)",
-				choose_file: "Selecteaza fisier",
-				upload_file: "Incarca fisier"
+				page_title: "Adaugă fișier cu date geografice",
+				description_text: "Selectează fișierul (GPX, KML, GeoJSON, Shapefile)",
+				choose_file: "Selectează fișier",
+				upload_file: "Incarcă fișier"
 			},
 
 			add_multiple_geofiles:
 			{
-				page_title: "Adauga fisiere cu date geografice",
-				description_text: "Selecteaza fisierele (GPX, KML, GeoJSON, Shapefile)",
-				choose_file: "Selecteaza fisiere",
-				upload_file: "Incarca fisiere"
+				page_title: "Adaugă fișiere cu date geografice",
+				description_text: "Selectează fișierele (GPX, KML, GeoJSON, Shapefile)",
+				choose_file: "Selectează fișiere",
+				upload_file: "Incarcă fișiere"
 			},
 			
 			users:
@@ -796,16 +806,16 @@ var localizedText = {
 			
 			files:
 			{
-				page_title: "Fisiere",
-				add_file: "Adauga fisier",
-				add_multiple_files: "Adauga fisiere multiple",
+				page_title: "fișiere",
+				add_file: "Adaugă fișier",
+				add_multiple_files: "Adaugă fișiere multiple",
 			},
 
 			geofiles:
 			{
-				page_title: "Fisiere cu date geografice",
-				add_geofile: "Adauga fisier",
-				add_multiple_geofiles: "Adauga fisiere multiple",
+				page_title: "fișiere cu date geografice",
+				add_geofile: "Adaugă fișier",
+				add_multiple_geofiles: "Adaugă fișiere multiple",
 
 				col_enabled: "Activat",
 				col_size: "Dimensiune",
@@ -839,7 +849,7 @@ var localizedText = {
 			exploration_points:
 			{
 				page_title: "Obiective explorare",
-				page_description: "Obiective de explorare se adauga pe harta folosind tipul de obiect 'obiective de explorare'",
+				page_description: "Obiective de explorare se Adaugă pe harta folosind tipul de obiect 'obiective de explorare'",
 				col_lat: "Latitudine",
 				col_long: "Longitudine",
 				col_alt: "Altitudine",
@@ -855,7 +865,7 @@ var localizedText = {
 
 			georeferenced_maps:
 			{
-				title_new_georeferenced_map_form: "Adauga harta georeferentiata",
+				title_new_georeferenced_map_form: "Adaugă harta georeferentiata",
 				title: "Titlul hartii",
 				description: "Descriere",
 				boundaries: "Limite",
@@ -868,8 +878,8 @@ var localizedText = {
 			georeferenced_maps_page:
 			{
 				page_title: "Harti georeferentiate",
-				description_text: "Harti georeferentiate sunt fisiere imagine cu harti care au asociate si coordonate geografice pentru punctele de pe harta pentru a putea fi suprapuse geografic peste alte straturi cu harti.",
-				btn_add_georeferenced_image: "Adauga imagine georeferentiata"
+				description_text: "Harti georeferentiate sunt fișiere imagine cu harti care au asociate si coordonate geografice pentru punctele de pe harta pentru a putea fi suprapuse geografic peste alte straturi cu harti.",
+				btn_add_georeferenced_image: "Adaugă imagine georeferentiata"
 			},
 
 			caves:
@@ -888,17 +898,17 @@ var localizedText = {
 				close: "Inchide",
 				del: "Sterge",
 				remove: "Sterge",
-				add: "Adauga",
-				add_files : "Adauga fisiere",
+				add: "Adaugă",
+				add_files : "Adaugă fișiere",
 				cancel: "Anuleaza",
 				browse: "Deschide",
 				
-				start_upload: "Incarca",
+				start_upload: "Incarcă",
 				end_upload: "Opreste", // Stop, Termina
 				error: "Eroare",
 				processing: "Proceseaza...",
 				
-				add_time: "Data adaugarii",				
+				add_time: "Data Adaugării",				
 				
 				back: "Inapoi",
 				
@@ -906,7 +916,7 @@ var localizedText = {
 				{
 					name: "Nume",
 					size: "Marime",
-					add_time: "Adaugat la",
+					add_time: "Adaugăt la",
 					category: "Categorie",
 				}
 			},

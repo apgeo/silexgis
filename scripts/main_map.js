@@ -3610,27 +3610,46 @@ function initNewFeatureForm()
 }
 
 function openNewCaveForm(cave_id, coordinates, existingSelectedFeature, entrance_type = "cave")
-{
+{	
 	editMode = false;
-	
-	if (cave_id)
-		editMode = true;
+
 	
 	$('#upload_cave_files_cave_id').val(cave_id);
+	
+		//$('#saveCave').off('click');
+		$('#caveForm').off('submit');
+		
+		//$("#caveForm").find("input, input[type=text], textarea").val("");
+		$('#cave_id').val("");
+		$('#cave_coords_lon').val("");
+		$('#cave_coords_lat').val("");
+		$('#entrance_existing_point_id').val("");
+		
+		$('#ce_feature_string').val(getFeatureGeoJsonString(existingSelectedFeature));
+		// $('#ce_feature_string').val(getFeatureGeoJsonString(coordinates));
+		
+		$("#caveForm")[0].reset();
+		
 
-	//$('#saveCave').off('click');
-	$('#caveForm').off('submit');
+	if (cave_id)
+	{
+		editMode = true;
+		
+		$("#cave_coords_lat").attr('disabled', 'disabled');
+		$("#cave_coords_lon").attr('disabled', 'disabled');
+
+		var coordinates_espg4326 = ol.proj.transform(existingSelectedFeature.getGeometry().getCoordinates(), 'EPSG:3857', 'EPSG:4326');
+
+		$('#cave_coords_lat').val(coordinates_espg4326[1]);
+		$('#cave_coords_lon').val(coordinates_espg4326[0]);		
+	}
+	else
+		{
+			$('#cave_coords_lat').removeAttr('disabled');
+			$('#cave_coords_lon').removeAttr('disabled');
+		}
 	
-	//$("#caveForm").find("input, input[type=text], textarea").val("");
-	$('#cave_id').val("");
-	$('#cave_coords_lon').val("");
-	$('#cave_coords_lat').val("");
-	$('#entrance_existing_point_id').val("");
-	
-	$('#ce_feature_string').val(getFeatureGeoJsonString(existingSelectedFeature));
-	// $('#ce_feature_string').val(getFeatureGeoJsonString(coordinates));
-	
-	$("#caveForm")[0].reset();
+	var local_existingSelectedFeature = existingSelectedFeature;
 	
 	
 	if (entrance_type == "pot")
@@ -3670,7 +3689,7 @@ function openNewCaveForm(cave_id, coordinates, existingSelectedFeature, entrance
 	}
 	
 	if (editMode)
-		$('#caveModalTitleLabel').text(_t().main_map.cave_edit_form.title_edit + " <i>" +selFeatureProps['cave_name']  +"</i>");
+		$('#caveModalTitleLabel').text(_t().main_map.cave_edit_form.title_edit + " " +selFeatureProps['cave_name']  +"");
 	else
 		$('#caveModalTitleLabel').text(_t().main_map.cave_edit_form.title_new);
 	
@@ -3686,6 +3705,19 @@ function openNewCaveForm(cave_id, coordinates, existingSelectedFeature, entrance
 		  //$('#cf_rock_type_id').val(-2);		
         e.preventDefault();
 	
+
+		  // update coordinates based on form input value
+		  var flat = $('#cave_coords_lat').val();
+		  var flon = $('#cave_coords_lon').val();
+  		  
+		  var coordinates_espg3857 = ol.proj.transform([parseFloat(flon), parseFloat(flat)], 'EPSG:4326', 'EPSG:3857'); 
+
+		  local_existingSelectedFeature.getGeometry().setCoordinates(coordinates_espg3857);
+
+		  //if (existingSelectedFeature) //-- ?
+		  $('#ce_feature_string').val(getFeatureGeoJsonString(local_existingSelectedFeature));
+		  
+
 		  var formData = $(this).serializeObject();
 		  
 		  if (!isNaN(formData.cf_name))
@@ -4152,14 +4184,12 @@ function openNewCaveEntranceForm(cave_entrance_id, coordinates, existingSelected
 		$('#cave_entrance_coords_lat').val(coordinates_espg4326[1]);
 		$('#cave_entrance_coords_lon').val(coordinates_espg4326[0]);
 		$('#cave_entrance_coords_label').text(rtrim(coordinates_espg4326[1]+"", 8) + ",  " + rtrim(coordinates_espg4326[0]+"", 8) + ((selFeatureProps != undefined) ? ((selFeatureProps.gpx_name != undefined) ? " : " + selFeatureProps.gpx_name : "") : ""));
-
-
-	}	
+	}
 	
 	if (editMode)
 		;//$('#caveEntranceModalTitleLabel').text("Edit cave entrance '" + selFeatureProps['cave_entrance_name'] +"'");
 	else
-		$('#caveEntranceModalTitleLabel').text("New cave entrance");
+		$('#caveEntranceModalTitleLabel').text(_t().main_map.cave_entrance_edit_form.title_new);
 
 	/*	
 	$('#saveCave').on('click', function(e) {
@@ -4192,7 +4222,8 @@ function openNewCaveEntranceForm(cave_entrance_id, coordinates, existingSelected
 				console.log('close');
 				$('#caveEntranceModal').modal('toggle'); 
 				
-				showNotification("Cave entrance <b>" + formData.cave_entrance_name + "</b> was saved.");
+				// showNotification("Cave entrance <b>" + formData.cave_entrance_name + "</b> was saved.");
+				showNotification(_t().main_map.notifications.saved_cave_entrance.format(formData.cave_entrance_name));
 				
 				reloadMapFeatures();
 				/* //-- $("caveModal").modal('hide');*/ 
@@ -7671,7 +7702,7 @@ function openUploadCaveFilesForm(cave_id) // cave_id, cave_entrance_id, feature_
 	}
 	else
 		{
-			alert("Please save the new cave first, then reopen the edit cave form. ...feature ;)");
+			alert("Salveaza pestera prima data si apoi revino.   Please save the new cave first, then reopen the edit cave form. ...feature ;)");
 			return;
 		}
 }
@@ -8033,6 +8064,13 @@ function cloneObject(obj){
     return obj;
 }
 
+String.prototype.format = function(){
+    var a = this, b;
+    for(b in arguments){
+        a = a.replace(/%[a-z]/,arguments[b]);
+    }
+    return a; // Make chainable
+};
 //-- implementation of Object.prototype functions generates errors like  "error SyntaxError: Failed to execute setRequestHeader' on 'XMLHttpRequest' " ?
 
 /*Object.prototype.getName = function() { 

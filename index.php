@@ -146,8 +146,8 @@
                         <!-- class="form-inline" -->
 
                         <input type="hidden" id="cave_id" name="cave_id">
-                        <input type="hidden" id="cave_coords_lat" name="cave_coords_lat">
-                        <input type="hidden" id="cave_coords_lon" name="cave_coords_lon">
+                        <!-- <input type="hidden" id="cave_coords_lat" name="cave_coords_lat">
+                        <input type="hidden" id="cave_coords_lon" name="cave_coords_lon"> -->
                         <input type="hidden" id="entrance_existing_point_id" name="entrance_existing_point_id">
 
                         <input type="hidden" id="ce_feature_string" name="ce_feature_string">
@@ -168,6 +168,17 @@
                             <div role="tabpanel" class="tab-pane active" id="main">
 
                                 <br/>
+
+                                <div class="form-group row">
+                                    <label for="cave_coords_lat" class="col-sm-2 control-label">Lat:</label>
+                                    <div class="col-sm-4">
+                                        <input type='number' size='9' step="any" class="form-control" id="cave_coords_lat" name="cave_coords_lat">
+                                    </div>
+                                    <label for="cave_coords_lon" class="col-sm-2 control-label">Long:</label>
+                                    <div class="col-sm-4">
+                                        <input type='number' size='9' step="any" class="form-control" id="cave_coords_lon" name="cave_coords_lon">
+                                    </div>
+                                </div>
 
                                 <div class="form-group row">
                                     <label for="cf_name" class="col-sm-4 control-label">*{main_map.cave_edit_form.name}*:</label>
@@ -474,7 +485,9 @@
                                     </thead>
                                 </table>
 
-                                <button class="btn btn-primary" id="addFilesToCave">*{generic.add_files}*</button>
+                                <!-- <button class="btn" id="addFilesToCave">*{generic.add_files}*</button> -->
+                                <!-- //-- link instead of button because, for undetermined cause, the button event gets called on enter in form instead of the default button -->
+                                <a href="#" class="btn btn-info" role="button" id="addFilesToCave" >*{generic.add_files}*</a>
 
 
                                 <!-- 
@@ -486,7 +499,8 @@
                             <div role="tabpanel" class="tab-pane" id="pictures">
                                 <br/>
 
-                                <button class="btn btn-primary" id="addPicturesToCave">*{generic.add_files}*</button>
+                                <!-- <button class="btn" id="addPicturesToCave">*{generic.add_files}*</button> -->
+                                <a href="#" class="btn btn-info" role="button" id="addPicturesToCave" >*{generic.add_files}*</a>
                             </div>
                         </div>
 
@@ -536,7 +550,7 @@
                                                                 <span>*{generic.add_files}*</span>
                                 <input type="file" name="files[]" multiple>
                                 </span>
-                                <button type="submit" class="btn btn-primary start">
+                                <button type="submit" class="btn start"> <!-- btn-primary -->
                                                                 <i class="icon-upload icon-white"></i>
                                                                 <span>*{generic.start_upload}*</span>
                                                             </button>
