@@ -114,6 +114,17 @@ function postDataAsync(_url, data, onSuccess, onFailure)
 });
 }
 
+function initAboutForm()
+{
+	
+}	
+
+function showAboutForm()
+{
+	$('#aboutModal').modal();
+}
+
+
 function showNotification(message, placement = undefined)
 {
 	// http://bootstrap-notify.remabledesigns.com/#documentation
@@ -209,4 +220,3 @@ Object.prototype.inCollection = function() {
     return false;
 }
 */
-

@@ -1,6 +1,8 @@
 <?php
-	//session_start();
-    $root = realpath($_SERVER["DOCUMENT_ROOT"])."/speogis";
+	//session_start();    
+	require_once dirname(__DIR__).'/config.php';
+	//$root = realpath($_SERVER["DOCUMENT_ROOT"])."/silexgis/demo/";
+	$root = ROOTPATH;
 	
 	require_once "$root/auth.php";
 	//echo "<header__>";
@@ -32,3 +34,43 @@
 	//</script>-->
 ?>
 <script type="text/javascript" src="<?=WEBROOT ?>scripts/user_common.js"></script>
+
+<!-- 
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+	About form
+	XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+-->
+
+<div class="modal fade" id="aboutModal" tabindex="-1" role="dialog" aria-labelledby="aboutModalTitleLabel">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title" id="aboutModalTitleLabel">*{main_map.about_form.title}*</h4>
+                    <!-- <h5><i><div id="feature_coords_label"></div></i></h5> -->
+                </div>
+                <div class="modal-body">
+                    <!-- <form id="aboutForm" role="form" > -->
+                        <a href="http://www.speosilex.ro/silexgis/" target="_blank" >Website SilexGIS</a>
+                        <br/>
+                        <br/>
+                        <a href="https://github.com/apgeo/silexgis" target="_blank" >SilexGIS pe GitHub</a>
+                        <br/>
+                        <br/>
+                        <a href="http://www.speosilex.ro/" target="_blank" >Silex Brașov</a>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-default" data-dismiss="modal">*{generic.close}*</button>                            
+                        </div>
+
+                    <!-- </form> -->
+                </div>
+
+            </div>
+        </div>
+    </div>
+    <!--
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ	
+	End About feature form
+	ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+-->

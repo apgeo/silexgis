@@ -56,8 +56,10 @@ var localizedText = {
 				tools: "Tools",
 				tools_submenu:
 				{
-					export_map: "Export"
+					export_map: "Export",
+					show_3d_models: "Show 3d models"
 				},
+				about: "About",
 				search_features_label: "Search features",
 			},
 			user_menu:
@@ -74,7 +76,9 @@ var localizedText = {
 					type: "Type",
 					opt_distance: "Distance",
 					opt_area: "Area",
-					opt_geodesic_measurement: "Geodesic measurement"
+					opt_geodesic_measurement: "Geodesic measurement",
+					continue_line_message: "Click to continue the line",
+					continue_polygon_message: "Click to continue the polygon",
 				},
 				map_views:
 				{
@@ -148,7 +152,16 @@ var localizedText = {
 				discoverers: "Discoverer(s)",
 				elevation: "Elevation",
 				entrance: "Entrance",
-				view_on_map: "map"				
+				view_on_map: "map",			
+				
+				tab_identification: "Identification",
+				tab_geology: "Geology",
+				tab_location: "Location",
+				tab_topometry: "Topometry",
+				tab_other: "Other",
+				tab_entrances: "Entrances",
+				tab_files: "Files",
+				tab_pictures: "Pictures"
 			},
 			feature_edit_form:
 			{
@@ -195,6 +208,10 @@ var localizedText = {
 				//title_edit: "",
 				add_pictures: "Add pictures",
 			},
+			about_form:
+			{
+				title: "About SilexGIS",
+			},			
 		},
 			trip_reports:
 			{
@@ -298,7 +315,19 @@ var localizedText = {
 			{
 				page_title: "Geo files",
 				add_geofile: "Add geofile",
-				add_multiple_geofiles: "Add multiple geofiles",				
+				add_multiple_geofiles: "Add multiple geofiles",
+				col_enabled: "Enabled",
+				col_size: "Size",
+				col_user: "User",
+				col_name: "Name",
+				col_time: "Time",
+				col_type: "Type",
+				col_original_style: "Original style",
+				// col_map_location: "Location",
+				// col_view: "Details",
+				
+				// details: "Details",
+				
 			},
 			
 			gps_points:
@@ -518,8 +547,10 @@ var localizedText = {
 				tools: "Unelte",
 				tools_submenu:
 				{
-					export_map: "Exporta ca imagine"
+					export_map: "Exporta ca imagine",
+					show_3d_models: "Modele 3d"
 				},
+				about: "Despre",
 				search_features_label: "Cauta locuri",
 			},
 			user_menu:
@@ -536,7 +567,9 @@ var localizedText = {
 					type: "tip",
 					opt_distance: "Distanta",
 					opt_area: "Arie",
-					opt_geodesic_measurement: "Distanta geodezica" // geografica / geodezica ? model simplu al suprafetei fara MDE
+					opt_geodesic_measurement: "Distanta geodezica", // geografica / geodezica ? model simplu al suprafetei fara MDE
+					continue_line_message: "Click pentru a continua masurarea distantei",
+					continue_polygon_message: "Click pentru a continua masurarea ariei",
 				},
 				map_views:
 				{
@@ -609,7 +642,16 @@ var localizedText = {
 				discoverers: "Descoperitor(i)",
 				elevation: "Altitudine",
 				entrance: "Intrare",
-				view_on_map: "pe hartă"
+				view_on_map: "pe hartă",
+
+				tab_identification: "Identificare",
+				tab_geology: "Geologie",
+				tab_location: "Localizare",
+				tab_topometry: "Topometrie",
+				tab_other: "Altele",
+				tab_entrances: "Intrări",
+				tab_files: "Fișiere",
+				tab_pictures: "Poze"				
 			},
 			feature_edit_form:
 			{
@@ -656,6 +698,10 @@ var localizedText = {
 				//title_edit: "",
 				add_pictures: "Adauga poze",
 			},			
+			about_form:
+			{
+				title: "Despre SilexGIS",
+			},
 		},
 			trip_reports:
 			{
@@ -760,6 +806,19 @@ var localizedText = {
 				page_title: "Fisiere cu date geografice",
 				add_geofile: "Adauga fisier",
 				add_multiple_geofiles: "Adauga fisiere multiple",
+
+				col_enabled: "Activat",
+				col_size: "Dimensiune",
+				col_user: "Utilizator",
+				col_name: "Nume",
+				col_time: "Data",
+				col_type: "Tip",
+				col_original_style: "Stil original",
+				// col_map_location: "Location",
+				// col_view: "Details",
+				
+				// details: "Details",
+
 			},
 			
 			gps_points:

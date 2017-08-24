@@ -137,7 +137,9 @@ body           { width:100%; height:100%; margin:0; font-family:sans-serif; }
 	   used when nav has class navbar-fixed-top
 	*/
 	
+	/* body { padding-top: 50px; } */
 	body { padding-top: 50px; }
+
 	
 	/*	
 	for smaller nav bar uncomment this, set body -> padding-top the same value as navbar -> height
@@ -552,11 +554,11 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 <?php
 	endif;
 ?>
-  <meta name="description" content="Silex GIS" />
+  <meta name="description" content="SilexGIS" />
 
-  
+<?php @include_once ROOTPATH."/ganalytics.php" ?>
 </head>
-<body>
+<body style="padding-top: 50px;" >
 <span id="user_language" style="visibility:hidden" ><?="$user_language" ?></span>
 <!-- doc: http://getbootstrap.com/components/#navbar-fixed-top -->
 <nav class="navbar navbar-default navbar-fixed-top" > <!--role="navigation" --> 
@@ -566,10 +568,15 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
       <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
         <span class="sr-only">Toggle navigation</span>
         <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
+        <!-- <span class="icon-bar"></span>
+        <span class="icon-bar"></span> -->
       </button>
-      <a class="navbar-brand" href="<?=WEBROOT ?>">SilexGIS</a>
+	  <div>	  
+	  	<a class="navbar-brand" href="<?=WEBROOT ?>">
+			<img src="<?=$application_url_root ?>/assets/img/silexgis_1_op_sm.png" style="float: left; margin: 0 auto;" class="img-responsive" />
+			<span>SilexGIS</span>
+		</a>
+	  </div>
     </div>
 
     <!-- Collect the nav links, forms, and other content for toggling -->
@@ -648,10 +655,12 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 				<li><a id="export_map" href="#" onclick="" download="map.png" >*{main_map.menu.tools_submenu.export_map}*</a></li>
 			<?php endif; ?>
 		
-			<li><a id="show_cave_view_3d_section" href="<?=$application_url_root ?>/caveview/show_model.php?file_id=all" target="_blank">Show 3d models</a></li>
+			<li><a id="show_cave_view_3d_section" href="<?=$application_url_root ?>/caveview/show_model.php?file_id=all" target="_blank">*{main_map.menu.tools_submenu.show_3d_models}*</a></li>
 			<!--<li><a href="#" onclick="exportMap" download="map.png" >Export</a></li>-->
 		  </ul>
 		</li>
+
+		<li <?php if ($currentPage == 'files') echo "class='active'"; ?> ><a id="show_about_form" href="#" onclick="showAboutForm();" >*{main_map.menu.about}*</a></li>
 		
 		<!--<li><a href="#" onclick="enableCaveFeatureEditing();">Test c m</a></li>-->
 		<!--
@@ -775,5 +784,5 @@ https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap4.min.js
 		var url_base = 'http://' + window.location.host + '<?=$application_url_root?>' + "/";
 	</script>
 	
-	<span id="user_language" style="visibility:hidden" ><?="$user_language" ?></span>
+	<span id="user_language" style="visibility:hidden" ><?="$user_language" ?></span>	
 <?php ?>

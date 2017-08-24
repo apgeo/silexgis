@@ -1141,4 +1141,3 @@ for (key in tournaments) {  var option = document.createElement('option');
 
     } 
 ?>
-

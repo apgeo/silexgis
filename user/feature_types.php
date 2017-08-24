@@ -61,7 +61,7 @@ ob_start();
   $sql="SELECT 	id, 	name, 	symbol_path, type FROM 	feature_types"; //.(!empty($filter_start_time_min) || !empty($filter_start_time_max) ? " WHERE 1 = 1 ".getSQLFilterString("time", $filter_start_time_min, $filter_start_time_max, "") : ""); 
    
 ##  *** set needed options
-  $debug_mode = !false;
+  $debug_mode = false;
   $messaging = true;
   $unique_prefix = "f_";  
   $dgrid = new DataGrid($debug_mode, $messaging, $unique_prefix, DATAGRID_DIR);

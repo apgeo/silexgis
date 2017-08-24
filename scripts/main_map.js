@@ -1032,14 +1032,14 @@ console.info(vectorLayer);
 		   * Message to show when the user is drawing a polygon.
 		   * @type {string}
 		   */
-		  var continuePolygonMsg = 'Click to continue the polygon';
+		  var continuePolygonMsg = _t().main_map.body.measurements_box.continue_line_message;
 
 
 		  /**
 		   * Message to show when the user is drawing a line.
 		   * @type {string}
 		   */
-		  var continueLineMsg = 'Click to continue the line';
+		  var continueLineMsg = _t().main_map.body.measurements_box.continue_polygon_message;
 
 
 		  /**
@@ -1130,20 +1130,23 @@ console.info(vectorLayer);
 			var sourceProj = map.getView().getProjection();
 			for (var index = 0, c_length = coordinates.length - 1; index < c_length; ++index) 
 			{
-				if (geodesicCheckbox.checked)
-				{		
 					var sourceProjection = map.getView().getProjection();
 					
 					var p0 = turf.point(ol.proj.transform(line.getCoordinates()[index], sourceProjection, 'EPSG:4326'));
 					var p1 = turf.point(ol.proj.transform(line.getCoordinates()[index + 1], sourceProjection, 'EPSG:4326'));
 
-					length += turf.distance(p0, p1) * 1000; // deafault: kilometers
-				}
-				else 
-				{
-					//-- incorrect ?
-					length = Math.round(line.getLength()); // length += Math.round(line.getLength() * 100) / 100;
-				}
+					length += turf.distance(p0, p1) * 1000; // default: kilometers
+
+
+				// 	if (geodesicCheckbox.checked)
+				// 		{		
+				// 		}
+				// else 
+				// {
+				// 	// https://gis.stackexchange.com/questions/142062/openlayers-3-linestring-getlength-not-returning-expected-value
+				// 	//-- getlength incorrect because it uses 2D plane which is distorted on real spherical projection
+				// 	// length = Math.round(line.getLength()); // length += Math.round(line.getLength() * 100) / 100;
+				// }
 			}
 			
 			var output;
@@ -3219,8 +3222,12 @@ function saveFeature(new_feature, selected_feature, event)
 		
 		//var feature = new_feature;
 		
-		if (selected_new_feature_type == 3)
+		if (selected_new_feature_type == 3) // cave
 			newCave(undefined, coordinates, new_feature);
+		else
+		//-- harcoded index from db
+		if (selected_new_feature_type == 19) // pot / aven
+			newCave(undefined, coordinates, new_feature, "pot");
 		else
 		if (selected_new_feature_type == 4)
 			newCaveEntrance(undefined, coordinates, new_feature);
@@ -3273,7 +3280,7 @@ function openNewFeatureForm(feature_id, coordinates, existingSelectedFeature, ne
 	
 	var featureType = featureTypes[new_feature_type];
 	//$('#saveCave').off('click');		
-	$('#featureForm').off('submit');
+	// $('#featureForm').off('submit');
 	
 	//$("#caveForm").find("input, input[type=text], textarea").val("");
 	$('#feature_id').val("");
@@ -3301,7 +3308,15 @@ function openNewFeatureForm(feature_id, coordinates, existingSelectedFeature, ne
 	$('#feature_existing_point_id').val("");	
 	
 	
+	// for unknow reasons $("#featureForm") is undefined
 	$("#featureForm")[0].reset();
+	
+	// $("#feature_name").val("");
+	// $("#feature_description").val("");
+	// $("#feature_id").val("");
+	// $("#feature_existing_point_id").val("");
+	// $("#feature_type_id").val("");
+	// $("#feature_string").val("");	
 	
 	
 	selFeatureProps = undefined;
@@ -3327,10 +3342,10 @@ function openNewFeatureForm(feature_id, coordinates, existingSelectedFeature, ne
 	}	
 		
 	if (editMode)
-		$('#featureModalTitleLabel').text("Edit feature");
+		$('#featureModalTitleLabel').text(_t().main_map.feature_edit_form.title_edit);
 	else
 	{			
-		$('#featureModalTitleLabel').text("New " + featureType.Name);		
+		$('#featureModalTitleLabel').text(_t().main_map.feature_edit_form.title_new + " " + featureType.Name);		
 		$('#feature_type_id').val(new_feature_type);
 		
 		
@@ -3350,6 +3365,7 @@ function openNewFeatureForm(feature_id, coordinates, existingSelectedFeature, ne
 		//$(this).submit();
 	});
 	*/
+	$('#featureForm').off('submit');
 	$('#featureForm').on('submit', function(e) {
           e.preventDefault();
 
@@ -3557,9 +3573,9 @@ function openNewPictureForm(picture_id, coordinates, existingSelectedFeature)
 // end new picture
 ///////////////////////
 
-function newCave(cave_id = undefined, coordinates, existingSelectedFeature)
+function newCave(cave_id = undefined, coordinates, existingSelectedFeature, entrance_type = "cave")
 {
-	openNewCaveForm(cave_id, coordinates, existingSelectedFeature);	
+	openNewCaveForm(cave_id, coordinates, existingSelectedFeature, entrance_type);	
 	
 	if (cave_id == undefined)
 		$('#caveModal').modal();
@@ -3579,6 +3595,11 @@ function initNewCaveForm()
 	initCaveDetailsUploadControl();
 	initCaveFilesTable();
 	initCavesUploadControl();	
+
+	$('#addPicturesToCave').on('click', function(e) {
+		e.preventDefault(); // To prevent following the link (optional)		
+		addCavePictures();
+	});
 }
 
 function initNewFeatureForm()
@@ -3588,7 +3609,7 @@ function initNewFeatureForm()
 	})
 }
 
-function openNewCaveForm(cave_id, coordinates, existingSelectedFeature)
+function openNewCaveForm(cave_id, coordinates, existingSelectedFeature, entrance_type = "cave")
 {
 	editMode = false;
 	
@@ -3612,6 +3633,17 @@ function openNewCaveForm(cave_id, coordinates, existingSelectedFeature)
 	$("#caveForm")[0].reset();
 	
 	
+	if (entrance_type == "pot")
+	{
+		$('#cf_cave_type').val(2); //-- harcoded index from db
+		$('#cf_cave_type').selectpicker('refresh');
+	}
+	else
+		{
+			$('#cf_cave_type').val(1); //-- harcoded index from db
+			$('#cf_cave_type').selectpicker('refresh');
+		}
+
 	selFeatureProps = undefined;
 	
 	if (existingSelectedFeature)
@@ -3632,15 +3664,15 @@ function openNewCaveForm(cave_id, coordinates, existingSelectedFeature)
 		if (selFeatureProps.gpx_name) 
 			feature_name = selFeatureProps.gpx_name;
 		
-		$('#cave_coords_label').text(rtrim(coordinates_espg4326[1]+"", 8) + ",  " + rtrim(coordinates_espg4326[0]+"", 8) + ((selFeatureProps != undefined) ? (" : " + feature_name) : ""));
+		$('#cave_coords_label').text(rtrim(coordinates_espg4326[1]+"", 8) + ",  " + rtrim(coordinates_espg4326[0]+"", 8) + ((selFeatureProps != undefined) ? ((feature_name != undefined) ? " : " + feature_name : "") : ""));
 		
 		$('#cf_name').val(feature_name);
 	}
 	
 	if (editMode)
-		$('#caveModalTitleLabel').text("Edit cave '" +selFeatureProps['cave_name']  +"'");
+		$('#caveModalTitleLabel').text(_t().main_map.cave_edit_form.title_edit + " <i>" +selFeatureProps['cave_name']  +"</i>");
 	else
-		$('#caveModalTitleLabel').text("New cave");
+		$('#caveModalTitleLabel').text(_t().main_map.cave_edit_form.title_new);
 	
 	/*	
 	$('#saveCave').on('click', function(e) {
@@ -7048,6 +7080,11 @@ function deleteFeature(feature)
 
 function deleteCave(cave_entrance)
 {		
+	var q_res = confirm(String.format("Doriti sa stergeti pestera?"));
+	
+	if (!q_res)
+		return;
+
 	// var feature_id = feature.getProperties().id;
 	
 	var cave_delete_data = {
@@ -7085,6 +7122,11 @@ function deleteCave(cave_entrance)
 
 function deleteCaveEntrance(cave_entrance)
 {		
+	var q_res = confirm(String.format("Doriti sa stergeti intrarea in pestera?"));
+	
+	if (!q_res)
+		return;
+
 	// var feature_id = feature.getProperties().id;
 	
 	var cave_entrance_delete_data = {
@@ -7253,8 +7295,11 @@ function LoadGeoreferencedMapLayer(title, boundary_north, boundary_west, boundar
 		
 		//var geo_extent_espg4326 = [boundary_west, boundary_south, boundary_east, boundary_north];
 		
-		var ws_corner = ol.proj.transform(ol.proj.fromLonLat([boundary_west, boundary_south]), new ol.proj.Projection("EPSG:4326"), new ol.proj.Projection('EPSG:3857'));
-		var en_corner = ol.proj.transform(ol.proj.fromLonLat([boundary_east, boundary_north]), new ol.proj.Projection("EPSG:4326"), new ol.proj.Projection('EPSG:3857'));
+		// var ws_corner = ol.proj.transform(ol.proj.fromLonLat([boundary_west, boundary_south]), new ol.proj.Projection({code: "EPSG:4326"}), new ol.proj.Projection({code: 'EPSG:3857'}));		
+		// var en_corner = ol.proj.transform(ol.proj.fromLonLat([boundary_east, boundary_north]), new ol.proj.Projection({code: "EPSG:4326"}), new ol.proj.Projection({code: 'EPSG:3857'}));
+
+		var ws_corner = ol.proj.transform([boundary_west, boundary_south], "EPSG:4326", 'EPSG:3857');		
+		var en_corner = ol.proj.transform([boundary_east, boundary_north], "EPSG:4326", 'EPSG:3857');
 		
 		var geo_extent_espg3857 = [ws_corner[0], ws_corner[1], en_corner[0], en_corner[1]];
 		
@@ -7494,7 +7539,7 @@ function refreshCaveEntrancesTable(cave) // cave_id
 
 function initCaveEntrancesTable()
 {
-	var datatables_lang_identifier_opt = "dataTables." + _t().misc.datatables_lang_identifier + ".lang";
+	var datatables_lang_identifier_opt = "datatables." + _t().misc.datatables_lang_identifier + ".lang";
 
 	$('#cave_entrances_table').DataTable({
 		"searching": false,
@@ -7888,6 +7933,26 @@ function initCaveFilesTable()
 
 // end cave files
 /////////////////////////////
+
+
+function addCavePictures()
+{
+	var cave_id = $('#upload_cave_files_cave_id').val();
+	// openUploadCaveFilesForm(cave_id);
+
+	openUploadPicturesForm(cave_id, "cave")
+}
+
+function initAboutForm()
+{
+	
+}
+
+function showAboutForm()
+{
+	$('#aboutModal').modal();
+}
+
 
 
 

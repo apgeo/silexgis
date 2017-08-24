@@ -1,4 +1,4 @@
-<?php
+<?php 
 session_start();
 include_once('config.php');
 //include_once("conf/dbconnection.php");
@@ -17,12 +17,12 @@ if($username=="") {
 } else {
 
 	$conid = DBCon::open_connection();    
-			
+
 	GPSData::$ConId = DBCon::get_connection_id();
 
 	$res = GPSData::get_user($username, $password);
 	//echo "count ".count($res);
-	
+
 	$err = "";
 	
 	//session_start();
@@ -42,7 +42,7 @@ if($username=="") {
 	{
 		$err ="Username and password are invalid!";
 	}
-	
+		
 	    $_SESSION["login_error"] = ($err!="") ? $err:"";
 		
         if($_SESSION["login_error"]!="") {
@@ -55,7 +55,7 @@ if($username=="") {
 				header("Location: login.php");
         } else {
 			//echo "logged in"; exit;            
-						
+				
 			$url = "index.php";
 			
 			if(isset($_REQUEST['redirurl']) && !empty($_REQUEST['redirurl'])) 
@@ -69,6 +69,8 @@ if($username=="") {
 				$url = "index.php";
 						
 			//echo "logged in redirect: _{$url}_"; exit;
+			
+			// echo "Location: $url";exit;
 			header("Location: $url");
         }
 

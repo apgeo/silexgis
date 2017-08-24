@@ -45,6 +45,14 @@
 	// $caves = CavesQuery::create()->find();	
 	// echo $allFiles->toJson();
 	// exit;
+
+	if (empty($file) && empty($allFiles))
+	{
+		echo 
+		"Nu sunt fisiere .lox, nici .3d in sistem. Incarca unul pentru a avea ce sa arat.<br/><br/>
+		There are no .lox, nor .3d files in the system. Please load one to have what to display.";
+		exit;
+	}
 ?>
 
 <!-- //-- head section is redeclared after header.php -->
@@ -57,9 +65,7 @@
 	<link type="text/css" href="<?=WEBROOT ?>vendor/CaveView.js/build/CaveView/css/caveview.css" rel="stylesheet"/>
 	<link type="text/css" href="<?=WEBROOT ?>caveview/css/silexgis_caveview.css" rel="stylesheet"/>
 </head>
-<body onload="onload();" >
-<br/>
-<br/>
+
 <script type="text/javascript" src="http://nls.tileserver.com/api.js"></script>
 <script type="text/javascript" src="<?=WEBROOT ?>vendor/CaveView.js/build/CaveView/lib/proj4-src.js" ></script>
 
@@ -92,8 +98,8 @@ function onload ()
 		if (!empty($allFiles))
 			//var_dump($allFiles)
 				echo "var files = ". json_encode($allFiles) . ";\n"; // $allFiles->toJSON()
-			else
-				throw new Exception("php: input file(s) could not be loaded");
+			else;
+				// throw new Exception("php: input file(s) could not be loaded");
 	?>
 	
 	CV.UI.init( "scene", { 
@@ -143,11 +149,16 @@ function onload ()
 			// ] 
 	}
 	else
-		throw "input file(s) could not be loaded";
+		console.info("no input file(s) detected");
+	// throw "input file(s) could not be loaded";
 
 }
 
 </script>
+<body onload="onload();" >
+<br/>
+<br/>
+
 <div id="scene"></div>
 <p>*{caveview_page.instructions}*</p>
 *{caveview_page.caveview_credits}* <a rel="license" href="https://aardgoose.github.io/CaveView.js/">CaveView</a> (<a rel="license" href="https://github.com/aardgoose/CaveView.js">GitHub project</a>)
