@@ -1,18 +1,3 @@
-# Silex GIS
+# SilexGIS
 
-SilexGIS is a web software application which aims to provide speleological groups and individuals with a way to manage the existing cave and associated surface data.
-
-It allows you to import existing data files (surface GPS data, cave survey data, surface and cave maps, photos, trip reports, activity logs and various other files / information) and to organize this information in a connected and easy to retrieve manner. You can visualize the imported information online on interactive maps on top of public available satellite imagery sources and other layers you define, work collaboratively with your colleagues on the data and export compiled maps with selected information.
-
-Another aspect, currently under development, is the data analysis functionality which is a lightweight (but easy to use and aimed at cavers) alternative to current complex GIS tools for analyzing underground and surface mapped information in karst areas.
-
-
-The application is currently under development in a "prealpha" stage.
-
-##Roadmap
-* major source code refactoring
-* add/finish several features to make some workflows fully usable
-* solve plenty bugs
-
-##Demo
-[http://speosilex.ro/silexgis/demo/](http://speosilex.ro/silexgis/demo/?lon=21.933717&lat=45.185921&z=14)
+Web application for storage and view of topographic, geographic and other associated cave and karst data.

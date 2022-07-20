@@ -1,0 +1,95 @@
+{
+    "name": "apgeo/silexgis-server",
+    "description": "",
+    "keywords": [
+        "speleology",
+        "cave",
+        "caving",
+        "karst"
+    ],
+    "license": "MIT",
+    "type": "project",
+    "authors": [
+        {
+            "name": "apgeo",
+            "email": "",
+        }
+    ],
+    "require": {
+        "php": ">=7.4",
+        "darkaonline/l5-swagger": "^8.3",
+        "fideloper/proxy": "^4.2",
+        "fruitcake/laravel-cors": "^3.0",
+        "guzzlehttp/guzzle": "^7.0.1",
+        "infyomlabs/laravel-generator": "*",
+        "infyomlabs/routes-explorer": "^1.0",
+        "infyomlabs/swagger-generator": "^2.0",
+        "intervention/image": "^2.5",
+        "intervention/imagecache": "^2.4",
+        "laravel-doctrine/orm": "*",
+        "laravel/framework": "^8.0",
+        "laravel/passport": "^10.0",
+        "laravel/socialite": "^5.1",
+        "laravel/tinker": "^2.0",
+        "laravel/ui": "^3.4",
+        "mstaack/laravel-postgis": "^5.4",
+        "spatie/laravel-fractal": "^5.8",
+        "spatie/laravel-permission": "^3.17",
+        "zircote/swagger-php": "^4.4"
+    },
+    "require-dev": {
+        "brianium/paratest": "^6.2",
+        "eduarguz/shift-php-cs": "dev-master",
+        "facade/ignition": "^2.5",
+        "fakerphp/faker": "^1.9.1",
+        "mockery/mockery": "^1.4.2",
+        "nunomaduro/collision": "^5.0",
+        "phpunit/phpunit": "^9.3.3"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": []
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "scripts": {
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "post-root-package-install": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+        ],
+        "post-create-project-cmd": [
+            "@php artisan key:generate --ansi"
+        ],
+        "api-docs": [
+            "apibmerge docs/api/blueprint docs/api/apiblueprint.apib",
+            "aglio --theme-variables flatly --theme-template triple -i docs/api/blueprint/apidocs.apib -o resources/views/apidocs.blade.php"
+        ],
+        "cs": [
+            "vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.dist.php -vvv --using-cache=no"
+        ],
+        "test": [
+            "php artisan test --parallel"
+        ]
+    }
+}

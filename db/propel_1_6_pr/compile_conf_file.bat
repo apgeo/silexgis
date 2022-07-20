@@ -1,1 +1,0 @@
-D:\wamp64\www\speogis\vendor\Propel\generator\bin\propel-gen.bat convert-conf

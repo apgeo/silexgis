@@ -1,0 +1,86 @@
+# Group Auth
+
+The auth API will allow you to work with the users registration and password management.
+
+## Tokens [/oauth/token]
+
+### Get a token [POST]
+Use this endpoint to get access tokens for the user, the API currently uses oAuth2 and supports 2 grants.
+- **Password:** Use grant `password` when the user is providing username and password
+- **Social grant:** Use grant `social_grant` when the user has a token from a supported OAuth provider.
+
++ Request (application/json)
+
+    + Attributes (Get tokens with credentials)
+
++ Response 200 (application/json)
+
+    + Attributes (Tokens)
+
++ Response 401 (application/json)
+
+    + Attributes (Error 401)
+
++ Request (application/json)
+
+    + Attributes (Get tokens with social token)
+
++ Response 200 (application/json)
+
+    + Attributes (Tokens)
+
++ Response 401 (application/json)
+
+    + Attributes (Error 401)
+
+## Register [/api/register]
+Use this endpoint to register a new user from the client consuming the API.
+
+### Register user [POST]
+This endpoint will allow you to handle the user registration in the API.
+
++ Request (application/json)
+
+    + Attributes (Registration input)
+
++ Response 201 (application/json)
+
+    + Attributes
+        + data (User Object)
+
++ Response 422 (application/json)
+
+    + Attributes (Error 422)
+
+
+## Password Recovery [/api/passwords/reset]
+Use this endpoints to reset the user's password with a recovery email.
+
+### Forgot Password [POST]
+This endpoint will allow you to trigger the recovery password email.
+
++ Request (application/json)
+
+    + Attributes (Forgot password input)
+
++ Response 201 (application/json)
+
++ Response 422 (application/json)
+
+    + Attributes (Error 422)
+
+### Reset Password [PUT]
+This endpoint will allow you to update the user's password with the token received in the email.
+
++ Request (application/json)
+
+    + Attributes (Reset password input)
+
++ Response 201 (application/json)
+
+    + Attributes (Reset password response)
+
++ Response 422 (application/json)
+
+    + Attributes (Error 422)
+

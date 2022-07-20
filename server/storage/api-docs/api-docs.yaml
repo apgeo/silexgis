@@ -1,0 +1,1807 @@
+openapi: 3.0.0
+paths:
+  /assets:
+    get:
+      tags:
+        - Asset
+      summary: getAssetList
+      description: 'Get all Assets'
+      operationId: bf2ac34b89b5240c36742fc783b640cc
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - Asset
+      summary: createAsset
+      description: 'Create Asset'
+      operationId: 5baf39dba56d410a1bf7eb6c1cfe6507
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/assets/{id}':
+    get:
+      tags:
+        - Asset
+      summary: getAssetItem
+      description: 'Get Asset'
+      operationId: 3f1618f3ab09735d63c93a014d82c4f2
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Asset'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - Asset
+      summary: updateAsset
+      description: 'Update Asset'
+      operationId: abe283cafa8b21156dee4a870c67a59a
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Asset'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - Asset
+      summary: deleteAsset
+      description: 'Delete Asset'
+      operationId: 81e573317d0ccd3a1a3bb21296048765
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Asset'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /caves:
+    get:
+      tags:
+        - Cave
+      summary: getCaveList
+      description: 'Get all Caves'
+      operationId: 14757fb12ad2e8397562b4882969690f
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - Cave
+      summary: createCave
+      description: 'Create Cave'
+      operationId: 577a84bf0de4130a9b10d13f0c622bf1
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/caves/{id}':
+    get:
+      tags:
+        - Cave
+      summary: getCaveItem
+      description: 'Get Cave'
+      operationId: 1c622d9db9c463a33aa532b32f3d23de
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Cave'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - Cave
+      summary: updateCave
+      description: 'Update Cave'
+      operationId: 704e65587b6fff0267744aa4bc2adaba
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Cave'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - Cave
+      summary: deleteCave
+      description: 'Delete Cave'
+      operationId: ea8453b16a586fecc4057c830d319683
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Cave'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /caveEntrances:
+    get:
+      tags:
+        - CaveEntrance
+      summary: getCaveEntranceList
+      description: 'Get all CaveEntrances'
+      operationId: 632f6231938573947ef4f90a83558ae3
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - CaveEntrance
+      summary: createCaveEntrance
+      description: 'Create CaveEntrance'
+      operationId: 2681ef5be66c133e9568f713e314cff1
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/caveEntrances/{id}':
+    get:
+      tags:
+        - CaveEntrance
+      summary: getCaveEntranceItem
+      description: 'Get CaveEntrance'
+      operationId: 53a160ba0cab52eadcafc744884ce3b3
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of CaveEntrance'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - CaveEntrance
+      summary: updateCaveEntrance
+      description: 'Update CaveEntrance'
+      operationId: 0b7098a3a4db3f15d66d5d173d9b70b9
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of CaveEntrance'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - CaveEntrance
+      summary: deleteCaveEntrance
+      description: 'Delete CaveEntrance'
+      operationId: 9e8ab160c3a28640fafc3953110f313e
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of CaveEntrance'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /caveTypes:
+    get:
+      tags:
+        - CaveType
+      summary: getCaveTypeList
+      description: 'Get all CaveTypes'
+      operationId: 25165acbf62fa3c489e9491389b227b3
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - CaveType
+      summary: createCaveType
+      description: 'Create CaveType'
+      operationId: 8aca8360affea531d604a5c03b92f24d
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/caveTypes/{id}':
+    get:
+      tags:
+        - CaveType
+      summary: getCaveTypeItem
+      description: 'Get CaveType'
+      operationId: 384448f895a8883569eb386b1ee359dc
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of CaveType'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - CaveType
+      summary: updateCaveType
+      description: 'Update CaveType'
+      operationId: 32d694f9aceadd67af72aef20ac33467
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of CaveType'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - CaveType
+      summary: deleteCaveType
+      description: 'Delete CaveType'
+      operationId: dc66aac759b9c8cb9d085b553c4a1371
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of CaveType'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /entranceTypes:
+    get:
+      tags:
+        - EntranceType
+      summary: getEntranceTypeList
+      description: 'Get all EntranceTypes'
+      operationId: d1ac8dd066753a9268189bef9e8d7516
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - EntranceType
+      summary: createEntranceType
+      description: 'Create EntranceType'
+      operationId: 1d29dd792139235db6955b6b998e529c
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/entranceTypes/{id}':
+    get:
+      tags:
+        - EntranceType
+      summary: getEntranceTypeItem
+      description: 'Get EntranceType'
+      operationId: 0f4f2571698f671d4964dbae0cc0bb2e
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of EntranceType'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - EntranceType
+      summary: updateEntranceType
+      description: 'Update EntranceType'
+      operationId: 3a00d9620c2ef33412466aa18158100b
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of EntranceType'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - EntranceType
+      summary: deleteEntranceType
+      description: 'Delete EntranceType'
+      operationId: 70253d281e06166f2d1b6a897694128e
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of EntranceType'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /features:
+    get:
+      tags:
+        - Feature
+      summary: getFeatureList
+      description: 'Get all Features'
+      operationId: 9521496ff8ea68c45217ad52ca6dd01d
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - Feature
+      summary: createFeature
+      description: 'Create Feature'
+      operationId: 0046884845bd07f1b308a84ee5c78a43
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/features/{id}':
+    get:
+      tags:
+        - Feature
+      summary: getFeatureItem
+      description: 'Get Feature'
+      operationId: d55d325b3f4a902ddddb46d59b3f43f3
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Feature'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - Feature
+      summary: updateFeature
+      description: 'Update Feature'
+      operationId: bb5a9e8f110f4c16c1f1f0ad114a8469
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Feature'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - Feature
+      summary: deleteFeature
+      description: 'Delete Feature'
+      operationId: 9ffd305291fd52a23ff9cd5990ef3848
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Feature'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /featureTypes:
+    get:
+      tags:
+        - FeatureType
+      summary: getFeatureTypeList
+      description: 'Get all FeatureTypes'
+      operationId: ca224d295015eea907de4ffb54c20ec5
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - FeatureType
+      summary: createFeatureType
+      description: 'Create FeatureType'
+      operationId: b79f907f629f9a57359460592e651c83
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/featureTypes/{id}':
+    get:
+      tags:
+        - FeatureType
+      summary: getFeatureTypeItem
+      description: 'Get FeatureType'
+      operationId: 9b2c3c9068d68c1aead0b780d2a84df4
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of FeatureType'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - FeatureType
+      summary: updateFeatureType
+      description: 'Update FeatureType'
+      operationId: e0aedf41c24fab81d1267a77a1d5c4cf
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of FeatureType'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - FeatureType
+      summary: deleteFeatureType
+      description: 'Delete FeatureType'
+      operationId: f7d2397b4f108ed49cf6c35919cf9774
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of FeatureType'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /files:
+    get:
+      tags:
+        - File
+      summary: getFileList
+      description: 'Get all Files'
+      operationId: 22fbfeda8d53a88acbdbe16ab3e86b8f
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - File
+      summary: createFile
+      description: 'Create File'
+      operationId: b17ec9ec45bbc639e95da6411336384b
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/files/{id}':
+    get:
+      tags:
+        - File
+      summary: getFileItem
+      description: 'Get File'
+      operationId: d20b3d23666dc5faa14e9240433e2e86
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of File'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - File
+      summary: updateFile
+      description: 'Update File'
+      operationId: 3dc956fb0ff8265eb54d1a6d37cd98f5
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of File'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - File
+      summary: deleteFile
+      description: 'Delete File'
+      operationId: fb6ff65241b7d3313109e3ffa0fe0b8a
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of File'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /geofiles:
+    get:
+      tags:
+        - Geofile
+      summary: getGeofileList
+      description: 'Get all Geofiles'
+      operationId: 5bb6226b9c5373a0798ea335b8620269
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - Geofile
+      summary: createGeofile
+      description: 'Create Geofile'
+      operationId: 25839bb1394106bf96af8dcddffa540d
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/geofiles/{id}':
+    get:
+      tags:
+        - Geofile
+      summary: getGeofileItem
+      description: 'Get Geofile'
+      operationId: 7926eea4a2535dbf125e3f0c7b01c0d5
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Geofile'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - Geofile
+      summary: updateGeofile
+      description: 'Update Geofile'
+      operationId: 56bd25e41f984f40623f142b39f5e827
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Geofile'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - Geofile
+      summary: deleteGeofile
+      description: 'Delete Geofile'
+      operationId: 0141b5c135ccd51a7fafb9a7c20f71b9
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Geofile'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /georeferencedMaps:
+    get:
+      tags:
+        - GeoreferencedMap
+      summary: getGeoreferencedMapList
+      description: 'Get all GeoreferencedMaps'
+      operationId: dedf39617ecb7af96d8e8d48810b5729
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - GeoreferencedMap
+      summary: createGeoreferencedMap
+      description: 'Create GeoreferencedMap'
+      operationId: 5b7c00ad16af2bbc526833a99c0c7549
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/georeferencedMaps/{id}':
+    get:
+      tags:
+        - GeoreferencedMap
+      summary: getGeoreferencedMapItem
+      description: 'Get GeoreferencedMap'
+      operationId: 5aa6d43be787f05232b50135abc8d28a
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of GeoreferencedMap'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - GeoreferencedMap
+      summary: updateGeoreferencedMap
+      description: 'Update GeoreferencedMap'
+      operationId: eb681b0bf23941209b4da2efc88dfb89
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of GeoreferencedMap'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - GeoreferencedMap
+      summary: deleteGeoreferencedMap
+      description: 'Delete GeoreferencedMap'
+      operationId: 2da30fec0600f1315a69e6b7df036264
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of GeoreferencedMap'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /images:
+    get:
+      tags:
+        - Image
+      summary: getImageList
+      description: 'Get all Images'
+      operationId: 8664187b703ad558537c9d91449eed7a
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - Image
+      summary: createImage
+      description: 'Create Image'
+      operationId: 91c6b95c1b6104ea3fc0a7f1f85abafe
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/images/{id}':
+    get:
+      tags:
+        - Image
+      summary: getImageItem
+      description: 'Get Image'
+      operationId: e76e9b25359179f7558a7309abaa8bd1
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Image'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - Image
+      summary: updateImage
+      description: 'Update Image'
+      operationId: 63bb1b2694a4134e1e5798c7a683a3cc
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Image'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - Image
+      summary: deleteImage
+      description: 'Delete Image'
+      operationId: 5183e00186551512bbeb06d3d6d156cd
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Image'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /logs:
+    get:
+      tags:
+        - Log
+      summary: getLogList
+      description: 'Get all Logs'
+      operationId: f98af73e23990227213ec217d6670d2b
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - Log
+      summary: createLog
+      description: 'Create Log'
+      operationId: c4d265e8dccd6fd68487c2bfbe5943ac
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/logs/{id}':
+    get:
+      tags:
+        - Log
+      summary: getLogItem
+      description: 'Get Log'
+      operationId: 4aa2b06765e6a46bfee37102d6810c88
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Log'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - Log
+      summary: updateLog
+      description: 'Update Log'
+      operationId: 3ac95b87739c3f60f50f01405bde87ad
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Log'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - Log
+      summary: deleteLog
+      description: 'Delete Log'
+      operationId: a8600d888983a5555731f45fa9600ddb
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Log'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /mapViews:
+    get:
+      tags:
+        - MapView
+      summary: getMapViewList
+      description: 'Get all MapViews'
+      operationId: 8310101e74c64a50acdf3ab482d91216
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - MapView
+      summary: createMapView
+      description: 'Create MapView'
+      operationId: 01375ebe2deaa8778d005ccf378ba312
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/mapViews/{id}':
+    get:
+      tags:
+        - MapView
+      summary: getMapViewItem
+      description: 'Get MapView'
+      operationId: d8860be06ffbb834f065f28b4ca24063
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of MapView'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - MapView
+      summary: updateMapView
+      description: 'Update MapView'
+      operationId: 8fe83ba341aa4553dcc2c0d02158caff
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of MapView'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - MapView
+      summary: deleteMapView
+      description: 'Delete MapView'
+      operationId: 7781581fa54d42b16f38aa39e5ca0553
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of MapView'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /points:
+    get:
+      tags:
+        - Point
+      summary: getPointList
+      description: 'Get all Points'
+      operationId: 414e326e5df569e950277de2c8e9c3b1
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - Point
+      summary: createPoint
+      description: 'Create Point'
+      operationId: 7b9b6b981e45df08007c3f1a42a57595
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/points/{id}':
+    get:
+      tags:
+        - Point
+      summary: getPointItem
+      description: 'Get Point'
+      operationId: 84890aa276d26faec598361de21ed829
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Point'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - Point
+      summary: updatePoint
+      description: 'Update Point'
+      operationId: 5a5298550ce46a9468da1fc44a5851e2
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Point'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - Point
+      summary: deletePoint
+      description: 'Delete Point'
+      operationId: 8382eb01398d1029539a633a18910721
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Point'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /sxgUsers:
+    get:
+      tags:
+        - SxgUser
+      summary: getSxgUserList
+      description: 'Get all SxgUsers'
+      operationId: 9b39d49adef3b6e430abac14641a50fa
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - SxgUser
+      summary: createSxgUser
+      description: 'Create SxgUser'
+      operationId: dbd8a6874ab9d1cab12748fcf39b8a53
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/sxgUsers/{id}':
+    get:
+      tags:
+        - SxgUser
+      summary: getSxgUserItem
+      description: 'Get SxgUser'
+      operationId: 367790b415fe7e968903353e93752d48
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of SxgUser'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - SxgUser
+      summary: updateSxgUser
+      description: 'Update SxgUser'
+      operationId: 1015f4f6430d718f185eca3cc2423024
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of SxgUser'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - SxgUser
+      summary: deleteSxgUser
+      description: 'Delete SxgUser'
+      operationId: 8fe91923e4e3c2c8daac2a888c304eeb
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of SxgUser'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /tags:
+    get:
+      tags:
+        - Tag
+      summary: getTagList
+      description: 'Get all Tags'
+      operationId: 57fc6cc7a88ad83c6888887c40e6094a
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - Tag
+      summary: createTag
+      description: 'Create Tag'
+      operationId: c851a6840f9037781df6fcc88bd294e4
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/tags/{id}':
+    get:
+      tags:
+        - Tag
+      summary: getTagItem
+      description: 'Get Tag'
+      operationId: 35978f1f50ee3ef20582e565ac7b6720
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Tag'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - Tag
+      summary: updateTag
+      description: 'Update Tag'
+      operationId: 3e3cc7bb590b34997dd14f6ca40743f3
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Tag'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - Tag
+      summary: deleteTag
+      description: 'Delete Tag'
+      operationId: 5ac3d7ca53caad3cfe1e4ef1a673ba07
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of Tag'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /teamMembers:
+    get:
+      tags:
+        - TeamMember
+      summary: getTeamMemberList
+      description: 'Get all TeamMembers'
+      operationId: 50e42d2216f357cb3fc2c9d04e56d568
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - TeamMember
+      summary: createTeamMember
+      description: 'Create TeamMember'
+      operationId: 793a2f9812ee40dbbf2e79904985274c
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/teamMembers/{id}':
+    get:
+      tags:
+        - TeamMember
+      summary: getTeamMemberItem
+      description: 'Get TeamMember'
+      operationId: 504f1e2454344367b03491dac070cd56
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of TeamMember'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - TeamMember
+      summary: updateTeamMember
+      description: 'Update TeamMember'
+      operationId: d17af343b44e4ce310e0f9288ec00d3a
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of TeamMember'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - TeamMember
+      summary: deleteTeamMember
+      description: 'Delete TeamMember'
+      operationId: 87f4ab442a55d282e1ebade1a87da9c3
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of TeamMember'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /tripLogs:
+    get:
+      tags:
+        - TripLogs
+      summary: getTripLogsList
+      description: 'Get all TripLogs'
+      operationId: c15a7f9a6008ff7e48676ca3cf804d45
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - TripLogs
+      summary: createTripLogs
+      description: 'Create TripLogs'
+      operationId: 3b7d4d912acf1978ce1f451c27525b85
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/tripLogs/{id}':
+    get:
+      tags:
+        - TripLogs
+      summary: getTripLogsItem
+      description: 'Get TripLogs'
+      operationId: b0be1724d2b4030ef83d5fe144802562
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of TripLogs'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - TripLogs
+      summary: updateTripLogs
+      description: 'Update TripLogs'
+      operationId: a395e23edaa4ccfce651904bf97ff304
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of TripLogs'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - TripLogs
+      summary: deleteTripLogs
+      description: 'Delete TripLogs'
+      operationId: 2458cebcb928d0cf634acaf03b114ba0
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of TripLogs'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+  /users:
+    get:
+      tags:
+        - User
+      summary: getUserList
+      description: 'Get all Users'
+      operationId: 1df092f5eddb2e29c3c5aa8043dd6d44
+      responses:
+        200:
+          description: 'successful operation'
+    post:
+      tags:
+        - User
+      summary: createUser
+      description: 'Create User'
+      operationId: 3465c05467f56755d8fde6dfe336f784
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+  '/users/{id}':
+    get:
+      tags:
+        - User
+      summary: getUserItem
+      description: 'Get User'
+      operationId: ca775ff26d0144e4b01abbd8c926f7c3
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of User'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'
+    put:
+      tags:
+        - User
+      summary: updateUser
+      description: 'Update User'
+      operationId: acefdff5c10ad10456b5e12506f8ab63
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of User'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - ''
+              properties:
+                name:
+                  description: desc
+                  type: string
+              type: object
+      responses:
+        200:
+          description: 'successful operation'
+    delete:
+      tags:
+        - User
+      summary: deleteUser
+      description: 'Delete User'
+      operationId: b3671c968c691df9358298f3a285c767
+      parameters:
+        -
+          name: id
+          in: path
+          description: 'id of User'
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'successful operation'

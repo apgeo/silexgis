@@ -1,7 +1,0 @@
-detection of identical file for the same user/group on upload
-
-remove sql_mode="" from /etc/my.cnf in test/demo server (reenable original strict mode)
-
-on login with wrong credetnials and login fails, can't login next with the good one until another window is open (probably because it enters a redirect loop to login on invalid login)
-
-update to ol 4 (errors on animations and zooming)
