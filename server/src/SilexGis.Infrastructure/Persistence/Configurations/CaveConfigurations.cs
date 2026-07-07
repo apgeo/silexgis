@@ -28,7 +28,7 @@ public sealed class CaveConfiguration : IEntityTypeConfiguration<Cave>
         builder.Property(x => x.DiscoveryDate).HasMaxLength(50);
         builder.Property(x => x.Discoverer).HasMaxLength(255);
 
-        // Meters with cm precision (02-data-model.md §3).
+        // Meters with cm precision.
         foreach (var metric in new[]
         {
             nameof(Cave.SurveyedLength), nameof(Cave.EstimatedLength), nameof(Cave.RealExtension),
@@ -57,7 +57,19 @@ public sealed class CaveConfiguration : IEntityTypeConfiguration<Cave>
         builder.HasIndex(x => x.TeamId);
         builder.HasIndex(x => x.DeletedAt).HasFilter("deleted_at IS NULL");
 
-        // Soft delete (02-data-model.md conventions).
+        // Accent-insensitive full-text search. Shadow property so Domain stays free of
+        // provider types; queries use EF.Property<NpgsqlTsVector>. immutable_unaccent is
+        // created in the AddCaveSearchVector migration (generated columns require
+        // IMMUTABLE expressions; the two-arg unaccent form qualifies).
+        builder.Property<NpgsqlTypes.NpgsqlTsVector>("SearchVector")
+            .HasColumnName("search_vector")
+            .HasComputedColumnSql(
+                "to_tsvector('simple', immutable_unaccent(coalesce(name, '') || ' ' || " +
+                "coalesce(other_toponyms, '') || ' ' || coalesce(description, '')))",
+                stored: true);
+        builder.HasIndex("SearchVector").HasMethod("gin");
+
+        // Soft delete.
         builder.HasQueryFilter(x => x.DeletedAt == null);
     }
 }

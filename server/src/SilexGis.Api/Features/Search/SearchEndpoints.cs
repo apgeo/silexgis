@@ -12,9 +12,9 @@ namespace SilexGis.Api.Features.Search;
 public sealed record SearchResultDto(IReadOnlyList<CaveListItemDto> Caves);
 
 /// <summary>
-/// Unified search (03-api-spec.md §3) — Phase 1 covers caves. Accent-insensitive
-/// (unaccent) so "pestera" matches "Peștera". Full-text tsvector ranking is a planned
-/// upgrade within Phase 1 polish.
+/// Unified search — currently covers caves. Accent-insensitive (unaccent) so "pestera"
+/// matches "Peștera". Word matches use the GIN-indexed generated search_vector column;
+/// substring/code matches fall back to ILIKE.
 /// </summary>
 public static class SearchEndpoints
 {
@@ -44,13 +44,16 @@ public static class SearchEndpoints
             return ApiProblems.BadRequest("search.query_too_short", "Provide at least 2 characters.");
         }
 
-        var pattern = $"%{q.Trim()}%";
+        var term = q.Trim();
+        var pattern = $"%{term}%";
         var caves = await db.Caves.AsNoTracking()
             .VisibleTo(user)
             .Where(c =>
-                EF.Functions.ILike(EF.Functions.Unaccent(c.Name), EF.Functions.Unaccent(pattern))
-                || (c.OtherToponyms != null
-                    && EF.Functions.ILike(EF.Functions.Unaccent(c.OtherToponyms), EF.Functions.Unaccent(pattern)))
+                // Indexed word search (GIN over the generated search_vector)…
+                EF.Property<NpgsqlTypes.NpgsqlTsVector>(c, "SearchVector")
+                    .Matches(EF.Functions.PlainToTsQuery("simple", EF.Functions.Unaccent(term)))
+                // …plus substring fallback for partial words and codes.
+                || EF.Functions.ILike(EF.Functions.Unaccent(c.Name), EF.Functions.Unaccent(pattern))
                 || (c.IdentificationCode != null && EF.Functions.ILike(c.IdentificationCode, pattern)))
             .OrderBy(c => c.Name)
             .Take(20)
