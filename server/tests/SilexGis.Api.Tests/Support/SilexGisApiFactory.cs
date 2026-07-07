@@ -12,6 +12,9 @@ public sealed class SilexGisApiFactory(string connectionString, IDictionary<stri
     {
         builder.UseSetting("Db:ConnectionString", connectionString);
         builder.UseSetting("Db:AutoMigrate", "true");
+        // The OIDC client registration is (re)seeded from PublicUrl on startup and the DB is
+        // shared across factories — every test factory must use the TestServer origin.
+        builder.UseSetting("PublicUrl", "http://localhost");
         if (settings is not null)
         {
             foreach (var (key, value) in settings)

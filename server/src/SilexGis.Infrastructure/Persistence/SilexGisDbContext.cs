@@ -24,6 +24,12 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
+    public DbSet<Cave> Caves => Set<Cave>();
+
+    public DbSet<CaveEntrance> CaveEntrances => Set<CaveEntrance>();
+
+    public DbSet<MapLayer> MapLayers => Set<MapLayer>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

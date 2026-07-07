@@ -72,10 +72,20 @@ public sealed class AuditInterceptor(ICurrentUser currentUser) : SaveChangesInte
             .Where(p => p.IsModified)
             .ToDictionary(
                 p => p.Metadata.Name,
-                p => new { old = p.OriginalValue, @new = p.CurrentValue });
+                p => new { old = Plain(p.OriginalValue), @new = Plain(p.CurrentValue) });
 
         return diff.Count == 0 ? null : JsonSerializer.Serialize(diff);
     }
+
+    // Geometry (and anything else STJ can't represent) is stored as text in the diff.
+    private static object? Plain(object? value) => value switch
+    {
+        null => null,
+        NetTopologySuite.Geometries.Geometry geometry => geometry.AsText(),
+        string or bool or Guid or DateTimeOffset or DateOnly or Enum => value,
+        _ when value.GetType().IsPrimitive || value is decimal => value,
+        _ => value.ToString(),
+    };
 }
 
 /// <summary>Placeholder until authentication provides an HttpContext-backed implementation.</summary>

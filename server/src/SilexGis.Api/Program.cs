@@ -1,13 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Api.Features.About;
+using SilexGis.Api.Features.Caves;
+using SilexGis.Api.Features.Map;
+using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
+using SilexGis.Api.Features.Search;
+using SilexGis.Api.Features.Taxonomies;
+using SilexGis.Domain;
+using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure;
+using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
 Log.Logger = new LoggerConfiguration()
@@ -25,6 +35,11 @@ try
         .ReadFrom.Configuration(context.Configuration)
         .ReadFrom.Services(services));
 
+    // Enums as strings in every contract (03-api-spec.md §1).
+    builder.Services.ConfigureHttpJsonOptions(options =>
+        options.SerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
+
     builder.Services.AddProblemDetails();
     builder.Services.AddOpenApi();
     builder.Services.AddSilexGisPersistence(builder.Configuration);
@@ -33,6 +48,10 @@ try
         .AddDbContextCheck<SilexGisDbContext>("database");
     builder.Services.AddOptions<AboutOptions>()
         .BindConfiguration(AboutOptions.SectionName);
+    builder.Services.AddOptions<AccessOptions>()
+        .BindConfiguration(AccessOptions.SectionName);
+    builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
+    builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
     var app = builder.Build();
 
@@ -68,6 +87,12 @@ try
     api.MapAboutEndpoints();
     api.MapAuthEndpoints();
     api.MapMeEndpoints();
+    api.MapTaxonomyEndpoints();
+    api.MapMapLayerEndpoints();
+    api.MapCaveEndpoints();
+    api.MapEntranceEndpoints();
+    api.MapMapDataEndpoints();
+    api.MapSearchEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {
@@ -75,7 +100,26 @@ try
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.Database.MigrateAsync();
         await TaxonomySeeder.SeedAsync(db);
+        await MapLayerSeeder.SeedAsync(db);
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
+    }
+
+    // `dotnet run -- seed-demo`: load the demo dataset and exit (06-deployment.md §4).
+    if (args.Contains("seed-demo"))
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+        var admins = await userManager.GetUsersInRoleAsync(GlobalRoles.Admin);
+        if (admins.Count == 0)
+        {
+            Log.Error("seed-demo requires a bootstrap admin (set SILEXGIS__Admin__Email/Password)");
+            return;
+        }
+
+        await DemoSeeder.SeedAsync(db, admins[0].Id);
+        Log.Information("Demo data seeded (owner: {Email})", admins[0].Email);
+        return;
     }
 
     await app.RunAsync();
