@@ -15,14 +15,113 @@
     "lockedOut": "Account temporarily locked. Try again later.",
     "signingIn": "Signing you in…"
   },
-  "home": {
-    "welcome": "Welcome to SilexGIS",
-    "signedInAs": "Signed in as",
-    "roles": "Roles",
-    "placeholder": "The map workspace arrives in the next phase."
-  },
   "common": {
     "loading": "Loading…",
-    "language": "Language"
+    "language": "Language",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Saved.",
+    "saveFailed": "The operation failed. Please try again.",
+    "deleted": "Deleted."
+  },
+  "map": {
+    "baseLayers": "Base layers",
+    "overlays": "Overlays",
+    "entrances": "Cave entrances",
+    "searchPlaceholder": "Search caves or places…",
+    "caves": "Caves",
+    "places": "Places",
+    "zoomTo": "Zoom to",
+    "openCave": "Open cave",
+    "approximate": "Approximate location — exact coordinates are protected.",
+    "noSelection": "Click a feature on the map to see details."
+  },
+  "caves": {
+    "title": "Caves",
+    "newCave": "New cave",
+    "editCave": "Edit cave",
+    "name": "Name",
+    "type": "Type",
+    "region": "Region",
+    "surveyedLength": "Length (m)",
+    "depth": "Depth (m)",
+    "entrances": "Entrances",
+    "visibility": "Visibility",
+    "identificationCode": "Code",
+    "searchPlaceholder": "Search name or toponym…",
+    "allTypes": "All types",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this cave?",
+    "sections": {
+      "identification": "Identification",
+      "localization": "Localization",
+      "geology": "Geology",
+      "morphometry": "Morphometry",
+      "status": "Status",
+      "discovery": "Discovery",
+      "access": "Access"
+    },
+    "fields": {
+      "otherToponyms": "Other toponyms",
+      "description": "Description",
+      "website": "Website",
+      "hydrographicBasin": "Hydrographic basin",
+      "valley": "Valley",
+      "tributaryRiver": "Tributary river",
+      "closestAddress": "Closest address",
+      "landRegistryNumber": "Land registry no.",
+      "locationNotes": "Location notes",
+      "rockType": "Rock type",
+      "rockAge": "Rock age",
+      "surveyedLength": "Surveyed length (m)",
+      "estimatedLength": "Estimated length (m)",
+      "realExtension": "Real extension (m)",
+      "projectedExtension": "Projected extension (m)",
+      "positiveDepth": "Positive depth (m)",
+      "negativeDepth": "Negative depth (m)",
+      "potentialDepth": "Potential depth (m)",
+      "altitude": "Altitude (m)",
+      "volume": "Volume (m³)",
+      "area": "Area (m²)",
+      "ramificationIndex": "Ramification index",
+      "caveAge": "Cave age",
+      "explorationStatus": "Exploration status",
+      "protectionClass": "Protection class",
+      "isShowCave": "Show cave",
+      "showCaveLength": "Show-cave length (m)",
+      "discoveryDate": "Discovery date",
+      "discoverer": "Discoverer",
+      "locationProtected": "Protected location",
+      "locationProtectedHint": "Exact coordinates and precise-location fields are hidden from users without explicit permission."
+    },
+    "visibilityValues": {
+      "private": "Private",
+      "team": "Team",
+      "authenticated": "Authenticated users",
+      "public": "Public"
+    },
+    "explorationValues": {
+      "unknown": "Unknown",
+      "ongoing": "Ongoing",
+      "finished": "Finished",
+      "abandoned": "Abandoned"
+    }
+  },
+  "entrances": {
+    "add": "Add entrance",
+    "edit": "Edit entrance",
+    "deleteConfirm": "Delete this entrance?",
+    "coordinates": "Coordinates",
+    "longitude": "Longitude",
+    "latitude": "Latitude",
+    "main": "Main",
+    "positionQuality": "Position quality",
+    "qualityValues": {
+      "unknown": "Unknown",
+      "gps": "GPS",
+      "map": "From map",
+      "estimated": "Estimated"
+    }
   }
 }

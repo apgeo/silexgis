@@ -2,16 +2,20 @@
 import { EnvironmentOutlined, LogoutOutlined, TableOutlined, UserOutlined } from '@ant-design/icons';
 import { Dropdown, Flex, Layout, Menu, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/auth.tsx';
 
 /** Application shell (04-frontend-spec.md §1): slim header + collapsible icon sidebar. */
 export default function AppLayout() {
   const { t, i18n } = useTranslation();
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const selectedKey = location.pathname.startsWith('/caves') ? 'caves' : 'map';
 
   return (
-    <Layout style={{ minHeight: '100%' }}>
+    <Layout style={{ height: '100%' }}>
       <Layout.Header style={{ display: 'flex', alignItems: 'center', paddingInline: 16 }}>
         <Typography.Title level={4} style={{ color: '#fff', margin: 0, flex: 1 }}>
           {t('app.name')}
@@ -49,14 +53,15 @@ export default function AppLayout() {
         <Layout.Sider collapsible defaultCollapsed theme="light">
           <Menu
             mode="inline"
-            selectable={false}
+            selectedKeys={[selectedKey]}
+            onClick={({ key }) => navigate(key === 'map' ? '/' : '/caves')}
             items={[
-              { key: 'map', icon: <EnvironmentOutlined />, label: t('nav.map'), disabled: true },
-              { key: 'caves', icon: <TableOutlined />, label: t('nav.caves'), disabled: true },
+              { key: 'map', icon: <EnvironmentOutlined />, label: t('nav.map') },
+              { key: 'caves', icon: <TableOutlined />, label: t('nav.caves') },
             ]}
           />
         </Layout.Sider>
-        <Layout.Content style={{ padding: 24 }}>
+        <Layout.Content style={{ overflow: 'auto' }}>
           <Outlet />
         </Layout.Content>
       </Layout>

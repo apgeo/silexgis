@@ -242,6 +242,385 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cave-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaxonomyDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entrance-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaxonomyDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rock-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaxonomyDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/feature-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureTypeDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map-layers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Enabled layer catalog for the map workspace. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MapLayerDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{caveId}/entrances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Entrances of a cave; coordinates obfuscated without ViewExactLocation. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EntranceDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Adds an entrance (Write on the cave). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EntranceWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EntranceDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cave-entrances/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Updates an entrance (Write on the cave). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EntranceWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EntranceDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes an entrance (Write on the cave). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map/cave-entrances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cave entrances as GeoJSON for the given bbox; clustered at low zoom. */
+        get: {
+            parameters: {
+                query: {
+                    bbox: string;
+                    zoom?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Searches caves by name/toponyms (accent-insensitive). */
+        get: {
+            parameters: {
+                query: {
+                    q: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SearchResultDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -428,6 +807,159 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paged cave list with filters; visibility-filtered, protected locations obfuscated. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                    sort?: string;
+                    caveTypeId?: number;
+                    region?: string;
+                    search?: string;
+                    minLength?: number;
+                    bbox?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfCaveListItemDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates a cave (Editor role and above); the caller becomes owner. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CaveWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Single cave; protected location fields require ViewExactLocation. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveDto"];
+                    };
+                };
+            };
+        };
+        /** Full update (Write permission). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CaveWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Soft delete (Delete permission). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -438,13 +970,235 @@ export interface components {
             license: string;
             sourceUrl: string;
         };
+        CaveDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            otherToponyms: null | string;
+            identificationCode: null | string;
+            /** Format: int64 */
+            caveTypeId: number;
+            description: null | string;
+            website: null | string;
+            region: null | string;
+            hydrographicBasin: null | string;
+            valley: null | string;
+            tributaryRiver: null | string;
+            closestAddress: null | string;
+            landRegistryNumber: null | string;
+            locationNotes: null | string;
+            /** Format: int64 */
+            rockTypeId: null | number;
+            rockAge: null | string;
+            /** Format: double */
+            surveyedLength: null | number;
+            /** Format: double */
+            estimatedLength: null | number;
+            /** Format: double */
+            realExtension: null | number;
+            /** Format: double */
+            projectedExtension: null | number;
+            /** Format: double */
+            depth: null | number;
+            /** Format: double */
+            positiveDepth: null | number;
+            /** Format: double */
+            negativeDepth: null | number;
+            /** Format: double */
+            potentialDepth: null | number;
+            /** Format: double */
+            altitude: null | number;
+            /** Format: double */
+            volume: null | number;
+            /** Format: double */
+            area: null | number;
+            /** Format: double */
+            ramificationIndex: null | number;
+            /** Format: int32 */
+            caveAge: null | number;
+            explorationStatus: components["schemas"]["ExplorationStatus"];
+            protectionClass: null | string;
+            isShowCave: boolean;
+            /** Format: double */
+            showCaveLength: null | number;
+            discoveryDate: null | string;
+            discoverer: null | string;
+            locationProtected: boolean;
+            /** Format: int32 */
+            entranceCount: number;
+            mainGeom: null | components["schemas"]["GeoJsonPoint"];
+            approximateLocation: boolean;
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CaveListItemDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            identificationCode: null | string;
+            /** Format: int64 */
+            caveTypeId: number;
+            region: null | string;
+            /** Format: double */
+            surveyedLength: null | number;
+            /** Format: double */
+            depth: null | number;
+            explorationStatus: components["schemas"]["ExplorationStatus"];
+            locationProtected: boolean;
+            /** Format: int32 */
+            entranceCount: number;
+            mainGeom: null | components["schemas"]["GeoJsonPoint"];
+            approximateLocation: boolean;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CaveWriteRequest: {
+            name: string;
+            otherToponyms: null | string;
+            identificationCode: null | string;
+            /** Format: int64 */
+            caveTypeId: number;
+            description: null | string;
+            website: null | string;
+            region: null | string;
+            hydrographicBasin: null | string;
+            valley: null | string;
+            tributaryRiver: null | string;
+            closestAddress: null | string;
+            landRegistryNumber: null | string;
+            locationNotes: null | string;
+            /** Format: int64 */
+            rockTypeId: null | number;
+            rockAge: null | string;
+            /** Format: double */
+            surveyedLength: null | number;
+            /** Format: double */
+            estimatedLength: null | number;
+            /** Format: double */
+            realExtension: null | number;
+            /** Format: double */
+            projectedExtension: null | number;
+            /** Format: double */
+            depth: null | number;
+            /** Format: double */
+            positiveDepth: null | number;
+            /** Format: double */
+            negativeDepth: null | number;
+            /** Format: double */
+            potentialDepth: null | number;
+            /** Format: double */
+            altitude: null | number;
+            /** Format: double */
+            volume: null | number;
+            /** Format: double */
+            area: null | number;
+            /** Format: double */
+            ramificationIndex: null | number;
+            /** Format: int32 */
+            caveAge: null | number;
+            explorationStatus: components["schemas"]["ExplorationStatus"];
+            protectionClass: null | string;
+            isShowCave: boolean;
+            /** Format: double */
+            showCaveLength: null | number;
+            discoveryDate: null | string;
+            discoverer: null | string;
+            locationProtected: boolean;
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
+        };
+        EntranceDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            caveId: string;
+            name: null | string;
+            /** Format: int64 */
+            entranceTypeId: number;
+            isMain: boolean;
+            geom: components["schemas"]["GeoJsonPoint"];
+            /** Format: double */
+            altitude: null | number;
+            description: null | string;
+            positionQuality: components["schemas"]["PositionQuality"];
+            /** Format: date */
+            surveyedAt: null | string;
+            approximateLocation: boolean;
+        };
+        EntranceWriteRequest: {
+            name: null | string;
+            /** Format: int64 */
+            entranceTypeId: number;
+            isMain: boolean;
+            geom: components["schemas"]["GeoJsonPoint"];
+            /** Format: double */
+            altitude: null | number;
+            description: null | string;
+            positionQuality: components["schemas"]["PositionQuality"];
+            /** Format: date */
+            surveyedAt: null | string;
+        };
+        /** @enum {unknown} */
+        ExplorationStatus: "unknown" | "ongoing" | "finished" | "abandoned";
+        FeatureCollection: {
+            type: string;
+            features: components["schemas"]["GeoFeature"][];
+        };
+        FeatureTypeDto: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            geometryKind: components["schemas"]["GeometryKind"];
+            symbolFile: null | string;
+            style: null | string;
+            propertiesSchema: null | string;
+        };
         ForgotPasswordRequest: {
             email: string;
         };
+        GeoFeature: {
+            type: string;
+            geometry: components["schemas"]["GeoJsonPoint"];
+            properties: Record<string, never>;
+        };
+        GeoJsonPoint: {
+            type: string;
+            coordinates: number[];
+        };
+        /** @enum {unknown} */
+        GeometryKind: "point" | "line" | "polygon" | "any";
         LoginRequest: {
             email: string;
             password: string;
         };
+        MapLayerDto: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            layerKind: components["schemas"]["MapLayerKind"];
+            urlTemplate: string;
+            options: null | string;
+            attribution: null | string;
+            isBase: boolean;
+            isDefault: boolean;
+            /** Format: int32 */
+            sortOrder: number;
+        };
+        /** @enum {unknown} */
+        MapLayerKind: "xyz" | "wmts" | "wms" | "vector" | "cog";
         MeDto: {
             /** Format: uuid */
             id: string;
@@ -454,6 +1208,17 @@ export interface components {
             locale: string;
             roles: string[];
         };
+        PagedResultOfCaveListItemDto: {
+            items: components["schemas"]["CaveListItemDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        /** @enum {unknown} */
+        PositionQuality: "unknown" | "gps" | "map" | "estimated";
         RegisterRequest: {
             email: string;
             password: string;
@@ -464,6 +1229,20 @@ export interface components {
             token: string;
             newPassword: string;
         };
+        SearchResultDto: {
+            caves: components["schemas"]["CaveListItemDto"][];
+        };
+        TaxonomyDto: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+        };
+        /** @enum {unknown} */
+        Visibility: "private" | "team" | "authenticated" | "public";
     };
     responses: never;
     parameters: never;

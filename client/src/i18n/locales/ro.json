@@ -15,14 +15,113 @@
     "lockedOut": "Cont blocat temporar. Încercați din nou mai târziu.",
     "signingIn": "Autentificare în curs…"
   },
-  "home": {
-    "welcome": "Bun venit la SilexGIS",
-    "signedInAs": "Autentificat ca",
-    "roles": "Roluri",
-    "placeholder": "Spațiul de lucru cu harta vine în etapa următoare."
-  },
   "common": {
     "loading": "Se încarcă…",
-    "language": "Limbă"
+    "language": "Limbă",
+    "save": "Salvează",
+    "cancel": "Anulează",
+    "saved": "Salvat.",
+    "saveFailed": "Operația a eșuat. Încercați din nou.",
+    "deleted": "Șters."
+  },
+  "map": {
+    "baseLayers": "Hărți de bază",
+    "overlays": "Suprapuneri",
+    "entrances": "Intrări în peșteri",
+    "searchPlaceholder": "Caută peșteri sau locuri…",
+    "caves": "Peșteri",
+    "places": "Locuri",
+    "zoomTo": "Centrează",
+    "openCave": "Deschide peștera",
+    "approximate": "Locație aproximativă — coordonatele exacte sunt protejate.",
+    "noSelection": "Apăsați pe un element de pe hartă pentru detalii."
+  },
+  "caves": {
+    "title": "Peșteri",
+    "newCave": "Peșteră nouă",
+    "editCave": "Editare peșteră",
+    "name": "Denumire",
+    "type": "Tip",
+    "region": "Regiune",
+    "surveyedLength": "Lungime (m)",
+    "depth": "Denivelare (m)",
+    "entrances": "Intrări",
+    "visibility": "Vizibilitate",
+    "identificationCode": "Cod",
+    "searchPlaceholder": "Caută denumire sau toponim…",
+    "allTypes": "Toate tipurile",
+    "edit": "Editează",
+    "delete": "Șterge",
+    "deleteConfirm": "Ștergeți această peșteră?",
+    "sections": {
+      "identification": "Identificare",
+      "localization": "Localizare",
+      "geology": "Geologie",
+      "morphometry": "Morfometrie",
+      "status": "Stare",
+      "discovery": "Descoperire",
+      "access": "Acces"
+    },
+    "fields": {
+      "otherToponyms": "Alte toponime",
+      "description": "Descriere",
+      "website": "Site web",
+      "hydrographicBasin": "Bazin hidrografic",
+      "valley": "Vale",
+      "tributaryRiver": "Afluent",
+      "closestAddress": "Adresa cea mai apropiată",
+      "landRegistryNumber": "Nr. carte funciară",
+      "locationNotes": "Note de localizare",
+      "rockType": "Tip de rocă",
+      "rockAge": "Vârsta rocii",
+      "surveyedLength": "Lungime cartată (m)",
+      "estimatedLength": "Lungime estimată (m)",
+      "realExtension": "Extensie reală (m)",
+      "projectedExtension": "Extensie proiectată (m)",
+      "positiveDepth": "Denivelare pozitivă (m)",
+      "negativeDepth": "Denivelare negativă (m)",
+      "potentialDepth": "Denivelare potențială (m)",
+      "altitude": "Altitudine (m)",
+      "volume": "Volum (m³)",
+      "area": "Suprafață (m²)",
+      "ramificationIndex": "Indice de ramificare",
+      "caveAge": "Vârsta peșterii",
+      "explorationStatus": "Stadiul explorării",
+      "protectionClass": "Clasă de protecție",
+      "isShowCave": "Peșteră turistică",
+      "showCaveLength": "Lungime amenajată (m)",
+      "discoveryDate": "Data descoperirii",
+      "discoverer": "Descoperitor",
+      "locationProtected": "Locație protejată",
+      "locationProtectedHint": "Coordonatele exacte și câmpurile de localizare precisă sunt ascunse utilizatorilor fără permisiune explicită."
+    },
+    "visibilityValues": {
+      "private": "Privată",
+      "team": "Echipă",
+      "authenticated": "Utilizatori autentificați",
+      "public": "Publică"
+    },
+    "explorationValues": {
+      "unknown": "Necunoscut",
+      "ongoing": "În desfășurare",
+      "finished": "Finalizată",
+      "abandoned": "Abandonată"
+    }
+  },
+  "entrances": {
+    "add": "Adaugă intrare",
+    "edit": "Editare intrare",
+    "deleteConfirm": "Ștergeți această intrare?",
+    "coordinates": "Coordonate",
+    "longitude": "Longitudine",
+    "latitude": "Latitudine",
+    "main": "Principală",
+    "positionQuality": "Calitatea poziției",
+    "qualityValues": {
+      "unknown": "Necunoscută",
+      "gps": "GPS",
+      "map": "De pe hartă",
+      "estimated": "Estimată"
+    }
   }
 }
