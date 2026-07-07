@@ -2,8 +2,8 @@
 namespace SilexGis.Domain;
 
 /// <summary>
-/// RLS-ready access-control columns carried by every protected table (ADR-007,
-/// 02-data-model.md). The permission evaluator and visibility filters operate on these.
+/// RLS-ready access-control columns carried by every protected table.
+/// The permission evaluator and visibility filters operate on these.
 /// </summary>
 public interface IProtectedEntity
 {

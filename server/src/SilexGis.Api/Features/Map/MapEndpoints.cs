@@ -10,8 +10,8 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Features.Map;
 
 /// <summary>
-/// GeoJSON layer endpoints for the map workspace (03-api-spec.md §2). Always
-/// visibility-filtered; protected cave locations obfuscated server-side (05 §5).
+/// GeoJSON layer endpoints for the map workspace. Always
+/// visibility-filtered; protected cave locations obfuscated server-side.
 /// Below the cluster zoom threshold results are aggregated into cluster features.
 /// </summary>
 public static class MapEndpoints

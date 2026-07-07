@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/auth.tsx';
 
-/** Application shell (04-frontend-spec.md §1): slim header + collapsible icon sidebar. */
+/** Application shell: slim header + collapsible icon sidebar. */
 export default function AppLayout() {
   const { t, i18n } = useTranslation();
   const { user, signOut } = useAuth();

@@ -4,8 +4,8 @@ using NetTopologySuite.Geometries;
 namespace SilexGis.Api.Common;
 
 /// <summary>
-/// Minimal GeoJSON contract types (RFC 7946) used in DTOs and map responses (03-api-spec.md
-/// §2). Deliberately plain records so the OpenAPI schema — and the generated TS client —
+/// Minimal GeoJSON contract types (RFC 7946) used in DTOs and map responses.
+/// Deliberately plain records so the OpenAPI schema — and the generated TS client —
 /// stay exact; NTS types never appear in contracts.
 /// </summary>
 public sealed record GeoJsonPoint(string Type, double[] Coordinates)

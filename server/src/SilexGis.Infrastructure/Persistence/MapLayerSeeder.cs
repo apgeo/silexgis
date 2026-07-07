@@ -6,7 +6,7 @@ using SilexGis.Domain.Entities;
 namespace SilexGis.Infrastructure.Persistence;
 
 /// <summary>
-/// Seeds the default layer catalog (02-data-model.md §4) — attribution-compliant public
+/// Seeds the default layer catalog — attribution-compliant public
 /// layers. Idempotent by name; never overwrites admin edits.
 /// </summary>
 public static class MapLayerSeeder

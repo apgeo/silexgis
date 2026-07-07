@@ -4,8 +4,8 @@ using FluentValidation;
 namespace SilexGis.Api.Common;
 
 /// <summary>
-/// Endpoint filter running the FluentValidation validator for the request body
-/// (01-architecture.md §2). Failures → 400 ProblemDetails with an errors dictionary.
+/// Endpoint filter running the FluentValidation validator for the request body.
+/// Failures → 400 ProblemDetails with an errors dictionary.
 /// </summary>
 public sealed class ValidationFilter<T> : IEndpointFilter
     where T : class

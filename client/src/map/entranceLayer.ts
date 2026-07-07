@@ -20,7 +20,7 @@ export function createEntranceLayer(): VectorLayer {
 }
 
 /**
- * Bbox/zoom loading strategy (04-frontend-spec.md §2.1): reload on moveend (debounced),
+ * Bbox/zoom loading strategy: reload on moveend (debounced),
  * stale responses discarded. Returns a detach function.
  */
 export function attachEntranceLoader(map: Map): () => void {

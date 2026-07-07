@@ -13,7 +13,7 @@ interface SearchTarget {
   zoom: number;
 }
 
-/** Unified search over the workspace map: internal caves + Nominatim geocoding (04 §2.4). */
+/** Unified search over the workspace map: internal caves + Nominatim geocoding. */
 export default function MapSearch() {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');

@@ -41,7 +41,7 @@ interface EntranceFormValues {
 }
 
 /**
- * Entrance editor (04-frontend-spec.md §2.3): click-to-place on a mini map, kept in two-way
+ * Entrance editor: click-to-place on a mini map, kept in two-way
  * sync with exact manual coordinate inputs — v1 parity for "manual cave coordinates".
  */
 export default function EntranceEditorModal({

@@ -6,7 +6,7 @@ using SilexGis.Domain.Entities;
 namespace SilexGis.Infrastructure.Persistence;
 
 /// <summary>
-/// Idempotent seed of the lookup taxonomies (02-data-model.md §2). Matches by Code — never
+/// Idempotent seed of the lookup taxonomies. Matches by Code — never
 /// overwrites admin edits; only inserts missing rows.
 /// </summary>
 public static class TaxonomySeeder
@@ -62,7 +62,7 @@ public static class TaxonomySeeder
 
     private static async Task SeedFeatureTypesAsync(SilexGisDbContext db, CancellationToken ct)
     {
-        // Symbol files reference the bundled legacy symbol set (10-legacy-analysis.md §2).
+        // Symbol files reference the bundled legacy symbol set.
         (string Code, string Name, GeometryKind Kind, string Symbol)[] items =
         [
             ("sinkhole", "Sinkhole / Doline", GeometryKind.Point, "sinkhole.png"),

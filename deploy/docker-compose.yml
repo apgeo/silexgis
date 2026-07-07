@@ -1,4 +1,4 @@
-# SilexGIS production deployment (06-deployment.md §1).
+# SilexGIS production deployment.
 # Usage: cp .env.example .env → edit → docker compose up -d → http://localhost:8080
 name: silexgis
 

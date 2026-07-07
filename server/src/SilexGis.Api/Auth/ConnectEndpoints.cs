@@ -10,7 +10,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace SilexGis.Api.Auth;
 
 /// <summary>
-/// OIDC protocol endpoints (03-api-spec.md §5). Authorization Code + PKCE with the SPA as a
+/// OIDC protocol endpoints. Authorization Code + PKCE with the SPA as a
 /// first-party client: the authorize endpoint relies on the Identity cookie session and
 /// auto-consents; unauthenticated callers are redirected to the SPA login route.
 /// </summary>

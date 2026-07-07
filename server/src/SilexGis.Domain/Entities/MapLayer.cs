@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 namespace SilexGis.Domain.Entities;
 
-/// <summary>Admin-configured base/overlay layer catalog entry (02-data-model.md §4).</summary>
+/// <summary>Admin-configured base/overlay layer catalog entry.</summary>
 public class MapLayer : ITimestamped
 {
     public long Id { get; set; }

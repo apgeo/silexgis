@@ -11,7 +11,7 @@ public sealed class TeamConfiguration : IEntityTypeConfiguration<Team>
     public void Configure(EntityTypeBuilder<Team> builder)
     {
         builder.ToTable("teams");
-        builder.Property(x => x.Id).ValueGeneratedNever(); // uuid v7 generated app-side (ADR-018)
+        builder.Property(x => x.Id).ValueGeneratedNever(); // uuid v7 generated app-side
         builder.Property(x => x.Name).HasMaxLength(100);
         builder.Property(x => x.Slug).HasMaxLength(100);
         builder.Property(x => x.Description).HasMaxLength(4000);

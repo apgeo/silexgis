@@ -2,10 +2,10 @@
 namespace SilexGis.Domain.Permissions;
 
 /// <summary>
-/// Effective-permission algorithm (05-auth-permissions.md §3), Phase 1 scope: global roles,
+/// Effective-permission algorithm. Current scope: global roles,
 /// ownership, visibility and team roles. Explicit ACL grants (object_acl) are added in the
 /// permissions phase — this is the single place they will plug into.
-/// Team defaults (05 §2): member → Read+Write; team admin/owner → +Delete+Share+Manage.
+/// Team defaults: member → Read+Write; team admin/owner → +Delete+Share+Manage.
 /// </summary>
 public static class PermissionEvaluator
 {

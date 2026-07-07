@@ -4,7 +4,7 @@ import type { paths } from './schema';
 import { userManager } from '../auth/auth.tsx';
 
 /**
- * Typed API client generated from the server OpenAPI contract (03-api-spec.md §6).
+ * Typed API client generated from the server OpenAPI contract.
  * `schema.d.ts` is generated — regenerate with `npm run generate:api`, never hand-edit.
  */
 export const api = createClient<paths>({ baseUrl: '/' });

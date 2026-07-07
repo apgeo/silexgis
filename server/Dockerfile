@@ -7,7 +7,7 @@ RUN dotnet publish src/SilexGis.Api -c Release -o /app/publish
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
-# Uploaded files volume (06-deployment.md); owned by the non-root app user.
+# Uploaded files volume; owned by the non-root app user.
 RUN mkdir -p /data/files && chown -R app:app /data
 USER app
 EXPOSE 8080

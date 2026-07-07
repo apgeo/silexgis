@@ -2,8 +2,8 @@
 namespace SilexGis.Domain;
 
 /// <summary>
-/// Per-object permission flags stored in object_acl.permissions (02-data-model.md §7,
-/// 05-auth-permissions.md). Values are part of the schema contract — do not renumber.
+/// Per-object permission flags stored in object_acl.permissions.
+/// Values are part of the schema contract — do not renumber.
 /// </summary>
 [Flags]
 public enum ObjectPermission

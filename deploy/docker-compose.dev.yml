@@ -1,4 +1,4 @@
-# Development database only (06-deployment.md §4).
+# Development database only.
 # Usage: docker compose -f docker-compose.dev.yml up -d
 # Then: `dotnet run` in server/src/SilexGis.Api and `npm run dev` in client/.
 name: silexgis-dev

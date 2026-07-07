@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { InMemoryWebStorage, UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
 
 // Authorization Code + PKCE against the embedded OpenIddict server (same origin).
-// Tokens live in memory only (05-auth-permissions.md §1); refresh tokens drive renewal.
+// Tokens live in memory only (never persisted to storage); refresh tokens drive renewal.
 export const userManager = new UserManager({
   authority: window.location.origin,
   client_id: 'silexgis-spa',

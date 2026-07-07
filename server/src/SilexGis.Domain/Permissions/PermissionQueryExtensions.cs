@@ -2,8 +2,8 @@
 namespace SilexGis.Domain.Permissions;
 
 /// <summary>
-/// Read-visibility filter composed into every list/map query over protected entities
-/// (05-auth-permissions.md §3). Mirrored in SQL by PermissionSql.VisibleToFragment —
+/// Read-visibility filter composed into every list/map query over protected entities.
+/// Mirrored in SQL by PermissionSql.VisibleToFragment —
 /// a parity test keeps the two in lock-step; change them together or not at all.
 /// </summary>
 public static class PermissionQueryExtensions

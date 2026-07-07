@@ -7,8 +7,8 @@ using SilexGis.Domain.Entities;
 namespace SilexGis.Infrastructure.Persistence;
 
 /// <summary>
-/// Demo dataset for local exploration and E2E tests (`dotnet run -- seed-demo`,
-/// 06-deployment.md §4). Owned by the given user; idempotent by identification code.
+/// Demo dataset for local exploration and E2E tests (`dotnet run -- seed-demo`).
+/// Owned by the given user; idempotent by identification code.
 /// </summary>
 public static class DemoSeeder
 {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 namespace SilexGis.Domain.Entities;
 
-/// <summary>A club/group that can own objects (02-data-model.md §1).</summary>
+/// <summary>A club/group that can own objects.</summary>
 public class Team : ITimestamped, IAuditable
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();

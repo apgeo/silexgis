@@ -28,14 +28,14 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    // SILEXGIS__{Section}__{Key} environment variables override appsettings (06-deployment.md §3).
+    // SILEXGIS__{Section}__{Key} environment variables override appsettings.
     builder.Configuration.AddEnvironmentVariables("SILEXGIS__");
 
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
         .ReadFrom.Services(services));
 
-    // Contract hygiene (03-api-spec.md §1): enums as strings; strict numbers — the web
+    // Contract hygiene: enums as strings; strict numbers — the web
     // default (AllowReadingFromString) would advertise every numeric as "number | string"
     // in the OpenAPI document and poison the generated TS client.
     builder.Services.ConfigureHttpJsonOptions(options =>
@@ -60,8 +60,8 @@ try
 
     var app = builder.Build();
 
-    // The API always sits behind a reverse proxy (nginx `web` service / Vite dev proxy —
-    // 01-architecture.md §1); honor its scheme/host so OIDC issuer and redirects are right.
+    // The API always sits behind a reverse proxy (nginx `web` service / Vite dev proxy);
+    // honor its scheme/host so OIDC issuer and redirects are right.
     // The proxy is only reachable on the internal network, so no known-proxy allow-list.
     var forwardedHeaders = new ForwardedHeadersOptions
     {
@@ -78,7 +78,7 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
 
-    app.MapOpenApi(); // /openapi/v1.json — the contract the TS client is generated from (03-api-spec.md §6).
+    app.MapOpenApi(); // /openapi/v1.json — the contract the TS client is generated from.
 
     // Liveness: process is up (no dependency checks). Readiness: all registered checks.
     app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
@@ -87,7 +87,7 @@ try
     app.MapConnectEndpoints();
 
     // Default-deny: everything under /api/v1 requires a bearer token unless an endpoint is
-    // explicitly on the anonymous allow-list (03-api-spec.md §7).
+    // explicitly on the anonymous allow-list.
     var api = app.MapGroup("/api/v1").RequireAuthorization();
     api.MapAboutEndpoints();
     api.MapAuthEndpoints();
@@ -109,7 +109,7 @@ try
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
     }
 
-    // `dotnet run -- seed-demo`: load the demo dataset and exit (06-deployment.md §4).
+    // `dotnet run -- seed-demo`: load the demo dataset and exit.
     if (args.Contains("seed-demo"))
     {
         using var scope = app.Services.CreateScope();

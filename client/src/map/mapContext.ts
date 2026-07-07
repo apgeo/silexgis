@@ -4,8 +4,8 @@ import View from 'ol/View';
 import { ScaleLine, defaults as defaultControls } from 'ol/control';
 import { fromLonLat } from 'ol/proj';
 
-// The workspace map is a module-level singleton living OUTSIDE React state
-// (04-frontend-spec.md §8); components attach/detach the DOM target and subscribe to events.
+// The workspace map is a module-level singleton living OUTSIDE React state;
+// components attach/detach the DOM target and subscribe to events.
 let workspaceMap: Map | undefined;
 
 export function getWorkspaceMap(): Map {

@@ -2,7 +2,7 @@
 namespace SilexGis.Domain;
 
 /// <summary>
-/// Baseline read audience of a protected object (02-data-model.md RLS-ready columns, ADR-007).
+/// Baseline read audience of a protected object (stored in the RLS-ready visibility column).
 /// Stored as smallint; values are part of the schema contract — do not renumber.
 /// </summary>
 public enum Visibility : short

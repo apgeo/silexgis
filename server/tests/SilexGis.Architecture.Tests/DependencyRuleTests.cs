@@ -7,7 +7,7 @@ using SilexGis.Infrastructure;
 namespace SilexGis.Architecture.Tests;
 
 /// <summary>
-/// Dependency rules from 01-architecture.md §2. These tests are a hard quality floor —
+/// Layer dependency rules. These tests are a hard quality floor —
 /// never weaken or delete them to make a build pass (.claude/CLAUDE.md).
 /// </summary>
 public class DependencyRuleTests

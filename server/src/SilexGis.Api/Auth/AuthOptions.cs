@@ -3,7 +3,7 @@ using SilexGis.Domain;
 
 namespace SilexGis.Api.Auth;
 
-/// <summary>Authentication behavior (05-auth-permissions.md §1, 06-deployment.md §3).</summary>
+/// <summary>Authentication behavior options.</summary>
 public sealed class AuthOptions
 {
     public const string SectionName = "Auth";

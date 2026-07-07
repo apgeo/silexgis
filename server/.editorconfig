@@ -12,7 +12,7 @@ trim_trailing_whitespace = true
 indent_size = 2
 
 [*.cs]
-# SPDX header required on every source file (ADR-017); enforced at build (EnforceCodeStyleInBuild).
+# SPDX header required on every source file; enforced at build (EnforceCodeStyleInBuild).
 file_header_template = SPDX-License-Identifier: AGPL-3.0-or-later
 dotnet_diagnostic.IDE0073.severity = warning
 csharp_style_namespace_declarations = file_scoped:warning

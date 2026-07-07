@@ -14,7 +14,7 @@ import {
 
 type CaveFormValues = Omit<CaveWrite, 'teamId'>;
 
-/** Create/edit form, sectioned per 04-frontend-spec.md §4. Team binding arrives with teams UI. */
+/** Create/edit form, sectioned to mirror the cave sheet. Team binding arrives with teams UI. */
 export default function CaveFormPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { create } from 'zustand';
 
-// Workspace UI state (04-frontend-spec.md §8): serializable, carries references (ids),
+// Workspace UI state: serializable, carries references (ids),
 // never entity payloads — panels fetch their own data through TanStack Query.
 export interface EntranceSelection {
   entranceId: string;

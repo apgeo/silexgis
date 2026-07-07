@@ -56,7 +56,7 @@ public sealed class EntranceWriteRequestValidator : AbstractValidator<EntranceWr
 }
 
 /// <summary>
-/// Entrances inherit the cave's access control (02-data-model.md §3): every operation
+/// Entrances inherit the cave's access control: every operation
 /// checks the parent cave. Derived cave fields (entrance_count, main_geom) are maintained
 /// here — the single write path for entrances.
 /// </summary>

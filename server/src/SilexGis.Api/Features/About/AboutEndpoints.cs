@@ -9,7 +9,7 @@ public static class AboutEndpoints
 {
     /// <summary>
     /// Anonymous by design: exposes name, version, license and source location
-    /// (AGPL §13; on the anonymous allow-list, 03-api-spec.md §7).
+    /// (AGPL §13; on the anonymous allow-list).
     /// </summary>
     public static RouteGroupBuilder MapAboutEndpoints(this RouteGroupBuilder api)
     {

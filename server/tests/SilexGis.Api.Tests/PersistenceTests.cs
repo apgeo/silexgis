@@ -60,7 +60,7 @@ public sealed class PersistenceTests : IDisposable
         await db.SaveChangesAsync();
 
         team.Id.ShouldNotBe(Guid.Empty);
-        team.Id.ToString()[14].ShouldBe('7'); // uuid version nibble — v7 per ADR-018
+        team.Id.ToString()[14].ShouldBe('7'); // uuid version nibble — must stay v7
         team.CreatedAt.ShouldBeGreaterThan(DateTimeOffset.UnixEpoch);
         team.UpdatedAt.ShouldBe(team.CreatedAt);
 

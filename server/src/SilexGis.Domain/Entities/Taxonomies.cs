@@ -2,8 +2,8 @@
 namespace SilexGis.Domain.Entities;
 
 /// <summary>
-/// Admin-editable lookup taxonomies (02-data-model.md §2). bigint identity keys — exchanged
-/// across installations by natural key <c>Code</c> (ADR-018).
+/// Admin-editable lookup taxonomies. bigint identity keys — exchanged
+/// across installations by natural key <c>Code</c>.
 /// </summary>
 public abstract class TaxonomyBase : ITimestamped, IAuditable
 {
@@ -30,7 +30,7 @@ public class EntranceType : TaxonomyBase;
 
 public class RockType : TaxonomyBase;
 
-/// <summary>Surface-feature taxonomy with symbology (02-data-model.md §2).</summary>
+/// <summary>Surface-feature taxonomy with symbology.</summary>
 public class FeatureType : TaxonomyBase
 {
     public GeometryKind GeometryKind { get; set; } = GeometryKind.Point;

@@ -4,8 +4,8 @@ using NetTopologySuite.Geometries;
 namespace SilexGis.Domain.Entities;
 
 /// <summary>
-/// A cave with toponymy, localization, geology, morphometry and protection data
-/// (02-data-model.md §3). Soft-deleted; geometry lives on entrances — <see cref="MainGeom"/>
+/// A cave with toponymy, localization, geology, morphometry and protection data.
+/// Soft-deleted; geometry lives on entrances — <see cref="MainGeom"/>
 /// and <see cref="EntranceCount"/> are derived copies maintained by the entrance handlers.
 /// </summary>
 public class Cave : IProtectedEntity, ITimestamped, IAuditable
@@ -25,7 +25,7 @@ public class Cave : IProtectedEntity, ITimestamped, IAuditable
 
     public string? Website { get; set; }
 
-    // Localization (textual parts are redacted for protected caves — 05 §5)
+    // Localization (textual parts are redacted for protected caves)
     public string? Region { get; set; }
 
     public string? HydrographicBasin { get; set; }
@@ -86,7 +86,7 @@ public class Cave : IProtectedEntity, ITimestamped, IAuditable
 
     public string? Discoverer { get; set; }
 
-    /// <summary>When true, exact coordinates require ViewExactLocation (05 §5).</summary>
+    /// <summary>When true, exact coordinates require the ViewExactLocation permission.</summary>
     public bool LocationProtected { get; set; }
 
     // Derived from entrances (maintained by entrance handlers)
@@ -94,7 +94,7 @@ public class Cave : IProtectedEntity, ITimestamped, IAuditable
 
     public Point? MainGeom { get; set; }
 
-    // Access control (ADR-007)
+    // Access control (RLS-ready columns)
     public Guid OwnerUserId { get; set; }
 
     public Guid? TeamId { get; set; }

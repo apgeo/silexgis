@@ -9,7 +9,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace SilexGis.Api.Auth;
 
 /// <summary>
-/// Startup seeding: global roles, the bootstrap administrator (05-auth-permissions.md §1),
+/// Startup seeding: global roles, the bootstrap administrator,
 /// and the first-party SPA OAuth client. Idempotent — safe on every start.
 /// </summary>
 public static class IdentitySeeder

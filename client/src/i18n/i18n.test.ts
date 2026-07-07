@@ -11,7 +11,7 @@ function flattenKeys(value: object, prefix = ''): string[] {
   );
 }
 
-// EN and RO must be maintained together (ADR-016).
+// EN and RO must be maintained together.
 describe('i18n locales', () => {
   it('en and ro define exactly the same keys', () => {
     expect(flattenKeys(ro).sort()).toEqual(flattenKeys(en).sort());

@@ -5,8 +5,8 @@ using SilexGis.Domain;
 namespace SilexGis.Infrastructure.Identity;
 
 /// <summary>
-/// Application user — ASP.NET Identity with uuid v7 keys plus profile fields
-/// (02-data-model.md §1, ADR-018). Lives in Infrastructure so Domain stays framework-free;
+/// Application user — ASP.NET Identity with uuid v7 keys plus profile fields.
+/// Lives in Infrastructure so Domain stays framework-free;
 /// domain code references users by Guid only.
 /// </summary>
 public class SilexGisUser : IdentityUser<Guid>, ITimestamped

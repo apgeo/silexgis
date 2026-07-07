@@ -13,7 +13,7 @@ namespace SilexGis.Api.Tests;
 
 /// <summary>
 /// Exercises the real OIDC surface end-to-end: cookie login → authorize (code + PKCE) →
-/// token exchange → bearer-protected API → refresh grant (05-auth-permissions.md §1).
+/// token exchange → bearer-protected API → refresh grant.
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class AuthFlowTests : IDisposable

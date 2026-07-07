@@ -12,7 +12,7 @@ export type MapLayerInfo = components['schemas']['MapLayerDto'];
 export type Taxonomy = components['schemas']['TaxonomyDto'];
 export type EntranceFeatureCollection = components['schemas']['FeatureCollection'];
 
-// Query keys live here so invalidation stays precise (04-frontend-spec.md §8).
+// Query keys live here so invalidation stays precise.
 export const queryKeys = {
   me: ['me'] as const,
   mapLayers: ['map-layers'] as const,

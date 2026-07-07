@@ -20,7 +20,7 @@ public class ObjectPermissionTests
     [Fact]
     public void Flag_values_match_the_data_model_contract()
     {
-        // 02-data-model.md §7 — stored values, must never change.
+        // Stored values, must never change.
         ((int)ObjectPermission.Read).ShouldBe(1);
         ((int)ObjectPermission.Write).ShouldBe(2);
         ((int)ObjectPermission.Delete).ShouldBe(4);
@@ -32,7 +32,7 @@ public class ObjectPermissionTests
     [Fact]
     public void Visibility_values_match_the_data_model_contract()
     {
-        // 02-data-model.md RLS-ready columns — stored values, must never change.
+        // Stored values of the RLS-ready visibility column, must never change.
         ((short)Visibility.Private).ShouldBe((short)0);
         ((short)Visibility.Team).ShouldBe((short)1);
         ((short)Visibility.Authenticated).ShouldBe((short)2);

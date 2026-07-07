@@ -8,8 +8,8 @@ using SilexGis.Domain.Entities;
 namespace SilexGis.Infrastructure.Persistence;
 
 /// <summary>
-/// Writes audit_log rows for creates/updates/deletes of <see cref="IAuditable"/> entities
-/// (02-data-model.md §6). Update entries carry a { prop: { old, new } } diff as jsonb.
+/// Writes audit_log rows for creates/updates/deletes of <see cref="IAuditable"/> entities.
+/// Update entries carry a { prop: { old, new } } diff as jsonb.
 /// </summary>
 public sealed class AuditInterceptor(ICurrentUser currentUser) : SaveChangesInterceptor
 {

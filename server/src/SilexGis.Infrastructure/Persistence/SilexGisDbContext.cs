@@ -37,7 +37,7 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
         builder.HasPostgresExtension("postgis");
         builder.HasPostgresExtension("unaccent");
 
-        // Identity tables use plain names (02-data-model.md §1), not AspNet* defaults.
+        // Identity tables use plain names (users/roles/…), not AspNet* defaults.
         builder.Entity<SilexGisUser>().ToTable("users");
         builder.Entity<SilexGisRole>().ToTable("roles");
         builder.Entity<IdentityUserRole<Guid>>().ToTable("user_roles");

@@ -11,7 +11,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace SilexGis.Api.Auth;
 
 /// <summary>
-/// ASP.NET Identity + embedded OpenIddict OIDC server (ADR-006, 05-auth-permissions.md §1).
+/// ASP.NET Identity + embedded OpenIddict OIDC server.
 /// Cookie session for the interactive authorize flow; JWT bearer (locally validated) for
 /// the API. Authorization Code + PKCE only — no client secrets, no password grant.
 /// </summary>
@@ -80,11 +80,11 @@ public static class AuthenticationSetup
 
                 // Development certificates are auto-created and persisted per machine.
                 // Production installations must mount stable certificates — tracked for the
-                // deployment work (06-deployment.md); tokens are invalidated on key rotation.
+                // deployment work; tokens are invalidated on key rotation.
                 options.AddDevelopmentEncryptionCertificate()
                     .AddDevelopmentSigningCertificate();
 
-                // Standard JWT access tokens (05-auth-permissions.md §1).
+                // Standard JWT access tokens.
                 options.DisableAccessTokenEncryption();
 
                 options.UseAspNetCore()
@@ -92,10 +92,10 @@ public static class AuthenticationSetup
                     .EnableTokenEndpointPassthrough()
                     .EnableEndSessionEndpointPassthrough()
                     .EnableUserInfoEndpointPassthrough()
-                    // TLS terminates at the reverse proxy (01-architecture.md §1) — the API
+                    // TLS terminates at the reverse proxy — the API
                     // itself serves plain HTTP inside the network, so OpenIddict must not
-                    // reject non-HTTPS requests. Public exposure without TLS is an operator
-                    // error documented in 06-deployment.md.
+                    // reject non-HTTPS requests. Public exposure without TLS is an
+                    // operator error (the install guide requires TLS at the proxy).
                     .DisableTransportSecurityRequirement();
             })
             .AddValidation(options =>

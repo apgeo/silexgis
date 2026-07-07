@@ -12,7 +12,7 @@ import { attachSelection } from '../map/selection.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import './MapPage.css';
 
-/** Map workspace v1 (04-frontend-spec.md §2): fixed resizable panes; docking comes later. */
+/** Map workspace v1: fixed resizable panes; docking comes later. */
 export default function MapPage() {
   const mapTarget = useRef<HTMLDivElement>(null);
   const { data: layers } = useMapLayers();

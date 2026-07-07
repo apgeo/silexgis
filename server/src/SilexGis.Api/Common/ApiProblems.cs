@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 namespace SilexGis.Api.Common;
 
 /// <summary>
-/// RFC 9457 problem responses with the stable machine-readable code (03-api-spec.md §1).
+/// RFC 9457 problem responses with a stable machine-readable code.
 /// Typed (ProblemHttpResult) so handlers can use exact Results&lt;...&gt; unions and the
 /// OpenAPI contract stays complete.
 /// </summary>

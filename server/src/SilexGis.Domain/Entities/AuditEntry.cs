@@ -4,8 +4,8 @@ using System.Net;
 namespace SilexGis.Domain.Entities;
 
 /// <summary>
-/// Append-only audit record (02-data-model.md §6). EntityId is a string because audited
-/// entities use mixed key types (uuid domain entities, bigint taxonomies — ADR-018); the
+/// Append-only audit record. EntityId is a string because audited
+/// entities use mixed key types (uuid domain entities, bigint taxonomies); the
 /// audit log is a trace, not a foreign-key relationship.
 /// </summary>
 public class AuditEntry

@@ -112,7 +112,7 @@ public sealed record CaveWriteRequest(
 internal static class CaveMapping
 {
     /// <summary>
-    /// Maps to DTO applying location protection (05 §5): without ViewExactLocation, the
+    /// Maps to DTO applying location protection: without ViewExactLocation, the
     /// main geometry is grid-snapped and precise-location text fields are redacted.
     /// </summary>
     public static CaveDto ToDto(this Cave c, UserContext? user, double gridMeters)

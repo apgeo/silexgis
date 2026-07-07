@@ -12,7 +12,7 @@ public sealed record UserContext(
 {
     public bool IsAdmin => Roles.Contains(GlobalRoles.Admin);
 
-    /// <summary>Editor and above may create content (05-auth-permissions.md §2).</summary>
+    /// <summary>Editor and above may create content.</summary>
     public bool CanCreateContent =>
         Roles.Contains(GlobalRoles.Editor) || Roles.Contains(GlobalRoles.Manager) || IsAdmin;
 

@@ -7,8 +7,8 @@ using SilexGis.Infrastructure.Identity;
 namespace SilexGis.Api.Auth;
 
 /// <summary>
-/// Session and account endpoints (03-api-spec.md §5). All anonymous by design (allow-list
-/// §7): they establish the session the OIDC authorize flow relies on.
+/// Session and account endpoints. All anonymous by design (documented allow-list):
+/// they establish the session the OIDC authorize flow relies on.
 /// </summary>
 public static class AuthEndpoints
 {

@@ -19,7 +19,7 @@ namespace SilexGis.Api.Tests;
 
 /// <summary>
 /// Cave domain end-to-end: CRUD, visibility matrix, team access, location obfuscation,
-/// map bbox/cluster endpoint, search, and EF↔SQL visibility parity (05-auth-permissions §3).
+/// map bbox/cluster endpoint, search, and EF↔SQL visibility parity.
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class CaveDomainTests : IAsyncLifetime, IDisposable

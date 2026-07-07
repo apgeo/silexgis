@@ -4,8 +4,8 @@ using Testcontainers.PostgreSql;
 namespace SilexGis.Api.Tests.Support;
 
 /// <summary>
-/// One PostGIS container for the whole test collection (07-testing.md). The image matches
-/// the deployment database (06-deployment.md §1).
+/// One PostGIS container for the whole test collection. The image matches
+/// the deployment database.
 /// </summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 namespace SilexGis.Domain.Entities;
 
-/// <summary>Membership of a user in a team (02-data-model.md §1). Unique per (TeamId, UserId).</summary>
+/// <summary>Membership of a user in a team. Unique per (TeamId, UserId).</summary>
 public class TeamMember : ITimestamped
 {
     public long Id { get; set; }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { defineConfig } from '@playwright/test';
 
-// Smoke flows against the dev stack (07-testing.md §2): requires the dev database
+// Smoke flows against the dev stack: requires the dev database
 // (deploy/docker-compose.dev.yml) and the API on :5080; Vite is started automatically.
 export default defineConfig({
   testDir: './e2e',

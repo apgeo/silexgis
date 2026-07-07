@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace SilexGis.Api.Common;
 
-/// <summary>List envelope (03-api-spec.md §1).</summary>
+/// <summary>List envelope for paged endpoints.</summary>
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalItems);
 
 public static class Paging

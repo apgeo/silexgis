@@ -3,7 +3,7 @@ namespace SilexGis.Domain;
 
 /// <summary>
 /// Outbound email seam (password reset, future confirmations). A real SMTP implementation
-/// is configuration-gated (06-deployment.md §3 Smtp); without it, a logging no-op is used.
+/// is configuration-gated (Smtp options); without it, a logging no-op is used.
 /// </summary>
 public interface IEmailSender
 {

@@ -5,7 +5,7 @@ import { initReactI18next } from 'react-i18next';
 import en from './locales/en.json';
 import ro from './locales/ro.json';
 
-// EN and RO are maintained together (ADR-016); the key-parity test enforces it.
+// EN and RO are maintained together; the key-parity test enforces it.
 void i18n
   .use(LanguageDetector)
   .use(initReactI18next)

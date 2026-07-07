@@ -4,7 +4,7 @@ using NetTopologySuite.Geometries;
 namespace SilexGis.Domain.Entities;
 
 /// <summary>
-/// An entrance of a cave (02-data-model.md §3). Inherits the cave's access control —
+/// An entrance of a cave. Inherits the cave's access control —
 /// no own RLS columns. Geometry is a 2D point; altitude is the dedicated column.
 /// </summary>
 public class CaveEntrance : ITimestamped, IAuditable
