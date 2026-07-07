@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
@@ -29,7 +30,7 @@ public static class MapEndpoints
         return api;
     }
 
-    private static async Task<IResult> CaveEntrancesAsync(
+    private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> CaveEntrancesAsync(
         string bbox,
         int? zoom,
         SilexGisDbContext db,
@@ -40,7 +41,7 @@ public static class MapEndpoints
         var user = await userAccessor.GetAsync(ct);
         if (user is null)
         {
-            return Results.Unauthorized();
+            return TypedResults.Unauthorized();
         }
 
         if (!Bbox.TryParse(bbox, out var box))

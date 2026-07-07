@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using FluentValidation;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
@@ -81,7 +82,7 @@ public static class EntranceEndpoints
         return api;
     }
 
-    private static async Task<IResult> ListAsync(
+    private static async Task<Results<Ok<List<EntranceDto>>, ProblemHttpResult>> ListAsync(
         Guid caveId,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
@@ -106,7 +107,7 @@ public static class EntranceEndpoints
             .ToList());
     }
 
-    private static async Task<IResult> CreateAsync(
+    private static async Task<Results<Created<EntranceDto>, ProblemHttpResult>> CreateAsync(
         Guid caveId,
         EntranceWriteRequest request,
         SilexGisDbContext db,
@@ -142,7 +143,7 @@ public static class EntranceEndpoints
             ToDto(entrance, exact: true, access.Value.LocationGridMeters));
     }
 
-    private static async Task<IResult> UpdateAsync(
+    private static async Task<Results<Ok<EntranceDto>, ProblemHttpResult>> UpdateAsync(
         Guid id,
         EntranceWriteRequest request,
         SilexGisDbContext db,
@@ -171,7 +172,7 @@ public static class EntranceEndpoints
         return TypedResults.Ok(ToDto(entrance, exact: true, access.Value.LocationGridMeters));
     }
 
-    private static async Task<IResult> DeleteAsync(
+    private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,

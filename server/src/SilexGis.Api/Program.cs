@@ -35,10 +35,15 @@ try
         .ReadFrom.Configuration(context.Configuration)
         .ReadFrom.Services(services));
 
-    // Enums as strings in every contract (03-api-spec.md §1).
+    // Contract hygiene (03-api-spec.md §1): enums as strings; strict numbers — the web
+    // default (AllowReadingFromString) would advertise every numeric as "number | string"
+    // in the OpenAPI document and poison the generated TS client.
     builder.Services.ConfigureHttpJsonOptions(options =>
+    {
         options.SerializerOptions.Converters.Add(
-            new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
+            new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase));
+        options.SerializerOptions.NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.Strict;
+    });
 
     builder.Services.AddProblemDetails();
     builder.Services.AddOpenApi();

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
@@ -29,7 +30,7 @@ public static class CaveEndpoints
         return api;
     }
 
-    private static async Task<IResult> ListAsync(
+    private static async Task<Results<Ok<PagedResult<CaveListItemDto>>, UnauthorizedHttpResult>> ListAsync(
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
         IOptions<AccessOptions> access,
@@ -46,7 +47,7 @@ public static class CaveEndpoints
         var user = await userAccessor.GetAsync(ct);
         if (user is null)
         {
-            return Results.Unauthorized();
+            return TypedResults.Unauthorized();
         }
 
         var query = db.Caves.AsNoTracking().VisibleTo(user);
@@ -88,7 +89,7 @@ public static class CaveEndpoints
         return TypedResults.Ok(result);
     }
 
-    private static async Task<IResult> GetAsync(
+    private static async Task<Results<Ok<CaveDto>, ProblemHttpResult>> GetAsync(
         Guid id,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
@@ -111,7 +112,7 @@ public static class CaveEndpoints
         return TypedResults.Ok(cave.ToDto(user, access.Value.LocationGridMeters));
     }
 
-    private static async Task<IResult> CreateAsync(
+    private static async Task<Results<Created<CaveDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
         CaveWriteRequest request,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
@@ -121,7 +122,7 @@ public static class CaveEndpoints
         var user = await userAccessor.GetAsync(ct);
         if (user is null)
         {
-            return Results.Unauthorized();
+            return TypedResults.Unauthorized();
         }
 
         if (!user.CanCreateContent)
@@ -143,7 +144,7 @@ public static class CaveEndpoints
         return TypedResults.Created($"/api/v1/caves/{cave.Id}", cave.ToDto(user, access.Value.LocationGridMeters));
     }
 
-    private static async Task<IResult> UpdateAsync(
+    private static async Task<Results<Ok<CaveDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
         Guid id,
         CaveWriteRequest request,
         SilexGisDbContext db,
@@ -175,7 +176,7 @@ public static class CaveEndpoints
         return TypedResults.Ok(cave.ToDto(user, access.Value.LocationGridMeters));
     }
 
-    private static async Task<IResult> DeleteAsync(
+    private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
