@@ -1,0 +1,19 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+[*.{json,yml,yaml,csproj,props,targets}]
+indent_size = 2
+
+[*.cs]
+# SPDX header required on every source file (ADR-017); enforced at build (EnforceCodeStyleInBuild).
+file_header_template = SPDX-License-Identifier: AGPL-3.0-or-later
+dotnet_diagnostic.IDE0073.severity = warning
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_diagnostic.IDE0161.severity = warning

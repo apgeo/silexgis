@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SilexGis.Api/SilexGis.Api.csproj" />
+    <Project Path="src/SilexGis.Domain/SilexGis.Domain.csproj" />
+    <Project Path="src/SilexGis.Infrastructure/SilexGis.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SilexGis.Api.Tests/SilexGis.Api.Tests.csproj" />
+    <Project Path="tests/SilexGis.Architecture.Tests/SilexGis.Architecture.Tests.csproj" />
+    <Project Path="tests/SilexGis.Domain.Tests/SilexGis.Domain.Tests.csproj" />
+  </Folder>
+</Solution>
