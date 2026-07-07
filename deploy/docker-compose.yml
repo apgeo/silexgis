@@ -1,0 +1,46 @@
+# SilexGIS production deployment (06-deployment.md §1).
+# Usage: cp .env.example .env → edit → docker compose up -d → http://localhost:8080
+name: silexgis
+
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: silexgis
+      POSTGRES_USER: silexgis
+      POSTGRES_PASSWORD: ${SILEXGIS_DB_PASSWORD:?set SILEXGIS_DB_PASSWORD in .env}
+    volumes:
+      - silexgis-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U silexgis -d silexgis"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: ../server
+    environment:
+      SILEXGIS__Db__ConnectionString: Host=db;Port=5432;Database=silexgis;Username=silexgis;Password=${SILEXGIS_DB_PASSWORD}
+      SILEXGIS__PublicUrl: ${SILEXGIS_PUBLIC_URL:-http://localhost:8080}
+      SILEXGIS__Admin__Email: ${SILEXGIS_ADMIN_EMAIL:-}
+      SILEXGIS__Admin__Password: ${SILEXGIS_ADMIN_PASSWORD:-}
+      SILEXGIS__Auth__OpenRegistration: ${SILEXGIS_OPEN_REGISTRATION:-false}
+    volumes:
+      - silexgis-files:/data/files
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build: ../client
+    ports:
+      - "${SILEXGIS_HTTP_PORT:-8080}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  silexgis-db:
+  silexgis-files:

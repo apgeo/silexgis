@@ -1,0 +1,24 @@
+# Development database only (06-deployment.md §4).
+# Usage: docker compose -f docker-compose.dev.yml up -d
+# Then: `dotnet run` in server/src/SilexGis.Api and `npm run dev` in client/.
+name: silexgis-dev
+
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: silexgis
+      POSTGRES_USER: silexgis
+      POSTGRES_PASSWORD: silexgis
+    ports:
+      - "5432:5432"
+    volumes:
+      - silexgis-dev-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U silexgis -d silexgis"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  silexgis-dev-db:
