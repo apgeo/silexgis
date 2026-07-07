@@ -1,5 +1,24 @@
 # SilexGIS
 
-Web application for storage and view of topographic, geographic and other associated cave and karst data.
+Web application for storage, viewing and editing of cave / karst topographic, geographic
+and other associated data.
 
-Since May 2022 the application is being rebuilt from scratch using modern technologies: React, TypeScript, PostgreSQL / PostGIS, Laravel (PHP framework), OpenLayers 6. In the current state, only part of the functionality of the initial application is reimplemented.
+**v3 (2026, in development):** full rebuild on a modern stack —
+ASP.NET Core minimal API (.NET, LTS) · PostgreSQL/PostGIS · EF Core + NetTopologySuite ·
+React + TypeScript · Ant Design · OpenLayers · Docker-first deployment.
+
+Previous versions:
+- **v1** (PHP/MySQL/OpenLayers 3) — live at [speosilex.ro/silexgis](https://speosilex.ro/silexgis/en/index.php)
+- **v2** (2022, React/Laravel, partial) — archived on the [`v2-archive`](../../tree/v2-archive) branch
+
+## Repository layout
+
+```
+server/   ASP.NET Core API (.NET solution)
+client/   React SPA (added in a later phase)
+deploy/   Docker Compose, reverse-proxy configs, scripts (added in a later phase)
+```
+
+## License
+
+AGPL-3.0-or-later — see [LICENSE](LICENSE).

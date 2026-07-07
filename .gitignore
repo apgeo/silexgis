@@ -139,3 +139,17 @@ test-results
 todo.txt
 .dev_var_notes
 .code-workspace
+
+# AI specification & agent docs — private for now (see .claude/AGENTS.md before publishing)
+.claude/
+/CLAUDE.md
+/AGENTS.md
+
+# .NET
+bin/
+obj/
+artifacts/
+*.user
+.vs/
+TestResults/
+*.received.*

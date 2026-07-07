@@ -1,0 +1,20 @@
+# Normalize line endings: LF in repo and on checkout (cross-platform rule, see .claude/CLAUDE.md)
+* text=auto eol=lf
+
+# Windows-only files keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tif binary
+*.tiff binary
+*.lox binary
+*.3d binary
