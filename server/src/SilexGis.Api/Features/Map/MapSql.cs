@@ -10,8 +10,8 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Features.Map;
 
 /// <summary>
-/// Dapper spatial SQL for the map slice (ADR-005 — raw SQL lives only in *Sql.cs files).
-/// Clustering: grid aggregation via ST_SnapToGrid. Protected cave coordinates enter the
+/// Dapper spatial SQL for the map slice (raw SQL lives only in *Sql.cs files).
+/// Clustering: grid aggregation over coordinates. Protected cave coordinates enter the
 /// aggregation already obfuscated with the SAME grid as LocationProtection.Snap (round to
 /// nearest multiple of the cell) so cluster centroids can never leak an exact location.
 /// </summary>
@@ -37,27 +37,35 @@ public static class MapSql
         parameters.Add("cluster_cell", clusterCellDegrees);
         parameters.Add("protection_cell", protectionCellDegrees);
 
+        // Cluster centroid of points == arithmetic mean of coordinates; avg(x)/avg(y)
+        // avoids materializing ST_Collect geometry collections (which dominated cost at
+        // 50k rows). SQL round() rounds half away from zero, exactly matching
+        // LocationProtection.Snap (MidpointRounding.AwayFromZero) — keep them identical.
         var sql = $"""
-            SELECT
-                ST_X(ST_Centroid(ST_Collect(g.geom))) AS lon,
-                ST_Y(ST_Centroid(ST_Collect(g.geom))) AS lat,
-                COUNT(*)::int AS count
+            SELECT avg(g.gx) AS lon, avg(g.gy) AS lat, COUNT(*)::int AS count
             FROM (
-                SELECT CASE
-                    WHEN (NOT c.location_protected
-                          OR @vis_is_admin
-                          OR c.owner_user_id = @vis_user_id
-                          OR (c.team_id IS NOT NULL AND c.team_id = ANY(@vis_team_ids)))
-                    THEN e.geom
-                    ELSE ST_SnapToGrid(e.geom, @protection_cell)
-                END AS geom
+                SELECT
+                    CASE WHEN (NOT c.location_protected
+                               OR @vis_is_admin
+                               OR c.owner_user_id = @vis_user_id
+                               OR (c.team_id IS NOT NULL AND c.team_id = ANY(@vis_team_ids)))
+                        THEN ST_X(e.geom)
+                        ELSE round(ST_X(e.geom) / @protection_cell) * @protection_cell
+                    END AS gx,
+                    CASE WHEN (NOT c.location_protected
+                               OR @vis_is_admin
+                               OR c.owner_user_id = @vis_user_id
+                               OR (c.team_id IS NOT NULL AND c.team_id = ANY(@vis_team_ids)))
+                        THEN ST_Y(e.geom)
+                        ELSE round(ST_Y(e.geom) / @protection_cell) * @protection_cell
+                    END AS gy
                 FROM cave_entrances e
                 JOIN caves c ON c.id = e.cave_id
                 WHERE c.deleted_at IS NULL
                   AND e.geom && ST_MakeEnvelope(@west, @south, @east, @north, 4326)
                   AND {visibilitySql}
             ) g
-            GROUP BY ST_SnapToGrid(g.geom, @cluster_cell)
+            GROUP BY round(g.gx / @cluster_cell), round(g.gy / @cluster_cell)
             """;
 
         var connection = db.Database.GetDbConnection();

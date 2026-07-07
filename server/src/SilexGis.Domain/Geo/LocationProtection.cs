@@ -6,7 +6,7 @@ using SilexGis.Domain.Permissions;
 namespace SilexGis.Domain.Geo;
 
 /// <summary>
-/// Server-side protection of sensitive cave locations (05-auth-permissions.md §5).
+/// Server-side protection of sensitive cave locations.
 /// Every path that emits cave coordinates (DTOs, map endpoints, exports) must go through
 /// this — never rely on the client to hide data.
 /// </summary>
@@ -24,16 +24,16 @@ public static class LocationProtection
     /// <summary>
     /// Snaps a point to the nearest grid intersection of <paramref name="gridMeters"/>,
     /// removing precision deterministically (same input → same output; no jitter to average
-    /// away). Uses one cell size in degrees on both axes so it is exactly reproducible in
-    /// SQL as ST_SnapToGrid — the two MUST stay identical, or combining endpoints would
-    /// leak location by grid intersection.
+    /// away). Uses one cell size in degrees on both axes and away-from-zero rounding so it
+    /// is exactly reproducible in SQL as round(x / cell) * cell — the two MUST stay
+    /// identical, or combining endpoints would leak location by grid intersection.
     /// </summary>
     public static Point Snap(Point point, double gridMeters)
     {
         var cell = CellDegrees(gridMeters);
-        return new Point(Math.Round(point.X / cell) * cell, Math.Round(point.Y / cell) * cell)
-        {
-            SRID = point.SRID,
-        };
+        return new Point(SnapValue(point.X, cell), SnapValue(point.Y, cell)) { SRID = point.SRID };
     }
+
+    private static double SnapValue(double value, double cell) =>
+        Math.Round(value / cell, MidpointRounding.AwayFromZero) * cell;
 }
