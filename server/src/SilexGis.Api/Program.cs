@@ -2,8 +2,10 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Api.Features.About;
+using SilexGis.Api.Features.Me;
 using SilexGis.Infrastructure;
 using SilexGis.Infrastructure.Persistence;
 
@@ -25,6 +27,7 @@ try
     builder.Services.AddProblemDetails();
     builder.Services.AddOpenApi();
     builder.Services.AddSilexGisPersistence(builder.Configuration);
+    builder.Services.AddSilexGisAuth();
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<SilexGisDbContext>("database");
     builder.Services.AddOptions<AboutOptions>()
@@ -36,14 +39,23 @@ try
     app.UseStatusCodePages();
     app.UseSerilogRequestLogging();
 
+    app.UseAuthentication();
+    app.UseAuthorization();
+
     app.MapOpenApi(); // /openapi/v1.json — the contract the TS client is generated from (03-api-spec.md §6).
 
-    // Liveness: process is up (no dependency checks). Readiness: all registered checks
-    // (db/storage checks arrive with Infrastructure wiring in batch 0.2).
+    // Liveness: process is up (no dependency checks). Readiness: all registered checks.
     app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
     app.MapHealthChecks("/health/ready");
 
-    app.MapAboutEndpoints();
+    app.MapConnectEndpoints();
+
+    // Default-deny: everything under /api/v1 requires a bearer token unless an endpoint is
+    // explicitly on the anonymous allow-list (03-api-spec.md §7).
+    var api = app.MapGroup("/api/v1").RequireAuthorization();
+    api.MapAboutEndpoints();
+    api.MapAuthEndpoints();
+    api.MapMeEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {
@@ -51,6 +63,7 @@ try
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.Database.MigrateAsync();
         await TaxonomySeeder.SeedAsync(db);
+        await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
     }
 
     await app.RunAsync();

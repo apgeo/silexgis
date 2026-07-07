@@ -11,19 +11,20 @@ public static class AboutEndpoints
     /// Anonymous by design: exposes name, version, license and source location
     /// (AGPL §13; on the anonymous allow-list, 03-api-spec.md §7).
     /// </summary>
-    public static IEndpointRouteBuilder MapAboutEndpoints(this IEndpointRouteBuilder app)
+    public static RouteGroupBuilder MapAboutEndpoints(this RouteGroupBuilder api)
     {
-        app.MapGet("/api/v1/about", (IOptions<AboutOptions> about) =>
+        api.MapGet("/about", (IOptions<AboutOptions> about) =>
             {
                 var version = typeof(AboutEndpoints).Assembly
                     .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
                     .InformationalVersion ?? "unknown";
                 return TypedResults.Ok(new AboutDto("SilexGIS", version, "AGPL-3.0-or-later", about.Value.SourceUrl));
             })
+            .AllowAnonymous()
             .WithTags("About")
             .WithSummary("Application name, version, license and source-code location.");
 
-        return app;
+        return api;
     }
 }
 

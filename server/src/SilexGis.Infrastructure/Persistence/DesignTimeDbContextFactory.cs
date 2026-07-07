@@ -11,5 +11,6 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Sil
         new(new DbContextOptionsBuilder<SilexGisDbContext>()
             .UseNpgsql("Host=localhost;Database=silexgis_design_time", o => o.UseNetTopologySuite())
             .UseSnakeCaseNamingConvention()
+            .UseOpenIddict()
             .Options);
 }

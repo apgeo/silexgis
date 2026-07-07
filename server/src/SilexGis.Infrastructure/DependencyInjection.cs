@@ -27,6 +27,7 @@ public static class DependencyInjection
         services.AddDbContext<SilexGisDbContext>((sp, options) => options
             .UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite())
             .UseSnakeCaseNamingConvention()
+            .UseOpenIddict()
             .AddInterceptors(
                 sp.GetRequiredService<TimestampInterceptor>(),
                 sp.GetRequiredService<AuditInterceptor>()));
