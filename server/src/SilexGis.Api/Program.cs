@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 using SilexGis.Api.Common;
 using SilexGis.Api.Features.About;
+using SilexGis.Infrastructure;
+using SilexGis.Infrastructure.Persistence;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -21,7 +24,9 @@ try
 
     builder.Services.AddProblemDetails();
     builder.Services.AddOpenApi();
-    builder.Services.AddHealthChecks();
+    builder.Services.AddSilexGisPersistence(builder.Configuration);
+    builder.Services.AddHealthChecks()
+        .AddDbContextCheck<SilexGisDbContext>("database");
     builder.Services.AddOptions<AboutOptions>()
         .BindConfiguration(AboutOptions.SectionName);
 
@@ -40,7 +45,15 @@ try
 
     app.MapAboutEndpoints();
 
-    app.Run();
+    if (app.Configuration.GetValue("Db:AutoMigrate", true))
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.Database.MigrateAsync();
+        await TaxonomySeeder.SeedAsync(db);
+    }
+
+    await app.RunAsync();
 }
 catch (Exception ex)
 {

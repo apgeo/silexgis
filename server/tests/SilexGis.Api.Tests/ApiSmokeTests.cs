@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Shouldly;
+using SilexGis.Api.Tests.Support;
 
 namespace SilexGis.Api.Tests;
 
-public class ApiSmokeTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection(PostgresCollection.Name)]
+public sealed class ApiSmokeTests : IDisposable
 {
-    private readonly WebApplicationFactory<Program> factory;
+    private readonly SilexGisApiFactory factory;
 
-    public ApiSmokeTests(WebApplicationFactory<Program> factory) => this.factory = factory;
+    public ApiSmokeTests(PostgresFixture postgres) => factory = new SilexGisApiFactory(postgres.ConnectionString);
 
     [Fact]
     public async Task Health_live_returns_ok()
@@ -21,11 +22,12 @@ public class ApiSmokeTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
-    public async Task Health_ready_returns_ok()
+    public async Task Health_ready_returns_ok_with_database_check()
     {
         var response = await factory.CreateClient().GetAsync("/health/ready");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).ShouldBe("Healthy");
     }
 
     [Fact]
@@ -47,6 +49,8 @@ public class ApiSmokeTests : IClassFixture<WebApplicationFactory<Program>>
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
+
+    public void Dispose() => factory.Dispose();
 
     private sealed record AboutResponse(string Name, string Version, string License, string SourceUrl);
 }

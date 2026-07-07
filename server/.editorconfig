@@ -17,3 +17,9 @@ file_header_template = SPDX-License-Identifier: AGPL-3.0-or-later
 dotnet_diagnostic.IDE0073.severity = warning
 csharp_style_namespace_declarations = file_scoped:warning
 dotnet_diagnostic.IDE0161.severity = warning
+
+# EF Core scaffolded migrations are generated code — exempt from style rules.
+[**/Migrations/*.cs]
+generated_code = true
+dotnet_diagnostic.IDE0073.severity = none
+dotnet_diagnostic.IDE0161.severity = none
