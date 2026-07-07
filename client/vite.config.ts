@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // Dev server proxies API + OIDC endpoints to the local API so the SPA is same-origin
-// (matching the production nginx topology, 01-architecture.md §1).
+// (matching the production nginx topology).
 const apiTarget = 'http://localhost:5080';
 const proxiedPaths = ['/api', '/connect', '/health', '/openapi', '/.well-known'];
 
@@ -19,5 +19,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './src/setupTests.ts',
+    // e2e/ belongs to Playwright, not Vitest.
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 });
