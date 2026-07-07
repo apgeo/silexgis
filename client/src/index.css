@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Global glue only — components style themselves via antd tokens (04-frontend-spec.md §9). */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}

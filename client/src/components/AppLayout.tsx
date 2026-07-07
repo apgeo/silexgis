@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { EnvironmentOutlined, LogoutOutlined, TableOutlined, UserOutlined } from '@ant-design/icons';
+import { Dropdown, Flex, Layout, Menu, Select, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
+import { Outlet } from 'react-router-dom';
+import { useAuth } from '../auth/auth.tsx';
+
+/** Application shell (04-frontend-spec.md §1): slim header + collapsible icon sidebar. */
+export default function AppLayout() {
+  const { t, i18n } = useTranslation();
+  const { user, signOut } = useAuth();
+
+  return (
+    <Layout style={{ minHeight: '100%' }}>
+      <Layout.Header style={{ display: 'flex', alignItems: 'center', paddingInline: 16 }}>
+        <Typography.Title level={4} style={{ color: '#fff', margin: 0, flex: 1 }}>
+          {t('app.name')}
+        </Typography.Title>
+        <Flex gap={16} align="center">
+          <Select
+            size="small"
+            value={i18n.resolvedLanguage}
+            onChange={(lng) => void i18n.changeLanguage(lng)}
+            options={[
+              { value: 'en', label: 'EN' },
+              { value: 'ro', label: 'RO' },
+            ]}
+            aria-label={t('common.language')}
+          />
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: 'signout',
+                  icon: <LogoutOutlined />,
+                  label: t('auth.signOut'),
+                  onClick: () => void signOut(),
+                },
+              ],
+            }}
+          >
+            <Typography.Text style={{ color: '#fff', cursor: 'pointer' }}>
+              <UserOutlined /> {user?.profile.preferred_username ?? user?.profile.email}
+            </Typography.Text>
+          </Dropdown>
+        </Flex>
+      </Layout.Header>
+      <Layout>
+        <Layout.Sider collapsible defaultCollapsed theme="light">
+          <Menu
+            mode="inline"
+            selectable={false}
+            items={[
+              { key: 'map', icon: <EnvironmentOutlined />, label: t('nav.map'), disabled: true },
+              { key: 'caves', icon: <TableOutlined />, label: t('nav.caves'), disabled: true },
+            ]}
+          />
+        </Layout.Sider>
+        <Layout.Content style={{ padding: 24 }}>
+          <Outlet />
+        </Layout.Content>
+      </Layout>
+    </Layout>
+  );
+}

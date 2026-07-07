@@ -1,0 +1,28 @@
+{
+  "app": {
+    "name": "SilexGIS"
+  },
+  "nav": {
+    "map": "Map",
+    "caves": "Caves"
+  },
+  "auth": {
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "invalidCredentials": "Invalid email or password.",
+    "lockedOut": "Account temporarily locked. Try again later.",
+    "signingIn": "Signing you in…"
+  },
+  "home": {
+    "welcome": "Welcome to SilexGIS",
+    "signedInAs": "Signed in as",
+    "roles": "Roles",
+    "placeholder": "The map workspace arrives in the next phase."
+  },
+  "common": {
+    "loading": "Loading…",
+    "language": "Language"
+  }
+}

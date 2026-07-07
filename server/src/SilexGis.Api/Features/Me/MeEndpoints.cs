@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using SilexGis.Infrastructure.Identity;
 
@@ -14,12 +15,13 @@ public static class MeEndpoints
         return api;
     }
 
-    private static async Task<IResult> GetAsync(HttpContext context, UserManager<SilexGisUser> userManager)
+    private static async Task<Results<Ok<MeDto>, UnauthorizedHttpResult>> GetAsync(
+        HttpContext context, UserManager<SilexGisUser> userManager)
     {
         var user = await userManager.GetUserAsync(context.User);
         if (user is null)
         {
-            return Results.Unauthorized();
+            return TypedResults.Unauthorized();
         }
 
         var roles = await userManager.GetRolesAsync(user);

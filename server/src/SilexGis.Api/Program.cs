@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using SilexGis.Api.Auth;
@@ -34,6 +35,17 @@ try
         .BindConfiguration(AboutOptions.SectionName);
 
     var app = builder.Build();
+
+    // The API always sits behind a reverse proxy (nginx `web` service / Vite dev proxy —
+    // 01-architecture.md §1); honor its scheme/host so OIDC issuer and redirects are right.
+    // The proxy is only reachable on the internal network, so no known-proxy allow-list.
+    var forwardedHeaders = new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    };
+    forwardedHeaders.KnownIPNetworks.Clear();
+    forwardedHeaders.KnownProxies.Clear();
+    app.UseForwardedHeaders(forwardedHeaders);
 
     app.UseExceptionHandler();
     app.UseStatusCodePages();

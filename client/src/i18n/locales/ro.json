@@ -1,0 +1,28 @@
+{
+  "app": {
+    "name": "SilexGIS"
+  },
+  "nav": {
+    "map": "Hartă",
+    "caves": "Peșteri"
+  },
+  "auth": {
+    "email": "Email",
+    "password": "Parolă",
+    "signIn": "Autentificare",
+    "signOut": "Deconectare",
+    "invalidCredentials": "Email sau parolă incorecte.",
+    "lockedOut": "Cont blocat temporar. Încercați din nou mai târziu.",
+    "signingIn": "Autentificare în curs…"
+  },
+  "home": {
+    "welcome": "Bun venit la SilexGIS",
+    "signedInAs": "Autentificat ca",
+    "roles": "Roluri",
+    "placeholder": "Spațiul de lucru cu harta vine în etapa următoare."
+  },
+  "common": {
+    "loading": "Se încarcă…",
+    "language": "Limbă"
+  }
+}
