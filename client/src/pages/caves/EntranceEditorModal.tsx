@@ -93,9 +93,37 @@ export default function EntranceEditorModal({
           positionQuality: 'gps',
         };
     form.setFieldsValue(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reinitialize only when the modal opens
+  }, [open]);
 
+  // Unmount safety: detach the map if the page navigates away while the modal is open.
+  useEffect(
+    () => () => {
+      miniMap.current?.setTarget(undefined);
+      miniMap.current = null;
+    },
+    [],
+  );
+
+  const teardownMap = () => {
+    miniMap.current?.setTarget(undefined);
+    miniMap.current = null;
+  };
+
+  // The Modal mounts its children lazily, so the map target div does not exist yet when
+  // `open` flips true — build the map only after the open transition (content mounted).
+  const onAfterOpenChange = (visible: boolean) => {
+    if (!visible) {
+      teardownMap();
+      return;
+    }
+    if (miniMap.current || !mapTarget.current) {
+      return;
+    }
+    const lon = form.getFieldValue('lon') as number;
+    const lat = form.getFieldValue('lat') as number;
     const map = new Map({
-      target: mapTarget.current ?? undefined,
+      target: mapTarget.current,
       layers: [
         new TileLayer({ source: new XYZ({ url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png' }) }),
         new VectorLayer({
@@ -109,23 +137,16 @@ export default function EntranceEditorModal({
           }),
         }),
       ],
-      view: new View({ center: fromLonLat([initial.lon, initial.lat]), zoom: 14 }),
+      view: new View({ center: fromLonLat([lon, lat]), zoom: 14 }),
     });
     map.on('singleclick', (event) => {
-      const [lon, lat] = toLonLat(event.coordinate);
-      form.setFieldsValue({ lon: Number(lon.toFixed(6)), lat: Number(lat.toFixed(6)) });
-      placeMarker(lon, lat, false);
+      const [clickLon, clickLat] = toLonLat(event.coordinate);
+      form.setFieldsValue({ lon: Number(clickLon.toFixed(6)), lat: Number(clickLat.toFixed(6)) });
+      placeMarker(clickLon, clickLat, false);
     });
     miniMap.current = map;
-    placeMarker(initial.lon, initial.lat, true);
-    window.setTimeout(() => map.updateSize(), 100); // modal animation settles first
-
-    return () => {
-      map.setTarget(undefined);
-      miniMap.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuild only when the modal opens
-  }, [open]);
+    placeMarker(lon, lat, true);
+  };
 
   const onOk = async () => {
     const values = await form.validateFields();
@@ -159,6 +180,7 @@ export default function EntranceEditorModal({
       open={open}
       onCancel={onClose}
       onOk={() => void onOk()}
+      afterOpenChange={onAfterOpenChange}
       confirmLoading={createEntrance.isPending || updateEntrance.isPending}
       width={720}
       destroyOnHidden
