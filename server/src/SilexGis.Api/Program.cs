@@ -14,6 +14,7 @@ using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Export;
 using SilexGis.Api.Features.Files;
 using SilexGis.Api.Features.Geofiles;
+using SilexGis.Api.Features.GeoreferencedMaps;
 using SilexGis.Api.Features.Jobs;
 using SilexGis.Api.Features.Map;
 using SilexGis.Api.Features.MapLayers;
@@ -123,6 +124,7 @@ try
     api.MapExportEndpoints();
     api.MapFileEndpoints();
     api.MapAttachmentEndpoints();
+    api.MapGeoreferencedMapEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {

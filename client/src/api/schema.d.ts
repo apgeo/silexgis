@@ -1790,6 +1790,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/georeferenced-maps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paged catalog; visibility-filtered; protected-cave-linked maps omitted. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                    caveId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfGeoreferencedMapDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Uploads a georeferenced raster (GeoTIFF) and queues COG normalization. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        file: components["schemas"]["IFormFile"];
+                    };
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GeoreferencedMapDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/georeferenced-maps/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Single georeferenced map with a fresh COG delivery URL. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GeoreferencedMapDto"];
+                    };
+                };
+            };
+        };
+        /** Metadata update (Write permission). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["GeoreferencedMapUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GeoreferencedMapDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes the catalog entry (stored files are kept). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2107,6 +2257,54 @@ export interface components {
         };
         /** @enum {unknown} */
         GeometryKind: "point" | "line" | "polygon" | "any";
+        GeoreferencedMapDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: null | string;
+            mapKind: components["schemas"]["MapKind"];
+            /** Format: uuid */
+            fileId: string;
+            status: components["schemas"]["RasterStatus"];
+            processingError: null | string;
+            bbox: null | components["schemas"]["GeoJsonGeometry"];
+            /** Format: int32 */
+            minZoom: null | number;
+            /** Format: int32 */
+            maxZoom: null | number;
+            attribution: null | string;
+            /** Format: double */
+            defaultOpacity: number;
+            /** Format: uuid */
+            caveId: null | string;
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            cogUrl: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        GeoreferencedMapUpdateRequest: {
+            name: string;
+            description: null | string;
+            mapKind: components["schemas"]["MapKind"];
+            /** Format: int32 */
+            minZoom: null | number;
+            /** Format: int32 */
+            maxZoom: null | number;
+            attribution: null | string;
+            /** Format: double */
+            defaultOpacity: number;
+            /** Format: uuid */
+            caveId: null | string;
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
+        };
         /** Format: binary */
         IFormFile: string;
         JsonElement: unknown;
@@ -2114,6 +2312,8 @@ export interface components {
             email: string;
             password: string;
         };
+        /** @enum {unknown} */
+        MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";
         MapLayerDto: {
             /** Format: int64 */
             id: number;
@@ -2156,6 +2356,15 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfGeoreferencedMapDto: {
+            items: components["schemas"]["GeoreferencedMapDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfSurfaceFeatureDto: {
             items: components["schemas"]["SurfaceFeatureDto"][];
             /** Format: int32 */
@@ -2182,6 +2391,8 @@ export interface components {
         };
         /** @enum {unknown} */
         ProcessingJobStatus: "queued" | "running" | "succeeded" | "failed";
+        /** @enum {unknown} */
+        RasterStatus: "uploaded" | "processing" | "ready" | "failed";
         RegisterRequest: {
             email: string;
             password: string;

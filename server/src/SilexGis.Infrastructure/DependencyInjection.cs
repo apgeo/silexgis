@@ -46,7 +46,9 @@ public static class DependencyInjection
         services.AddSingleton<IFileStore, LocalFileStore>();
         services.AddSingleton<ThumbnailService>();
         services.AddSingleton<IVectorIO, GdalVectorIO>();
+        services.AddSingleton<RasterCogService>();
         services.AddScoped<IProcessingJobHandler, GeofileImportHandler>();
+        services.AddScoped<IProcessingJobHandler, RasterCogHandler>();
         services.AddHostedService<ProcessingJobWorker>();
         return services;
     }

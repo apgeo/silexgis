@@ -42,6 +42,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<Attachment> Attachments => Set<Attachment>();
 
+    public DbSet<GeoreferencedMap> GeoreferencedMaps => Set<GeoreferencedMap>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

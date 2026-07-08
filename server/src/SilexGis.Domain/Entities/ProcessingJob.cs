@@ -43,4 +43,5 @@ public class ProcessingJob
 public static class ProcessingJobKinds
 {
     public const string GeofileImport = "geofile-import";
+    public const string RasterCog = "raster-cog";
 }
