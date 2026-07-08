@@ -158,14 +158,14 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           {t('mapEdit.snapShort')}
         </Button>
       </Tooltip>
-      <Divider type="vertical" />
+      <Divider orientation="vertical" />
       <Tooltip title={t('mapEdit.undo')}>
         <Button size="small" icon={<UndoOutlined />} disabled={!state.canUndo} onClick={() => controller.undo()} />
       </Tooltip>
       <Tooltip title={t('mapEdit.redo')}>
         <Button size="small" icon={<RedoOutlined />} disabled={!state.canRedo} onClick={() => controller.redo()} />
       </Tooltip>
-      <Divider type="vertical" />
+      <Divider orientation="vertical" />
       <Tooltip title={t('mapEdit.measureDistance')}>
         <Button
           size="small"
@@ -190,7 +190,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           {state.measureResult}
         </Typography.Text>
       )}
-      <Divider type="vertical" />
+      <Divider orientation="vertical" />
       <Badge count={state.dirty} size="small">
         <Button
           size="small"
