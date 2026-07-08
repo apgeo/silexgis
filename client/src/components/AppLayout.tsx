@@ -6,6 +6,8 @@ import {
   GoldOutlined,
   HistoryOutlined,
   LogoutOutlined,
+  SafetyOutlined,
+  TeamOutlined,
   TableOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -25,7 +27,7 @@ export default function AppLayout() {
   const { data: me } = useMe();
   const isAdmin = me?.roles.includes('Admin') ?? false;
 
-  const sections = ['caves', 'features', 'geodata', 'trip-logs', 'admin/audit'] as const;
+  const sections = ['caves', 'features', 'geodata', 'trip-logs', 'teams', 'admin/audit'] as const;
   const selectedKey = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
 
   return (
@@ -48,6 +50,12 @@ export default function AppLayout() {
           <Dropdown
             menu={{
               items: [
+                {
+                  key: 'security',
+                  icon: <SafetyOutlined />,
+                  label: t('nav.security'),
+                  onClick: () => navigate('/account/security'),
+                },
                 {
                   key: 'signout',
                   icon: <LogoutOutlined />,
@@ -75,6 +83,7 @@ export default function AppLayout() {
               { key: 'features', icon: <GoldOutlined />, label: t('nav.features') },
               { key: 'geodata', icon: <DatabaseOutlined />, label: t('nav.geodata') },
               { key: 'trip-logs', icon: <CarOutlined />, label: t('nav.trips') },
+              { key: 'teams', icon: <TeamOutlined />, label: t('nav.teams') },
               ...(isAdmin
                 ? [{ key: 'admin/audit', icon: <HistoryOutlined />, label: t('nav.audit') }]
                 : []),

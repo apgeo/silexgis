@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DeleteOutlined, EditOutlined, EnvironmentOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EnvironmentOutlined, LockOutlined, PlusOutlined } from '@ant-design/icons';
 import { Alert, App, Button, Card, Descriptions, Flex, Popconfirm, Spin, Table, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -17,6 +17,7 @@ import {
 } from '../../api/hooks.ts';
 import { formatLonLat } from '../../geo/coords.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
+import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
 import EntranceEditorModal from './EntranceEditorModal.tsx';
 
@@ -38,6 +39,7 @@ export default function CaveDetailPage() {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingEntrance, setEditingEntrance] = useState<Entrance | null>(null);
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
 
   if (isPending || !cave) {
     return (
@@ -75,6 +77,11 @@ export default function CaveDetailPage() {
           {cave.name}
         </Typography.Title>
         <Flex gap={8}>
+          {canEdit && (
+            <Button icon={<LockOutlined />} onClick={() => setPermissionsOpen(true)}>
+              {t('permissions.button')}
+            </Button>
+          )}
           <Button icon={<EditOutlined />} onClick={() => navigate(`/caves/${cave.id}/edit`)}>
             {t('caves.edit')}
           </Button>
@@ -194,6 +201,15 @@ export default function CaveDetailPage() {
       )}
 
       {id && <AttachmentSection entityType="cave" entityId={id} canEdit={canEdit} />}
+
+      {id && (
+        <PermissionsModal
+          entityType="cave"
+          entityId={id}
+          open={permissionsOpen}
+          onClose={() => setPermissionsOpen(false)}
+        />
+      )}
 
       {id && (
         <EntranceEditorModal

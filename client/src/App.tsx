@@ -20,6 +20,8 @@ const GeodataPage = lazy(() => import('./pages/geodata/GeodataPage.tsx'));
 const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
 const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
+const TeamsPage = lazy(() => import('./pages/teams/TeamsPage.tsx'));
+const SecurityPage = lazy(() => import('./pages/account/SecurityPage.tsx'));
 
 function Loadable({ children }: { children: ReactNode }) {
   return (
@@ -48,6 +50,8 @@ const router = createBrowserRouter([
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
+          { path: '/teams', element: <Loadable><TeamsPage /></Loadable> },
+          { path: '/account/security', element: <Loadable><SecurityPage /></Loadable> },
         ],
       },
     ],

@@ -7,6 +7,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 interface LoginFormValues {
   email: string;
   password: string;
+  twoFactorCode?: string;
 }
 
 /**
@@ -19,6 +20,7 @@ export default function LoginPage() {
   const [params] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [needsMfa, setNeedsMfa] = useState(false);
 
   const onFinish = async (values: LoginFormValues) => {
     setSubmitting(true);
@@ -32,6 +34,16 @@ export default function LoginPage() {
 
       if (!response.ok) {
         const problem = (await response.json().catch(() => null)) as { code?: string } | null;
+        if (problem?.code === 'auth.mfa_required') {
+          // Password accepted; reveal the second-factor field and resubmit.
+          setNeedsMfa(true);
+          setError(t('auth.mfaRequired'));
+          return;
+        }
+        if (problem?.code === 'auth.mfa_invalid') {
+          setError(t('auth.mfaInvalid'));
+          return;
+        }
         setError(problem?.code === 'auth.locked_out' ? t('auth.lockedOut') : t('auth.invalidCredentials'));
         return;
       }
@@ -62,6 +74,11 @@ export default function LoginPage() {
           <Form.Item name="password" label={t('auth.password')} rules={[{ required: true }]}>
             <Input.Password autoComplete="current-password" />
           </Form.Item>
+          {needsMfa && (
+            <Form.Item name="twoFactorCode" label={t('auth.mfaCode')} rules={[{ required: true }]}>
+              <Input autoComplete="one-time-code" autoFocus placeholder="123456" />
+            </Form.Item>
+          )}
           <Button type="primary" htmlType="submit" block loading={submitting}>
             {t('auth.signIn')}
           </Button>

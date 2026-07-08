@@ -8,7 +8,9 @@
     "features": "Surface features",
     "geodata": "Geodata",
     "trips": "Trip logs",
-    "audit": "Audit"
+    "audit": "Audit",
+    "teams": "Teams",
+    "security": "Security"
   },
   "auth": {
     "email": "Email",
@@ -17,7 +19,10 @@
     "signOut": "Sign out",
     "invalidCredentials": "Invalid email or password.",
     "lockedOut": "Account temporarily locked. Try again later.",
-    "signingIn": "Signing you in…"
+    "signingIn": "Signing you in…",
+    "mfaRequired": "Enter the code from your authenticator app.",
+    "mfaInvalid": "The two-factor code is not valid.",
+    "mfaCode": "Two-factor code"
   },
   "common": {
     "loading": "Loading…",
@@ -250,5 +255,56 @@
     "entityType": "Entity",
     "entityId": "Entity id",
     "entityTypePlaceholder": "Filter by entity type (e.g. Cave)…"
+  },
+  "teams": {
+    "title": "Teams",
+    "new": "New team",
+    "name": "Name",
+    "members": "Members",
+    "manage": "Manage",
+    "addMember": "Add",
+    "removeConfirm": "Remove this member?",
+    "roles": {
+      "member": "Member",
+      "admin": "Admin",
+      "owner": "Owner"
+    }
+  },
+  "permissions": {
+    "title": "Permissions",
+    "button": "Permissions",
+    "subject": "Subject",
+    "user": "User",
+    "team": "Team",
+    "pickUser": "Search users…",
+    "pickTeam": "Pick a team…",
+    "addGrant": "Add",
+    "notManager": "You cannot manage permissions on this object.",
+    "flags": {
+      "read": "Read",
+      "write": "Write",
+      "delete": "Delete",
+      "share": "Share",
+      "managePermissions": "Manage",
+      "viewExactLocation": "Exact location"
+    }
+  },
+  "security": {
+    "title": "Account security",
+    "mfa": "Two-factor authentication (TOTP)",
+    "statusOn": "Enabled",
+    "statusOff": "Off",
+    "intro": "Protect your account with one-time codes from an authenticator app.",
+    "enable": "Set up two-factor",
+    "enterKey": "Add this key to your authenticator app, then confirm with a code.",
+    "codePlaceholder": "6-digit code",
+    "confirm": "Confirm",
+    "codeInvalid": "The code is not valid.",
+    "enabled": "Two-factor authentication is on.",
+    "disabled": "Two-factor authentication is off.",
+    "disable": "Disable",
+    "disableConfirm": "Disable two-factor authentication?",
+    "recoveryLeft": "Recovery codes left: {{count}}",
+    "recoveryTitle": "Store these recovery codes now — they are shown only once."
   }
 }

@@ -978,6 +978,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Searches users by name/email for pickers (authenticated). */
+        get: {
+            parameters: {
+                query: {
+                    q: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UserSummaryDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -3535,6 +3573,12 @@ export interface components {
             /** Format: uuid */
             userId: null | string;
             nameText: null | string;
+        };
+        UserSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            displayName: null | string;
+            email: null | string;
         };
         /** @enum {unknown} */
         Visibility: "private" | "team" | "authenticated" | "public";

@@ -27,6 +27,7 @@ using SilexGis.Api.Features.Tags;
 using SilexGis.Api.Features.Taxonomies;
 using SilexGis.Api.Features.Teams;
 using SilexGis.Api.Features.TripLogs;
+using SilexGis.Api.Features.Users;
 using SilexGis.Domain;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure;
@@ -156,6 +157,7 @@ try
     api.MapAuditEndpoints();
     api.MapObjectAclEndpoints();
     api.MapTeamEndpoints();
+    api.MapUserEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {

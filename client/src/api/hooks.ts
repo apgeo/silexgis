@@ -32,6 +32,10 @@ export const queryKeys = {
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
   taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
   tags: (search: string) => ['tags', search] as const,
+  teams: ['teams'] as const,
+  teamMembers: (teamId: string) => ['teams', teamId, 'members'] as const,
+  acl: (entityType: string, entityId: string) => ['acl', entityType, entityId] as const,
+  mfa: ['mfa'] as const,
 };
 
 async function unwrap<T>(
@@ -545,6 +549,108 @@ export function useDeleteTagging() {
       }
     },
     onSuccess: () => invalidate(),
+  });
+}
+
+export type TeamInfo = components['schemas']['TeamDto'];
+export type TeamMemberInfo = components['schemas']['TeamMemberDto'];
+export type AclEntry = components['schemas']['AclEntryDto'];
+export type AclEntryWrite = components['schemas']['AclEntryWrite'];
+export type MfaStatus = components['schemas']['MfaStatusDto'];
+
+export function useTeams() {
+  return useQuery({
+    queryKey: queryKeys.teams,
+    queryFn: () => unwrap(api.GET('/api/v1/teams')),
+    staleTime: 60_000,
+  });
+}
+
+export function useTeamMembers(teamId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.teamMembers(teamId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/teams/{id}/members', { params: { path: { id: teamId! } } })),
+    enabled: !!teamId,
+  });
+}
+
+function useInvalidateTeams() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: ['teams'] });
+}
+
+export function useCreateTeam() {
+  const invalidate = useInvalidateTeams();
+  return useMutation({
+    mutationFn: (body: { name: string; description: string | null; website: string | null }) =>
+      unwrap(api.POST('/api/v1/teams', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpsertTeamMember(teamId: string) {
+  const invalidate = useInvalidateTeams();
+  return useMutation({
+    mutationFn: (body: { userId: string; role: TeamMemberInfo['role'] }) =>
+      unwrap(api.POST('/api/v1/teams/{id}/members', { params: { path: { id: teamId } }, body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useRemoveTeamMember(teamId: string) {
+  const invalidate = useInvalidateTeams();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const { error, response } = await api.DELETE('/api/v1/teams/{id}/members/{userId}', {
+        params: { path: { id: teamId, userId } },
+      });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useAcl(entityType: string, entityId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.acl(entityType, entityId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/objects/{entityType}/{id}/acl', {
+        params: { path: { entityType, id: entityId! } },
+      })),
+    enabled: enabled && !!entityId,
+    retry: false,
+  });
+}
+
+export function useReplaceAcl(entityType: string, entityId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (entries: AclEntryWrite[]) =>
+      unwrap(api.PUT('/api/v1/objects/{entityType}/{id}/acl', {
+        params: { path: { entityType, id: entityId } },
+        body: { entries },
+      })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['acl'] }),
+  });
+}
+
+export type UserSummary = components['schemas']['UserSummaryDto'];
+
+export function useUserSearch(q: string) {
+  return useQuery({
+    queryKey: ['user-search', q] as const,
+    queryFn: () => unwrap(api.GET('/api/v1/users/search', { params: { query: { q } } })),
+    enabled: q.trim().length >= 2,
+    staleTime: 30_000,
+  });
+}
+
+export function useMfaStatus() {
+  return useQuery({
+    queryKey: queryKeys.mfa,
+    queryFn: () => unwrap(api.GET('/api/v1/me/mfa')),
   });
 }
 

@@ -155,6 +155,44 @@ test('cave photo attachment round-trip', async ({ page }) => {
   await expect(page.getByText('e2e-photo.png')).not.toBeVisible();
 });
 
+test('teams and per-object permission grants', async ({ page }) => {
+  const teamName = `E2E Team ${Date.now()}`;
+  await login(page);
+
+  // Create a team (the admin holds Manager rights) and see ourselves as owner.
+  await page.goto('/teams');
+  await page.getByRole('button', { name: /New team/ }).click();
+  await page.getByLabel('Name', { exact: true }).fill(teamName);
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  const teamRow = page.getByRole('row', { name: new RegExp(teamName) });
+  await expect(teamRow).toBeVisible();
+  await teamRow.getByRole('button', { name: 'Manage' }).click();
+  await expect(page.getByText('Owner')).toBeVisible({ timeout: 15_000 });
+  await page.keyboard.press('Escape');
+
+  // Grant the team Read on a cave through the permissions modal.
+  await page.goto('/caves');
+  await page.getByText('Peștera Demo Mare').click();
+  await page.getByRole('button', { name: /Permissions/ }).click();
+  const modal = page.getByRole('dialog');
+  await modal.locator('.ant-select').first().click();
+  await page.locator('.ant-select-item-option', { hasText: 'Team' }).click();
+  await modal.locator('.ant-select').nth(1).click();
+  await page.locator('.ant-select-item-option', { hasText: teamName }).click();
+  await modal.getByRole('button', { name: /Add/ }).click();
+  await expect(modal.getByText(teamName)).toBeVisible();
+  await modal.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+
+  // Reopen: the grant persisted; then remove it (cleanup).
+  await page.getByRole('button', { name: /Permissions/ }).click();
+  await expect(modal.getByText(teamName)).toBeVisible({ timeout: 15_000 });
+  await modal.getByRole('button', { name: 'delete' }).click();
+  await modal.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+});
+
 test('trip log with participants, tags and the audit trail', async ({ page }) => {
   const title = `E2E Trip ${Date.now()}`;
   const tagName = `e2e-tag-${Date.now()}`;

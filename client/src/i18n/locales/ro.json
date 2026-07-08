@@ -8,7 +8,9 @@
     "features": "Fenomene de suprafață",
     "geodata": "Geodate",
     "trips": "Jurnale de tură",
-    "audit": "Istoric"
+    "audit": "Istoric",
+    "teams": "Echipe",
+    "security": "Securitate"
   },
   "auth": {
     "email": "Email",
@@ -17,7 +19,10 @@
     "signOut": "Deconectare",
     "invalidCredentials": "Email sau parolă incorecte.",
     "lockedOut": "Cont blocat temporar. Încercați din nou mai târziu.",
-    "signingIn": "Autentificare în curs…"
+    "signingIn": "Autentificare în curs…",
+    "mfaRequired": "Introduceți codul din aplicația de autentificare.",
+    "mfaInvalid": "Codul de autentificare nu este valid.",
+    "mfaCode": "Cod de autentificare"
   },
   "common": {
     "loading": "Se încarcă…",
@@ -250,5 +255,56 @@
     "entityType": "Entitate",
     "entityId": "Id entitate",
     "entityTypePlaceholder": "Filtrează după tipul entității (ex. Cave)…"
+  },
+  "teams": {
+    "title": "Echipe",
+    "new": "Echipă nouă",
+    "name": "Denumire",
+    "members": "Membri",
+    "manage": "Administrează",
+    "addMember": "Adaugă",
+    "removeConfirm": "Eliminați acest membru?",
+    "roles": {
+      "member": "Membru",
+      "admin": "Administrator",
+      "owner": "Proprietar"
+    }
+  },
+  "permissions": {
+    "title": "Permisiuni",
+    "button": "Permisiuni",
+    "subject": "Subiect",
+    "user": "Utilizator",
+    "team": "Echipă",
+    "pickUser": "Caută utilizatori…",
+    "pickTeam": "Alege o echipă…",
+    "addGrant": "Adaugă",
+    "notManager": "Nu puteți administra permisiunile acestui obiect.",
+    "flags": {
+      "read": "Citire",
+      "write": "Scriere",
+      "delete": "Ștergere",
+      "share": "Partajare",
+      "managePermissions": "Administrare",
+      "viewExactLocation": "Locație exactă"
+    }
+  },
+  "security": {
+    "title": "Securitatea contului",
+    "mfa": "Autentificare în doi pași (TOTP)",
+    "statusOn": "Activă",
+    "statusOff": "Inactivă",
+    "intro": "Protejați-vă contul cu coduri unice dintr-o aplicație de autentificare.",
+    "enable": "Configurează doi pași",
+    "enterKey": "Adăugați această cheie în aplicația de autentificare, apoi confirmați cu un cod.",
+    "codePlaceholder": "Cod din 6 cifre",
+    "confirm": "Confirmă",
+    "codeInvalid": "Codul nu este valid.",
+    "enabled": "Autentificarea în doi pași este activă.",
+    "disabled": "Autentificarea în doi pași este inactivă.",
+    "disable": "Dezactivează",
+    "disableConfirm": "Dezactivați autentificarea în doi pași?",
+    "recoveryLeft": "Coduri de recuperare rămase: {{count}}",
+    "recoveryTitle": "Salvați aceste coduri de recuperare acum — sunt afișate o singură dată."
   }
 }
