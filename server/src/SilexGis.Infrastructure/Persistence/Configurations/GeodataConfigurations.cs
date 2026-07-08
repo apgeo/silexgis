@@ -54,9 +54,14 @@ public sealed class GeofileFeatureConfiguration : IEntityTypeConfiguration<Geofi
 {
     public void Configure(EntityTypeBuilder<GeofileFeature> builder)
     {
-        builder.ToTable("geofile_features");
+        // Untyped geometry: a typmod like geometry(Geometry,4326) enforces 2D, but
+        // imported files legitimately mix dimensions (GPX tracks carry elevations as Z).
+        // The SRID typmod is replaced by a check constraint; the vector reader is the
+        // single place that normalizes everything to 4326.
+        builder.ToTable("geofile_features",
+            t => t.HasCheckConstraint("ck_geofile_features_geom_srid", "st_srid(geom) = 4326"));
 
-        builder.Property(x => x.Geom).HasColumnType("geometry(Geometry, 4326)");
+        builder.Property(x => x.Geom).HasColumnType("geometry");
         builder.Property(x => x.Properties).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
 
         // Bulk re-import deletes by geofile id; cascade keeps cleanup transactional.

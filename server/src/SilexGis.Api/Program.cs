@@ -145,6 +145,7 @@ try
     api.MapCaveEndpoints();
     api.MapEntranceEndpoints();
     api.MapSurveyModelEndpoints();
+    api.MapCenterlineEndpoints();
     api.MapSurfaceFeatureEndpoints();
     api.MapMapDataEndpoints();
     api.MapSearchEndpoints();

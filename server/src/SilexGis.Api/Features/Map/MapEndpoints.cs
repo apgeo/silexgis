@@ -39,7 +39,53 @@ public static class MapEndpoints
         api.MapGet("/map/trip-logs", TripLogsAsync)
             .WithTags("Map")
             .WithSummary("Trip-log geometries as GeoJSON for the given bbox and date range.");
+        api.MapGet("/map/cave-centerlines", CaveCenterlinesAsync)
+            .WithTags("Map")
+            .WithSummary("Cave centerlines as GeoJSON for the given bbox; protected caves' lines omitted.");
         return api;
+    }
+
+    private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> CaveCenterlinesAsync(
+        string bbox,
+        SilexGisDbContext db,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var user = await userAccessor.GetAsync(ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!Bbox.TryParse(bbox, out var box))
+        {
+            return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
+        }
+
+        // Centerlines inherit the cave's visibility; the join also applies the caves'
+        // soft-delete filter. Lines of location-protected caves are omitted entirely —
+        // a centerline IS the cave's exact location.
+        var polygon = box.ToPolygon();
+        var visibleCaves = db.Caves.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Cave);
+        var rows = await db.CaveCenterlines.AsNoTracking()
+            .Where(cl => cl.Geom.Intersects(polygon))
+            .Join(visibleCaves, cl => cl.CaveId, c => c.Id, (cl, c) => cl)
+            .Take(MaxPoints)
+            .ToListAsync(ct);
+
+        var redacted = await CaveLinkRedaction.RedactedCaveIdsAsync(db, user, rows.Select(r => r.CaveId), ct);
+        var features = rows
+            .Where(r => !redacted.Contains(r.CaveId))
+            .Select(r => GeoFeature.Of(r.Geom, new Dictionary<string, object?>
+            {
+                ["id"] = r.Id,
+                ["caveId"] = r.CaveId,
+                ["name"] = r.Name,
+                ["lengthM"] = r.LengthM,
+            }))
+            .ToList();
+
+        return TypedResults.Ok(FeatureCollection.Of(features));
     }
 
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> TripLogsAsync(

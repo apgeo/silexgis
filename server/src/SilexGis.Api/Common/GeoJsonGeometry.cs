@@ -28,7 +28,9 @@ public sealed record GeoJsonGeometry(string Type, JsonElement Coordinates)
         };
         return new GeoJsonGeometry(geometry.GeometryType, JsonSerializer.SerializeToElement(model));
 
-        static double[] Position(Coordinate c) => [c.X, c.Y];
+        // GeoJSON positions carry an optional third element; keep altitude when the
+        // source geometry has it (centerlines are Z-typed) instead of flattening to 2D.
+        static double[] Position(Coordinate c) => double.IsNaN(c.Z) ? [c.X, c.Y] : [c.X, c.Y, c.Z];
         static double[][] Line(LineString l) => [.. l.Coordinates.Select(Position)];
         static double[][][] Rings(Polygon poly) =>
             [.. new[] { poly.ExteriorRing }.Concat(poly.InteriorRings)

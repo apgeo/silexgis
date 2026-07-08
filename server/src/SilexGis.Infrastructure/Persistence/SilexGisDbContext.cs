@@ -60,6 +60,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<SurveyModel> SurveyModels => Set<SurveyModel>();
 
+    public DbSet<CaveCenterline> CaveCenterlines => Set<CaveCenterline>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

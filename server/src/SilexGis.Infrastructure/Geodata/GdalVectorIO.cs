@@ -4,6 +4,7 @@ using System.Text.Json;
 using MaxRev.Gdal.Core;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
+using OSGeo.GDAL;
 using OSGeo.OGR;
 using OSGeo.OSR;
 using SilexGis.Domain;
@@ -18,7 +19,14 @@ namespace SilexGis.Infrastructure.Geodata;
 /// </summary>
 public sealed class GdalVectorIO : IVectorIO
 {
-    static GdalVectorIO() => GdalBase.ConfigureAll();
+    static GdalVectorIO()
+    {
+        GdalBase.ConfigureAll();
+        // GPX elevations become geometry Z only with this option; otherwise the driver
+        // exposes them as an attribute on the *_points layers we skip. Centerlines (and
+        // any imported track) would silently lose altitude without it.
+        Gdal.SetConfigOption("GPX_ELE_AS_25D", "YES");
+    }
 
     // GPX datasets expose point/segment layers that duplicate their aggregate layers.
     private static readonly string[] GpxLayers = ["waypoints", "routes", "tracks"];
