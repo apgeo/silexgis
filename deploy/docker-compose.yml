@@ -27,8 +27,12 @@ services:
       SILEXGIS__Admin__Password: ${SILEXGIS_ADMIN_PASSWORD:-}
       SILEXGIS__Auth__OpenRegistration: ${SILEXGIS_OPEN_REGISTRATION:-false}
       SILEXGIS__Files__Root: /data/files
+      SILEXGIS__Keys__Path: /data/keys
     volumes:
       - silexgis-files:/data/files
+      # Data-protection keys must survive container recreation, or every deploy would
+      # invalidate outstanding file-access tokens and cookies.
+      - silexgis-keys:/data/keys
     depends_on:
       db:
         condition: service_healthy
@@ -45,3 +49,4 @@ services:
 volumes:
   silexgis-db:
   silexgis-files:
+  silexgis-keys:

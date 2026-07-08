@@ -228,6 +228,12 @@ public static class GeofileEndpoints
 
         var storedFile = await db.StoredFiles.FirstOrDefaultAsync(f => f.Id == geofile.FileId, ct);
 
+        // Polymorphic attachment rows have no FK to the geofile — clean them up in the
+        // same transaction as the entity.
+        await db.Attachments
+            .Where(a => a.EntityType == AttachedEntityType.Geofile && a.EntityId == geofile.Id)
+            .ExecuteDeleteAsync(ct);
+
         // Imported features cascade with the geofile row; the file row goes explicitly
         // (uploads are 1:1 with geofiles until the Phase 3 media work).
         db.Geofiles.Remove(geofile);

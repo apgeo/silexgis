@@ -7,9 +7,12 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
+using Microsoft.AspNetCore.DataProtection;
 using SilexGis.Api.Features.About;
+using SilexGis.Api.Features.Attachments;
 using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Export;
+using SilexGis.Api.Features.Files;
 using SilexGis.Api.Features.Geofiles;
 using SilexGis.Api.Features.Jobs;
 using SilexGis.Api.Features.Map;
@@ -54,6 +57,17 @@ try
     builder.Services.AddSilexGisPersistence(builder.Configuration);
     builder.Services.AddSilexGisGeodata(builder.Configuration);
     builder.Services.AddSilexGisAuth();
+
+    // Data-protection keys persist to disk so file-access tokens (and cookies) survive
+    // restarts and container recreation; deployments mount a volume at Keys:Path.
+    var keysPath = Path.GetFullPath(
+        builder.Configuration.GetValue<string>("Keys:Path") ?? Path.Combine("data", "keys"),
+        AppContext.BaseDirectory);
+    Directory.CreateDirectory(keysPath);
+    builder.Services.AddDataProtection()
+        .SetApplicationName("silexgis")
+        .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+    builder.Services.AddSingleton<IFileAccessTokenService, FileAccessTokenService>();
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<SilexGisDbContext>("database");
     builder.Services.AddOptions<AboutOptions>()
@@ -107,6 +121,8 @@ try
     api.MapGeofileEndpoints();
     api.MapJobEndpoints();
     api.MapExportEndpoints();
+    api.MapFileEndpoints();
+    api.MapAttachmentEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {

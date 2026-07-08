@@ -1534,6 +1534,262 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Uploads a file (multipart); attach it to an entity via /attachments. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        file: components["schemas"]["IFormFile"];
+                    };
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FileDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** File metadata with fresh short-lived delivery URLs. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FileDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Streams file content (honors Range); token-authenticated. */
+        get: {
+            parameters: {
+                query: {
+                    token: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** WebP thumbnail for image files (sizes 160/480/1200); token-authenticated. */
+        get: {
+            parameters: {
+                query: {
+                    token: string;
+                    size?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Attachments of one entity, ordered; requires Read on the entity. */
+        get: {
+            parameters: {
+                query: {
+                    entityType: string;
+                    entityId: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AttachmentDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Attaches an uploaded file to an entity; requires Write on the entity. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AttachmentCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AttachmentDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attachments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Detaches a file (the file itself is kept); requires Write on the entity. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1544,6 +1800,37 @@ export interface components {
             license: string;
             sourceUrl: string;
         };
+        /** @enum {unknown} */
+        AttachedEntityType: "cave" | "caveEntrance" | "surfaceFeature" | "tripLog" | "team" | "geofile";
+        AttachmentCreateRequest: {
+            /** Format: uuid */
+            fileId: string;
+            entityType: components["schemas"]["AttachedEntityType"];
+            /** Format: uuid */
+            entityId: string;
+            role: components["schemas"]["AttachmentRole"];
+            caption: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+        };
+        AttachmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            fileId: string;
+            entityType: components["schemas"]["AttachedEntityType"];
+            /** Format: uuid */
+            entityId: string;
+            role: components["schemas"]["AttachmentRole"];
+            caption: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            /** Format: uuid */
+            addedBy: null | string;
+            file: components["schemas"]["FileDto"];
+        };
+        /** @enum {unknown} */
+        AttachmentRole: "photoEntrance" | "photoInterior" | "photoSurface" | "document" | "map2d" | "surveyData" | "other";
         CaveDto: {
             /** Format: uuid */
             id: string;
@@ -1740,6 +2027,22 @@ export interface components {
             style: null | string;
             propertiesSchema: null | string;
         };
+        FileDto: {
+            /** Format: uuid */
+            id: string;
+            originalName: string;
+            mimeType: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            sha256: string;
+            kind: components["schemas"]["FileKind"];
+            /** Format: date-time */
+            createdAt: string;
+            contentUrl: string;
+            thumbnailUrl: null | string;
+        };
+        /** @enum {unknown} */
+        FileKind: "image" | "document" | "survey" | "raster" | "vector" | "model" | "other";
         ForgotPasswordRequest: {
             email: string;
         };

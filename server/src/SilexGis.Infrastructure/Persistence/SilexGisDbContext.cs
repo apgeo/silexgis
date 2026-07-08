@@ -40,6 +40,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<ProcessingJob> ProcessingJobs => Set<ProcessingJob>();
 
+    public DbSet<Attachment> Attachments => Set<Attachment>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

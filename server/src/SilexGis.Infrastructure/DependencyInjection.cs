@@ -44,6 +44,7 @@ public static class DependencyInjection
     {
         services.Configure<FilesOptions>(configuration.GetSection(FilesOptions.SectionName));
         services.AddSingleton<IFileStore, LocalFileStore>();
+        services.AddSingleton<ThumbnailService>();
         services.AddSingleton<IVectorIO, GdalVectorIO>();
         services.AddScoped<IProcessingJobHandler, GeofileImportHandler>();
         services.AddHostedService<ProcessingJobWorker>();

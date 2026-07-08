@@ -201,6 +201,11 @@ public static class SurfaceFeatureEndpoints
                 : ApiProblems.NotFound("surface_feature.not_found");
         }
 
+        // Polymorphic attachment rows have no FK to the feature — clean them up in the
+        // same transaction as the entity.
+        await db.Attachments
+            .Where(a => a.EntityType == AttachedEntityType.SurfaceFeature && a.EntityId == feature.Id)
+            .ExecuteDeleteAsync(ct);
         db.SurfaceFeatures.Remove(feature);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
