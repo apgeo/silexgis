@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Diagnostics;
 using System.Net;
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -59,6 +60,35 @@ public sealed class PerformanceTests : IDisposable
             output.WriteLine($"{name}: {stopwatch.ElapsedMilliseconds} ms");
             stopwatch.ElapsedMilliseconds.ShouldBeLessThan(BudgetMs, $"{name} exceeded {BudgetMs}ms");
         }
+
+        await AssertLocalBboxUsesSpatialIndexAsync();
+    }
+
+    /// <summary>
+    /// The wall-clock budget above catches regressions loosely; this pins the reason the map
+    /// scales — a focused bbox must ride the GIST index on cave_entrances.geom, never a
+    /// sequential scan of all 50k rows. EXPLAIN ANALYZE is the durable contract here.
+    /// </summary>
+    private async Task AssertLocalBboxUsesSpatialIndexAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var connection = db.Database.GetDbConnection();
+
+        var planLines = await connection.QueryAsync<string>("""
+            EXPLAIN (ANALYZE, BUFFERS)
+            SELECT e.geom
+            FROM cave_entrances e
+            JOIN caves c ON c.id = e.cave_id
+            WHERE c.deleted_at IS NULL
+              AND e.geom && ST_MakeEnvelope(24.9, 45.4, 25.15, 45.6, 4326)
+            """);
+        var plan = string.Join("\n", planLines);
+        output.WriteLine(plan);
+
+        plan.ShouldContain("ix_cave_entrances_geom", Case.Insensitive,
+            "the map bbox filter must use the spatial index, not scan every entrance");
+        plan.ShouldNotContain("Seq Scan on cave_entrances", Case.Insensitive);
     }
 
     private async Task SeedSyntheticAsync(Guid ownerId)
