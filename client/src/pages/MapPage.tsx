@@ -11,6 +11,7 @@ import ViewsPanel from '../components/map/ViewsPanel.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
 import SelectionPanel from '../components/map/SelectionPanel.tsx';
 import { setActiveBaseLayer, syncBaseLayers } from '../map/baseLayers.ts';
+import { CENTERLINE_LAYER_ID, attachCenterlineLoader, createCenterlineLayer } from '../map/centerlineLayer.ts';
 import { ENTRANCE_LAYER_ID, attachEntranceLoader, createEntranceLayer, reloadEntrances } from '../map/entranceLayer.ts';
 import {
   SURFACE_FEATURE_LAYER_ID,
@@ -43,6 +44,7 @@ export default function MapPage() {
   const [entrancesVisible, setEntrancesVisible] = useState(true);
   const [tagFilter, setTagFilter] = useState<string | null>(getMapTagFilter());
   const [surfaceFeaturesVisible, setSurfaceFeaturesVisible] = useState(true);
+  const [centerlinesVisible, setCenterlinesVisible] = useState(true);
   const [editController, setEditController] = useState<MapEditController | null>(null);
   const selection = useWorkspaceStore((s) => s.selection);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
@@ -71,6 +73,7 @@ export default function MapPage() {
     for (const [id, create] of [
       [ENTRANCE_LAYER_ID, createEntranceLayer],
       [SURFACE_FEATURE_LAYER_ID, createSurfaceFeatureLayer],
+      [CENTERLINE_LAYER_ID, createCenterlineLayer],
     ] as const) {
       if (!map.getLayers().getArray().some((l) => l.get('id') === id)) {
         map.addLayer(create());
@@ -79,6 +82,7 @@ export default function MapPage() {
 
     const detachLoader = attachEntranceLoader(map);
     const detachFeatureLoader = attachSurfaceFeatureLoader(map);
+    const detachCenterlineLoader = attachCenterlineLoader(map);
     const detachGeofileLoader = attachGeofileLoader(map);
     const detachSelection = attachSelection(map, setSelection);
     const detachHover = attachHoverTooltip(map);
@@ -89,6 +93,7 @@ export default function MapPage() {
       setEditController(null);
       detachLoader();
       detachFeatureLoader();
+      detachCenterlineLoader();
       detachGeofileLoader();
       detachSelection();
       detachHover();
@@ -175,11 +180,20 @@ export default function MapPage() {
     layer?.setVisible(surfaceFeaturesVisible);
   }, [surfaceFeaturesVisible]);
 
+  useEffect(() => {
+    const layer = getWorkspaceMap()
+      .getLayers()
+      .getArray()
+      .find((l) => l.get('id') === CENTERLINE_LAYER_ID);
+    layer?.setVisible(centerlinesVisible);
+  }, [centerlinesVisible]);
+
   const captureCurrentView = () =>
     captureViewConfig({
       baseLayerId: activeBaseId,
       entrancesVisible,
       surfaceFeaturesVisible,
+      centerlinesVisible,
       geofileIds: visibleGeofileIds,
       rasters: visibleRasterIds.map((id) => ({ id, opacity: rasterOpacity[id] })),
       tagFilter,
@@ -196,6 +210,7 @@ export default function MapPage() {
     }
     setEntrancesVisible(ui.entrancesVisible);
     setSurfaceFeaturesVisible(ui.surfaceFeaturesVisible);
+    setCenterlinesVisible(ui.centerlinesVisible);
     for (const id of visibleGeofileIds) {
       if (!ui.geofileIds.includes(id)) {
         setGeofileVisible(id, false);
@@ -236,6 +251,8 @@ export default function MapPage() {
           onEntrancesVisibleChange={setEntrancesVisible}
           surfaceFeaturesVisible={surfaceFeaturesVisible}
           onSurfaceFeaturesVisibleChange={setSurfaceFeaturesVisible}
+          centerlinesVisible={centerlinesVisible}
+          onCenterlinesVisibleChange={setCenterlinesVisible}
           geofiles={importedGeofiles}
           visibleGeofileIds={visibleGeofileIds}
           onGeofileVisibleChange={setGeofileVisible}

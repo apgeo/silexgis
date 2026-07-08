@@ -12,6 +12,8 @@ interface LayerPanelProps {
   onEntrancesVisibleChange: (visible: boolean) => void;
   surfaceFeaturesVisible: boolean;
   onSurfaceFeaturesVisibleChange: (visible: boolean) => void;
+  centerlinesVisible: boolean;
+  onCenterlinesVisibleChange: (visible: boolean) => void;
   geofiles: GeofileInfo[];
   visibleGeofileIds: string[];
   onGeofileVisibleChange: (id: string, visible: boolean) => void;
@@ -33,6 +35,8 @@ export default function LayerPanel({
   onEntrancesVisibleChange,
   surfaceFeaturesVisible,
   onSurfaceFeaturesVisibleChange,
+  centerlinesVisible,
+  onCenterlinesVisibleChange,
   geofiles,
   visibleGeofileIds,
   onGeofileVisibleChange,
@@ -79,6 +83,9 @@ export default function LayerPanel({
           onChange={(e) => onSurfaceFeaturesVisibleChange(e.target.checked)}
         >
           {t('map.surfaceFeatures')}
+        </Checkbox>
+        <Checkbox checked={centerlinesVisible} onChange={(e) => onCenterlinesVisibleChange(e.target.checked)}>
+          {t('map.centerlines')}
         </Checkbox>
       </div>
       {geofiles.length > 0 && (

@@ -22,6 +22,7 @@ export const queryKeys = {
   cave: (id: string) => ['caves', 'detail', id] as const,
   entrances: (caveId: string) => ['entrances', caveId] as const,
   surveyModels: (caveId: string) => ['survey-models', caveId] as const,
+  centerlines: (caveId: string) => ['centerlines', caveId] as const,
   caveSearch: (q: string) => ['cave-search', q] as const,
   nominatim: (q: string) => ['nominatim', q] as const,
   surfaceFeatures: (params: SurfaceFeatureListParams) => ['surface-features', 'list', params] as const,
@@ -175,6 +176,57 @@ export function useDeleteSurveyModel() {
     },
     onSuccess: (_, { caveId }) => invalidate(caveId),
   });
+}
+
+export type CenterlineInfo = components['schemas']['CenterlineDto'];
+
+export function useCenterlines(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.centerlines(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{caveId}/centerlines', { params: { path: { caveId: caveId! } } })),
+    enabled: !!caveId,
+  });
+}
+
+function useInvalidateCenterlines() {
+  const queryClient = useQueryClient();
+  return (caveId: string) =>
+    void queryClient.invalidateQueries({ queryKey: queryKeys.centerlines(caveId) });
+}
+
+export function useUploadCenterline() {
+  const invalidate = useInvalidateCenterlines();
+  return useMutation({
+    mutationFn: async ({ caveId, file }: { caveId: string; file: File }): Promise<CenterlineInfo> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      return unwrap(api.POST('/api/v1/caves/{caveId}/centerlines', {
+        params: { path: { caveId } },
+        body: form as never,
+        bodySerializer: (b: unknown) => b as FormData,
+      }));
+    },
+    onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
+export function useDeleteCenterline() {
+  const invalidate = useInvalidateCenterlines();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; caveId: string }) => {
+      const { error, response } = await api.DELETE('/api/v1/cave-centerlines/{id}', { params: { path: { id } } });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
+/** Imperative fetch used by the OpenLayers centerline loader (not a hook). */
+export async function fetchCenterlineFeatures(bbox: string): Promise<EntranceFeatureCollection> {
+  return unwrap(api.GET('/api/v1/map/cave-centerlines', { params: { query: { bbox } } }));
 }
 
 export function useCaveSearch(q: string) {

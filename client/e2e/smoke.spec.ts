@@ -224,6 +224,40 @@ test('3D survey model: upload, embedded viewer and cross-window 3D panel', async
   await page.waitForURL(/\/caves$/);
 });
 
+test('cave centerline: upload, computed length and map overlay toggle', async ({ page }) => {
+  const caveName = `E2E Centerline Cave ${Date.now()}`;
+  await login(page);
+
+  await page.goto('/caves/new');
+  await page.getByLabel('Name', { exact: true }).fill(caveName);
+  await page.getByLabel('Type', { exact: true }).click();
+  await page.locator('.ant-select-item-option').first().click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
+
+  // Upload the GPX track; the row shows the PostGIS-computed geodesic length.
+  const card = page.locator('.ant-card', { hasText: 'Centerlines' });
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: /Upload centerline/ }).click();
+  await (await fileChooserPromise).setFiles('e2e/fixtures/e2e-track.gpx');
+  await expect(card.getByText('e2e-track')).toBeVisible({ timeout: 15_000 });
+  await expect(card.getByText(/[\d,.]+ m/)).toBeVisible();
+
+  // The workspace gains the centerline overlay toggle, on by default.
+  await page.goto('/');
+  await expect(page.getByRole('checkbox', { name: 'Cave centerlines' })).toBeChecked();
+
+  // Clean up: delete the centerline, then the cave.
+  await page.goto('/caves');
+  await page.getByText(caveName).click();
+  await card.getByRole('button', { name: 'delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(card.getByText('No centerlines yet')).toBeVisible({ timeout: 15_000 });
+  await page.locator('button', { hasText: 'Delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await page.waitForURL(/\/caves$/);
+});
+
 test('saved views: save, share anonymously, delete', async ({ page, browser, context }) => {
   const viewName = `E2E View ${Date.now()}`;
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);

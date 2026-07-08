@@ -19,6 +19,7 @@ import { formatLonLat } from '../../geo/coords.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
+import CenterlineSection from './CenterlineSection.tsx';
 import EntranceEditorModal from './EntranceEditorModal.tsx';
 import SurveyModelSection from './SurveyModelSection.tsx';
 
@@ -202,6 +203,8 @@ export default function CaveDetailPage() {
       )}
 
       {id && <SurveyModelSection caveId={id} canEdit={canEdit} />}
+
+      {id && <CenterlineSection caveId={id} canEdit={canEdit} />}
 
       {id && <AttachmentSection entityType="cave" entityId={id} canEdit={canEdit} />}
 

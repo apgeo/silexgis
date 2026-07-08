@@ -47,7 +47,8 @@
     "noSelection": "Apăsați pe un element de pe hartă pentru detalii.",
     "surfaceFeatures": "Fenomene de suprafață",
     "geofiles": "Fișiere importate",
-    "rasterMaps": "Hărți raster"
+    "rasterMaps": "Hărți raster",
+    "centerlines": "Poligonații peșteri"
   },
   "caves": {
     "title": "Peșteri",
@@ -337,5 +338,19 @@
     "view": "Vezi în 3D",
     "deleteConfirm": "Ștergi acest model topo?",
     "empty": "Niciun model 3D încă"
+  },
+  "centerlines": {
+    "title": "Poligonații",
+    "upload": "Încarcă poligonație",
+    "uploaded": "Poligonație încărcată",
+    "uploadFailed": "Încărcarea a eșuat",
+    "length": "Lungime",
+    "source": "Sursă",
+    "sourceValues": {
+      "uploaded": "Încărcată",
+      "extracted": "Extrasă"
+    },
+    "deleteConfirm": "Ștergi această poligonație?",
+    "empty": "Nicio poligonație încă"
   }
 }

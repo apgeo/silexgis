@@ -47,7 +47,8 @@
     "noSelection": "Click a feature on the map to see details.",
     "surfaceFeatures": "Surface features",
     "geofiles": "Imported files",
-    "rasterMaps": "Raster maps"
+    "rasterMaps": "Raster maps",
+    "centerlines": "Cave centerlines"
   },
   "caves": {
     "title": "Caves",
@@ -337,5 +338,19 @@
     "view": "View in 3D",
     "deleteConfirm": "Delete this survey model?",
     "empty": "No 3D models yet"
+  },
+  "centerlines": {
+    "title": "Centerlines",
+    "upload": "Upload centerline",
+    "uploaded": "Centerline uploaded",
+    "uploadFailed": "Upload failed",
+    "length": "Length",
+    "source": "Source",
+    "sourceValues": {
+      "uploaded": "Uploaded",
+      "extracted": "Extracted"
+    },
+    "deleteConfirm": "Delete this centerline?",
+    "empty": "No centerlines yet"
   }
 }

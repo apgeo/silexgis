@@ -694,6 +694,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{caveId}/centerlines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Centerlines of a cave; withheld without the exact-location permission. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CenterlineDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Uploads a GeoJSON/GPX centerline (Write on the cave). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        file: components["schemas"]["IFormFile"];
+                    };
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CenterlineDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cave-centerlines/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Deletes the centerline (Write on the cave). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/map/cave-entrances": {
         parameters: {
             query?: never;
@@ -828,6 +930,44 @@ export interface paths {
                     bbox: string;
                     from?: string;
                     to?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map/cave-centerlines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cave centerlines as GeoJSON for the given bbox; protected caves' lines omitted. */
+        get: {
+            parameters: {
+                query: {
+                    bbox: string;
                 };
                 header?: never;
                 path?: never;
@@ -3470,6 +3610,23 @@ export interface components {
             teamId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
+        CenterlineDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            caveId: string;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            name: string;
+            geom: components["schemas"]["GeoJsonGeometry"];
+            /** Format: double */
+            lengthM: null | number;
+            source: components["schemas"]["CenterlineSource"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @enum {unknown} */
+        CenterlineSource: "uploaded" | "extracted";
         EntranceDto: {
             /** Format: uuid */
             id: string;
