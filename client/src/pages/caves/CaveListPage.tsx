@@ -7,7 +7,7 @@ import type { SorterResult } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { downloadFile } from '../../api/download.ts';
-import { useCaveTypes, useCaves, useMe, type CaveListItem, type CaveListParams } from '../../api/hooks.ts';
+import { useCaveTypes, useCaves, useMe, useTags, type CaveListItem, type CaveListParams } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 
 const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
@@ -29,6 +29,7 @@ export default function CaveListPage() {
   const search = useDebouncedValue(searchInput);
   const { data, isFetching } = useCaves({ ...params, search: search || undefined });
   const { data: caveTypes } = useCaveTypes();
+  const { data: tags } = useTags('');
   const { data: me } = useMe();
 
   const canCreate = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
@@ -95,6 +96,15 @@ export default function CaveListPage() {
           style={{ width: 200 }}
           options={caveTypes?.map((x) => ({ value: Number(x.id), label: x.name }))}
           onChange={(value?: number) => setParams((p) => ({ ...p, page: 1, caveTypeId: value }))}
+        />
+        <Select
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          placeholder={t('tags.filterPlaceholder')}
+          style={{ width: 200 }}
+          options={tags?.map((x) => ({ value: x.slug, label: x.name }))}
+          onChange={(value?: string) => setParams((p) => ({ ...p, page: 1, tag: value }))}
         />
       </Flex>
       <Table<CaveListItem>

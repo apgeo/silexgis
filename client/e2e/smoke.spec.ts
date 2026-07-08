@@ -155,6 +155,41 @@ test('cave photo attachment round-trip', async ({ page }) => {
   await expect(page.getByText('e2e-photo.png')).not.toBeVisible();
 });
 
+test('trip log with participants, tags and the audit trail', async ({ page }) => {
+  const title = `E2E Trip ${Date.now()}`;
+  const tagName = `e2e-tag-${Date.now()}`;
+  await login(page);
+
+  // Create a trip with a guest participant.
+  await page.goto('/trip-logs');
+  await page.getByRole('button', { name: /New trip log/ }).click();
+  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('button', { name: /Add participant/ }).click();
+  await page.getByPlaceholder('Participant name').fill('Guest Caver');
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Guest Caver')).toBeVisible();
+
+  // Tag it inline (the input autofocuses; Enter submits).
+  await page.getByText('Add tag').click();
+  await page.keyboard.type(tagName);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.ant-tag', { hasText: tagName })).toBeVisible({ timeout: 15_000 });
+
+  // The admin audit trail recorded the creation.
+  await page.goto('/admin/audit');
+  await expect(page.getByText('Audit trail')).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'TripLog' }).first()).toBeVisible({ timeout: 15_000 });
+
+  // Cleanup: delete the trip from its detail page.
+  await page.goto('/trip-logs');
+  await page.getByText(title).click();
+  await page.getByRole('button', { name: /Delete/ }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(title)).not.toBeVisible();
+});
+
 test('georeferenced raster upload, COG processing, map overlay and delete', async ({ page }) => {
   await login(page);
 

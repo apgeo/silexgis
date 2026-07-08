@@ -11,6 +11,7 @@ import {
   useFeatureTypes,
   useMe,
   useSurfaceFeatures,
+  useTags,
   useUpdateSurfaceFeature,
   type SurfaceFeatureDetail,
   type SurfaceFeatureListParams,
@@ -32,6 +33,7 @@ export default function FeatureListPage() {
   const search = useDebouncedValue(searchInput);
   const { data, isFetching } = useSurfaceFeatures({ ...params, search: search || undefined });
   const { data: featureTypes } = useFeatureTypes();
+  const { data: tags } = useTags('');
   const { data: me } = useMe();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
   const updateFeature = useUpdateSurfaceFeature();
@@ -132,6 +134,15 @@ export default function FeatureListPage() {
           style={{ width: 220 }}
           options={featureTypes?.map((x) => ({ value: Number(x.id), label: x.name }))}
           onChange={(value?: number) => setParams((p) => ({ ...p, page: 1, featureTypeId: value }))}
+        />
+        <Select
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          placeholder={t('tags.filterPlaceholder')}
+          style={{ width: 200 }}
+          options={tags?.map((x) => ({ value: x.slug, label: x.name }))}
+          onChange={(value?: string) => setParams((p) => ({ ...p, page: 1, tag: value }))}
         />
       </Flex>
       <Table<SurfaceFeatureDetail>

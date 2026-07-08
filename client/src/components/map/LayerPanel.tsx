@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Checkbox, Divider, Radio, Slider, Typography } from 'antd';
+import { Checkbox, Divider, Radio, Select, Slider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import type { GeofileInfo, MapLayerInfo, RasterMapInfo } from '../../api/hooks.ts';
+import { useTags, type GeofileInfo, type MapLayerInfo, type RasterMapInfo } from '../../api/hooks.ts';
 
 interface LayerPanelProps {
   layers: MapLayerInfo[];
@@ -19,6 +19,8 @@ interface LayerPanelProps {
   onRasterVisibleChange: (id: string, visible: boolean) => void;
   rasterOpacity: Record<string, number>;
   onRasterOpacityChange: (id: string, opacity: number) => void;
+  tagFilter: string | null;
+  onTagFilterChange: (slug: string | null) => void;
 }
 
 export default function LayerPanel({
@@ -37,8 +39,11 @@ export default function LayerPanel({
   onRasterVisibleChange,
   rasterOpacity,
   onRasterOpacityChange,
+  tagFilter,
+  onTagFilterChange,
 }: LayerPanelProps) {
   const { t } = useTranslation();
+  const { data: tags } = useTags('');
 
   return (
     <div style={{ padding: 12, overflow: 'auto', height: '100%' }}>
@@ -51,6 +56,17 @@ export default function LayerPanel({
       />
       <Divider style={{ margin: '12px 0' }} />
       <Typography.Text strong>{t('map.overlays')}</Typography.Text>
+      <Select
+        allowClear
+        showSearch
+        size="small"
+        optionFilterProp="label"
+        placeholder={t('tags.filterPlaceholder')}
+        style={{ width: '100%', marginTop: 8 }}
+        value={tagFilter ?? undefined}
+        options={tags?.map((x) => ({ value: x.slug, label: x.name }))}
+        onChange={(value?: string) => onTagFilterChange(value ?? null)}
+      />
       <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <Checkbox checked={entrancesVisible} onChange={(e) => onEntrancesVisibleChange(e.target.checked)}>
           {t('map.entrances')}

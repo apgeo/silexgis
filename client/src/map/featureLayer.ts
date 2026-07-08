@@ -7,6 +7,7 @@ import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Circle as CircleStyle, Fill, Icon, Stroke, Style } from 'ol/style';
 import { fetchSurfaceFeatureCollection, type FeatureType } from '../api/hooks.ts';
+import { getMapTagFilter } from './mapFilters.ts';
 
 export const SURFACE_FEATURE_LAYER_ID = 'surface-features';
 
@@ -75,7 +76,7 @@ export function attachSurfaceFeatureLoader(map: Map): () => void {
     const bbox = extent.map((n) => n.toFixed(5)).join(',');
     const seq = ++requestSeq;
     try {
-      const collection = await fetchSurfaceFeatureCollection(bbox);
+      const collection = await fetchSurfaceFeatureCollection(bbox, getMapTagFilter() ?? undefined);
       if (seq !== requestSeq) {
         return; // a newer request superseded this one
       }

@@ -6,7 +6,9 @@
     "map": "Hartă",
     "caves": "Peșteri",
     "features": "Fenomene de suprafață",
-    "geodata": "Geodate"
+    "geodata": "Geodate",
+    "trips": "Jurnale de tură",
+    "audit": "Istoric"
   },
   "auth": {
     "email": "Email",
@@ -219,5 +221,34 @@
     "measureDistance": "Măsoară distanța",
     "measureArea": "Măsoară aria",
     "discard": "Renunță la editări și măsurători"
+  },
+  "trips": {
+    "title": "Jurnale de tură",
+    "titleField": "Titlu",
+    "new": "Jurnal de tură nou",
+    "edit": "Editare jurnal",
+    "date": "Data",
+    "location": "Locație",
+    "caves": "Peșteri",
+    "participants": "Participanți",
+    "participantName": "Nume participant",
+    "participantRequired": "Numele este obligatoriu",
+    "addParticipant": "Adaugă participant",
+    "deleteConfirm": "Ștergeți acest jurnal de tură?",
+    "searchPlaceholder": "Caută după titlu…"
+  },
+  "tags": {
+    "title": "Etichete",
+    "add": "Adaugă etichetă",
+    "filterPlaceholder": "Filtrează după etichetă…"
+  },
+  "audit": {
+    "title": "Istoric modificări",
+    "at": "Când",
+    "user": "Utilizator",
+    "action": "Acțiune",
+    "entityType": "Entitate",
+    "entityId": "Id entitate",
+    "entityTypePlaceholder": "Filtrează după tipul entității (ex. Cave)…"
   }
 }

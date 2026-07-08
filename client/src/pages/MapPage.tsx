@@ -7,15 +7,17 @@ import LayerPanel from '../components/map/LayerPanel.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
 import SelectionPanel from '../components/map/SelectionPanel.tsx';
 import { setActiveBaseLayer, syncBaseLayers } from '../map/baseLayers.ts';
-import { ENTRANCE_LAYER_ID, attachEntranceLoader, createEntranceLayer } from '../map/entranceLayer.ts';
+import { ENTRANCE_LAYER_ID, attachEntranceLoader, createEntranceLayer, reloadEntrances } from '../map/entranceLayer.ts';
 import {
   SURFACE_FEATURE_LAYER_ID,
   attachSurfaceFeatureLoader,
   createSurfaceFeatureLayer,
+  reloadSurfaceFeatures,
   setFeatureTypeSymbols,
   setSelectedSurfaceFeature,
 } from '../map/featureLayer.ts';
 import { attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
+import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { syncRasterLayers } from '../map/rasterLayers.ts';
 import { attachHoverTooltip } from '../map/hoverTooltip.ts';
 import { getWorkspaceMap } from '../map/mapContext.ts';
@@ -32,6 +34,7 @@ export default function MapPage() {
   const { data: me } = useMe();
   const [activeBaseId, setActiveBaseId] = useState<number>();
   const [entrancesVisible, setEntrancesVisible] = useState(true);
+  const [tagFilter, setTagFilter] = useState<string | null>(getMapTagFilter());
   const [surfaceFeaturesVisible, setSurfaceFeaturesVisible] = useState(true);
   const [editController, setEditController] = useState<MapEditController | null>(null);
   const selection = useWorkspaceStore((s) => s.selection);
@@ -166,6 +169,13 @@ export default function MapPage() {
           onRasterVisibleChange={setRasterVisible}
           rasterOpacity={rasterOpacity}
           onRasterOpacityChange={setRasterOpacity}
+          tagFilter={tagFilter}
+          onTagFilterChange={(slug) => {
+            setTagFilter(slug);
+            setMapTagFilter(slug);
+            reloadEntrances();
+            reloadSurfaceFeatures();
+          }}
         />
       </Panel>
       <Separator className="map-workspace-handle" />

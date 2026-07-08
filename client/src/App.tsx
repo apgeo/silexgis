@@ -17,6 +17,9 @@ const CaveFormPage = lazy(() => import('./pages/caves/CaveFormPage.tsx'));
 const CaveDetailPage = lazy(() => import('./pages/caves/CaveDetailPage.tsx'));
 const FeatureListPage = lazy(() => import('./pages/features/FeatureListPage.tsx'));
 const GeodataPage = lazy(() => import('./pages/geodata/GeodataPage.tsx'));
+const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
+const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
+const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
 
 function Loadable({ children }: { children: ReactNode }) {
   return (
@@ -42,6 +45,9 @@ const router = createBrowserRouter([
           { path: '/caves/:id/edit', element: <Loadable><CaveFormPage /></Loadable> },
           { path: '/features', element: <Loadable><FeatureListPage /></Loadable> },
           { path: '/geodata', element: <Loadable><GeodataPage /></Loadable> },
+          { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
+          { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
+          { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
         ],
       },
     ],

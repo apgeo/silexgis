@@ -7,6 +7,7 @@ import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
 import { fetchEntranceFeatures } from '../api/hooks.ts';
+import { getMapTagFilter } from './mapFilters.ts';
 
 export const ENTRANCE_LAYER_ID = 'entrances';
 
@@ -23,6 +24,13 @@ export function createEntranceLayer(): VectorLayer {
  * Bbox/zoom loading strategy: reload on moveend (debounced),
  * stale responses discarded. Returns a detach function.
  */
+let activeReload: (() => void) | undefined;
+
+/** Forces a refetch of the current extent (e.g. after changing map filters). */
+export function reloadEntrances(): void {
+  activeReload?.();
+}
+
 export function attachEntranceLoader(map: Map): () => void {
   let requestSeq = 0;
   let timer: number | undefined;
@@ -38,7 +46,7 @@ export function attachEntranceLoader(map: Map): () => void {
     const zoom = Math.round(view.getZoom() ?? 8);
     const seq = ++requestSeq;
     try {
-      const collection = await fetchEntranceFeatures(bbox, zoom);
+      const collection = await fetchEntranceFeatures(bbox, zoom, getMapTagFilter() ?? undefined);
       if (seq !== requestSeq) {
         return; // a newer request superseded this one
       }
@@ -56,9 +64,11 @@ export function attachEntranceLoader(map: Map): () => void {
 
   map.on('moveend', onMoveEnd);
   void load();
+  activeReload = () => void load();
   return () => {
     map.un('moveend', onMoveEnd);
     window.clearTimeout(timer);
+    activeReload = undefined;
   };
 }
 

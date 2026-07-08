@@ -6,7 +6,9 @@
     "map": "Map",
     "caves": "Caves",
     "features": "Surface features",
-    "geodata": "Geodata"
+    "geodata": "Geodata",
+    "trips": "Trip logs",
+    "audit": "Audit"
   },
   "auth": {
     "email": "Email",
@@ -219,5 +221,34 @@
     "measureDistance": "Measure distance",
     "measureArea": "Measure area",
     "discard": "Discard edits and measurements"
+  },
+  "trips": {
+    "title": "Trip logs",
+    "titleField": "Title",
+    "new": "New trip log",
+    "edit": "Edit trip log",
+    "date": "Date",
+    "location": "Location",
+    "caves": "Caves",
+    "participants": "Participants",
+    "participantName": "Participant name",
+    "participantRequired": "Name is required",
+    "addParticipant": "Add participant",
+    "deleteConfirm": "Delete this trip log?",
+    "searchPlaceholder": "Search by title…"
+  },
+  "tags": {
+    "title": "Tags",
+    "add": "Add tag",
+    "filterPlaceholder": "Filter by tag…"
+  },
+  "audit": {
+    "title": "Audit trail",
+    "at": "When",
+    "user": "User",
+    "action": "Action",
+    "entityType": "Entity",
+    "entityId": "Entity id",
+    "entityTypePlaceholder": "Filter by entity type (e.g. Cave)…"
   }
 }

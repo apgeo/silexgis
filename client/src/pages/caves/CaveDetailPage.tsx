@@ -17,6 +17,7 @@ import {
 } from '../../api/hooks.ts';
 import { formatLonLat } from '../../geo/coords.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
+import TagChips from '../../components/tags/TagChips.tsx';
 import EntranceEditorModal from './EntranceEditorModal.tsx';
 
 export default function CaveDetailPage() {
@@ -185,6 +186,12 @@ export default function CaveDetailPage() {
           ]}
         />
       </Card>
+
+      {id && (
+        <div style={{ marginTop: 12 }}>
+          <TagChips entityType="cave" entityId={id} canEdit={canEdit} />
+        </div>
+      )}
 
       {id && <AttachmentSection entityType="cave" entityId={id} canEdit={canEdit} />}
 

@@ -28,6 +28,10 @@ export const queryKeys = {
   geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
   attachments: (entityType: string, entityId: string) => ['attachments', entityType, entityId] as const,
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
+  tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
+  tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
+  taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
+  tags: (search: string) => ['tags', search] as const,
 };
 
 async function unwrap<T>(
@@ -90,6 +94,7 @@ export interface CaveListParams {
   caveTypeId?: number;
   region?: string;
   search?: string;
+  tag?: string;
 }
 
 export function useCaves(params: CaveListParams) {
@@ -148,13 +153,13 @@ export function useNominatim(q: string) {
 }
 
 /** Imperative fetch used by the OpenLayers entrance-layer loader (not a hook). */
-export async function fetchEntranceFeatures(bbox: string, zoom: number): Promise<EntranceFeatureCollection> {
-  return unwrap(api.GET('/api/v1/map/cave-entrances', { params: { query: { bbox, zoom } } }));
+export async function fetchEntranceFeatures(bbox: string, zoom: number, tag?: string): Promise<EntranceFeatureCollection> {
+  return unwrap(api.GET('/api/v1/map/cave-entrances', { params: { query: { bbox, zoom, tag } } }));
 }
 
 /** Imperative fetch used by the OpenLayers surface-feature loader (not a hook). */
-export async function fetchSurfaceFeatureCollection(bbox: string): Promise<EntranceFeatureCollection> {
-  return unwrap(api.GET('/api/v1/map/surface-features', { params: { query: { bbox } } }));
+export async function fetchSurfaceFeatureCollection(bbox: string, tag?: string): Promise<EntranceFeatureCollection> {
+  return unwrap(api.GET('/api/v1/map/surface-features', { params: { query: { bbox, tag } } }));
 }
 
 export type SurfaceFeatureDetail = components['schemas']['SurfaceFeatureDto'];
@@ -179,6 +184,7 @@ export interface SurfaceFeatureListParams {
   featureTypeId?: number;
   caveId?: string;
   search?: string;
+  tag?: string;
 }
 
 export function useSurfaceFeatures(params: SurfaceFeatureListParams) {
@@ -422,6 +428,118 @@ export function useDeleteRasterMap() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error, response } = await api.DELETE('/api/v1/georeferenced-maps/{id}', { params: { path: { id } } });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+export type TripLogInfo = components['schemas']['TripLogDto'];
+export type TripLogWrite = components['schemas']['TripLogWriteRequest'];
+export type TagInfo = components['schemas']['TagDto'];
+export type TaggingInfo = components['schemas']['TaggingDto'];
+
+export interface TripLogListParams {
+  page?: number;
+  pageSize?: number;
+  from?: string;
+  to?: string;
+  caveId?: string;
+  search?: string;
+}
+
+export function useTripLogs(params: TripLogListParams) {
+  return useQuery({
+    queryKey: queryKeys.tripLogs(params),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useTripLog(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.tripLog(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+  });
+}
+
+function useInvalidateTripLogs() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+}
+
+export function useCreateTripLog() {
+  const invalidate = useInvalidateTripLogs();
+  return useMutation({
+    mutationFn: (body: TripLogWrite) => unwrap(api.POST('/api/v1/trip-logs', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateTripLog() {
+  const invalidate = useInvalidateTripLogs();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: TripLogWrite }) =>
+      unwrap(api.PUT('/api/v1/trip-logs/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useDeleteTripLog() {
+  const invalidate = useInvalidateTripLogs();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/trip-logs/{id}', { params: { path: { id } } });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useTags(search: string) {
+  return useQuery({
+    queryKey: queryKeys.tags(search),
+    queryFn: () => unwrap(api.GET('/api/v1/tags', { params: { query: { search: search || undefined } } })),
+    staleTime: 60_000,
+  });
+}
+
+export function useTaggings(entityType: AttachedEntityType, entityId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.taggings(entityType, entityId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/taggings', { params: { query: { entityType, entityId: entityId! } } })),
+    enabled: !!entityId,
+  });
+}
+
+function useInvalidateTaggings() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['taggings'] });
+    void queryClient.invalidateQueries({ queryKey: ['tags'] });
+  };
+}
+
+export function useCreateTagging() {
+  const invalidate = useInvalidateTaggings();
+  return useMutation({
+    mutationFn: (body: { tagName: string; entityType: AttachedEntityType; entityId: string }) =>
+      unwrap(api.POST('/api/v1/taggings', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useDeleteTagging() {
+  const invalidate = useInvalidateTaggings();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const { error, response } = await api.DELETE('/api/v1/taggings/{id}', { params: { path: { id } } });
       if (error !== undefined) {
         throw new Error(`API error ${response.status}`);
       }

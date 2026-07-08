@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
+  CarOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
   GoldOutlined,
+  HistoryOutlined,
   LogoutOutlined,
   TableOutlined,
   UserOutlined,
@@ -10,6 +12,7 @@ import {
 import { Dropdown, Flex, Layout, Menu, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useMe } from '../api/hooks.ts';
 import { useAuth } from '../auth/auth.tsx';
 
 /** Application shell: slim header + collapsible icon sidebar. */
@@ -19,13 +22,11 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const selectedKey = location.pathname.startsWith('/caves')
-    ? 'caves'
-    : location.pathname.startsWith('/features')
-      ? 'features'
-      : location.pathname.startsWith('/geodata')
-        ? 'geodata'
-        : 'map';
+  const { data: me } = useMe();
+  const isAdmin = me?.roles.includes('Admin') ?? false;
+
+  const sections = ['caves', 'features', 'geodata', 'trip-logs', 'admin/audit'] as const;
+  const selectedKey = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
 
   return (
     <Layout style={{ height: '100%' }}>
@@ -73,6 +74,10 @@ export default function AppLayout() {
               { key: 'caves', icon: <TableOutlined />, label: t('nav.caves') },
               { key: 'features', icon: <GoldOutlined />, label: t('nav.features') },
               { key: 'geodata', icon: <DatabaseOutlined />, label: t('nav.geodata') },
+              { key: 'trip-logs', icon: <CarOutlined />, label: t('nav.trips') },
+              ...(isAdmin
+                ? [{ key: 'admin/audit', icon: <HistoryOutlined />, label: t('nav.audit') }]
+                : []),
             ]}
           />
         </Layout.Sider>
