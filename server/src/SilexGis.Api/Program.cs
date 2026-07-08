@@ -18,12 +18,14 @@ using SilexGis.Api.Features.Geofiles;
 using SilexGis.Api.Features.GeoreferencedMaps;
 using SilexGis.Api.Features.Jobs;
 using SilexGis.Api.Features.Map;
+using SilexGis.Api.Features.Permissions;
 using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
 using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.SurfaceFeatures;
 using SilexGis.Api.Features.Tags;
 using SilexGis.Api.Features.Taxonomies;
+using SilexGis.Api.Features.Teams;
 using SilexGis.Api.Features.TripLogs;
 using SilexGis.Domain;
 using SilexGis.Domain.Permissions;
@@ -79,6 +81,7 @@ try
     builder.Services.AddOptions<AccessOptions>()
         .BindConfiguration(AccessOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
+    builder.Services.AddScoped<IPermissionService, AclPermissionService>();
     builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
     var app = builder.Build();
@@ -131,6 +134,8 @@ try
     api.MapTripLogEndpoints();
     api.MapTagEndpoints();
     api.MapAuditEndpoints();
+    api.MapObjectAclEndpoints();
+    api.MapTeamEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {

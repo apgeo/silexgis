@@ -54,6 +54,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<Tagging> Taggings => Set<Tagging>();
 
+    public DbSet<ObjectAcl> ObjectAcls => Set<ObjectAcl>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

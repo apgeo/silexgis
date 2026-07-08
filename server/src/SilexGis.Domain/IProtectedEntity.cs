@@ -7,6 +7,9 @@ namespace SilexGis.Domain;
 /// </summary>
 public interface IProtectedEntity
 {
+    /// <summary>Uuid primary key — also the polymorphic target of ACL/attachment/tag rows.</summary>
+    Guid Id { get; }
+
     Guid OwnerUserId { get; set; }
 
     Guid? TeamId { get; set; }

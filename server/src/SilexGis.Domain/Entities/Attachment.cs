@@ -10,6 +10,21 @@ public enum AttachedEntityType : short
     TripLog = 3,
     Team = 4,
     Geofile = 5,
+    GeoreferencedMap = 6,
+}
+
+/// <summary>Maps protected entity instances to their polymorphic discriminator.</summary>
+public static class ProtectedEntityTypes
+{
+    public static AttachedEntityType Of(IProtectedEntity entity) => entity switch
+    {
+        Cave => AttachedEntityType.Cave,
+        SurfaceFeature => AttachedEntityType.SurfaceFeature,
+        Geofile => AttachedEntityType.Geofile,
+        TripLog => AttachedEntityType.TripLog,
+        GeoreferencedMap => AttachedEntityType.GeoreferencedMap,
+        _ => throw new ArgumentException($"No entity-type mapping for {entity.GetType().Name}.", nameof(entity)),
+    };
 }
 
 /// <summary>Semantic role of an attached file. Stored as smallint.</summary>

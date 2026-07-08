@@ -2,14 +2,19 @@
 namespace SilexGis.Domain.Permissions;
 
 /// <summary>
-/// Effective-permission algorithm. Current scope: global roles,
-/// ownership, visibility and team roles. Explicit ACL grants (object_acl) are added in the
-/// permissions phase — this is the single place they will plug into.
+/// Effective-permission algorithm: global roles, ownership, visibility, team roles and
+/// explicit ACL grants. The evaluator stays pure — callers that want the ACL layer load
+/// the applicable grants first (IPermissionService does this) and pass their OR-ed
+/// flags in <c>aclGranted</c>; most-permissive layer wins.
 /// Team defaults: member → Read+Write; team admin/owner → +Delete+Share+Manage.
 /// </summary>
 public static class PermissionEvaluator
 {
-    public static bool Can(UserContext? user, IProtectedEntity entity, ObjectPermission permission)
+    public static bool Can(
+        UserContext? user,
+        IProtectedEntity entity,
+        ObjectPermission permission,
+        ObjectPermission aclGranted = ObjectPermission.None)
     {
         if (user is null)
         {
@@ -35,10 +40,13 @@ public static class PermissionEvaluator
                     | ObjectPermission.Share | ObjectPermission.ManagePermissions
                     | ObjectPermission.ViewExactLocation
                 : ObjectPermission.Read | ObjectPermission.Write | ObjectPermission.ViewExactLocation;
-            return granted.HasFlag(permission);
+            if (granted.HasFlag(permission))
+            {
+                return true;
+            }
         }
 
-        return false;
+        return aclGranted.HasFlag(permission);
     }
 
     private static bool VisibilityAllowsRead(UserContext user, IProtectedEntity entity) =>
