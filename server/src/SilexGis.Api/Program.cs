@@ -64,7 +64,7 @@ try
     builder.Services.AddOpenApi();
     builder.Services.AddSilexGisPersistence(builder.Configuration);
     builder.Services.AddSilexGisGeodata(builder.Configuration);
-    builder.Services.AddSilexGisAuth();
+    builder.Services.AddSilexGisAuth(builder.Configuration);
 
     // Data-protection keys persist to disk so file-access tokens (and cookies) survive
     // restarts and container recreation; deployments mount a volume at Keys:Path.
@@ -138,6 +138,7 @@ try
     var api = app.MapGroup("/api/v1").RequireAuthorization();
     api.MapAboutEndpoints();
     api.MapAuthEndpoints();
+    api.MapExternalAuthEndpoints();
     api.MapMeEndpoints();
     api.MapMfaEndpoints();
     api.MapTaxonomyEndpoints();

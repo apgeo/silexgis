@@ -20,6 +20,10 @@ services:
 
   api:
     build: ../server
+    # Any SILEXGIS__* line added to .env (e.g. external login providers) flows through here;
+    # the explicit mappings below still take precedence for the common settings.
+    env_file:
+      - .env
     environment:
       SILEXGIS__Db__ConnectionString: Host=db;Port=5432;Database=silexgis;Username=silexgis;Password=${SILEXGIS_DB_PASSWORD}
       SILEXGIS__PublicUrl: ${SILEXGIS_PUBLIC_URL:-http://localhost:8080}

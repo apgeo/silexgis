@@ -17,7 +17,7 @@ namespace SilexGis.Api.Auth;
 /// </summary>
 public static class AuthenticationSetup
 {
-    public static IServiceCollection AddSilexGisAuth(this IServiceCollection services)
+    public static IServiceCollection AddSilexGisAuth(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<AuthOptions>().BindConfiguration(AuthOptions.SectionName);
         services.AddOptions<AdminBootstrapOptions>().BindConfiguration(AdminBootstrapOptions.SectionName);
@@ -103,6 +103,18 @@ public static class AuthenticationSetup
                 options.UseLocalServer();
                 options.UseAspNetCore();
             });
+
+        // External login providers (Google/GitHub/generic OIDC) — none unless configured.
+        // Each federates into a local account; the local OIDC server still issues app tokens.
+        var externalProviders = configuration.GetSection(AuthOptions.SectionName)
+            .GetSection(nameof(AuthOptions.ExternalProviders))
+            .Get<ExternalProviderOptions[]>() ?? [];
+        if (externalProviders.Length > 0)
+        {
+            services.AddAuthentication().AddExternalProviders(externalProviders);
+        }
+
+        services.AddScoped<ExternalAuthService>();
 
         // AddIdentity made the cookie the default scheme; the API default is bearer.
         services.Configure<AuthenticationOptions>(options =>
