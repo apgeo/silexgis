@@ -22,7 +22,10 @@
     "signingIn": "Autentificare în curs…",
     "mfaRequired": "Introduceți codul din aplicația de autentificare.",
     "mfaInvalid": "Codul de autentificare nu este valid.",
-    "mfaCode": "Cod de autentificare"
+    "mfaCode": "Cod de autentificare",
+    "or": "sau",
+    "signInWith": "Autentificare cu {{provider}}",
+    "externalFailed": "Autentificarea externă nu a fost finalizată. Încercați din nou sau folosiți parola."
   },
   "common": {
     "loading": "Se încarcă…",
@@ -306,7 +309,16 @@
     "disable": "Dezactivează",
     "disableConfirm": "Dezactivați autentificarea în doi pași?",
     "recoveryLeft": "Coduri de recuperare rămase: {{count}}",
-    "recoveryTitle": "Salvați aceste coduri de recuperare acum — sunt afișate o singură dată."
+    "recoveryTitle": "Salvați aceste coduri de recuperare acum — sunt afișate o singură dată.",
+    "linkedAccounts": "Conturi asociate",
+    "linkedIntro": "Autentificați-vă cu un furnizor extern, pe lângă parolă.",
+    "linkWith": "Asociază {{provider}}",
+    "linkAdded": "Cont asociat.",
+    "linkFailed": "Contul nu a putut fi asociat. Este posibil să fie deja asociat în altă parte.",
+    "unlink": "Dezasociază",
+    "unlinkConfirm": "Eliminați acest cont asociat?",
+    "unlinked": "Cont dezasociat.",
+    "unlinkFailed": "Contul nu a putut fi dezasociat."
   },
   "views": {
     "title": "Vederi salvate",

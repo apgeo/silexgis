@@ -1530,6 +1530,189 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Public sign-in configuration: open registration, external-only flag, provider buttons. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuthConfigDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/external/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Begins an external sign-in (or account link with ?mode=link); redirects to the provider. */
+        get: {
+            parameters: {
+                query?: {
+                    returnUrl?: string;
+                    mode?: string;
+                };
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/external/{provider}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Provider return: federates the identity into a local account, then resumes the sign-in flow. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/external-logins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** External providers linked to the caller's account. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExternalLoginsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/external-logins/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes a linked external provider. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    provider: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/mfa": {
         parameters: {
             query?: never;
@@ -3464,6 +3647,11 @@ export interface components {
             entityId: null | string;
             changes: null | components["schemas"]["JsonElement"];
         };
+        AuthConfigDto: {
+            openRegistration: boolean;
+            externalOnly: boolean;
+            providers: components["schemas"]["ExternalProviderInfo"][];
+        };
         CaveDto: {
             /** Format: uuid */
             id: string;
@@ -3660,6 +3848,18 @@ export interface components {
         };
         /** @enum {unknown} */
         ExplorationStatus: "unknown" | "ongoing" | "finished" | "abandoned";
+        ExternalLoginDto: {
+            provider: string;
+            displayName: string;
+        };
+        ExternalLoginsDto: {
+            logins: components["schemas"]["ExternalLoginDto"][];
+            hasPassword: boolean;
+        };
+        ExternalProviderInfo: {
+            name: string;
+            displayName: string;
+        };
         FeatureCollection: {
             type: string;
             features: components["schemas"]["GeoFeature"][];

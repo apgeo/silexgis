@@ -22,7 +22,10 @@
     "signingIn": "Signing you in…",
     "mfaRequired": "Enter the code from your authenticator app.",
     "mfaInvalid": "The two-factor code is not valid.",
-    "mfaCode": "Two-factor code"
+    "mfaCode": "Two-factor code",
+    "or": "or",
+    "signInWith": "Sign in with {{provider}}",
+    "externalFailed": "External sign-in did not complete. Please try again or use your password."
   },
   "common": {
     "loading": "Loading…",
@@ -306,7 +309,16 @@
     "disable": "Disable",
     "disableConfirm": "Disable two-factor authentication?",
     "recoveryLeft": "Recovery codes left: {{count}}",
-    "recoveryTitle": "Store these recovery codes now — they are shown only once."
+    "recoveryTitle": "Store these recovery codes now — they are shown only once.",
+    "linkedAccounts": "Linked accounts",
+    "linkedIntro": "Sign in with an external provider in addition to your password.",
+    "linkWith": "Link {{provider}}",
+    "linkAdded": "Account linked.",
+    "linkFailed": "That account could not be linked. It may already be linked elsewhere.",
+    "unlink": "Unlink",
+    "unlinkConfirm": "Remove this linked account?",
+    "unlinked": "Account unlinked.",
+    "unlinkFailed": "The account could not be unlinked."
   },
   "views": {
     "title": "Saved views",
