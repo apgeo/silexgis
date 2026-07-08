@@ -109,7 +109,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         // Update replaces children; others cannot write.
         (await outsider.PutAsJsonAsync($"/api/v1/trip-logs/{tripId}", TripBody("X", caveIds: [])))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        var update = await owner.PutAsJsonAsync($"/api/v1/trip-logs/{tripId}", new
+        var update = await owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{tripId}", new
         {
             title = $"Exploration camp {marker} (updated)",
             tripDate = "2026-06-20",

@@ -25,4 +25,8 @@ public static class ApiProblems
     public static ProblemHttpResult PreconditionFailed(string code, string? detail = null) =>
         TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status412PreconditionFailed,
             extensions: new Dictionary<string, object?> { ["code"] = code });
+
+    public static ProblemHttpResult PreconditionRequired(string code, string? detail = null) =>
+        TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status428PreconditionRequired,
+            extensions: new Dictionary<string, object?> { ["code"] = code });
 }

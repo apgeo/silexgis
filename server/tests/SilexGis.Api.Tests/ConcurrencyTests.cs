@@ -84,11 +84,17 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable
         freshDelete.Headers.TryAddWithoutValidation("If-Match", newEtag);
         (await owner.SendAsync(freshDelete)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        // Requests without If-Match keep working (mandatory only at the API freeze).
-        var create2 = await owner.PostAsJsonAsync("/api/v1/caves", CaveBody("Lenient Cave"));
+        // The freeze makes If-Match mandatory on edits of loaded resources: a PUT without it
+        // is refused with 428 and the stable code, so an edit can never silently overwrite.
+        var create2 = await owner.PostAsJsonAsync("/api/v1/caves", CaveBody("Frozen Cave"));
         var caveId2 = (await create2.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
-        (await owner.PutAsJsonAsync($"/api/v1/caves/{caveId2}", CaveBody("Lenient Cave v2")))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var noHeader = await owner.PutAsJsonAsync($"/api/v1/caves/{caveId2}", CaveBody("Frozen Cave v2"));
+        noHeader.StatusCode.ShouldBe(HttpStatusCode.PreconditionRequired);
+        (await noHeader.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("concurrency.if_match_required");
+
+        // DELETE stays lenient — list/map deletes carry no loaded version — so no header deletes.
+        (await owner.DeleteAsync($"/api/v1/caves/{caveId2}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
     private object CaveBody(string name) => new

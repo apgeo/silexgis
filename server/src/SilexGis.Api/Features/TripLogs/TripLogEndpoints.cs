@@ -163,7 +163,7 @@ public static class TripLogEndpoints
                 : ApiProblems.NotFound("trip_log.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct) is { } stale)
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, required: true) is { } stale)
         {
             return stale;
         }

@@ -102,7 +102,7 @@ public sealed class SurfaceFeatureTests : IAsyncLifetime, IDisposable
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         var renamed = Body($"Dolina Redenumita {marker}", sinkholeTypeId, "private");
-        (await owner.PutAsJsonAsync($"/api/v1/surface-features/{privateId}", renamed))
+        (await owner.PutWithIfMatchAsync($"/api/v1/surface-features/{privateId}", renamed))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // ---- map endpoint: bbox + type filter + visibility

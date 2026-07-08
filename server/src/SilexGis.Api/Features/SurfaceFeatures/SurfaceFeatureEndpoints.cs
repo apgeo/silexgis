@@ -183,7 +183,7 @@ public static class SurfaceFeatureEndpoints
                 : ApiProblems.NotFound("surface_feature.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.SurfaceFeatures, feature.Id, ct) is { } stale)
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.SurfaceFeatures, feature.Id, ct, required: true) is { } stale)
         {
             return stale;
         }

@@ -187,7 +187,7 @@ public static class CaveEndpoints
                 : ApiProblems.NotFound("cave.not_found");
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Caves, cave.Id, ct) is { } stale)
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Caves, cave.Id, ct, required: true) is { } stale)
         {
             return stale;
         }

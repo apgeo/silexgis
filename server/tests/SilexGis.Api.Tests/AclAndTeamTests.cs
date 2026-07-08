@@ -81,7 +81,7 @@ public sealed class AclAndTeamTests : IAsyncLifetime, IDisposable
         // Read+Write grant → update succeeds; ACL management still locked.
         await ReplaceAclAsync(owner, caveId,
             [(AclSubjectKind.User, granteeId, ObjectPermission.Read | ObjectPermission.Write)]);
-        (await grantee.PutAsJsonAsync($"/api/v1/caves/{caveId}", CaveBody("ACL Cave renamed", "private")))
+        (await grantee.PutWithIfMatchAsync($"/api/v1/caves/{caveId}", CaveBody("ACL Cave renamed", "private")))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
         (await grantee.GetAsync($"/api/v1/objects/cave/{caveId}/acl")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 

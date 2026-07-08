@@ -24,16 +24,23 @@ public static class Concurrency
     }
 
     /// <summary>
-    /// Returns a 412 Problem when the request carries If-Match and it does not match the
-    /// row's current version; null otherwise (including when no header was sent).
+    /// Validates the If-Match precondition against the row's current version. Returns a 412
+    /// Problem on mismatch. When <paramref name="required"/> is set (the /api/v1 contract for
+    /// entities edited through a loaded detail view), a missing header yields 428; otherwise a
+    /// missing header is allowed (last-write-wins) and returns null.
     /// </summary>
     public static async Task<ProblemHttpResult?> CheckIfMatchAsync(
-        HttpContext http, SilexGisDbContext db, VersionedTable table, Guid id, CancellationToken ct)
+        HttpContext http, SilexGisDbContext db, VersionedTable table, Guid id, CancellationToken ct,
+        bool required = false)
     {
         var header = http.Request.Headers.IfMatch;
         if (header.Count == 0)
         {
-            return null;
+            return required
+                ? ApiProblems.PreconditionRequired(
+                    "concurrency.if_match_required",
+                    "This resource requires an If-Match header carrying the version you last loaded.")
+                : null;
         }
 
         var current = $"\"{await ConcurrencySql.VersionAsync(db, table, id, ct)}\"";

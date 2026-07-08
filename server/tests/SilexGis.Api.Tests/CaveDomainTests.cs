@@ -103,7 +103,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
         // ---- write permissions: outsider can read authCave but not write it
         (await outsider.PutAsJsonAsync($"/api/v1/caves/{authCave}", CaveBody("Hijacked", Visibility.Public)))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await teammate.PutAsJsonAsync($"/api/v1/caves/{teamCave}", CaveBody("Team Cave Updated", Visibility.Team, teamId: teamId)))
+        (await teammate.PutWithIfMatchAsync($"/api/v1/caves/{teamCave}", CaveBody("Team Cave Updated", Visibility.Team, teamId: teamId)))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
         // team member cannot delete (only team admin/owner)
         (await teammate.DeleteAsync($"/api/v1/caves/{teamCave}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
