@@ -26,6 +26,7 @@ services:
       SILEXGIS__Admin__Email: ${SILEXGIS_ADMIN_EMAIL:-}
       SILEXGIS__Admin__Password: ${SILEXGIS_ADMIN_PASSWORD:-}
       SILEXGIS__Auth__OpenRegistration: ${SILEXGIS_OPEN_REGISTRATION:-false}
+      SILEXGIS__Files__Root: /data/files
     volumes:
       - silexgis-files:/data/files
     depends_on:

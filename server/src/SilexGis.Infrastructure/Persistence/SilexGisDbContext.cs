@@ -32,6 +32,14 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<MapLayer> MapLayers => Set<MapLayer>();
 
+    public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
+
+    public DbSet<Geofile> Geofiles => Set<Geofile>();
+
+    public DbSet<GeofileFeature> GeofileFeatures => Set<GeofileFeature>();
+
+    public DbSet<ProcessingJob> ProcessingJobs => Set<ProcessingJob>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

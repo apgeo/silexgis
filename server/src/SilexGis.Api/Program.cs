@@ -9,6 +9,9 @@ using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Api.Features.About;
 using SilexGis.Api.Features.Caves;
+using SilexGis.Api.Features.Export;
+using SilexGis.Api.Features.Geofiles;
+using SilexGis.Api.Features.Jobs;
 using SilexGis.Api.Features.Map;
 using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
@@ -49,6 +52,7 @@ try
     builder.Services.AddProblemDetails();
     builder.Services.AddOpenApi();
     builder.Services.AddSilexGisPersistence(builder.Configuration);
+    builder.Services.AddSilexGisGeodata(builder.Configuration);
     builder.Services.AddSilexGisAuth();
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<SilexGisDbContext>("database");
@@ -100,6 +104,9 @@ try
     api.MapSurfaceFeatureEndpoints();
     api.MapMapDataEndpoints();
     api.MapSearchEndpoints();
+    api.MapGeofileEndpoints();
+    api.MapJobEndpoints();
+    api.MapExportEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {

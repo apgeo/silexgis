@@ -3,6 +3,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SilexGis.Domain;
+using SilexGis.Infrastructure.Files;
+using SilexGis.Infrastructure.Geodata;
+using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure;
@@ -32,6 +35,18 @@ public static class DependencyInjection
                 sp.GetRequiredService<TimestampInterceptor>(),
                 sp.GetRequiredService<AuditInterceptor>()));
 
+        return services;
+    }
+
+    /// <summary>File storage, vector format IO (GDAL) and the processing-job worker.</summary>
+    public static IServiceCollection AddSilexGisGeodata(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<FilesOptions>(configuration.GetSection(FilesOptions.SectionName));
+        services.AddSingleton<IFileStore, LocalFileStore>();
+        services.AddSingleton<IVectorIO, GdalVectorIO>();
+        services.AddScoped<IProcessingJobHandler, GeofileImportHandler>();
+        services.AddHostedService<ProcessingJobWorker>();
         return services;
     }
 }

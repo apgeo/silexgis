@@ -14,16 +14,22 @@ public sealed record GeoJsonGeometry(string Type, JsonElement Coordinates)
     public static GeoJsonGeometry From(Geometry geometry)
     {
         // Serialize coordinates through a plain nested-array model, then parse to JsonElement.
+        // Multi* variants appear in imported geodata (e.g. GPX tracks are MultiLineString);
+        // GeometryCollection has no "coordinates" and is flattened before it gets here.
         object model = geometry switch
         {
             Point p => Position(p.Coordinate),
-            LineString l => l.Coordinates.Select(Position).ToArray(),
+            LineString l => Line(l),
             Polygon poly => Rings(poly),
+            MultiPoint mp => mp.Geometries.Select(g => Position(g.Coordinate)).ToArray(),
+            MultiLineString ml => ml.Geometries.Cast<LineString>().Select(Line).ToArray(),
+            MultiPolygon mpoly => mpoly.Geometries.Cast<Polygon>().Select(Rings).ToArray(),
             _ => throw new NotSupportedException($"Geometry type {geometry.GeometryType} is not supported."),
         };
         return new GeoJsonGeometry(geometry.GeometryType, JsonSerializer.SerializeToElement(model));
 
         static double[] Position(Coordinate c) => [c.X, c.Y];
+        static double[][] Line(LineString l) => [.. l.Coordinates.Select(Position)];
         static double[][][] Rings(Polygon poly) =>
             [.. new[] { poly.ExteriorRing }.Concat(poly.InteriorRings)
                 .Select(r => r.Coordinates.Select(Position).ToArray())];

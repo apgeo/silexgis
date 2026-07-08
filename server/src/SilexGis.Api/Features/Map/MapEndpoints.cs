@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
+using SilexGis.Domain;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -30,7 +32,52 @@ public static class MapEndpoints
         api.MapGet("/map/surface-features", SurfaceFeaturesAsync)
             .WithTags("Map")
             .WithSummary("Surface features as GeoJSON for the given bbox, optionally filtered by type.");
+        api.MapGet("/map/geofiles/{id:guid}/features", GeofileFeaturesAsync)
+            .WithTags("Map")
+            .WithSummary("Imported geofile rows as GeoJSON for the given bbox.");
         return api;
+    }
+
+    private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> GeofileFeaturesAsync(
+        Guid id,
+        string bbox,
+        SilexGisDbContext db,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var user = await userAccessor.GetAsync(ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        // Rows inherit the geofile's ACL; an unreadable geofile is not disclosed.
+        var geofile = await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(g => g.Id == id, ct);
+        if (geofile is null || !PermissionEvaluator.Can(user, geofile, ObjectPermission.Read))
+        {
+            return ApiProblems.NotFound("geofile.not_found");
+        }
+
+        if (!Bbox.TryParse(bbox, out var box))
+        {
+            return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
+        }
+
+        var polygon = box.ToPolygon();
+        var rows = await db.GeofileFeatures.AsNoTracking()
+            .Where(f => f.GeofileId == id && f.Geom.Intersects(polygon))
+            .Take(MaxPoints)
+            .ToListAsync(ct);
+
+        var features = rows.Select(f =>
+        {
+            var properties = JsonSerializer.Deserialize<Dictionary<string, object?>>(f.Properties)
+                ?? [];
+            properties["id"] = f.Id;
+            return GeoFeature.Of(f.Geom, properties);
+        }).ToList();
+
+        return TypedResults.Ok(FeatureCollection.Of(features));
     }
 
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> SurfaceFeaturesAsync(
