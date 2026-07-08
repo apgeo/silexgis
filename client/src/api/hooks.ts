@@ -25,6 +25,7 @@ export const queryKeys = {
   nominatim: (q: string) => ['nominatim', q] as const,
   surfaceFeatures: (params: SurfaceFeatureListParams) => ['surface-features', 'list', params] as const,
   surfaceFeature: (id: string) => ['surface-features', 'detail', id] as const,
+  geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
 };
 
 async function unwrap<T>(
@@ -219,6 +220,80 @@ export function useDeleteSurfaceFeature() {
     },
     onSuccess: () => invalidate(),
   });
+}
+
+export type GeofileInfo = components['schemas']['GeofileDto'];
+export type GeofileUpdate = components['schemas']['GeofileUpdateRequest'];
+
+export interface GeofileListParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+}
+
+export function useGeofiles(params: GeofileListParams, pollWhileImporting = false) {
+  return useQuery({
+    queryKey: queryKeys.geofiles(params),
+    queryFn: () => unwrap(api.GET('/api/v1/geofiles', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+    // Imports run in a background job — keep the table live until they settle.
+    refetchInterval: pollWhileImporting
+      ? (query) =>
+          query.state.data?.items.some(
+            (g) => g.importStatus === 'uploaded' || g.importStatus === 'importing',
+          )
+            ? 2000
+            : false
+      : false,
+  });
+}
+
+function useInvalidateGeofiles() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: ['geofiles'] });
+}
+
+export function useUploadGeofile() {
+  const invalidate = useInvalidateGeofiles();
+  return useMutation({
+    mutationFn: async (file: File): Promise<GeofileInfo> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      // Multipart: hand the FormData through untouched (the browser sets the boundary).
+      return unwrap(api.POST('/api/v1/geofiles', {
+        body: form as never,
+        bodySerializer: (b: unknown) => b as FormData,
+      }));
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateGeofile() {
+  const invalidate = useInvalidateGeofiles();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: GeofileUpdate }) =>
+      unwrap(api.PUT('/api/v1/geofiles/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useDeleteGeofile() {
+  const invalidate = useInvalidateGeofiles();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/geofiles/{id}', { params: { path: { id } } });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+/** Imperative fetch used by the OpenLayers geofile-layer loader (not a hook). */
+export async function fetchGeofileFeatureCollection(id: string, bbox: string): Promise<EntranceFeatureCollection> {
+  return unwrap(api.GET('/api/v1/map/geofiles/{id}/features', { params: { path: { id }, query: { bbox } } }));
 }
 
 function useInvalidateCaves() {

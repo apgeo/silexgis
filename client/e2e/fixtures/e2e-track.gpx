@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="silexgis-e2e" xmlns="http://www.topografix.com/GPX/1/1">
+  <wpt lat="45.612" lon="25.512"><name>E2E Spring</name><ele>780</ele></wpt>
+  <wpt lat="45.618" lon="25.518"><name>E2E Sink</name></wpt>
+  <trk>
+    <name>E2E Ridge Walk</name>
+    <trkseg>
+      <trkpt lat="45.610" lon="25.510"/>
+      <trkpt lat="45.614" lon="25.514"/>
+      <trkpt lat="45.618" lon="25.518"/>
+    </trkseg>
+  </trk>
+</gpx>

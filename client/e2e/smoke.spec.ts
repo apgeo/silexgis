@@ -126,3 +126,38 @@ test('surface feature draw, attributes, selection and table round-trip', async (
   await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(featureName)).not.toBeVisible();
 });
+
+test('geofile upload, background import, map layer, export and delete', async ({ page }) => {
+  await login(page);
+
+  // Upload a GPX through the drag&drop zone; the import runs as a background job
+  // and the table polls until it settles.
+  await page.goto('/geodata');
+  await page.locator('input[type=file]').setInputFiles('e2e/fixtures/e2e-track.gpx');
+  const row = page.getByRole('row', { name: /e2e-track/ });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await expect(row.getByText('Imported')).toBeVisible({ timeout: 30_000 });
+  await expect(row.getByText('3', { exact: true })).toBeVisible(); // 2 waypoints + 1 track
+
+  // Re-export of the imported rows downloads a real file.
+  const downloadPromise = page.waitForEvent('download');
+  await row.getByRole('button', { name: 'download' }).click();
+  await page.getByRole('menuitem', { name: 'GEOJSON' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.geojson$/);
+
+  // Show on map: the workspace opens with the geofile overlay toggled on.
+  const featuresLoaded = page.waitForResponse((r) => r.url().includes('/features?bbox=') && r.ok());
+  await row.getByRole('button', { name: 'aim' }).click();
+  await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('checkbox', { name: 'e2e-track' })).toBeChecked();
+  await featuresLoaded;
+
+  // Cleanup: delete the geofile (imported rows cascade).
+  await page.goto('/geodata');
+  const rowAgain = page.getByRole('row', { name: /e2e-track/ });
+  await rowAgain.getByRole('button', { name: 'delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('e2e-track')).not.toBeVisible();
+});

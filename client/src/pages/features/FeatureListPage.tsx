@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { AimOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
-import { App, Button, Flex, Input, Popconfirm, Select, Table, Tag, Tooltip, Typography } from 'antd';
+import { AimOutlined, DeleteOutlined, DownloadOutlined, EditOutlined } from '@ant-design/icons';
+import { App, Button, Dropdown, Flex, Input, Popconfirm, Select, Table, Tag, Tooltip, Typography } from 'antd';
 import type { TablePaginationConfig } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { downloadFile } from '../../api/download.ts';
 import {
   useDeleteSurfaceFeature,
   useFeatureTypes,
@@ -19,6 +20,8 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
+
+const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
 
 export default function FeatureListPage() {
   const { t, i18n } = useTranslation();
@@ -84,12 +87,37 @@ export default function FeatureListPage() {
     setParams((p) => ({ ...p, page: pagination.current, pageSize: pagination.pageSize }));
   };
 
+  // Exports honor the current filters (not the current page — the server streams all rows).
+  const onExport = (format: string) => {
+    const query = new URLSearchParams({ format });
+    if (search) {
+      query.set('search', search);
+    }
+    if (params.featureTypeId !== undefined) {
+      query.set('featureTypeId', String(params.featureTypeId));
+    }
+    downloadFile(`/api/v1/export/surface-features?${query}`).catch(() =>
+      message.error(t('common.saveFailed')),
+    );
+  };
+
   return (
     <div style={{ padding: 24 }}>
       <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('features.title')}
         </Typography.Title>
+        <Dropdown
+          menu={{
+            items: exportFormats.map((format) => ({
+              key: format,
+              label: format.toUpperCase(),
+              onClick: () => onExport(format),
+            })),
+          }}
+        >
+          <Button icon={<DownloadOutlined />}>{t('common.export')}</Button>
+        </Dropdown>
       </Flex>
       <Flex gap={8} style={{ marginBottom: 12 }}>
         <Input.Search

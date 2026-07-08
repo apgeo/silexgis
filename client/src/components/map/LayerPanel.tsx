@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Checkbox, Divider, Radio, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import type { MapLayerInfo } from '../../api/hooks.ts';
+import type { GeofileInfo, MapLayerInfo } from '../../api/hooks.ts';
 
 interface LayerPanelProps {
   layers: MapLayerInfo[];
@@ -11,6 +11,9 @@ interface LayerPanelProps {
   onEntrancesVisibleChange: (visible: boolean) => void;
   surfaceFeaturesVisible: boolean;
   onSurfaceFeaturesVisibleChange: (visible: boolean) => void;
+  geofiles: GeofileInfo[];
+  visibleGeofileIds: string[];
+  onGeofileVisibleChange: (id: string, visible: boolean) => void;
 }
 
 export default function LayerPanel({
@@ -21,6 +24,9 @@ export default function LayerPanel({
   onEntrancesVisibleChange,
   surfaceFeaturesVisible,
   onSurfaceFeaturesVisibleChange,
+  geofiles,
+  visibleGeofileIds,
+  onGeofileVisibleChange,
 }: LayerPanelProps) {
   const { t } = useTranslation();
 
@@ -46,6 +52,23 @@ export default function LayerPanel({
           {t('map.surfaceFeatures')}
         </Checkbox>
       </div>
+      {geofiles.length > 0 && (
+        <>
+          <Divider style={{ margin: '12px 0' }} />
+          <Typography.Text strong>{t('map.geofiles')}</Typography.Text>
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {geofiles.map((geofile) => (
+              <Checkbox
+                key={geofile.id}
+                checked={visibleGeofileIds.includes(geofile.id)}
+                onChange={(e) => onGeofileVisibleChange(geofile.id, e.target.checked)}
+              >
+                {geofile.name}
+              </Checkbox>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

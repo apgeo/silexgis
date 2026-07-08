@@ -5,7 +5,8 @@
   "nav": {
     "map": "Map",
     "caves": "Caves",
-    "features": "Surface features"
+    "features": "Surface features",
+    "geodata": "Geodata"
   },
   "auth": {
     "email": "Email",
@@ -23,7 +24,8 @@
     "cancel": "Cancel",
     "saved": "Saved.",
     "saveFailed": "The operation failed. Please try again.",
-    "deleted": "Deleted."
+    "deleted": "Deleted.",
+    "export": "Export"
   },
   "map": {
     "baseLayers": "Base layers",
@@ -36,7 +38,8 @@
     "openCave": "Open cave",
     "approximate": "Approximate location — exact coordinates are protected.",
     "noSelection": "Click a feature on the map to see details.",
-    "surfaceFeatures": "Surface features"
+    "surfaceFeatures": "Surface features",
+    "geofiles": "Imported files"
   },
   "caves": {
     "title": "Caves",
@@ -150,6 +153,27 @@
       "Point": "Point",
       "LineString": "Line",
       "Polygon": "Polygon"
+    }
+  },
+  "geodata": {
+    "title": "Geodata",
+    "name": "Name",
+    "format": "Format",
+    "status": "Status",
+    "features": "Features",
+    "edit": "Edit geofile",
+    "deleteConfirm": "Delete this geofile and its imported features?",
+    "showOnMap": "Show on map",
+    "searchPlaceholder": "Search by name…",
+    "uploadPrompt": "Click or drag vector files here to upload",
+    "uploadHint": "GPX, KML, GeoJSON, zipped shapefile, WKT — imported in the background.",
+    "uploadQueued": "{{name}} uploaded — import queued.",
+    "uploadFailed": "Upload failed. Check the file format and try again.",
+    "statusValues": {
+      "uploaded": "Queued",
+      "importing": "Importing…",
+      "imported": "Imported",
+      "failed": "Failed"
     }
   },
   "mapEdit": {

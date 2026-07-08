@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-import { useFeatureTypes, useMapLayers, useMe } from '../api/hooks.ts';
+import { useFeatureTypes, useGeofiles, useMapLayers, useMe } from '../api/hooks.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
 import LayerPanel from '../components/map/LayerPanel.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
@@ -15,6 +15,7 @@ import {
   setFeatureTypeSymbols,
   setSelectedSurfaceFeature,
 } from '../map/featureLayer.ts';
+import { attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
 import { attachHoverTooltip } from '../map/hoverTooltip.ts';
 import { getWorkspaceMap } from '../map/mapContext.ts';
 import { MapEditController } from '../map/mapEdit.ts';
@@ -34,6 +35,13 @@ export default function MapPage() {
   const [editController, setEditController] = useState<MapEditController | null>(null);
   const selection = useWorkspaceStore((s) => s.selection);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
+  const visibleGeofileIds = useWorkspaceStore((s) => s.visibleGeofileIds);
+  const setGeofileVisible = useWorkspaceStore((s) => s.setGeofileVisible);
+  const { data: geofilePage } = useGeofiles({ pageSize: 100 });
+  const importedGeofiles = useMemo(
+    () => (geofilePage?.items ?? []).filter((g) => g.importStatus === 'imported'),
+    [geofilePage],
+  );
   const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
 
   useEffect(() => {
@@ -51,6 +59,7 @@ export default function MapPage() {
 
     const detachLoader = attachEntranceLoader(map);
     const detachFeatureLoader = attachSurfaceFeatureLoader(map);
+    const detachGeofileLoader = attachGeofileLoader(map);
     const detachSelection = attachSelection(map, setSelection);
     const detachHover = attachHoverTooltip(map);
     const controller = new MapEditController(map);
@@ -60,11 +69,17 @@ export default function MapPage() {
       setEditController(null);
       detachLoader();
       detachFeatureLoader();
+      detachGeofileLoader();
       detachSelection();
       detachHover();
       map.setTarget(undefined);
     };
   }, [setSelection]);
+
+  // Geofile overlays follow the workspace selection of visible geofiles.
+  useEffect(() => {
+    syncGeofileLayers(getWorkspaceMap(), importedGeofiles, new Set(visibleGeofileIds));
+  }, [importedGeofiles, visibleGeofileIds]);
 
   // Highlight follows the workspace selection (also when set from the features table).
   useEffect(() => {
@@ -123,6 +138,9 @@ export default function MapPage() {
           onEntrancesVisibleChange={setEntrancesVisible}
           surfaceFeaturesVisible={surfaceFeaturesVisible}
           onSurfaceFeaturesVisibleChange={setSurfaceFeaturesVisible}
+          geofiles={importedGeofiles}
+          visibleGeofileIds={visibleGeofileIds}
+          onGeofileVisibleChange={setGeofileVisible}
         />
       </Panel>
       <Separator className="map-workspace-handle" />

@@ -5,7 +5,8 @@
   "nav": {
     "map": "Hartă",
     "caves": "Peșteri",
-    "features": "Fenomene de suprafață"
+    "features": "Fenomene de suprafață",
+    "geodata": "Geodate"
   },
   "auth": {
     "email": "Email",
@@ -23,7 +24,8 @@
     "cancel": "Anulează",
     "saved": "Salvat.",
     "saveFailed": "Operația a eșuat. Încercați din nou.",
-    "deleted": "Șters."
+    "deleted": "Șters.",
+    "export": "Exportă"
   },
   "map": {
     "baseLayers": "Hărți de bază",
@@ -36,7 +38,8 @@
     "openCave": "Deschide peștera",
     "approximate": "Locație aproximativă — coordonatele exacte sunt protejate.",
     "noSelection": "Apăsați pe un element de pe hartă pentru detalii.",
-    "surfaceFeatures": "Fenomene de suprafață"
+    "surfaceFeatures": "Fenomene de suprafață",
+    "geofiles": "Fișiere importate"
   },
   "caves": {
     "title": "Peșteri",
@@ -150,6 +153,27 @@
       "Point": "Punct",
       "LineString": "Linie",
       "Polygon": "Poligon"
+    }
+  },
+  "geodata": {
+    "title": "Geodate",
+    "name": "Denumire",
+    "format": "Format",
+    "status": "Stare",
+    "features": "Elemente",
+    "edit": "Editare fișier geo",
+    "deleteConfirm": "Ștergeți acest fișier geo și elementele importate?",
+    "showOnMap": "Arată pe hartă",
+    "searchPlaceholder": "Caută după denumire…",
+    "uploadPrompt": "Apăsați sau trageți fișiere vectoriale aici pentru încărcare",
+    "uploadHint": "GPX, KML, GeoJSON, shapefile arhivat (zip), WKT — importate în fundal.",
+    "uploadQueued": "{{name}} încărcat — importul a fost programat.",
+    "uploadFailed": "Încărcarea a eșuat. Verificați formatul fișierului și încercați din nou.",
+    "statusValues": {
+      "uploaded": "În așteptare",
+      "importing": "Se importă…",
+      "imported": "Importat",
+      "failed": "Eșuat"
     }
   },
   "mapEdit": {

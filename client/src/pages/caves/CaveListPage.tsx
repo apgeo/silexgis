@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { PlusOutlined } from '@ant-design/icons';
-import { Button, Flex, Input, Select, Table, Tag, Typography } from 'antd';
+import { DownloadOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Button, Dropdown, Flex, Input, Select, Table, Tag, Typography } from 'antd';
 import type { TablePaginationConfig } from 'antd';
 import type { SorterResult } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { downloadFile } from '../../api/download.ts';
 import { useCaveTypes, useCaves, useMe, type CaveListItem, type CaveListParams } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+
+const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
 
 const sortableFields: Record<string, string> = {
   name: 'name',
@@ -20,6 +23,7 @@ const sortableFields: Record<string, string> = {
 export default function CaveListPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { message } = App.useApp();
   const [params, setParams] = useState<CaveListParams>({ page: 1, pageSize: 20 });
   const [searchInput, setSearchInput] = useState('');
   const search = useDebouncedValue(searchInput);
@@ -29,6 +33,18 @@ export default function CaveListPage() {
 
   const canCreate = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
   const typeName = (id: number) => caveTypes?.find((x) => x.id === id)?.name ?? '';
+
+  // Exports honor the current filters (not the current page — the server streams all rows).
+  const onExport = (format: string) => {
+    const query = new URLSearchParams({ format });
+    if (search) {
+      query.set('search', search);
+    }
+    if (params.caveTypeId !== undefined) {
+      query.set('caveTypeId', String(params.caveTypeId));
+    }
+    downloadFile(`/api/v1/export/caves?${query}`).catch(() => message.error(t('common.saveFailed')));
+  };
 
   const onTableChange = (
     pagination: TablePaginationConfig,
@@ -47,11 +63,24 @@ export default function CaveListPage() {
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('caves.title')}
         </Typography.Title>
-        {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/caves/new')}>
-            {t('caves.newCave')}
-          </Button>
-        )}
+        <Flex gap={8}>
+          <Dropdown
+            menu={{
+              items: exportFormats.map((format) => ({
+                key: format,
+                label: format.toUpperCase(),
+                onClick: () => onExport(format),
+              })),
+            }}
+          >
+            <Button icon={<DownloadOutlined />}>{t('common.export')}</Button>
+          </Dropdown>
+          {canCreate && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/caves/new')}>
+              {t('caves.newCave')}
+            </Button>
+          )}
+        </Flex>
       </Flex>
       <Flex gap={8} style={{ marginBottom: 12 }}>
         <Input.Search
