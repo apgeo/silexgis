@@ -26,6 +26,7 @@ public static class DependencyInjection
         services.AddSingleton<ICurrentUser, AnonymousCurrentUser>();
         services.AddSingleton<TimestampInterceptor>();
         services.AddSingleton<AuditInterceptor>();
+        services.AddSingleton<UserIdTransactionInterceptor>();
 
         services.AddDbContext<SilexGisDbContext>((sp, options) => options
             .UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite())
@@ -33,7 +34,8 @@ public static class DependencyInjection
             .UseOpenIddict()
             .AddInterceptors(
                 sp.GetRequiredService<TimestampInterceptor>(),
-                sp.GetRequiredService<AuditInterceptor>()));
+                sp.GetRequiredService<AuditInterceptor>(),
+                sp.GetRequiredService<UserIdTransactionInterceptor>()));
 
         return services;
     }

@@ -19,7 +19,7 @@ public static class ConnectEndpoints
     public static IEndpointRouteBuilder MapConnectEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapMethods("/connect/authorize", [HttpMethods.Get, HttpMethods.Post], AuthorizeAsync);
-        app.MapPost("/connect/token", ExchangeAsync);
+        app.MapPost("/connect/token", ExchangeAsync).RequireRateLimiting("auth");
         app.MapGet("/connect/userinfo", UserInfoAsync).RequireAuthorization();
         app.MapMethods("/connect/logout", [HttpMethods.Get, HttpMethods.Post], LogoutAsync);
         return app;

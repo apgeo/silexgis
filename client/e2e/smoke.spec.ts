@@ -198,23 +198,27 @@ test('georeferenced raster upload, COG processing, map overlay and delete', asyn
   await page.goto('/geodata');
   await page.getByRole('tab', { name: 'Raster maps' }).click();
   await page.locator('input[type=file][accept=".tif,.tiff"]').setInputFiles('e2e/fixtures/e2e-map.tif');
-  const row = page.getByRole('row', { name: /e2e-map/ });
+  // Newest first (the table sorts by update time) — robust to leftovers from aborted runs.
+  const row = page.getByRole('row', { name: /e2e-map/ }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
   await expect(row.getByText('Ready')).toBeVisible({ timeout: 30_000 });
 
   // Show on map: the overlay appears in the layer panel with its opacity slider.
   await row.getByRole('button', { name: 'aim' }).click();
   await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole('checkbox', { name: 'e2e-map' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'e2e-map' }).first()).toBeChecked();
   await expect(page.locator('.ant-slider')).toBeVisible();
 
-  // Cleanup.
+  // Cleanup: remove every e2e raster (earlier aborted runs may have left extras).
   await page.goto('/geodata');
   await page.getByRole('tab', { name: 'Raster maps' }).click();
-  const rowAgain = page.getByRole('row', { name: /e2e-map/ });
-  await rowAgain.getByRole('button', { name: 'delete' }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
-  await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
+  const rows = page.getByRole('row', { name: /e2e-map/ });
+  await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+  for (let remaining = await rows.count(); remaining > 0; remaining--) {
+    await rows.first().getByRole('button', { name: 'delete' }).click();
+    await page.getByRole('button', { name: 'OK' }).click();
+    await expect(rows).toHaveCount(remaining - 1, { timeout: 15_000 });
+  }
 });
 
 test('geofile upload, background import, map layer, export and delete', async ({ page }) => {

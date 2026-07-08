@@ -81,6 +81,23 @@ try
     builder.Services.AddOptions<AccessOptions>()
         .BindConfiguration(AccessOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
+    // Credential-guessing protection: per-IP fixed window on the auth surface.
+    // Limit is configurable for installations behind shared NATs.
+    var authPermitLimit = builder.Configuration.GetValue("Auth:RateLimitPerMinute", 60);
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        options.AddPolicy("auth", context =>
+            System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = authPermitLimit,
+                    QueueLimit = 0,
+                }));
+    });
+
     builder.Services.AddScoped<AclPermissionService>();
     builder.Services.AddScoped<IPermissionService>(sp => sp.GetRequiredService<AclPermissionService>());
     builder.Services.AddValidatorsFromAssemblyContaining<Program>();
@@ -104,6 +121,7 @@ try
 
     app.UseAuthentication();
     app.UseAuthorization();
+    app.UseRateLimiter();
 
     app.MapOpenApi(); // /openapi/v1.json — the contract the TS client is generated from.
 
@@ -119,6 +137,7 @@ try
     api.MapAboutEndpoints();
     api.MapAuthEndpoints();
     api.MapMeEndpoints();
+    api.MapMfaEndpoints();
     api.MapTaxonomyEndpoints();
     api.MapMapLayerEndpoints();
     api.MapCaveEndpoints();

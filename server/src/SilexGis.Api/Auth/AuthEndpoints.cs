@@ -14,7 +14,7 @@ public static class AuthEndpoints
 {
     public static RouteGroupBuilder MapAuthEndpoints(this RouteGroupBuilder api)
     {
-        var auth = api.MapGroup("/auth").WithTags("Auth").AllowAnonymous();
+        var auth = api.MapGroup("/auth").WithTags("Auth").AllowAnonymous().RequireRateLimiting("auth");
 
         auth.MapPost("/login", LoginAsync)
             .WithSummary("Signs in with email + password, establishing the cookie session used by the OIDC authorize flow.");
@@ -43,6 +43,28 @@ public static class AuthEndpoints
         if (result.IsLockedOut)
         {
             return AuthProblem(StatusCodes.Status401Unauthorized, "auth.locked_out", "Account temporarily locked after repeated failures.");
+        }
+
+        if (result.RequiresTwoFactor)
+        {
+            // Password was correct; the SPA must resubmit with the authenticator code
+            // (or a recovery code prefixed "recovery:"). Stable code drives that UI.
+            if (string.IsNullOrWhiteSpace(request.TwoFactorCode))
+            {
+                return AuthProblem(StatusCodes.Status401Unauthorized, "auth.mfa_required", "A two-factor code is required.");
+            }
+
+            var code = request.TwoFactorCode.Trim();
+            var mfaResult = code.StartsWith("recovery:", StringComparison.OrdinalIgnoreCase)
+                ? await signInManager.TwoFactorRecoveryCodeSignInAsync(code["recovery:".Length..].Replace(" ", string.Empty))
+                : await signInManager.TwoFactorAuthenticatorSignInAsync(
+                    code.Replace(" ", string.Empty), isPersistent: true, rememberClient: false);
+            if (!mfaResult.Succeeded)
+            {
+                return AuthProblem(StatusCodes.Status401Unauthorized, "auth.mfa_invalid", "The two-factor code is not valid.");
+            }
+
+            return TypedResults.Ok(new SessionDto(user.Id, user.Email!, user.DisplayName));
         }
 
         if (!result.Succeeded)
@@ -132,7 +154,7 @@ public static class AuthEndpoints
             });
 }
 
-public sealed record LoginRequest(string Email, string Password);
+public sealed record LoginRequest(string Email, string Password, string? TwoFactorCode = null);
 
 public sealed record RegisterRequest(string Email, string Password, string? DisplayName);
 
