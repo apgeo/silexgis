@@ -26,6 +26,7 @@ export const queryKeys = {
   surfaceFeatures: (params: SurfaceFeatureListParams) => ['surface-features', 'list', params] as const,
   surfaceFeature: (id: string) => ['surface-features', 'detail', id] as const,
   geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
+  attachments: (entityType: string, entityId: string) => ['attachments', entityType, entityId] as const,
 };
 
 async function unwrap<T>(
@@ -294,6 +295,69 @@ export function useDeleteGeofile() {
 /** Imperative fetch used by the OpenLayers geofile-layer loader (not a hook). */
 export async function fetchGeofileFeatureCollection(id: string, bbox: string): Promise<EntranceFeatureCollection> {
   return unwrap(api.GET('/api/v1/map/geofiles/{id}/features', { params: { path: { id }, query: { bbox } } }));
+}
+
+export type FileInfo = components['schemas']['FileDto'];
+export type AttachmentInfo = components['schemas']['AttachmentDto'];
+export type AttachedEntityType = AttachmentInfo['entityType'];
+export type AttachmentRole = AttachmentInfo['role'];
+
+export function useAttachments(entityType: AttachedEntityType, entityId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.attachments(entityType, entityId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/attachments', { params: { query: { entityType, entityId: entityId! } } })),
+    enabled: !!entityId,
+    // Delivery URLs embed 10-minute tokens; refresh the list before they lapse.
+    staleTime: 5 * 60_000,
+    refetchInterval: 8 * 60_000,
+  });
+}
+
+function useInvalidateAttachments() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: ['attachments'] });
+}
+
+export function useUploadFile() {
+  return useMutation({
+    mutationFn: async (file: File): Promise<FileInfo> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      return unwrap(api.POST('/api/v1/files', {
+        body: form as never,
+        bodySerializer: (b: unknown) => b as FormData,
+      }));
+    },
+  });
+}
+
+export function useCreateAttachment() {
+  const invalidate = useInvalidateAttachments();
+  return useMutation({
+    mutationFn: (body: {
+      fileId: string;
+      entityType: AttachedEntityType;
+      entityId: string;
+      role: AttachmentRole;
+      caption: string | null;
+      sortOrder: number;
+    }) => unwrap(api.POST('/api/v1/attachments', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useDeleteAttachment() {
+  const invalidate = useInvalidateAttachments();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/attachments/{id}', { params: { path: { id } } });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
 }
 
 function useInvalidateCaves() {

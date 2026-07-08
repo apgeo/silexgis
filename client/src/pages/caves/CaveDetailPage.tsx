@@ -11,10 +11,12 @@ import {
   useDeleteEntrance,
   useEntranceTypes,
   useEntrances,
+  useMe,
   useRockTypes,
   type Entrance,
 } from '../../api/hooks.ts';
 import { formatLonLat } from '../../geo/coords.ts';
+import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import EntranceEditorModal from './EntranceEditorModal.tsx';
 
 export default function CaveDetailPage() {
@@ -30,6 +32,8 @@ export default function CaveDetailPage() {
   const { data: entranceTypes } = useEntranceTypes();
   const deleteCave = useDeleteCave();
   const deleteEntrance = useDeleteEntrance(id ?? '');
+  const { data: me } = useMe();
+  const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingEntrance, setEditingEntrance] = useState<Entrance | null>(null);
@@ -181,6 +185,8 @@ export default function CaveDetailPage() {
           ]}
         />
       </Card>
+
+      {id && <AttachmentSection entityType="cave" entityId={id} canEdit={canEdit} />}
 
       {id && (
         <EntranceEditorModal

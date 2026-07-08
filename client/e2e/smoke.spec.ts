@@ -127,6 +127,34 @@ test('surface feature draw, attributes, selection and table round-trip', async (
   await expect(page.getByText(featureName)).not.toBeVisible();
 });
 
+test('cave photo attachment round-trip', async ({ page }) => {
+  await login(page);
+
+  // Any visible demo cave works; the gallery lives on the detail page.
+  await page.goto('/caves');
+  await page.getByText('Peștera Demo Mare').click();
+  await expect(page.getByText('Photos & documents')).toBeVisible({ timeout: 15_000 });
+
+  // Upload a photo through the attachment drop zone (scoped to the gallery card).
+  const gallery = page.locator('.ant-card', { hasText: 'Photos & documents' });
+  await gallery.locator('input[type=file]').setInputFiles('e2e/fixtures/e2e-photo.png');
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+
+  // The gallery renders the thumbnail through the token-authenticated URL.
+  const photo = page.locator('.ant-image img[src*="/thumbnail"]').first();
+  await expect(photo).toBeVisible({ timeout: 15_000 });
+  await expect(photo).toHaveJSProperty('naturalWidth', 4); // decoded, not a broken image
+
+  // Cleanup: remove every e2e photo (earlier aborted runs may have left extras).
+  const figures = page.locator('figure').filter({ hasText: 'e2e-photo' });
+  for (let remaining = await figures.count(); remaining > 0; remaining--) {
+    await figures.first().getByRole('button', { name: 'delete' }).click();
+    await page.getByRole('button', { name: 'OK' }).click();
+    await expect(figures).toHaveCount(remaining - 1, { timeout: 15_000 });
+  }
+  await expect(page.getByText('e2e-photo.png')).not.toBeVisible();
+});
+
 test('geofile upload, background import, map layer, export and delete', async ({ page }) => {
   await login(page);
 

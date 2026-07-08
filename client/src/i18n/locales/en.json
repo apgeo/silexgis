@@ -155,6 +155,14 @@
       "Polygon": "Polygon"
     }
   },
+  "attachments": {
+    "title": "Photos & documents",
+    "photos": "Photos",
+    "documents": "Documents",
+    "uploadPrompt": "Click or drag photos and documents here to attach them",
+    "deleteConfirm": "Remove this attachment? The file stays available to its uploader.",
+    "empty": "No photos or documents yet."
+  },
   "geodata": {
     "title": "Geodata",
     "name": "Name",
