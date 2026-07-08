@@ -149,6 +149,7 @@ public static class EntranceEndpoints
     private static async Task<Results<Ok<EntranceDto>, ProblemHttpResult>> UpdateAsync(
         Guid id,
         EntranceWriteRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
@@ -168,6 +169,11 @@ public static class EntranceEndpoints
             return ApiProblems.Forbidden();
         }
 
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.CaveEntrances, entrance.Id, ct) is { } stale)
+        {
+            return stale;
+        }
+
         Apply(request, entrance);
         entrance.Geom = request.Geom.ToPoint();
 
@@ -178,6 +184,7 @@ public static class EntranceEndpoints
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
@@ -194,6 +201,11 @@ public static class EntranceEndpoints
         if (!await permissions.CanAsync(user, cave, ObjectPermission.Write, ct))
         {
             return ApiProblems.Forbidden();
+        }
+
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.CaveEntrances, entrance.Id, ct) is { } stale)
+        {
+            return stale;
         }
 
         db.CaveEntrances.Remove(entrance);

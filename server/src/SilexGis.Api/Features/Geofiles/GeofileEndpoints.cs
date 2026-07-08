@@ -175,6 +175,7 @@ public static class GeofileEndpoints
     private static async Task<Results<Ok<GeofileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
         Guid id,
         GeofileUpdateRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
@@ -192,6 +193,11 @@ public static class GeofileEndpoints
             return await permissions.CanAsync(user, geofile, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("geofile.not_found");
+        }
+
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Geofiles, geofile.Id, ct) is { } stale)
+        {
+            return stale;
         }
 
         if (request.TeamId is not null && !user.IsAdmin && !user.IsMemberOf(request.TeamId.Value))

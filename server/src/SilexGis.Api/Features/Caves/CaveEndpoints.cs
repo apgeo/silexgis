@@ -102,6 +102,7 @@ public static class CaveEndpoints
 
     private static async Task<Results<Ok<CaveDto>, ProblemHttpResult>> GetAsync(
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
@@ -126,6 +127,7 @@ public static class CaveEndpoints
             && await permissions.CanAsync(user, cave, ObjectPermission.ViewExactLocation, ct)
             ? new HashSet<Guid> { cave.Id }
             : null;
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.Caves, cave.Id, ct);
         return TypedResults.Ok(cave.ToDto(user, access.Value.LocationGridMeters, exactGrants));
     }
 
@@ -164,6 +166,7 @@ public static class CaveEndpoints
     private static async Task<Results<Ok<CaveDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
         Guid id,
         CaveWriteRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
@@ -184,6 +187,11 @@ public static class CaveEndpoints
                 : ApiProblems.NotFound("cave.not_found");
         }
 
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Caves, cave.Id, ct) is { } stale)
+        {
+            return stale;
+        }
+
         if (request.TeamId != cave.TeamId && !await TeamBindingAllowedAsync(db, user, request.TeamId, ct))
         {
             return ApiProblems.Forbidden("cave.team_membership_required");
@@ -191,11 +199,13 @@ public static class CaveEndpoints
 
         request.Apply(cave);
         await db.SaveChangesAsync(ct);
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.Caves, cave.Id, ct);
         return TypedResults.Ok(cave.ToDto(user, access.Value.LocationGridMeters));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
@@ -213,6 +223,11 @@ public static class CaveEndpoints
             return await permissions.CanAsync(user, cave, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("cave.not_found");
+        }
+
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Caves, cave.Id, ct) is { } stale)
+        {
+            return stale;
         }
 
         cave.DeletedAt = DateTimeOffset.UtcNow;

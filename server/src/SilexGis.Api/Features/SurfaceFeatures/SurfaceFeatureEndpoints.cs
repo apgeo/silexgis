@@ -105,6 +105,7 @@ public static class SurfaceFeatureEndpoints
 
     private static async Task<Results<Ok<SurfaceFeatureDto>, ProblemHttpResult>> GetAsync(
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
@@ -119,6 +120,7 @@ public static class SurfaceFeatureEndpoints
         }
 
         var redact = await CaveLinkRedaction.ShouldRedactAsync(db, user, feature.CaveId, ct);
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.SurfaceFeatures, feature.Id, ct);
         return TypedResults.Ok(feature.ToDto(redactCaveLink: redact));
     }
 
@@ -161,6 +163,7 @@ public static class SurfaceFeatureEndpoints
     private static async Task<Results<Ok<SurfaceFeatureDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
         Guid id,
         SurfaceFeatureWriteRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
@@ -180,6 +183,11 @@ public static class SurfaceFeatureEndpoints
                 : ApiProblems.NotFound("surface_feature.not_found");
         }
 
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.SurfaceFeatures, feature.Id, ct) is { } stale)
+        {
+            return stale;
+        }
+
         var validation = await ValidateReferencesAsync(db, permissions, user, request, ct);
         if (validation is not null)
         {
@@ -188,12 +196,14 @@ public static class SurfaceFeatureEndpoints
 
         request.Apply(feature, request.Geometry.ToGeometryOrNull()!);
         await db.SaveChangesAsync(ct);
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.SurfaceFeatures, feature.Id, ct);
         var redact = await CaveLinkRedaction.ShouldRedactAsync(db, user, feature.CaveId, ct);
         return TypedResults.Ok(feature.ToDto(redactCaveLink: redact));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
@@ -211,6 +221,11 @@ public static class SurfaceFeatureEndpoints
             return await permissions.CanAsync(user, feature, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("surface_feature.not_found");
+        }
+
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.SurfaceFeatures, feature.Id, ct) is { } stale)
+        {
+            return stale;
         }
 
         // Polymorphic attachment rows have no FK to the feature — clean them up in the

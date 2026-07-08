@@ -225,6 +225,7 @@ public static class GeoreferencedMapEndpoints
     private static async Task<Results<Ok<GeoreferencedMapDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
         Guid id,
         GeoreferencedMapUpdateRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
         IPermissionService permissions,
@@ -243,6 +244,11 @@ public static class GeoreferencedMapEndpoints
             return await permissions.CanAsync(user, map, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("georeferenced_map.not_found");
+        }
+
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.GeoreferencedMaps, map.Id, ct) is { } stale)
+        {
+            return stale;
         }
 
         if (request.TeamId is not null && !user.IsAdmin && !user.IsMemberOf(request.TeamId.Value))

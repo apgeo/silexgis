@@ -88,6 +88,7 @@ public static class TripLogEndpoints
 
     private static async Task<Results<Ok<TripLogDto>, ProblemHttpResult>> GetAsync(
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
@@ -101,6 +102,7 @@ public static class TripLogEndpoints
         }
 
         var items = await MapWithChildrenAsync(db, user!, [trip], ct);
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
         return TypedResults.Ok(items[0]);
     }
 
@@ -141,6 +143,7 @@ public static class TripLogEndpoints
     private static async Task<Results<Ok<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
         Guid id,
         TripLogWriteRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
@@ -158,6 +161,11 @@ public static class TripLogEndpoints
             return await permissions.CanAsync(user, trip, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("trip_log.not_found");
+        }
+
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct) is { } stale)
+        {
+            return stale;
         }
 
         var problem = await ValidateReferencesAsync(db, permissions, user, request, ct);
@@ -178,6 +186,7 @@ public static class TripLogEndpoints
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
@@ -195,6 +204,11 @@ public static class TripLogEndpoints
             return await permissions.CanAsync(user, trip, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("trip_log.not_found");
+        }
+
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct) is { } stale)
+        {
+            return stale;
         }
 
         // Cave/participant links cascade; polymorphic rows are cleaned here.
