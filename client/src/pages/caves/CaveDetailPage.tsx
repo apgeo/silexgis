@@ -20,6 +20,7 @@ import AttachmentSection from '../../components/attachments/AttachmentSection.ts
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
 import EntranceEditorModal from './EntranceEditorModal.tsx';
+import SurveyModelSection from './SurveyModelSection.tsx';
 
 export default function CaveDetailPage() {
   const { t } = useTranslation();
@@ -199,6 +200,8 @@ export default function CaveDetailPage() {
           <TagChips entityType="cave" entityId={id} canEdit={canEdit} />
         </div>
       )}
+
+      {id && <SurveyModelSection caveId={id} canEdit={canEdit} />}
 
       {id && <AttachmentSection entityType="cave" entityId={id} canEdit={canEdit} />}
 

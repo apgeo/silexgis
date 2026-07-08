@@ -21,6 +21,7 @@ export const queryKeys = {
   caves: (params: CaveListParams) => ['caves', 'list', params] as const,
   cave: (id: string) => ['caves', 'detail', id] as const,
   entrances: (caveId: string) => ['entrances', caveId] as const,
+  surveyModels: (caveId: string) => ['survey-models', caveId] as const,
   caveSearch: (q: string) => ['cave-search', q] as const,
   nominatim: (q: string) => ['nominatim', q] as const,
   surfaceFeatures: (params: SurfaceFeatureListParams) => ['surface-features', 'list', params] as const,
@@ -123,6 +124,56 @@ export function useEntrances(caveId: string | undefined) {
     queryFn: () =>
       unwrap(api.GET('/api/v1/caves/{caveId}/entrances', { params: { path: { caveId: caveId! } } })),
     enabled: !!caveId,
+  });
+}
+
+export type SurveyModelInfo = components['schemas']['SurveyModelDto'];
+export type AuditEntry = components['schemas']['AuditEntryDto'];
+
+export function useSurveyModels(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.surveyModels(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{caveId}/survey-models', { params: { path: { caveId: caveId! } } })),
+    enabled: !!caveId,
+    // The signed model URLs live 10 minutes; refresh before they lapse mid-view.
+    staleTime: 5 * 60_000,
+    refetchInterval: 8 * 60_000,
+  });
+}
+
+function useInvalidateSurveyModels() {
+  const queryClient = useQueryClient();
+  return (caveId: string) =>
+    void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModels(caveId) });
+}
+
+export function useUploadSurveyModel() {
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: async ({ caveId, file }: { caveId: string; file: File }): Promise<SurveyModelInfo> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      return unwrap(api.POST('/api/v1/caves/{caveId}/survey-models', {
+        params: { path: { caveId } },
+        body: form as never,
+        bodySerializer: (b: unknown) => b as FormData,
+      }));
+    },
+    onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
+export function useDeleteSurveyModel() {
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; caveId: string }) => {
+      const { error, response } = await api.DELETE('/api/v1/survey-models/{id}', { params: { path: { id } } });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: (_, { caveId }) => invalidate(caveId),
   });
 }
 

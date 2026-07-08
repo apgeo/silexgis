@@ -4,10 +4,8 @@ import { Flex, Input, Table, Tag, Typography } from 'antd';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
-import type { components } from '../../api/schema';
+import type { AuditEntry } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
-
-type AuditEntry = components['schemas']['AuditEntryDto'];
 
 const actionColor: Record<string, string> = {
   created: 'green',

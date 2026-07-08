@@ -544,6 +544,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{caveId}/survey-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Survey models of a cave; withheld without the exact-location permission. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurveyModelDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Uploads a .lox/.3d survey model (Write on the cave). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        file: components["schemas"]["IFormFile"];
+                    };
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurveyModelDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-models/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Single survey model with a fresh file delivery URL. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurveyModelDto"];
+                    };
+                };
+            };
+        };
+        /** Metadata update (Write on the cave). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SurveyModelUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurveyModelDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes the survey model (Write on the cave); the stored file is kept. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/map/cave-entrances": {
         parameters: {
             query?: never;
@@ -3717,6 +3867,32 @@ export interface components {
             /** Format: uuid */
             teamId: null | string;
             visibility: components["schemas"]["Visibility"];
+        };
+        SurveyModelDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            caveId: string;
+            name: string;
+            format: components["schemas"]["SurveyModelFormat"];
+            /** Format: uuid */
+            fileId: string;
+            description: null | string;
+            /** Format: date */
+            surveyedAt: null | string;
+            modelUrl: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {unknown} */
+        SurveyModelFormat: "lox" | "survex3d";
+        SurveyModelUpdateRequest: {
+            name: string;
+            description: null | string;
+            /** Format: date */
+            surveyedAt: null | string;
         };
         TagDto: {
             /** Format: int64 */

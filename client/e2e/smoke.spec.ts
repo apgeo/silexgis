@@ -170,6 +170,60 @@ test('pop-out registry drives the main map across windows', async ({ page, conte
   await popup.close();
 });
 
+test('3D survey model: upload, embedded viewer and cross-window 3D panel', async ({ page, context }) => {
+  const caveName = `E2E 3D Cave ${Date.now()}`;
+  await login(page);
+
+  // Create a cave to hold the model.
+  await page.goto('/caves/new');
+  await page.getByLabel('Name', { exact: true }).fill(caveName);
+  await page.getByLabel('Type', { exact: true }).click();
+  await page.locator('.ant-select-item-option').first().click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
+
+  // Upload the committed Survex .3d fixture; the row appears with its format tag.
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: /Upload model/ }).click();
+  await (await fileChooserPromise).setFiles('e2e/fixtures/P8_Master.3d');
+  await expect(page.getByText('Survex .3d')).toBeVisible({ timeout: 15_000 });
+
+  // The embedded viewer parses the survey: the canvas mounts and the spinner clears
+  // only after CaveView fires its load-complete event.
+  await page.getByRole('button', { name: /View in 3D/ }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByTestId('caveview-container').locator('canvas').first())
+    .toBeAttached({ timeout: 30_000 });
+  await expect(dialog.getByTestId('caveview-loading')).toHaveCount(0, { timeout: 30_000 });
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+
+  // Multi-monitor scenario: a registry window and a 3D window, synced over the bus —
+  // picking the cave in one renders its model in the other.
+  const viewer = await context.newPage();
+  await viewer.goto('/panel/viewer3d');
+  await expect(viewer.getByText(/Select a cave with a 3D model/)).toBeVisible({ timeout: 20_000 });
+
+  const registry = await context.newPage();
+  await registry.goto('/panel/registry');
+  await registry.getByPlaceholder(/Search/).fill(caveName);
+  await registry.getByText(caveName).click();
+  await expect(viewer.getByTestId('caveview-container').locator('canvas').first())
+    .toBeAttached({ timeout: 30_000 });
+  await expect(viewer.getByTestId('caveview-loading')).toHaveCount(0, { timeout: 30_000 });
+  await registry.close();
+  await viewer.close();
+
+  // Clean up: delete the model, then the cave.
+  await page.locator('.ant-card', { hasText: '3D survey models' })
+    .getByRole('button', { name: 'delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('No 3D models yet')).toBeVisible({ timeout: 15_000 });
+  await page.locator('button', { hasText: 'Delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await page.waitForURL(/\/caves$/);
+});
+
 test('saved views: save, share anonymously, delete', async ({ page, browser, context }) => {
   const viewName = `E2E View ${Date.now()}`;
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -235,10 +289,15 @@ test('teams and per-object permission grants', async ({ page }) => {
   await modal.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
 
-  // Reopen: the grant persisted; then remove it (cleanup).
+  // Reopen: the grant persisted; then remove it — sweeping grants left behind by
+  // previously aborted runs too (they accumulate on the shared demo cave and make a
+  // bare "delete" click ambiguous).
   await page.getByRole('button', { name: /Permissions/ }).click();
   await expect(modal.getByText(teamName)).toBeVisible({ timeout: 15_000 });
-  await modal.getByRole('button', { name: 'delete' }).click();
+  const e2eGrantRows = modal.getByRole('row', { name: /E2E Team/ });
+  while ((await e2eGrantRows.count()) > 0) {
+    await e2eGrantRows.first().getByRole('button', { name: 'delete' }).click();
+  }
   await modal.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
 });

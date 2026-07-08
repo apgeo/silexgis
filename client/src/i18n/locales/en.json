@@ -319,6 +319,23 @@
   "panel": {
     "unknown": "Unknown panel.",
     "registryTitle": "Cave registry",
-    "popOut": "Pop out the registry into its own window"
+    "popOut": "Pop out the registry into its own window",
+    "popOut3d": "Open 3D viewer window",
+    "viewer3dTitle": "3D viewer",
+    "viewer3dEmpty": "Select a cave with a 3D model to display it here."
+  },
+  "caveview": {
+    "loadError": "Failed to load the 3D model"
+  },
+  "surveyModels": {
+    "title": "3D survey models",
+    "upload": "Upload model",
+    "uploaded": "Model uploaded",
+    "uploadFailed": "Upload failed",
+    "format": "Format",
+    "surveyedAt": "Surveyed",
+    "view": "View in 3D",
+    "deleteConfirm": "Delete this survey model?",
+    "empty": "No 3D models yet"
   }
 }

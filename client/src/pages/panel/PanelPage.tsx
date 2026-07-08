@@ -1,31 +1,89 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Flex, Input, Table, Typography } from 'antd';
 import type { TablePaginationConfig } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
-import { useCaves, type CaveListItem, type CaveListParams } from '../../api/hooks.ts';
+import {
+  useCave,
+  useCaves,
+  useSurveyModels,
+  type CaveListItem,
+  type CaveListParams,
+} from '../../api/hooks.ts';
+import CaveViewPanel from '../../components/caveview/CaveViewPanel.tsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
-import { publish } from '../../workspace/workspaceBus.ts';
+import { publish, subscribe } from '../../workspace/workspaceBus.ts';
 
 /**
  * A single panel rendered chrome-less for pop-out windows (multi-monitor work).
  * Interactions publish references over the workspace bus; the main window's map
- * reacts. Currently one panel exists: the cave registry.
+ * reacts. Panels: the cave registry and the 3D survey viewer.
  */
 export default function PanelPage() {
   const { t } = useTranslation();
   const { panelId } = useParams<{ panelId: string }>();
 
-  if (panelId !== 'registry') {
-    return (
-      <Flex align="center" justify="center" style={{ height: '100vh' }}>
-        <Typography.Text type="secondary">{t('panel.unknown')}</Typography.Text>
-      </Flex>
-    );
+  switch (panelId) {
+    case 'registry':
+      return <RegistryPanel />;
+    case 'viewer3d':
+      return <Viewer3dPanel />;
+    default:
+      return (
+        <Flex align="center" justify="center" style={{ height: '100vh' }}>
+          <Typography.Text type="secondary">{t('panel.unknown')}</Typography.Text>
+        </Flex>
+      );
   }
+}
 
-  return <RegistryPanel />;
+/**
+ * Follows cave selections published on the workspace bus (registry pop-out, map click)
+ * and renders the selected cave's first 3D survey model — the multi-monitor scenario:
+ * map in one window, synced 3D in another.
+ */
+function Viewer3dPanel() {
+  const { t } = useTranslation();
+  const [caveId, setCaveId] = useState<string | null>(null);
+
+  useEffect(
+    () =>
+      subscribe((event) => {
+        if (
+          event.kind === 'selection' &&
+          (event.selection?.kind === 'cave' || event.selection?.kind === 'entrance')
+        ) {
+          setCaveId(event.selection.caveId);
+        }
+      }),
+    [],
+  );
+
+  const { data: cave } = useCave(caveId ?? undefined);
+  const { data: models } = useSurveyModels(caveId ?? undefined);
+  const model = models?.[0];
+
+  return (
+    <Flex vertical style={{ height: '100vh', padding: 12 }} gap={8}>
+      <Typography.Title level={5} style={{ margin: 0 }}>
+        {cave ? `${t('panel.viewer3dTitle')} — ${cave.name}` : t('panel.viewer3dTitle')}
+      </Typography.Title>
+      {model ? (
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <CaveViewPanel
+            fileUrl={model.modelUrl}
+            fileName={`${model.name}.${model.format === 'lox' ? 'lox' : '3d'}`}
+            height="100%"
+          />
+        </div>
+      ) : (
+        <Flex align="center" justify="center" style={{ flex: 1 }}>
+          <Typography.Text type="secondary">{t('panel.viewer3dEmpty')}</Typography.Text>
+        </Flex>
+      )}
+    </Flex>
+  );
 }
 
 function RegistryPanel() {

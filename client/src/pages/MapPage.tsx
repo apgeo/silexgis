@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Tooltip } from 'antd';
-import { ExportOutlined } from '@ant-design/icons';
+import { CodeSandboxOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { useFeatureTypes, useGeofiles, useMapLayers, useMapViews, useMe, useRasterMaps } from '../api/hooks.ts';
@@ -267,6 +267,13 @@ export default function MapPage() {
                 size="small"
                 icon={<ExportOutlined />}
                 onClick={() => window.open('/panel/registry', 'silexgis-registry', 'popup,width=900,height=700')}
+              />
+            </Tooltip>
+            <Tooltip title={t('panel.popOut3d')}>
+              <Button
+                size="small"
+                icon={<CodeSandboxOutlined />}
+                onClick={() => window.open('/panel/viewer3d', 'silexgis-viewer3d', 'popup,width=1000,height=750')}
               />
             </Tooltip>
           </div>

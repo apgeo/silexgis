@@ -319,6 +319,23 @@
   "panel": {
     "unknown": "Panou necunoscut.",
     "registryTitle": "Registrul peșterilor",
-    "popOut": "Deschide registrul într-o fereastră separată"
+    "popOut": "Deschide registrul într-o fereastră separată",
+    "popOut3d": "Deschide fereastra 3D",
+    "viewer3dTitle": "Vizualizator 3D",
+    "viewer3dEmpty": "Selectează o peșteră cu model 3D pentru a-l afișa aici."
+  },
+  "caveview": {
+    "loadError": "Modelul 3D nu a putut fi încărcat"
+  },
+  "surveyModels": {
+    "title": "Modele topo 3D",
+    "upload": "Încarcă model",
+    "uploaded": "Model încărcat",
+    "uploadFailed": "Încărcarea a eșuat",
+    "format": "Format",
+    "surveyedAt": "Cartat la",
+    "view": "Vezi în 3D",
+    "deleteConfirm": "Ștergi acest model topo?",
+    "empty": "Niciun model 3D încă"
   }
 }
