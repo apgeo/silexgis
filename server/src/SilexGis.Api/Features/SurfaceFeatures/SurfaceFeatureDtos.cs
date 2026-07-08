@@ -33,14 +33,19 @@ public sealed record SurfaceFeatureWriteRequest(
 
 internal static class SurfaceFeatureMapping
 {
-    public static SurfaceFeatureDto ToDto(this SurfaceFeature f) => new(
+    /// <summary>
+    /// A feature's exact geometry plus a link to a location-protected cave would
+    /// disclose that cave's location; <paramref name="redactCaveLink"/> hides the link
+    /// for callers without the exact-location permission.
+    /// </summary>
+    public static SurfaceFeatureDto ToDto(this SurfaceFeature f, bool redactCaveLink = false) => new(
         f.Id,
         f.Name,
         f.FeatureTypeId,
         GeoJsonGeometry.From(f.Geom),
         f.Description,
         JsonSerializer.Deserialize<JsonElement>(f.Properties),
-        f.CaveId,
+        redactCaveLink ? null : f.CaveId,
         f.OwnerUserId,
         f.TeamId,
         f.Visibility,

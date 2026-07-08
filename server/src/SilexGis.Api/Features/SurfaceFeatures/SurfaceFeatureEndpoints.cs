@@ -56,6 +56,15 @@ public static class SurfaceFeatureEndpoints
 
         if (caveId is not null)
         {
+            // Filtering by a cave whose exact location the caller may not see would
+            // reveal it through the matched features' geometries — behave as if no
+            // features are linked to it.
+            if (await CaveLinkRedaction.ShouldRedactAsync(db, user, caveId, ct))
+            {
+                var (emptyPage, emptySize) = Paging.Normalize(page, pageSize);
+                return TypedResults.Ok(new PagedResult<SurfaceFeatureDto>([], emptyPage, emptySize, 0));
+            }
+
             query = query.Where(f => f.CaveId == caveId);
         }
 
@@ -73,8 +82,17 @@ public static class SurfaceFeatureEndpoints
         }
 
         var (p, size) = Paging.Normalize(page, pageSize);
-        var result = await query.OrderByDescending(f => f.UpdatedAt).ToPagedAsync(p, size, f => f.ToDto(), ct);
-        return TypedResults.Ok(result);
+        var total = await query.CountAsync(ct);
+        var rows = await query.OrderByDescending(f => f.UpdatedAt)
+            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
+
+        var redacted = await CaveLinkRedaction.RedactedCaveIdsAsync(
+            db, user, rows.Where(f => f.CaveId is not null).Select(f => f.CaveId!.Value), ct);
+        var items = rows
+            .Select(f => f.ToDto(redactCaveLink: f.CaveId is not null && redacted.Contains(f.CaveId.Value)))
+            .ToList();
+
+        return TypedResults.Ok(new PagedResult<SurfaceFeatureDto>(items, p, size, total));
     }
 
     private static async Task<Results<Ok<SurfaceFeatureDto>, ProblemHttpResult>> GetAsync(
@@ -91,7 +109,8 @@ public static class SurfaceFeatureEndpoints
             return ApiProblems.NotFound("surface_feature.not_found");
         }
 
-        return TypedResults.Ok(feature.ToDto());
+        var redact = await CaveLinkRedaction.ShouldRedactAsync(db, user, feature.CaveId, ct);
+        return TypedResults.Ok(feature.ToDto(redactCaveLink: redact));
     }
 
     private static async Task<Results<Created<SurfaceFeatureDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
@@ -125,7 +144,8 @@ public static class SurfaceFeatureEndpoints
         db.SurfaceFeatures.Add(feature);
         await db.SaveChangesAsync(ct);
 
-        return TypedResults.Created($"/api/v1/surface-features/{feature.Id}", feature.ToDto());
+        var redact = await CaveLinkRedaction.ShouldRedactAsync(db, user, feature.CaveId, ct);
+        return TypedResults.Created($"/api/v1/surface-features/{feature.Id}", feature.ToDto(redactCaveLink: redact));
     }
 
     private static async Task<Results<Ok<SurfaceFeatureDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -157,7 +177,8 @@ public static class SurfaceFeatureEndpoints
 
         request.Apply(feature, request.Geometry.ToGeometryOrNull()!);
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(feature.ToDto());
+        var redact = await CaveLinkRedaction.ShouldRedactAsync(db, user, feature.CaveId, ct);
+        return TypedResults.Ok(feature.ToDto(redactCaveLink: redact));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(

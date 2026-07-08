@@ -109,12 +109,18 @@ public static class MapEndpoints
         }
 
         var rows = await query.Take(MaxPoints).ToListAsync(ct);
+
+        // A cave link next to exact feature coordinates would disclose a protected
+        // cave's location — hide the link where the caller lacks the permission.
+        var redacted = await CaveLinkRedaction.RedactedCaveIdsAsync(
+            db, user, rows.Where(f => f.CaveId is not null).Select(f => f.CaveId!.Value), ct);
+
         var features = rows.Select(f => GeoFeature.Of(f.Geom, new Dictionary<string, object?>
         {
             ["id"] = f.Id,
             ["name"] = f.Name,
             ["featureTypeId"] = f.FeatureTypeId,
-            ["caveId"] = f.CaveId,
+            ["caveId"] = f.CaveId is not null && redacted.Contains(f.CaveId.Value) ? null : f.CaveId,
         })).ToList();
 
         return TypedResults.Ok(FeatureCollection.Of(features));

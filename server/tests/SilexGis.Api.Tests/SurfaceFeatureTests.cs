@@ -133,6 +133,72 @@ public sealed class SurfaceFeatureTests : IAsyncLifetime, IDisposable
         (await owner.GetAsync($"/api/v1/surface-features/{privateId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task Cave_link_is_redacted_when_the_linked_cave_location_is_protected()
+    {
+        // A location-protected but otherwise visible cave, linked from a feature with
+        // exact coordinates: the link must vanish for callers without the
+        // exact-location permission, or the feature would give the cave away.
+        long caveTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
+        }
+
+        var caveResponse = await owner.PostAsJsonAsync("/api/v1/caves", new
+        {
+            name = $"Linked Protected Cave {Guid.NewGuid():N}",
+            caveTypeId,
+            visibility = "authenticated",
+            locationProtected = true,
+            explorationStatus = "Unknown",
+            isShowCave = false,
+        });
+        caveResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var caveId = (await caveResponse.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
+
+        var lon = 25.4611;
+        var lat = 45.5322;
+        var featureResponse = await owner.PostAsJsonAsync("/api/v1/surface-features", new
+        {
+            name = "Sinkhole above protected cave",
+            featureTypeId = sinkholeTypeId,
+            geometry = new { type = "Point", coordinates = new[] { lon, lat } },
+            visibility = "authenticated",
+            caveId,
+        });
+        featureResponse.StatusCode.ShouldBe(HttpStatusCode.Created, await featureResponse.Content.ReadAsStringAsync());
+        var featureId = (await featureResponse.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
+
+        // Owner (may view exact location) keeps the link everywhere.
+        var ownerDetail = (await owner.GetFromJsonAsync<JsonObject>($"/api/v1/surface-features/{featureId}"))!;
+        ownerDetail["caveId"]!.GetValue<Guid>().ShouldBe(caveId);
+
+        // Outsider can read the feature (authenticated) but not the exact cave location.
+        var outsiderDetail = (await outsider.GetFromJsonAsync<JsonObject>($"/api/v1/surface-features/{featureId}"))!;
+        outsiderDetail["caveId"].ShouldBeNull();
+        outsiderDetail["geometry"]!["coordinates"]![0]!.GetValue<double>().ShouldBe(lon); // geometry stays exact
+
+        // List DTOs and map properties are redacted the same way.
+        var listItem = (await outsider.GetFromJsonAsync<JsonObject>("/api/v1/surface-features/?search=above protected"))!
+            ["items"]!.AsArray().Single(f => f!["id"]!.GetValue<Guid>() == featureId)!;
+        listItem["caveId"].ShouldBeNull();
+
+        var bbox = $"{lon - 0.01},{lat - 0.01},{lon + 0.01},{lat + 0.01}";
+        var mapFeature = (await outsider.GetFromJsonAsync<JsonObject>($"/api/v1/map/surface-features?bbox={bbox}"))!
+            ["features"]!.AsArray().Single(f => f!["properties"]!["id"]!.GetValue<Guid>() == featureId)!;
+        mapFeature["properties"]!["caveId"].ShouldBeNull();
+
+        // Filtering by the protected cave behaves as if nothing were linked.
+        var filtered = (await outsider.GetFromJsonAsync<JsonObject>($"/api/v1/surface-features/?caveId={caveId}"))!;
+        filtered["items"]!.AsArray().Count.ShouldBe(0);
+
+        // The owner's filter still works.
+        var ownerFiltered = (await owner.GetFromJsonAsync<JsonObject>($"/api/v1/surface-features/?caveId={caveId}"))!;
+        ownerFiltered["items"]!.AsArray().Count.ShouldBe(1);
+    }
+
     private static object Body(
         string name, long featureTypeId, string visibility = "private",
         object? geometry = null, object? properties = null) => new

@@ -18,6 +18,15 @@ public static class LocationProtection
         !cave.LocationProtected
         || PermissionEvaluator.Can(user, cave, ObjectPermission.ViewExactLocation);
 
+    /// <summary>
+    /// A cave link on another record with exact coordinates (e.g. a surface feature)
+    /// discloses the cave's location by proximity — "protected cave X is here". The link
+    /// must be hidden wherever the caller may not view the exact location, even when the
+    /// cave record itself is visible to them.
+    /// </summary>
+    public static bool ShouldRedactCaveLink(UserContext? user, Cave cave) =>
+        !CanViewExactLocation(user, cave);
+
     /// <summary>Grid cell size in degrees for a protection grid of <paramref name="gridMeters"/>.</summary>
     public static double CellDegrees(double gridMeters) => gridMeters / MetersPerDegreeLat;
 
