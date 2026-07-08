@@ -152,6 +152,22 @@ export async function fetchSurfaceFeatureCollection(bbox: string): Promise<Entra
   return unwrap(api.GET('/api/v1/map/surface-features', { params: { query: { bbox } } }));
 }
 
+export type SurfaceFeatureDetail = components['schemas']['SurfaceFeatureDto'];
+export type SurfaceFeatureWrite = components['schemas']['SurfaceFeatureWriteRequest'];
+
+// Imperative surface-feature calls used by the map edit controller (outside React).
+export async function fetchSurfaceFeature(id: string): Promise<SurfaceFeatureDetail> {
+  return unwrap(api.GET('/api/v1/surface-features/{id}', { params: { path: { id } } }));
+}
+
+export async function createSurfaceFeature(body: SurfaceFeatureWrite): Promise<SurfaceFeatureDetail> {
+  return unwrap(api.POST('/api/v1/surface-features', { body }));
+}
+
+export async function updateSurfaceFeature(id: string, body: SurfaceFeatureWrite): Promise<SurfaceFeatureDetail> {
+  return unwrap(api.PUT('/api/v1/surface-features/{id}', { params: { path: { id } }, body }));
+}
+
 function useInvalidateCaves() {
   const queryClient = useQueryClient();
   return (caveId?: string) => {

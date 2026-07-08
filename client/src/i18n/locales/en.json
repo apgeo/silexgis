@@ -124,5 +124,18 @@
       "map": "From map",
       "estimated": "Estimated"
     }
+  },
+  "mapEdit": {
+    "featureType": "Feature type",
+    "draw": "Draw",
+    "modify": "Modify (drag vertices; Alt+click deletes)",
+    "translate": "Move geometry",
+    "snap": "Snap to visible features",
+    "snapShort": "Snap",
+    "undo": "Undo",
+    "redo": "Redo",
+    "measureDistance": "Measure distance",
+    "measureArea": "Measure area",
+    "discard": "Discard edits and measurements"
   }
 }

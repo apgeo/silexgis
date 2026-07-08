@@ -124,5 +124,18 @@
       "map": "De pe hartă",
       "estimated": "Estimată"
     }
+  },
+  "mapEdit": {
+    "featureType": "Tip de fenomen",
+    "draw": "Desenează",
+    "modify": "Modifică (trage vârfurile; Alt+clic șterge)",
+    "translate": "Mută geometria",
+    "snap": "Aliniere la elementele vizibile",
+    "snapShort": "Aliniere",
+    "undo": "Anulează",
+    "redo": "Refă",
+    "measureDistance": "Măsoară distanța",
+    "measureArea": "Măsoară aria",
+    "discard": "Renunță la editări și măsurători"
   }
 }

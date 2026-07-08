@@ -13,6 +13,11 @@ export const SURFACE_FEATURE_LAYER_ID = 'surface-features';
 const source = new VectorSource();
 const format = new GeoJSON();
 
+/** The live feature source — the edit controller draws into and snaps against it. */
+export function getSurfaceFeatureSource(): VectorSource {
+  return source;
+}
+
 // featureTypeId → symbol file, fed from the /feature-types catalog by the map page.
 let symbolByTypeId = new globalThis.Map<number, string>();
 const iconCache = new globalThis.Map<string, Icon>();
@@ -28,6 +33,13 @@ export function createSurfaceFeatureLayer(): VectorLayer {
   const layer = new VectorLayer({ source, zIndex: 9, style: featureStyle });
   layer.set('id', SURFACE_FEATURE_LAYER_ID);
   return layer;
+}
+
+let activeReload: (() => void) | undefined;
+
+/** Forces a refetch of the current extent (e.g. after saving edits). */
+export function reloadSurfaceFeatures(): void {
+  activeReload?.();
 }
 
 /** Bbox loading on moveend (debounced), stale responses discarded; returns a detach fn. */
@@ -63,9 +75,11 @@ export function attachSurfaceFeatureLoader(map: Map): () => void {
 
   map.on('moveend', onMoveEnd);
   void load();
+  activeReload = () => void load();
   return () => {
     map.un('moveend', onMoveEnd);
     window.clearTimeout(timer);
+    activeReload = undefined;
   };
 }
 

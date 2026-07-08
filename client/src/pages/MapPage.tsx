@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-import { useFeatureTypes, useMapLayers } from '../api/hooks.ts';
+import { useFeatureTypes, useMapLayers, useMe } from '../api/hooks.ts';
+import EditToolbar from '../components/map/EditToolbar.tsx';
 import LayerPanel from '../components/map/LayerPanel.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
 import SelectionPanel from '../components/map/SelectionPanel.tsx';
@@ -14,6 +15,7 @@ import {
   setFeatureTypeSymbols,
 } from '../map/featureLayer.ts';
 import { getWorkspaceMap } from '../map/mapContext.ts';
+import { MapEditController } from '../map/mapEdit.ts';
 import { attachSelection } from '../map/selection.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import './MapPage.css';
@@ -23,10 +25,13 @@ export default function MapPage() {
   const mapTarget = useRef<HTMLDivElement>(null);
   const { data: layers } = useMapLayers();
   const { data: featureTypes } = useFeatureTypes();
+  const { data: me } = useMe();
   const [activeBaseId, setActiveBaseId] = useState<number>();
   const [entrancesVisible, setEntrancesVisible] = useState(true);
   const [surfaceFeaturesVisible, setSurfaceFeaturesVisible] = useState(true);
+  const [editController, setEditController] = useState<MapEditController | null>(null);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
+  const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
 
   useEffect(() => {
     const map = getWorkspaceMap();
@@ -44,7 +49,11 @@ export default function MapPage() {
     const detachLoader = attachEntranceLoader(map);
     const detachFeatureLoader = attachSurfaceFeatureLoader(map);
     const detachSelection = attachSelection(map, setSelection);
+    const controller = new MapEditController(map);
+    setEditController(controller);
     return () => {
+      controller.dispose();
+      setEditController(null);
       detachLoader();
       detachFeatureLoader();
       detachSelection();
@@ -112,6 +121,11 @@ export default function MapPage() {
           <div className="map-search-overlay">
             <MapSearch />
           </div>
+          {canEdit && editController && (
+            <div className="map-edit-overlay">
+              <EditToolbar controller={editController} />
+            </div>
+          )}
         </div>
       </Panel>
       <Separator className="map-workspace-handle" />
