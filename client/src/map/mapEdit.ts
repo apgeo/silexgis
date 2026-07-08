@@ -50,6 +50,9 @@ export class MapEditController {
   };
   private listener: ((s: EditState) => void) | undefined;
 
+  /** Invoked after each completed draw so the UI can collect attributes. */
+  onDrawEnd: ((feature: Feature) => void) | undefined;
+
   private createdFeatures: { feature: Feature; geometryType: DrawShape }[] = [];
   private modifiedGeometries = new globalThis.Map<string, object>();
 
@@ -155,6 +158,7 @@ export class MapEditController {
     this.detachInteractions();
     this.map.removeLayer(this.measureLayer);
     this.listener = undefined;
+    this.onDrawEnd = undefined;
   }
 
   // ---- interactions ----
@@ -180,6 +184,7 @@ export class MapEditController {
         },
       });
       this.syncDirty();
+      this.onDrawEnd?.(feature);
     });
     this.map.addInteraction(draw);
     this.interactions.push(draw);

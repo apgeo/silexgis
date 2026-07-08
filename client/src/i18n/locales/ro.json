@@ -4,7 +4,8 @@
   },
   "nav": {
     "map": "Hartă",
-    "caves": "Peșteri"
+    "caves": "Peșteri",
+    "features": "Fenomene de suprafață"
   },
   "auth": {
     "email": "Email",
@@ -123,6 +124,32 @@
       "gps": "GPS",
       "map": "De pe hartă",
       "estimated": "Estimată"
+    }
+  },
+  "features": {
+    "title": "Fenomene de suprafață",
+    "name": "Denumire",
+    "type": "Tip",
+    "geometry": "Geometrie",
+    "visibility": "Vizibilitate",
+    "description": "Descriere",
+    "updatedAt": "Actualizat",
+    "unnamed": "Fără denumire",
+    "linkedCave": "Peșteră asociată",
+    "linkedCavePlaceholder": "Caută peșteri…",
+    "typedProperties": "Proprietăți",
+    "newFeature": "Fenomen de suprafață nou",
+    "editFeature": "Editare fenomen de suprafață",
+    "edit": "Editează",
+    "delete": "Șterge",
+    "deleteConfirm": "Ștergeți acest fenomen de suprafață?",
+    "showOnMap": "Arată pe hartă",
+    "searchPlaceholder": "Caută după denumire…",
+    "allTypes": "Toate tipurile",
+    "geometryTypes": {
+      "Point": "Punct",
+      "LineString": "Linie",
+      "Polygon": "Poligon"
     }
   },
   "mapEdit": {

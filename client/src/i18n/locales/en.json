@@ -4,7 +4,8 @@
   },
   "nav": {
     "map": "Map",
-    "caves": "Caves"
+    "caves": "Caves",
+    "features": "Surface features"
   },
   "auth": {
     "email": "Email",
@@ -123,6 +124,32 @@
       "gps": "GPS",
       "map": "From map",
       "estimated": "Estimated"
+    }
+  },
+  "features": {
+    "title": "Surface features",
+    "name": "Name",
+    "type": "Type",
+    "geometry": "Geometry",
+    "visibility": "Visibility",
+    "description": "Description",
+    "updatedAt": "Updated",
+    "unnamed": "Unnamed",
+    "linkedCave": "Linked cave",
+    "linkedCavePlaceholder": "Search caves…",
+    "typedProperties": "Properties",
+    "newFeature": "New surface feature",
+    "editFeature": "Edit surface feature",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this surface feature?",
+    "showOnMap": "Show on map",
+    "searchPlaceholder": "Search by name…",
+    "allTypes": "All types",
+    "geometryTypes": {
+      "Point": "Point",
+      "LineString": "Line",
+      "Polygon": "Polygon"
     }
   },
   "mapEdit": {

@@ -15,6 +15,7 @@ const MapPage = lazy(() => import('./pages/MapPage.tsx'));
 const CaveListPage = lazy(() => import('./pages/caves/CaveListPage.tsx'));
 const CaveFormPage = lazy(() => import('./pages/caves/CaveFormPage.tsx'));
 const CaveDetailPage = lazy(() => import('./pages/caves/CaveDetailPage.tsx'));
+const FeatureListPage = lazy(() => import('./pages/features/FeatureListPage.tsx'));
 
 function Loadable({ children }: { children: ReactNode }) {
   return (
@@ -38,6 +39,7 @@ const router = createBrowserRouter([
           { path: '/caves/new', element: <Loadable><CaveFormPage /></Loadable> },
           { path: '/caves/:id', element: <Loadable><CaveDetailPage /></Loadable> },
           { path: '/caves/:id/edit', element: <Loadable><CaveFormPage /></Loadable> },
+          { path: '/features', element: <Loadable><FeatureListPage /></Loadable> },
         ],
       },
     ],

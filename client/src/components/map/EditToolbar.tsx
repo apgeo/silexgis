@@ -12,6 +12,7 @@ import {
   UndoOutlined,
 } from '@ant-design/icons';
 import { App, Badge, Button, Divider, Select, Space, Tooltip, Typography } from 'antd';
+import type Feature from 'ol/Feature';
 import { useTranslation } from 'react-i18next';
 import {
   createSurfaceFeature,
@@ -21,6 +22,7 @@ import {
 } from '../../api/hooks.ts';
 import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
 import { MapEditController, type DrawShape, type EditMode, type EditState } from '../../map/mapEdit.ts';
+import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 
 interface EditToolbarProps {
   controller: MapEditController;
@@ -43,8 +45,18 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
   });
   const [typeId, setTypeId] = useState<number>();
   const [saving, setSaving] = useState(false);
+  // Freshly drawn feature awaiting attributes; the modal stashes them on the
+  // OL feature (pendingAttrs) — nothing hits the server until Save.
+  const [pendingFeature, setPendingFeature] = useState<Feature | null>(null);
 
   useEffect(() => controller.subscribe(setState), [controller]);
+
+  useEffect(() => {
+    controller.onDrawEnd = (feature) => setPendingFeature(feature);
+    return () => {
+      controller.onDrawEnd = undefined;
+    };
+  }, [controller]);
 
   const selectedType = featureTypes?.find((ft) => Number(ft.id) === typeId);
   const kind = (selectedType?.geometryKind ?? 'point').toString().toLowerCase();
@@ -59,15 +71,16 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
     try {
       const { created, modified } = controller.getPendingEdits();
       for (const { feature } of created) {
+        const attrs = feature.get('pendingAttrs') as FeatureAttributeValues | undefined;
         await createSurfaceFeature({
-          name: null,
-          featureTypeId: Number(feature.get('featureTypeId') ?? typeId ?? 0),
+          name: attrs?.name ?? null,
+          featureTypeId: attrs?.featureTypeId ?? Number(feature.get('featureTypeId') ?? typeId ?? 0),
           geometry: MapEditController.toGeoJsonGeometry(feature.getGeometry()!) as never,
-          description: null,
-          properties: null,
-          caveId: null,
+          description: attrs?.description ?? null,
+          properties: (attrs?.properties ?? null) as never,
+          caveId: attrs?.caveId ?? null,
           teamId: null,
-          visibility: 'private',
+          visibility: attrs?.visibility ?? 'private',
         });
       }
       for (const [id, geometry] of modified) {
@@ -97,6 +110,8 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
     controller.reset();
     reloadSurfaceFeatures();
   };
+
+  const pendingGeometryType = (pendingFeature?.getGeometry()?.getType() ?? 'Point') as DrawShape;
 
   return (
     <Space size={4} wrap>
@@ -196,6 +211,22 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           onClick={discard}
         />
       </Tooltip>
+      <FeatureEditModal
+        open={pendingFeature !== null}
+        title={t('features.newFeature')}
+        geometryType={pendingGeometryType}
+        initial={{
+          featureTypeId: Number(pendingFeature?.get('featureTypeId') ?? typeId),
+          visibility: 'private',
+        }}
+        onCancel={() => setPendingFeature(null)}
+        onSubmit={(values) => {
+          // Stash on the OL feature; the type also drives the map symbol.
+          pendingFeature?.set('pendingAttrs', values);
+          pendingFeature?.set('featureTypeId', values.featureTypeId);
+          setPendingFeature(null);
+        }}
+      />
     </Space>
   );
 }

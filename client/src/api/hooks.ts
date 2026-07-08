@@ -23,6 +23,8 @@ export const queryKeys = {
   entrances: (caveId: string) => ['entrances', caveId] as const,
   caveSearch: (q: string) => ['cave-search', q] as const,
   nominatim: (q: string) => ['nominatim', q] as const,
+  surfaceFeatures: (params: SurfaceFeatureListParams) => ['surface-features', 'list', params] as const,
+  surfaceFeature: (id: string) => ['surface-features', 'detail', id] as const,
 };
 
 async function unwrap<T>(
@@ -166,6 +168,57 @@ export async function createSurfaceFeature(body: SurfaceFeatureWrite): Promise<S
 
 export async function updateSurfaceFeature(id: string, body: SurfaceFeatureWrite): Promise<SurfaceFeatureDetail> {
   return unwrap(api.PUT('/api/v1/surface-features/{id}', { params: { path: { id } }, body }));
+}
+
+export interface SurfaceFeatureListParams {
+  page?: number;
+  pageSize?: number;
+  featureTypeId?: number;
+  caveId?: string;
+  search?: string;
+}
+
+export function useSurfaceFeatures(params: SurfaceFeatureListParams) {
+  return useQuery({
+    queryKey: queryKeys.surfaceFeatures(params),
+    queryFn: () => unwrap(api.GET('/api/v1/surface-features', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useSurfaceFeature(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.surfaceFeature(id ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/surface-features/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+  });
+}
+
+function useInvalidateSurfaceFeatures() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: ['surface-features'] });
+}
+
+export function useUpdateSurfaceFeature() {
+  const invalidate = useInvalidateSurfaceFeatures();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: SurfaceFeatureWrite }) => updateSurfaceFeature(id, body),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useDeleteSurfaceFeature() {
+  const invalidate = useInvalidateSurfaceFeatures();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/surface-features/{id}', { params: { path: { id } } });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
 }
 
 function useInvalidateCaves() {

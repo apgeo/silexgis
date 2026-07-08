@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { EnvironmentOutlined, LogoutOutlined, TableOutlined, UserOutlined } from '@ant-design/icons';
+import { EnvironmentOutlined, GoldOutlined, LogoutOutlined, TableOutlined, UserOutlined } from '@ant-design/icons';
 import { Dropdown, Flex, Layout, Menu, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -12,7 +12,11 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const selectedKey = location.pathname.startsWith('/caves') ? 'caves' : 'map';
+  const selectedKey = location.pathname.startsWith('/caves')
+    ? 'caves'
+    : location.pathname.startsWith('/features')
+      ? 'features'
+      : 'map';
 
   return (
     <Layout style={{ height: '100%' }}>
@@ -54,10 +58,11 @@ export default function AppLayout() {
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
-            onClick={({ key }) => navigate(key === 'map' ? '/' : '/caves')}
+            onClick={({ key }) => navigate(key === 'map' ? '/' : `/${key}`)}
             items={[
               { key: 'map', icon: <EnvironmentOutlined />, label: t('nav.map') },
               { key: 'caves', icon: <TableOutlined />, label: t('nav.caves') },
+              { key: 'features', icon: <GoldOutlined />, label: t('nav.features') },
             ]}
           />
         </Layout.Sider>

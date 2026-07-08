@@ -13,7 +13,9 @@ import {
   attachSurfaceFeatureLoader,
   createSurfaceFeatureLayer,
   setFeatureTypeSymbols,
+  setSelectedSurfaceFeature,
 } from '../map/featureLayer.ts';
+import { attachHoverTooltip } from '../map/hoverTooltip.ts';
 import { getWorkspaceMap } from '../map/mapContext.ts';
 import { MapEditController } from '../map/mapEdit.ts';
 import { attachSelection } from '../map/selection.ts';
@@ -30,6 +32,7 @@ export default function MapPage() {
   const [entrancesVisible, setEntrancesVisible] = useState(true);
   const [surfaceFeaturesVisible, setSurfaceFeaturesVisible] = useState(true);
   const [editController, setEditController] = useState<MapEditController | null>(null);
+  const selection = useWorkspaceStore((s) => s.selection);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
   const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
 
@@ -49,6 +52,7 @@ export default function MapPage() {
     const detachLoader = attachEntranceLoader(map);
     const detachFeatureLoader = attachSurfaceFeatureLoader(map);
     const detachSelection = attachSelection(map, setSelection);
+    const detachHover = attachHoverTooltip(map);
     const controller = new MapEditController(map);
     setEditController(controller);
     return () => {
@@ -57,9 +61,15 @@ export default function MapPage() {
       detachLoader();
       detachFeatureLoader();
       detachSelection();
+      detachHover();
       map.setTarget(undefined);
     };
   }, [setSelection]);
+
+  // Highlight follows the workspace selection (also when set from the features table).
+  useEffect(() => {
+    setSelectedSurfaceFeature(selection?.kind === 'feature' ? selection.featureId : null);
+  }, [selection]);
 
   useEffect(() => {
     if (featureTypes) {

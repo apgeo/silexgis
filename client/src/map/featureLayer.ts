@@ -18,15 +18,33 @@ export function getSurfaceFeatureSource(): VectorSource {
   return source;
 }
 
-// featureTypeId → symbol file, fed from the /feature-types catalog by the map page.
+// featureTypeId → symbol file / display name, fed from the /feature-types
+// catalog by the map page. Names back the hover tooltip for unnamed features.
 let symbolByTypeId = new globalThis.Map<number, string>();
+let nameByTypeId = new globalThis.Map<number, string>();
 const iconCache = new globalThis.Map<string, Icon>();
 
 export function setFeatureTypeSymbols(types: FeatureType[]): void {
   symbolByTypeId = new globalThis.Map(
     types.filter((t) => t.symbolFile).map((t) => [Number(t.id), t.symbolFile!]),
   );
+  nameByTypeId = new globalThis.Map(types.map((t) => [Number(t.id), t.name]));
   source.changed(); // restyle already-loaded features with the fresh catalog
+}
+
+export function getFeatureTypeName(featureTypeId: unknown): string | undefined {
+  return nameByTypeId.get(Number(featureTypeId));
+}
+
+// Selection highlight: the styling reads this id so the highlight survives
+// bbox reloads (features are recreated, the id is stable).
+let selectedFeatureId: string | null = null;
+
+export function setSelectedSurfaceFeature(id: string | null): void {
+  if (selectedFeatureId !== id) {
+    selectedFeatureId = id;
+    source.changed();
+  }
 }
 
 export function createSurfaceFeatureLayer(): VectorLayer {
@@ -88,11 +106,26 @@ const palette = {
   line: '#8c4a2f',
   fill: 'rgba(140, 74, 47, 0.15)',
   stroke: '#ffffff',
+  highlight: '#1677ff',
+  highlightHalo: 'rgba(22, 119, 255, 0.25)',
 };
 
-function featureStyle(feature: FeatureLike): Style {
+function featureStyle(feature: FeatureLike): Style | Style[] {
   const geometryType = feature.getGeometry()?.getType();
+  const selected = selectedFeatureId !== null && feature.get('id') === selectedFeatureId;
+
   if (geometryType === 'Point') {
+    // A translucent halo behind the symbol marks the selected feature.
+    const halo = selected
+      ? [new Style({
+          image: new CircleStyle({
+            radius: 14,
+            fill: new Fill({ color: palette.highlightHalo }),
+            stroke: new Stroke({ color: palette.highlight, width: 2 }),
+          }),
+        })]
+      : [];
+
     const symbol = symbolByTypeId.get(Number(feature.get('featureTypeId')));
     if (symbol) {
       let icon = iconCache.get(symbol);
@@ -100,15 +133,25 @@ function featureStyle(feature: FeatureLike): Style {
         icon = new Icon({ src: `/feature_symbols/${symbol}`, scale: 0.5 });
         iconCache.set(symbol, icon);
       }
-      return new Style({ image: icon });
+      return [...halo, new Style({ image: icon })];
     }
-    return new Style({
+    return [...halo, new Style({
       image: new CircleStyle({
         radius: 6,
         fill: new Fill({ color: palette.point }),
         stroke: new Stroke({ color: palette.stroke, width: 2 }),
       }),
-    });
+    })];
+  }
+
+  if (selected) {
+    return [
+      new Style({ stroke: new Stroke({ color: palette.highlight, width: 6 }) }),
+      new Style({
+        stroke: new Stroke({ color: palette.line, width: 2.5 }),
+        fill: new Fill({ color: palette.highlightHalo }),
+      }),
+    ];
   }
 
   return new Style({

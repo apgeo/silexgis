@@ -76,3 +76,50 @@ test('cave and entrance create/edit round-trip', async ({ page }) => {
   await page.waitForURL(/\/caves$/);
   await expect(page.getByText(caveName)).not.toBeVisible();
 });
+
+test('surface feature draw, attributes, selection and table round-trip', async ({ page }) => {
+  const featureName = `E2E Sinkhole ${Date.now()}`;
+  await login(page);
+
+  const toolbar = page.locator('.map-edit-overlay');
+  await expect(toolbar).toBeVisible();
+
+  // Pick the feature type that carries a typed-properties schema.
+  await toolbar.locator('.ant-select').click();
+  await page.locator('.ant-select-item-option', { hasText: 'Sinkhole / Doline' }).click();
+
+  // Draw a point by clicking the map canvas (icon-only button → name "edit").
+  await toolbar.getByRole('button', { name: 'edit' }).click();
+  const canvas = page.locator('.map-canvas');
+  await canvas.click({ position: { x: 420, y: 260 } });
+
+  // Attribute modal opens for the freshly drawn feature; schema fields render.
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByText('New surface feature')).toBeVisible();
+  await modal.getByLabel('Name').fill(featureName);
+  await modal.getByLabel('Depth (m)').fill('12.5');
+  await modal.getByRole('button', { name: 'OK' }).click();
+
+  // Batched save posts the feature and reloads the layer.
+  const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/surface-features') && r.ok());
+  await toolbar.getByRole('button', { name: /Save/ }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  await reloaded;
+
+  // Click the same spot: the saved feature is selected and the detail card
+  // shows the schema-labeled property.
+  await canvas.click({ position: { x: 420, y: 260 } });
+  await expect(page.getByRole('heading', { name: featureName })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Depth (m)')).toBeVisible();
+  await expect(page.getByText('12.5')).toBeVisible();
+
+  // The features table lists it; delete from the row actions (cleanup).
+  await page.goto('/features');
+  const row = page.getByRole('row', { name: new RegExp(featureName) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await expect(row.getByText('Sinkhole / Doline')).toBeVisible();
+  await row.getByRole('button', { name: 'delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(featureName)).not.toBeVisible();
+});
