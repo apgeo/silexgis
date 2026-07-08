@@ -35,7 +35,8 @@
     "saved": "Saved.",
     "saveFailed": "The operation failed. Please try again.",
     "deleted": "Deleted.",
-    "export": "Export"
+    "export": "Export",
+    "conflict": "Someone else changed this since you loaded it. Reload and reapply your changes."
   },
   "map": {
     "baseLayers": "Base layers",

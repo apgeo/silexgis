@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from './client.ts';
+import { api, ApiError } from './client.ts';
 import type { components } from './schema';
 
 export type CaveListItem = components['schemas']['CaveListItemDto'];
@@ -45,9 +45,19 @@ async function unwrap<T>(
 ): Promise<T> {
   const { data, error, response } = await call;
   if (error !== undefined || data === undefined) {
-    throw new Error(`API error ${response.status}`);
+    throw new ApiError(response.status, (error as { code?: string } | undefined)?.code);
   }
   return data;
+}
+
+/** unwrap for endpoints with no response body (DELETE / 204). */
+async function unwrapVoid(
+  call: Promise<{ error?: unknown; response: Response }>,
+): Promise<void> {
+  const { error, response } = await call;
+  if (error !== undefined) {
+    throw new ApiError(response.status, (error as { code?: string } | undefined)?.code);
+  }
 }
 
 export function useMe() {
@@ -327,12 +337,8 @@ export function useUpdateSurfaceFeature() {
 export function useDeleteSurfaceFeature() {
   const invalidate = useInvalidateSurfaceFeatures();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error, response } = await api.DELETE('/api/v1/surface-features/{id}', { params: { path: { id } } });
-      if (error !== undefined) {
-        throw new Error(`API error ${response.status}`);
-      }
-    },
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/surface-features/{id}', { params: { path: { id } } })),
     onSuccess: () => invalidate(),
   });
 }
@@ -598,12 +604,7 @@ export function useUpdateTripLog() {
 export function useDeleteTripLog() {
   const invalidate = useInvalidateTripLogs();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error, response } = await api.DELETE('/api/v1/trip-logs/{id}', { params: { path: { id } } });
-      if (error !== undefined) {
-        throw new Error(`API error ${response.status}`);
-      }
-    },
+    mutationFn: (id: string) => unwrapVoid(api.DELETE('/api/v1/trip-logs/{id}', { params: { path: { id } } })),
     onSuccess: () => invalidate(),
   });
 }
@@ -837,12 +838,7 @@ export function useUpdateCave(id: string) {
 export function useDeleteCave() {
   const invalidate = useInvalidateCaves();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error, response } = await api.DELETE('/api/v1/caves/{id}', { params: { path: { id } } });
-      if (error !== undefined) {
-        throw new Error(`API error ${response.status}`);
-      }
-    },
+    mutationFn: (id: string) => unwrapVoid(api.DELETE('/api/v1/caves/{id}', { params: { path: { id } } })),
     onSuccess: () => invalidate(),
   });
 }

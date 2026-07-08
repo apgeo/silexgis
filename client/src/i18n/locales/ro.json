@@ -35,7 +35,8 @@
     "saved": "Salvat.",
     "saveFailed": "Operația a eșuat. Încercați din nou.",
     "deleted": "Șters.",
-    "export": "Exportă"
+    "export": "Exportă",
+    "conflict": "Altcineva a modificat acest element de când l-ați încărcat. Reîncărcați și reaplicați modificările."
   },
   "map": {
     "baseLayers": "Hărți de bază",
