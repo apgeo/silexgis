@@ -9,6 +9,8 @@ interface LayerPanelProps {
   onBaseChange: (id: number) => void;
   entrancesVisible: boolean;
   onEntrancesVisibleChange: (visible: boolean) => void;
+  surfaceFeaturesVisible: boolean;
+  onSurfaceFeaturesVisibleChange: (visible: boolean) => void;
 }
 
 export default function LayerPanel({
@@ -17,6 +19,8 @@ export default function LayerPanel({
   onBaseChange,
   entrancesVisible,
   onEntrancesVisibleChange,
+  surfaceFeaturesVisible,
+  onSurfaceFeaturesVisibleChange,
 }: LayerPanelProps) {
   const { t } = useTranslation();
 
@@ -31,9 +35,15 @@ export default function LayerPanel({
       />
       <Divider style={{ margin: '12px 0' }} />
       <Typography.Text strong>{t('map.overlays')}</Typography.Text>
-      <div style={{ marginTop: 8 }}>
+      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <Checkbox checked={entrancesVisible} onChange={(e) => onEntrancesVisibleChange(e.target.checked)}>
           {t('map.entrances')}
+        </Checkbox>
+        <Checkbox
+          checked={surfaceFeaturesVisible}
+          onChange={(e) => onSurfaceFeaturesVisibleChange(e.target.checked)}
+        >
+          {t('map.surfaceFeatures')}
         </Checkbox>
       </div>
     </div>

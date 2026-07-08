@@ -34,7 +34,8 @@
     "zoomTo": "Centrează",
     "openCave": "Deschide peștera",
     "approximate": "Locație aproximativă — coordonatele exacte sunt protejate.",
-    "noSelection": "Apăsați pe un element de pe hartă pentru detalii."
+    "noSelection": "Apăsați pe un element de pe hartă pentru detalii.",
+    "surfaceFeatures": "Fenomene de suprafață"
   },
   "caves": {
     "title": "Peșteri",

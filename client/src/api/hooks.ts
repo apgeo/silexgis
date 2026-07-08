@@ -10,6 +10,7 @@ export type Entrance = components['schemas']['EntranceDto'];
 export type EntranceWrite = components['schemas']['EntranceWriteRequest'];
 export type MapLayerInfo = components['schemas']['MapLayerDto'];
 export type Taxonomy = components['schemas']['TaxonomyDto'];
+export type FeatureType = components['schemas']['FeatureTypeDto'];
 export type EntranceFeatureCollection = components['schemas']['FeatureCollection'];
 
 // Query keys live here so invalidation stays precise.
@@ -67,6 +68,14 @@ export function useEntranceTypes() {
 
 export function useRockTypes() {
   return useQuery(taxonomyQuery('/api/v1/rock-types', 'rock-types'));
+}
+
+export function useFeatureTypes() {
+  return useQuery({
+    queryKey: queryKeys.taxonomy('feature-types'),
+    queryFn: () => unwrap(api.GET('/api/v1/feature-types')),
+    staleTime: 5 * 60_000,
+  });
 }
 
 export interface CaveListParams {
@@ -136,6 +145,11 @@ export function useNominatim(q: string) {
 /** Imperative fetch used by the OpenLayers entrance-layer loader (not a hook). */
 export async function fetchEntranceFeatures(bbox: string, zoom: number): Promise<EntranceFeatureCollection> {
   return unwrap(api.GET('/api/v1/map/cave-entrances', { params: { query: { bbox, zoom } } }));
+}
+
+/** Imperative fetch used by the OpenLayers surface-feature loader (not a hook). */
+export async function fetchSurfaceFeatureCollection(bbox: string): Promise<EntranceFeatureCollection> {
+  return unwrap(api.GET('/api/v1/map/surface-features', { params: { query: { bbox } } }));
 }
 
 function useInvalidateCaves() {

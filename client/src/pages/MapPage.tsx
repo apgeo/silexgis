@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-import { useMapLayers } from '../api/hooks.ts';
+import { useFeatureTypes, useMapLayers } from '../api/hooks.ts';
 import LayerPanel from '../components/map/LayerPanel.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
 import SelectionPanel from '../components/map/SelectionPanel.tsx';
 import { setActiveBaseLayer, syncBaseLayers } from '../map/baseLayers.ts';
 import { ENTRANCE_LAYER_ID, attachEntranceLoader, createEntranceLayer } from '../map/entranceLayer.ts';
+import {
+  SURFACE_FEATURE_LAYER_ID,
+  attachSurfaceFeatureLoader,
+  createSurfaceFeatureLayer,
+  setFeatureTypeSymbols,
+} from '../map/featureLayer.ts';
 import { getWorkspaceMap } from '../map/mapContext.ts';
 import { attachSelection } from '../map/selection.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
@@ -16,26 +22,41 @@ import './MapPage.css';
 export default function MapPage() {
   const mapTarget = useRef<HTMLDivElement>(null);
   const { data: layers } = useMapLayers();
+  const { data: featureTypes } = useFeatureTypes();
   const [activeBaseId, setActiveBaseId] = useState<number>();
   const [entrancesVisible, setEntrancesVisible] = useState(true);
+  const [surfaceFeaturesVisible, setSurfaceFeaturesVisible] = useState(true);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
 
   useEffect(() => {
     const map = getWorkspaceMap();
     map.setTarget(mapTarget.current ?? undefined);
 
-    if (!map.getLayers().getArray().some((l) => l.get('id') === ENTRANCE_LAYER_ID)) {
-      map.addLayer(createEntranceLayer());
+    for (const [id, create] of [
+      [ENTRANCE_LAYER_ID, createEntranceLayer],
+      [SURFACE_FEATURE_LAYER_ID, createSurfaceFeatureLayer],
+    ] as const) {
+      if (!map.getLayers().getArray().some((l) => l.get('id') === id)) {
+        map.addLayer(create());
+      }
     }
 
     const detachLoader = attachEntranceLoader(map);
+    const detachFeatureLoader = attachSurfaceFeatureLoader(map);
     const detachSelection = attachSelection(map, setSelection);
     return () => {
       detachLoader();
+      detachFeatureLoader();
       detachSelection();
       map.setTarget(undefined);
     };
   }, [setSelection]);
+
+  useEffect(() => {
+    if (featureTypes) {
+      setFeatureTypeSymbols(featureTypes);
+    }
+  }, [featureTypes]);
 
   useEffect(() => {
     if (layers && activeBaseId === undefined) {
@@ -60,6 +81,14 @@ export default function MapPage() {
     layer?.setVisible(entrancesVisible);
   }, [entrancesVisible]);
 
+  useEffect(() => {
+    const layer = getWorkspaceMap()
+      .getLayers()
+      .getArray()
+      .find((l) => l.get('id') === SURFACE_FEATURE_LAYER_ID);
+    layer?.setVisible(surfaceFeaturesVisible);
+  }, [surfaceFeaturesVisible]);
+
   return (
     <Group orientation="horizontal" className="map-workspace">
       <Panel defaultSize={16} minSize={10} className="map-workspace-panel">
@@ -72,6 +101,8 @@ export default function MapPage() {
           }}
           entrancesVisible={entrancesVisible}
           onEntrancesVisibleChange={setEntrancesVisible}
+          surfaceFeaturesVisible={surfaceFeaturesVisible}
+          onSurfaceFeaturesVisibleChange={setSurfaceFeaturesVisible}
         />
       </Panel>
       <Separator className="map-workspace-handle" />

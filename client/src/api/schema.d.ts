@@ -583,6 +583,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/map/surface-features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Surface features as GeoJSON for the given bbox, optionally filtered by type. */
+        get: {
+            parameters: {
+                query: {
+                    bbox: string;
+                    featureTypeId?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search": {
         parameters: {
             query?: never;
@@ -960,6 +999,157 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/surface-features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paged surface-feature list with filters; visibility-filtered. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                    featureTypeId?: number;
+                    caveId?: string;
+                    search?: string;
+                    bbox?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfSurfaceFeatureDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates a surface feature (Editor role and above); the caller becomes owner. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SurfaceFeatureWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurfaceFeatureDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/surface-features/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Single surface feature. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurfaceFeatureDto"];
+                    };
+                };
+            };
+        };
+        /** Full update (Write permission). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SurfaceFeatureWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurfaceFeatureDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes a surface feature (Delete permission). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1171,8 +1361,12 @@ export interface components {
         };
         GeoFeature: {
             type: string;
-            geometry: components["schemas"]["GeoJsonPoint"];
+            geometry: components["schemas"]["GeoJsonGeometry"];
             properties: Record<string, never>;
+        };
+        GeoJsonGeometry: {
+            type: string;
+            coordinates: components["schemas"]["JsonElement"];
         };
         GeoJsonPoint: {
             type: string;
@@ -1180,6 +1374,7 @@ export interface components {
         };
         /** @enum {unknown} */
         GeometryKind: "point" | "line" | "polygon" | "any";
+        JsonElement: unknown;
         LoginRequest: {
             email: string;
             password: string;
@@ -1217,6 +1412,15 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfSurfaceFeatureDto: {
+            items: components["schemas"]["SurfaceFeatureDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         /** @enum {unknown} */
         PositionQuality: "unknown" | "gps" | "map" | "estimated";
         RegisterRequest: {
@@ -1229,8 +1433,51 @@ export interface components {
             token: string;
             newPassword: string;
         };
+        SearchFeatureItemDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            /** Format: int64 */
+            featureTypeId: number;
+            center: components["schemas"]["GeoJsonPoint"];
+        };
         SearchResultDto: {
             caves: components["schemas"]["CaveListItemDto"][];
+            features: components["schemas"]["SearchFeatureItemDto"][];
+        };
+        SurfaceFeatureDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            /** Format: int64 */
+            featureTypeId: number;
+            geometry: components["schemas"]["GeoJsonGeometry"];
+            description: null | string;
+            properties: components["schemas"]["JsonElement"];
+            /** Format: uuid */
+            caveId: null | string;
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SurfaceFeatureWriteRequest: {
+            name: null | string;
+            /** Format: int64 */
+            featureTypeId: number;
+            geometry: components["schemas"]["GeoJsonGeometry"];
+            description: null | string;
+            properties: null | components["schemas"]["JsonElement"];
+            /** Format: uuid */
+            caveId: null | string;
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
         };
         TaxonomyDto: {
             /** Format: int64 */

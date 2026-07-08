@@ -34,7 +34,8 @@
     "zoomTo": "Zoom to",
     "openCave": "Open cave",
     "approximate": "Approximate location — exact coordinates are protected.",
-    "noSelection": "Click a feature on the map to see details."
+    "noSelection": "Click a feature on the map to see details.",
+    "surfaceFeatures": "Surface features"
   },
   "caves": {
     "title": "Caves",
