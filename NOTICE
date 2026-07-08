@@ -1,0 +1,40 @@
+SilexGIS
+Copyright (c) 2014-2026 Silex Brașov speleo club and SilexGIS contributors
+
+This product is licensed under the GNU Affero General Public License v3.0 or later
+(AGPL-3.0-or-later). See the LICENSE file for the full text.
+
+================================================================================
+Bundled third-party components
+================================================================================
+
+This repository redistributes the following third-party works. Their own licenses
+apply to those files and are reproduced alongside them.
+
+--------------------------------------------------------------------------------
+CaveView.js
+--------------------------------------------------------------------------------
+A 3D cave-survey viewer, vendored as a prebuilt runtime bundle under
+client/public/caveview/. Used on demand by the embedded 3D viewer.
+
+  Source:    https://github.com/aardgoose/CaveView.js (release 2.9.0)
+  License:   MIT — see client/public/caveview/LICENSE
+  Provenance: client/public/caveview/README.md
+
+--------------------------------------------------------------------------------
+Feature symbol icons
+--------------------------------------------------------------------------------
+The 19 PNG symbols under client/public/feature_symbols/ (used to render surface
+features on the map). These originate from earlier SilexGIS versions.
+
+  Provenance and license status: client/public/feature_symbols/PROVENANCE.md
+
+================================================================================
+Dependencies
+================================================================================
+
+SilexGIS is built with open-source libraries obtained through NuGet (server) and
+npm (client); those are not redistributed here as source. Their licenses are those
+declared by each package. Notable runtime components include ASP.NET Core,
+OpenIddict, EF Core with Npgsql and NetTopologySuite, GDAL (via MaxRev.Gdal),
+React, Ant Design and OpenLayers.
