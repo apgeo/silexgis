@@ -153,3 +153,5 @@ artifacts/
 .vs/
 TestResults/
 *.received.*
+# Editor-local settings
+.vscode/
