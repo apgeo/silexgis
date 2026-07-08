@@ -110,7 +110,8 @@ export default function MapPage() {
 
   return (
     <Group orientation="horizontal" className="map-workspace">
-      <Panel defaultSize={16} minSize={10} className="map-workspace-panel">
+      {/* Panel sizes: bare numbers mean pixels in react-resizable-panels v4 — use percent strings. */}
+      <Panel defaultSize="16%" minSize="10%" className="map-workspace-panel">
         <LayerPanel
           layers={layers ?? []}
           activeBaseId={activeBaseId}
@@ -125,7 +126,7 @@ export default function MapPage() {
         />
       </Panel>
       <Separator className="map-workspace-handle" />
-      <Panel minSize={30}>
+      <Panel minSize="30%">
         <div className="map-canvas-wrap">
           <div ref={mapTarget} className="map-canvas" data-testid="map-canvas" />
           <div className="map-search-overlay">
@@ -139,7 +140,7 @@ export default function MapPage() {
         </div>
       </Panel>
       <Separator className="map-workspace-handle" />
-      <Panel defaultSize={22} minSize={12} className="map-workspace-panel">
+      <Panel defaultSize="22%" minSize="12%" className="map-workspace-panel">
         <SelectionPanel />
       </Panel>
     </Group>

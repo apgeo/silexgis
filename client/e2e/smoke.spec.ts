@@ -21,8 +21,11 @@ test('login, map workspace and cave registry work end to end', async ({ page }) 
   await login(page);
   await expect(page.getByRole('radio', { name: 'OpenStreetMap' })).toBeChecked();
 
-  // Layer panel shows the entrance overlay toggle.
+  // Layer panel shows the entrance overlay toggle. Visibility matters here:
+  // checked-state assertions pass even when the dock is collapsed to a sliver.
   await expect(page.getByRole('checkbox', { name: 'Cave entrances' })).toBeChecked();
+  await expect(page.getByText('Base layers')).toBeVisible();
+  await expect(page.getByText(/Click a feature on the map/)).toBeVisible();
 
   // Cave registry lists demo data.
   await page.goto('/caves');
