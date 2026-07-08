@@ -14,7 +14,13 @@ export interface FeatureSelection {
   featureId: string;
 }
 
-export type WorkspaceSelection = EntranceSelection | FeatureSelection;
+/** Cave picked without a specific entrance (e.g. from a popped-out registry). */
+export interface CaveSelection {
+  kind: 'cave';
+  caveId: string;
+}
+
+export type WorkspaceSelection = EntranceSelection | FeatureSelection | CaveSelection;
 
 interface WorkspaceState {
   selection: WorkspaceSelection | null;

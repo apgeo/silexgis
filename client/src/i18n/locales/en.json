@@ -315,5 +315,10 @@
     "linkCopied": "Share link copied.",
     "exportImage": "Export map image",
     "sharedNotFound": "This shared view does not exist or was revoked."
+  },
+  "panel": {
+    "unknown": "Unknown panel.",
+    "registryTitle": "Cave registry",
+    "popOut": "Pop out the registry into its own window"
   }
 }

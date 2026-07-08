@@ -315,5 +315,10 @@
     "linkCopied": "Linkul de partajare a fost copiat.",
     "exportImage": "Exportă imaginea hărții",
     "sharedNotFound": "Această vedere partajată nu există sau a fost revocată."
+  },
+  "panel": {
+    "unknown": "Panou necunoscut.",
+    "registryTitle": "Registrul peșterilor",
+    "popOut": "Deschide registrul într-o fereastră separată"
   }
 }

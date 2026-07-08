@@ -17,7 +17,7 @@ import {
 import { formatLonLat } from '../../geo/coords.ts';
 import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
 import { fitGeoJsonGeometry, flyTo } from '../../map/mapContext.ts';
-import { useWorkspaceStore, type EntranceSelection, type FeatureSelection } from '../../stores/workspaceStore.ts';
+import { useWorkspaceStore, type CaveSelection, type EntranceSelection, type FeatureSelection } from '../../stores/workspaceStore.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 import { parsePropertiesSchema } from '../features/propertiesSchema.ts';
 
@@ -33,14 +33,14 @@ export default function SelectionPanel() {
     );
   }
 
-  return selection.kind === 'entrance' ? (
-    <CaveCard selection={selection} />
-  ) : (
-    <FeatureCard selection={selection} />
-  );
+  if (selection.kind === 'feature') {
+    return <FeatureCard selection={selection} />;
+  }
+
+  return <CaveCard selection={selection} />;
 }
 
-function CaveCard({ selection }: { selection: EntranceSelection }) {
+function CaveCard({ selection }: { selection: EntranceSelection | CaveSelection }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { data: cave, isPending } = useCave(selection.caveId);
@@ -55,7 +55,7 @@ function CaveCard({ selection }: { selection: EntranceSelection }) {
     );
   }
 
-  const entrance = entrances?.find((e) => e.id === selection.entranceId);
+  const entrance = selection.kind === 'entrance' ? entrances?.find((e) => e.id === selection.entranceId) : undefined;
   const typeName = caveTypes?.find((x) => x.id === cave.caveTypeId)?.name;
 
   return (

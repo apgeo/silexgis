@@ -155,6 +155,21 @@ test('cave photo attachment round-trip', async ({ page }) => {
   await expect(page.getByText('e2e-photo.png')).not.toBeVisible();
 });
 
+test('pop-out registry drives the main map across windows', async ({ page, context }) => {
+  await login(page);
+
+  // Open the registry pop-out; it shares the session and the workspace bus.
+  const popupPromise = context.waitForEvent('page');
+  await page.getByRole('button', { name: 'export' }).click();
+  const popup = await popupPromise;
+  await expect(popup.getByText('Cave registry')).toBeVisible({ timeout: 15_000 });
+
+  // Picking a cave in the pop-out selects it in the MAIN window's dock.
+  await popup.getByText('Peștera Demo Mare').click();
+  await expect(page.getByRole('heading', { name: 'Peștera Demo Mare' })).toBeVisible({ timeout: 15_000 });
+  await popup.close();
+});
+
 test('saved views: save, share anonymously, delete', async ({ page, browser, context }) => {
   const viewName = `E2E View ${Date.now()}`;
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);

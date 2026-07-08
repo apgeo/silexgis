@@ -23,6 +23,7 @@ const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
 const TeamsPage = lazy(() => import('./pages/teams/TeamsPage.tsx'));
 const SecurityPage = lazy(() => import('./pages/account/SecurityPage.tsx'));
 const SharedViewPage = lazy(() => import('./pages/SharedViewPage.tsx'));
+const PanelPage = lazy(() => import('./pages/panel/PanelPage.tsx'));
 
 function Loadable({ children }: { children: ReactNode }) {
   return (
@@ -39,6 +40,8 @@ const router = createBrowserRouter([
   {
     element: <RequireAuth />,
     children: [
+      // Chrome-less pop-out panels join the workspace bus from their own windows.
+      { path: '/panel/:panelId', element: <Loadable><PanelPage /></Loadable> },
       {
         element: <AppLayout />,
         children: [

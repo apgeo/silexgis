@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Button, Tooltip } from 'antd';
+import { ExportOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { useFeatureTypes, useGeofiles, useMapLayers, useMapViews, useMe, useRasterMaps } from '../api/hooks.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
@@ -20,9 +23,10 @@ import {
 import { attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
 import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
+import { subscribe } from '../workspace/workspaceBus.ts';
 import { syncRasterLayers } from '../map/rasterLayers.ts';
 import { attachHoverTooltip } from '../map/hoverTooltip.ts';
-import { getWorkspaceMap } from '../map/mapContext.ts';
+import { flyTo, getWorkspaceMap } from '../map/mapContext.ts';
 import { MapEditController } from '../map/mapEdit.ts';
 import { attachSelection } from '../map/selection.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
@@ -30,6 +34,7 @@ import './MapPage.css';
 
 /** Map workspace v1: fixed resizable panes; docking comes later. */
 export default function MapPage() {
+  const { t } = useTranslation();
   const mapTarget = useRef<HTMLDivElement>(null);
   const { data: layers } = useMapLayers();
   const { data: featureTypes } = useFeatureTypes();
@@ -105,6 +110,15 @@ export default function MapPage() {
       new globalThis.Map(Object.entries(rasterOpacity)),
     );
   }, [readyRasters, visibleRasterIds, rasterOpacity]);
+
+  // Pop-out windows publish picks over the workspace bus; the main map follows.
+  useEffect(() => subscribe((event) => {
+    if (event.kind === 'selection') {
+      setSelection(event.selection);
+    } else if (event.kind === 'fly-to') {
+      flyTo(event.lon, event.lat, event.zoom ?? 15);
+    }
+  }), [setSelection]);
 
   // Apply the user's home view once per session when the workspace first opens.
   const { data: savedViews } = useMapViews();
@@ -246,6 +260,15 @@ export default function MapPage() {
           <div ref={mapTarget} className="map-canvas" data-testid="map-canvas" />
           <div className="map-search-overlay">
             <MapSearch />
+          </div>
+          <div className="map-popout-overlay">
+            <Tooltip title={t('panel.popOut')}>
+              <Button
+                size="small"
+                icon={<ExportOutlined />}
+                onClick={() => window.open('/panel/registry', 'silexgis-registry', 'popup,width=900,height=700')}
+              />
+            </Tooltip>
           </div>
           {canEdit && editController && (
             <div className="map-edit-overlay">
