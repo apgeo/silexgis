@@ -1016,6 +1016,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/shared/views/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read-only shared view by token (anonymous). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SharedViewDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -2884,6 +2922,186 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/map-views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's visible saved views. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MapViewDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Saves a view; the caller becomes owner. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MapViewWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MapViewDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map-views/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Updates a saved view (Write permission). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MapViewWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MapViewDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes a saved view (Delete permission). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map-views/{id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mints (or returns) the view's share token (Share permission). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MapViewDto"];
+                    };
+                };
+            };
+        };
+        /** Revokes the share token. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2913,7 +3131,7 @@ export interface components {
         /** @enum {unknown} */
         AclSubjectKind: "user" | "team";
         /** @enum {unknown} */
-        AttachedEntityType: "cave" | "caveEntrance" | "surfaceFeature" | "tripLog" | "team" | "geofile" | "georeferencedMap";
+        AttachedEntityType: "cave" | "caveEntrance" | "surfaceFeature" | "tripLog" | "team" | "geofile" | "georeferencedMap" | "mapView";
         AttachmentCreateRequest: {
             /** Format: uuid */
             fileId: string;
@@ -3305,6 +3523,34 @@ export interface components {
         };
         /** @enum {unknown} */
         MapLayerKind: "xyz" | "wmts" | "wms" | "vector" | "cog";
+        MapViewDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: null | string;
+            config: components["schemas"]["JsonElement"];
+            /** Format: uuid */
+            shareToken: null | string;
+            isHome: boolean;
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        MapViewWriteRequest: {
+            name: string;
+            description: null | string;
+            config: components["schemas"]["JsonElement"];
+            isHome: boolean;
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
+        };
         MeDto: {
             /** Format: uuid */
             id: string;
@@ -3433,6 +3679,10 @@ export interface components {
             /** Format: date */
             tripDate: string;
             center: null | components["schemas"]["GeoJsonPoint"];
+        };
+        SharedViewDto: {
+            name: string;
+            config: components["schemas"]["JsonElement"];
         };
         SurfaceFeatureDto: {
             /** Format: uuid */

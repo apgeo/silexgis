@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-import { useFeatureTypes, useGeofiles, useMapLayers, useMe, useRasterMaps } from '../api/hooks.ts';
+import { useFeatureTypes, useGeofiles, useMapLayers, useMapViews, useMe, useRasterMaps } from '../api/hooks.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
 import LayerPanel from '../components/map/LayerPanel.tsx';
+import ViewsPanel from '../components/map/ViewsPanel.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
 import SelectionPanel from '../components/map/SelectionPanel.tsx';
 import { setActiveBaseLayer, syncBaseLayers } from '../map/baseLayers.ts';
@@ -18,6 +19,7 @@ import {
 } from '../map/featureLayer.ts';
 import { attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
 import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
+import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import { syncRasterLayers } from '../map/rasterLayers.ts';
 import { attachHoverTooltip } from '../map/hoverTooltip.ts';
 import { getWorkspaceMap } from '../map/mapContext.ts';
@@ -104,6 +106,19 @@ export default function MapPage() {
     );
   }, [readyRasters, visibleRasterIds, rasterOpacity]);
 
+  // Apply the user's home view once per session when the workspace first opens.
+  const { data: savedViews } = useMapViews();
+  useEffect(() => {
+    if (savedViews && !sessionStorage.getItem('silexgis.homeApplied')) {
+      sessionStorage.setItem('silexgis.homeApplied', '1');
+      const home = savedViews.find((v) => v.isHome);
+      if (home) {
+        applyView(home);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on first data
+  }, [savedViews]);
+
   // Highlight follows the workspace selection (also when set from the features table).
   useEffect(() => {
     setSelectedSurfaceFeature(selection?.kind === 'feature' ? selection.featureId : null);
@@ -146,6 +161,52 @@ export default function MapPage() {
     layer?.setVisible(surfaceFeaturesVisible);
   }, [surfaceFeaturesVisible]);
 
+  const captureCurrentView = () =>
+    captureViewConfig({
+      baseLayerId: activeBaseId,
+      entrancesVisible,
+      surfaceFeaturesVisible,
+      geofileIds: visibleGeofileIds,
+      rasters: visibleRasterIds.map((id) => ({ id, opacity: rasterOpacity[id] })),
+      tagFilter,
+    });
+
+  const applyView = (view: { config: unknown }) => {
+    const ui = applyViewConfig(view.config);
+    if (!ui) {
+      return;
+    }
+    if (ui.baseLayerId !== undefined) {
+      setActiveBaseId(ui.baseLayerId);
+      setActiveBaseLayer(getWorkspaceMap(), ui.baseLayerId);
+    }
+    setEntrancesVisible(ui.entrancesVisible);
+    setSurfaceFeaturesVisible(ui.surfaceFeaturesVisible);
+    for (const id of visibleGeofileIds) {
+      if (!ui.geofileIds.includes(id)) {
+        setGeofileVisible(id, false);
+      }
+    }
+    for (const id of ui.geofileIds) {
+      setGeofileVisible(id, true);
+    }
+    for (const id of visibleRasterIds) {
+      if (!ui.rasters.some((r) => r.id === id)) {
+        setRasterVisible(id, false);
+      }
+    }
+    for (const raster of ui.rasters) {
+      setRasterVisible(raster.id, true);
+      if (raster.opacity !== undefined) {
+        setRasterOpacity(raster.id, raster.opacity);
+      }
+    }
+    setTagFilter(ui.tagFilter);
+    setMapTagFilter(ui.tagFilter);
+    reloadEntrances();
+    reloadSurfaceFeatures();
+  };
+
   return (
     <Group orientation="horizontal" className="map-workspace">
       {/* Panel sizes: bare numbers mean pixels in react-resizable-panels v4 — use percent strings. */}
@@ -176,6 +237,7 @@ export default function MapPage() {
             reloadEntrances();
             reloadSurfaceFeatures();
           }}
+          footer={<ViewsPanel onCapture={captureCurrentView} onApply={applyView} />}
         />
       </Panel>
       <Separator className="map-workspace-handle" />

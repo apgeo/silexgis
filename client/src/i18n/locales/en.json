@@ -306,5 +306,14 @@
     "disableConfirm": "Disable two-factor authentication?",
     "recoveryLeft": "Recovery codes left: {{count}}",
     "recoveryTitle": "Store these recovery codes now — they are shown only once."
+  },
+  "views": {
+    "title": "Saved views",
+    "namePlaceholder": "View name…",
+    "save": "Save current view",
+    "share": "Copy share link",
+    "linkCopied": "Share link copied.",
+    "exportImage": "Export map image",
+    "sharedNotFound": "This shared view does not exist or was revoked."
   }
 }

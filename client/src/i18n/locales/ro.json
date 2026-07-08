@@ -306,5 +306,14 @@
     "disableConfirm": "Dezactivați autentificarea în doi pași?",
     "recoveryLeft": "Coduri de recuperare rămase: {{count}}",
     "recoveryTitle": "Salvați aceste coduri de recuperare acum — sunt afișate o singură dată."
+  },
+  "views": {
+    "title": "Vederi salvate",
+    "namePlaceholder": "Nume vedere…",
+    "save": "Salvează vederea curentă",
+    "share": "Copiază linkul de partajare",
+    "linkCopied": "Linkul de partajare a fost copiat.",
+    "exportImage": "Exportă imaginea hărții",
+    "sharedNotFound": "Această vedere partajată nu există sau a fost revocată."
   }
 }

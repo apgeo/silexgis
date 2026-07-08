@@ -22,6 +22,7 @@ const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx
 const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
 const TeamsPage = lazy(() => import('./pages/teams/TeamsPage.tsx'));
 const SecurityPage = lazy(() => import('./pages/account/SecurityPage.tsx'));
+const SharedViewPage = lazy(() => import('./pages/SharedViewPage.tsx'));
 
 function Loadable({ children }: { children: ReactNode }) {
   return (
@@ -34,6 +35,7 @@ function Loadable({ children }: { children: ReactNode }) {
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/auth/callback', element: <CallbackPage /> },
+  { path: '/shared/view/:token', element: <Loadable><SharedViewPage /></Loadable> },
   {
     element: <RequireAuth />,
     children: [

@@ -155,6 +155,41 @@ test('cave photo attachment round-trip', async ({ page }) => {
   await expect(page.getByText('e2e-photo.png')).not.toBeVisible();
 });
 
+test('saved views: save, share anonymously, delete', async ({ page, browser, context }) => {
+  const viewName = `E2E View ${Date.now()}`;
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await login(page);
+
+  // Save the current workspace as a named view.
+  const dock = page.locator('.map-workspace-panel').first();
+  await dock.getByPlaceholder('View name…').fill(viewName);
+  await dock.getByRole('button', { name: 'save' }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  // Typography.Link without href carries no link role; match by text.
+  const viewLink = page.locator('.map-workspace-panel').first().getByText(viewName);
+  await expect(viewLink).toBeVisible();
+
+  // Share: the link lands on the clipboard; an anonymous browser can open it.
+  await page.getByRole('listitem').filter({ hasText: viewName })
+    .getByRole('button', { name: 'link' }).click();
+  await expect(page.getByText('Share link copied.')).toBeVisible({ timeout: 15_000 });
+  const sharedUrl = await page.evaluate(() => navigator.clipboard.readText());
+  expect(sharedUrl).toContain('/shared/view/');
+
+  const anonymous = await browser.newContext();
+  const anonymousPage = await anonymous.newPage();
+  await anonymousPage.goto(sharedUrl);
+  await anonymousPage.waitForURL(/\/shared\/view\//); // no login redirect
+  await expect(anonymousPage.getByRole('heading', { name: viewName })).toBeVisible({ timeout: 15_000 });
+  await expect(anonymousPage.locator('.ol-viewport')).toBeVisible();
+  await anonymous.close();
+
+  // Cleanup.
+  await page.getByRole('listitem').filter({ hasText: viewName })
+    .getByRole('button', { name: 'delete' }).click();
+  await expect(viewLink).not.toBeVisible({ timeout: 15_000 });
+});
+
 test('teams and per-object permission grants', async ({ page }) => {
   const teamName = `E2E Team ${Date.now()}`;
   await login(page);
@@ -164,7 +199,7 @@ test('teams and per-object permission grants', async ({ page }) => {
   await page.getByRole('button', { name: /New team/ }).click();
   await page.getByLabel('Name', { exact: true }).fill(teamName);
   await page.getByRole('button', { name: 'OK' }).click();
-  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
   const teamRow = page.getByRole('row', { name: new RegExp(teamName) });
   await expect(teamRow).toBeVisible();
   await teamRow.getByRole('button', { name: 'Manage' }).click();
@@ -183,14 +218,14 @@ test('teams and per-object permission grants', async ({ page }) => {
   await modal.getByRole('button', { name: /Add/ }).click();
   await expect(modal.getByText(teamName)).toBeVisible();
   await modal.getByRole('button', { name: 'OK' }).click();
-  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
 
   // Reopen: the grant persisted; then remove it (cleanup).
   await page.getByRole('button', { name: /Permissions/ }).click();
   await expect(modal.getByText(teamName)).toBeVisible({ timeout: 15_000 });
   await modal.getByRole('button', { name: 'delete' }).click();
   await modal.getByRole('button', { name: 'OK' }).click();
-  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
 });
 
 test('trip log with participants, tags and the audit trail', async ({ page }) => {

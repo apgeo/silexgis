@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import type { ReactNode } from 'react';
 import { Checkbox, Divider, Radio, Select, Slider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useTags, type GeofileInfo, type MapLayerInfo, type RasterMapInfo } from '../../api/hooks.ts';
@@ -21,6 +22,7 @@ interface LayerPanelProps {
   onRasterOpacityChange: (id: string, opacity: number) => void;
   tagFilter: string | null;
   onTagFilterChange: (slug: string | null) => void;
+  footer?: ReactNode;
 }
 
 export default function LayerPanel({
@@ -41,6 +43,7 @@ export default function LayerPanel({
   onRasterOpacityChange,
   tagFilter,
   onTagFilterChange,
+  footer,
 }: LayerPanelProps) {
   const { t } = useTranslation();
   const { data: tags } = useTags('');
@@ -126,6 +129,7 @@ export default function LayerPanel({
           </div>
         </>
       )}
+      {footer}
     </div>
   );
 }
