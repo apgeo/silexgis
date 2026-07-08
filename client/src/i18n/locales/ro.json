@@ -39,7 +39,8 @@
     "approximate": "Locație aproximativă — coordonatele exacte sunt protejate.",
     "noSelection": "Apăsați pe un element de pe hartă pentru detalii.",
     "surfaceFeatures": "Fenomene de suprafață",
-    "geofiles": "Fișiere importate"
+    "geofiles": "Fișiere importate",
+    "rasterMaps": "Hărți raster"
   },
   "caves": {
     "title": "Peșteri",
@@ -181,6 +182,28 @@
       "uploaded": "În așteptare",
       "importing": "Se importă…",
       "imported": "Importat",
+      "failed": "Eșuat"
+    },
+    "tabVector": "Fișiere vectoriale",
+    "tabRaster": "Hărți raster",
+    "mapKind": "Tip",
+    "editRaster": "Editare hartă raster",
+    "deleteRasterConfirm": "Ștergeți această hartă raster?",
+    "rasterUploadPrompt": "Apăsați sau trageți fișiere GeoTIFF georeferențiate aici",
+    "rasterUploadHint": "Convertite în fundal în Cloud-Optimized GeoTIFF.",
+    "defaultOpacity": "Opacitate implicită (0–1)",
+    "attribution": "Atribuire",
+    "mapKinds": {
+      "geological": "Geologică",
+      "topographic": "Topografică",
+      "tourist": "Turistică",
+      "caveMap": "Hartă de peșteră",
+      "other": "Altele"
+    },
+    "rasterStatusValues": {
+      "uploaded": "În așteptare",
+      "processing": "Se procesează…",
+      "ready": "Gata",
       "failed": "Eșuat"
     }
   },

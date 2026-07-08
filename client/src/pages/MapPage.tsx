@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-import { useFeatureTypes, useGeofiles, useMapLayers, useMe } from '../api/hooks.ts';
+import { useFeatureTypes, useGeofiles, useMapLayers, useMe, useRasterMaps } from '../api/hooks.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
 import LayerPanel from '../components/map/LayerPanel.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
@@ -16,6 +16,7 @@ import {
   setSelectedSurfaceFeature,
 } from '../map/featureLayer.ts';
 import { attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
+import { syncRasterLayers } from '../map/rasterLayers.ts';
 import { attachHoverTooltip } from '../map/hoverTooltip.ts';
 import { getWorkspaceMap } from '../map/mapContext.ts';
 import { MapEditController } from '../map/mapEdit.ts';
@@ -41,6 +42,15 @@ export default function MapPage() {
   const importedGeofiles = useMemo(
     () => (geofilePage?.items ?? []).filter((g) => g.importStatus === 'imported'),
     [geofilePage],
+  );
+  const visibleRasterIds = useWorkspaceStore((s) => s.visibleRasterIds);
+  const setRasterVisible = useWorkspaceStore((s) => s.setRasterVisible);
+  const rasterOpacity = useWorkspaceStore((s) => s.rasterOpacity);
+  const setRasterOpacity = useWorkspaceStore((s) => s.setRasterOpacity);
+  const { data: rasterPage } = useRasterMaps({ pageSize: 100 });
+  const readyRasters = useMemo(
+    () => (rasterPage?.items ?? []).filter((r) => r.status === 'ready'),
+    [rasterPage],
   );
   const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
 
@@ -80,6 +90,16 @@ export default function MapPage() {
   useEffect(() => {
     syncGeofileLayers(getWorkspaceMap(), importedGeofiles, new Set(visibleGeofileIds));
   }, [importedGeofiles, visibleGeofileIds]);
+
+  // Raster overlays likewise, with per-map opacity.
+  useEffect(() => {
+    syncRasterLayers(
+      getWorkspaceMap(),
+      readyRasters,
+      new Set(visibleRasterIds),
+      new globalThis.Map(Object.entries(rasterOpacity)),
+    );
+  }, [readyRasters, visibleRasterIds, rasterOpacity]);
 
   // Highlight follows the workspace selection (also when set from the features table).
   useEffect(() => {
@@ -141,6 +161,11 @@ export default function MapPage() {
           geofiles={importedGeofiles}
           visibleGeofileIds={visibleGeofileIds}
           onGeofileVisibleChange={setGeofileVisible}
+          rasters={readyRasters}
+          visibleRasterIds={visibleRasterIds}
+          onRasterVisibleChange={setRasterVisible}
+          rasterOpacity={rasterOpacity}
+          onRasterOpacityChange={setRasterOpacity}
         />
       </Panel>
       <Separator className="map-workspace-handle" />

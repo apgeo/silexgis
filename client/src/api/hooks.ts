@@ -27,6 +27,7 @@ export const queryKeys = {
   surfaceFeature: (id: string) => ['surface-features', 'detail', id] as const,
   geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
   attachments: (entityType: string, entityId: string) => ['attachments', entityType, entityId] as const,
+  rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
 };
 
 async function unwrap<T>(
@@ -352,6 +353,75 @@ export function useDeleteAttachment() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error, response } = await api.DELETE('/api/v1/attachments/{id}', { params: { path: { id } } });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+export type RasterMapInfo = components['schemas']['GeoreferencedMapDto'];
+export type RasterMapUpdate = components['schemas']['GeoreferencedMapUpdateRequest'];
+
+export interface RasterMapListParams {
+  page?: number;
+  pageSize?: number;
+  caveId?: string;
+}
+
+export function useRasterMaps(params: RasterMapListParams, pollWhileProcessing = false) {
+  return useQuery({
+    queryKey: queryKeys.rasterMaps(params),
+    queryFn: () => unwrap(api.GET('/api/v1/georeferenced-maps', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+    // COG normalization runs in a background job; the signed CogUrl also has a
+    // 10-minute lifetime, so refresh periodically either way.
+    refetchInterval: pollWhileProcessing
+      ? (query) =>
+          query.state.data?.items.some(
+            (m) => m.status === 'uploaded' || m.status === 'processing',
+          )
+            ? 2000
+            : 8 * 60_000
+      : 8 * 60_000,
+  });
+}
+
+function useInvalidateRasterMaps() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: ['raster-maps'] });
+}
+
+export function useUploadRasterMap() {
+  const invalidate = useInvalidateRasterMaps();
+  return useMutation({
+    mutationFn: async (file: File): Promise<RasterMapInfo> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      return unwrap(api.POST('/api/v1/georeferenced-maps', {
+        body: form as never,
+        bodySerializer: (b: unknown) => b as FormData,
+      }));
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateRasterMap() {
+  const invalidate = useInvalidateRasterMaps();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: RasterMapUpdate }) =>
+      unwrap(api.PUT('/api/v1/georeferenced-maps/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useDeleteRasterMap() {
+  const invalidate = useInvalidateRasterMaps();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/georeferenced-maps/{id}', { params: { path: { id } } });
       if (error !== undefined) {
         throw new Error(`API error ${response.status}`);
       }

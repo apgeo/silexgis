@@ -155,6 +155,33 @@ test('cave photo attachment round-trip', async ({ page }) => {
   await expect(page.getByText('e2e-photo.png')).not.toBeVisible();
 });
 
+test('georeferenced raster upload, COG processing, map overlay and delete', async ({ page }) => {
+  await login(page);
+
+  // Upload a small georeferenced GeoTIFF on the raster tab; a background job
+  // converts it to a Cloud-Optimized GeoTIFF.
+  await page.goto('/geodata');
+  await page.getByRole('tab', { name: 'Raster maps' }).click();
+  await page.locator('input[type=file][accept=".tif,.tiff"]').setInputFiles('e2e/fixtures/e2e-map.tif');
+  const row = page.getByRole('row', { name: /e2e-map/ });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await expect(row.getByText('Ready')).toBeVisible({ timeout: 30_000 });
+
+  // Show on map: the overlay appears in the layer panel with its opacity slider.
+  await row.getByRole('button', { name: 'aim' }).click();
+  await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('checkbox', { name: 'e2e-map' })).toBeChecked();
+  await expect(page.locator('.ant-slider')).toBeVisible();
+
+  // Cleanup.
+  await page.goto('/geodata');
+  await page.getByRole('tab', { name: 'Raster maps' }).click();
+  const rowAgain = page.getByRole('row', { name: /e2e-map/ });
+  await rowAgain.getByRole('button', { name: 'delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
+});
+
 test('geofile upload, background import, map layer, export and delete', async ({ page }) => {
   await login(page);
 

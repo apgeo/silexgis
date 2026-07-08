@@ -39,7 +39,8 @@
     "approximate": "Approximate location — exact coordinates are protected.",
     "noSelection": "Click a feature on the map to see details.",
     "surfaceFeatures": "Surface features",
-    "geofiles": "Imported files"
+    "geofiles": "Imported files",
+    "rasterMaps": "Raster maps"
   },
   "caves": {
     "title": "Caves",
@@ -181,6 +182,28 @@
       "uploaded": "Queued",
       "importing": "Importing…",
       "imported": "Imported",
+      "failed": "Failed"
+    },
+    "tabVector": "Vector files",
+    "tabRaster": "Raster maps",
+    "mapKind": "Kind",
+    "editRaster": "Edit raster map",
+    "deleteRasterConfirm": "Delete this raster map entry?",
+    "rasterUploadPrompt": "Click or drag georeferenced GeoTIFFs here to upload",
+    "rasterUploadHint": "Converted to Cloud-Optimized GeoTIFF in the background.",
+    "defaultOpacity": "Default opacity (0–1)",
+    "attribution": "Attribution",
+    "mapKinds": {
+      "geological": "Geological",
+      "topographic": "Topographic",
+      "tourist": "Tourist",
+      "caveMap": "Cave map",
+      "other": "Other"
+    },
+    "rasterStatusValues": {
+      "uploaded": "Queued",
+      "processing": "Processing…",
+      "ready": "Ready",
       "failed": "Failed"
     }
   },

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Checkbox, Divider, Radio, Typography } from 'antd';
+import { Checkbox, Divider, Radio, Slider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import type { GeofileInfo, MapLayerInfo } from '../../api/hooks.ts';
+import type { GeofileInfo, MapLayerInfo, RasterMapInfo } from '../../api/hooks.ts';
 
 interface LayerPanelProps {
   layers: MapLayerInfo[];
@@ -14,6 +14,11 @@ interface LayerPanelProps {
   geofiles: GeofileInfo[];
   visibleGeofileIds: string[];
   onGeofileVisibleChange: (id: string, visible: boolean) => void;
+  rasters: RasterMapInfo[];
+  visibleRasterIds: string[];
+  onRasterVisibleChange: (id: string, visible: boolean) => void;
+  rasterOpacity: Record<string, number>;
+  onRasterOpacityChange: (id: string, opacity: number) => void;
 }
 
 export default function LayerPanel({
@@ -27,6 +32,11 @@ export default function LayerPanel({
   geofiles,
   visibleGeofileIds,
   onGeofileVisibleChange,
+  rasters,
+  visibleRasterIds,
+  onRasterVisibleChange,
+  rasterOpacity,
+  onRasterOpacityChange,
 }: LayerPanelProps) {
   const { t } = useTranslation();
 
@@ -66,6 +76,37 @@ export default function LayerPanel({
                 {geofile.name}
               </Checkbox>
             ))}
+          </div>
+        </>
+      )}
+      {rasters.length > 0 && (
+        <>
+          <Divider style={{ margin: '12px 0' }} />
+          <Typography.Text strong>{t('map.rasterMaps')}</Typography.Text>
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {rasters.map((raster) => {
+              const visible = visibleRasterIds.includes(raster.id);
+              return (
+                <div key={raster.id}>
+                  <Checkbox
+                    checked={visible}
+                    onChange={(e) => onRasterVisibleChange(raster.id, e.target.checked)}
+                  >
+                    {raster.name}
+                  </Checkbox>
+                  {visible && (
+                    <Slider
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      style={{ margin: '0 8px 8px 24px' }}
+                      value={rasterOpacity[raster.id] ?? Number(raster.defaultOpacity)}
+                      onChange={(value) => onRasterOpacityChange(raster.id, value)}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       )}
