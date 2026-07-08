@@ -43,6 +43,11 @@ public sealed class PersistenceTests : IDisposable
         (await db.RockTypes.AnyAsync(x => x.Code == "limestone")).ShouldBeTrue();
         (await db.FeatureTypes.CountAsync()).ShouldBeGreaterThanOrEqualTo(19);
 
+        // Typed-properties schemas ship (and backfill) for selected feature types.
+        var sinkhole = await db.FeatureTypes.SingleAsync(x => x.Code == "sinkhole");
+        sinkhole.PropertiesSchema.ShouldNotBeNull();
+        sinkhole.PropertiesSchema.ShouldContain("depth_m");
+
         // Re-running the seeder must not duplicate rows.
         var before = await db.FeatureTypes.CountAsync();
         await TaxonomySeeder.SeedAsync(db);
