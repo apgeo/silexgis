@@ -48,7 +48,7 @@ public static class SurfaceFeatureEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var query = db.SurfaceFeatures.AsNoTracking().VisibleTo(user);
+        var query = db.SurfaceFeatures.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.SurfaceFeature);
 
         if (!string.IsNullOrWhiteSpace(tag))
         {
@@ -106,12 +106,13 @@ public static class SurfaceFeatureEndpoints
     private static async Task<Results<Ok<SurfaceFeatureDto>, ProblemHttpResult>> GetAsync(
         Guid id,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
         var feature = await db.SurfaceFeatures.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (feature is null || !PermissionEvaluator.Can(user, feature, ObjectPermission.Read))
+        if (feature is null || !await permissions.CanAsync(user, feature, ObjectPermission.Read, ct))
         {
             // Existence of a feature the caller cannot read is not disclosed.
             return ApiProblems.NotFound("surface_feature.not_found");
@@ -124,6 +125,7 @@ public static class SurfaceFeatureEndpoints
     private static async Task<Results<Created<SurfaceFeatureDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
         SurfaceFeatureWriteRequest request,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -138,7 +140,7 @@ public static class SurfaceFeatureEndpoints
             return ApiProblems.Forbidden("surface_feature.create_requires_editor");
         }
 
-        var validation = await ValidateReferencesAsync(db, user, request, ct);
+        var validation = await ValidateReferencesAsync(db, permissions, user, request, ct);
         if (validation is not null)
         {
             return validation;
@@ -160,6 +162,7 @@ public static class SurfaceFeatureEndpoints
         Guid id,
         SurfaceFeatureWriteRequest request,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -170,14 +173,14 @@ public static class SurfaceFeatureEndpoints
             return ApiProblems.NotFound("surface_feature.not_found");
         }
 
-        if (user is null || !PermissionEvaluator.Can(user, feature, ObjectPermission.Write))
+        if (user is null || !await permissions.CanAsync(user, feature, ObjectPermission.Write, ct))
         {
-            return PermissionEvaluator.Can(user, feature, ObjectPermission.Read)
+            return await permissions.CanAsync(user, feature, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("surface_feature.not_found");
         }
 
-        var validation = await ValidateReferencesAsync(db, user, request, ct);
+        var validation = await ValidateReferencesAsync(db, permissions, user, request, ct);
         if (validation is not null)
         {
             return validation;
@@ -192,6 +195,7 @@ public static class SurfaceFeatureEndpoints
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -202,9 +206,9 @@ public static class SurfaceFeatureEndpoints
             return ApiProblems.NotFound("surface_feature.not_found");
         }
 
-        if (user is null || !PermissionEvaluator.Can(user, feature, ObjectPermission.Delete))
+        if (user is null || !await permissions.CanAsync(user, feature, ObjectPermission.Delete, ct))
         {
-            return PermissionEvaluator.Can(user, feature, ObjectPermission.Read)
+            return await permissions.CanAsync(user, feature, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("surface_feature.not_found");
         }
@@ -225,7 +229,7 @@ public static class SurfaceFeatureEndpoints
     /// visible to the caller (an invisible cave is reported as not found, not forbidden).
     /// </summary>
     private static async Task<ProblemHttpResult?> ValidateReferencesAsync(
-        SilexGisDbContext db, UserContext user, SurfaceFeatureWriteRequest request, CancellationToken ct)
+        SilexGisDbContext db, IPermissionService permissions, UserContext user, SurfaceFeatureWriteRequest request, CancellationToken ct)
     {
         Geometry? geom = request.Geometry.ToGeometryOrNull();
         if (geom is null)
@@ -255,7 +259,7 @@ public static class SurfaceFeatureEndpoints
         if (request.CaveId is not null)
         {
             var cave = await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == request.CaveId, ct);
-            if (cave is null || !PermissionEvaluator.Can(user, cave, ObjectPermission.Read))
+            if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
             {
                 return ApiProblems.BadRequest("surface_feature.cave_not_found", "Linked cave does not exist.");
             }

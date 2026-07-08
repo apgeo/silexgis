@@ -61,6 +61,25 @@ public sealed class AclPermissionService(SilexGisDbContext db) : IPermissionServ
         return effective;
     }
 
+    /// <summary>
+    /// Bulk variant for obfuscation paths that process many caves per request: all cave
+    /// ids on which the caller holds an explicit ViewExactLocation grant (directly or
+    /// via a team). Admin/owner fast paths are evaluated per row by the caller.
+    /// </summary>
+    public async Task<HashSet<Guid>> CaveExactLocationGrantsAsync(UserContext user, CancellationToken ct)
+    {
+        var userId = user.UserId;
+        var teamIds = user.TeamIds;
+        var ids = await db.ObjectAcls.AsNoTracking()
+            .Where(a => a.EntityType == AttachedEntityType.Cave
+                && ((a.SubjectKind == AclSubjectKind.User && a.SubjectId == userId)
+                    || (a.SubjectKind == AclSubjectKind.Team && teamIds.Contains(a.SubjectId)))
+                && a.Permissions.HasFlag(ObjectPermission.ViewExactLocation))
+            .Select(a => a.EntityId)
+            .ToListAsync(ct);
+        return [.. ids];
+    }
+
     private async Task<ObjectPermission> LoadGrantsAsync(
         UserContext user, IProtectedEntity entity, CancellationToken ct)
     {

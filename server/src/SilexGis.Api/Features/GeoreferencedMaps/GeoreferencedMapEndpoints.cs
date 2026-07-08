@@ -175,7 +175,7 @@ public static class GeoreferencedMapEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var query = db.GeoreferencedMaps.AsNoTracking().VisibleTo(user);
+        var query = db.GeoreferencedMaps.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.GeoreferencedMap);
         if (caveId is not null)
         {
             query = query.Where(m => m.CaveId == caveId);
@@ -202,12 +202,13 @@ public static class GeoreferencedMapEndpoints
         Guid id,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
         var map = await db.GeoreferencedMaps.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id, ct);
-        if (map is null || !PermissionEvaluator.Can(user, map, ObjectPermission.Read))
+        if (map is null || !await permissions.CanAsync(user, map, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("georeferenced_map.not_found");
         }
@@ -226,6 +227,7 @@ public static class GeoreferencedMapEndpoints
         GeoreferencedMapUpdateRequest request,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -236,9 +238,9 @@ public static class GeoreferencedMapEndpoints
             return ApiProblems.NotFound("georeferenced_map.not_found");
         }
 
-        if (user is null || !PermissionEvaluator.Can(user, map, ObjectPermission.Write))
+        if (user is null || !await permissions.CanAsync(user, map, ObjectPermission.Write, ct))
         {
-            return PermissionEvaluator.Can(user, map, ObjectPermission.Read)
+            return await permissions.CanAsync(user, map, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("georeferenced_map.not_found");
         }
@@ -251,7 +253,7 @@ public static class GeoreferencedMapEndpoints
         if (request.CaveId is not null)
         {
             var cave = await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == request.CaveId, ct);
-            if (cave is null || !PermissionEvaluator.Can(user, cave, ObjectPermission.Read))
+            if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
             {
                 return ApiProblems.BadRequest("georeferenced_map.cave_not_found", "Linked cave does not exist.");
             }
@@ -274,6 +276,7 @@ public static class GeoreferencedMapEndpoints
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -284,9 +287,9 @@ public static class GeoreferencedMapEndpoints
             return ApiProblems.NotFound("georeferenced_map.not_found");
         }
 
-        if (user is null || !PermissionEvaluator.Can(user, map, ObjectPermission.Delete))
+        if (user is null || !await permissions.CanAsync(user, map, ObjectPermission.Delete, ct))
         {
-            return PermissionEvaluator.Can(user, map, ObjectPermission.Read)
+            return await permissions.CanAsync(user, map, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("georeferenced_map.not_found");
         }

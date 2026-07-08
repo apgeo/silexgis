@@ -137,7 +137,7 @@ public static class GeofileEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var query = db.Geofiles.AsNoTracking().VisibleTo(user);
+        var query = db.Geofiles.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Geofile);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -153,20 +153,22 @@ public static class GeofileEndpoints
     private static async Task<Results<Ok<GeofileDto>, ProblemHttpResult>> GetAsync(
         Guid id,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
-        var (geofile, problem) = await LoadReadableAsync(id, db, userAccessor, ct);
+        var (geofile, problem) = await LoadReadableAsync(id, db, permissions, userAccessor, ct);
         return problem is not null ? problem : TypedResults.Ok(geofile!.ToDto());
     }
 
     private static async Task<Results<Ok<GeofileStatusDto>, ProblemHttpResult>> GetStatusAsync(
         Guid id,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
-        var (geofile, problem) = await LoadReadableAsync(id, db, userAccessor, ct);
+        var (geofile, problem) = await LoadReadableAsync(id, db, permissions, userAccessor, ct);
         return problem is not null ? problem : TypedResults.Ok(geofile!.ToStatusDto());
     }
 
@@ -174,6 +176,7 @@ public static class GeofileEndpoints
         Guid id,
         GeofileUpdateRequest request,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -184,9 +187,9 @@ public static class GeofileEndpoints
             return ApiProblems.NotFound("geofile.not_found");
         }
 
-        if (user is null || !PermissionEvaluator.Can(user, geofile, ObjectPermission.Write))
+        if (user is null || !await permissions.CanAsync(user, geofile, ObjectPermission.Write, ct))
         {
-            return PermissionEvaluator.Can(user, geofile, ObjectPermission.Read)
+            return await permissions.CanAsync(user, geofile, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("geofile.not_found");
         }
@@ -209,6 +212,7 @@ public static class GeofileEndpoints
         Guid id,
         SilexGisDbContext db,
         IFileStore fileStore,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -219,9 +223,9 @@ public static class GeofileEndpoints
             return ApiProblems.NotFound("geofile.not_found");
         }
 
-        if (user is null || !PermissionEvaluator.Can(user, geofile, ObjectPermission.Delete))
+        if (user is null || !await permissions.CanAsync(user, geofile, ObjectPermission.Delete, ct))
         {
-            return PermissionEvaluator.Can(user, geofile, ObjectPermission.Read)
+            return await permissions.CanAsync(user, geofile, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("geofile.not_found");
         }
@@ -254,11 +258,11 @@ public static class GeofileEndpoints
 
     /// <summary>Read-gated fetch; unreadable and missing geofiles are both 404.</summary>
     private static async Task<(Geofile? Geofile, ProblemHttpResult? Problem)> LoadReadableAsync(
-        Guid id, SilexGisDbContext db, IUserContextAccessor userAccessor, CancellationToken ct)
+        Guid id, SilexGisDbContext db, IPermissionService permissions, IUserContextAccessor userAccessor, CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
         var geofile = await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(g => g.Id == id, ct);
-        if (geofile is null || !PermissionEvaluator.Can(user, geofile, ObjectPermission.Read))
+        if (geofile is null || !await permissions.CanAsync(user, geofile, ObjectPermission.Read, ct))
         {
             return (null, ApiProblems.NotFound("geofile.not_found"));
         }

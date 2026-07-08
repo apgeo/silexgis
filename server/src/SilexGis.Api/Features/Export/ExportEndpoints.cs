@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Geodata;
@@ -50,6 +51,7 @@ public static class ExportEndpoints
         string? bbox,
         SilexGisDbContext db,
         IVectorIO vectorIO,
+        AclPermissionService permissions,
         IUserContextAccessor userAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
@@ -67,7 +69,7 @@ public static class ExportEndpoints
 
         // Same filter surface as the caves list; only caves with a main entrance
         // geometry can be exported as vector rows.
-        var query = db.Caves.AsNoTracking().VisibleTo(user).Where(c => c.MainGeom != null);
+        var query = db.Caves.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Cave).Where(c => c.MainGeom != null);
 
         if (caveTypeId is not null)
         {
@@ -95,9 +97,11 @@ public static class ExportEndpoints
         var rows = await query.OrderBy(c => c.Name).ToListAsync(ct);
 
         var gridMeters = access.Value.LocationGridMeters;
+        var exactGrants = await permissions.CaveExactLocationGrantsAsync(user, ct);
         var features = rows.Select(cave =>
         {
-            var exact = LocationProtection.CanViewExactLocation(user, cave);
+            var exact = LocationProtection.CanViewExactLocation(
+                user, cave, exactGrants.Contains(cave.Id) ? ObjectPermission.ViewExactLocation : ObjectPermission.None);
             var geom = exact ? cave.MainGeom! : LocationProtection.Snap(cave.MainGeom!, gridMeters);
             return new VectorFeature(geom, new Dictionary<string, object?>
             {
@@ -140,7 +144,7 @@ public static class ExportEndpoints
             return UnsupportedFormat(format);
         }
 
-        var query = db.SurfaceFeatures.AsNoTracking().VisibleTo(user);
+        var query = db.SurfaceFeatures.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.SurfaceFeature);
 
         if (featureTypeId is not null)
         {
@@ -200,6 +204,7 @@ public static class ExportEndpoints
         string format,
         SilexGisDbContext db,
         IVectorIO vectorIO,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -215,7 +220,7 @@ public static class ExportEndpoints
         }
 
         var geofile = await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(g => g.Id == id, ct);
-        if (geofile is null || !PermissionEvaluator.Can(user, geofile, ObjectPermission.Read))
+        if (geofile is null || !await permissions.CanAsync(user, geofile, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("geofile.not_found");
         }

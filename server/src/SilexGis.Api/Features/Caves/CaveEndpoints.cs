@@ -32,6 +32,7 @@ public static class CaveEndpoints
 
     private static async Task<Results<Ok<PagedResult<CaveListItemDto>>, UnauthorizedHttpResult>> ListAsync(
         SilexGisDbContext db,
+        AclPermissionService permissions,
         IUserContextAccessor userAccessor,
         IOptions<AccessOptions> access,
         int? page,
@@ -51,7 +52,7 @@ public static class CaveEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var query = db.Caves.AsNoTracking().VisibleTo(user);
+        var query = db.Caves.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Cave);
 
         if (!string.IsNullOrWhiteSpace(tag))
         {
@@ -92,14 +93,17 @@ public static class CaveEndpoints
 
         query = ApplySort(query, sort);
 
+        var exactGrants = await permissions.CaveExactLocationGrantsAsync(user, ct);
         var (p, size) = Paging.Normalize(page, pageSize);
-        var result = await query.ToPagedAsync(p, size, c => c.ToListItem(user, access.Value.LocationGridMeters), ct);
+        var result = await query.ToPagedAsync(
+            p, size, c => c.ToListItem(user, access.Value.LocationGridMeters, exactGrants), ct);
         return TypedResults.Ok(result);
     }
 
     private static async Task<Results<Ok<CaveDto>, ProblemHttpResult>> GetAsync(
         Guid id,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
@@ -111,13 +115,18 @@ public static class CaveEndpoints
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        if (!PermissionEvaluator.Can(user, cave, ObjectPermission.Read))
+        if (!await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
         {
             // Existence of a cave the caller cannot read is not disclosed.
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        return TypedResults.Ok(cave.ToDto(user, access.Value.LocationGridMeters));
+        // An explicit exact-location grant lifts obfuscation on the single-cave DTO too.
+        var exactGrants = cave.LocationProtected
+            && await permissions.CanAsync(user, cave, ObjectPermission.ViewExactLocation, ct)
+            ? new HashSet<Guid> { cave.Id }
+            : null;
+        return TypedResults.Ok(cave.ToDto(user, access.Value.LocationGridMeters, exactGrants));
     }
 
     private static async Task<Results<Created<CaveDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
@@ -156,6 +165,7 @@ public static class CaveEndpoints
         Guid id,
         CaveWriteRequest request,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
@@ -167,9 +177,9 @@ public static class CaveEndpoints
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        if (user is null || !PermissionEvaluator.Can(user, cave, ObjectPermission.Write))
+        if (user is null || !await permissions.CanAsync(user, cave, ObjectPermission.Write, ct))
         {
-            return PermissionEvaluator.Can(user, cave, ObjectPermission.Read)
+            return await permissions.CanAsync(user, cave, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("cave.not_found");
         }
@@ -187,6 +197,7 @@ public static class CaveEndpoints
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -197,9 +208,9 @@ public static class CaveEndpoints
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        if (user is null || !PermissionEvaluator.Can(user, cave, ObjectPermission.Delete))
+        if (user is null || !await permissions.CanAsync(user, cave, ObjectPermission.Delete, ct))
         {
-            return PermissionEvaluator.Can(user, cave, ObjectPermission.Read)
+            return await permissions.CanAsync(user, cave, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("cave.not_found");
         }

@@ -63,7 +63,7 @@ public static class MapEndpoints
 
         var polygon = box.ToPolygon();
         var query = db.TripLogs.AsNoTracking()
-            .VisibleTo(user)
+            .VisibleTo(user, db.ObjectAcls, AttachedEntityType.TripLog)
             .Where(x => x.Geom != null && x.Geom.Intersects(polygon));
 
         if (from is not null)
@@ -91,6 +91,7 @@ public static class MapEndpoints
         Guid id,
         string bbox,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -102,7 +103,7 @@ public static class MapEndpoints
 
         // Rows inherit the geofile's ACL; an unreadable geofile is not disclosed.
         var geofile = await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(g => g.Id == id, ct);
-        if (geofile is null || !PermissionEvaluator.Can(user, geofile, ObjectPermission.Read))
+        if (geofile is null || !await permissions.CanAsync(user, geofile, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("geofile.not_found");
         }
@@ -150,7 +151,7 @@ public static class MapEndpoints
 
         var polygon = box.ToPolygon();
         var query = db.SurfaceFeatures.AsNoTracking()
-            .VisibleTo(user)
+            .VisibleTo(user, db.ObjectAcls, AttachedEntityType.SurfaceFeature)
             .Where(f => f.Geom.Intersects(polygon));
 
         if (featureTypeId is not null)
@@ -212,9 +213,10 @@ public static class MapEndpoints
     private static async Task<FeatureCollection> PointsAsync(
         SilexGisDbContext db, UserContext user, Bbox box, double gridMeters, string? tag, CancellationToken ct)
     {
+        var exactGrants = await new AclPermissionService(db).CaveExactLocationGrantsAsync(user, ct);
         var polygon = box.ToPolygon();
 
-        var caves = db.Caves.AsNoTracking().VisibleTo(user);
+        var caves = db.Caves.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Cave);
         if (!string.IsNullOrWhiteSpace(tag))
         {
             caves = caves.Where(c => db.Taggings.Any(tg =>
@@ -234,7 +236,8 @@ public static class MapEndpoints
 
         var features = rows.Select(row =>
         {
-            var exact = LocationProtection.CanViewExactLocation(user, row.Cave);
+            var exact = LocationProtection.CanViewExactLocation(
+                user, row.Cave, exactGrants.Contains(row.Cave.Id) ? ObjectPermission.ViewExactLocation : ObjectPermission.None);
             var geom = exact ? row.Entrance.Geom : LocationProtection.Snap(row.Entrance.Geom, gridMeters);
             return GeoFeature.Of(geom, new Dictionary<string, object?>
             {

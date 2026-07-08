@@ -85,18 +85,20 @@ public static class EntranceEndpoints
     private static async Task<Results<Ok<List<EntranceDto>>, ProblemHttpResult>> ListAsync(
         Guid caveId,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
         var cave = await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == caveId, ct);
-        if (cave is null || !PermissionEvaluator.Can(user, cave, ObjectPermission.Read))
+        if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        var exact = LocationProtection.CanViewExactLocation(user, cave);
+        var exact = !cave.LocationProtected
+            || await permissions.CanAsync(user, cave, ObjectPermission.ViewExactLocation, ct);
         var entrances = await db.CaveEntrances.AsNoTracking()
             .Where(e => e.CaveId == caveId)
             .OrderByDescending(e => e.IsMain).ThenBy(e => e.CreatedAt)
@@ -111,18 +113,19 @@ public static class EntranceEndpoints
         Guid caveId,
         EntranceWriteRequest request,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
         var cave = await db.Caves.FirstOrDefaultAsync(c => c.Id == caveId, ct);
-        if (cave is null || user is null || !PermissionEvaluator.Can(user, cave, ObjectPermission.Read))
+        if (cave is null || user is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        if (!PermissionEvaluator.Can(user, cave, ObjectPermission.Write))
+        if (!await permissions.CanAsync(user, cave, ObjectPermission.Write, ct))
         {
             return ApiProblems.Forbidden();
         }
@@ -147,6 +150,7 @@ public static class EntranceEndpoints
         Guid id,
         EntranceWriteRequest request,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
@@ -154,12 +158,12 @@ public static class EntranceEndpoints
         var user = await userAccessor.GetAsync(ct);
         var entrance = await db.CaveEntrances.FirstOrDefaultAsync(e => e.Id == id, ct);
         var cave = entrance is null ? null : await db.Caves.FirstOrDefaultAsync(c => c.Id == entrance.CaveId, ct);
-        if (entrance is null || cave is null || !PermissionEvaluator.Can(user, cave, ObjectPermission.Read))
+        if (entrance is null || cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("entrance.not_found");
         }
 
-        if (!PermissionEvaluator.Can(user, cave, ObjectPermission.Write))
+        if (!await permissions.CanAsync(user, cave, ObjectPermission.Write, ct))
         {
             return ApiProblems.Forbidden();
         }
@@ -175,18 +179,19 @@ public static class EntranceEndpoints
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
         var entrance = await db.CaveEntrances.FirstOrDefaultAsync(e => e.Id == id, ct);
         var cave = entrance is null ? null : await db.Caves.FirstOrDefaultAsync(c => c.Id == entrance.CaveId, ct);
-        if (entrance is null || cave is null || !PermissionEvaluator.Can(user, cave, ObjectPermission.Read))
+        if (entrance is null || cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("entrance.not_found");
         }
 
-        if (!PermissionEvaluator.Can(user, cave, ObjectPermission.Write))
+        if (!await permissions.CanAsync(user, cave, ObjectPermission.Write, ct))
         {
             return ApiProblems.Forbidden();
         }

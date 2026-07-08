@@ -46,7 +46,7 @@ public static class TripLogEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var query = db.TripLogs.AsNoTracking().VisibleTo(user);
+        var query = db.TripLogs.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.TripLog);
 
         if (from is not null)
         {
@@ -89,12 +89,13 @@ public static class TripLogEndpoints
     private static async Task<Results<Ok<TripLogDto>, ProblemHttpResult>> GetAsync(
         Guid id,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
         var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
-        if (trip is null || !PermissionEvaluator.Can(user, trip, ObjectPermission.Read))
+        if (trip is null || !await permissions.CanAsync(user, trip, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("trip_log.not_found");
         }
@@ -106,6 +107,7 @@ public static class TripLogEndpoints
     private static async Task<Results<Created<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
         TripLogWriteRequest request,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -120,7 +122,7 @@ public static class TripLogEndpoints
             return ApiProblems.Forbidden("trip_log.create_requires_editor");
         }
 
-        var problem = await ValidateReferencesAsync(db, user, request, ct);
+        var problem = await ValidateReferencesAsync(db, permissions, user, request, ct);
         if (problem is not null)
         {
             return problem;
@@ -140,6 +142,7 @@ public static class TripLogEndpoints
         Guid id,
         TripLogWriteRequest request,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -150,14 +153,14 @@ public static class TripLogEndpoints
             return ApiProblems.NotFound("trip_log.not_found");
         }
 
-        if (user is null || !PermissionEvaluator.Can(user, trip, ObjectPermission.Write))
+        if (user is null || !await permissions.CanAsync(user, trip, ObjectPermission.Write, ct))
         {
-            return PermissionEvaluator.Can(user, trip, ObjectPermission.Read)
+            return await permissions.CanAsync(user, trip, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("trip_log.not_found");
         }
 
-        var problem = await ValidateReferencesAsync(db, user, request, ct);
+        var problem = await ValidateReferencesAsync(db, permissions, user, request, ct);
         if (problem is not null)
         {
             return problem;
@@ -176,6 +179,7 @@ public static class TripLogEndpoints
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         SilexGisDbContext db,
+        IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -186,9 +190,9 @@ public static class TripLogEndpoints
             return ApiProblems.NotFound("trip_log.not_found");
         }
 
-        if (user is null || !PermissionEvaluator.Can(user, trip, ObjectPermission.Delete))
+        if (user is null || !await permissions.CanAsync(user, trip, ObjectPermission.Delete, ct))
         {
-            return PermissionEvaluator.Can(user, trip, ObjectPermission.Read)
+            return await permissions.CanAsync(user, trip, ObjectPermission.Read, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("trip_log.not_found");
         }
@@ -242,7 +246,7 @@ public static class TripLogEndpoints
 
     /// <summary>Geometry validity, cave visibility, participant-user existence.</summary>
     private static async Task<ProblemHttpResult?> ValidateReferencesAsync(
-        SilexGisDbContext db, UserContext user, TripLogWriteRequest request, CancellationToken ct)
+        SilexGisDbContext db, IPermissionService permissions, UserContext user, TripLogWriteRequest request, CancellationToken ct)
     {
         if (request.Geom is not null && request.Geom.ToGeometryOrNull() is null)
         {
@@ -257,7 +261,7 @@ public static class TripLogEndpoints
         foreach (var caveId in request.CaveIds.Distinct())
         {
             var cave = await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == caveId, ct);
-            if (cave is null || !PermissionEvaluator.Can(user, cave, ObjectPermission.Read))
+            if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
             {
                 return ApiProblems.BadRequest("trip_log.cave_not_found", "A linked cave does not exist.");
             }

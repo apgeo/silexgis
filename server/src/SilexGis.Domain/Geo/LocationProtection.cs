@@ -14,9 +14,10 @@ public static class LocationProtection
 {
     private const double MetersPerDegreeLat = 111_320d;
 
-    public static bool CanViewExactLocation(UserContext? user, Cave cave) =>
+    public static bool CanViewExactLocation(
+        UserContext? user, Cave cave, ObjectPermission aclGranted = ObjectPermission.None) =>
         !cave.LocationProtected
-        || PermissionEvaluator.Can(user, cave, ObjectPermission.ViewExactLocation);
+        || PermissionEvaluator.Can(user, cave, ObjectPermission.ViewExactLocation, aclGranted);
 
     /// <summary>
     /// A cave link on another record with exact coordinates (e.g. a surface feature)
@@ -24,8 +25,9 @@ public static class LocationProtection
     /// must be hidden wherever the caller may not view the exact location, even when the
     /// cave record itself is visible to them.
     /// </summary>
-    public static bool ShouldRedactCaveLink(UserContext? user, Cave cave) =>
-        !CanViewExactLocation(user, cave);
+    public static bool ShouldRedactCaveLink(
+        UserContext? user, Cave cave, ObjectPermission aclGranted = ObjectPermission.None) =>
+        !CanViewExactLocation(user, cave, aclGranted);
 
     /// <summary>Grid cell size in degrees for a protection grid of <paramref name="gridMeters"/>.</summary>
     public static double CellDegrees(double gridMeters) => gridMeters / MetersPerDegreeLat;

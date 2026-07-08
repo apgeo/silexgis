@@ -30,7 +30,8 @@ public static class MapSql
         var clusterCellDegrees = 360d / Math.Pow(2, zoom) / 4d;
         var protectionCellDegrees = LocationProtection.CellDegrees(protectionGridMeters);
 
-        var (visibilitySql, parameters) = PermissionSql.VisibleToFragment(user, "c");
+        var (visibilitySql, parameters) = PermissionSql.VisibleToFragment(
+            user, "c", SilexGis.Domain.Entities.AttachedEntityType.Cave);
         parameters.Add("west", box.West);
         parameters.Add("south", box.South);
         parameters.Add("east", box.East);
@@ -61,14 +62,24 @@ public static class MapSql
                     CASE WHEN (NOT c.location_protected
                                OR @vis_is_admin
                                OR c.owner_user_id = @vis_user_id
-                               OR (c.team_id IS NOT NULL AND c.team_id = ANY(@vis_team_ids)))
+                               OR (c.team_id IS NOT NULL AND c.team_id = ANY(@vis_team_ids))
+                               OR EXISTS (SELECT 1 FROM object_acl acl
+                                          WHERE acl.entity_type = 0 AND acl.entity_id = c.id
+                                            AND ((acl.subject_kind = 0 AND acl.subject_id = @vis_user_id)
+                                                 OR (acl.subject_kind = 1 AND acl.subject_id = ANY(@vis_team_ids)))
+                                            AND (acl.permissions & 32) <> 0))
                         THEN ST_X(e.geom)
                         ELSE round(ST_X(e.geom) / @protection_cell) * @protection_cell
                     END AS gx,
                     CASE WHEN (NOT c.location_protected
                                OR @vis_is_admin
                                OR c.owner_user_id = @vis_user_id
-                               OR (c.team_id IS NOT NULL AND c.team_id = ANY(@vis_team_ids)))
+                               OR (c.team_id IS NOT NULL AND c.team_id = ANY(@vis_team_ids))
+                               OR EXISTS (SELECT 1 FROM object_acl acl
+                                          WHERE acl.entity_type = 0 AND acl.entity_id = c.id
+                                            AND ((acl.subject_kind = 0 AND acl.subject_id = @vis_user_id)
+                                                 OR (acl.subject_kind = 1 AND acl.subject_id = ANY(@vis_team_ids)))
+                                            AND (acl.permissions & 32) <> 0))
                         THEN ST_Y(e.geom)
                         ELSE round(ST_Y(e.geom) / @protection_cell) * @protection_cell
                     END AS gy

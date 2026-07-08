@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Api.Features.Caves;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -56,7 +57,7 @@ public static class SearchEndpoints
         var term = q.Trim();
         var pattern = $"%{term}%";
         var caves = await db.Caves.AsNoTracking()
-            .VisibleTo(user)
+            .VisibleTo(user, db.ObjectAcls, AttachedEntityType.Cave)
             .Where(c =>
                 // Indexed word search (GIN over the generated search_vector)…
                 EF.Property<NpgsqlTypes.NpgsqlTsVector>(c, "SearchVector")
@@ -69,7 +70,7 @@ public static class SearchEndpoints
             .ToListAsync(ct);
 
         var features = await db.SurfaceFeatures.AsNoTracking()
-            .VisibleTo(user)
+            .VisibleTo(user, db.ObjectAcls, AttachedEntityType.SurfaceFeature)
             .Where(f =>
                 EF.Property<NpgsqlTypes.NpgsqlTsVector>(f, "SearchVector")
                     .Matches(EF.Functions.PlainToTsQuery("simple", EF.Functions.Unaccent(term)))
@@ -79,7 +80,7 @@ public static class SearchEndpoints
             .ToListAsync(ct);
 
         var trips = await db.TripLogs.AsNoTracking()
-            .VisibleTo(user)
+            .VisibleTo(user, db.ObjectAcls, AttachedEntityType.TripLog)
             .Where(x => EF.Functions.ILike(EF.Functions.Unaccent(x.Title), EF.Functions.Unaccent(pattern))
                 || (x.Description != null && EF.Functions.ILike(EF.Functions.Unaccent(x.Description), EF.Functions.Unaccent(pattern))))
             .OrderByDescending(x => x.TripDate)

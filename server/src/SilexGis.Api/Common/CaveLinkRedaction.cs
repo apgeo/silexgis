@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
+using SilexGis.Domain;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -27,7 +28,13 @@ public static class CaveLinkRedaction
             .Where(c => ids.Contains(c.Id) && c.LocationProtected)
             .ToListAsync(ct);
 
-        return [.. caves.Where(c => LocationProtection.ShouldRedactCaveLink(user, c)).Select(c => c.Id)];
+        var exactGrants = user is null
+            ? new HashSet<Guid>()
+            : await new AclPermissionService(db).CaveExactLocationGrantsAsync(user, ct);
+        return [.. caves
+            .Where(c => LocationProtection.ShouldRedactCaveLink(
+                user, c, exactGrants.Contains(c.Id) ? ObjectPermission.ViewExactLocation : ObjectPermission.None))
+            .Select(c => c.Id)];
     }
 
     /// <summary>Single-cave variant for detail endpoints.</summary>

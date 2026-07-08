@@ -115,9 +115,11 @@ internal static class CaveMapping
     /// Maps to DTO applying location protection: without ViewExactLocation, the
     /// main geometry is grid-snapped and precise-location text fields are redacted.
     /// </summary>
-    public static CaveDto ToDto(this Cave c, UserContext? user, double gridMeters)
+    public static CaveDto ToDto(
+        this Cave c, UserContext? user, double gridMeters, IReadOnlySet<Guid>? exactGrants = null)
     {
-        var exact = LocationProtection.CanViewExactLocation(user, c);
+        var exact = LocationProtection.CanViewExactLocation(
+            user, c, exactGrants != null && exactGrants.Contains(c.Id) ? ObjectPermission.ViewExactLocation : ObjectPermission.None);
         return new CaveDto(
             c.Id, c.Name, c.OtherToponyms, c.IdentificationCode, c.CaveTypeId, c.Description,
             c.Website, c.Region, c.HydrographicBasin, c.Valley, c.TributaryRiver,
@@ -135,9 +137,11 @@ internal static class CaveMapping
             c.OwnerUserId, c.TeamId, c.Visibility, c.CreatedAt, c.UpdatedAt);
     }
 
-    public static CaveListItemDto ToListItem(this Cave c, UserContext? user, double gridMeters)
+    public static CaveListItemDto ToListItem(
+        this Cave c, UserContext? user, double gridMeters, IReadOnlySet<Guid>? exactGrants = null)
     {
-        var exact = LocationProtection.CanViewExactLocation(user, c);
+        var exact = LocationProtection.CanViewExactLocation(
+            user, c, exactGrants != null && exactGrants.Contains(c.Id) ? ObjectPermission.ViewExactLocation : ObjectPermission.None);
         return new CaveListItemDto(
             c.Id, c.Name, c.IdentificationCode, c.CaveTypeId, c.Region, c.SurveyedLength,
             c.Depth, c.ExplorationStatus, c.LocationProtected, c.EntranceCount,

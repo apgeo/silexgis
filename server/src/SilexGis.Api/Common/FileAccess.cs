@@ -46,7 +46,7 @@ public static class FileAccessRules
         {
             case AttachedEntityType.Cave:
                 var cave = await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == entityId, ct);
-                return cave is not null && PermissionEvaluator.Can(user, cave, ObjectPermission.Read);
+                return cave is not null && await new AclPermissionService(db).CanAsync(user, cave, ObjectPermission.Read, ct);
 
             case AttachedEntityType.CaveEntrance:
                 // Entrances inherit their cave's ACL.
@@ -54,22 +54,22 @@ public static class FileAccessRules
                     .Where(e => e.Id == entityId)
                     .Join(db.Caves.AsNoTracking(), e => e.CaveId, c => c.Id, (e, c) => c)
                     .FirstOrDefaultAsync(ct);
-                return entranceCave is not null && PermissionEvaluator.Can(user, entranceCave, ObjectPermission.Read);
+                return entranceCave is not null && await new AclPermissionService(db).CanAsync(user, entranceCave, ObjectPermission.Read, ct);
 
             case AttachedEntityType.SurfaceFeature:
                 var feature = await db.SurfaceFeatures.AsNoTracking().FirstOrDefaultAsync(f => f.Id == entityId, ct);
-                return feature is not null && PermissionEvaluator.Can(user, feature, ObjectPermission.Read);
+                return feature is not null && await new AclPermissionService(db).CanAsync(user, feature, ObjectPermission.Read, ct);
 
             case AttachedEntityType.Geofile:
                 var geofile = await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(g => g.Id == entityId, ct);
-                return geofile is not null && PermissionEvaluator.Can(user, geofile, ObjectPermission.Read);
+                return geofile is not null && await new AclPermissionService(db).CanAsync(user, geofile, ObjectPermission.Read, ct);
 
             case AttachedEntityType.Team:
                 return user.IsMemberOf(entityId);
 
             case AttachedEntityType.TripLog:
                 var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == entityId, ct);
-                return trip is not null && PermissionEvaluator.Can(user, trip, ObjectPermission.Read);
+                return trip is not null && await new AclPermissionService(db).CanAsync(user, trip, ObjectPermission.Read, ct);
 
             default:
                 return false;
@@ -84,29 +84,29 @@ public static class FileAccessRules
         {
             case AttachedEntityType.Cave:
                 var cave = await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == entityId, ct);
-                return cave is not null && PermissionEvaluator.Can(user, cave, ObjectPermission.Write);
+                return cave is not null && await new AclPermissionService(db).CanAsync(user, cave, ObjectPermission.Write, ct);
 
             case AttachedEntityType.CaveEntrance:
                 var entranceCave = await db.CaveEntrances.AsNoTracking()
                     .Where(e => e.Id == entityId)
                     .Join(db.Caves.AsNoTracking(), e => e.CaveId, c => c.Id, (e, c) => c)
                     .FirstOrDefaultAsync(ct);
-                return entranceCave is not null && PermissionEvaluator.Can(user, entranceCave, ObjectPermission.Write);
+                return entranceCave is not null && await new AclPermissionService(db).CanAsync(user, entranceCave, ObjectPermission.Write, ct);
 
             case AttachedEntityType.SurfaceFeature:
                 var feature = await db.SurfaceFeatures.AsNoTracking().FirstOrDefaultAsync(f => f.Id == entityId, ct);
-                return feature is not null && PermissionEvaluator.Can(user, feature, ObjectPermission.Write);
+                return feature is not null && await new AclPermissionService(db).CanAsync(user, feature, ObjectPermission.Write, ct);
 
             case AttachedEntityType.Geofile:
                 var geofile = await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(g => g.Id == entityId, ct);
-                return geofile is not null && PermissionEvaluator.Can(user, geofile, ObjectPermission.Write);
+                return geofile is not null && await new AclPermissionService(db).CanAsync(user, geofile, ObjectPermission.Write, ct);
 
             case AttachedEntityType.Team:
                 return user.IsMemberOf(entityId) || user.IsAdmin;
 
             case AttachedEntityType.TripLog:
                 var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == entityId, ct);
-                return trip is not null && PermissionEvaluator.Can(user, trip, ObjectPermission.Write);
+                return trip is not null && await new AclPermissionService(db).CanAsync(user, trip, ObjectPermission.Write, ct);
 
             default:
                 return false;

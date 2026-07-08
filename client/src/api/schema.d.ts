@@ -2314,6 +2314,356 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/objects/{entityType}/{id}/acl": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ACL entries of one object (ManagePermissions). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    entityType: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AclEntryDto"][];
+                    };
+                };
+            };
+        };
+        /** Replaces the object's ACL entries (ManagePermissions). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    entityType: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AclReplaceRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AclEntryDto"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/objects/{entityType}/{id}/effective-permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own effective permissions on the object. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    entityType: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ObjectPermission"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** All teams with member counts. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TeamDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates a team (Manager role and above); the caller becomes team owner. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TeamWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TeamDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teams/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Single team. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TeamDto"];
+                    };
+                };
+            };
+        };
+        /** Updates team metadata (team admin/owner). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TeamWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TeamDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes a team (team owner or Admin); objects keep owner-based access. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teams/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Team members with roles. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TeamMemberDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Adds a member or changes their role (team admin/owner). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TeamMemberWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TeamMemberDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teams/{id}/members/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes a member (team admin/owner; owners cannot be removed). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2324,8 +2674,26 @@ export interface components {
             license: string;
             sourceUrl: string;
         };
+        AclEntryDto: {
+            subjectKind: components["schemas"]["AclSubjectKind"];
+            /** Format: uuid */
+            subjectId: string;
+            subjectName: null | string;
+            permissions: components["schemas"]["ObjectPermission"];
+        };
+        AclEntryWrite: {
+            subjectKind: components["schemas"]["AclSubjectKind"];
+            /** Format: uuid */
+            subjectId: string;
+            permissions: components["schemas"]["ObjectPermission"];
+        };
+        AclReplaceRequest: {
+            entries: components["schemas"]["AclEntryWrite"][];
+        };
         /** @enum {unknown} */
-        AttachedEntityType: "cave" | "caveEntrance" | "surfaceFeature" | "tripLog" | "team" | "geofile";
+        AclSubjectKind: "user" | "team";
+        /** @enum {unknown} */
+        AttachedEntityType: "cave" | "caveEntrance" | "surfaceFeature" | "tripLog" | "team" | "geofile" | "georeferencedMap";
         AttachmentCreateRequest: {
             /** Format: uuid */
             fileId: string;
@@ -2725,6 +3093,7 @@ export interface components {
             locale: string;
             roles: string[];
         };
+        ObjectPermission: string;
         PagedResultOfAuditEntryDto: {
             items: components["schemas"]["AuditEntryDto"][];
             /** Format: int32 */
@@ -2891,6 +3260,34 @@ export interface components {
             description: null | string;
             /** Format: int32 */
             sortOrder: number;
+        };
+        TeamDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            description: null | string;
+            website: null | string;
+            /** Format: int32 */
+            memberCount: number;
+        };
+        TeamMemberDto: {
+            /** Format: uuid */
+            userId: string;
+            displayName: null | string;
+            role: components["schemas"]["TeamRole"];
+        };
+        TeamMemberWriteRequest: {
+            /** Format: uuid */
+            userId: string;
+            role: components["schemas"]["TeamRole"];
+        };
+        /** @enum {unknown} */
+        TeamRole: "member" | "admin" | "owner";
+        TeamWriteRequest: {
+            name: string;
+            description: null | string;
+            website: null | string;
         };
         TripLogDto: {
             /** Format: uuid */

@@ -81,7 +81,8 @@ try
     builder.Services.AddOptions<AccessOptions>()
         .BindConfiguration(AccessOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
-    builder.Services.AddScoped<IPermissionService, AclPermissionService>();
+    builder.Services.AddScoped<AclPermissionService>();
+    builder.Services.AddScoped<IPermissionService>(sp => sp.GetRequiredService<AclPermissionService>());
     builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
     var app = builder.Build();
