@@ -622,6 +622,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/map/geofiles/{id}/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Imported geofile rows as GeoJSON for the given bbox. */
+        get: {
+            parameters: {
+                query: {
+                    bbox: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search": {
         parameters: {
             query?: never;
@@ -649,6 +689,162 @@ export interface paths {
                     content: {
                         "application/json": components["schemas"]["SearchResultDto"];
                     };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Processing job status (requester or admin). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProcessingJobDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/caves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Caves (main entrance points) as GeoJSON/GPX/KML/CSV/zipped shapefile. */
+        get: {
+            parameters: {
+                query: {
+                    format: string;
+                    caveTypeId?: number;
+                    region?: string;
+                    search?: string;
+                    bbox?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/surface-features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Surface features as GeoJSON/GPX/KML/CSV/zipped shapefile. */
+        get: {
+            parameters: {
+                query: {
+                    format: string;
+                    featureTypeId?: number;
+                    caveId?: string;
+                    search?: string;
+                    bbox?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geofiles/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Imported geofile rows re-exported in the requested format. */
+        get: {
+            parameters: {
+                query: {
+                    format: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -1150,6 +1346,194 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/geofiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paged geofile list; visibility-filtered. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                    search?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfGeofileDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Uploads a vector file (multipart) and queues the server-side import. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        file: components["schemas"]["IFormFile"];
+                    };
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GeofileDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geofiles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Single geofile. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GeofileDto"];
+                    };
+                };
+            };
+        };
+        /** Metadata update (Write permission); the uploaded file is immutable. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["GeofileUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GeofileDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes a geofile with its imported features and stored file. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geofiles/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Import status for polling. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GeofileStatusDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1364,6 +1748,52 @@ export interface components {
             geometry: components["schemas"]["GeoJsonGeometry"];
             properties: Record<string, never>;
         };
+        GeofileDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: null | string;
+            /** Format: uuid */
+            fileId: string;
+            format: components["schemas"]["GeofileFormat"];
+            /** Format: int32 */
+            srid: null | number;
+            importStatus: components["schemas"]["GeofileImportStatus"];
+            importError: null | string;
+            /** Format: int32 */
+            featureCount: number;
+            bbox: null | components["schemas"]["GeoJsonGeometry"];
+            style: null | components["schemas"]["JsonElement"];
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {unknown} */
+        GeofileFormat: "gpx" | "kml" | "geoJson" | "shapefile" | "wkt" | "wkb";
+        /** @enum {unknown} */
+        GeofileImportStatus: "uploaded" | "importing" | "imported" | "failed";
+        GeofileStatusDto: {
+            /** Format: uuid */
+            id: string;
+            importStatus: components["schemas"]["GeofileImportStatus"];
+            importError: null | string;
+            /** Format: int32 */
+            featureCount: number;
+        };
+        GeofileUpdateRequest: {
+            name: string;
+            description: null | string;
+            style: null | components["schemas"]["JsonElement"];
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
+        };
         GeoJsonGeometry: {
             type: string;
             coordinates: components["schemas"]["JsonElement"];
@@ -1374,6 +1804,8 @@ export interface components {
         };
         /** @enum {unknown} */
         GeometryKind: "point" | "line" | "polygon" | "any";
+        /** Format: binary */
+        IFormFile: string;
         JsonElement: unknown;
         LoginRequest: {
             email: string;
@@ -1412,6 +1844,15 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfGeofileDto: {
+            items: components["schemas"]["GeofileDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfSurfaceFeatureDto: {
             items: components["schemas"]["SurfaceFeatureDto"][];
             /** Format: int32 */
@@ -1423,6 +1864,21 @@ export interface components {
         };
         /** @enum {unknown} */
         PositionQuality: "unknown" | "gps" | "map" | "estimated";
+        ProcessingJobDto: {
+            /** Format: int64 */
+            id: number;
+            kind: string;
+            status: components["schemas"]["ProcessingJobStatus"];
+            error: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            startedAt: null | string;
+            /** Format: date-time */
+            completedAt: null | string;
+        };
+        /** @enum {unknown} */
+        ProcessingJobStatus: "queued" | "running" | "succeeded" | "failed";
         RegisterRequest: {
             email: string;
             password: string;
