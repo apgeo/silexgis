@@ -14,6 +14,7 @@ public enum VersionedTable
     Geofiles,
     GeoreferencedMaps,
     TripLogs,
+    SurveyModels,
 }
 
 /// <summary>
@@ -32,6 +33,7 @@ public static class ConcurrencySql
             [VersionedTable.Geofiles] = "geofiles",
             [VersionedTable.GeoreferencedMaps] = "georeferenced_maps",
             [VersionedTable.TripLogs] = "trip_logs",
+            [VersionedTable.SurveyModels] = "survey_models",
         };
 
     /// <summary>Current row version, or null when the row does not exist.</summary>

@@ -58,6 +58,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<MapView> MapViews => Set<MapView>();
 
+    public DbSet<SurveyModel> SurveyModels => Set<SurveyModel>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

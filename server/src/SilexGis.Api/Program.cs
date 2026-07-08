@@ -144,6 +144,7 @@ try
     api.MapMapLayerEndpoints();
     api.MapCaveEndpoints();
     api.MapEntranceEndpoints();
+    api.MapSurveyModelEndpoints();
     api.MapSurfaceFeatureEndpoints();
     api.MapMapDataEndpoints();
     api.MapSearchEndpoints();
