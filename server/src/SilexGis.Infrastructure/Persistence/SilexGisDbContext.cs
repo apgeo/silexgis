@@ -56,6 +56,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<ObjectAcl> ObjectAcls => Set<ObjectAcl>();
 
+    public DbSet<MapView> MapViews => Set<MapView>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

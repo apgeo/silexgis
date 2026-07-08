@@ -18,6 +18,7 @@ using SilexGis.Api.Features.Geofiles;
 using SilexGis.Api.Features.GeoreferencedMaps;
 using SilexGis.Api.Features.Jobs;
 using SilexGis.Api.Features.Map;
+using SilexGis.Api.Features.MapViews;
 using SilexGis.Api.Features.Permissions;
 using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
@@ -158,6 +159,7 @@ try
     api.MapObjectAclEndpoints();
     api.MapTeamEndpoints();
     api.MapUserEndpoints();
+    api.MapMapViewEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {

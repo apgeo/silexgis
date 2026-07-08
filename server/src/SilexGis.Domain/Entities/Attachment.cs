@@ -11,6 +11,7 @@ public enum AttachedEntityType : short
     Team = 4,
     Geofile = 5,
     GeoreferencedMap = 6,
+    MapView = 7,
 }
 
 /// <summary>Maps protected entity instances to their polymorphic discriminator.</summary>
@@ -23,6 +24,7 @@ public static class ProtectedEntityTypes
         Geofile => AttachedEntityType.Geofile,
         TripLog => AttachedEntityType.TripLog,
         GeoreferencedMap => AttachedEntityType.GeoreferencedMap,
+        MapView => AttachedEntityType.MapView,
         _ => throw new ArgumentException($"No entity-type mapping for {entity.GetType().Name}.", nameof(entity)),
     };
 }
