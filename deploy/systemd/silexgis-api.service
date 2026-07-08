@@ -1,0 +1,42 @@
+# SilexGIS API — systemd unit template for a non-Docker install (Linux).
+#
+# 1. Publish the API:   dotnet publish server/src/SilexGis.Api -c Release -o /opt/silexgis/api
+# 2. Create a service user and data dirs:
+#      useradd --system --home /var/lib/silexgis --shell /usr/sbin/nologin silexgis
+#      mkdir -p /var/lib/silexgis/files /var/lib/silexgis/keys
+#      chown -R silexgis:silexgis /opt/silexgis /var/lib/silexgis
+# 3. Put secrets in /etc/silexgis/silexgis.env (see EnvironmentFile below), chmod 600.
+# 4. cp this file to /etc/systemd/system/, then:
+#      systemctl daemon-reload && systemctl enable --now silexgis-api
+#
+# Serve the built client (client/dist) and reverse-proxy /api, /connect, /health, /openapi,
+# /.well-known to ASPNETCORE_URLS with nginx/Caddy/IIS — see deploy/nginx/silexgis.conf.
+
+[Unit]
+Description=SilexGIS API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=silexgis
+Group=silexgis
+WorkingDirectory=/opt/silexgis/api
+ExecStart=/usr/bin/dotnet /opt/silexgis/api/SilexGis.Api.dll
+Restart=on-failure
+RestartSec=5
+
+# Bind to loopback; the web server in front terminates TLS and proxies here.
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5080
+# All other configuration (DB connection, PublicUrl, admin bootstrap, providers) lives here:
+EnvironmentFile=/etc/silexgis/silexgis.env
+
+# Hardening.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/silexgis
+
+[Install]
+WantedBy=multi-user.target

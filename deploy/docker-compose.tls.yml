@@ -1,0 +1,41 @@
+# TLS overlay: puts Caddy (automatic Let's Encrypt) in front of the web service.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+#
+# Requires in .env:
+#   SILEXGIS_DOMAIN=caves.example.org          # public hostname, DNS pointed at this host
+#   SILEXGIS_PUBLIC_URL=https://caves.example.org
+#   SILEXGIS_TLS_EMAIL=admin@example.org       # optional, for Let's Encrypt notices
+#
+# Caddy obtains and renews the certificate automatically; ports 80 and 443 must be
+# reachable from the internet for the ACME challenge.
+name: silexgis
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SILEXGIS_DOMAIN: ${SILEXGIS_DOMAIN:?set SILEXGIS_DOMAIN in .env}
+      SILEXGIS_TLS_EMAIL: ${SILEXGIS_TLS_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - silexgis-caddy-data:/data
+      - silexgis-caddy-config:/config
+    restart: unless-stopped
+
+  web:
+    # Fronted by Caddy now — stop publishing the plain-HTTP port to the host.
+    # (!reset needs Docker Compose v2.24+; on older versions delete this override and
+    # firewall the SILEXGIS_HTTP_PORT instead.)
+    ports: !reset []
+
+volumes:
+  silexgis-caddy-data:
+  silexgis-caddy-config:
