@@ -9,12 +9,17 @@ using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Search;
 
-public sealed record SearchResultDto(IReadOnlyList<CaveListItemDto> Caves);
+/// <summary>A surface-feature hit; Center is a representative point for map fly-to.</summary>
+public sealed record SearchFeatureItemDto(Guid Id, string? Name, long FeatureTypeId, GeoJsonPoint Center);
+
+public sealed record SearchResultDto(
+    IReadOnlyList<CaveListItemDto> Caves,
+    IReadOnlyList<SearchFeatureItemDto> Features);
 
 /// <summary>
-/// Unified search — currently covers caves. Accent-insensitive (unaccent) so "pestera"
-/// matches "Peștera". Word matches use the GIN-indexed generated search_vector column;
-/// substring/code matches fall back to ILIKE.
+/// Unified search over caves and surface features. Accent-insensitive (unaccent) so
+/// "pestera" matches "Peștera". Word matches use the GIN-indexed generated search_vector
+/// columns; substring/code matches fall back to ILIKE.
 /// </summary>
 public static class SearchEndpoints
 {
@@ -59,7 +64,19 @@ public static class SearchEndpoints
             .Take(20)
             .ToListAsync(ct);
 
+        var features = await db.SurfaceFeatures.AsNoTracking()
+            .VisibleTo(user)
+            .Where(f =>
+                EF.Property<NpgsqlTypes.NpgsqlTsVector>(f, "SearchVector")
+                    .Matches(EF.Functions.PlainToTsQuery("simple", EF.Functions.Unaccent(term)))
+                || (f.Name != null && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern))))
+            .OrderBy(f => f.Name)
+            .Take(10)
+            .ToListAsync(ct);
+
         return TypedResults.Ok(new SearchResultDto(
-            [.. caves.Select(c => c.ToListItem(user, access.Value.LocationGridMeters))]));
+            [.. caves.Select(c => c.ToListItem(user, access.Value.LocationGridMeters))],
+            [.. features.Select(f => new SearchFeatureItemDto(
+                f.Id, f.Name, f.FeatureTypeId, GeoJsonPoint.From((NetTopologySuite.Geometries.Point)f.Geom.Centroid)))]));
     }
 }

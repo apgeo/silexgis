@@ -15,10 +15,10 @@ public sealed record GeoJsonPoint(string Type, double[] Coordinates)
     public Point ToPoint() => new(Coordinates[0], Coordinates[1]) { SRID = 4326 };
 }
 
-public sealed record GeoFeature(string Type, GeoJsonPoint Geometry, Dictionary<string, object?> Properties)
+public sealed record GeoFeature(string Type, GeoJsonGeometry Geometry, Dictionary<string, object?> Properties)
 {
-    public static GeoFeature Of(Point point, Dictionary<string, object?> properties) =>
-        new("Feature", GeoJsonPoint.From(point), properties);
+    public static GeoFeature Of(Geometry geometry, Dictionary<string, object?> properties) =>
+        new("Feature", GeoJsonGeometry.From(geometry), properties);
 }
 
 public sealed record FeatureCollection(string Type, IReadOnlyList<GeoFeature> Features)

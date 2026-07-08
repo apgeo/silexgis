@@ -13,6 +13,7 @@ using SilexGis.Api.Features.Map;
 using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
 using SilexGis.Api.Features.Search;
+using SilexGis.Api.Features.SurfaceFeatures;
 using SilexGis.Api.Features.Taxonomies;
 using SilexGis.Domain;
 using SilexGis.Domain.Permissions;
@@ -96,6 +97,7 @@ try
     api.MapMapLayerEndpoints();
     api.MapCaveEndpoints();
     api.MapEntranceEndpoints();
+    api.MapSurfaceFeatureEndpoints();
     api.MapMapDataEndpoints();
     api.MapSearchEndpoints();
 

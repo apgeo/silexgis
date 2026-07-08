@@ -27,7 +27,50 @@ public static class MapEndpoints
         api.MapGet("/map/cave-entrances", CaveEntrancesAsync)
             .WithTags("Map")
             .WithSummary("Cave entrances as GeoJSON for the given bbox; clustered at low zoom.");
+        api.MapGet("/map/surface-features", SurfaceFeaturesAsync)
+            .WithTags("Map")
+            .WithSummary("Surface features as GeoJSON for the given bbox, optionally filtered by type.");
         return api;
+    }
+
+    private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> SurfaceFeaturesAsync(
+        string bbox,
+        long? featureTypeId,
+        SilexGisDbContext db,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var user = await userAccessor.GetAsync(ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!Bbox.TryParse(bbox, out var box))
+        {
+            return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
+        }
+
+        var polygon = box.ToPolygon();
+        var query = db.SurfaceFeatures.AsNoTracking()
+            .VisibleTo(user)
+            .Where(f => f.Geom.Intersects(polygon));
+
+        if (featureTypeId is not null)
+        {
+            query = query.Where(f => f.FeatureTypeId == featureTypeId);
+        }
+
+        var rows = await query.Take(MaxPoints).ToListAsync(ct);
+        var features = rows.Select(f => GeoFeature.Of(f.Geom, new Dictionary<string, object?>
+        {
+            ["id"] = f.Id,
+            ["name"] = f.Name,
+            ["featureTypeId"] = f.FeatureTypeId,
+            ["caveId"] = f.CaveId,
+        })).ToList();
+
+        return TypedResults.Ok(FeatureCollection.Of(features));
     }
 
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> CaveEntrancesAsync(

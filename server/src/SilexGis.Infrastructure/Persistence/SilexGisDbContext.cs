@@ -28,6 +28,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<CaveEntrance> CaveEntrances => Set<CaveEntrance>();
 
+    public DbSet<SurfaceFeature> SurfaceFeatures => Set<SurfaceFeature>();
+
     public DbSet<MapLayer> MapLayers => Set<MapLayer>();
 
     protected override void OnModelCreating(ModelBuilder builder)

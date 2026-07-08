@@ -14,8 +14,15 @@ public static class DemoSeeder
 {
     public static async Task SeedAsync(SilexGisDbContext db, Guid ownerUserId, CancellationToken ct = default)
     {
-        if (await db.Caves.AnyAsync(c => c.IdentificationCode == "DEMO-0001", ct))
+        // Each section guards itself so re-running tops up data added in later versions.
+        var demoCaveId = await db.Caves
+            .Where(c => c.IdentificationCode == "DEMO-0001")
+            .Select(c => (Guid?)c.Id)
+            .FirstOrDefaultAsync(ct);
+        if (demoCaveId is not null)
         {
+            await SeedSurfaceFeaturesAsync(db, ownerUserId, demoCaveId.Value, ct);
+            await db.SaveChangesAsync(ct);
             return;
         }
 
@@ -95,6 +102,47 @@ public static class DemoSeeder
             item.Cave.MainGeom = new Point(main.Lon, main.Lat) { SRID = 4326 };
         }
 
+        await SeedSurfaceFeaturesAsync(db, ownerUserId, demoData[0].Cave.Id, ct);
+
         await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task SeedSurfaceFeaturesAsync(
+        SilexGisDbContext db, Guid ownerUserId, Guid demoCaveId, CancellationToken ct)
+    {
+        if (await db.SurfaceFeatures.AnyAsync(f => f.Name == "Dolina Demo", ct))
+        {
+            return;
+        }
+
+        var sinkholeTypeId = await db.FeatureTypes.Where(t => t.Code == "sinkhole").Select(t => t.Id).SingleAsync(ct);
+        var fractureTypeId = await db.FeatureTypes.Where(t => t.Code == "fracture_line").Select(t => t.Id).SingleAsync(ct);
+
+        db.SurfaceFeatures.Add(new SurfaceFeature
+        {
+            Name = "Dolina Demo",
+            FeatureTypeId = sinkholeTypeId,
+            Geom = new Point(25.4455, 45.5301) { SRID = 4326 },
+            Description = "Demo sinkhole above the main gallery.",
+            CaveId = demoCaveId,
+            OwnerUserId = ownerUserId,
+            Visibility = Visibility.Public,
+        });
+
+        db.SurfaceFeatures.Add(new SurfaceFeature
+        {
+            Name = "Falia Demo",
+            FeatureTypeId = fractureTypeId,
+            Geom = new LineString(
+            [
+                new Coordinate(25.4420, 45.5280),
+                new Coordinate(25.4460, 45.5305),
+                new Coordinate(25.4490, 45.5335),
+            ])
+            { SRID = 4326 },
+            Description = "Demo fracture line crossing the plateau.",
+            OwnerUserId = ownerUserId,
+            Visibility = Visibility.Public,
+        });
     }
 }
