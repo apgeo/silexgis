@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -35,7 +36,55 @@ public static class MapEndpoints
         api.MapGet("/map/geofiles/{id:guid}/features", GeofileFeaturesAsync)
             .WithTags("Map")
             .WithSummary("Imported geofile rows as GeoJSON for the given bbox.");
+        api.MapGet("/map/trip-logs", TripLogsAsync)
+            .WithTags("Map")
+            .WithSummary("Trip-log geometries as GeoJSON for the given bbox and date range.");
         return api;
+    }
+
+    private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> TripLogsAsync(
+        string bbox,
+        DateOnly? from,
+        DateOnly? to,
+        SilexGisDbContext db,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var user = await userAccessor.GetAsync(ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!Bbox.TryParse(bbox, out var box))
+        {
+            return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
+        }
+
+        var polygon = box.ToPolygon();
+        var query = db.TripLogs.AsNoTracking()
+            .VisibleTo(user)
+            .Where(x => x.Geom != null && x.Geom.Intersects(polygon));
+
+        if (from is not null)
+        {
+            query = query.Where(x => x.TripDate >= from);
+        }
+
+        if (to is not null)
+        {
+            query = query.Where(x => x.TripDate <= to);
+        }
+
+        var rows = await query.Take(MaxPoints).ToListAsync(ct);
+        var features = rows.Select(x => GeoFeature.Of(x.Geom!, new Dictionary<string, object?>
+        {
+            ["id"] = x.Id,
+            ["title"] = x.Title,
+            ["tripDate"] = x.TripDate.ToString("O"),
+        })).ToList();
+
+        return TypedResults.Ok(FeatureCollection.Of(features));
     }
 
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> GeofileFeaturesAsync(
@@ -83,6 +132,7 @@ public static class MapEndpoints
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> SurfaceFeaturesAsync(
         string bbox,
         long? featureTypeId,
+        string? tag,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
@@ -108,6 +158,13 @@ public static class MapEndpoints
             query = query.Where(f => f.FeatureTypeId == featureTypeId);
         }
 
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            query = query.Where(f => db.Taggings.Any(tg =>
+                tg.EntityType == AttachedEntityType.SurfaceFeature && tg.EntityId == f.Id
+                && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
+        }
+
         var rows = await query.Take(MaxPoints).ToListAsync(ct);
 
         // A cave link next to exact feature coordinates would disclose a protected
@@ -129,6 +186,7 @@ public static class MapEndpoints
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> CaveEntrancesAsync(
         string bbox,
         int? zoom,
+        string? tag,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
         IOptions<AccessOptions> access,
@@ -147,19 +205,27 @@ public static class MapEndpoints
 
         var effectiveZoom = Math.Clamp(zoom ?? 14, 0, 24);
         return effectiveZoom < ClusterMaxZoom
-            ? TypedResults.Ok(await MapSql.ClustersAsync(db, user, box, effectiveZoom, access.Value.LocationGridMeters, ct))
-            : TypedResults.Ok(await PointsAsync(db, user, box, access.Value.LocationGridMeters, ct));
+            ? TypedResults.Ok(await MapSql.ClustersAsync(db, user, box, effectiveZoom, access.Value.LocationGridMeters, tag, ct))
+            : TypedResults.Ok(await PointsAsync(db, user, box, access.Value.LocationGridMeters, tag, ct));
     }
 
     private static async Task<FeatureCollection> PointsAsync(
-        SilexGisDbContext db, UserContext user, Bbox box, double gridMeters, CancellationToken ct)
+        SilexGisDbContext db, UserContext user, Bbox box, double gridMeters, string? tag, CancellationToken ct)
     {
         var polygon = box.ToPolygon();
+
+        var caves = db.Caves.AsNoTracking().VisibleTo(user);
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            caves = caves.Where(c => db.Taggings.Any(tg =>
+                tg.EntityType == AttachedEntityType.Cave && tg.EntityId == c.Id
+                && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
+        }
 
         var rows = await db.CaveEntrances.AsNoTracking()
             .Where(e => e.Geom.Intersects(polygon))
             .Join(
-                db.Caves.AsNoTracking().VisibleTo(user),
+                caves,
                 e => e.CaveId,
                 c => c.Id,
                 (e, c) => new { Entrance = e, Cave = c })

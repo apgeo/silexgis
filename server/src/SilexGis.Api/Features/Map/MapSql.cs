@@ -23,6 +23,7 @@ public static class MapSql
         Bbox box,
         int zoom,
         double protectionGridMeters,
+        string? tag,
         CancellationToken ct)
     {
         // ~64 px cluster cells on a 256 px tile pyramid.
@@ -36,6 +37,18 @@ public static class MapSql
         parameters.Add("north", box.North);
         parameters.Add("cluster_cell", clusterCellDegrees);
         parameters.Add("protection_cell", protectionCellDegrees);
+
+        // Optional tag filter — entity_type 0 = cave (schema-contract value, tested).
+        var tagSql = string.Empty;
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            tagSql = """
+                  AND EXISTS (SELECT 1 FROM taggings tg
+                              JOIN tags t ON t.id = tg.tag_id
+                              WHERE tg.entity_type = 0 AND tg.entity_id = c.id AND t.slug = @tag)
+                """;
+            parameters.Add("tag", tag);
+        }
 
         // Cluster centroid of points == arithmetic mean of coordinates; avg(x)/avg(y)
         // avoids materializing ST_Collect geometry collections (which dominated cost at
@@ -63,7 +76,7 @@ public static class MapSql
                 JOIN caves c ON c.id = e.cave_id
                 WHERE c.deleted_at IS NULL
                   AND e.geom && ST_MakeEnvelope(@west, @south, @east, @north, 4326)
-                  AND {visibilitySql}
+                  AND {visibilitySql}{tagSql}
             ) g
             GROUP BY round(g.gx / @cluster_cell), round(g.gy / @cluster_cell)
             """;

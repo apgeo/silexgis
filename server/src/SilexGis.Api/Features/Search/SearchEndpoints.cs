@@ -12,9 +12,13 @@ namespace SilexGis.Api.Features.Search;
 /// <summary>A surface-feature hit; Center is a representative point for map fly-to.</summary>
 public sealed record SearchFeatureItemDto(Guid Id, string? Name, long FeatureTypeId, GeoJsonPoint Center);
 
+/// <summary>A trip-log hit; Center (when the trip has a geometry) enables map fly-to.</summary>
+public sealed record SearchTripItemDto(Guid Id, string Title, DateOnly TripDate, GeoJsonPoint? Center);
+
 public sealed record SearchResultDto(
     IReadOnlyList<CaveListItemDto> Caves,
-    IReadOnlyList<SearchFeatureItemDto> Features);
+    IReadOnlyList<SearchFeatureItemDto> Features,
+    IReadOnlyList<SearchTripItemDto> Trips);
 
 /// <summary>
 /// Unified search over caves and surface features. Accent-insensitive (unaccent) so
@@ -74,9 +78,20 @@ public static class SearchEndpoints
             .Take(10)
             .ToListAsync(ct);
 
+        var trips = await db.TripLogs.AsNoTracking()
+            .VisibleTo(user)
+            .Where(x => EF.Functions.ILike(EF.Functions.Unaccent(x.Title), EF.Functions.Unaccent(pattern))
+                || (x.Description != null && EF.Functions.ILike(EF.Functions.Unaccent(x.Description), EF.Functions.Unaccent(pattern))))
+            .OrderByDescending(x => x.TripDate)
+            .Take(10)
+            .ToListAsync(ct);
+
         return TypedResults.Ok(new SearchResultDto(
             [.. caves.Select(c => c.ToListItem(user, access.Value.LocationGridMeters))],
             [.. features.Select(f => new SearchFeatureItemDto(
-                f.Id, f.Name, f.FeatureTypeId, GeoJsonPoint.From((NetTopologySuite.Geometries.Point)f.Geom.Centroid)))]));
+                f.Id, f.Name, f.FeatureTypeId, GeoJsonPoint.From((NetTopologySuite.Geometries.Point)f.Geom.Centroid)))],
+            [.. trips.Select(x => new SearchTripItemDto(
+                x.Id, x.Title, x.TripDate,
+                x.Geom is null ? null : GeoJsonPoint.From((NetTopologySuite.Geometries.Point)x.Geom.Centroid)))]));
     }
 }

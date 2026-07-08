@@ -10,6 +10,7 @@ using SilexGis.Api.Common;
 using Microsoft.AspNetCore.DataProtection;
 using SilexGis.Api.Features.About;
 using SilexGis.Api.Features.Attachments;
+using SilexGis.Api.Features.Audit;
 using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Export;
 using SilexGis.Api.Features.Files;
@@ -21,7 +22,9 @@ using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
 using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.SurfaceFeatures;
+using SilexGis.Api.Features.Tags;
 using SilexGis.Api.Features.Taxonomies;
+using SilexGis.Api.Features.TripLogs;
 using SilexGis.Domain;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure;
@@ -125,6 +128,9 @@ try
     api.MapFileEndpoints();
     api.MapAttachmentEndpoints();
     api.MapGeoreferencedMapEndpoints();
+    api.MapTripLogEndpoints();
+    api.MapTagEndpoints();
+    api.MapAuditEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {

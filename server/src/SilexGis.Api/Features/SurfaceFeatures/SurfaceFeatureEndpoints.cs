@@ -39,6 +39,7 @@ public static class SurfaceFeatureEndpoints
         Guid? caveId,
         string? search,
         string? bbox,
+        string? tag,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -48,6 +49,13 @@ public static class SurfaceFeatureEndpoints
         }
 
         var query = db.SurfaceFeatures.AsNoTracking().VisibleTo(user);
+
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            query = query.Where(f => db.Taggings.Any(tg =>
+                tg.EntityType == AttachedEntityType.SurfaceFeature && tg.EntityId == f.Id
+                && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
+        }
 
         if (featureTypeId is not null)
         {

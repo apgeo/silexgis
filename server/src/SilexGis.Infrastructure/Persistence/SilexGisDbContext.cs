@@ -44,6 +44,16 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<GeoreferencedMap> GeoreferencedMaps => Set<GeoreferencedMap>();
 
+    public DbSet<TripLog> TripLogs => Set<TripLog>();
+
+    public DbSet<TripLogCave> TripLogCaves => Set<TripLogCave>();
+
+    public DbSet<TripLogParticipant> TripLogParticipants => Set<TripLogParticipant>();
+
+    public DbSet<Tag> Tags => Set<Tag>();
+
+    public DbSet<Tagging> Taggings => Set<Tagging>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

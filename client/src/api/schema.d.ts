@@ -557,6 +557,7 @@ export interface paths {
                 query: {
                     bbox: string;
                     zoom?: number;
+                    tag?: string;
                 };
                 header?: never;
                 path?: never;
@@ -596,6 +597,7 @@ export interface paths {
                 query: {
                     bbox: string;
                     featureTypeId?: number;
+                    tag?: string;
                 };
                 header?: never;
                 path?: never;
@@ -639,6 +641,46 @@ export interface paths {
                 path: {
                     id: string;
                 };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map/trip-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trip-log geometries as GeoJSON for the given bbox and date range. */
+        get: {
+            parameters: {
+                query: {
+                    bbox: string;
+                    from?: string;
+                    to?: string;
+                };
+                header?: never;
+                path?: never;
                 cookie?: never;
             };
             requestBody?: never;
@@ -856,6 +898,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tag catalog with optional name search. */
+        get: {
+            parameters: {
+                query?: {
+                    search?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TagDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit trail, filterable by entity; admins only until per-object managers exist. */
+        get: {
+            parameters: {
+                query?: {
+                    entityType?: string;
+                    entityId?: string;
+                    action?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfAuditEntryDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -1061,6 +1183,7 @@ export interface paths {
                     search?: string;
                     minLength?: number;
                     bbox?: string;
+                    tag?: string;
                 };
                 header?: never;
                 path?: never;
@@ -1212,6 +1335,7 @@ export interface paths {
                     caveId?: string;
                     search?: string;
                     bbox?: string;
+                    tag?: string;
                 };
                 header?: never;
                 path?: never;
@@ -1940,6 +2064,256 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paged trip logs with date/cave filters; visibility-filtered. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                    from?: string;
+                    to?: string;
+                    caveId?: string;
+                    search?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfTripLogDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates a trip log (Editor role and above); the caller becomes owner. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripLogWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Single trip log with caves and participants. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogDto"];
+                    };
+                };
+            };
+        };
+        /** Full update incl. caves/participants replacement (Write permission). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripLogWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes a trip log with its links and attachments. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/taggings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tags of one entity; requires Read on the entity. */
+        get: {
+            parameters: {
+                query: {
+                    entityType: string;
+                    entityId: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaggingDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Tags an entity, creating the tag if new; requires Write on the entity. Idempotent. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TaggingCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaggingDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/taggings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes a tag from an entity; requires Write on the entity. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1981,6 +2355,19 @@ export interface components {
         };
         /** @enum {unknown} */
         AttachmentRole: "photoEntrance" | "photoInterior" | "photoSurface" | "document" | "map2d" | "surveyData" | "other";
+        AuditEntryDto: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            at: string;
+            /** Format: uuid */
+            userId: null | string;
+            userName: null | string;
+            action: string;
+            entityType: null | string;
+            entityId: null | string;
+            changes: null | components["schemas"]["JsonElement"];
+        };
         CaveDto: {
             /** Format: uuid */
             id: string;
@@ -2338,6 +2725,15 @@ export interface components {
             locale: string;
             roles: string[];
         };
+        PagedResultOfAuditEntryDto: {
+            items: components["schemas"]["AuditEntryDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfCaveListItemDto: {
             items: components["schemas"]["CaveListItemDto"][];
             /** Format: int32 */
@@ -2367,6 +2763,15 @@ export interface components {
         };
         PagedResultOfSurfaceFeatureDto: {
             items: components["schemas"]["SurfaceFeatureDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfTripLogDto: {
+            items: components["schemas"]["TripLogDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -2414,6 +2819,15 @@ export interface components {
         SearchResultDto: {
             caves: components["schemas"]["CaveListItemDto"][];
             features: components["schemas"]["SearchFeatureItemDto"][];
+            trips: components["schemas"]["SearchTripItemDto"][];
+        };
+        SearchTripItemDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: date */
+            tripDate: string;
+            center: null | components["schemas"]["GeoJsonPoint"];
         };
         SurfaceFeatureDto: {
             /** Format: uuid */
@@ -2449,6 +2863,26 @@ export interface components {
             teamId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
+        TagDto: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            slug: string;
+        };
+        TaggingCreateRequest: {
+            tagName: string;
+            entityType: components["schemas"]["AttachedEntityType"];
+            /** Format: uuid */
+            entityId: string;
+        };
+        TaggingDto: {
+            /** Format: int64 */
+            id: number;
+            tag: components["schemas"]["TagDto"];
+            entityType: components["schemas"]["AttachedEntityType"];
+            /** Format: uuid */
+            entityId: string;
+        };
         TaxonomyDto: {
             /** Format: int64 */
             id: number;
@@ -2457,6 +2891,55 @@ export interface components {
             description: null | string;
             /** Format: int32 */
             sortOrder: number;
+        };
+        TripLogDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: date */
+            tripDate: string;
+            /** Format: date */
+            tripDateEnd: null | string;
+            description: null | string;
+            locationText: null | string;
+            geom: null | components["schemas"]["GeoJsonGeometry"];
+            caveIds: string[];
+            participants: components["schemas"]["TripParticipantDto"][];
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        TripLogWriteRequest: {
+            title: string;
+            /** Format: date */
+            tripDate: string;
+            /** Format: date */
+            tripDateEnd: null | string;
+            description: null | string;
+            locationText: null | string;
+            geom: null | components["schemas"]["GeoJsonGeometry"];
+            caveIds: string[];
+            participants: components["schemas"]["TripParticipantWrite"][];
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
+        };
+        TripParticipantDto: {
+            /** Format: uuid */
+            userId: null | string;
+            nameText: null | string;
+            displayName: null | string;
+        };
+        TripParticipantWrite: {
+            /** Format: uuid */
+            userId: null | string;
+            nameText: null | string;
         };
         /** @enum {unknown} */
         Visibility: "private" | "team" | "authenticated" | "public";

@@ -42,6 +42,7 @@ public static class CaveEndpoints
         string? search,
         decimal? minLength,
         string? bbox,
+        string? tag,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -51,6 +52,13 @@ public static class CaveEndpoints
         }
 
         var query = db.Caves.AsNoTracking().VisibleTo(user);
+
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            query = query.Where(c => db.Taggings.Any(tg =>
+                tg.EntityType == AttachedEntityType.Cave && tg.EntityId == c.Id
+                && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
+        }
 
         if (caveTypeId is not null)
         {

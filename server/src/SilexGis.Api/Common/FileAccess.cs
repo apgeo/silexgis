@@ -67,8 +67,12 @@ public static class FileAccessRules
             case AttachedEntityType.Team:
                 return user.IsMemberOf(entityId);
 
+            case AttachedEntityType.TripLog:
+                var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == entityId, ct);
+                return trip is not null && PermissionEvaluator.Can(user, trip, ObjectPermission.Read);
+
             default:
-                return false; // trip logs land with their own slice
+                return false;
         }
     }
 
@@ -99,6 +103,10 @@ public static class FileAccessRules
 
             case AttachedEntityType.Team:
                 return user.IsMemberOf(entityId) || user.IsAdmin;
+
+            case AttachedEntityType.TripLog:
+                var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == entityId, ct);
+                return trip is not null && PermissionEvaluator.Can(user, trip, ObjectPermission.Write);
 
             default:
                 return false;
