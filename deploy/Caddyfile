@@ -2,6 +2,9 @@
 # Caddy terminates TLS with an automatically provisioned Let's Encrypt certificate and
 # reverse-proxies to the web (nginx) service. X-Forwarded-Proto=https is added for us, so the
 # API issues https OIDC redirects (PublicUrl must be the https address).
+#
+# Both variables are required (compose enforces it): `email` rejects an empty argument, so an
+# unset SILEXGIS_TLS_EMAIL would make Caddy fail to parse this file.
 
 {
 	email {$SILEXGIS_TLS_EMAIL}

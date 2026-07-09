@@ -53,7 +53,7 @@ docker compose exec api dotnet SilexGis.Api.dll seed-demo
 TLS is not on by default. Two easy options:
 
 **Bundled Caddy (automatic Let's Encrypt).** Point a domain's DNS at the host, open ports 80
-and 443, then set in `.env`:
+and 443, then set all three in `.env` (each is required by this overlay):
 
 ```
 SILEXGIS_DOMAIN=caves.example.org

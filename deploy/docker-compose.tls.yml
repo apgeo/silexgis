@@ -6,7 +6,7 @@
 # Requires in .env:
 #   SILEXGIS_DOMAIN=caves.example.org          # public hostname, DNS pointed at this host
 #   SILEXGIS_PUBLIC_URL=https://caves.example.org
-#   SILEXGIS_TLS_EMAIL=admin@example.org       # optional, for Let's Encrypt notices
+#   SILEXGIS_TLS_EMAIL=admin@example.org       # Let's Encrypt contact (expiry/revocation notices)
 #
 # Caddy obtains and renews the certificate automatically; ports 80 and 443 must be
 # reachable from the internet for the ACME challenge.
@@ -23,7 +23,9 @@ services:
       - "443:443/udp"
     environment:
       SILEXGIS_DOMAIN: ${SILEXGIS_DOMAIN:?set SILEXGIS_DOMAIN in .env}
-      SILEXGIS_TLS_EMAIL: ${SILEXGIS_TLS_EMAIL:-}
+      # Required: the Caddyfile's global `email` option takes no empty value, so an unset
+      # variable would leave Caddy crash-looping on a config parse error. Fail here instead.
+      SILEXGIS_TLS_EMAIL: ${SILEXGIS_TLS_EMAIL:?set SILEXGIS_TLS_EMAIL in .env (Let's Encrypt contact)}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - silexgis-caddy-data:/data
