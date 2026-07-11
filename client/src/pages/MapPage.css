@@ -134,6 +134,14 @@
   word-break: break-word;
 }
 
+/* Jump-to-scale combo, stacked above the OL scale line (bottom-left). */
+.map-scale-overlay {
+  position: absolute;
+  bottom: 34px;
+  left: 8px;
+  z-index: 5;
+}
+
 /* Right dock: selection / in-view tabs fill the panel and scroll internally. */
 .map-right-tabs {
   height: 100%;

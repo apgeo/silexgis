@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
+import MeasureButton from '@terrestris/react-geo/dist/Button/MeasureButton/MeasureButton';
 import {
   AimOutlined,
   BorderOutlined,
@@ -13,7 +14,7 @@ import {
   RedoOutlined,
   UndoOutlined,
 } from '@ant-design/icons';
-import { App, Badge, Button, Divider, Space, Tooltip, Typography } from 'antd';
+import { App, Badge, Button, Divider, Space, Tooltip } from 'antd';
 import type Feature from 'ol/Feature';
 import { useTranslation } from 'react-i18next';
 import {
@@ -51,10 +52,13 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
   const { message } = App.useApp();
   const { data: featureTypes } = useFeatureTypes();
   const [state, setState] = useState<EditState>({
-    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0, measureResult: null,
+    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0,
   });
   const [typeId, setTypeId] = useState<number>();
   const [saving, setSaving] = useState(false);
+  // Measuring lives outside the edit controller (react-geo owns those
+  // interactions); arming either side disarms the other.
+  const [measure, setMeasure] = useState<'line' | 'polygon' | null>(null);
   // Freshly drawn feature awaiting attributes; the modal stashes them on the
   // OL feature (pendingAttrs) — nothing hits the server until Save.
   const [pendingFeature, setPendingFeature] = useState<Feature | null>(null);
@@ -77,7 +81,18 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
   const fixedShape = shapeForKind[kind] ?? 'Point';
 
   const setMode = (mode: EditMode, shape?: DrawShape) => {
+    setMeasure(null);
     controller.setMode(state.mode === mode && mode !== 'draw' ? 'none' : mode, shape, typeId);
+  };
+
+  const toggleMeasure = (type: 'line' | 'polygon') => {
+    setMeasure((current) => {
+      const next = current === type ? null : type;
+      if (next) {
+        controller.setMode('none');
+      }
+      return next;
+    });
   };
 
   const save = async () => {
@@ -134,6 +149,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
         value={typeId}
         onChange={(id) => {
           setTypeId(id);
+          setMeasure(null);
           // Picking a symbol arms drawing immediately (reference-software behavior),
           // with the shape implied by the type's geometry kind.
           const picked = featureTypes?.find((ft) => Number(ft.id) === id);
@@ -203,30 +219,29 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
         <Button size="small" icon={<RedoOutlined />} disabled={!state.canRedo} onClick={() => controller.redo()} />
       </Tooltip>
       <Divider orientation="vertical" />
-      <Tooltip title={t('mapEdit.measureDistance')}>
-        <Button
-          size="small"
-          type={state.mode === 'measure-distance' ? 'primary' : 'default'}
-          icon={<ColumnWidthOutlined />}
-          onClick={() => setMode('measure-distance')}
-        />
-      </Tooltip>
-      <Tooltip title={t('mapEdit.measureArea')}>
-        <Button
-          size="small"
-          type={state.mode === 'measure-area' ? 'primary' : 'default'}
-          icon={<BorderOutlined />}
-          onClick={() => setMode('measure-area')}
-        />
-      </Tooltip>
-      {state.measureResult && (
-        <Typography.Text
-          copyable={{ text: state.measureResult }}
-          style={{ fontSize: 12 }}
-        >
-          {state.measureResult}
-        </Typography.Text>
-      )}
+      <MeasureButton
+        size="small"
+        measureType="line"
+        pressed={measure === 'line'}
+        onChange={() => toggleMeasure('line')}
+        tooltip={t('mapEdit.measureDistance')}
+        icon={<ColumnWidthOutlined />}
+        pressedIcon={<ColumnWidthOutlined />}
+        showSegmentLengths
+        clickToDrawText={t('mapEdit.clickToMeasure')}
+        continueLineMsg={t('mapEdit.continueLine')}
+      />
+      <MeasureButton
+        size="small"
+        measureType="polygon"
+        pressed={measure === 'polygon'}
+        onChange={() => toggleMeasure('polygon')}
+        tooltip={t('mapEdit.measureArea')}
+        icon={<BorderOutlined />}
+        pressedIcon={<BorderOutlined />}
+        clickToDrawText={t('mapEdit.clickToMeasure')}
+        continuePolygonMsg={t('mapEdit.continueArea')}
+      />
       <Divider orientation="vertical" />
       <Badge count={state.dirty} size="small">
         <Button
@@ -244,7 +259,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
         <Button
           size="small"
           icon={<CloseOutlined />}
-          disabled={state.dirty === 0 && !state.measureResult}
+          disabled={state.dirty === 0}
           onClick={discard}
         />
       </Tooltip>

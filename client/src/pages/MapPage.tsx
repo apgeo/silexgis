@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
 import BackgroundLayerChooser from '@terrestris/react-geo/dist/BackgroundLayerChooser/BackgroundLayerChooser';
+import GeoLocationButton from '@terrestris/react-geo/dist/Button/GeoLocationButton/GeoLocationButton';
+import ScaleCombo from '@terrestris/react-geo/dist/Field/ScaleCombo/ScaleCombo';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
-import { Button, Tabs, Tooltip } from 'antd';
-import { CodeSandboxOutlined, ExportOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
+import { App, Button, Tabs, Tooltip } from 'antd';
+import { AimOutlined, CodeSandboxOutlined, ExportOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import type { EventsKey } from 'ol/events';
 import type BaseLayer from 'ol/layer/Base';
 import type TileLayer from 'ol/layer/Tile';
@@ -52,6 +54,7 @@ import './MapPage.css';
 /** Map workspace v1: fixed resizable panes; docking comes later. */
 export default function MapPage() {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const mapTarget = useRef<HTMLDivElement>(null);
   const leftPanelRef = usePanelRef();
   const rightPanelRef = usePanelRef();
@@ -448,7 +451,20 @@ export default function MapPage() {
               buttonTooltip={t('map.changeBaseLayer')}
             />
           )}
+          <div className="map-scale-overlay">
+            <ScaleCombo syncWithMap size="small" style={{ width: 128 }} />
+          </div>
           <div className="map-popout-overlay">
+            <GeoLocationButton
+              size="small"
+              icon={<AimOutlined />}
+              pressedIcon={<AimOutlined />}
+              tooltip={t('map.locateMe')}
+              showMarker
+              follow
+              enableTracking
+              onError={() => message.error(t('map.geolocationFailed'))}
+            />
             <Tooltip title={t('panel.popOut')}>
               <Button
                 size="small"

@@ -61,7 +61,9 @@
     "selectedCount": "{{count}} selectate",
     "zoomToSelected": "Zoom la selecție",
     "zoomInForEntrances": "Apropie harta pentru a lista intrările individuale.",
-    "nothingInView": "Nimic încărcat în vederea curentă."
+    "nothingInView": "Nimic încărcat în vederea curentă.",
+    "locateMe": "Arată locația mea",
+    "geolocationFailed": "Locația nu a putut fi determinată."
   },
   "caves": {
     "title": "Peșteri",
@@ -239,7 +241,10 @@
     "redo": "Refă",
     "measureDistance": "Măsoară distanța",
     "measureArea": "Măsoară aria",
-    "discard": "Renunță la editări și măsurători",
+    "discard": "Renunță la editări",
+    "clickToMeasure": "Clic pentru a măsura",
+    "continueLine": "Clic pentru a continua linia — dublu-clic pentru a încheia",
+    "continueArea": "Clic pentru a continua suprafața — dublu-clic pentru a încheia",
     "pickFeatureType": "Alege un tip de fenomen",
     "newCaveHere": "Peșteră nouă aici (clic pe hartă)",
     "newEntranceHere": "Intrare nouă aici (clic pe hartă)",

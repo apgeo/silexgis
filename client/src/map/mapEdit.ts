@@ -1,29 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type Map from 'ol/Map';
-import Feature, { type FeatureLike } from 'ol/Feature';
+import Feature from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import type Geometry from 'ol/geom/Geometry';
 import type Point from 'ol/geom/Point';
 import { Draw, Modify, Snap, Translate } from 'ol/interaction';
-import VectorLayer from 'ol/layer/Vector';
 import { toLonLat } from 'ol/proj';
-import VectorSource from 'ol/source/Vector';
-import { getArea, getLength } from 'ol/sphere';
-import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
+import type VectorSource from 'ol/source/Vector';
 import { getSurfaceFeatureSource } from './featureLayer.ts';
 
 // All OL edit interactions live here; React components only dispatch intents and
-// subscribe to plain-data snapshots via the listener.
+// subscribe to plain-data snapshots via the listener. (Measuring is not an edit
+// concern anymore — the toolbar hosts react-geo's measure buttons directly.)
 
-export type EditMode =
-  | 'none'
-  | 'draw'
-  | 'modify'
-  | 'translate'
-  | 'measure-distance'
-  | 'measure-area'
-  | 'add-cave'
-  | 'add-entrance';
+export type EditMode = 'none' | 'draw' | 'modify' | 'translate' | 'add-cave' | 'add-entrance';
 export type DrawShape = 'Point' | 'LineString' | 'Polygon';
 export type PlacementMode = 'add-cave' | 'add-entrance';
 
@@ -33,7 +23,6 @@ export interface EditState {
   canUndo: boolean;
   canRedo: boolean;
   dirty: number; // created + geometry-modified features not yet saved
-  measureResult: string | null;
 }
 
 export interface PendingEdits {
@@ -50,14 +39,12 @@ const format = new GeoJSON();
 export class MapEditController {
   private readonly map: Map;
   private readonly source: VectorSource;
-  private readonly measureSource = new VectorSource();
-  private readonly measureLayer: VectorLayer;
 
   private interactions: (Draw | Modify | Translate | Snap)[] = [];
   private undoStack: Command[] = [];
   private redoStack: Command[] = [];
   private state: EditState = {
-    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0, measureResult: null,
+    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0,
   };
   private listener: ((s: EditState) => void) | undefined;
 
@@ -73,15 +60,6 @@ export class MapEditController {
   constructor(map: Map) {
     this.map = map;
     this.source = getSurfaceFeatureSource();
-    this.measureLayer = new VectorLayer({
-      source: this.measureSource,
-      // Data overlays get sequential zIndex from their group position; keep
-      // measurements far above however many of them exist.
-      zIndex: 1000,
-      style: measureStyle,
-    });
-    this.measureLayer.set('id', 'measure');
-    map.addLayer(this.measureLayer);
   }
 
   subscribe(listener: (s: EditState) => void): void {
@@ -102,7 +80,7 @@ export class MapEditController {
 
   setMode(mode: EditMode, drawShape?: DrawShape, drawTypeId?: number): void {
     this.detachInteractions();
-    this.state = { ...this.state, mode, measureResult: null };
+    this.state = { ...this.state, mode };
 
     switch (mode) {
       case 'draw':
@@ -113,12 +91,6 @@ export class MapEditController {
         break;
       case 'translate':
         this.attachTranslate();
-        break;
-      case 'measure-distance':
-        this.attachMeasure('LineString');
-        break;
-      case 'measure-area':
-        this.attachMeasure('Polygon');
         break;
       case 'add-cave':
       case 'add-entrance':
@@ -164,19 +136,11 @@ export class MapEditController {
     this.modifiedGeometries.clear();
     this.undoStack = [];
     this.redoStack = [];
-    this.clearMeasurements();
     this.setMode('none');
-  }
-
-  clearMeasurements(): void {
-    this.measureSource.clear();
-    this.state = { ...this.state, measureResult: null };
-    this.emit();
   }
 
   dispose(): void {
     this.detachInteractions();
-    this.map.removeLayer(this.measureLayer);
     this.listener = undefined;
     this.onDrawEnd = undefined;
     this.onPointPlaced = undefined;
@@ -294,21 +258,6 @@ export class MapEditController {
     this.interactions.push(draw);
   }
 
-  private attachMeasure(shape: 'LineString' | 'Polygon'): void {
-    const draw = new Draw({ source: this.measureSource, type: shape });
-    draw.on('drawend', (event) => {
-      const geometry = event.feature.getGeometry()!;
-      const result = shape === 'LineString'
-        ? formatLength(getLength(geometry))
-        : formatArea(getArea(geometry));
-      event.feature.set('measure', result);
-      this.state = { ...this.state, measureResult: result };
-      this.emit();
-    });
-    this.map.addInteraction(draw);
-    this.interactions.push(draw);
-  }
-
   private detachInteractions(): void {
     for (const interaction of this.interactions) {
       this.map.removeInteraction(interaction);
@@ -337,27 +286,3 @@ export class MapEditController {
   }
 }
 
-function formatLength(meters: number): string {
-  return meters >= 1000 ? `${(meters / 1000).toFixed(2)} km` : `${meters.toFixed(1)} m`;
-}
-
-function formatArea(squareMeters: number): string {
-  return squareMeters >= 1_000_000
-    ? `${(squareMeters / 1_000_000).toFixed(3)} km²`
-    : `${squareMeters.toFixed(0)} m²`;
-}
-
-function measureStyle(feature: FeatureLike): Style {
-  return new Style({
-    stroke: new Stroke({ color: '#c41d7f', width: 2, lineDash: [6, 6] }),
-    fill: new Fill({ color: 'rgba(196, 29, 127, 0.08)' }),
-    image: new CircleStyle({ radius: 4, fill: new Fill({ color: '#c41d7f' }) }),
-    text: new Text({
-      text: (feature.get('measure') as string | undefined) ?? '',
-      offsetY: -12,
-      font: '12px sans-serif',
-      fill: new Fill({ color: '#c41d7f' }),
-      stroke: new Stroke({ color: '#ffffff', width: 3 }),
-    }),
-  });
-}

@@ -61,7 +61,9 @@
     "selectedCount": "{{count}} selected",
     "zoomToSelected": "Zoom to selected",
     "zoomInForEntrances": "Zoom in to list individual entrances.",
-    "nothingInView": "Nothing loaded in the current view."
+    "nothingInView": "Nothing loaded in the current view.",
+    "locateMe": "Show my location",
+    "geolocationFailed": "Could not determine your location."
   },
   "caves": {
     "title": "Caves",
@@ -239,8 +241,11 @@
     "redo": "Redo",
     "measureDistance": "Measure distance",
     "measureArea": "Measure area",
-    "discard": "Discard edits and measurements",
+    "discard": "Discard edits",
     "pickFeatureType": "Pick a feature type",
+    "clickToMeasure": "Click to measure",
+    "continueLine": "Click to continue the line — double-click to finish",
+    "continueArea": "Click to continue the area — double-click to finish",
     "newCaveHere": "New cave here (click the map)",
     "newEntranceHere": "New entrance here (click the map)",
     "entranceType": "Entrance type",
