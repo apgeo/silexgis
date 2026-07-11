@@ -241,6 +241,11 @@
     "measureArea": "Măsoară aria",
     "discard": "Renunță la editări și măsurători",
     "pickFeatureType": "Alege un tip de fenomen",
+    "newCaveHere": "Peșteră nouă aici (clic pe hartă)",
+    "newEntranceHere": "Intrare nouă aici (clic pe hartă)",
+    "entranceType": "Tip intrare",
+    "locationProtected": "Protejează locația exactă",
+    "pickCaveForEntrance": "Alege peștera căreia îi aparține intrarea.",
     "groups": {
       "point": "Puncte",
       "line": "Linii",

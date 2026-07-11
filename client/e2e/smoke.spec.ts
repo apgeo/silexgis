@@ -17,13 +17,17 @@ async function login(page: Page) {
   await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 20_000 });
 }
 
+/** A named overlay row in the layer composer tree (left dock). */
+function overlayTreeNode(page: Page, name: string) {
+  return page.locator('.layer-composer .ant-tree-treenode').filter({ hasText: name });
+}
+
 test('login, map workspace and cave registry work end to end', async ({ page }) => {
   await login(page);
   await expect(page.getByRole('radio', { name: 'OpenStreetMap' })).toBeChecked();
 
-  // Layer panel shows the entrance overlay toggle. Visibility matters here:
-  // checked-state assertions pass even when the dock is collapsed to a sliver.
-  await expect(page.getByRole('checkbox', { name: 'Cave entrances' })).toBeChecked();
+  // The composer tree lists the entrance overlay with its checkbox on.
+  await expect(overlayTreeNode(page, 'Cave entrances').locator('.ant-tree-checkbox-checked')).toBeVisible();
   await expect(page.getByText('Base layers')).toBeVisible();
   await expect(page.getByText(/Click a feature on the map/)).toBeVisible();
 
@@ -74,6 +78,40 @@ test('cave and entrance create/edit round-trip', async ({ page }) => {
   await expect(page.getByText('Testland')).toBeVisible();
 
   // Clean up: delete the cave (entrances cascade server-side).
+  await page.locator('button', { hasText: 'Delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await page.waitForURL(/\/caves$/);
+  await expect(page.getByText(caveName)).not.toBeVisible();
+});
+
+test('cave add on map: place a new cave with its entrance by clicking the canvas', async ({ page }) => {
+  const caveName = `E2E Map Cave ${Date.now()}`;
+  await login(page);
+
+  const toolbar = page.locator('.map-edit-overlay');
+  await expect(toolbar).toBeVisible();
+
+  // Arm the tool, click the map, and fill the quick-create dialog.
+  await toolbar.getByTestId('tool-add-cave').click();
+  await page.locator('.map-canvas').click({ position: { x: 400, y: 240 } });
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByText(/New cave here/)).toBeVisible();
+  await modal.getByLabel('Name').fill(caveName);
+  await modal.getByLabel('Type', { exact: true }).click();
+  await page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option').first().click();
+  await modal.getByLabel('Entrance type').click();
+  await page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option').first().click();
+  await modal.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+
+  // The new cave is selected in the right dock; its entrance count proves the
+  // first entrance landed with the create.
+  await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Entrances').locator('..')).toContainText('1');
+
+  // Clean up from the registry (entrances cascade).
+  await page.goto('/caves');
+  await page.getByText(caveName).click();
   await page.locator('button', { hasText: 'Delete' }).click();
   await page.getByRole('button', { name: 'OK' }).click();
   await page.waitForURL(/\/caves$/);
@@ -246,7 +284,7 @@ test('cave centerline: upload, computed length and map overlay toggle', async ({
 
   // The workspace gains the centerline overlay toggle, on by default.
   await page.goto('/');
-  await expect(page.getByRole('checkbox', { name: 'Cave centerlines' })).toBeChecked();
+  await expect(overlayTreeNode(page, 'Cave centerlines').locator('.ant-tree-checkbox-checked')).toBeVisible();
 
   // Clean up: delete the centerline, then the cave.
   await page.goto('/caves');

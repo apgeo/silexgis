@@ -20,7 +20,7 @@ import AttachmentSection from '../../components/attachments/AttachmentSection.ts
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
 import CenterlineSection from './CenterlineSection.tsx';
-import EntranceEditorModal from './EntranceEditorModal.tsx';
+import EntranceEditorModal from '../../components/caves/EntranceEditorModal.tsx';
 import SurveyModelSection from './SurveyModelSection.tsx';
 
 export default function CaveDetailPage() {

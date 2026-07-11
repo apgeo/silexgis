@@ -241,6 +241,11 @@
     "measureArea": "Measure area",
     "discard": "Discard edits and measurements",
     "pickFeatureType": "Pick a feature type",
+    "newCaveHere": "New cave here (click the map)",
+    "newEntranceHere": "New entrance here (click the map)",
+    "entranceType": "Entrance type",
+    "locationProtected": "Protect the exact location",
+    "pickCaveForEntrance": "Pick the cave this entrance belongs to.",
     "groups": {
       "point": "Points",
       "line": "Lines",

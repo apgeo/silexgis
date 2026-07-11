@@ -8,6 +8,8 @@ import {
   ColumnWidthOutlined,
   DragOutlined,
   EditOutlined,
+  EnvironmentOutlined,
+  LoginOutlined,
   RedoOutlined,
   UndoOutlined,
 } from '@ant-design/icons';
@@ -21,8 +23,15 @@ import {
   useFeatureTypes,
 } from '../../api/hooks.ts';
 import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
-import { MapEditController, type DrawShape, type EditMode, type EditState } from '../../map/mapEdit.ts';
+import {
+  MapEditController,
+  type DrawShape,
+  type EditMode,
+  type EditState,
+  type PlacementMode,
+} from '../../map/mapEdit.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
+import CaveAddModal from './CaveAddModal.tsx';
 import FeaturePalette from './FeaturePalette.tsx';
 
 interface EditToolbarProps {
@@ -49,13 +58,17 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
   // Freshly drawn feature awaiting attributes; the modal stashes them on the
   // OL feature (pendingAttrs) — nothing hits the server until Save.
   const [pendingFeature, setPendingFeature] = useState<Feature | null>(null);
+  // A landed cave/entrance placement click awaiting its create dialog.
+  const [placement, setPlacement] = useState<{ mode: PlacementMode; lonLat: [number, number] } | null>(null);
 
   useEffect(() => controller.subscribe(setState), [controller]);
 
   useEffect(() => {
     controller.onDrawEnd = (feature) => setPendingFeature(feature);
+    controller.onPointPlaced = (mode, lonLat) => setPlacement({ mode, lonLat });
     return () => {
       controller.onDrawEnd = undefined;
+      controller.onPointPlaced = undefined;
     };
   }, [controller]);
 
@@ -164,6 +177,25 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
         </Button>
       </Tooltip>
       <Divider orientation="vertical" />
+      <Tooltip title={t('mapEdit.newCaveHere')}>
+        <Button
+          size="small"
+          type={state.mode === 'add-cave' ? 'primary' : 'default'}
+          icon={<EnvironmentOutlined />}
+          onClick={() => setMode('add-cave')}
+          data-testid="tool-add-cave"
+        />
+      </Tooltip>
+      <Tooltip title={t('mapEdit.newEntranceHere')}>
+        <Button
+          size="small"
+          type={state.mode === 'add-entrance' ? 'primary' : 'default'}
+          icon={<LoginOutlined />}
+          onClick={() => setMode('add-entrance')}
+          data-testid="tool-add-entrance"
+        />
+      </Tooltip>
+      <Divider orientation="vertical" />
       <Tooltip title={t('mapEdit.undo')}>
         <Button size="small" icon={<UndoOutlined />} disabled={!state.canUndo} onClick={() => controller.undo()} />
       </Tooltip>
@@ -216,6 +248,11 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           onClick={discard}
         />
       </Tooltip>
+      <CaveAddModal
+        mode={placement?.mode ?? null}
+        lonLat={placement?.lonLat ?? null}
+        onClose={() => setPlacement(null)}
+      />
       <FeatureEditModal
         open={pendingFeature !== null}
         title={t('features.newFeature')}

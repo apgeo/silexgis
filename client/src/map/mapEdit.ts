@@ -3,8 +3,10 @@ import type Map from 'ol/Map';
 import Feature, { type FeatureLike } from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import type Geometry from 'ol/geom/Geometry';
+import type Point from 'ol/geom/Point';
 import { Draw, Modify, Snap, Translate } from 'ol/interaction';
 import VectorLayer from 'ol/layer/Vector';
+import { toLonLat } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { getArea, getLength } from 'ol/sphere';
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
@@ -13,8 +15,17 @@ import { getSurfaceFeatureSource } from './featureLayer.ts';
 // All OL edit interactions live here; React components only dispatch intents and
 // subscribe to plain-data snapshots via the listener.
 
-export type EditMode = 'none' | 'draw' | 'modify' | 'translate' | 'measure-distance' | 'measure-area';
+export type EditMode =
+  | 'none'
+  | 'draw'
+  | 'modify'
+  | 'translate'
+  | 'measure-distance'
+  | 'measure-area'
+  | 'add-cave'
+  | 'add-entrance';
 export type DrawShape = 'Point' | 'LineString' | 'Polygon';
+export type PlacementMode = 'add-cave' | 'add-entrance';
 
 export interface EditState {
   mode: EditMode;
@@ -52,6 +63,9 @@ export class MapEditController {
 
   /** Invoked after each completed draw so the UI can collect attributes. */
   onDrawEnd: ((feature: Feature) => void) | undefined;
+
+  /** Invoked when a cave/entrance placement click lands (lon/lat, EPSG:4326). */
+  onPointPlaced: ((mode: PlacementMode, lonLat: [number, number]) => void) | undefined;
 
   private createdFeatures: { feature: Feature; geometryType: DrawShape }[] = [];
   private modifiedGeometries = new globalThis.Map<string, object>();
@@ -105,6 +119,10 @@ export class MapEditController {
         break;
       case 'measure-area':
         this.attachMeasure('Polygon');
+        break;
+      case 'add-cave':
+      case 'add-entrance':
+        this.attachPlacePoint(mode);
         break;
       case 'none':
         break;
@@ -161,6 +179,7 @@ export class MapEditController {
     this.map.removeLayer(this.measureLayer);
     this.listener = undefined;
     this.onDrawEnd = undefined;
+    this.onPointPlaced = undefined;
   }
 
   // ---- interactions ----
@@ -256,6 +275,23 @@ export class MapEditController {
     const snap = new Snap({ source: this.source });
     this.map.addInteraction(snap);
     this.interactions.push(snap);
+  }
+
+  /**
+   * One-shot point placement for the cave/entrance tools: the click is reported
+   * as lon/lat and the tool disarms — no feature is kept (the create dialog and
+   * the subsequent server reload own what appears on the map).
+   */
+  private attachPlacePoint(mode: PlacementMode): void {
+    const draw = new Draw({ type: 'Point' });
+    draw.on('drawend', (event) => {
+      const point = event.feature.getGeometry() as Point;
+      const [lon, lat] = toLonLat(point.getCoordinates());
+      this.setMode('none');
+      this.onPointPlaced?.(mode, [Number(lon.toFixed(6)), Number(lat.toFixed(6))]);
+    });
+    this.map.addInteraction(draw);
+    this.interactions.push(draw);
   }
 
   private attachMeasure(shape: 'LineString' | 'Polygon'): void {

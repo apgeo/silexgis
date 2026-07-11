@@ -843,6 +843,11 @@ export function useDeleteCave() {
   });
 }
 
+/** Non-hook variant for flows where the cave id is only known at submit time. */
+export async function createEntranceFor(caveId: string, body: EntranceWrite) {
+  return unwrap(api.POST('/api/v1/caves/{caveId}/entrances', { params: { path: { caveId } }, body }));
+}
+
 export function useCreateEntrance(caveId: string) {
   const invalidate = useInvalidateCaves();
   return useMutation({
