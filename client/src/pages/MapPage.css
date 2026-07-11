@@ -134,6 +134,28 @@
   word-break: break-word;
 }
 
+/* Right dock: selection / in-view tabs fill the panel and scroll internally. */
+.map-right-tabs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-right-tabs .ant-tabs-nav {
+  margin: 0;
+  padding: 0 8px;
+}
+
+.map-right-tabs .ant-tabs-content-holder {
+  flex: 1;
+  overflow: auto;
+}
+
+.map-right-tabs .ant-tabs-content,
+.map-right-tabs .ant-tabs-tabpane {
+  height: 100%;
+}
+
 /* Layer composer tree (react-geo LayerTree in the left dock). */
 .layer-composer {
   margin-top: 8px;

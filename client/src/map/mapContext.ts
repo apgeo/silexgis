@@ -126,15 +126,11 @@ export function setLayerOpacity(layerId: string, opacity: number): void {
     ?.setOpacity(opacity);
 }
 
-/** Fits the view to a GeoJSON geometry (EPSG:4326) — points get a sane close-up zoom. */
-export function fitGeoJsonGeometry(geometry: object): void {
+/** Fits the view to a map-projection extent — degenerate (point) extents get maxZoom. */
+export function fitExtent(extent: [number, number, number, number]): void {
   const map = getWorkspaceMap();
-  const geom = new GeoJSON().readGeometry(geometry, {
-    dataProjection: 'EPSG:4326',
-    featureProjection: 'EPSG:3857',
-  });
   const fit = () =>
-    map.getView().fit(geom.getExtent(), {
+    map.getView().fit(extent, {
       padding: [60, 60, 60, 60],
       maxZoom: 17,
       duration: 500,
@@ -143,8 +139,17 @@ export function fitGeoJsonGeometry(geometry: object): void {
   if (map.getSize()) {
     fit();
   } else {
-    // Called from a table page before the workspace renders: fit as soon as
-    // the map gets a size (it acquires one when the map page mounts).
+    // Called before the workspace renders (table pages, tests): fit as soon
+    // as the map gets a size (it acquires one when the map page mounts).
     map.once('change:size', fit);
   }
+}
+
+/** Fits the view to a GeoJSON geometry (EPSG:4326) — points get a sane close-up zoom. */
+export function fitGeoJsonGeometry(geometry: object): void {
+  const geom = new GeoJSON().readGeometry(geometry, {
+    dataProjection: 'EPSG:4326',
+    featureProjection: 'EPSG:3857',
+  });
+  fitExtent(geom.getExtent() as [number, number, number, number]);
 }

@@ -55,7 +55,13 @@
     "rasterMaps": "Raster maps",
     "centerlines": "Cave centerlines",
     "showPanel": "Show panel",
-    "hidePanel": "Hide panel"
+    "hidePanel": "Hide panel",
+    "tabSelection": "Selection",
+    "tabInView": "In view",
+    "selectedCount": "{{count}} selected",
+    "zoomToSelected": "Zoom to selected",
+    "zoomInForEntrances": "Zoom in to list individual entrances.",
+    "nothingInView": "Nothing loaded in the current view."
   },
   "caves": {
     "title": "Caves",

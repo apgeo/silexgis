@@ -14,6 +14,11 @@ export const ENTRANCE_LAYER_ID = 'entrances';
 const source = new VectorSource();
 const format = new GeoJSON();
 
+/** The live entrance source (individual entrances + low-zoom cluster features). */
+export function getEntranceSource(): VectorSource {
+  return source;
+}
+
 export function createEntranceLayer(): VectorLayer {
   // Stacking comes from the overlay group's collection order, not a fixed zIndex.
   const layer = new VectorLayer({ source, style: entranceStyle });

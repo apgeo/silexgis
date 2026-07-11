@@ -55,7 +55,13 @@
     "rasterMaps": "Hărți raster",
     "centerlines": "Poligonații peșteri",
     "showPanel": "Arată panoul",
-    "hidePanel": "Ascunde panoul"
+    "hidePanel": "Ascunde panoul",
+    "tabSelection": "Selecție",
+    "tabInView": "În vedere",
+    "selectedCount": "{{count}} selectate",
+    "zoomToSelected": "Zoom la selecție",
+    "zoomInForEntrances": "Apropie harta pentru a lista intrările individuale.",
+    "nothingInView": "Nimic încărcat în vederea curentă."
   },
   "caves": {
     "title": "Peșteri",

@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import BackgroundLayerChooser from '@terrestris/react-geo/dist/BackgroundLayerChooser/BackgroundLayerChooser';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
-import { Button, Tooltip } from 'antd';
+import { Button, Tabs, Tooltip } from 'antd';
 import { CodeSandboxOutlined, ExportOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import type { EventsKey } from 'ol/events';
 import type BaseLayer from 'ol/layer/Base';
@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import { useFeatureTypes, useGeofiles, useMapLayers, useMapViews, useMe, useRasterMaps } from '../api/hooks.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
+import FeatureListPanel from '../components/map/FeatureListPanel.tsx';
 import LayerPanel from '../components/map/LayerPanel.tsx';
 import ViewsPanel from '../components/map/ViewsPanel.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
@@ -319,6 +320,15 @@ export default function MapPage() {
   // uncontrolled and read layer opacity on mount) via this nonce.
   const [treeNonce, setTreeNonce] = useState(0);
 
+  // Right dock: selection details / live "in view" index. Picking something
+  // (map click or list row) brings the selection tab forward.
+  const [rightTab, setRightTab] = useState('selection');
+  useEffect(() => {
+    if (selection) {
+      setRightTab('selection');
+    }
+  }, [selection]);
+
   const applyView = (view: { config: unknown }) => {
     const ui = applyViewConfig(view.config);
     if (!ui) {
@@ -471,7 +481,15 @@ export default function MapPage() {
         className="map-workspace-panel"
         onResize={() => setRightCollapsed(rightPanelRef.current?.isCollapsed() ?? false)}
       >
-        <SelectionPanel />
+        <Tabs
+          className="map-right-tabs"
+          activeKey={rightTab}
+          onChange={setRightTab}
+          items={[
+            { key: 'selection', label: t('map.tabSelection'), children: <SelectionPanel /> },
+            { key: 'inview', label: t('map.tabInView'), children: <FeatureListPanel /> },
+          ]}
+        />
       </Panel>
     </Group>
     </MapContext.Provider>

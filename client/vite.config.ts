@@ -21,5 +21,12 @@ export default defineConfig({
     setupFiles: './src/setupTests.ts',
     // e2e/ belongs to Playwright, not Vitest.
     include: ['src/**/*.test.{ts,tsx}'],
+    server: {
+      deps: {
+        // react-geo ships extensionless CJS-style imports (lodash/has) that
+        // Node's ESM resolver rejects; inline it so Vite resolves them.
+        inline: [/@terrestris/],
+      },
+    },
   },
 });
