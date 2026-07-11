@@ -11,7 +11,7 @@ import {
   RedoOutlined,
   UndoOutlined,
 } from '@ant-design/icons';
-import { App, Badge, Button, Divider, Select, Space, Tooltip, Typography } from 'antd';
+import { App, Badge, Button, Divider, Space, Tooltip, Typography } from 'antd';
 import type Feature from 'ol/Feature';
 import { useTranslation } from 'react-i18next';
 import {
@@ -23,6 +23,7 @@ import {
 import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
 import { MapEditController, type DrawShape, type EditMode, type EditState } from '../../map/mapEdit.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
+import FeaturePalette from './FeaturePalette.tsx';
 
 interface EditToolbarProps {
   controller: MapEditController;
@@ -115,13 +116,17 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
 
   return (
     <Space size={4} wrap>
-      <Select
-        size="small"
-        style={{ width: 170 }}
-        placeholder={t('mapEdit.featureType')}
+      <FeaturePalette
+        featureTypes={featureTypes ?? []}
         value={typeId}
-        onChange={setTypeId}
-        options={featureTypes?.map((ft) => ({ value: Number(ft.id), label: ft.name }))}
+        onChange={(id) => {
+          setTypeId(id);
+          // Picking a symbol arms drawing immediately (reference-software behavior),
+          // with the shape implied by the type's geometry kind.
+          const picked = featureTypes?.find((ft) => Number(ft.id) === id);
+          const pickedKind = (picked?.geometryKind ?? 'point').toString().toLowerCase();
+          controller.setMode('draw', shapeForKind[pickedKind] ?? 'Point', id);
+        }}
       />
       <Tooltip title={t('mapEdit.draw')}>
         <Button

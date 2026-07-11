@@ -87,9 +87,10 @@ test('surface feature draw, attributes, selection and table round-trip', async (
   const toolbar = page.locator('.map-edit-overlay');
   await expect(toolbar).toBeVisible();
 
-  // Pick the feature type that carries a typed-properties schema.
-  await toolbar.locator('.ant-select').click();
-  await page.locator('.ant-select-item-option', { hasText: 'Sinkhole / Doline' }).click();
+  // Pick the feature type from the symbol palette (carries a typed-properties schema).
+  // Picking a symbol arms drawing; the explicit draw click below just re-affirms it.
+  await toolbar.getByRole('button', { name: /Feature type/ }).click();
+  await page.getByRole('button', { name: 'Sinkhole / Doline' }).click();
 
   // Draw a point by clicking the map canvas (icon-only button → name "edit").
   await toolbar.getByRole('button', { name: 'edit' }).click();
@@ -388,7 +389,13 @@ test('georeferenced raster upload, COG processing, map overlay and delete', asyn
   await row.getByRole('button', { name: 'aim' }).click();
   await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('checkbox', { name: 'e2e-map' }).first()).toBeChecked();
-  await expect(page.locator('.ant-slider')).toBeVisible();
+  // Scope to the checked raster row's own slider — built-in overlays now carry sliders
+  // too, and earlier runs may leave extra (unchecked) e2e-map rows in the panel.
+  const rasterRow = page
+    .locator('div')
+    .filter({ has: page.getByRole('checkbox', { name: 'e2e-map', checked: true }) })
+    .last();
+  await expect(rasterRow.locator('.ant-slider')).toBeVisible();
 
   // Cleanup: remove every e2e raster (earlier aborted runs may have left extras).
   await page.goto('/geodata');

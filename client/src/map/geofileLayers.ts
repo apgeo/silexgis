@@ -43,7 +43,12 @@ function parseOverrides(geofile: GeofileInfo): GeofileStyleOverrides | null {
  * Reconciles the map's geofile layers with the wanted set. Call whenever the
  * visible-geofile selection or the geofile catalog changes.
  */
-export function syncGeofileLayers(map: Map, geofiles: GeofileInfo[], visibleIds: ReadonlySet<string>): void {
+export function syncGeofileLayers(
+  map: Map,
+  geofiles: GeofileInfo[],
+  visibleIds: ReadonlySet<string>,
+  opacityById: ReadonlyMap<string, number> = new globalThis.Map(),
+): void {
   const wanted = new globalThis.Map(
     geofiles.filter((g) => visibleIds.has(g.id) && g.importStatus === 'imported').map((g) => [g.id, g]),
   );
@@ -56,19 +61,22 @@ export function syncGeofileLayers(map: Map, geofiles: GeofileInfo[], visibleIds:
     }
   }
 
-  // Add missing layers and refresh styles on existing ones.
+  // Add missing layers and refresh styles + opacity on existing ones.
   for (const [geofileId, geofile] of wanted) {
     const layerId = GEOFILE_LAYER_PREFIX + geofileId;
+    const opacity = opacityById.get(geofileId) ?? 1;
     const existing = map.getLayers().getArray()
       .find((l) => l.get('id') === layerId) as VectorLayer | undefined;
     if (existing) {
       existing.setStyle(layerStyle(parseOverrides(geofile)));
+      existing.setOpacity(opacity);
       continue;
     }
 
     const layer = new VectorLayer({
       source: new VectorSource(),
       zIndex: 8, // under entrances (10) and surface features (9)
+      opacity,
       style: layerStyle(parseOverrides(geofile)),
     });
     layer.set('id', layerId);

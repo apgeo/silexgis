@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Tooltip } from 'antd';
-import { CodeSandboxOutlined, ExportOutlined } from '@ant-design/icons';
+import { CodeSandboxOutlined, ExportOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { Group, Panel, Separator } from 'react-resizable-panels';
+import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import { useFeatureTypes, useGeofiles, useMapLayers, useMapViews, useMe, useRasterMaps } from '../api/hooks.ts';
+import BaseLayerSwitcher from '../components/map/BaseLayerSwitcher.tsx';
 import EditToolbar from '../components/map/EditToolbar.tsx';
 import LayerPanel from '../components/map/LayerPanel.tsx';
 import ViewsPanel from '../components/map/ViewsPanel.tsx';
@@ -27,7 +28,8 @@ import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import { subscribe } from '../workspace/workspaceBus.ts';
 import { syncRasterLayers } from '../map/rasterLayers.ts';
 import { attachHoverTooltip } from '../map/hoverTooltip.ts';
-import { flyTo, getWorkspaceMap } from '../map/mapContext.ts';
+import { attachUrlHash, hasMapHash } from '../map/urlHash.ts';
+import { flyTo, getWorkspaceMap, setLayerOpacity } from '../map/mapContext.ts';
 import { MapEditController } from '../map/mapEdit.ts';
 import { attachSelection } from '../map/selection.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
@@ -37,6 +39,10 @@ import './MapPage.css';
 export default function MapPage() {
   const { t } = useTranslation();
   const mapTarget = useRef<HTMLDivElement>(null);
+  const leftPanelRef = usePanelRef();
+  const rightPanelRef = usePanelRef();
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
   const { data: layers } = useMapLayers();
   const { data: featureTypes } = useFeatureTypes();
   const { data: me } = useMe();
@@ -59,6 +65,8 @@ export default function MapPage() {
   const setRasterVisible = useWorkspaceStore((s) => s.setRasterVisible);
   const rasterOpacity = useWorkspaceStore((s) => s.rasterOpacity);
   const setRasterOpacity = useWorkspaceStore((s) => s.setRasterOpacity);
+  const overlayOpacity = useWorkspaceStore((s) => s.overlayOpacity);
+  const setOverlayOpacity = useWorkspaceStore((s) => s.setOverlayOpacity);
   const { data: rasterPage } = useRasterMaps({ pageSize: 100 });
   const readyRasters = useMemo(
     () => (rasterPage?.items ?? []).filter((r) => r.status === 'ready'),
@@ -86,6 +94,7 @@ export default function MapPage() {
     const detachGeofileLoader = attachGeofileLoader(map);
     const detachSelection = attachSelection(map, setSelection);
     const detachHover = attachHoverTooltip(map);
+    const detachUrlHash = attachUrlHash(map);
     const controller = new MapEditController(map);
     setEditController(controller);
     return () => {
@@ -97,14 +106,27 @@ export default function MapPage() {
       detachGeofileLoader();
       detachSelection();
       detachHover();
+      detachUrlHash();
       map.setTarget(undefined);
     };
   }, [setSelection]);
 
-  // Geofile overlays follow the workspace selection of visible geofiles.
+  // Geofile overlays follow the workspace selection of visible geofiles, with per-file opacity.
   useEffect(() => {
-    syncGeofileLayers(getWorkspaceMap(), importedGeofiles, new Set(visibleGeofileIds));
-  }, [importedGeofiles, visibleGeofileIds]);
+    syncGeofileLayers(
+      getWorkspaceMap(),
+      importedGeofiles,
+      new Set(visibleGeofileIds),
+      new globalThis.Map(Object.entries(overlayOpacity)),
+    );
+  }, [importedGeofiles, visibleGeofileIds, overlayOpacity]);
+
+  // Built-in vector overlays (entrances, surface features, centerlines) follow their opacity.
+  useEffect(() => {
+    for (const id of [ENTRANCE_LAYER_ID, SURFACE_FEATURE_LAYER_ID, CENTERLINE_LAYER_ID]) {
+      setLayerOpacity(id, overlayOpacity[id] ?? 1);
+    }
+  }, [overlayOpacity]);
 
   // Raster overlays likewise, with per-map opacity.
   useEffect(() => {
@@ -130,8 +152,9 @@ export default function MapPage() {
   useEffect(() => {
     if (savedViews && !sessionStorage.getItem('silexgis.homeApplied')) {
       sessionStorage.setItem('silexgis.homeApplied', '1');
+      // A shareable position in the URL wins over the home view.
       const home = savedViews.find((v) => v.isHome);
-      if (home) {
+      if (home && !hasMapHash()) {
         applyView(home);
       }
     }
@@ -197,6 +220,7 @@ export default function MapPage() {
       geofileIds: visibleGeofileIds,
       rasters: visibleRasterIds.map((id) => ({ id, opacity: rasterOpacity[id] })),
       tagFilter,
+      overlayOpacity,
     });
 
   const applyView = (view: { config: unknown }) => {
@@ -230,6 +254,9 @@ export default function MapPage() {
         setRasterOpacity(raster.id, raster.opacity);
       }
     }
+    for (const [key, value] of Object.entries(ui.overlayOpacity)) {
+      setOverlayOpacity(key, value);
+    }
     setTagFilter(ui.tagFilter);
     setMapTagFilter(ui.tagFilter);
     reloadEntrances();
@@ -239,7 +266,15 @@ export default function MapPage() {
   return (
     <Group orientation="horizontal" className="map-workspace">
       {/* Panel sizes: bare numbers mean pixels in react-resizable-panels v4 — use percent strings. */}
-      <Panel defaultSize="16%" minSize="10%" className="map-workspace-panel">
+      <Panel
+        panelRef={leftPanelRef}
+        collapsible
+        collapsedSize="0%"
+        defaultSize="16%"
+        minSize="10%"
+        className="map-workspace-panel"
+        onResize={() => setLeftCollapsed(leftPanelRef.current?.isCollapsed() ?? false)}
+      >
         <LayerPanel
           layers={layers ?? []}
           activeBaseId={activeBaseId}
@@ -261,6 +296,8 @@ export default function MapPage() {
           onRasterVisibleChange={setRasterVisible}
           rasterOpacity={rasterOpacity}
           onRasterOpacityChange={setRasterOpacity}
+          overlayOpacity={overlayOpacity}
+          onOverlayOpacityChange={setOverlayOpacity}
           tagFilter={tagFilter}
           onTagFilterChange={(slug) => {
             setTagFilter(slug);
@@ -278,7 +315,37 @@ export default function MapPage() {
           <div className="map-search-overlay">
             <MapSearch />
           </div>
+          <Tooltip title={leftCollapsed ? t('map.showPanel') : t('map.hidePanel')} placement="right">
+            <Button
+              className="map-dock-toggle map-dock-toggle-left"
+              size="small"
+              aria-label={leftCollapsed ? t('map.showPanel') : t('map.hidePanel')}
+              icon={leftCollapsed ? <RightOutlined /> : <LeftOutlined />}
+              onClick={() =>
+                leftCollapsed ? leftPanelRef.current?.expand() : leftPanelRef.current?.collapse()
+              }
+            />
+          </Tooltip>
+          <Tooltip title={rightCollapsed ? t('map.showPanel') : t('map.hidePanel')} placement="left">
+            <Button
+              className="map-dock-toggle map-dock-toggle-right"
+              size="small"
+              aria-label={rightCollapsed ? t('map.showPanel') : t('map.hidePanel')}
+              icon={rightCollapsed ? <LeftOutlined /> : <RightOutlined />}
+              onClick={() =>
+                rightCollapsed ? rightPanelRef.current?.expand() : rightPanelRef.current?.collapse()
+              }
+            />
+          </Tooltip>
           <div className="map-popout-overlay">
+            <BaseLayerSwitcher
+              layers={layers ?? []}
+              activeBaseId={activeBaseId}
+              onChange={(id) => {
+                setActiveBaseId(id);
+                setActiveBaseLayer(getWorkspaceMap(), id);
+              }}
+            />
             <Tooltip title={t('panel.popOut')}>
               <Button
                 size="small"
@@ -302,7 +369,15 @@ export default function MapPage() {
         </div>
       </Panel>
       <Separator className="map-workspace-handle" />
-      <Panel defaultSize="22%" minSize="12%" className="map-workspace-panel">
+      <Panel
+        panelRef={rightPanelRef}
+        collapsible
+        collapsedSize="0%"
+        defaultSize="22%"
+        minSize="12%"
+        className="map-workspace-panel"
+        onResize={() => setRightCollapsed(rightPanelRef.current?.isCollapsed() ?? false)}
+      >
         <SelectionPanel />
       </Panel>
     </Group>

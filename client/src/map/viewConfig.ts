@@ -18,6 +18,8 @@ export interface ViewConfig {
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
   tagFilter: string | null;
+  /** Added after v1 shipped; older saved views omit it (treated as fully opaque). */
+  overlayOpacity?: Record<string, number>;
 }
 
 /** UI state the map page owns; the camera lives on the OL map itself. */
@@ -29,6 +31,7 @@ export interface WorkspaceUiState {
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
   tagFilter: string | null;
+  overlayOpacity: Record<string, number>;
 }
 
 export function captureViewConfig(ui: WorkspaceUiState): ViewConfig {
@@ -45,6 +48,7 @@ export function captureViewConfig(ui: WorkspaceUiState): ViewConfig {
     geofileIds: ui.geofileIds,
     rasters: ui.rasters,
     tagFilter: ui.tagFilter,
+    overlayOpacity: ui.overlayOpacity,
   };
 }
 
@@ -66,6 +70,7 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     geofileIds: parsed.geofileIds ?? [],
     rasters: parsed.rasters ?? [],
     tagFilter: parsed.tagFilter ?? null,
+    overlayOpacity: parsed.overlayOpacity ?? {},
   };
 }
 

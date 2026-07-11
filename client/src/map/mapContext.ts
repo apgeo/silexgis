@@ -24,6 +24,15 @@ export function flyTo(lon: number, lat: number, zoom = 15): void {
   getWorkspaceMap().getView().animate({ center: fromLonLat([lon, lat]), zoom, duration: 500 });
 }
 
+/** Sets the opacity (0..1) of a map layer identified by its `id` property, if present. */
+export function setLayerOpacity(layerId: string, opacity: number): void {
+  getWorkspaceMap()
+    .getLayers()
+    .getArray()
+    .find((layer) => layer.get('id') === layerId)
+    ?.setOpacity(opacity);
+}
+
 /** Fits the view to a GeoJSON geometry (EPSG:4326) — points get a sane close-up zoom. */
 export function fitGeoJsonGeometry(geometry: object): void {
   const map = getWorkspaceMap();

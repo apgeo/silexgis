@@ -33,6 +33,13 @@ interface WorkspaceState {
   setRasterVisible: (id: string, visible: boolean) => void;
   rasterOpacity: Record<string, number>;
   setRasterOpacity: (id: string, opacity: number) => void;
+  /**
+   * Per-overlay opacity (0..1) for the built-in vector overlays (keyed by their layer id:
+   * 'entrances', 'surface-features', 'centerlines') and for each geofile (keyed by geofile
+   * id). A missing key means fully opaque. Rasters keep their own `rasterOpacity`.
+   */
+  overlayOpacity: Record<string, number>;
+  setOverlayOpacity: (key: string, opacity: number) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
@@ -55,4 +62,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   rasterOpacity: {},
   setRasterOpacity: (id, opacity) =>
     set((state) => ({ rasterOpacity: { ...state.rasterOpacity, [id]: opacity } })),
+  overlayOpacity: {},
+  setOverlayOpacity: (key, opacity) =>
+    set((state) => ({ overlayOpacity: { ...state.overlayOpacity, [key]: opacity } })),
 }));

@@ -22,10 +22,18 @@ interface LayerPanelProps {
   onRasterVisibleChange: (id: string, visible: boolean) => void;
   rasterOpacity: Record<string, number>;
   onRasterOpacityChange: (id: string, opacity: number) => void;
+  /** Opacity (0..1) for the built-in vector overlays and geofiles; missing = opaque. */
+  overlayOpacity: Record<string, number>;
+  onOverlayOpacityChange: (key: string, opacity: number) => void;
   tagFilter: string | null;
   onTagFilterChange: (slug: string | null) => void;
   footer?: ReactNode;
 }
+
+// Opacity keys for the built-in overlays match their OpenLayers layer ids.
+const ENTRANCE_KEY = 'entrances';
+const SURFACE_KEY = 'surface-features';
+const CENTERLINE_KEY = 'centerlines';
 
 export default function LayerPanel({
   layers,
@@ -45,12 +53,38 @@ export default function LayerPanel({
   onRasterVisibleChange,
   rasterOpacity,
   onRasterOpacityChange,
+  overlayOpacity,
+  onOverlayOpacityChange,
   tagFilter,
   onTagFilterChange,
   footer,
 }: LayerPanelProps) {
   const { t } = useTranslation();
   const { data: tags } = useTags('');
+
+  // A visibility checkbox with an opacity slider that appears while the overlay is shown.
+  const overlayRow = (
+    label: string,
+    checked: boolean,
+    onCheck: (v: boolean) => void,
+    opacityKey: string,
+  ) => (
+    <div key={opacityKey}>
+      <Checkbox checked={checked} onChange={(e) => onCheck(e.target.checked)}>
+        {label}
+      </Checkbox>
+      {checked && (
+        <Slider
+          min={0}
+          max={1}
+          step={0.05}
+          style={{ margin: '0 8px 4px 24px' }}
+          value={overlayOpacity[opacityKey] ?? 1}
+          onChange={(value) => onOverlayOpacityChange(opacityKey, value)}
+        />
+      )}
+    </div>
+  );
 
   return (
     <div style={{ padding: 12, overflow: 'auto', height: '100%' }}>
@@ -75,33 +109,23 @@ export default function LayerPanel({
         onChange={(value?: string) => onTagFilterChange(value ?? null)}
       />
       <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <Checkbox checked={entrancesVisible} onChange={(e) => onEntrancesVisibleChange(e.target.checked)}>
-          {t('map.entrances')}
-        </Checkbox>
-        <Checkbox
-          checked={surfaceFeaturesVisible}
-          onChange={(e) => onSurfaceFeaturesVisibleChange(e.target.checked)}
-        >
-          {t('map.surfaceFeatures')}
-        </Checkbox>
-        <Checkbox checked={centerlinesVisible} onChange={(e) => onCenterlinesVisibleChange(e.target.checked)}>
-          {t('map.centerlines')}
-        </Checkbox>
+        {overlayRow(t('map.entrances'), entrancesVisible, onEntrancesVisibleChange, ENTRANCE_KEY)}
+        {overlayRow(t('map.surfaceFeatures'), surfaceFeaturesVisible, onSurfaceFeaturesVisibleChange, SURFACE_KEY)}
+        {overlayRow(t('map.centerlines'), centerlinesVisible, onCenterlinesVisibleChange, CENTERLINE_KEY)}
       </div>
       {geofiles.length > 0 && (
         <>
           <Divider style={{ margin: '12px 0' }} />
           <Typography.Text strong>{t('map.geofiles')}</Typography.Text>
           <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {geofiles.map((geofile) => (
-              <Checkbox
-                key={geofile.id}
-                checked={visibleGeofileIds.includes(geofile.id)}
-                onChange={(e) => onGeofileVisibleChange(geofile.id, e.target.checked)}
-              >
-                {geofile.name}
-              </Checkbox>
-            ))}
+            {geofiles.map((geofile) =>
+              overlayRow(
+                geofile.name,
+                visibleGeofileIds.includes(geofile.id),
+                (v) => onGeofileVisibleChange(geofile.id, v),
+                geofile.id,
+              ),
+            )}
           </div>
         </>
       )}

@@ -52,7 +52,9 @@
     "surfaceFeatures": "Fenomene de suprafață",
     "geofiles": "Fișiere importate",
     "rasterMaps": "Hărți raster",
-    "centerlines": "Poligonații peșteri"
+    "centerlines": "Poligonații peșteri",
+    "showPanel": "Arată panoul",
+    "hidePanel": "Ascunde panoul"
   },
   "caves": {
     "title": "Peșteri",
@@ -230,7 +232,14 @@
     "redo": "Refă",
     "measureDistance": "Măsoară distanța",
     "measureArea": "Măsoară aria",
-    "discard": "Renunță la editări și măsurători"
+    "discard": "Renunță la editări și măsurători",
+    "pickFeatureType": "Alege un tip de fenomen",
+    "groups": {
+      "point": "Puncte",
+      "line": "Linii",
+      "polygon": "Suprafețe",
+      "any": "Altele"
+    }
   },
   "trips": {
     "title": "Jurnale de tură",

@@ -62,3 +62,74 @@
   display: flex;
   gap: 6px;
 }
+
+/* Collapse/expand tabs pinned to the dock boundaries. */
+.map-dock-toggle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 6;
+  opacity: 0.85;
+}
+
+.map-dock-toggle:hover {
+  opacity: 1;
+}
+
+.map-dock-toggle-left {
+  left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.map-dock-toggle-right {
+  right: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* Feature symbol palette (edit tools). */
+.feature-palette {
+  max-width: 320px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.feature-palette-group {
+  margin-bottom: 8px;
+}
+
+.feature-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.feature-palette-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.feature-palette-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.feature-palette-item.is-selected {
+  border-color: #1677ff;
+  background: rgba(22, 119, 255, 0.08);
+}
+
+.feature-palette-label {
+  font-size: 11px;
+  line-height: 1.1;
+  text-align: center;
+  word-break: break-word;
+}

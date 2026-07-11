@@ -52,7 +52,9 @@
     "surfaceFeatures": "Surface features",
     "geofiles": "Imported files",
     "rasterMaps": "Raster maps",
-    "centerlines": "Cave centerlines"
+    "centerlines": "Cave centerlines",
+    "showPanel": "Show panel",
+    "hidePanel": "Hide panel"
   },
   "caves": {
     "title": "Caves",
@@ -230,7 +232,14 @@
     "redo": "Redo",
     "measureDistance": "Measure distance",
     "measureArea": "Measure area",
-    "discard": "Discard edits and measurements"
+    "discard": "Discard edits and measurements",
+    "pickFeatureType": "Pick a feature type",
+    "groups": {
+      "point": "Points",
+      "line": "Lines",
+      "polygon": "Areas",
+      "any": "Other"
+    }
   },
   "trips": {
     "title": "Trip logs",
