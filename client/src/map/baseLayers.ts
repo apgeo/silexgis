@@ -28,10 +28,24 @@ export function syncBaseLayers(map: Map, catalog: MapLayerInfo[], activeId: numb
       zIndex: 0,
     });
     layer.set(BASE_ID_PROP, entryId);
+    layer.set('name', entry.name); // shown by the on-canvas background-layer chooser
     map.addLayer(layer);
   }
 
   setActiveBaseLayer(map, activeId);
+}
+
+/** The base tile layers currently on the map (creation order = catalog order). */
+export function getBaseLayers(map: Map): TileLayer[] {
+  return map
+    .getLayers()
+    .getArray()
+    .filter((layer): layer is TileLayer => layer.get(BASE_ID_PROP) !== undefined);
+}
+
+/** The catalog id of a base layer created by `syncBaseLayers`. */
+export function getBaseLayerId(layer: TileLayer): number | undefined {
+  return layer.get(BASE_ID_PROP) as number | undefined;
 }
 
 export function setActiveBaseLayer(map: Map, id: number): void {

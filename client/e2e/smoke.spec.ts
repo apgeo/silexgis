@@ -385,17 +385,17 @@ test('georeferenced raster upload, COG processing, map overlay and delete', asyn
   await expect(row).toBeVisible({ timeout: 15_000 });
   await expect(row.getByText('Ready')).toBeVisible({ timeout: 30_000 });
 
-  // Show on map: the overlay appears in the layer panel with its opacity slider.
+  // Show on map: the raster's catalog checkbox is on and its layer joins the
+  // composer tree, where every active overlay row carries a transparency slider.
   await row.getByRole('button', { name: 'aim' }).click();
   await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('checkbox', { name: 'e2e-map' }).first()).toBeChecked();
-  // Scope to the checked raster row's own slider — built-in overlays now carry sliders
-  // too, and earlier runs may leave extra (unchecked) e2e-map rows in the panel.
-  const rasterRow = page
-    .locator('div')
-    .filter({ has: page.getByRole('checkbox', { name: 'e2e-map', checked: true }) })
-    .last();
-  await expect(rasterRow.locator('.ant-slider')).toBeVisible();
+  const treeRow = page
+    .locator('.layer-composer .ant-tree-treenode')
+    .filter({ hasText: 'e2e-map' })
+    .first();
+  await expect(treeRow).toBeVisible();
+  await expect(treeRow.locator('.ant-slider')).toBeVisible();
 
   // Cleanup: remove every e2e raster (earlier aborted runs may have left extras).
   await page.goto('/geodata');

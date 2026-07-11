@@ -40,7 +40,8 @@
   },
   "map": {
     "baseLayers": "Hărți de bază",
-    "overlays": "Suprapuneri",
+    "activeOverlays": "Straturi pe hartă",
+    "changeBaseLayer": "Schimbă harta de bază",
     "entrances": "Intrări în peșteri",
     "searchPlaceholder": "Caută peșteri sau locuri…",
     "caves": "Peșteri",

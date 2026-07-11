@@ -49,7 +49,8 @@ export function setSelectedSurfaceFeature(id: string | null): void {
 }
 
 export function createSurfaceFeatureLayer(): VectorLayer {
-  const layer = new VectorLayer({ source, zIndex: 9, style: featureStyle });
+  // Stacking comes from the overlay group's collection order, not a fixed zIndex.
+  const layer = new VectorLayer({ source, style: featureStyle });
   layer.set('id', SURFACE_FEATURE_LAYER_ID);
   return layer;
 }

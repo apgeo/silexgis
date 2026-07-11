@@ -1,17 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
+import BackgroundLayerChooser from '@terrestris/react-geo/dist/BackgroundLayerChooser/BackgroundLayerChooser';
+import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
 import { Button, Tooltip } from 'antd';
 import { CodeSandboxOutlined, ExportOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
+import type { EventsKey } from 'ol/events';
+import type BaseLayer from 'ol/layer/Base';
+import type TileLayer from 'ol/layer/Tile';
+import { unByKey } from 'ol/Observable';
 import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import { useFeatureTypes, useGeofiles, useMapLayers, useMapViews, useMe, useRasterMaps } from '../api/hooks.ts';
-import BaseLayerSwitcher from '../components/map/BaseLayerSwitcher.tsx';
 import EditToolbar from '../components/map/EditToolbar.tsx';
 import LayerPanel from '../components/map/LayerPanel.tsx';
 import ViewsPanel from '../components/map/ViewsPanel.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
 import SelectionPanel from '../components/map/SelectionPanel.tsx';
-import { setActiveBaseLayer, syncBaseLayers } from '../map/baseLayers.ts';
+import { getBaseLayerId, getBaseLayers, setActiveBaseLayer, syncBaseLayers } from '../map/baseLayers.ts';
 import { CENTERLINE_LAYER_ID, attachCenterlineLoader, createCenterlineLayer } from '../map/centerlineLayer.ts';
 import { ENTRANCE_LAYER_ID, attachEntranceLoader, createEntranceLayer, reloadEntrances } from '../map/entranceLayer.ts';
 import {
@@ -22,14 +27,22 @@ import {
   setFeatureTypeSymbols,
   setSelectedSurfaceFeature,
 } from '../map/featureLayer.ts';
-import { attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
+import { GEOFILE_LAYER_PREFIX, attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
 import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import { subscribe } from '../workspace/workspaceBus.ts';
-import { syncRasterLayers } from '../map/rasterLayers.ts';
+import { RASTER_LAYER_PREFIX, syncRasterLayers } from '../map/rasterLayers.ts';
 import { attachHoverTooltip } from '../map/hoverTooltip.ts';
 import { attachUrlHash, hasMapHash } from '../map/urlHash.ts';
-import { flyTo, getWorkspaceMap, setLayerOpacity } from '../map/mapContext.ts';
+import {
+  applyPendingOverlayOrder,
+  findOverlayLayer,
+  flyTo,
+  getOverlayGroup,
+  getWorkspaceMap,
+  setDesiredOverlayOrder,
+  setLayerOpacity,
+} from '../map/mapContext.ts';
 import { MapEditController } from '../map/mapEdit.ts';
 import { attachSelection } from '../map/selection.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
@@ -78,13 +91,15 @@ export default function MapPage() {
     const map = getWorkspaceMap();
     map.setTarget(mapTarget.current ?? undefined);
 
+    // Built-in overlays live in the shared overlay group; bottom→top order here
+    // is the default stacking (users can re-drag it in the composer tree).
     for (const [id, create] of [
-      [ENTRANCE_LAYER_ID, createEntranceLayer],
       [SURFACE_FEATURE_LAYER_ID, createSurfaceFeatureLayer],
+      [ENTRANCE_LAYER_ID, createEntranceLayer],
       [CENTERLINE_LAYER_ID, createCenterlineLayer],
     ] as const) {
-      if (!map.getLayers().getArray().some((l) => l.get('id') === id)) {
-        map.addLayer(create());
+      if (!findOverlayLayer(id)) {
+        getOverlayGroup().getLayers().push(create());
       }
     }
 
@@ -119,6 +134,8 @@ export default function MapPage() {
       new Set(visibleGeofileIds),
       new globalThis.Map(Object.entries(overlayOpacity)),
     );
+    // A just-applied saved view may prescribe a stacking that includes these layers.
+    applyPendingOverlayOrder();
   }, [importedGeofiles, visibleGeofileIds, overlayOpacity]);
 
   // Built-in vector overlays (entrances, surface features, centerlines) follow their opacity.
@@ -130,13 +147,58 @@ export default function MapPage() {
 
   // Raster overlays likewise, with per-map opacity.
   useEffect(() => {
-    syncRasterLayers(
-      getWorkspaceMap(),
-      readyRasters,
-      new Set(visibleRasterIds),
-      new globalThis.Map(Object.entries(rasterOpacity)),
-    );
+    syncRasterLayers(readyRasters, new Set(visibleRasterIds), new globalThis.Map(Object.entries(rasterOpacity)));
+    applyPendingOverlayOrder();
   }, [readyRasters, visibleRasterIds, rasterOpacity]);
+
+  // Mirrors opacity changes made on the OL layers (the composer's transparency
+  // sliders write layer.setOpacity directly) back into the workspace store, which
+  // owns persistence (saved views) and re-creation of geofile/raster layers.
+  // The value guard stops the write-back loop with the store→OL effects above.
+  useEffect(() => {
+    const collection = getOverlayGroup().getLayers();
+    const bound = new globalThis.Map<BaseLayer, EventsKey>();
+
+    const mirror = (layer: BaseLayer) => {
+      const id = layer.get('id') as string | undefined;
+      if (!id) {
+        return;
+      }
+      const opacity = Math.round(layer.getOpacity() * 100) / 100;
+      const state = useWorkspaceStore.getState();
+      if (id.startsWith(RASTER_LAYER_PREFIX)) {
+        const rasterId = id.slice(RASTER_LAYER_PREFIX.length);
+        if (state.rasterOpacity[rasterId] !== opacity) {
+          state.setRasterOpacity(rasterId, opacity);
+        }
+      } else {
+        const key = id.startsWith(GEOFILE_LAYER_PREFIX) ? id.slice(GEOFILE_LAYER_PREFIX.length) : id;
+        if ((state.overlayOpacity[key] ?? 1) !== opacity) {
+          state.setOverlayOpacity(key, opacity);
+        }
+      }
+    };
+
+    const bind = (layer: BaseLayer) => {
+      bound.set(layer, layer.on('change:opacity', () => mirror(layer)));
+    };
+    const unbind = (layer: BaseLayer) => {
+      const key = bound.get(layer);
+      if (key) {
+        unByKey(key);
+        bound.delete(layer);
+      }
+    };
+
+    collection.getArray().forEach(bind);
+    const addKey = collection.on('add', (e) => bind(e.element as BaseLayer));
+    const removeKey = collection.on('remove', (e) => unbind(e.element as BaseLayer));
+    return () => {
+      unByKey([addKey, removeKey]);
+      [...bound.values()].forEach((key) => unByKey(key));
+      bound.clear();
+    };
+  }, []);
 
   // Pop-out windows publish picks over the workspace bus; the main map follows.
   useEffect(() => subscribe((event) => {
@@ -181,35 +243,65 @@ export default function MapPage() {
     }
   }, [layers, activeBaseId]);
 
+  // Base layers are created lazily from the catalog; the version bump tells the
+  // on-canvas chooser (which needs the OL layer instances) that they exist now.
+  const [baseLayersVersion, setBaseLayersVersion] = useState(0);
   useEffect(() => {
     if (layers && activeBaseId !== undefined) {
       syncBaseLayers(getWorkspaceMap(), layers, activeBaseId);
+      setBaseLayersVersion((v) => v + 1);
     }
   }, [layers, activeBaseId]);
+  const baseOlLayers = useMemo(
+    () => (baseLayersVersion > 0 ? getBaseLayers(getWorkspaceMap()) : []),
+    [baseLayersVersion],
+  );
+
+  // The on-canvas chooser switches base layers by flipping OL visibility itself;
+  // follow it so the radio, saved views and the URL state stay truthful.
+  useEffect(() => {
+    const keys = baseOlLayers.map((layer) =>
+      layer.on('change:visible', () => {
+        if (layer.getVisible()) {
+          const id = getBaseLayerId(layer);
+          if (id !== undefined) {
+            setActiveBaseId(id);
+          }
+        }
+      }),
+    );
+    return () => unByKey(keys);
+  }, [baseOlLayers]);
 
   useEffect(() => {
-    const layer = getWorkspaceMap()
-      .getLayers()
-      .getArray()
-      .find((l) => l.get('id') === ENTRANCE_LAYER_ID);
-    layer?.setVisible(entrancesVisible);
+    findOverlayLayer(ENTRANCE_LAYER_ID)?.setVisible(entrancesVisible);
   }, [entrancesVisible]);
 
   useEffect(() => {
-    const layer = getWorkspaceMap()
-      .getLayers()
-      .getArray()
-      .find((l) => l.get('id') === SURFACE_FEATURE_LAYER_ID);
-    layer?.setVisible(surfaceFeaturesVisible);
+    findOverlayLayer(SURFACE_FEATURE_LAYER_ID)?.setVisible(surfaceFeaturesVisible);
   }, [surfaceFeaturesVisible]);
 
   useEffect(() => {
-    const layer = getWorkspaceMap()
-      .getLayers()
-      .getArray()
-      .find((l) => l.get('id') === CENTERLINE_LAYER_ID);
-    layer?.setVisible(centerlinesVisible);
+    findOverlayLayer(CENTERLINE_LAYER_ID)?.setVisible(centerlinesVisible);
   }, [centerlinesVisible]);
+
+  // Checkbox toggles coming from the composer tree. Built-ins hide/show and are
+  // reflected into page state (for saved views); geofile/raster overlays are
+  // deactivated entirely — their layer is removed and the catalog checkbox clears.
+  const onOverlayVisibilityChanged = (layer: BaseLayer, visible: boolean) => {
+    const id = layer.get('id') as string | undefined;
+    if (id === ENTRANCE_LAYER_ID) {
+      setEntrancesVisible(visible);
+    } else if (id === SURFACE_FEATURE_LAYER_ID) {
+      setSurfaceFeaturesVisible(visible);
+    } else if (id === CENTERLINE_LAYER_ID) {
+      setCenterlinesVisible(visible);
+    } else if (id?.startsWith(GEOFILE_LAYER_PREFIX)) {
+      setGeofileVisible(id.slice(GEOFILE_LAYER_PREFIX.length), visible);
+    } else if (id?.startsWith(RASTER_LAYER_PREFIX)) {
+      setRasterVisible(id.slice(RASTER_LAYER_PREFIX.length), visible);
+    }
+  };
 
   const captureCurrentView = () =>
     captureViewConfig({
@@ -223,10 +315,19 @@ export default function MapPage() {
       overlayOpacity,
     });
 
+  // Applying a view remounts the composer's transparency sliders (they are
+  // uncontrolled and read layer opacity on mount) via this nonce.
+  const [treeNonce, setTreeNonce] = useState(0);
+
   const applyView = (view: { config: unknown }) => {
     const ui = applyViewConfig(view.config);
     if (!ui) {
       return;
+    }
+    setTreeNonce((n) => n + 1);
+    if (ui.overlayOrder.length > 0) {
+      // Geofile/raster layers may not exist yet; the sync effects re-apply this.
+      setDesiredOverlayOrder(ui.overlayOrder);
     }
     if (ui.baseLayerId !== undefined) {
       setActiveBaseId(ui.baseLayerId);
@@ -264,6 +365,7 @@ export default function MapPage() {
   };
 
   return (
+    <MapContext.Provider value={getWorkspaceMap()}>
     <Group orientation="horizontal" className="map-workspace">
       {/* Panel sizes: bare numbers mean pixels in react-resizable-panels v4 — use percent strings. */}
       <Panel
@@ -282,22 +384,14 @@ export default function MapPage() {
             setActiveBaseId(id);
             setActiveBaseLayer(getWorkspaceMap(), id);
           }}
-          entrancesVisible={entrancesVisible}
-          onEntrancesVisibleChange={setEntrancesVisible}
-          surfaceFeaturesVisible={surfaceFeaturesVisible}
-          onSurfaceFeaturesVisibleChange={setSurfaceFeaturesVisible}
-          centerlinesVisible={centerlinesVisible}
-          onCenterlinesVisibleChange={setCenterlinesVisible}
           geofiles={importedGeofiles}
           visibleGeofileIds={visibleGeofileIds}
           onGeofileVisibleChange={setGeofileVisible}
           rasters={readyRasters}
           visibleRasterIds={visibleRasterIds}
           onRasterVisibleChange={setRasterVisible}
-          rasterOpacity={rasterOpacity}
-          onRasterOpacityChange={setRasterOpacity}
-          overlayOpacity={overlayOpacity}
-          onOverlayOpacityChange={setOverlayOpacity}
+          onOverlayVisibilityChanged={onOverlayVisibilityChanged}
+          treeNonce={treeNonce}
           tagFilter={tagFilter}
           onTagFilterChange={(slug) => {
             setTagFilter(slug);
@@ -337,15 +431,14 @@ export default function MapPage() {
               }
             />
           </Tooltip>
-          <div className="map-popout-overlay">
-            <BaseLayerSwitcher
-              layers={layers ?? []}
-              activeBaseId={activeBaseId}
-              onChange={(id) => {
-                setActiveBaseId(id);
-                setActiveBaseLayer(getWorkspaceMap(), id);
-              }}
+          {baseOlLayers.length > 0 && (
+            <BackgroundLayerChooser
+              layers={baseOlLayers}
+              backgroundLayerFilter={(l) => getBaseLayerId(l as TileLayer) !== undefined}
+              buttonTooltip={t('map.changeBaseLayer')}
             />
+          )}
+          <div className="map-popout-overlay">
             <Tooltip title={t('panel.popOut')}>
               <Button
                 size="small"
@@ -381,5 +474,6 @@ export default function MapPage() {
         <SelectionPanel />
       </Panel>
     </Group>
+    </MapContext.Provider>
   );
 }

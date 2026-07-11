@@ -40,7 +40,8 @@
   },
   "map": {
     "baseLayers": "Base layers",
-    "overlays": "Overlays",
+    "activeOverlays": "Map layers",
+    "changeBaseLayer": "Change the base map",
     "entrances": "Cave entrances",
     "searchPlaceholder": "Search caves or places…",
     "caves": "Caves",

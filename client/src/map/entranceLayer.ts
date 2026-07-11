@@ -15,7 +15,8 @@ const source = new VectorSource();
 const format = new GeoJSON();
 
 export function createEntranceLayer(): VectorLayer {
-  const layer = new VectorLayer({ source, zIndex: 10, style: entranceStyle });
+  // Stacking comes from the overlay group's collection order, not a fixed zIndex.
+  const layer = new VectorLayer({ source, style: entranceStyle });
   layer.set('id', ENTRANCE_LAYER_ID);
   return layer;
 }

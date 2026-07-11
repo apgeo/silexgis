@@ -20,7 +20,8 @@ const style = [
 ];
 
 export function createCenterlineLayer(): VectorLayer {
-  const layer = new VectorLayer({ source, zIndex: 11, style });
+  // Stacking comes from the overlay group's collection order, not a fixed zIndex.
+  const layer = new VectorLayer({ source, style });
   layer.set('id', CENTERLINE_LAYER_ID);
   return layer;
 }

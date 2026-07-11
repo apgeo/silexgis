@@ -61,7 +61,9 @@ export class MapEditController {
     this.source = getSurfaceFeatureSource();
     this.measureLayer = new VectorLayer({
       source: this.measureSource,
-      zIndex: 30,
+      // Data overlays get sequential zIndex from their group position; keep
+      // measurements far above however many of them exist.
+      zIndex: 1000,
       style: measureStyle,
     });
     this.measureLayer.set('id', 'measure');

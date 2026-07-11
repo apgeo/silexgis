@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { fromLonLat, toLonLat } from 'ol/proj';
-import { getWorkspaceMap } from './mapContext.ts';
+import { getOverlayOrder, getWorkspaceMap } from './mapContext.ts';
 
 /**
  * The saved-view config document (client-owned, versioned). Everything needed to
@@ -20,6 +20,11 @@ export interface ViewConfig {
   tagFilter: string | null;
   /** Added after v1 shipped; older saved views omit it (treated as fully opaque). */
   overlayOpacity?: Record<string, number>;
+  /**
+   * Overlay stacking, bottom→top, as layer ids (built-in ids plus `geofile:`/`raster:`
+   * prefixed ones). Added after v1 shipped; older saved views omit it (default order).
+   */
+  overlayOrder?: string[];
 }
 
 /** UI state the map page owns; the camera lives on the OL map itself. */
@@ -32,9 +37,12 @@ export interface WorkspaceUiState {
   rasters: { id: string; opacity?: number }[];
   tagFilter: string | null;
   overlayOpacity: Record<string, number>;
+  overlayOrder: string[];
 }
 
-export function captureViewConfig(ui: WorkspaceUiState): ViewConfig {
+// The stacking order is read straight off the OL overlay group, so capture
+// callers don't pass it.
+export function captureViewConfig(ui: Omit<WorkspaceUiState, 'overlayOrder'>): ViewConfig {
   const view = getWorkspaceMap().getView();
   const center = toLonLat(view.getCenter() ?? [0, 0]);
   return {
@@ -49,6 +57,7 @@ export function captureViewConfig(ui: WorkspaceUiState): ViewConfig {
     rasters: ui.rasters,
     tagFilter: ui.tagFilter,
     overlayOpacity: ui.overlayOpacity,
+    overlayOrder: getOverlayOrder(),
   };
 }
 
@@ -71,6 +80,7 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     rasters: parsed.rasters ?? [],
     tagFilter: parsed.tagFilter ?? null,
     overlayOpacity: parsed.overlayOpacity ?? {},
+    overlayOrder: parsed.overlayOrder ?? [],
   };
 }
 

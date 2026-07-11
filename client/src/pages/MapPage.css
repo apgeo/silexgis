@@ -133,3 +133,69 @@
   text-align: center;
   word-break: break-word;
 }
+
+/* Layer composer tree (react-geo LayerTree in the left dock). */
+.layer-composer {
+  margin-top: 8px;
+}
+
+.layer-composer .ant-tree-treenode {
+  width: 100%;
+}
+
+.layer-composer .ant-tree-node-content-wrapper {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.layer-node-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The slider sits under the layer name inside the (draggable) tree row. */
+.layer-node-opacity {
+  margin: 0 8px 2px 0;
+}
+
+.layer-node-opacity .ant-slider {
+  margin: 2px 0 6px;
+}
+
+/* On-canvas background-layer chooser (react-geo). Our base layers are XYZ
+   sources, which the chooser's collapsed overview mini-map cannot clone —
+   collapse the empty 140px preview box into a compact title chip. */
+.map-canvas-wrap .bg-layer-chooser {
+  bottom: 88px;
+  right: 8px;
+  z-index: 5;
+}
+
+.map-canvas-wrap .bg-layer-chooser .change-bg-btn {
+  height: 40px;
+}
+
+.map-canvas-wrap .bg-layer-chooser .bg-preview {
+  width: auto;
+  min-width: 96px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  border: 1px solid #808080;
+  border-radius: 0 4px 4px 0;
+  background: #fff;
+}
+
+.map-canvas-wrap .bg-layer-chooser .bg-preview #overview-map {
+  display: none;
+}
+
+.map-canvas-wrap .bg-layer-chooser .bg-preview span.layer-title {
+  position: static;
+  background: none;
+  width: auto;
+  padding: 0 10px;
+  border-radius: 0;
+}

@@ -6,11 +6,14 @@ import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { fetchGeofileFeatureCollection, type GeofileInfo } from '../api/hooks.ts';
+import { getOverlayGroup } from './mapContext.ts';
 
-// One vector layer per visible geofile, keyed by geofile id. Layers share a single
-// moveend-driven bbox loader; style overrides come from the geofile's style jsonb.
+// One vector layer per visible geofile, keyed by geofile id, living in the shared
+// overlay group. Layers share a single moveend-driven bbox loader; style overrides
+// come from the geofile's style jsonb.
 
-const GEOFILE_LAYER_PREFIX = 'geofile:';
+export const GEOFILE_LAYER_PREFIX = 'geofile:';
+const RASTER_LAYER_ID_PREFIX = 'raster:';
 const format = new GeoJSON();
 
 interface GeofileStyleOverrides {
@@ -52,12 +55,13 @@ export function syncGeofileLayers(
   const wanted = new globalThis.Map(
     geofiles.filter((g) => visibleIds.has(g.id) && g.importStatus === 'imported').map((g) => [g.id, g]),
   );
+  const overlays = getOverlayGroup().getLayers();
 
   // Remove layers that are no longer wanted.
-  for (const layer of [...map.getLayers().getArray()]) {
+  for (const layer of [...overlays.getArray()]) {
     const id = layer.get('id') as string | undefined;
     if (id?.startsWith(GEOFILE_LAYER_PREFIX) && !wanted.has(id.slice(GEOFILE_LAYER_PREFIX.length))) {
-      map.removeLayer(layer);
+      overlays.remove(layer);
     }
   }
 
@@ -65,7 +69,7 @@ export function syncGeofileLayers(
   for (const [geofileId, geofile] of wanted) {
     const layerId = GEOFILE_LAYER_PREFIX + geofileId;
     const opacity = opacityById.get(geofileId) ?? 1;
-    const existing = map.getLayers().getArray()
+    const existing = overlays.getArray()
       .find((l) => l.get('id') === layerId) as VectorLayer | undefined;
     if (existing) {
       existing.setStyle(layerStyle(parseOverrides(geofile)));
@@ -75,12 +79,18 @@ export function syncGeofileLayers(
 
     const layer = new VectorLayer({
       source: new VectorSource(),
-      zIndex: 8, // under entrances (10) and surface features (9)
       opacity,
       style: layerStyle(parseOverrides(geofile)),
     });
     layer.set('id', layerId);
-    map.addLayer(layer);
+    layer.set('name', geofile.name);
+    // Default stacking slot: above rasters and existing geofiles, below the
+    // built-in overlays (bottom→top collection order; users may re-drag later).
+    const insertAt = overlays.getArray().filter((l) => {
+      const id = l.get('id') as string | undefined;
+      return id?.startsWith(RASTER_LAYER_ID_PREFIX) || id?.startsWith(GEOFILE_LAYER_PREFIX);
+    }).length;
+    overlays.insertAt(insertAt, layer);
     void loadLayer(map, geofileId, layer);
   }
 }
@@ -90,7 +100,7 @@ export function attachGeofileLoader(map: Map): () => void {
   let timer: number | undefined;
 
   const loadAll = () => {
-    for (const layer of map.getLayers().getArray()) {
+    for (const layer of getOverlayGroup().getLayers().getArray()) {
       const id = layer.get('id') as string | undefined;
       if (id?.startsWith(GEOFILE_LAYER_PREFIX)) {
         void loadLayer(map, id.slice(GEOFILE_LAYER_PREFIX.length), layer as VectorLayer);
