@@ -97,17 +97,23 @@ test('cave add on map: place a new cave with its entrance by clicking the canvas
   const modal = page.getByRole('dialog');
   await expect(modal.getByText(/New cave here/)).toBeVisible();
   await modal.getByLabel('Name').fill(caveName);
+  // Keyboard-select the first option: clicking dropdown items inside a modal is
+  // flaky (the animated dropdown can close mid-click and swallow the action).
   await modal.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option').first().click();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
   await modal.getByLabel('Entrance type').click();
-  await page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option').first().click();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
   await modal.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
 
   // The new cave is selected in the right dock; its entrance count proves the
   // first entrance landed with the create.
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('Entrances').locator('..')).toContainText('1');
+  await expect(
+    page.locator('.map-right-tabs .ant-descriptions-row', { hasText: 'Entrances' }),
+  ).toContainText('1');
 
   // Clean up from the registry (entrances cascade).
   await page.goto('/caves');
@@ -451,10 +457,11 @@ test('geofile upload, background import, map layer, export and delete', async ({
   await login(page);
 
   // Upload a GPX through the drag&drop zone; the import runs as a background job
-  // and the table polls until it settles.
+  // and the table polls until it settles. Newest first — .first() keeps the flow
+  // robust to leftovers from aborted earlier runs (mirrors the raster test).
   await page.goto('/geodata');
   await page.locator('input[type=file]').setInputFiles('e2e/fixtures/e2e-track.gpx');
-  const row = page.getByRole('row', { name: /e2e-track/ });
+  const row = page.getByRole('row', { name: /e2e-track/ }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
   await expect(row.getByText('Imported')).toBeVisible({ timeout: 30_000 });
   await expect(row.getByText('3', { exact: true })).toBeVisible(); // 2 waypoints + 1 track
@@ -467,17 +474,24 @@ test('geofile upload, background import, map layer, export and delete', async ({
   expect(download.suggestedFilename()).toMatch(/\.geojson$/);
 
   // Show on map: the workspace opens with the geofile overlay toggled on.
+  // exact:true pins the catalog checkbox — the composer tree row for the same
+  // geofile also exposes role=checkbox (labelled "holder e2e-track").
   const featuresLoaded = page.waitForResponse((r) => r.url().includes('/features?bbox=') && r.ok());
   await row.getByRole('button', { name: 'aim' }).click();
   await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole('checkbox', { name: 'e2e-track' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'e2e-track', exact: true }).first()).toBeChecked();
+  await expect(
+    overlayTreeNode(page, 'e2e-track').locator('.ant-tree-checkbox-checked').first(),
+  ).toBeVisible();
   await featuresLoaded;
 
-  // Cleanup: delete the geofile (imported rows cascade).
+  // Cleanup: remove every e2e geofile (earlier aborted runs may have left extras).
   await page.goto('/geodata');
-  const rowAgain = page.getByRole('row', { name: /e2e-track/ });
-  await rowAgain.getByRole('button', { name: 'delete' }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
-  await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('e2e-track')).not.toBeVisible();
+  const rows = page.getByRole('row', { name: /e2e-track/ });
+  await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+  for (let remaining = await rows.count(); remaining > 0; remaining--) {
+    await rows.first().getByRole('button', { name: 'delete' }).click();
+    await page.getByRole('button', { name: 'OK' }).click();
+    await expect(rows).toHaveCount(remaining - 1, { timeout: 15_000 });
+  }
 });
