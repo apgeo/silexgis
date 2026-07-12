@@ -63,7 +63,11 @@
     "zoomInForEntrances": "Zoom in to list individual entrances.",
     "nothingInView": "Nothing loaded in the current view.",
     "locateMe": "Show my location",
-    "geolocationFailed": "Could not determine your location."
+    "geolocationFailed": "Could not determine your location.",
+    "clusterTitle": "{{count}} entrances in this area",
+    "zoomHere": "Zoom here",
+    "approximateShort": "approx.",
+    "swipeCompare": "Compare raster with the map beneath (swipe)"
   },
   "caves": {
     "title": "Caves",

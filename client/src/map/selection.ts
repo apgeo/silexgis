@@ -2,14 +2,15 @@
 import type Map from 'ol/Map';
 import type MapBrowserEvent from 'ol/MapBrowserEvent';
 import type Point from 'ol/geom/Point';
+import { toLonLat } from 'ol/proj';
 import type { WorkspaceSelection } from '../stores/workspaceStore.ts';
 import { ENTRANCE_LAYER_ID } from './entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from './featureLayer.ts';
 
 /**
- * Click behavior: cluster → zoom in; entrance / surface feature → publish
- * selection (discriminated by the owning layer); empty → clear.
- * Returns a detach function.
+ * Click behavior: cluster → publish a cluster selection (the panel lists its
+ * members and offers zoom); entrance / surface feature → publish selection
+ * (discriminated by the owning layer); empty → clear. Returns a detach function.
  */
 export function attachSelection(
   map: Map,
@@ -24,8 +25,16 @@ export function attachSelection(
         if (props.cluster === true) {
           const geometry = feature.getGeometry() as Point | undefined;
           if (geometry) {
-            const view = map.getView();
-            view.animate({ center: geometry.getCoordinates(), zoom: (view.getZoom() ?? 8) + 2, duration: 400 });
+            const [lon, lat] = toLonLat(geometry.getCoordinates());
+            onPick({
+              kind: 'cluster',
+              lon,
+              lat,
+              count: Number(props.count ?? 0),
+              // Same rounding the entrance loader sends, so the cell matches
+              // what the server aggregated.
+              zoom: Math.round(map.getView().getZoom() ?? 8),
+            });
           }
           handled = true;
           return true;

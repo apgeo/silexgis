@@ -84,6 +84,31 @@ test('cave and entrance create/edit round-trip', async ({ page }) => {
   await expect(page.getByText(caveName)).not.toBeVisible();
 });
 
+test('cluster click lists its member entrances in the panel', async ({ page }) => {
+  await login(page);
+
+  // Center on the demo cave via the map search (stays inside the SPA session),
+  // then zoom out below the clustering threshold: 15 → 9. The cave's two
+  // entrances aggregate into one cluster ~1px from the view center.
+  await page.getByPlaceholder('Search caves or places…').fill('Peștera Demo');
+  await page.locator('.ant-select-dropdown').getByText(/Peștera Demo Mare/).first().click();
+  for (let i = 0; i < 6; i++) {
+    await page.locator('.ol-zoom-out').click();
+  }
+
+  // Retry the click until the cluster card shows — zoom animations and the
+  // debounced bbox loader settle at their own pace.
+  const canvas = page.locator('.map-canvas');
+  await expect(async () => {
+    await canvas.click();
+    await expect(page.getByText(/entrances in this area/)).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+
+  // Picking a member selects the entrance and the cave card takes over.
+  await page.getByRole('button', { name: /entrance|Peșter/i }).first().click();
+  await expect(page.getByRole('heading', { name: /Peștera Demo Mare/ })).toBeVisible({ timeout: 15_000 });
+});
+
 test('cave add on map: place a new cave with its entrance by clicking the canvas', async ({ page }) => {
   const caveName = `E2E Map Cave ${Date.now()}`;
   await login(page);
@@ -440,6 +465,12 @@ test('georeferenced raster upload, COG processing, map overlay and delete', asyn
     .first();
   await expect(treeRow).toBeVisible();
   await expect(treeRow.locator('.ant-slider')).toBeVisible();
+
+  // Swipe-compare: toggling shows the draggable divider over the canvas.
+  await page.getByTestId('raster-swipe-toggle').click();
+  await expect(page.getByTestId('raster-swipe-handle')).toBeVisible();
+  await page.getByTestId('raster-swipe-toggle').click();
+  await expect(page.getByTestId('raster-swipe-handle')).not.toBeVisible();
 
   // Cleanup: remove every e2e raster (earlier aborted runs may have left extras).
   await page.goto('/geodata');

@@ -134,6 +134,36 @@
   word-break: break-word;
 }
 
+/* Raster swipe-compare divider: full-height drag handle over the canvas. */
+.map-swipe-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  z-index: 6;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.45);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.map-swipe-handle::after {
+  content: '⇔';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border: 1px solid #808080;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  line-height: 22px;
+  text-align: center;
+  font-size: 13px;
+  color: #333;
+}
+
 /* Jump-to-scale combo, stacked above the OL scale line (bottom-left). */
 .map-scale-overlay {
   position: absolute;

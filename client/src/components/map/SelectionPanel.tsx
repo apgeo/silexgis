@@ -7,6 +7,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   useCave,
   useCaveTypes,
+  useClusterEntrances,
   useDeleteSurfaceFeature,
   useEntrances,
   useFeatureTypes,
@@ -17,7 +18,14 @@ import {
 import { formatLonLat } from '../../geo/coords.ts';
 import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
 import { fitGeoJsonGeometry, flyTo } from '../../map/mapContext.ts';
-import { useWorkspaceStore, type CaveSelection, type EntranceSelection, type FeatureSelection } from '../../stores/workspaceStore.ts';
+import { getMapTagFilter } from '../../map/mapFilters.ts';
+import {
+  useWorkspaceStore,
+  type CaveSelection,
+  type ClusterSelection,
+  type EntranceSelection,
+  type FeatureSelection,
+} from '../../stores/workspaceStore.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 import { parsePropertiesSchema } from '../features/propertiesSchema.ts';
 
@@ -37,7 +45,86 @@ export default function SelectionPanel() {
     return <FeatureCard selection={selection} />;
   }
 
+  if (selection.kind === 'cluster') {
+    return <ClusterCard selection={selection} />;
+  }
+
   return <CaveCard selection={selection} />;
+}
+
+/** A clicked low-zoom cluster: list its member entrances without moving the camera. */
+function ClusterCard({ selection }: { selection: ClusterSelection }) {
+  const { t } = useTranslation();
+  const setSelection = useWorkspaceStore((s) => s.setSelection);
+  const { data, isPending } = useClusterEntrances(
+    selection.lon,
+    selection.lat,
+    selection.zoom,
+    getMapTagFilter() ?? undefined,
+  );
+
+  const entrances = useMemo(() => {
+    return (data?.features ?? [])
+      .map((feature) => {
+        const props = feature.properties as Record<string, unknown>;
+        const coords = (feature.geometry as { coordinates?: number[] }).coordinates ?? [];
+        return {
+          id: String(props.id ?? ''),
+          caveId: String(props.caveId ?? ''),
+          name: typeof props.name === 'string' && props.name ? props.name : null,
+          approximate: props.approximate === true,
+          lon: Number(coords[0]),
+          lat: Number(coords[1]),
+        };
+      })
+      .filter((e) => e.id && e.caveId)
+      .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+  }, [data]);
+
+  if (isPending) {
+    return (
+      <Flex align="center" justify="center" style={{ height: '100%' }}>
+        <Spin />
+      </Flex>
+    );
+  }
+
+  return (
+    <div style={{ padding: 12, overflow: 'auto', height: '100%' }}>
+      <Typography.Title level={5} style={{ marginTop: 0 }}>
+        {t('map.clusterTitle', { count: entrances.length })}
+      </Typography.Title>
+      <Button
+        icon={<AimOutlined />}
+        size="small"
+        style={{ marginBottom: 8 }}
+        onClick={() => flyTo(selection.lon, selection.lat, selection.zoom + 2)}
+      >
+        {t('map.zoomHere')}
+      </Button>
+      <Flex vertical gap={2}>
+        {entrances.map((entrance) => (
+          <Button
+            key={entrance.id}
+            type="text"
+            size="small"
+            style={{ justifyContent: 'flex-start' }}
+            onClick={() => {
+              setSelection({ kind: 'entrance', entranceId: entrance.id, caveId: entrance.caveId });
+              flyTo(entrance.lon, entrance.lat, 15);
+            }}
+          >
+            {entrance.name ?? t('features.unnamed')}
+            {entrance.approximate && (
+              <Tag color="orange" style={{ marginLeft: 6 }}>
+                {t('map.approximateShort')}
+              </Tag>
+            )}
+          </Button>
+        ))}
+      </Flex>
+    </div>
+  );
 }
 
 function CaveCard({ selection }: { selection: EntranceSelection | CaveSelection }) {

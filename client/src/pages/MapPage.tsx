@@ -5,7 +5,14 @@ import GeoLocationButton from '@terrestris/react-geo/dist/Button/GeoLocationButt
 import ScaleCombo from '@terrestris/react-geo/dist/Field/ScaleCombo/ScaleCombo';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
 import { App, Button, Tabs, Tooltip } from 'antd';
-import { AimOutlined, CodeSandboxOutlined, ExportOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
+import {
+  AimOutlined,
+  BorderVerticleOutlined,
+  CodeSandboxOutlined,
+  ExportOutlined,
+  LeftOutlined,
+  RightOutlined,
+} from '@ant-design/icons';
 import type { EventsKey } from 'ol/events';
 import type BaseLayer from 'ol/layer/Base';
 import type TileLayer from 'ol/layer/Tile';
@@ -35,6 +42,7 @@ import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import { subscribe } from '../workspace/workspaceBus.ts';
 import { RASTER_LAYER_PREFIX, syncRasterLayers } from '../map/rasterLayers.ts';
+import { setRasterSwipeActive, setRasterSwipeFraction } from '../map/rasterSwipe.ts';
 import { attachHoverTooltip } from '../map/hoverTooltip.ts';
 import { attachUrlHash, hasMapHash } from '../map/urlHash.ts';
 import {
@@ -332,6 +340,36 @@ export default function MapPage() {
     }
   }, [selection]);
 
+  // Raster swipe-compare: ephemeral, auto-disarms when the last raster goes away.
+  const [swipeActive, setSwipeActive] = useState(false);
+  const [swipePos, setSwipePos] = useState(0.5);
+  useEffect(() => {
+    if (visibleRasterIds.length === 0) {
+      setSwipeActive(false);
+    }
+  }, [visibleRasterIds]);
+  useEffect(() => {
+    setRasterSwipeActive(swipeActive);
+    return () => setRasterSwipeActive(false);
+  }, [swipeActive]);
+
+  const onSwipeHandleDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const wrap = event.currentTarget.parentElement!.getBoundingClientRect();
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    const move = (ev: PointerEvent) => {
+      const f = Math.min(1, Math.max(0, (ev.clientX - wrap.left) / wrap.width));
+      setSwipePos(f);
+      setRasterSwipeFraction(f);
+    };
+    const up = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+  };
+
   const applyView = (view: { config: unknown }) => {
     const ui = applyViewConfig(view.config);
     if (!ui) {
@@ -454,7 +492,26 @@ export default function MapPage() {
           <div className="map-scale-overlay">
             <ScaleCombo syncWithMap size="small" style={{ width: 128 }} />
           </div>
+          {swipeActive && (
+            <div
+              className="map-swipe-handle"
+              style={{ left: `calc(${(swipePos * 100).toFixed(2)}% - 2px)` }}
+              onPointerDown={onSwipeHandleDown}
+              data-testid="raster-swipe-handle"
+            />
+          )}
           <div className="map-popout-overlay">
+            {visibleRasterIds.length > 0 && (
+              <Tooltip title={t('map.swipeCompare')}>
+                <Button
+                  size="small"
+                  type={swipeActive ? 'primary' : 'default'}
+                  icon={<BorderVerticleOutlined />}
+                  onClick={() => setSwipeActive((v) => !v)}
+                  data-testid="raster-swipe-toggle"
+                />
+              </Tooltip>
+            )}
             <GeoLocationButton
               size="small"
               icon={<AimOutlined />}

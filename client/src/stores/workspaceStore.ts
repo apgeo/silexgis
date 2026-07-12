@@ -20,7 +20,17 @@ export interface CaveSelection {
   caveId: string;
 }
 
-export type WorkspaceSelection = EntranceSelection | FeatureSelection | CaveSelection;
+/** A low-zoom entrance cluster: the panel lists its members from the server. */
+export interface ClusterSelection {
+  kind: 'cluster';
+  lon: number;
+  lat: number;
+  count: number;
+  /** Map zoom at click time — determines the server's cluster cell size. */
+  zoom: number;
+}
+
+export type WorkspaceSelection = EntranceSelection | FeatureSelection | CaveSelection | ClusterSelection;
 
 interface WorkspaceState {
   selection: WorkspaceSelection | null;

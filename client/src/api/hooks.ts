@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { clusterCellBbox } from '../geo/cluster.ts';
 import { api, ApiError } from './client.ts';
 import type { components } from './schema';
 
@@ -272,6 +273,19 @@ export function useNominatim(q: string) {
 /** Imperative fetch used by the OpenLayers entrance-layer loader (not a hook). */
 export async function fetchEntranceFeatures(bbox: string, zoom: number, tag?: string): Promise<EntranceFeatureCollection> {
   return unwrap(api.GET('/api/v1/map/cave-entrances', { params: { query: { bbox, zoom, tag } } }));
+}
+
+/**
+ * Members of a low-zoom entrance cluster: its cluster cell (+margin) fetched at
+ * a zoom above the server's clustering threshold, so points come back.
+ */
+export function useClusterEntrances(lon: number, lat: number, zoom: number, tag?: string) {
+  const bbox = clusterCellBbox(lon, lat, zoom);
+  return useQuery({
+    queryKey: ['map', 'cluster-entrances', bbox, tag ?? null] as const,
+    queryFn: () => fetchEntranceFeatures(bbox, 14, tag),
+    staleTime: 30_000,
+  });
 }
 
 /** Imperative fetch used by the OpenLayers surface-feature loader (not a hook). */

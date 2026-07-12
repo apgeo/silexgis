@@ -63,7 +63,11 @@
     "zoomInForEntrances": "Apropie harta pentru a lista intrările individuale.",
     "nothingInView": "Nimic încărcat în vederea curentă.",
     "locateMe": "Arată locația mea",
-    "geolocationFailed": "Locația nu a putut fi determinată."
+    "geolocationFailed": "Locația nu a putut fi determinată.",
+    "clusterTitle": "{{count}} intrări în această zonă",
+    "zoomHere": "Apropie aici",
+    "approximateShort": "aprox.",
+    "swipeCompare": "Compară rasterul cu harta de dedesubt (glisor)"
   },
   "caves": {
     "title": "Peșteri",
