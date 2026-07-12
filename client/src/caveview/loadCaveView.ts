@@ -12,9 +12,11 @@ const SCRIPT_URL = `${CAVEVIEW_HOME}js/CaveView2.min.js`;
 const CSS_URL = `${CAVEVIEW_HOME}css/caveview.css`;
 
 // Minimal hand-written surface of the CV2 global — only what the app calls.
+// 'entrance' fires when an entrance label is clicked in the 3D scene; its event
+// carries the survey's entrance label as `displayName`.
 export interface CaveViewer {
-  addEventListener(type: 'newCave' | 'progress', listener: (event: unknown) => void): void;
-  removeEventListener(type: 'newCave' | 'progress', listener: (event: unknown) => void): void;
+  addEventListener(type: 'newCave' | 'progress' | 'entrance', listener: (event: unknown) => void): void;
+  removeEventListener(type: 'newCave' | 'progress' | 'entrance', listener: (event: unknown) => void): void;
 }
 
 export interface CaveViewUi {

@@ -7,6 +7,7 @@ import { useParams } from 'react-router-dom';
 import {
   useCave,
   useCaves,
+  useEntrances,
   useSurveyModels,
   type CaveListItem,
   type CaveListParams,
@@ -62,7 +63,31 @@ function Viewer3dPanel() {
 
   const { data: cave } = useCave(caveId ?? undefined);
   const { data: models } = useSurveyModels(caveId ?? undefined);
+  const { data: entrances } = useEntrances(caveId ?? undefined);
   const model = models?.[0];
+
+  // Clicking an entrance label in the 3D scene pans the main window's map there.
+  // Survey labels and DB entrance names only sometimes agree, so fall back to the
+  // cave's main location when no entrance matches.
+  const onEntrancePick = (displayName: string) => {
+    const match = entrances?.find((e) => e.name?.toLowerCase() === displayName.toLowerCase());
+    if (match) {
+      publish({
+        kind: 'fly-to',
+        lon: Number(match.geom.coordinates[0]),
+        lat: Number(match.geom.coordinates[1]),
+        zoom: 17,
+      });
+      publish({ kind: 'selection', selection: { kind: 'entrance', entranceId: match.id, caveId: match.caveId } });
+    } else if (cave?.mainGeom) {
+      publish({
+        kind: 'fly-to',
+        lon: Number(cave.mainGeom.coordinates[0]),
+        lat: Number(cave.mainGeom.coordinates[1]),
+        zoom: 15,
+      });
+    }
+  };
 
   return (
     <Flex vertical style={{ height: '100vh', padding: 12 }} gap={8}>
@@ -75,6 +100,7 @@ function Viewer3dPanel() {
             fileUrl={model.modelUrl}
             fileName={`${model.name}.${model.format === 'lox' ? 'lox' : '3d'}`}
             height="100%"
+            onEntrancePick={onEntrancePick}
           />
         </div>
       ) : (

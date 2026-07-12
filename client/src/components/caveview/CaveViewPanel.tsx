@@ -14,6 +14,8 @@ export interface CaveViewPanelProps {
   fileName: string;
   /** CSS height of the viewer surface. */
   height?: number | string;
+  /** Fired with the survey's entrance label when one is clicked in the 3D scene. */
+  onEntrancePick?: (displayName: string) => void;
 }
 
 // CaveView addresses its container by element id; keep ids unique across remounts and
@@ -25,13 +27,17 @@ let panelSequence = 0;
  * hands it to CaveView as a named File (parser choice), and tears the viewer down on
  * unmount. CaveView owns everything inside its container div — React never touches it.
  */
-export default function CaveViewPanel({ fileUrl, fileName, height = 480 }: CaveViewPanelProps) {
+export default function CaveViewPanel({ fileUrl, fileName, height = 480, onEntrancePick }: CaveViewPanelProps) {
   const { t } = useTranslation();
   const containerIdRef = useRef<string>(null);
   containerIdRef.current ??= `caveview-panel-${panelSequence++}`;
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorDetail, setErrorDetail] = useState<string>();
+
+  // The callback rides a ref so a new identity doesn't reload the whole viewer.
+  const onEntrancePickRef = useRef(onEntrancePick);
+  onEntrancePickRef.current = onEntrancePick;
 
   useEffect(() => {
     let disposed = false;
@@ -48,6 +54,12 @@ export default function CaveViewPanel({ fileUrl, fileName, height = 480 }: CaveV
       const viewer = new cv2.CaveViewer(containerIdRef.current!, { home: CAVEVIEW_HOME });
       viewer.addEventListener('newCave', () => {
         if (!disposed) setStatus('ready');
+      });
+      viewer.addEventListener('entrance', (event) => {
+        const name = (event as { displayName?: unknown }).displayName;
+        if (!disposed && typeof name === 'string' && name) {
+          onEntrancePickRef.current?.(name);
+        }
       });
       ui = new cv2.CaveViewUI(viewer);
       ui.loadCave(new File([blob], fileName));
