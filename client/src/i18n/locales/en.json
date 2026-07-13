@@ -76,7 +76,9 @@
     "contextNewCave": "New cave here",
     "contextNewEntrance": "New entrance here",
     "contextCopyCoords": "Copy coordinates",
-    "coordsCopied": "Coordinates copied."
+    "coordsCopied": "Coordinates copied.",
+    "heatmap": "Entrance heatmap",
+    "baseOpacity": "Opacity of {{name}}"
   },
   "dialog": {
     "dockToSide": "Dock to the side of the map",

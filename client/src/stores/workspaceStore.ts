@@ -50,6 +50,13 @@ interface WorkspaceState {
    */
   overlayOpacity: Record<string, number>;
   setOverlayOpacity: (key: string, opacity: number) => void;
+  /**
+   * Per-base-layer opacity (0..1), keyed by catalog id. Only the active base is visible
+   * at a time, but each base remembers its own value so switching restores it. A missing
+   * key means fully opaque.
+   */
+  baseOpacity: Record<number, number>;
+  setBaseOpacity: (id: number, opacity: number) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
@@ -75,4 +82,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   overlayOpacity: {},
   setOverlayOpacity: (key, opacity) =>
     set((state) => ({ overlayOpacity: { ...state.overlayOpacity, [key]: opacity } })),
+  baseOpacity: {},
+  setBaseOpacity: (id, opacity) =>
+    set((state) => ({ baseOpacity: { ...state.baseOpacity, [id]: opacity } })),
 }));

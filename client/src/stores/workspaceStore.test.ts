@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { useWorkspaceStore } from './workspaceStore.ts';
 
 afterEach(() => {
-  useWorkspaceStore.setState({ overlayOpacity: {}, rasterOpacity: {} });
+  useWorkspaceStore.setState({ overlayOpacity: {}, rasterOpacity: {}, baseOpacity: {} });
 });
 
 describe('workspaceStore overlay opacity', () => {
@@ -26,5 +26,16 @@ describe('workspaceStore overlay opacity', () => {
 
     expect(useWorkspaceStore.getState().rasterOpacity).toEqual({ r1: 0.3 });
     expect(useWorkspaceStore.getState().overlayOpacity).toEqual({ centerlines: 0.6 });
+  });
+
+  it('sets and merges per-base-layer opacity keyed by id, independent of overlays', () => {
+    const store = useWorkspaceStore.getState();
+    store.setBaseOpacity(1, 0.4);
+    store.setBaseOpacity(2, 0.7);
+    store.setBaseOpacity(1, 0.9);
+    store.setOverlayOpacity('entrances', 0.5);
+
+    expect(useWorkspaceStore.getState().baseOpacity).toEqual({ 1: 0.9, 2: 0.7 });
+    expect(useWorkspaceStore.getState().overlayOpacity).toEqual({ entrances: 0.5 });
   });
 });

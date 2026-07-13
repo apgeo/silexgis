@@ -40,6 +40,7 @@ import {
   setFeatureTypeSymbols,
   setSelectedSurfaceFeature,
 } from '../map/featureLayer.ts';
+import { ENTRANCE_HEATMAP_LAYER_ID, createEntranceHeatmapLayer } from '../map/heatmapLayer.ts';
 import { GEOFILE_LAYER_PREFIX, attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
 import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
@@ -81,6 +82,7 @@ export default function MapPage() {
   const [tagFilter, setTagFilter] = useState<string | null>(getMapTagFilter());
   const [surfaceFeaturesVisible, setSurfaceFeaturesVisible] = useState(true);
   const [centerlinesVisible, setCenterlinesVisible] = useState(true);
+  const [heatmapVisible, setHeatmapVisible] = useState(false);
   const [editController, setEditController] = useState<MapEditController | null>(null);
   const selection = useWorkspaceStore((s) => s.selection);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
@@ -97,6 +99,8 @@ export default function MapPage() {
   const setRasterOpacity = useWorkspaceStore((s) => s.setRasterOpacity);
   const overlayOpacity = useWorkspaceStore((s) => s.overlayOpacity);
   const setOverlayOpacity = useWorkspaceStore((s) => s.setOverlayOpacity);
+  const baseOpacity = useWorkspaceStore((s) => s.baseOpacity);
+  const setBaseOpacity = useWorkspaceStore((s) => s.setBaseOpacity);
   const { data: rasterPage } = useRasterMaps({ pageSize: 100 });
   const readyRasters = useMemo(
     () => (rasterPage?.items ?? []).filter((r) => r.status === 'ready'),
@@ -119,8 +123,10 @@ export default function MapPage() {
     map.setTarget(mapTarget.current ?? undefined);
 
     // Built-in overlays live in the shared overlay group; bottom→top order here
-    // is the default stacking (users can re-drag it in the composer tree).
+    // is the default stacking (users can re-drag it in the composer tree). The
+    // entrance heatmap sits at the bottom as a density wash beneath the points.
     for (const [id, create] of [
+      [ENTRANCE_HEATMAP_LAYER_ID, createEntranceHeatmapLayer],
       [SURFACE_FEATURE_LAYER_ID, createSurfaceFeatureLayer],
       [ENTRANCE_LAYER_ID, createEntranceLayer],
       [CENTERLINE_LAYER_ID, createCenterlineLayer],
@@ -170,9 +176,9 @@ export default function MapPage() {
     applyPendingOverlayOrder();
   }, [importedGeofiles, visibleGeofileIds, overlayOpacity]);
 
-  // Built-in vector overlays (entrances, surface features, centerlines) follow their opacity.
+  // Built-in vector overlays (entrances, surface features, centerlines, heatmap) follow their opacity.
   useEffect(() => {
-    for (const id of [ENTRANCE_LAYER_ID, SURFACE_FEATURE_LAYER_ID, CENTERLINE_LAYER_ID]) {
+    for (const id of [ENTRANCE_LAYER_ID, SURFACE_FEATURE_LAYER_ID, CENTERLINE_LAYER_ID, ENTRANCE_HEATMAP_LAYER_ID]) {
       setLayerOpacity(id, overlayOpacity[id] ?? 1);
     }
   }, [overlayOpacity]);
@@ -289,6 +295,18 @@ export default function MapPage() {
     [baseLayersVersion],
   );
 
+  // Base tile layers carry per-catalog-id opacity. Only the active base is visible,
+  // but each keeps its own value so switching restores it; re-applied when the base
+  // layers are (re)created (version bump) or a saved view changes the opacities.
+  useEffect(() => {
+    for (const layer of baseOlLayers) {
+      const id = getBaseLayerId(layer);
+      if (id !== undefined) {
+        layer.setOpacity(baseOpacity[id] ?? 1);
+      }
+    }
+  }, [baseOlLayers, baseOpacity]);
+
   // The on-canvas chooser switches base layers by flipping OL visibility itself;
   // follow it so the radio, saved views and the URL state stay truthful.
   useEffect(() => {
@@ -317,6 +335,10 @@ export default function MapPage() {
     findOverlayLayer(CENTERLINE_LAYER_ID)?.setVisible(centerlinesVisible);
   }, [centerlinesVisible]);
 
+  useEffect(() => {
+    findOverlayLayer(ENTRANCE_HEATMAP_LAYER_ID)?.setVisible(heatmapVisible);
+  }, [heatmapVisible]);
+
   // Checkbox toggles coming from the composer tree. Built-ins hide/show and are
   // reflected into page state (for saved views); geofile/raster overlays are
   // deactivated entirely — their layer is removed and the catalog checkbox clears.
@@ -328,6 +350,8 @@ export default function MapPage() {
       setSurfaceFeaturesVisible(visible);
     } else if (id === CENTERLINE_LAYER_ID) {
       setCenterlinesVisible(visible);
+    } else if (id === ENTRANCE_HEATMAP_LAYER_ID) {
+      setHeatmapVisible(visible);
     } else if (id?.startsWith(GEOFILE_LAYER_PREFIX)) {
       setGeofileVisible(id.slice(GEOFILE_LAYER_PREFIX.length), visible);
     } else if (id?.startsWith(RASTER_LAYER_PREFIX)) {
@@ -341,10 +365,12 @@ export default function MapPage() {
       entrancesVisible,
       surfaceFeaturesVisible,
       centerlinesVisible,
+      heatmapVisible,
       geofileIds: visibleGeofileIds,
       rasters: visibleRasterIds.map((id) => ({ id, opacity: rasterOpacity[id] })),
       tagFilter,
       overlayOpacity,
+      baseOpacity,
     });
 
   // Applying a view remounts the composer's transparency sliders (they are
@@ -407,6 +433,7 @@ export default function MapPage() {
     setEntrancesVisible(ui.entrancesVisible);
     setSurfaceFeaturesVisible(ui.surfaceFeaturesVisible);
     setCenterlinesVisible(ui.centerlinesVisible);
+    setHeatmapVisible(ui.heatmapVisible);
     for (const id of visibleGeofileIds) {
       if (!ui.geofileIds.includes(id)) {
         setGeofileVisible(id, false);
@@ -428,6 +455,10 @@ export default function MapPage() {
     }
     for (const [key, value] of Object.entries(ui.overlayOpacity)) {
       setOverlayOpacity(key, value);
+    }
+    // Base opacity keys are catalog ids (serialized as strings in JSON).
+    for (const [key, value] of Object.entries(ui.baseOpacity)) {
+      setBaseOpacity(Number(key), value);
     }
     setTagFilter(ui.tagFilter);
     setMapTagFilter(ui.tagFilter);
@@ -455,6 +486,8 @@ export default function MapPage() {
             setActiveBaseId(id);
             setActiveBaseLayer(getWorkspaceMap(), id);
           }}
+          baseOpacity={baseOpacity}
+          onBaseOpacityChange={setBaseOpacity}
           geofiles={importedGeofiles}
           visibleGeofileIds={visibleGeofileIds}
           onGeofileVisibleChange={setGeofileVisible}

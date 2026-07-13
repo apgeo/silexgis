@@ -15,11 +15,15 @@ export interface ViewConfig {
   surfaceFeaturesVisible: boolean;
   /** Added after v1 shipped; older saved views omit it (treated as true). */
   centerlinesVisible?: boolean;
+  /** Added after v1 shipped; older saved views omit it (treated as off). */
+  heatmapVisible?: boolean;
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
   tagFilter: string | null;
   /** Added after v1 shipped; older saved views omit it (treated as fully opaque). */
   overlayOpacity?: Record<string, number>;
+  /** Per-base-layer opacity keyed by catalog id. Older saved views omit it (opaque). */
+  baseOpacity?: Record<number, number>;
   /**
    * Overlay stacking, bottom→top, as layer ids (built-in ids plus `geofile:`/`raster:`
    * prefixed ones). Added after v1 shipped; older saved views omit it (default order).
@@ -33,10 +37,12 @@ export interface WorkspaceUiState {
   entrancesVisible: boolean;
   surfaceFeaturesVisible: boolean;
   centerlinesVisible: boolean;
+  heatmapVisible: boolean;
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
   tagFilter: string | null;
   overlayOpacity: Record<string, number>;
+  baseOpacity: Record<number, number>;
   overlayOrder: string[];
 }
 
@@ -53,10 +59,12 @@ export function captureViewConfig(ui: Omit<WorkspaceUiState, 'overlayOrder'>): V
     entrancesVisible: ui.entrancesVisible,
     surfaceFeaturesVisible: ui.surfaceFeaturesVisible,
     centerlinesVisible: ui.centerlinesVisible,
+    heatmapVisible: ui.heatmapVisible,
     geofileIds: ui.geofileIds,
     rasters: ui.rasters,
     tagFilter: ui.tagFilter,
     overlayOpacity: ui.overlayOpacity,
+    baseOpacity: ui.baseOpacity,
     overlayOrder: getOverlayOrder(),
   };
 }
@@ -76,10 +84,12 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     entrancesVisible: parsed.entrancesVisible ?? true,
     surfaceFeaturesVisible: parsed.surfaceFeaturesVisible ?? true,
     centerlinesVisible: parsed.centerlinesVisible ?? true,
+    heatmapVisible: parsed.heatmapVisible ?? false,
     geofileIds: parsed.geofileIds ?? [],
     rasters: parsed.rasters ?? [],
     tagFilter: parsed.tagFilter ?? null,
     overlayOpacity: parsed.overlayOpacity ?? {},
+    baseOpacity: parsed.baseOpacity ?? {},
     overlayOrder: parsed.overlayOrder ?? [],
   };
 }

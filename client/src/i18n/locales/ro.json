@@ -76,7 +76,9 @@
     "contextNewCave": "Peșteră nouă aici",
     "contextNewEntrance": "Intrare nouă aici",
     "contextCopyCoords": "Copiază coordonatele",
-    "coordsCopied": "Coordonate copiate."
+    "coordsCopied": "Coordonate copiate.",
+    "heatmap": "Hartă de căldură (intrări)",
+    "baseOpacity": "Opacitatea stratului {{name}}"
   },
   "dialog": {
     "dockToSide": "Andochează lângă hartă",

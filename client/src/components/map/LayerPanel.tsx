@@ -2,19 +2,23 @@
 import type { ReactNode } from 'react';
 import LayerTree from '@terrestris/react-geo/dist/LayerTree/LayerTree';
 import LayerTransparencySlider from '@terrestris/react-geo/dist/Slider/LayerTransparencySlider/LayerTransparencySlider';
-import { Checkbox, Divider, Radio, Select, Typography } from 'antd';
+import { Checkbox, Divider, Radio, Select, Slider, Typography } from 'antd';
 import type OlLayerBase from 'ol/layer/Base';
 import { useTranslation } from 'react-i18next';
 import { useTags, type GeofileInfo, type MapLayerInfo, type RasterMapInfo } from '../../api/hooks.ts';
 import { CENTERLINE_LAYER_ID } from '../../map/centerlineLayer.ts';
 import { ENTRANCE_LAYER_ID } from '../../map/entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from '../../map/featureLayer.ts';
+import { ENTRANCE_HEATMAP_LAYER_ID } from '../../map/heatmapLayer.ts';
 import { getOverlayGroup } from '../../map/mapContext.ts';
 
 interface LayerPanelProps {
   layers: MapLayerInfo[];
   activeBaseId: number | undefined;
   onBaseChange: (id: number) => void;
+  /** Per-base-layer opacity (0..1) keyed by catalog id; missing = fully opaque. */
+  baseOpacity: Record<number, number>;
+  onBaseOpacityChange: (id: number, opacity: number) => void;
   geofiles: GeofileInfo[];
   visibleGeofileIds: string[];
   onGeofileVisibleChange: (id: string, visible: boolean) => void;
@@ -38,6 +42,8 @@ export default function LayerPanel({
   layers,
   activeBaseId,
   onBaseChange,
+  baseOpacity,
+  onBaseOpacityChange,
   geofiles,
   visibleGeofileIds,
   onGeofileVisibleChange,
@@ -62,6 +68,8 @@ export default function LayerPanel({
         return t('map.surfaceFeatures');
       case CENTERLINE_LAYER_ID:
         return t('map.centerlines');
+      case ENTRANCE_HEATMAP_LAYER_ID:
+        return t('map.heatmap');
       default:
         // Geofile/raster layers carry their catalog name on the OL layer itself.
         return (layer.get('name') as string | undefined) ?? id ?? '';
@@ -93,12 +101,33 @@ export default function LayerPanel({
   return (
     <div style={{ padding: 12, overflow: 'auto', height: '100%' }}>
       <Typography.Text strong>{t('map.baseLayers')}</Typography.Text>
+      {/* Each base keeps its own opacity slider (like overlays); only the active base
+          is visible, so switching to a dimmed base restores its opacity. */}
       <Radio.Group
-        style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, width: '100%' }}
         value={activeBaseId}
         onChange={(e) => onBaseChange(e.target.value as number)}
-        options={layers.filter((l) => l.isBase).map((l) => ({ value: Number(l.id), label: l.name }))}
-      />
+      >
+        {layers
+          .filter((l) => l.isBase)
+          .map((l) => {
+            const id = Number(l.id);
+            return (
+              <div key={id} className="base-layer-row">
+                <Radio value={id}>{l.name}</Radio>
+                <Slider
+                  className="base-layer-opacity"
+                  min={0}
+                  max={100}
+                  value={Math.round((baseOpacity[id] ?? 1) * 100)}
+                  onChange={(value) => onBaseOpacityChange(id, (value as number) / 100)}
+                  tooltip={{ formatter: (value) => `${value ?? 0}%` }}
+                  aria-label={t('map.baseOpacity', { name: l.name })}
+                />
+              </div>
+            );
+          })}
+      </Radio.Group>
       <Divider style={{ margin: '12px 0' }} />
       <Typography.Text strong>{t('map.activeOverlays')}</Typography.Text>
       <Select

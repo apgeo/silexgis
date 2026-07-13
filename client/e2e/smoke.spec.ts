@@ -618,6 +618,38 @@ test('georeferenced raster upload, COG processing, map overlay and delete', asyn
   }
 });
 
+test('layer composer: entrance heatmap toggle and per-base opacity', async ({ page }) => {
+  await login(page);
+
+  // The entrance-density heatmap joins the composer like any overlay, off by default.
+  const heatmapRow = overlayTreeNode(page, 'Entrance heatmap');
+  await expect(heatmapRow).toBeVisible();
+  await expect(heatmapRow.locator('.ant-tree-checkbox-checked')).toHaveCount(0);
+
+  // Enabling it renders a Heatmap canvas over the viewport; toggling off removes it.
+  const viewportCanvases = page.locator('.ol-viewport canvas');
+  const canvasesBefore = await viewportCanvases.count();
+  await heatmapRow.locator('.ant-tree-checkbox').click();
+  await expect(heatmapRow.locator('.ant-tree-checkbox-checked')).toBeVisible();
+  await expect(async () => {
+    expect(await viewportCanvases.count()).toBeGreaterThan(canvasesBefore);
+  }).toPass({ timeout: 10_000 });
+  await heatmapRow.locator('.ant-tree-checkbox').click();
+  await expect(heatmapRow.locator('.ant-tree-checkbox-checked')).toHaveCount(0);
+  await expect(async () => {
+    expect(await viewportCanvases.count()).toBe(canvasesBefore);
+  }).toPass({ timeout: 10_000 });
+
+  // Each base row carries its own opacity slider; dimming the active base (OSM)
+  // drops its handle below 100% — the base is not radio-only anymore.
+  const osmRow = page.locator('.base-layer-row').filter({ hasText: 'OpenStreetMap' });
+  const handle = osmRow.locator('.ant-slider-handle');
+  await expect(handle).toHaveAttribute('aria-valuenow', '100');
+  await handle.click();
+  await page.keyboard.press('ArrowLeft');
+  await expect(handle).toHaveAttribute('aria-valuenow', '99');
+});
+
 test('geofile upload, background import, map layer, export and delete', async ({ page }) => {
   await login(page);
 

@@ -269,6 +269,16 @@
   height: 100%;
 }
 
+/* Base-layer rows: the radio on its own line, a compact opacity slider beneath. */
+.base-layer-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.base-layer-row .base-layer-opacity {
+  margin: 0 8px 0 24px;
+}
+
 /* Layer composer tree (react-geo LayerTree in the left dock). */
 .layer-composer {
   margin-top: 8px;
