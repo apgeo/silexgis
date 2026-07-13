@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
-import { App, Checkbox, Flex, Form, Input, InputNumber, Modal, Select } from 'antd';
+import { App, Checkbox, Flex, Form, Input, InputNumber, Select } from 'antd';
 import Map from 'ol/Map';
 import View from 'ol/View';
 import Feature from 'ol/Feature';
@@ -20,6 +20,7 @@ import {
   type EntranceWrite,
 } from '../../api/hooks.ts';
 import { clampLonLat } from '../../geo/coords.ts';
+import DialogHost from '../DialogHost.tsx';
 
 interface EntranceEditorModalProps {
   caveId: string;
@@ -110,6 +111,16 @@ export default function EntranceEditorModal({
     miniMap.current = null;
   };
 
+  // The dialog host can re-parent the content between modal and drawer while
+  // open; the map div then unmounts and a fresh one mounts. Tearing down on the
+  // ref going null lets the re-parented host's open transition rebuild cleanly.
+  const onMapTargetRef = (el: HTMLDivElement | null) => {
+    mapTarget.current = el;
+    if (!el) {
+      teardownMap();
+    }
+  };
+
   // The Modal mounts its children lazily, so the map target div does not exist yet when
   // `open` flips true — build the map only after the open transition (content mounted).
   const onAfterOpenChange = (visible: boolean) => {
@@ -175,17 +186,17 @@ export default function EntranceEditorModal({
   };
 
   return (
-    <Modal
+    <DialogHost
+      kind="entrance-edit"
       title={entrance ? t('entrances.edit') : t('entrances.add')}
       open={open}
       onCancel={onClose}
       onOk={() => void onOk()}
       afterOpenChange={onAfterOpenChange}
-      confirmLoading={createEntrance.isPending || updateEntrance.isPending}
+      okLoading={createEntrance.isPending || updateEntrance.isPending}
       width={720}
-      destroyOnHidden
     >
-      <div ref={mapTarget} style={{ height: 280, marginBottom: 16, background: '#e8ecef' }} />
+      <div ref={onMapTargetRef} style={{ height: 280, marginBottom: 16, background: '#e8ecef' }} />
       <Form<EntranceFormValues> form={form} layout="vertical">
         <Flex gap={12} wrap>
           <Form.Item name="name" label={t('caves.name')} style={{ width: 220 }}>
@@ -243,6 +254,6 @@ export default function EntranceEditorModal({
           <Input.TextArea rows={2} />
         </Form.Item>
       </Form>
-    </Modal>
+    </DialogHost>
   );
 }

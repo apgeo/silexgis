@@ -285,6 +285,52 @@ test('map context menu: typed add-here, cave placement and coordinate copy', asy
   await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
 });
 
+test('dialog placement flip: cave-add continues as a side panel with values intact', async ({ page }) => {
+  const caveName = `E2E Flip Cave ${Date.now()}`;
+  await login(page);
+
+  const toolbar = page.locator('.map-edit-overlay');
+  await toolbar.getByTestId('tool-add-cave').click();
+  await page.locator('.map-canvas').click({ position: { x: 380, y: 300 } });
+
+  const modal = page.locator('.ant-modal');
+  await expect(modal.getByText(/New cave here/)).toBeVisible();
+  await modal.getByLabel('Name').fill(caveName);
+
+  // Flip to the side panel mid-edit: same dialog, docked, values kept, no mask.
+  await modal.getByTestId('dialog-placement-flip').click();
+  const drawer = page.locator('.ant-drawer');
+  await expect(drawer.getByText(/New cave here/)).toBeVisible();
+  await expect(drawer.getByLabel('Name')).toHaveValue(caveName);
+  await expect(page.locator('.ant-drawer-mask')).toHaveCount(0);
+
+  // Finish the create from the drawer (keyboard-select per the modal flow above).
+  await drawer.getByLabel('Type', { exact: true }).click();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await drawer.getByLabel('Entrance type').click();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await drawer.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
+
+  // The preference persisted; restore the default for other flows and clean up.
+  await toolbar.getByTestId('tool-add-cave').click();
+  await page.locator('.map-canvas').click({ position: { x: 420, y: 320 } });
+  await expect(page.locator('.ant-drawer').getByText(/New cave here/)).toBeVisible();
+  await page.locator('.ant-drawer').getByTestId('dialog-placement-flip').click();
+  await expect(page.locator('.ant-modal').getByText(/New cave here/)).toBeVisible();
+  await page.locator('.ant-modal').getByRole('button', { name: 'Cancel' }).click();
+
+  await page.goto('/caves');
+  await page.getByText(caveName).click();
+  await page.locator('button', { hasText: 'Delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await page.waitForURL(/\/caves$/);
+  await expect(page.getByText(caveName)).not.toBeVisible();
+});
+
 test('cave photo attachment round-trip', async ({ page }) => {
   await login(page);
 

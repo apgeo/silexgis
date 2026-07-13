@@ -31,6 +31,7 @@
     "loading": "Se încarcă…",
     "language": "Limbă",
     "save": "Salvează",
+    "ok": "OK",
     "cancel": "Anulează",
     "saved": "Salvat.",
     "saveFailed": "Operația a eșuat. Încercați din nou.",
@@ -76,6 +77,10 @@
     "contextNewEntrance": "Intrare nouă aici",
     "contextCopyCoords": "Copiază coordonatele",
     "coordsCopied": "Coordonate copiate."
+  },
+  "dialog": {
+    "dockToSide": "Andochează lângă hartă",
+    "floatAsDialog": "Afișează ca dialog"
   },
   "caves": {
     "title": "Peșteri",

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
-import { App, AutoComplete, Checkbox, Flex, Form, Input, Modal, Select, Typography } from 'antd';
+import { App, AutoComplete, Checkbox, Flex, Form, Input, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   createEntranceFor,
@@ -15,6 +15,7 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { reloadEntrances } from '../../map/entranceLayer.ts';
 import type { PlacementMode } from '../../map/mapEdit.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
+import DialogHost from '../DialogHost.tsx';
 import EntranceEditorModal from '../caves/EntranceEditorModal.tsx';
 
 interface CaveAddModalProps {
@@ -137,13 +138,13 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
 
   return (
     <>
-      <Modal
+      <DialogHost
+        kind="cave-add"
         title={t('mapEdit.newCaveHere')}
         open={mode === 'add-cave' && lonLat !== null}
         onCancel={onClose}
         onOk={() => void submitNewCave()}
-        confirmLoading={saving}
-        destroyOnHidden
+        okLoading={saving}
       >
         <Typography.Paragraph type="secondary">
           {t('entrances.coordinates')}: {lonLat ? formatLonLat(lonLat[0], lonLat[1]) : ''}
@@ -188,14 +189,13 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
             </Form.Item>
           </Flex>
         </Form>
-      </Modal>
+      </DialogHost>
 
-      <Modal
+      <DialogHost
+        kind="cave-add"
         title={t('mapEdit.newEntranceHere')}
         open={mode === 'add-entrance' && lonLat !== null && pickedCaveId === null}
         onCancel={onClose}
-        okButtonProps={{ style: { display: 'none' } }}
-        destroyOnHidden
       >
         <Typography.Paragraph type="secondary">
           {t('mapEdit.pickCaveForEntrance')}
@@ -212,7 +212,7 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
         >
           <Input.Search placeholder={t('caves.searchPlaceholder')} />
         </AutoComplete>
-      </Modal>
+      </DialogHost>
 
       {pickedCaveId !== null && lonLat !== null && (
         <EntranceEditorModal

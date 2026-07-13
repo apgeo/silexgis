@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useState } from 'react';
-import { Checkbox, Divider, Form, Input, InputNumber, Modal, Select } from 'antd';
+import { Checkbox, Divider, Form, Input, InputNumber, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   useCave,
@@ -9,6 +9,7 @@ import {
   type SurfaceFeatureDetail,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import DialogHost from '../DialogHost.tsx';
 import { parsePropertiesSchema } from './propertiesSchema.ts';
 
 type Visibility = SurfaceFeatureDetail['visibility'];
@@ -142,14 +143,14 @@ export default function FeatureEditModal({
   };
 
   return (
-    <Modal
+    <DialogHost
+      kind="feature-edit"
       title={title}
       open={open}
       onCancel={onCancel}
       onOk={() => void onOk()}
-      confirmLoading={busy}
+      okLoading={busy}
       width={560}
-      destroyOnHidden
     >
       <Form<FormValues> form={form} layout="vertical">
         <Form.Item name="name" label={t('features.name')}>
@@ -216,6 +217,6 @@ export default function FeatureEditModal({
           </>
         )}
       </Form>
-    </Modal>
+    </DialogHost>
   );
 }

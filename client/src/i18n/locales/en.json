@@ -31,6 +31,7 @@
     "loading": "Loading…",
     "language": "Language",
     "save": "Save",
+    "ok": "OK",
     "cancel": "Cancel",
     "saved": "Saved.",
     "saveFailed": "The operation failed. Please try again.",
@@ -76,6 +77,10 @@
     "contextNewEntrance": "New entrance here",
     "contextCopyCoords": "Copy coordinates",
     "coordsCopied": "Coordinates copied."
+  },
+  "dialog": {
+    "dockToSide": "Dock to the side of the map",
+    "floatAsDialog": "Float as a dialog"
   },
   "caves": {
     "title": "Caves",
