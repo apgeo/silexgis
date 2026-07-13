@@ -134,6 +134,77 @@ public sealed class SurfaceFeatureTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task Multi_part_geometry_round_trips_through_create_update_and_map()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+
+        // Imported multi-part geodata (a GPX track is a MultiLineString) must create, read,
+        // edit and render like a simple feature. A multi-part line fits a Line-kind type.
+        var multiLine = new
+        {
+            type = "MultiLineString",
+            coordinates = new[]
+            {
+                new[] { new[] { 25.44, 45.52 }, new[] { 25.45, 45.53 } },
+                new[] { new[] { 25.46, 45.54 }, new[] { 25.47, 45.55 } },
+            },
+        };
+        var id = await CreateAsync(owner, Body($"Multi Track {marker}", fractureTypeId, "authenticated", geometry: multiLine));
+
+        var dto = (await owner.GetFromJsonAsync<JsonObject>($"/api/v1/surface-features/{id}"))!;
+        dto["geometry"]!["type"]!.GetValue<string>().ShouldBe("MultiLineString");
+        dto["geometry"]!["coordinates"]!.AsArray().Count.ShouldBe(2);
+
+        // Editing the geometry (here, a third part) and saving it back is the modify+save
+        // path the map edit tools drive — it must round-trip, not 400 as "geometry_invalid".
+        var edited = new
+        {
+            type = "MultiLineString",
+            coordinates = new[]
+            {
+                new[] { new[] { 25.44, 45.52 }, new[] { 25.45, 45.53 } },
+                new[] { new[] { 25.46, 45.54 }, new[] { 25.47, 45.55 } },
+                new[] { new[] { 25.48, 45.56 }, new[] { 25.49, 45.57 } },
+            },
+        };
+        (await owner.PutWithIfMatchAsync($"/api/v1/surface-features/{id}",
+            Body($"Multi Track {marker}", fractureTypeId, "authenticated", geometry: edited)))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var updated = (await owner.GetFromJsonAsync<JsonObject>($"/api/v1/surface-features/{id}"))!;
+        updated["geometry"]!["coordinates"]!.AsArray().Count.ShouldBe(3);
+
+        // The map endpoint emits the multi-part geometry unchanged.
+        var mapFeature = (await owner.GetFromJsonAsync<JsonObject>(
+            "/api/v1/map/surface-features?bbox=25.3,45.4,25.6,45.7"))!["features"]!.AsArray()
+            .Single(f => f!["properties"]!["id"]!.GetValue<Guid>() == id)!;
+        mapFeature["geometry"]!["type"]!.GetValue<string>().ShouldBe("MultiLineString");
+
+        // A multipoint fits a Point-kind type.
+        var multiPointId = await CreateAsync(owner, Body($"Multi Points {marker}", sinkholeTypeId, "private", geometry: new
+        {
+            type = "MultiPoint",
+            coordinates = new[] { new[] { 25.44, 45.52 }, new[] { 25.45, 45.53 } },
+        }));
+        (await owner.GetFromJsonAsync<JsonObject>($"/api/v1/surface-features/{multiPointId}"))!
+            ["geometry"]!["type"]!.GetValue<string>().ShouldBe("MultiPoint");
+
+        // But a multipolygon still does not fit a Line-kind type — kind checks hold for Multi*.
+        var kindMismatch = await owner.PostAsJsonAsync("/api/v1/surface-features", Body(
+            $"Bad multi {marker}", fractureTypeId, geometry: new
+            {
+                type = "MultiPolygon",
+                coordinates = new[]
+                {
+                    new[] { new[] { new[] { 0.0, 0.0 }, new[] { 4.0, 0.0 }, new[] { 4.0, 4.0 }, new[] { 0.0, 4.0 }, new[] { 0.0, 0.0 } } },
+                },
+            }));
+        kindMismatch.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await kindMismatch.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
+            .ShouldBe("surface_feature.geometry_kind_mismatch");
+    }
+
+    [Fact]
     public async Task Cave_link_is_redacted_when_the_linked_cave_location_is_protected()
     {
         // A location-protected but otherwise visible cave, linked from a feature with

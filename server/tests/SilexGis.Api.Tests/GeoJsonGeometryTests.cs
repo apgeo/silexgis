@@ -50,13 +50,53 @@ public sealed class GeoJsonGeometryTests
         back.ToGeometryOrNull().ShouldBeOfType<Polygon>().EqualsTopologically(polygon).ShouldBeTrue();
     }
 
+    [Fact]
+    public void MultiPoint_round_trips()
+    {
+        var geom = Geo("MultiPoint", "[[25.0,45.0],[25.1,45.1]]").ToGeometryOrNull();
+        var multi = geom.ShouldBeOfType<MultiPoint>();
+        multi.NumGeometries.ShouldBe(2);
+        multi.SRID.ShouldBe(4326);
+
+        GeoJsonGeometry.From(multi).Type.ShouldBe("MultiPoint");
+    }
+
+    [Fact]
+    public void MultiLineString_round_trips()
+    {
+        var geom = Geo("MultiLineString", "[[[25.0,45.0],[25.1,45.1]],[[26.0,46.0],[26.1,46.1]]]").ToGeometryOrNull();
+        var multi = geom.ShouldBeOfType<MultiLineString>();
+        multi.NumGeometries.ShouldBe(2);
+
+        var back = GeoJsonGeometry.From(multi);
+        back.Type.ShouldBe("MultiLineString");
+        back.ToGeometryOrNull().ShouldBeOfType<MultiLineString>().EqualsTopologically(multi).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void MultiPolygon_round_trips()
+    {
+        var geom = Geo(
+            "MultiPolygon",
+            "[[[[0,0],[4,0],[4,4],[0,4],[0,0]]],[[[5,5],[6,5],[6,6],[5,6],[5,5]]]]").ToGeometryOrNull();
+        var multi = geom.ShouldBeOfType<MultiPolygon>();
+        multi.NumGeometries.ShouldBe(2);
+        multi.SRID.ShouldBe(4326);
+
+        var back = GeoJsonGeometry.From(multi);
+        back.Type.ShouldBe("MultiPolygon");
+        back.ToGeometryOrNull().ShouldBeOfType<MultiPolygon>().EqualsTopologically(multi).ShouldBeTrue();
+    }
+
     [Theory]
     [InlineData("Point", "[25.5]")] // too few numbers
     [InlineData("Point", "\"nope\"")] // not an array
     [InlineData("LineString", "[[25.0,45.0]]")] // one-point line
     [InlineData("Polygon", "[[[0,0],[4,0],[4,4]]]")] // unclosed ring
     [InlineData("Polygon", "[]")] // no rings
-    [InlineData("MultiPolygon", "[]")] // unsupported type
+    [InlineData("MultiPolygon", "[]")] // empty multipolygon (no parts)
+    [InlineData("MultiPoint", "[]")] // empty multipoint (no parts)
+    [InlineData("GeometryCollection", "[]")] // intentionally unsupported type
     [InlineData("Polygon", "[[[0,0],[4,0],[0,4],[4,4],[0,0]]]")] // self-intersecting (bow-tie)
     public void Malformed_geometry_returns_null(string type, string coordinates) =>
         Geo(type, coordinates).ToGeometryOrNull().ShouldBeNull();
@@ -73,5 +113,22 @@ public sealed class GeoJsonGeometryTests
         GeoJsonGeometry.MatchesKind(line, GeometryKind.Polygon).ShouldBeFalse();
         GeoJsonGeometry.MatchesKind(point, GeometryKind.Any).ShouldBeTrue();
         GeoJsonGeometry.MatchesKind(line, GeometryKind.Any).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Kind_matching_accepts_multi_variants_of_the_same_kind()
+    {
+        var multiPoint = Geo("MultiPoint", "[[1,1],[2,2]]").ToGeometryOrNull()!;
+        var multiLine = Geo("MultiLineString", "[[[0,0],[1,1]]]").ToGeometryOrNull()!;
+        var multiPolygon = Geo("MultiPolygon", "[[[[0,0],[4,0],[4,4],[0,4],[0,0]]]]").ToGeometryOrNull()!;
+
+        // A multi-part geometry is editable under its single-part feature-type kind.
+        GeoJsonGeometry.MatchesKind(multiPoint, GeometryKind.Point).ShouldBeTrue();
+        GeoJsonGeometry.MatchesKind(multiLine, GeometryKind.Line).ShouldBeTrue();
+        GeoJsonGeometry.MatchesKind(multiPolygon, GeometryKind.Polygon).ShouldBeTrue();
+
+        // But not under a different kind.
+        GeoJsonGeometry.MatchesKind(multiPoint, GeometryKind.Line).ShouldBeFalse();
+        GeoJsonGeometry.MatchesKind(multiPolygon, GeometryKind.Point).ShouldBeFalse();
     }
 }

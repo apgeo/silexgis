@@ -5,9 +5,12 @@ using NetTopologySuite.Geometries;
 namespace SilexGis.Api.Common;
 
 /// <summary>
-/// GeoJSON geometry contract for entities whose shape varies (Point/LineString/Polygon).
-/// Coordinates stay a raw JSON element because GeoJSON coordinate arrays are recursive —
-/// a fixed OpenAPI schema cannot express them; conversion to NTS validates structure.
+/// GeoJSON geometry contract for entities whose shape varies (Point/LineString/Polygon and
+/// their Multi* variants — the latter appear in imported geodata and must round-trip through
+/// edits). Coordinates stay a raw JSON element because GeoJSON coordinate arrays are
+/// recursive — a fixed OpenAPI schema cannot express them; conversion to NTS validates
+/// structure. GeometryCollection is intentionally unsupported (no coordinates array; nothing
+/// produces one for these entities).
 /// </summary>
 public sealed record GeoJsonGeometry(string Type, JsonElement Coordinates)
 {
@@ -47,6 +50,9 @@ public sealed record GeoJsonGeometry(string Type, JsonElement Coordinates)
                 "Point" => new Point(ParsePosition(Coordinates)),
                 "LineString" => new LineString(ParseLine(Coordinates)),
                 "Polygon" => ParsePolygon(Coordinates),
+                "MultiPoint" => new MultiPoint([.. Parts(Coordinates).Select(p => new Point(ParsePosition(p)))]),
+                "MultiLineString" => new MultiLineString([.. Parts(Coordinates).Select(l => new LineString(ParseLine(l)))]),
+                "MultiPolygon" => new MultiPolygon([.. Parts(Coordinates).Select(ParsePolygon)]),
                 _ => throw new JsonException($"Unsupported geometry type '{Type}'."),
             };
             if (!geometry.IsValid)
@@ -92,14 +98,31 @@ public sealed record GeoJsonGeometry(string Type, JsonElement Coordinates)
             var rings = e.EnumerateArray().Select(r => new LinearRing(ParseLine(r))).ToArray();
             return new Polygon(rings[0], [.. rings.Skip(1)]);
         }
+
+        // The parts of a Multi* geometry: at least one, each parsed by the matching simple
+        // parser above. An empty multi-geometry is rejected (a feature with no parts is
+        // meaningless and would slip past the IsValid check).
+        static JsonElement[] Parts(JsonElement e)
+        {
+            if (e.ValueKind != JsonValueKind.Array || e.GetArrayLength() < 1)
+            {
+                throw new JsonException("A multi-geometry needs at least one part.");
+            }
+
+            return [.. e.EnumerateArray()];
+        }
     }
 
-    /// <summary>True when the geometry class is allowed for the given kind.</summary>
+    /// <summary>
+    /// True when the geometry class is allowed for the given kind. A Multi* variant matches
+    /// its single-part kind (a multi-part polygon is still polygonal), so imported multi-part
+    /// features remain editable under their typed feature type.
+    /// </summary>
     public static bool MatchesKind(Geometry geometry, Domain.GeometryKind kind) => kind switch
     {
-        Domain.GeometryKind.Point => geometry is Point,
-        Domain.GeometryKind.Line => geometry is LineString,
-        Domain.GeometryKind.Polygon => geometry is Polygon,
+        Domain.GeometryKind.Point => geometry is Point or MultiPoint,
+        Domain.GeometryKind.Line => geometry is LineString or MultiLineString,
+        Domain.GeometryKind.Polygon => geometry is Polygon or MultiPolygon,
         Domain.GeometryKind.Any => true,
         _ => false,
     };

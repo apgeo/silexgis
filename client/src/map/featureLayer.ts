@@ -116,7 +116,9 @@ function featureStyle(feature: FeatureLike): Style | Style[] {
   const geometryType = feature.getGeometry()?.getType();
   const selected = selectedFeatureId !== null && feature.get('id') === selectedFeatureId;
 
-  if (geometryType === 'Point') {
+  // MultiPoint features (from imported multi-part geodata) style like points: OpenLayers
+  // draws the image style at every point of the geometry.
+  if (geometryType === 'Point' || geometryType === 'MultiPoint') {
     // A translucent halo behind the symbol marks the selected feature.
     const halo = selected
       ? [new Style({
