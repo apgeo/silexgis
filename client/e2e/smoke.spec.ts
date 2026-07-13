@@ -244,6 +244,47 @@ test('pinned feature-type shortcuts and the map chrome toggle', async ({ page })
   await expect(shortcut).toHaveCount(0);
 });
 
+test('map context menu: typed add-here, cave placement and coordinate copy', async ({ page }) => {
+  const featureName = `E2E Context Sinkhole ${Date.now()}`;
+  await login(page);
+
+  const canvas = page.locator('.map-canvas');
+
+  // Right-click opens the typed add menu; picking a point type places it there.
+  await canvas.click({ button: 'right', position: { x: 430, y: 250 } });
+  await expect(page.getByText('Copy coordinates')).toBeVisible();
+  await page.getByText('Add feature').hover();
+  await page.getByRole('menuitem', { name: 'Sinkhole / Doline' }).click();
+
+  // Picking closes the menu entirely (its layers would sit above the dialog).
+  await expect(page.getByRole('menuitem', { name: 'Sinkhole / Doline' })).toBeHidden();
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByText('New surface feature')).toBeVisible();
+  await modal.getByLabel('Name').fill(featureName);
+  await modal.getByRole('button', { name: 'OK' }).click();
+
+  // The placement is a pending edit saved through the normal batched flow.
+  const toolbar = page.locator('.map-edit-overlay');
+  const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/surface-features') && r.ok());
+  await toolbar.getByRole('button', { name: /Save/ }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  await reloaded;
+
+  // "New cave here" opens the create dialog without needing a second click.
+  await canvas.click({ button: 'right', position: { x: 300, y: 200 } });
+  await page.getByRole('menuitem', { name: 'New cave here' }).click();
+  await expect(page.getByRole('dialog').getByText(/New cave here/)).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+
+  // Cleanup: remove the created feature via the registry.
+  await page.goto('/features');
+  const row = page.getByRole('row', { name: new RegExp(featureName) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.getByRole('button', { name: 'delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
+});
+
 test('cave photo attachment round-trip', async ({ page }) => {
   await login(page);
 

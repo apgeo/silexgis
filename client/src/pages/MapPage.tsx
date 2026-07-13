@@ -25,6 +25,7 @@ import { useFeatureTypes, useGeofiles, useMapLayers, useMapViews, useMe, useRast
 import EditToolbar from '../components/map/EditToolbar.tsx';
 import FeatureListPanel from '../components/map/FeatureListPanel.tsx';
 import LayerPanel from '../components/map/LayerPanel.tsx';
+import MapContextMenu from '../components/map/MapContextMenu.tsx';
 import ViewsPanel from '../components/map/ViewsPanel.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
 import SelectionPanel from '../components/map/SelectionPanel.tsx';
@@ -56,7 +57,8 @@ import {
   setDesiredOverlayOrder,
   setLayerOpacity,
 } from '../map/mapContext.ts';
-import { MapEditController } from '../map/mapEdit.ts';
+import { attachContextMenu, type MapContextMenuTarget } from '../map/contextMenu.ts';
+import { MapEditController, type DrawShape } from '../map/mapEdit.ts';
 import { attachSelection } from '../map/selection.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
@@ -109,6 +111,9 @@ export default function MapPage() {
   const [editDirty, setEditDirty] = useState(0);
   useEffect(() => editController?.subscribe((s) => setEditDirty(s.dirty)), [editController]);
 
+  // Right-click (long-press on touch) context menu over the canvas.
+  const [contextTarget, setContextTarget] = useState<MapContextMenuTarget | null>(null);
+
   useEffect(() => {
     const map = getWorkspaceMap();
     map.setTarget(mapTarget.current ?? undefined);
@@ -132,6 +137,9 @@ export default function MapPage() {
     const detachSelection = attachSelection(map, setSelection);
     const detachHover = attachHoverTooltip(map);
     const detachUrlHash = attachUrlHash(map);
+    const detachContextMenu = attachContextMenu(map, setContextTarget);
+    // Panning/zooming away invalidates the menu's anchor point.
+    const moveKey = map.on('movestart', () => setContextTarget(null));
     const controller = new MapEditController(map);
     setEditController(controller);
     return () => {
@@ -144,6 +152,8 @@ export default function MapPage() {
       detachSelection();
       detachHover();
       detachUrlHash();
+      detachContextMenu();
+      unByKey(moveKey);
       map.setTarget(undefined);
     };
   }, [setSelection]);
@@ -573,6 +583,25 @@ export default function MapPage() {
               <EditToolbar controller={editController} />
             </div>
           )}
+          <MapContextMenu
+            target={contextTarget}
+            featureTypes={featureTypes ?? []}
+            canEdit={canEdit}
+            onClose={() => setContextTarget(null)}
+            onAddFeature={(typeId, lonLat) => {
+              const picked = featureTypes?.find((ft) => Number(ft.id) === typeId);
+              const pickedKind = (picked?.geometryKind ?? 'point').toString().toLowerCase();
+              if (pickedKind === 'line' || pickedKind === 'polygon') {
+                // Multi-click shapes start at the user's next clicks; just arm the tool.
+                const shape: DrawShape = pickedKind === 'line' ? 'LineString' : 'Polygon';
+                editController?.setMode('draw', shape, typeId);
+              } else {
+                // Point kinds land exactly where the menu was opened.
+                editController?.placePointAt(lonLat, typeId);
+              }
+            }}
+            onPlace={(mode, lonLat) => editController?.requestPlacement(mode, lonLat)}
+          />
         </div>
       </Panel>
       <Separator className="map-workspace-handle" />

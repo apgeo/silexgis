@@ -69,7 +69,16 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
   // A landed cave/entrance placement click awaiting its create dialog.
   const [placement, setPlacement] = useState<{ mode: PlacementMode; lonLat: [number, number] } | null>(null);
 
-  useEffect(() => controller.subscribe(setState), [controller]);
+  useEffect(
+    () =>
+      controller.subscribe((s) => {
+        setState(s);
+        // The context menu can arm drawing directly on the controller; follow its
+        // armed type so the palette trigger and shape stay truthful.
+        setTypeId((prev) => (s.mode === 'draw' && s.drawTypeId !== undefined ? s.drawTypeId : prev));
+      }),
+    [controller],
+  );
 
   useEffect(() => {
     controller.onDrawEnd = (feature) => setPendingFeature(feature);

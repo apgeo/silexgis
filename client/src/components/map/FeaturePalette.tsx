@@ -5,15 +5,13 @@ import { Button, Popover, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { FeatureType } from '../../api/hooks.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
+import { groupFeatureTypes } from './featureTypeGroups.ts';
 
 interface FeaturePaletteProps {
   featureTypes: FeatureType[];
   value?: number;
   onChange: (id: number) => void;
 }
-
-// Geometry-kind groups, rendered in this order. `any` collects the flexible types.
-const GROUP_ORDER = ['point', 'line', 'polygon', 'any'] as const;
 
 /**
  * Visual symbol picker for the edit tools: feature types grouped by geometry kind,
@@ -28,10 +26,7 @@ export default function FeaturePalette({ featureTypes, value, onChange }: Featur
   const togglePinnedType = useUiPrefsStore((s) => s.togglePinnedType);
   const selected = featureTypes.find((ft) => Number(ft.id) === value);
 
-  const groups = GROUP_ORDER.map((kind) => ({
-    kind,
-    items: featureTypes.filter((ft) => (ft.geometryKind ?? 'point') === kind),
-  })).filter((group) => group.items.length > 0);
+  const groups = groupFeatureTypes(featureTypes);
 
   const content = (
     <div className="feature-palette">

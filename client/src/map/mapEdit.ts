@@ -3,9 +3,9 @@ import type Map from 'ol/Map';
 import Feature from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import type Geometry from 'ol/geom/Geometry';
-import type Point from 'ol/geom/Point';
+import Point from 'ol/geom/Point';
 import { Draw, Modify, Snap, Translate } from 'ol/interaction';
-import { toLonLat } from 'ol/proj';
+import { fromLonLat, toLonLat } from 'ol/proj';
 import type VectorSource from 'ol/source/Vector';
 import { getSurfaceFeatureSource } from './featureLayer.ts';
 
@@ -23,6 +23,9 @@ export interface EditState {
   canUndo: boolean;
   canRedo: boolean;
   dirty: number; // created + geometry-modified features not yet saved
+  /** Shape/type the draw tool is armed with (kept while mode is 'draw'). */
+  drawShape?: DrawShape;
+  drawTypeId?: number;
 }
 
 export interface PendingEdits {
@@ -85,11 +88,15 @@ export class MapEditController {
 
   setMode(mode: EditMode, drawShape?: DrawShape, drawTypeId?: number): void {
     this.detachInteractions();
-    this.state = { ...this.state, mode };
+    // Draw arming is sticky: re-entering draw without explicit params (e.g. the
+    // snap toggle re-attaching interactions) keeps the current shape and type.
+    const shape = mode === 'draw' ? (drawShape ?? this.state.drawShape ?? 'Point') : undefined;
+    const typeId = mode === 'draw' ? (drawTypeId ?? this.state.drawTypeId) : undefined;
+    this.state = { ...this.state, mode, drawShape: shape, drawTypeId: typeId };
 
     switch (mode) {
       case 'draw':
-        this.attachDraw(drawShape ?? 'Point', drawTypeId);
+        this.attachDraw(shape ?? 'Point', typeId);
         break;
       case 'modify':
         this.attachModify();
@@ -133,6 +140,44 @@ export class MapEditController {
       this.undoStack.push(command);
       this.emit();
     }
+  }
+
+  /**
+   * Places a point feature of the given type at an exact coordinate (EPSG:4326) —
+   * the context menu's "add here" path. Runs through the same pending/undo pipeline
+   * as an interactive draw, so attribute collection and the batched save behave
+   * identically to a canvas click.
+   */
+  placePointAt(lonLat: [number, number], typeId: number): void {
+    const feature = new Feature(new Point(fromLonLat(lonLat)));
+    feature.set('pendingNew', true);
+    feature.set('featureTypeId', typeId);
+    this.source.addFeature(feature);
+    const entry = { feature, geometryType: 'Point' as DrawShape };
+    this.createdFeatures.push(entry);
+    this.pushCommand({
+      undo: () => {
+        this.source.removeFeature(feature);
+        this.createdFeatures = this.createdFeatures.filter((c) => c.feature !== feature);
+        this.syncDirty();
+      },
+      redo: () => {
+        this.source.addFeature(feature);
+        this.createdFeatures.push(entry);
+        this.syncDirty();
+      },
+    });
+    this.syncDirty();
+    this.onDrawEnd?.(feature);
+  }
+
+  /**
+   * Opens the cave/entrance create flow for an exact coordinate (context-menu path):
+   * same callback the one-shot placement tools use, without needing a second click.
+   */
+  requestPlacement(mode: PlacementMode, lonLat: [number, number]): void {
+    this.setMode('none');
+    this.onPointPlaced?.(mode, lonLat);
   }
 
   /** Called by the toolbar after a successful save or discard. */

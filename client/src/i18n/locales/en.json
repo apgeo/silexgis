@@ -70,7 +70,12 @@
     "swipeCompare": "Compare raster with the map beneath (swipe)",
     "hideChrome": "Hide map toolbars",
     "showChrome": "Show map toolbars",
-    "unsavedEdits": "{{count}} unsaved edits"
+    "unsavedEdits": "{{count}} unsaved edits",
+    "contextAdd": "Add feature",
+    "contextNewCave": "New cave here",
+    "contextNewEntrance": "New entrance here",
+    "contextCopyCoords": "Copy coordinates",
+    "coordsCopied": "Coordinates copied."
   },
   "caves": {
     "title": "Caves",

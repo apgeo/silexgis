@@ -70,7 +70,12 @@
     "swipeCompare": "Compară rasterul cu harta de dedesubt (glisor)",
     "hideChrome": "Ascunde barele de instrumente ale hărții",
     "showChrome": "Arată barele de instrumente ale hărții",
-    "unsavedEdits": "{{count}} modificări nesalvate"
+    "unsavedEdits": "{{count}} modificări nesalvate",
+    "contextAdd": "Adaugă fenomen",
+    "contextNewCave": "Peșteră nouă aici",
+    "contextNewEntrance": "Intrare nouă aici",
+    "contextCopyCoords": "Copiază coordonatele",
+    "coordsCopied": "Coordonate copiate."
   },
   "caves": {
     "title": "Peșteri",
