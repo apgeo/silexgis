@@ -1,0 +1,56 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { afterEach, describe, expect, it } from 'vitest';
+import { useUiPrefsStore } from './uiPrefsStore.ts';
+
+afterEach(() => {
+  useUiPrefsStore.setState({ pinnedTypeIds: [], dialogPlacement: {}, mapChromeHidden: false });
+  localStorage.removeItem('silexgis.uiPrefs');
+});
+
+describe('uiPrefsStore pinned types', () => {
+  it('pins in click order and unpins on repeat toggle', () => {
+    const { togglePinnedType } = useUiPrefsStore.getState();
+    togglePinnedType(3);
+    togglePinnedType(1);
+    togglePinnedType(2);
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([3, 1, 2]);
+
+    togglePinnedType(1);
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([3, 2]);
+  });
+
+  it('re-pinning moves a type to the end (re-pin to reorder)', () => {
+    const { togglePinnedType } = useUiPrefsStore.getState();
+    togglePinnedType(1);
+    togglePinnedType(2);
+    togglePinnedType(1); // unpin…
+    togglePinnedType(1); // …and pin again
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([2, 1]);
+  });
+
+  it('persists preferences to localStorage under the versioned key', () => {
+    useUiPrefsStore.getState().togglePinnedType(7);
+    useUiPrefsStore.getState().setMapChromeHidden(true);
+
+    const raw = localStorage.getItem('silexgis.uiPrefs');
+    expect(raw).not.toBeNull();
+    const stored = JSON.parse(raw!) as { state: { pinnedTypeIds: number[]; mapChromeHidden: boolean }; version: number };
+    expect(stored.version).toBe(1);
+    expect(stored.state.pinnedTypeIds).toEqual([7]);
+    expect(stored.state.mapChromeHidden).toBe(true);
+  });
+});
+
+describe('uiPrefsStore dialog placement', () => {
+  it('defaults to no stored placement and records per-dialog choices independently', () => {
+    expect(useUiPrefsStore.getState().dialogPlacement).toEqual({});
+
+    useUiPrefsStore.getState().setDialogPlacement('cave-add', 'drawer');
+    useUiPrefsStore.getState().setDialogPlacement('feature-edit', 'modal');
+
+    expect(useUiPrefsStore.getState().dialogPlacement).toEqual({
+      'cave-add': 'drawer',
+      'feature-edit': 'modal',
+    });
+  });
+});

@@ -67,7 +67,10 @@
     "clusterTitle": "{{count}} entrances in this area",
     "zoomHere": "Zoom here",
     "approximateShort": "approx.",
-    "swipeCompare": "Compare raster with the map beneath (swipe)"
+    "swipeCompare": "Compare raster with the map beneath (swipe)",
+    "hideChrome": "Hide map toolbars",
+    "showChrome": "Show map toolbars",
+    "unsavedEdits": "{{count}} unsaved edits"
   },
   "caves": {
     "title": "Caves",
@@ -247,6 +250,8 @@
     "measureArea": "Measure area",
     "discard": "Discard edits",
     "pickFeatureType": "Pick a feature type",
+    "pinType": "Pin to toolbar",
+    "unpinType": "Unpin from toolbar",
     "clickToMeasure": "Click to measure",
     "continueLine": "Click to continue the line — double-click to finish",
     "continueArea": "Click to continue the area — double-click to finish",

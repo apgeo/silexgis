@@ -46,7 +46,7 @@ export class MapEditController {
   private state: EditState = {
     mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0,
   };
-  private listener: ((s: EditState) => void) | undefined;
+  private readonly listeners = new Set<(s: EditState) => void>();
 
   /** Invoked after each completed draw so the UI can collect attributes. */
   onDrawEnd: ((feature: Feature) => void) | undefined;
@@ -62,9 +62,14 @@ export class MapEditController {
     this.source = getSurfaceFeatureSource();
   }
 
-  subscribe(listener: (s: EditState) => void): void {
-    this.listener = listener;
-    this.emit();
+  /** Registers a state listener; it is called immediately with the current snapshot. */
+  subscribe(listener: (s: EditState) => void): () => void {
+    this.listeners.add(listener);
+    this.refreshState();
+    listener(this.state);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   getPendingEdits(): PendingEdits {
@@ -141,7 +146,7 @@ export class MapEditController {
 
   dispose(): void {
     this.detachInteractions();
-    this.listener = undefined;
+    this.listeners.clear();
     this.onDrawEnd = undefined;
     this.onPointPlaced = undefined;
   }
@@ -275,14 +280,20 @@ export class MapEditController {
     this.emit();
   }
 
-  private emit(): void {
+  private refreshState(): void {
     this.state = {
       ...this.state,
       canUndo: this.undoStack.length > 0,
       canRedo: this.redoStack.length > 0,
       dirty: this.createdFeatures.length + this.modifiedGeometries.size,
     };
-    this.listener?.(this.state);
+  }
+
+  private emit(): void {
+    this.refreshState();
+    for (const listener of this.listeners) {
+      listener(this.state);
+    }
   }
 }
 

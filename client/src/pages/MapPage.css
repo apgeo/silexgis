@@ -25,6 +25,44 @@
   background: #e8ecef;
 }
 
+/* Shared treatment for on-canvas chrome: translucent panels the map shows through. */
+.map-chrome {
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* One-button chrome hide: only dock toggles, the toggle itself and attribution stay. */
+.map-chrome-hidden .map-search-overlay,
+.map-chrome-hidden .map-edit-overlay,
+.map-chrome-hidden .map-scale-overlay,
+.map-chrome-hidden .map-popout-overlay,
+.map-chrome-hidden .bg-layer-chooser {
+  display: none;
+}
+
+.map-chrome-toggle {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 7;
+  opacity: 0.85;
+}
+
+.map-chrome-toggle:hover {
+  opacity: 1;
+}
+
+/* Unsaved edits stay visible even with the edit toolbar hidden. */
+.map-dirty-pill {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+}
+
 .map-search-overlay {
   position: absolute;
   top: 12px;
@@ -39,9 +77,6 @@
   transform: translateX(-50%);
   z-index: 5;
   padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.94);
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .map-hover-tooltip {
@@ -54,10 +89,11 @@
   white-space: nowrap;
 }
 
+/* Sits left of the chrome-visibility toggle pinned at the corner. */
 .map-popout-overlay {
   position: absolute;
   top: 12px;
-  right: 12px;
+  right: 48px;
   z-index: 5;
   display: flex;
   gap: 6px;
@@ -106,7 +142,14 @@
   margin-top: 4px;
 }
 
+.feature-palette-item-wrap {
+  position: relative;
+  display: flex;
+}
+
 .feature-palette-item {
+  flex: 1;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -116,6 +159,30 @@
   border-radius: 6px;
   background: transparent;
   cursor: pointer;
+}
+
+/* Pushpin toggle in the item corner; revealed on hover, always shown when pinned. */
+.feature-palette-pin {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+}
+
+.feature-palette-item-wrap:hover .feature-palette-pin,
+.feature-palette-pin:focus-visible,
+.feature-palette-pin.is-pinned {
+  opacity: 1;
+}
+
+.feature-palette-pin.is-pinned {
+  color: #1677ff;
 }
 
 .feature-palette-item:hover {

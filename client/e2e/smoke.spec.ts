@@ -197,6 +197,53 @@ test('surface feature draw, attributes, selection and table round-trip', async (
   await expect(page.getByText(featureName)).not.toBeVisible();
 });
 
+test('pinned feature-type shortcuts and the map chrome toggle', async ({ page }) => {
+  await login(page);
+
+  const toolbar = page.locator('.map-edit-overlay');
+  await expect(toolbar).toBeVisible();
+  const paletteTrigger = toolbar.getByTestId('feature-palette-trigger');
+
+  // Pin a type from the palette: a one-click arm shortcut appears on the toolbar.
+  await paletteTrigger.click();
+  const paletteItem = page.locator('.feature-palette-item-wrap').filter({ hasText: 'Sinkhole / Doline' });
+  await paletteItem.hover();
+  await paletteItem.getByRole('button', { name: 'Pin to toolbar' }).click();
+  await paletteTrigger.click(); // close the palette
+
+  const shortcut = toolbar.locator('[data-testid^="pinned-type-"]');
+  await expect(shortcut).toBeVisible();
+
+  // The shortcut arms drawing for its type in one click.
+  await shortcut.click();
+  await expect(shortcut).toHaveClass(/ant-btn-primary/);
+
+  // Draw a point so there is a pending edit, then dismiss the attribute dialog.
+  await page.locator('.map-canvas').click({ position: { x: 400, y: 240 } });
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByText('New surface feature')).toBeVisible();
+  await modal.getByRole('button', { name: 'Cancel' }).click();
+
+  // Hiding the chrome hides the on-canvas toolbars but keeps the unsaved-edits pill.
+  await page.getByTestId('map-chrome-toggle').click();
+  await expect(toolbar).toBeHidden();
+  await expect(page.locator('.map-search-overlay')).toBeHidden();
+  const pill = page.getByTestId('map-dirty-pill');
+  await expect(pill).toBeVisible();
+
+  // The pill brings the chrome (and with it Save/Discard) back.
+  await pill.click();
+  await expect(toolbar).toBeVisible();
+
+  // Cleanup: discard the pending edit; unpinning removes the shortcut.
+  await toolbar.getByRole('button', { name: 'close' }).click();
+  await paletteTrigger.click();
+  await paletteItem.hover();
+  await paletteItem.getByRole('button', { name: 'Unpin from toolbar' }).click();
+  await paletteTrigger.click();
+  await expect(shortcut).toHaveCount(0);
+});
+
 test('cave photo attachment round-trip', async ({ page }) => {
   await login(page);
 

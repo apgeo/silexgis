@@ -31,9 +31,10 @@ import {
   type EditState,
   type PlacementMode,
 } from '../../map/mapEdit.ts';
+import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 import CaveAddModal from './CaveAddModal.tsx';
-import FeaturePalette from './FeaturePalette.tsx';
+import FeaturePalette, { FeatureSymbol } from './FeaturePalette.tsx';
 
 interface EditToolbarProps {
   controller: MapEditController;
@@ -45,6 +46,9 @@ const shapeForKind: Record<string, DrawShape | null> = {
   polygon: 'Polygon',
   any: null, // user picks the shape explicitly
 };
+
+/** Pinned shortcuts beyond this many stay reachable through the palette only. */
+const MAX_PINNED_BUTTONS = 8;
 
 /** Dispatches edit intents to the MapEditController; owns no OL objects itself. */
 export default function EditToolbar({ controller }: EditToolbarProps) {
@@ -76,9 +80,25 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
     };
   }, [controller]);
 
+  const pinnedTypeIds = useUiPrefsStore((s) => s.pinnedTypeIds);
+  const pinnedTypes = pinnedTypeIds
+    .map((id) => featureTypes?.find((ft) => Number(ft.id) === id))
+    .filter((ft) => ft !== undefined)
+    .slice(0, MAX_PINNED_BUTTONS);
+
   const selectedType = featureTypes?.find((ft) => Number(ft.id) === typeId);
   const kind = (selectedType?.geometryKind ?? 'point').toString().toLowerCase();
   const fixedShape = shapeForKind[kind] ?? 'Point';
+
+  // Picking a symbol (palette or pinned shortcut) arms drawing immediately
+  // (reference-software behavior), with the shape implied by the geometry kind.
+  const armType = (id: number) => {
+    setTypeId(id);
+    setMeasure(null);
+    const picked = featureTypes?.find((ft) => Number(ft.id) === id);
+    const pickedKind = (picked?.geometryKind ?? 'point').toString().toLowerCase();
+    controller.setMode('draw', shapeForKind[pickedKind] ?? 'Point', id);
+  };
 
   const setMode = (mode: EditMode, shape?: DrawShape) => {
     setMeasure(null);
@@ -144,19 +164,22 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
 
   return (
     <Space size={4} wrap>
-      <FeaturePalette
-        featureTypes={featureTypes ?? []}
-        value={typeId}
-        onChange={(id) => {
-          setTypeId(id);
-          setMeasure(null);
-          // Picking a symbol arms drawing immediately (reference-software behavior),
-          // with the shape implied by the type's geometry kind.
-          const picked = featureTypes?.find((ft) => Number(ft.id) === id);
-          const pickedKind = (picked?.geometryKind ?? 'point').toString().toLowerCase();
-          controller.setMode('draw', shapeForKind[pickedKind] ?? 'Point', id);
-        }}
-      />
+      <FeaturePalette featureTypes={featureTypes ?? []} value={typeId} onChange={armType} />
+      {pinnedTypes.map((ft) => {
+        const id = Number(ft.id);
+        return (
+          <Tooltip key={id} title={ft.name}>
+            <Button
+              size="small"
+              type={state.mode === 'draw' && typeId === id ? 'primary' : 'default'}
+              icon={<FeatureSymbol type={ft} size={16} />}
+              aria-label={ft.name}
+              data-testid={`pinned-type-${id}`}
+              onClick={() => armType(id)}
+            />
+          </Tooltip>
+        );
+      })}
       <Tooltip title={t('mapEdit.draw')}>
         <Button
           size="small"

@@ -10,6 +10,8 @@ import {
   BorderVerticleOutlined,
   CodeSandboxOutlined,
   ExportOutlined,
+  EyeInvisibleOutlined,
+  EyeOutlined,
   LeftOutlined,
   RightOutlined,
 } from '@ant-design/icons';
@@ -56,6 +58,7 @@ import {
 } from '../map/mapContext.ts';
 import { MapEditController } from '../map/mapEdit.ts';
 import { attachSelection } from '../map/selection.ts';
+import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import './MapPage.css';
 
@@ -98,6 +101,13 @@ export default function MapPage() {
     [rasterPage],
   );
   const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
+  const mapChromeHidden = useUiPrefsStore((s) => s.mapChromeHidden);
+  const setMapChromeHidden = useUiPrefsStore((s) => s.setMapChromeHidden);
+
+  // Unsaved-edit count mirrored out of the edit controller so the dirty guard pill
+  // can warn even while the edit toolbar is hidden with the rest of the chrome.
+  const [editDirty, setEditDirty] = useState(0);
+  useEffect(() => editController?.subscribe((s) => setEditDirty(s.dirty)), [editController]);
 
   useEffect(() => {
     const map = getWorkspaceMap();
@@ -455,11 +465,32 @@ export default function MapPage() {
       </Panel>
       <Separator className="map-workspace-handle" />
       <Panel minSize="30%">
-        <div className="map-canvas-wrap">
+        <div className={`map-canvas-wrap${mapChromeHidden ? ' map-chrome-hidden' : ''}`}>
           <div ref={mapTarget} className="map-canvas" data-testid="map-canvas" />
-          <div className="map-search-overlay">
+          <div className="map-search-overlay map-chrome">
             <MapSearch />
           </div>
+          <Tooltip title={mapChromeHidden ? t('map.showChrome') : t('map.hideChrome')} placement="left">
+            <Button
+              className="map-chrome-toggle"
+              size="small"
+              aria-label={mapChromeHidden ? t('map.showChrome') : t('map.hideChrome')}
+              icon={mapChromeHidden ? <EyeOutlined /> : <EyeInvisibleOutlined />}
+              onClick={() => setMapChromeHidden(!mapChromeHidden)}
+              data-testid="map-chrome-toggle"
+            />
+          </Tooltip>
+          {mapChromeHidden && editDirty > 0 && (
+            <Button
+              className="map-dirty-pill"
+              size="small"
+              type="primary"
+              onClick={() => setMapChromeHidden(false)}
+              data-testid="map-dirty-pill"
+            >
+              {t('map.unsavedEdits', { count: editDirty })}
+            </Button>
+          )}
           <Tooltip title={leftCollapsed ? t('map.showPanel') : t('map.hidePanel')} placement="right">
             <Button
               className="map-dock-toggle map-dock-toggle-left"
@@ -489,7 +520,7 @@ export default function MapPage() {
               buttonTooltip={t('map.changeBaseLayer')}
             />
           )}
-          <div className="map-scale-overlay">
+          <div className="map-scale-overlay map-chrome">
             <ScaleCombo syncWithMap size="small" style={{ width: 128 }} />
           </div>
           {swipeActive && (
@@ -500,7 +531,7 @@ export default function MapPage() {
               data-testid="raster-swipe-handle"
             />
           )}
-          <div className="map-popout-overlay">
+          <div className="map-popout-overlay map-chrome">
             {visibleRasterIds.length > 0 && (
               <Tooltip title={t('map.swipeCompare')}>
                 <Button
@@ -538,7 +569,7 @@ export default function MapPage() {
             </Tooltip>
           </div>
           {canEdit && editController && (
-            <div className="map-edit-overlay">
+            <div className="map-edit-overlay map-chrome">
               <EditToolbar controller={editController} />
             </div>
           )}

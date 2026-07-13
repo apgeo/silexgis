@@ -3,11 +3,15 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { FeatureType } from '../../api/hooks.ts';
+import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import FeaturePalette from './FeaturePalette.tsx';
 
 // This project runs Vitest without `globals`, so RTL's auto-cleanup is not
 // registered; each Popover renders into document.body, so clean up explicitly.
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  useUiPrefsStore.setState({ pinnedTypeIds: [] });
+});
 
 function makeType(over: Partial<FeatureType> & Pick<FeatureType, 'id' | 'name' | 'geometryKind'>): FeatureType {
   return {
@@ -47,5 +51,20 @@ describe('FeaturePalette', () => {
   it('renders the selected type with its name in the trigger', () => {
     render(<FeaturePalette featureTypes={types} value={2} onChange={() => {}} />);
     expect(screen.getByText('Fault')).toBeInTheDocument();
+  });
+
+  it('toggles a pin without arming the type', () => {
+    const onChange = vi.fn();
+    render(<FeaturePalette featureTypes={types} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Feature type/ }));
+    fireEvent.click(screen.getByTestId('palette-pin-1'));
+
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([1]);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByTestId('palette-pin-1')).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByTestId('palette-pin-1'));
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([]);
   });
 });

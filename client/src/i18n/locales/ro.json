@@ -67,7 +67,10 @@
     "clusterTitle": "{{count}} intrări în această zonă",
     "zoomHere": "Apropie aici",
     "approximateShort": "aprox.",
-    "swipeCompare": "Compară rasterul cu harta de dedesubt (glisor)"
+    "swipeCompare": "Compară rasterul cu harta de dedesubt (glisor)",
+    "hideChrome": "Ascunde barele de instrumente ale hărții",
+    "showChrome": "Arată barele de instrumente ale hărții",
+    "unsavedEdits": "{{count}} modificări nesalvate"
   },
   "caves": {
     "title": "Peșteri",
@@ -250,6 +253,8 @@
     "continueLine": "Clic pentru a continua linia — dublu-clic pentru a încheia",
     "continueArea": "Clic pentru a continua suprafața — dublu-clic pentru a încheia",
     "pickFeatureType": "Alege un tip de fenomen",
+    "pinType": "Fixează în bara de instrumente",
+    "unpinType": "Scoate din bara de instrumente",
     "newCaveHere": "Peșteră nouă aici (clic pe hartă)",
     "newEntranceHere": "Intrare nouă aici (clic pe hartă)",
     "entranceType": "Tip intrare",
