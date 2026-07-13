@@ -101,6 +101,7 @@ export default function MapPage() {
   const setOverlayOpacity = useWorkspaceStore((s) => s.setOverlayOpacity);
   const baseOpacity = useWorkspaceStore((s) => s.baseOpacity);
   const setBaseOpacity = useWorkspaceStore((s) => s.setBaseOpacity);
+  const resetBaseOpacity = useWorkspaceStore((s) => s.resetBaseOpacity);
   const { data: rasterPage } = useRasterMaps({ pageSize: 100 });
   const readyRasters = useMemo(
     () => (rasterPage?.items ?? []).filter((r) => r.status === 'ready'),
@@ -456,10 +457,11 @@ export default function MapPage() {
     for (const [key, value] of Object.entries(ui.overlayOpacity)) {
       setOverlayOpacity(key, value);
     }
-    // Base opacity keys are catalog ids (serialized as strings in JSON).
-    for (const [key, value] of Object.entries(ui.baseOpacity)) {
-      setBaseOpacity(Number(key), value);
-    }
+    // Restore base opacity as a full replacement, not a merge: a base the view does not
+    // mention reverts to opaque (its `?? 1` default), so applying a view can't leave an
+    // earlier manual dim in place. Keys are catalog ids (JSON-serialized as strings), which
+    // the numeric-id consumers coerce back on lookup.
+    resetBaseOpacity(ui.baseOpacity);
     setTagFilter(ui.tagFilter);
     setMapTagFilter(ui.tagFilter);
     reloadEntrances();

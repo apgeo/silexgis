@@ -57,6 +57,12 @@ interface WorkspaceState {
    */
   baseOpacity: Record<number, number>;
   setBaseOpacity: (id: number, opacity: number) => void;
+  /**
+   * Replaces the whole base-opacity map at once — used when restoring a saved view, so a
+   * base the view doesn't mention reverts to opaque instead of keeping an earlier manual
+   * dim (a plain per-key merge would leave stale values in place).
+   */
+  resetBaseOpacity: (opacities: Record<number, number>) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
@@ -85,4 +91,5 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   baseOpacity: {},
   setBaseOpacity: (id, opacity) =>
     set((state) => ({ baseOpacity: { ...state.baseOpacity, [id]: opacity } })),
+  resetBaseOpacity: (opacities) => set({ baseOpacity: opacities }),
 }));
