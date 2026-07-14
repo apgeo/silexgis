@@ -18,7 +18,7 @@ public enum SurveyModelFormat : short
 /// location-protected caves the whole record (and its file URL) is withheld from callers
 /// without the exact-location permission.
 /// </summary>
-public class SurveyModel : ITimestamped, IAuditable
+public class SurveyModel : ITimestamped, IAuditable, IAuditChild
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
@@ -39,4 +39,9 @@ public class SurveyModel : ITimestamped, IAuditable
     public DateTimeOffset UpdatedAt { get; set; }
 
     public string AuditId => Id.ToString();
+
+    // Survey models surface in their cave's timeline.
+    public string RootEntityType => nameof(Cave);
+
+    public string RootEntityId => CaveId.ToString();
 }

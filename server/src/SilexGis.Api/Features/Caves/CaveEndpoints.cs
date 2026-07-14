@@ -197,7 +197,21 @@ public static class CaveEndpoints
             return ApiProblems.Forbidden("cave.team_membership_required");
         }
 
+        // Write-path protection guard: a caller who cannot view the exact location only ever
+        // saw obfuscated values (null address/registry/notes), so ignore any change they submit
+        // to those fields — a full-replace PUT would otherwise write the obfuscated echo back
+        // over the real data. Keyed off the stored protection state (what they read via GET).
+        var canViewExact = await permissions.CanAsync(user, cave, ObjectPermission.ViewExactLocation, ct);
+        var wasProtected = cave.LocationProtected;
+        var preserved = (cave.ClosestAddress, cave.LandRegistryNumber, cave.LocationNotes);
+
         request.Apply(cave);
+
+        if (wasProtected && !canViewExact)
+        {
+            (cave.ClosestAddress, cave.LandRegistryNumber, cave.LocationNotes) = preserved;
+        }
+
         await db.SaveChangesAsync(ct);
         await Concurrency.EmitETagAsync(http, db, VersionedTable.Caves, cave.Id, ct);
         return TypedResults.Ok(cave.ToDto(user, access.Value.LocationGridMeters));

@@ -16,6 +16,7 @@ using SilexGis.Api.Features.Export;
 using SilexGis.Api.Features.Files;
 using SilexGis.Api.Features.Geofiles;
 using SilexGis.Api.Features.GeoreferencedMaps;
+using SilexGis.Api.Features.History;
 using SilexGis.Api.Features.Jobs;
 using SilexGis.Api.Features.Map;
 using SilexGis.Api.Features.MapViews;
@@ -158,6 +159,7 @@ try
     api.MapTripLogEndpoints();
     api.MapTagEndpoints();
     api.MapAuditEndpoints();
+    api.MapHistoryEndpoints();
     api.MapObjectAclEndpoints();
     api.MapTeamEndpoints();
     api.MapUserEndpoints();

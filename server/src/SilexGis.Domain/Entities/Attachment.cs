@@ -29,6 +29,28 @@ public static class ProtectedEntityTypes
     };
 }
 
+/// <summary>Helpers over <see cref="AttachedEntityType"/>.</summary>
+public static class AttachedEntityTypes
+{
+    /// <summary>
+    /// CLR type name of the discriminated entity — matches the string the audit trail
+    /// stores in <c>entity_type</c> (and history queries filter on), so a polymorphic
+    /// child (attachment/tagging) can name its parent's audit root.
+    /// </summary>
+    public static string ClrName(AttachedEntityType type) => type switch
+    {
+        AttachedEntityType.Cave => nameof(AttachedEntityType.Cave),
+        AttachedEntityType.CaveEntrance => nameof(AttachedEntityType.CaveEntrance),
+        AttachedEntityType.SurfaceFeature => nameof(AttachedEntityType.SurfaceFeature),
+        AttachedEntityType.TripLog => nameof(AttachedEntityType.TripLog),
+        AttachedEntityType.Team => nameof(AttachedEntityType.Team),
+        AttachedEntityType.Geofile => nameof(AttachedEntityType.Geofile),
+        AttachedEntityType.GeoreferencedMap => nameof(AttachedEntityType.GeoreferencedMap),
+        AttachedEntityType.MapView => nameof(AttachedEntityType.MapView),
+        _ => type.ToString(),
+    };
+}
+
 /// <summary>Semantic role of an attached file. Stored as smallint.</summary>
 public enum AttachmentRole : short
 {
@@ -47,7 +69,7 @@ public enum AttachmentRole : short
 /// where that lookup starts. The owning entity's slice deletes its attachments in the
 /// same transaction as the entity (no FK to the polymorphic target).
 /// </summary>
-public class Attachment : ITimestamped, IAuditable
+public class Attachment : ITimestamped, IAuditable, IAuditChild
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
@@ -70,4 +92,9 @@ public class Attachment : ITimestamped, IAuditable
     public DateTimeOffset UpdatedAt { get; set; }
 
     public string AuditId => Id.ToString();
+
+    // Attachments surface in the timeline of whatever they are attached to.
+    public string RootEntityType => AttachedEntityTypes.ClrName(EntityType);
+
+    public string RootEntityId => EntityId.ToString();
 }

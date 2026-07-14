@@ -50,7 +50,7 @@ public class Tag : ITimestamped, IAuditable
 /// Polymorphic tag assignment; unique per (tag, entity). Visibility of a tagging
 /// follows the tagged entity — tags themselves are installation-public.
 /// </summary>
-public class Tagging
+public class Tagging : IAuditable, IAuditChild
 {
     public long Id { get; set; }
 
@@ -61,4 +61,11 @@ public class Tagging
     public Guid EntityId { get; set; }
 
     public Guid? AddedBy { get; set; }
+
+    public string AuditId => Id.ToString();
+
+    // A tagging surfaces in the timeline of whatever it tags.
+    public string RootEntityType => AttachedEntityTypes.ClrName(EntityType);
+
+    public string RootEntityId => EntityId.ToString();
 }

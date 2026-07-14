@@ -7,7 +7,7 @@ namespace SilexGis.Domain.Entities;
 /// An entrance of a cave. Inherits the cave's access control —
 /// no own RLS columns. Geometry is a 2D point; altitude is the dedicated column.
 /// </summary>
-public class CaveEntrance : ITimestamped, IAuditable
+public class CaveEntrance : ITimestamped, IAuditable, IAuditChild
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
@@ -34,4 +34,9 @@ public class CaveEntrance : ITimestamped, IAuditable
     public DateTimeOffset UpdatedAt { get; set; }
 
     public string AuditId => Id.ToString();
+
+    // Entrances surface in their cave's timeline.
+    public string RootEntityType => nameof(Cave);
+
+    public string RootEntityId => CaveId.ToString();
 }

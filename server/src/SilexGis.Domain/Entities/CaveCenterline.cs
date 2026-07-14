@@ -19,7 +19,7 @@ public enum CenterlineSource : short
 /// cave's exact position underground, so for location-protected caves they are withheld
 /// entirely from callers without the exact-location permission.
 /// </summary>
-public class CaveCenterline : ITimestamped, IAuditable
+public class CaveCenterline : ITimestamped, IAuditable, IAuditChild
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
@@ -43,4 +43,9 @@ public class CaveCenterline : ITimestamped, IAuditable
     public DateTimeOffset UpdatedAt { get; set; }
 
     public string AuditId => Id.ToString();
+
+    // Centerlines surface in their cave's timeline.
+    public string RootEntityType => nameof(Cave);
+
+    public string RootEntityId => CaveId.ToString();
 }

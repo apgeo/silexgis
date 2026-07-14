@@ -13,8 +13,16 @@ public sealed class AuditEntryConfiguration : IEntityTypeConfiguration<AuditEntr
         builder.Property(x => x.Action).HasMaxLength(50);
         builder.Property(x => x.EntityType).HasMaxLength(100);
         builder.Property(x => x.EntityId).HasMaxLength(50);
+        builder.Property(x => x.RootEntityType).HasMaxLength(100);
+        builder.Property(x => x.RootEntityId).HasMaxLength(50);
         builder.Property(x => x.Changes).HasColumnType("jsonb");
         builder.HasIndex(x => new { x.EntityType, x.EntityId });
         builder.HasIndex(x => x.At);
+
+        // Parent-timeline lookups scan (root_entity_type, root_entity_id) newest-first; the
+        // partial filter keeps the index to child rows only (the majority carry no root).
+        builder.HasIndex(x => new { x.RootEntityType, x.RootEntityId, x.Id })
+            .HasFilter("root_entity_type IS NOT NULL")
+            .IsDescending(false, false, true);
     }
 }

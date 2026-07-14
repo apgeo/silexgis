@@ -56,7 +56,9 @@ public sealed class AuditInterceptor(ICurrentUser currentUser) : SaveChangesInte
                 Action = action,
                 EntityType = entry.Metadata.ClrType.Name,
                 EntityId = entry.Entity.AuditId,
-                Changes = action == AuditActions.Updated ? SerializeDiff(entry) : null,
+                RootEntityType = (entry.Entity as IAuditChild)?.RootEntityType,
+                RootEntityId = (entry.Entity as IAuditChild)?.RootEntityId,
+                Changes = SerializeChanges(entry, action),
             });
         }
 
@@ -66,16 +68,30 @@ public sealed class AuditInterceptor(ICurrentUser currentUser) : SaveChangesInte
         }
     }
 
-    private static string? SerializeDiff(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
+    // Update rows carry the modified props; created/deleted rows snapshot the whole entity so
+    // "attachment added" / "entrance deleted" events are informative and delete forensics
+    // survive. The primary key is skipped (it is the audit row's EntityId already, and would
+    // be a temporary value for store-generated keys captured before insert).
+    private static string? SerializeChanges(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry, string action)
     {
-        var diff = entry.Properties
-            .Where(p => p.IsModified)
-            .ToDictionary(
-                p => p.Metadata.Name,
-                p => new { old = Plain(p.OriginalValue), @new = Plain(p.CurrentValue) });
+        var scalars = entry.Properties.Where(p => !p.Metadata.IsPrimaryKey());
+        var diff = action switch
+        {
+            AuditActions.Updated => scalars.Where(p => p.IsModified)
+                .ToDictionary(p => p.Metadata.Name, p => Pair(p.OriginalValue, p.CurrentValue)),
+            AuditActions.Created => scalars.Where(p => p.CurrentValue is not null)
+                .ToDictionary(p => p.Metadata.Name, p => Pair(null, p.CurrentValue)),
+            AuditActions.Deleted => scalars.Where(p => p.OriginalValue is not null)
+                .ToDictionary(p => p.Metadata.Name, p => Pair(p.OriginalValue, null)),
+            _ => new Dictionary<string, Dictionary<string, object?>>(),
+        };
 
         return diff.Count == 0 ? null : JsonSerializer.Serialize(diff);
     }
+
+    private static Dictionary<string, object?> Pair(object? oldValue, object? newValue) =>
+        new() { ["old"] = Plain(oldValue), ["new"] = Plain(newValue) };
 
     // Geometry (and anything else STJ can't represent) is stored as text in the diff.
     private static object? Plain(object? value) => value switch

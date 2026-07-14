@@ -174,8 +174,23 @@ public static class EntranceEndpoints
             return stale;
         }
 
+        // Write-path protection guard (same rationale as caves): an editor without
+        // exact-location access sees only snapped coordinates and null altitude, so a normal
+        // save must not overwrite the precise stored values with that obfuscated echo.
+        var canViewExact = await permissions.CanAsync(user, cave, ObjectPermission.ViewExactLocation, ct);
+        var preservedGeom = entrance.Geom;
+        var preservedAltitude = entrance.Altitude;
+        var preservedQuality = entrance.PositionQuality;
+
         Apply(request, entrance);
         entrance.Geom = request.Geom.ToPoint();
+
+        if (cave.LocationProtected && !canViewExact)
+        {
+            entrance.Geom = preservedGeom;
+            entrance.Altitude = preservedAltitude;
+            entrance.PositionQuality = preservedQuality;
+        }
 
         await RecomputeDerivedAsync(db, cave, ct);
         await db.SaveChangesAsync(ct);

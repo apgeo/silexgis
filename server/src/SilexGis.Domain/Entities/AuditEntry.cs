@@ -22,6 +22,15 @@ public class AuditEntry
 
     public string? EntityId { get; set; }
 
+    /// <summary>
+    /// CLR type + key of the entity whose timeline this row also belongs to (a child's
+    /// parent, e.g. an entrance's cave). Null for root entities and legacy rows. Lets a
+    /// parent's history query pick up its children's changes.
+    /// </summary>
+    public string? RootEntityType { get; set; }
+
+    public string? RootEntityId { get; set; }
+
     /// <summary>Changed properties as JSON: { "prop": { "old": …, "new": … } } (jsonb).</summary>
     public string? Changes { get; set; }
 
