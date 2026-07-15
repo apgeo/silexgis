@@ -37,6 +37,23 @@ public sealed class AttachmentCreateRequestValidator : AbstractValidator<Attachm
         RuleFor(x => x.EntityId).NotEmpty();
         RuleFor(x => x.Caption).MaximumLength(500);
         RuleFor(x => x.EntityType).IsInEnum();
+        // A file is never an attachment target (it is only a tag target). Allowing it would let a
+        // file be attached to a file, and the polymorphic access resolver would then recurse
+        // file → attachment → file without bound. Tags travel a separate table, so are unaffected.
+        RuleFor(x => x.EntityType).NotEqual(AttachedEntityType.StoredFile)
+            .WithMessage("Files cannot be attachment targets.");
+        RuleFor(x => x.Role).IsInEnum();
+    }
+}
+
+/// <summary>Editable attachment metadata; the file and its target entity are fixed at creation.</summary>
+public sealed record AttachmentUpdateRequest(AttachmentRole Role, string? Caption, int SortOrder);
+
+public sealed class AttachmentUpdateRequestValidator : AbstractValidator<AttachmentUpdateRequest>
+{
+    public AttachmentUpdateRequestValidator()
+    {
+        RuleFor(x => x.Caption).MaximumLength(500);
         RuleFor(x => x.Role).IsInEnum();
     }
 }
@@ -51,6 +68,8 @@ public static class AttachmentEndpoints
             .WithSummary("Attachments of one entity, ordered; requires Read on the entity.");
         attachments.MapPost("/", CreateAsync).WithValidation<AttachmentCreateRequest>()
             .WithSummary("Attaches an uploaded file to an entity; requires Write on the entity.");
+        attachments.MapPut("/{id:guid}", UpdateAsync).WithValidation<AttachmentUpdateRequest>()
+            .WithSummary("Edits an attachment's role/caption/order; requires Write on the entity.");
         attachments.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Detaches a file (the file itself is kept); requires Write on the entity.");
 
@@ -133,6 +152,42 @@ public static class AttachmentEndpoints
         await db.SaveChangesAsync(ct);
 
         return TypedResults.Created($"/api/v1/attachments/{attachment.Id}", attachment.ToDto(file, tokens));
+    }
+
+    private static async Task<Results<Ok<AttachmentDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
+        Guid id,
+        AttachmentUpdateRequest request,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var user = await userAccessor.GetAsync(ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var attachment = await db.Attachments.FirstOrDefaultAsync(a => a.Id == id, ct);
+        if (attachment is null)
+        {
+            return ApiProblems.NotFound("attachment.not_found");
+        }
+
+        if (!await FileAccessRules.CanWriteEntityAsync(db, user, attachment.EntityType, attachment.EntityId, ct))
+        {
+            return await FileAccessRules.CanReadEntityAsync(db, user, attachment.EntityType, attachment.EntityId, ct)
+                ? ApiProblems.Forbidden()
+                : ApiProblems.NotFound("attachment.not_found");
+        }
+
+        attachment.Role = request.Role;
+        attachment.Caption = request.Caption;
+        attachment.SortOrder = request.SortOrder;
+        await db.SaveChangesAsync(ct);
+
+        var file = await db.StoredFiles.AsNoTracking().FirstAsync(f => f.Id == attachment.FileId, ct);
+        return TypedResults.Ok(attachment.ToDto(file, tokens));
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(

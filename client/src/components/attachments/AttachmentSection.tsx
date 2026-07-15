@@ -10,18 +10,14 @@ import {
   type AttachedEntityType,
   type AttachmentInfo,
 } from '../../api/hooks.ts';
+import AttachmentDetails from './AttachmentDetails.tsx';
+import FileVersions from './FileVersions.tsx';
+import { formatSize } from './fileFormat.ts';
 
 interface AttachmentSectionProps {
   entityType: AttachedEntityType;
   entityId: string;
   canEdit: boolean;
-}
-
-function formatSize(bytes: number): string {
-  if (bytes >= 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 /**
@@ -110,15 +106,23 @@ export default function AttachmentSection({ entityType, entityId, canEdit }: Att
                     <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis>
                       {attachment.caption ?? attachment.file.originalName}
                     </Typography.Text>
-                    {canEdit && (
-                      <Popconfirm
-                        title={t('attachments.deleteConfirm')}
-                        onConfirm={() => void onDelete(attachment)}
-                        okButtonProps={{ danger: true }}
-                      >
-                        <Button size="small" type="text" danger icon={<DeleteOutlined />} />
-                      </Popconfirm>
-                    )}
+                    <Flex align="center">
+                      {canEdit && <AttachmentDetails attachment={attachment} />}
+                      <FileVersions
+                        fileId={attachment.file.id}
+                        versionNumber={attachment.file.versionNumber}
+                        canEdit={canEdit}
+                      />
+                      {canEdit && (
+                        <Popconfirm
+                          title={t('attachments.deleteConfirm')}
+                          onConfirm={() => void onDelete(attachment)}
+                          okButtonProps={{ danger: true }}
+                        >
+                          <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                        </Popconfirm>
+                      )}
+                    </Flex>
                   </Flex>
                 </figure>
               ))}
@@ -136,6 +140,13 @@ export default function AttachmentSection({ entityType, entityId, canEdit }: Att
             renderItem={(attachment) => (
               <List.Item
                 actions={[
+                  ...(canEdit ? [<AttachmentDetails key="details" attachment={attachment} />] : []),
+                  <FileVersions
+                    key="versions"
+                    fileId={attachment.file.id}
+                    versionNumber={attachment.file.versionNumber}
+                    canEdit={canEdit}
+                  />,
                   <Button
                     key="download"
                     size="small"
@@ -160,7 +171,13 @@ export default function AttachmentSection({ entityType, entityId, canEdit }: Att
                 <List.Item.Meta
                   avatar={<FileOutlined />}
                   title={attachment.caption ?? attachment.file.originalName}
-                  description={`${attachment.file.originalName} · ${formatSize(attachment.file.sizeBytes)}`}
+                  description={[
+                    attachment.file.originalName,
+                    formatSize(attachment.file.sizeBytes),
+                    attachment.file.documentDate,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 />
               </List.Item>
             )}

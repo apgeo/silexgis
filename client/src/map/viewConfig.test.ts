@@ -8,6 +8,7 @@ const baseUi: Omit<WorkspaceUiState, 'overlayOrder'> = {
   surfaceFeaturesVisible: false,
   centerlinesVisible: true,
   heatmapVisible: true,
+  photosVisible: false,
   geofileIds: [],
   rasters: [],
   tagFilter: null,

@@ -42,6 +42,8 @@ import {
 } from '../map/featureLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID, createEntranceHeatmapLayer } from '../map/heatmapLayer.ts';
 import { GEOFILE_LAYER_PREFIX, attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
+import { PHOTO_LAYER_ID, attachPhotoLoader, createPhotoLayer, setPhotosEnabled } from '../map/photoLayer.ts';
+import { attachPhotoPopup } from '../map/photoPopup.ts';
 import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import { subscribe } from '../workspace/workspaceBus.ts';
@@ -83,6 +85,7 @@ export default function MapPage() {
   const [surfaceFeaturesVisible, setSurfaceFeaturesVisible] = useState(true);
   const [centerlinesVisible, setCenterlinesVisible] = useState(true);
   const [heatmapVisible, setHeatmapVisible] = useState(false);
+  const [photosVisible, setPhotosVisible] = useState(false);
   const [editController, setEditController] = useState<MapEditController | null>(null);
   const selection = useWorkspaceStore((s) => s.selection);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
@@ -131,6 +134,7 @@ export default function MapPage() {
       [SURFACE_FEATURE_LAYER_ID, createSurfaceFeatureLayer],
       [ENTRANCE_LAYER_ID, createEntranceLayer],
       [CENTERLINE_LAYER_ID, createCenterlineLayer],
+      [PHOTO_LAYER_ID, createPhotoLayer],
     ] as const) {
       if (!findOverlayLayer(id)) {
         getOverlayGroup().getLayers().push(create());
@@ -141,6 +145,8 @@ export default function MapPage() {
     const detachFeatureLoader = attachSurfaceFeatureLoader(map);
     const detachCenterlineLoader = attachCenterlineLoader(map);
     const detachGeofileLoader = attachGeofileLoader(map);
+    const detachPhotoLoader = attachPhotoLoader(map);
+    const detachPhotoPopup = attachPhotoPopup(map);
     const detachSelection = attachSelection(map, setSelection);
     const detachHover = attachHoverTooltip(map);
     const detachUrlHash = attachUrlHash(map);
@@ -156,6 +162,8 @@ export default function MapPage() {
       detachFeatureLoader();
       detachCenterlineLoader();
       detachGeofileLoader();
+      detachPhotoLoader();
+      detachPhotoPopup();
       detachSelection();
       detachHover();
       detachUrlHash();
@@ -340,6 +348,11 @@ export default function MapPage() {
     findOverlayLayer(ENTRANCE_HEATMAP_LAYER_ID)?.setVisible(heatmapVisible);
   }, [heatmapVisible]);
 
+  useEffect(() => {
+    findOverlayLayer(PHOTO_LAYER_ID)?.setVisible(photosVisible);
+    setPhotosEnabled(photosVisible); // gate the bbox loader so hidden = no fetches
+  }, [photosVisible]);
+
   // Checkbox toggles coming from the composer tree. Built-ins hide/show and are
   // reflected into page state (for saved views); geofile/raster overlays are
   // deactivated entirely — their layer is removed and the catalog checkbox clears.
@@ -353,6 +366,8 @@ export default function MapPage() {
       setCenterlinesVisible(visible);
     } else if (id === ENTRANCE_HEATMAP_LAYER_ID) {
       setHeatmapVisible(visible);
+    } else if (id === PHOTO_LAYER_ID) {
+      setPhotosVisible(visible);
     } else if (id?.startsWith(GEOFILE_LAYER_PREFIX)) {
       setGeofileVisible(id.slice(GEOFILE_LAYER_PREFIX.length), visible);
     } else if (id?.startsWith(RASTER_LAYER_PREFIX)) {
@@ -367,6 +382,7 @@ export default function MapPage() {
       surfaceFeaturesVisible,
       centerlinesVisible,
       heatmapVisible,
+      photosVisible,
       geofileIds: visibleGeofileIds,
       rasters: visibleRasterIds.map((id) => ({ id, opacity: rasterOpacity[id] })),
       tagFilter,
@@ -435,6 +451,7 @@ export default function MapPage() {
     setSurfaceFeaturesVisible(ui.surfaceFeaturesVisible);
     setCenterlinesVisible(ui.centerlinesVisible);
     setHeatmapVisible(ui.heatmapVisible);
+    setPhotosVisible(ui.photosVisible);
     for (const id of visibleGeofileIds) {
       if (!ui.geofileIds.includes(id)) {
         setGeofileVisible(id, false);

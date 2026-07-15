@@ -78,7 +78,8 @@
     "contextCopyCoords": "Copy coordinates",
     "coordsCopied": "Coordinates copied.",
     "heatmap": "Entrance heatmap",
-    "baseOpacity": "Opacity of {{name}}"
+    "baseOpacity": "Opacity of {{name}}",
+    "photos": "Geotagged photos"
   },
   "dialog": {
     "dockToSide": "Dock to the side of the map",
@@ -204,7 +205,25 @@
     "documents": "Documents",
     "uploadPrompt": "Click or drag photos and documents here to attach them",
     "deleteConfirm": "Remove this attachment? The file stays available to its uploader.",
-    "empty": "No photos or documents yet."
+    "empty": "No photos or documents yet.",
+    "versions": "Versions",
+    "uploadVersion": "Upload new version",
+    "currentVersion": "current",
+    "noVersions": "No versions yet.",
+    "deleteVersionConfirm": "Delete this version? Its content is removed permanently.",
+    "details": "Details",
+    "caption": "Caption",
+    "role": "Role",
+    "documentDate": "Document date",
+    "roles": {
+      "photoEntrance": "Entrance photo",
+      "photoInterior": "Interior photo",
+      "photoSurface": "Surface photo",
+      "document": "Document",
+      "map2d": "2D map",
+      "surveyData": "Survey data",
+      "other": "Other"
+    }
   },
   "geodata": {
     "title": "Geodata",
@@ -307,6 +326,45 @@
     "entityType": "Entity",
     "entityId": "Entity id",
     "entityTypePlaceholder": "Filter by entity type (e.g. Cave)…"
+  },
+  "history": {
+    "title": "History",
+    "empty": "No changes recorded yet.",
+    "hidden": "Value hidden (protected location)",
+    "systemUser": "System",
+    "restoreField": "Restore this value",
+    "restoreAll": "Restore all values from before this change",
+    "restored": "Value restored.",
+    "action": {
+      "created": "Created",
+      "updated": "Updated",
+      "deleted": "Deleted"
+    },
+    "entity": {
+      "Cave": "Cave",
+      "CaveEntrance": "Entrance",
+      "SurfaceFeature": "Surface feature",
+      "TripLog": "Trip report",
+      "CaveCenterline": "Centerline",
+      "SurveyModel": "Survey model",
+      "Attachment": "Attachment",
+      "Tagging": "Tag",
+      "TripLogCave": "Linked cave",
+      "TripLogParticipant": "Participant"
+    },
+    "field": {
+      "name": "Name",
+      "description": "Description",
+      "geom": "Location",
+      "altitude": "Altitude",
+      "positionQuality": "Position quality",
+      "closestAddress": "Closest address",
+      "landRegistryNumber": "Land registry number",
+      "locationNotes": "Location notes",
+      "caveId": "Linked cave",
+      "visibility": "Visibility",
+      "caption": "Caption"
+    }
   },
   "teams": {
     "title": "Teams",

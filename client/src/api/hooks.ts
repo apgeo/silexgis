@@ -30,6 +30,7 @@ export const queryKeys = {
   surfaceFeature: (id: string) => ['surface-features', 'detail', id] as const,
   geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
   attachments: (entityType: string, entityId: string) => ['attachments', entityType, entityId] as const,
+  fileVersions: (fileId: string) => ['file-versions', fileId] as const,
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
@@ -38,6 +39,7 @@ export const queryKeys = {
   teams: ['teams'] as const,
   teamMembers: (teamId: string) => ['teams', teamId, 'members'] as const,
   acl: (entityType: string, entityId: string) => ['acl', entityType, entityId] as const,
+  history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
   mfa: ['mfa'] as const,
 };
 
@@ -240,6 +242,11 @@ export async function fetchCenterlineFeatures(bbox: string): Promise<EntranceFea
   return unwrap(api.GET('/api/v1/map/cave-centerlines', { params: { query: { bbox } } }));
 }
 
+/** Imperative fetch used by the OpenLayers photo overlay loader (not a hook). */
+export async function fetchPhotoFeatures(bbox: string): Promise<EntranceFeatureCollection> {
+  return unwrap(api.GET('/api/v1/map/photos', { params: { query: { bbox } } }));
+}
+
 export function useCaveSearch(q: string) {
   return useQuery({
     queryKey: queryKeys.caveSearch(q),
@@ -342,9 +349,13 @@ function useInvalidateSurfaceFeatures() {
 
 export function useUpdateSurfaceFeature() {
   const invalidate = useInvalidateSurfaceFeatures();
+  const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: SurfaceFeatureWrite }) => updateSurfaceFeature(id, body),
-    onSuccess: () => invalidate(),
+    onSuccess: () => {
+      invalidate();
+      invalidateHistory();
+    },
   });
 }
 
@@ -450,7 +461,31 @@ export function useAttachments(entityType: AttachedEntityType, entityId: string 
 
 function useInvalidateAttachments() {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: ['attachments'] });
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['attachments'] });
+    // Attachments are audited children of their target entity, so any attach/detach/metadata
+    // change surfaces in that entity's timeline — refresh it here so every caller stays in sync.
+    void queryClient.invalidateQueries({ queryKey: ['history'] });
+  };
+}
+
+export type HistoryEvent = components['schemas']['HistoryEventDto'];
+
+/** Change history for an entity (incl. its children's events via audit roots). */
+export function useHistory(entityType: string, entityId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.history(entityType, entityId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/history', {
+        params: { query: { entityType, entityId: entityId!, pageSize: 100 } },
+      })),
+    enabled: !!entityId,
+  });
+}
+
+export function useInvalidateHistory() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: ['history'] });
 }
 
 export function useUploadFile() {
@@ -462,6 +497,20 @@ export function useUploadFile() {
         body: form as never,
         bodySerializer: (b: unknown) => b as FormData,
       }));
+    },
+  });
+}
+
+/** Updates user-set file metadata (document date). The gallery's file DTO carries it, so refresh attachments. */
+export function useUpdateFile() {
+  const invalidateAttachments = useInvalidateAttachments();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, documentDate }: { id: string; documentDate: string | null }) =>
+      unwrap(api.PUT('/api/v1/files/{id}', { params: { path: { id } }, body: { documentDate } })),
+    onSuccess: () => {
+      invalidateAttachments();
+      void queryClient.invalidateQueries({ queryKey: ['file-versions'] });
     },
   });
 }
@@ -481,6 +530,21 @@ export function useCreateAttachment() {
   });
 }
 
+export function useUpdateAttachment() {
+  const invalidate = useInvalidateAttachments();
+  return useMutation({
+    mutationFn: ({ id, ...body }: {
+      id: string;
+      role: AttachmentRole;
+      caption: string | null;
+      sortOrder: number;
+    }) => unwrap(api.PUT('/api/v1/attachments/{id}', { params: { path: { id } }, body })),
+    // Caption/role changes are audited on the target entity; useInvalidateAttachments refreshes
+    // both the gallery and that timeline.
+    onSuccess: () => invalidate(),
+  });
+}
+
 export function useDeleteAttachment() {
   const invalidate = useInvalidateAttachments();
   return useMutation({
@@ -491,6 +555,52 @@ export function useDeleteAttachment() {
       }
     },
     onSuccess: () => invalidate(),
+  });
+}
+
+export type FileVersionInfo = components['schemas']['FileVersionDto'];
+
+/** Full version chain of a file (editor-only; the server 403s read-only callers). */
+export function useFileVersions(fileId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.fileVersions(fileId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/files/{id}/versions', { params: { path: { id: fileId! } } })),
+    enabled: !!fileId && enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useUploadFileVersion() {
+  const invalidateAttachments = useInvalidateAttachments();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ fileId, file }: { fileId: string; file: File }): Promise<FileInfo> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      return unwrap(api.POST('/api/v1/files/{id}/versions', {
+        params: { path: { id: fileId } },
+        body: form as never,
+        bodySerializer: (b: unknown) => b as FormData,
+      }));
+    },
+    // The attachment now points at the new head; both the gallery and any version list refresh.
+    onSuccess: () => {
+      invalidateAttachments();
+      void queryClient.invalidateQueries({ queryKey: ['file-versions'] });
+    },
+  });
+}
+
+export function useDeleteFileVersion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/files/{id}', { params: { path: { id } } });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['file-versions'] }),
   });
 }
 
@@ -608,10 +718,14 @@ export function useCreateTripLog() {
 
 export function useUpdateTripLog() {
   const invalidate = useInvalidateTripLogs();
+  const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: TripLogWrite }) =>
       unwrap(api.PUT('/api/v1/trip-logs/{id}', { params: { path: { id } }, body })),
-    onSuccess: () => invalidate(),
+    onSuccess: () => {
+      invalidate();
+      invalidateHistory();
+    },
   });
 }
 
@@ -645,6 +759,8 @@ function useInvalidateTaggings() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: ['taggings'] });
     void queryClient.invalidateQueries({ queryKey: ['tags'] });
+    // Taggings are audited children of the tagged entity — refresh its timeline too.
+    void queryClient.invalidateQueries({ queryKey: ['history'] });
   };
 }
 
@@ -842,10 +958,14 @@ export function useCreateCave() {
 
 export function useUpdateCave(id: string) {
   const invalidate = useInvalidateCaves();
+  const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: (body: CaveWrite) =>
       unwrap(api.PUT('/api/v1/caves/{id}', { params: { path: { id } }, body })),
-    onSuccess: () => invalidate(id),
+    onSuccess: () => {
+      invalidate(id);
+      invalidateHistory();
+    },
   });
 }
 
@@ -864,24 +984,33 @@ export async function createEntranceFor(caveId: string, body: EntranceWrite) {
 
 export function useCreateEntrance(caveId: string) {
   const invalidate = useInvalidateCaves();
+  const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: (body: EntranceWrite) =>
       unwrap(api.POST('/api/v1/caves/{caveId}/entrances', { params: { path: { caveId } }, body })),
-    onSuccess: () => invalidate(caveId),
+    onSuccess: () => {
+      invalidate(caveId);
+      invalidateHistory();
+    },
   });
 }
 
 export function useUpdateEntrance(caveId: string) {
   const invalidate = useInvalidateCaves();
+  const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: EntranceWrite }) =>
       unwrap(api.PUT('/api/v1/cave-entrances/{id}', { params: { path: { id } }, body })),
-    onSuccess: () => invalidate(caveId),
+    onSuccess: () => {
+      invalidate(caveId);
+      invalidateHistory();
+    },
   });
 }
 
 export function useDeleteEntrance(caveId: string) {
   const invalidate = useInvalidateCaves();
+  const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: async (id: string) => {
       const { error, response } = await api.DELETE('/api/v1/cave-entrances/{id}', { params: { path: { id } } });
@@ -889,6 +1018,9 @@ export function useDeleteEntrance(caveId: string) {
         throw new Error(`API error ${response.status}`);
       }
     },
-    onSuccess: () => invalidate(caveId),
+    onSuccess: () => {
+      invalidate(caveId);
+      invalidateHistory();
+    },
   });
 }

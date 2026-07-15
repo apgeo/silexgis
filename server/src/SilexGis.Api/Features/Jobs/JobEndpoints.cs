@@ -24,7 +24,38 @@ public static class JobEndpoints
         api.MapGet("/jobs/{id:long}", GetAsync)
             .WithTags("Jobs")
             .WithSummary("Processing job status (requester or admin).");
+        api.MapPost("/jobs/photo-geo-backfill", EnqueuePhotoGeoBackfillAsync)
+            .WithTags("Jobs")
+            .WithSummary("Enqueues a one-off backfill of EXIF GPS points onto existing photos (admin).");
         return api;
+    }
+
+    private static async Task<Results<Ok<ProcessingJobDto>, UnauthorizedHttpResult, ProblemHttpResult>> EnqueuePhotoGeoBackfillAsync(
+        SilexGisDbContext db,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var user = await userAccessor.GetAsync(ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!user.IsAdmin)
+        {
+            return ApiProblems.Forbidden("jobs.requires_admin");
+        }
+
+        var job = new ProcessingJob
+        {
+            Kind = ProcessingJobKinds.PhotoGeoBackfill,
+            RequestedBy = user.UserId,
+        };
+        db.ProcessingJobs.Add(job);
+        await db.SaveChangesAsync(ct);
+
+        return TypedResults.Ok(new ProcessingJobDto(
+            job.Id, job.Kind, job.Status, job.Error, job.CreatedAt, job.StartedAt, job.CompletedAt));
     }
 
     private static async Task<Results<Ok<ProcessingJobDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(

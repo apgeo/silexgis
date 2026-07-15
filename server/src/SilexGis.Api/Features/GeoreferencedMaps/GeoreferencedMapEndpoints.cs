@@ -139,6 +139,7 @@ public static class GeoreferencedMapEndpoints
             UploadedBy = user.UserId,
             Kind = FileKind.Raster,
         };
+        stored.VersionGroupId = stored.Id; // head of its own version chain
 
         var map = new GeoreferencedMap
         {

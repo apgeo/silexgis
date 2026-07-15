@@ -163,6 +163,7 @@ public static class SurveyModelEndpoints
             UploadedBy = user.UserId,
             Kind = FileKind.Survey,
         };
+        stored.VersionGroupId = stored.Id; // head of its own version chain
 
         var model = new SurveyModel
         {

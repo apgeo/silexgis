@@ -47,10 +47,12 @@ public static class DependencyInjection
         services.Configure<FilesOptions>(configuration.GetSection(FilesOptions.SectionName));
         services.AddSingleton<IFileStore, LocalFileStore>();
         services.AddSingleton<ThumbnailService>();
+        services.AddSingleton<IPhotoGeotagReader, MagickPhotoGeotagReader>();
         services.AddSingleton<IVectorIO, GdalVectorIO>();
         services.AddSingleton<RasterCogService>();
         services.AddScoped<IProcessingJobHandler, GeofileImportHandler>();
         services.AddScoped<IProcessingJobHandler, RasterCogHandler>();
+        services.AddScoped<IProcessingJobHandler, PhotoGeoBackfillHandler>();
         services.AddHostedService<ProcessingJobWorker>();
         return services;
     }

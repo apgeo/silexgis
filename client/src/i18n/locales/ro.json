@@ -78,7 +78,8 @@
     "contextCopyCoords": "Copiază coordonatele",
     "coordsCopied": "Coordonate copiate.",
     "heatmap": "Hartă de căldură (intrări)",
-    "baseOpacity": "Opacitatea stratului {{name}}"
+    "baseOpacity": "Opacitatea stratului {{name}}",
+    "photos": "Fotografii geolocalizate"
   },
   "dialog": {
     "dockToSide": "Andochează lângă hartă",
@@ -204,7 +205,25 @@
     "documents": "Documente",
     "uploadPrompt": "Apăsați sau trageți fotografii și documente aici pentru a le atașa",
     "deleteConfirm": "Eliminați acest atașament? Fișierul rămâne disponibil celui care l-a încărcat.",
-    "empty": "Încă nu există fotografii sau documente."
+    "empty": "Încă nu există fotografii sau documente.",
+    "versions": "Versiuni",
+    "uploadVersion": "Încărcați o versiune nouă",
+    "currentVersion": "curentă",
+    "noVersions": "Încă nu există versiuni.",
+    "deleteVersionConfirm": "Ștergeți această versiune? Conținutul ei este eliminat definitiv.",
+    "details": "Detalii",
+    "caption": "Legendă",
+    "role": "Rol",
+    "documentDate": "Data documentului",
+    "roles": {
+      "photoEntrance": "Fotografie intrare",
+      "photoInterior": "Fotografie interior",
+      "photoSurface": "Fotografie suprafață",
+      "document": "Document",
+      "map2d": "Hartă 2D",
+      "surveyData": "Date topografice",
+      "other": "Altele"
+    }
   },
   "geodata": {
     "title": "Geodate",
@@ -307,6 +326,45 @@
     "entityType": "Entitate",
     "entityId": "Id entitate",
     "entityTypePlaceholder": "Filtrează după tipul entității (ex. Cave)…"
+  },
+  "history": {
+    "title": "Istoric",
+    "empty": "Nicio modificare înregistrată încă.",
+    "hidden": "Valoare ascunsă (locație protejată)",
+    "systemUser": "Sistem",
+    "restoreField": "Restaurează această valoare",
+    "restoreAll": "Restaurează toate valorile dinaintea acestei modificări",
+    "restored": "Valoare restaurată.",
+    "action": {
+      "created": "Creat",
+      "updated": "Modificat",
+      "deleted": "Șters"
+    },
+    "entity": {
+      "Cave": "Peșteră",
+      "CaveEntrance": "Intrare",
+      "SurfaceFeature": "Element de suprafață",
+      "TripLog": "Raport de tură",
+      "CaveCenterline": "Poligonație",
+      "SurveyModel": "Model topografic",
+      "Attachment": "Atașament",
+      "Tagging": "Etichetă",
+      "TripLogCave": "Peșteră asociată",
+      "TripLogParticipant": "Participant"
+    },
+    "field": {
+      "name": "Nume",
+      "description": "Descriere",
+      "geom": "Locație",
+      "altitude": "Altitudine",
+      "positionQuality": "Calitatea poziției",
+      "closestAddress": "Cea mai apropiată adresă",
+      "landRegistryNumber": "Număr cadastral",
+      "locationNotes": "Note despre locație",
+      "caveId": "Peșteră asociată",
+      "visibility": "Vizibilitate",
+      "caption": "Legendă"
+    }
   },
   "teams": {
     "title": "Echipe",

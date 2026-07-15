@@ -517,6 +517,16 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("inet")
                         .HasColumnName("ip");
 
+                    b.Property<string>("RootEntityId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("root_entity_id");
+
+                    b.Property<string>("RootEntityType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("root_entity_type");
+
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
@@ -529,6 +539,11 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("EntityType", "EntityId")
                         .HasDatabaseName("ix_audit_log_entity_type_entity_id");
+
+                    b.HasIndex("RootEntityType", "RootEntityId", "Id")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("ix_audit_log_root_entity_type_root_entity_id_id")
+                        .HasFilter("root_entity_type IS NOT NULL");
 
                     b.ToTable("audit_log", (string)null);
                 });
@@ -1613,6 +1628,14 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<DateOnly?>("DocumentDate")
+                        .HasColumnType("date")
+                        .HasColumnName("document_date");
+
+                    b.Property<Point>("Geom")
+                        .HasColumnType("geometry(Point, 4326)")
+                        .HasColumnName("geom");
+
                     b.Property<short>("Kind")
                         .HasColumnType("smallint")
                         .HasColumnName("kind");
@@ -1660,14 +1683,33 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("uploaded_by");
 
+                    b.Property<Guid>("VersionGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("version_group_id");
+
+                    b.Property<int>("VersionNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("version_number");
+
                     b.HasKey("Id")
                         .HasName("pk_files");
+
+                    b.HasIndex("Geom")
+                        .HasDatabaseName("ix_files_geom");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geom"), "gist");
 
                     b.HasIndex("Sha256")
                         .HasDatabaseName("ix_files_sha256");
 
                     b.HasIndex("UploadedBy")
                         .HasDatabaseName("ix_files_uploaded_by");
+
+                    b.HasIndex("VersionGroupId", "VersionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ix_files_version_group_id_version_number");
 
                     b.ToTable("files", (string)null);
                 });

@@ -37,20 +37,27 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
 }
 
 /// <summary>Trip ↔ cave link (unique pair; joins to caves for display).</summary>
-public class TripLogCave
+public class TripLogCave : IAuditable, IAuditChild
 {
     public long Id { get; set; }
 
     public Guid TripLogId { get; set; }
 
     public Guid CaveId { get; set; }
+
+    public string AuditId => Id.ToString();
+
+    // Cave links surface in their trip's timeline.
+    public string RootEntityType => nameof(TripLog);
+
+    public string RootEntityId => TripLogId.ToString();
 }
 
 /// <summary>
 /// Trip participant: either a registered user or a free-text name for people
 /// without accounts. Exactly one of the two is set (DB check constraint).
 /// </summary>
-public class TripLogParticipant
+public class TripLogParticipant : IAuditable, IAuditChild
 {
     public long Id { get; set; }
 
@@ -59,4 +66,11 @@ public class TripLogParticipant
     public Guid? UserId { get; set; }
 
     public string? NameText { get; set; }
+
+    public string AuditId => Id.ToString();
+
+    // Participants surface in their trip's timeline.
+    public string RootEntityType => nameof(TripLog);
+
+    public string RootEntityId => TripLogId.ToString();
 }

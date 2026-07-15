@@ -994,6 +994,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/map/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Geotagged photos as GeoJSON points for the given bbox; protected-cave photos withheld. */
+        get: {
+            parameters: {
+                query: {
+                    bbox: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search": {
         parameters: {
             query?: never;
@@ -1064,6 +1102,42 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/photo-geo-backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enqueues a one-off backfill of EXIF GPS points onto existing photos (admin). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProcessingJobDto"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -1256,6 +1330,47 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["PagedResultOfAuditEntryDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Change history for an entity (incl. its children); protection-redacted, visibility-gated. */
+        get: {
+            parameters: {
+                query?: {
+                    entityType?: string;
+                    entityId?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfHistoryEventDto"];
                     };
                 };
             };
@@ -2461,8 +2576,120 @@ export interface paths {
                 };
             };
         };
-        put?: never;
+        /** Updates user-set file metadata (document date); requires file-write access. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FileUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FileDto"];
+                    };
+                };
+            };
+        };
         post?: never;
+        /** Deletes a superseded (non-head) file version. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Version chain of a file (editor-only; superseded versions may hold removed content). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FileVersionDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Uploads a new version onto a file's head; repoints its attachments to it. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        file: components["schemas"]["IFormFile"];
+                    };
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FileDto"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -2617,7 +2844,33 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** Edits an attachment's role/caption/order; requires Write on the entity. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AttachmentUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AttachmentDto"];
+                    };
+                };
+            };
+        };
         post?: never;
         /** Detaches a file (the file itself is kept); requires Write on the entity. */
         delete: {
@@ -3604,7 +3857,7 @@ export interface components {
         /** @enum {unknown} */
         AclSubjectKind: "user" | "team";
         /** @enum {unknown} */
-        AttachedEntityType: "cave" | "caveEntrance" | "surfaceFeature" | "tripLog" | "team" | "geofile" | "georeferencedMap" | "mapView";
+        AttachedEntityType: "cave" | "caveEntrance" | "surfaceFeature" | "tripLog" | "team" | "geofile" | "georeferencedMap" | "mapView" | "storedFile";
         AttachmentCreateRequest: {
             /** Format: uuid */
             fileId: string;
@@ -3634,6 +3887,12 @@ export interface components {
         };
         /** @enum {unknown} */
         AttachmentRole: "photoEntrance" | "photoInterior" | "photoSurface" | "document" | "map2d" | "surveyData" | "other";
+        AttachmentUpdateRequest: {
+            role: components["schemas"]["AttachmentRole"];
+            caption: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+        };
         AuditEntryDto: {
             /** Format: int64 */
             id: number;
@@ -3886,6 +4145,10 @@ export interface components {
             sizeBytes: number;
             sha256: string;
             kind: components["schemas"]["FileKind"];
+            /** Format: int32 */
+            versionNumber: number;
+            /** Format: date */
+            documentDate: null | string;
             /** Format: date-time */
             createdAt: string;
             contentUrl: string;
@@ -3893,6 +4156,27 @@ export interface components {
         };
         /** @enum {unknown} */
         FileKind: "image" | "document" | "survey" | "raster" | "vector" | "model" | "other";
+        FileUpdateRequest: {
+            /** Format: date */
+            documentDate: null | string;
+        };
+        FileVersionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: int32 */
+            versionNumber: number;
+            originalName: string;
+            mimeType: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: uuid */
+            uploadedBy: null | string;
+            uploaderName: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            contentUrl: string;
+            isHead: boolean;
+        };
         ForgotPasswordRequest: {
             email: string;
         };
@@ -4005,6 +4289,20 @@ export interface components {
             teamId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
+        HistoryEventDto: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            at: string;
+            /** Format: uuid */
+            userId: null | string;
+            userName: null | string;
+            action: string;
+            entityType: string;
+            entityId: string;
+            changes: null | components["schemas"]["JsonElement"];
+            redactedProperties: string[];
+        };
         /** Format: binary */
         IFormFile: string;
         JsonElement: unknown;
@@ -4112,6 +4410,15 @@ export interface components {
         };
         PagedResultOfGeoreferencedMapDto: {
             items: components["schemas"]["GeoreferencedMapDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfHistoryEventDto: {
+            items: components["schemas"]["HistoryEventDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */

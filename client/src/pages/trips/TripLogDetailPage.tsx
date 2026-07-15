@@ -4,8 +4,17 @@ import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { App, Button, Card, Descriptions, Flex, Popconfirm, Spin, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useCave, useDeleteTripLog, useMe, useTripLog } from '../../api/hooks.ts';
+import {
+  useCave,
+  useDeleteTripLog,
+  useMe,
+  useTripLog,
+  useUpdateTripLog,
+  type TripLogWrite,
+} from '../../api/hooks.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
+import HistoryPanel, { type HistoryRestore } from '../../components/history/HistoryPanel.tsx';
+import { applyRestore } from '../../components/history/historyModel.ts';
 import TagChips from '../../components/tags/TagChips.tsx';
 import TripFormModal from './TripFormModal.tsx';
 
@@ -22,6 +31,7 @@ export default function TripLogDetailPage() {
   const { data: trip, isPending } = useTripLog(id);
   const { data: me } = useMe();
   const deleteTrip = useDeleteTripLog();
+  const updateTrip = useUpdateTripLog();
   const [editing, setEditing] = useState(false);
 
   if (isPending || !trip) {
@@ -106,6 +116,24 @@ export default function TripLogDetailPage() {
       </Card>
 
       <AttachmentSection entityType="tripLog" entityId={trip.id} canEdit={canEdit} />
+
+      <HistoryPanel
+        entityType="tripLog"
+        entityId={trip.id}
+        restore={
+          canEdit
+            ? ({
+                entityType: 'TripLog',
+                onRestore: async (event, props) => {
+                  await updateTrip.mutateAsync({
+                    id: trip.id,
+                    body: applyRestore(trip as unknown as TripLogWrite, event.changes, props),
+                  });
+                },
+              } satisfies HistoryRestore)
+            : undefined
+        }
+      />
 
       <TripFormModal open={editing} trip={trip} onClose={() => setEditing(false)} />
     </div>

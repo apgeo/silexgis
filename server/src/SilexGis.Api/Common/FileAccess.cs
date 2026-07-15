@@ -71,9 +71,46 @@ public static class FileAccessRules
                 var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == entityId, ct);
                 return trip is not null && await new AclPermissionService(db).CanAsync(user, trip, ObjectPermission.Read, ct);
 
+            case AttachedEntityType.StoredFile:
+                // A file (as a tag/attachment target) inherits the access of the objects it is
+                // attached to — the same rule the file endpoints use.
+                var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == entityId, ct);
+                return file is not null && await CanAccessAsync(db, user, file, ct);
+
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Who may modify a file's version chain (upload a new version, list/delete old versions):
+    /// an admin, the head's uploader, or anyone with Write on at least one entity the head is
+    /// attached to. A shared document is one document — a new version moves every attachment,
+    /// so Write on any one attached entity suffices. Evaluate against the chain head, which is
+    /// the row attachments point at.
+    /// </summary>
+    public static async Task<bool> CanWriteFileAsync(
+        SilexGisDbContext db, UserContext user, StoredFile head, CancellationToken ct)
+    {
+        if (user.IsAdmin || head.UploadedBy == user.UserId)
+        {
+            return true;
+        }
+
+        var links = await db.Attachments.AsNoTracking()
+            .Where(a => a.FileId == head.Id)
+            .Select(a => new { a.EntityType, a.EntityId })
+            .ToListAsync(ct);
+
+        foreach (var link in links)
+        {
+            if (await CanWriteEntityAsync(db, user, link.EntityType, link.EntityId, ct))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Write access to a polymorphic attachment target (attach/detach files).</summary>
@@ -107,6 +144,22 @@ public static class FileAccessRules
             case AttachedEntityType.TripLog:
                 var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == entityId, ct);
                 return trip is not null && await new AclPermissionService(db).CanAsync(user, trip, ObjectPermission.Write, ct);
+
+            case AttachedEntityType.StoredFile:
+                // Writing a file's tags is governed by the file-write rule, evaluated against the
+                // chain head (the row attachments/taggings point at). Resolve the head in case a
+                // non-head id was passed.
+                var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == entityId, ct);
+                if (file is null)
+                {
+                    return false;
+                }
+
+                var head = await db.StoredFiles.AsNoTracking()
+                    .Where(f => f.VersionGroupId == file.VersionGroupId)
+                    .OrderByDescending(f => f.VersionNumber)
+                    .FirstAsync(ct);
+                return await CanWriteFileAsync(db, user, head, ct);
 
             default:
                 return false;

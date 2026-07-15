@@ -692,3 +692,198 @@ test('geofile upload, background import, map layer, export and delete', async ({
     await expect(rows).toHaveCount(remaining - 1, { timeout: 15_000 });
   }
 });
+
+test('geotagged photos overlay toggles on and loads the photo map layer', async ({ page }) => {
+  await login(page);
+  // Enabling the opt-in overlay in the composer tree triggers a bbox load of the photo endpoint.
+  const photoRequest = page.waitForRequest((r) => r.url().includes('/api/v1/map/photos'), { timeout: 15_000 });
+  const photosRow = overlayTreeNode(page, 'Geotagged photos');
+  await photosRow.locator('.ant-tree-checkbox').click();
+  await expect(photosRow.locator('.ant-tree-checkbox-checked')).toBeVisible();
+  await photoRequest;
+});
+
+test('cave history records edits and restores a previous value', async ({ page }) => {
+  const caveName = `E2E History Cave ${Date.now()}`;
+  await login(page);
+
+  await page.goto('/caves/new');
+  await page.getByLabel('Name', { exact: true }).fill(caveName);
+  await page.getByLabel('Type', { exact: true }).click();
+  await page.locator('.ant-select-item-option').first().click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
+
+  // Two edits so the newest event carries a real old→new region pair.
+  await editRegion(page, 'Region One');
+  await editRegion(page, 'Region Two');
+
+  // The History card records the change as an old→new row (the value shows in two
+  // adjacent events, so target the specific row rather than the bare text).
+  const history = page.locator('.ant-card').filter({ hasText: 'History' }).last();
+  const latest = history.getByRole('row', { name: /Region One.*Region Two/ });
+  await expect(latest).toBeVisible({ timeout: 15_000 });
+
+  // Restore the previous value; the main details revert and a toast confirms.
+  await latest.getByLabel('Restore this value').click();
+  await expect(page.getByText('Value restored.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.ant-descriptions').first().getByText('Region One')).toBeVisible({ timeout: 15_000 });
+
+  // Cleanup.
+  await page.locator('button', { hasText: 'Delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await page.waitForURL(/\/caves$/);
+});
+
+async function editRegion(page: Page, value: string) {
+  await page.locator('button', { hasText: 'Edit' }).click();
+  await page.getByLabel('Region').fill(value);
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.locator('.ant-descriptions').first().getByText(value)).toBeVisible({ timeout: 15_000 });
+}
+
+test('surface feature history records edits and restores in the map panel', async ({ page }) => {
+  const featureName = `E2E Hist Feat ${Date.now()}`;
+  await login(page);
+
+  // Selection is by map click at a fixed pixel, so purge any e2e features an earlier
+  // aborted run left stacked on that spot — otherwise the click selects a stale one.
+  await deleteFeatureRows(page, /E2E /);
+  await page.goto('/');
+
+  const toolbar = page.locator('.map-edit-overlay');
+  await expect(toolbar).toBeVisible();
+  await toolbar.getByRole('button', { name: /Feature type/ }).click();
+  await page.getByRole('button', { name: 'Sinkhole / Doline' }).click();
+
+  // Draw and save a point feature.
+  await toolbar.getByRole('button', { name: 'edit' }).click();
+  const canvas = page.locator('.map-canvas');
+  await canvas.click({ position: { x: 420, y: 260 } });
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByText('New surface feature')).toBeVisible();
+  await modal.getByLabel('Name').fill(featureName);
+  await modal.getByRole('button', { name: 'OK' }).click();
+  const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/surface-features') && r.ok());
+  await toolbar.getByRole('button', { name: /Save/ }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  await reloaded;
+
+  // Select it; edit the description twice so the newest event carries an old→new pair.
+  await canvas.click({ position: { x: 420, y: 260 } });
+  await expect(page.getByRole('heading', { name: featureName })).toBeVisible({ timeout: 15_000 });
+  await editFeatureDescription(page, 'Desc One');
+  await editFeatureDescription(page, 'Desc Two');
+
+  // The selection panel's History card records the change as an old→new row.
+  const history = page.locator('.ant-card').filter({ hasText: 'History' });
+  const latest = history.getByRole('row', { name: /Desc One.*Desc Two/ });
+  await expect(latest).toBeVisible({ timeout: 15_000 });
+
+  // Restore the previous value; the feature detail reverts and a toast confirms.
+  await latest.getByLabel('Restore this value').click();
+  await expect(page.getByText('Value restored.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.ant-descriptions').first().getByText('Desc One')).toBeVisible({ timeout: 15_000 });
+
+  // Cleanup from the features table.
+  await deleteFeatureRows(page, new RegExp(featureName));
+});
+
+// Deletes every features-table row matching `pattern` (tolerant of leftovers from aborted runs).
+async function deleteFeatureRows(page: Page, pattern: RegExp) {
+  const listed = page.waitForResponse((r) => r.url().includes('/api/v1/surface-features') && r.ok());
+  await page.goto('/features');
+  await listed;
+  // Wait for the table body to actually paint (a data row or the empty placeholder) before
+  // the non-retrying count() — avoids racing the response→render gap without a fixed sleep.
+  await expect(page.locator('.ant-table-tbody tr').first()).toBeVisible();
+  const rows = page.getByRole('row', { name: pattern });
+  for (let remaining = await rows.count(); remaining > 0; remaining--) {
+    await rows.first().getByRole('button', { name: 'delete' }).click();
+    await page.getByRole('button', { name: 'OK' }).click();
+    await expect(rows).toHaveCount(remaining - 1, { timeout: 15_000 });
+  }
+}
+
+async function editFeatureDescription(page: Page, value: string) {
+  // antd folds an icon button's icon aria-label into its accessible name ("edit Edit"),
+  // so match the visible text instead of an exact role name.
+  await page.locator('button', { hasText: 'Edit' }).click();
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByText('Edit surface feature')).toBeVisible();
+  await modal.getByLabel('Description').fill(value);
+  await modal.getByRole('button', { name: 'OK' }).click();
+  await expect(page.locator('.ant-descriptions').getByText(value)).toBeVisible({ timeout: 15_000 });
+}
+
+test('cave attachment file versioning', async ({ page }) => {
+  await login(page);
+  await page.goto('/caves');
+  await page.getByText('Peștera Demo Mare').click();
+  await expect(page.getByText('Photos & documents')).toBeVisible({ timeout: 15_000 });
+
+  const gallery = page.locator('.ant-card', { hasText: 'Photos & documents' });
+  await deletePhotoFigures(page); // start clean
+  await gallery.locator('input[type=file]').setInputFiles('e2e/fixtures/e2e-photo.png');
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  const figure = page.locator('figure').filter({ hasText: 'e2e-photo' }).first();
+  await expect(figure).toBeVisible({ timeout: 15_000 });
+
+  // Open the versions popover and upload a corrected version onto the head.
+  await figure.getByRole('button', { name: 'history' }).click();
+  const popover = page.locator('.ant-popover');
+  await expect(popover.getByText('Upload new version')).toBeVisible();
+  await popover.locator('input[type=file]').setInputFiles('e2e/fixtures/e2e-photo.png');
+
+  // The chain now has two versions: the head (current) and the superseded v1.
+  await expect(popover.getByText('current')).toBeVisible({ timeout: 15_000 });
+  await expect(popover.getByText('v1')).toBeVisible();
+
+  // Cleanup (the attachment still points at one document — deleting the figure detaches it).
+  await page.keyboard.press('Escape');
+  await deletePhotoFigures(page);
+});
+
+test('cave attachment details: caption, document date and tags persist', async ({ page }) => {
+  await login(page);
+  await page.goto('/caves');
+  await page.getByText('Peștera Demo Mare').click();
+  await expect(page.getByText('Photos & documents')).toBeVisible({ timeout: 15_000 });
+
+  const gallery = page.locator('.ant-card', { hasText: 'Photos & documents' });
+  await deletePhotoFigures(page); // start clean
+  await gallery.locator('input[type=file]').setInputFiles('e2e/fixtures/e2e-photo.png');
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  const figure = page.locator('figure').filter({ hasText: 'e2e-photo' }).first();
+  await expect(figure).toBeVisible({ timeout: 15_000 });
+
+  // Open the details editor and set caption, the document's own date, and a tag.
+  await figure.getByRole('button', { name: 'Details' }).click();
+  const popover = page.locator('.ant-popover');
+  await popover.locator('input').first().fill('Winter caption e2e');
+  await popover.getByPlaceholder('Select date').fill('2019-08-01');
+  await page.keyboard.press('Enter');
+  await popover.getByText('Add tag').click();
+  await popover.getByRole('combobox').last().fill('e2e-detail-tag');
+  await page.keyboard.press('Enter');
+  await popover.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+
+  // Reopen: caption, date and tag round-tripped through the server.
+  await figure.getByRole('button', { name: 'Details' }).click();
+  await expect(popover.locator('input').first()).toHaveValue('Winter caption e2e');
+  await expect(popover.getByPlaceholder('Select date')).toHaveValue('2019-08-01');
+  await expect(popover.getByText('e2e-detail-tag')).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await deletePhotoFigures(page);
+});
+
+async function deletePhotoFigures(page: Page) {
+  const figures = page.locator('figure').filter({ hasText: 'e2e-photo' });
+  for (let remaining = await figures.count(); remaining > 0; remaining--) {
+    await figures.first().getByRole('button', { name: 'delete' }).click();
+    await page.getByRole('button', { name: 'OK' }).click();
+    await expect(figures).toHaveCount(remaining - 1, { timeout: 15_000 });
+  }
+}

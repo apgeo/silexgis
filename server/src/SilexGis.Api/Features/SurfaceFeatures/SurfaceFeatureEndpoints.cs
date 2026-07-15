@@ -194,7 +194,20 @@ public static class SurfaceFeatureEndpoints
             return validation;
         }
 
+        // A caller who cannot view the linked cave's exact location received caveId=null in the
+        // DTO they edited; ignore that null echo so a normal save doesn't silently unlink the
+        // protected cave (mirrors the cave/entrance write guards).
+        var preservedCaveId = feature.CaveId;
+        var caveLinkHidden = preservedCaveId is { } linkedCaveId
+            && await CaveLinkRedaction.ShouldRedactAsync(db, user, linkedCaveId, ct);
+
         request.Apply(feature, request.Geometry.ToGeometryOrNull()!);
+
+        if (caveLinkHidden && feature.CaveId is null)
+        {
+            feature.CaveId = preservedCaveId;
+        }
+
         await db.SaveChangesAsync(ct);
         await Concurrency.EmitETagAsync(http, db, VersionedTable.SurfaceFeatures, feature.Id, ct);
         var redact = await CaveLinkRedaction.ShouldRedactAsync(db, user, feature.CaveId, ct);

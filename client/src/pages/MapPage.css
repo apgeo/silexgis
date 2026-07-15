@@ -97,6 +97,30 @@
   white-space: nowrap;
 }
 
+.map-photo-popup {
+  background: #fff;
+  padding: 4px;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  max-width: 200px;
+}
+
+.map-photo-popup img {
+  display: block;
+  max-width: 192px;
+  max-height: 192px;
+  border-radius: 4px;
+}
+
+.map-photo-popup-name {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Sits left of the chrome-visibility toggle pinned at the corner. */
 .map-popout-overlay {
   position: absolute;

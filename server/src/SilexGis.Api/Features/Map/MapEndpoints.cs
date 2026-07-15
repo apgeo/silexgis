@@ -42,8 +42,180 @@ public static class MapEndpoints
         api.MapGet("/map/cave-centerlines", CaveCenterlinesAsync)
             .WithTags("Map")
             .WithSummary("Cave centerlines as GeoJSON for the given bbox; protected caves' lines omitted.");
+        api.MapGet("/map/photos", PhotosAsync)
+            .WithTags("Map")
+            .WithSummary("Geotagged photos as GeoJSON points for the given bbox; protected-cave photos withheld.");
         return api;
     }
+
+    /// <summary>
+    /// Geotagged image files as points. A photo shows only where the caller can read at least
+    /// one entity it is attached to; a photo attached to a protected cave (directly or via one
+    /// of its entrances) is withheld entirely from callers without the exact-location permission —
+    /// the EXIF point itself is the location, so snapping it is not enough.
+    /// </summary>
+    private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> PhotosAsync(
+        string bbox,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var user = await userAccessor.GetAsync(ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!Bbox.TryParse(bbox, out var box))
+        {
+            return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
+        }
+
+        var polygon = box.ToPolygon();
+        var candidates = await db.StoredFiles.AsNoTracking()
+            .Where(f => f.Geom != null && f.Kind == FileKind.Image && f.Geom!.Intersects(polygon))
+            .Select(f => new { f.Id, f.Geom, f.OriginalName })
+            .Take(MaxPoints)
+            .ToListAsync(ct);
+        if (candidates.Count == 0)
+        {
+            return TypedResults.Ok(FeatureCollection.Of([]));
+        }
+
+        var fileIds = candidates.Select(c => c.Id).ToList();
+        var links = await db.Attachments.AsNoTracking()
+            .Where(a => fileIds.Contains(a.FileId))
+            .Select(a => new { a.FileId, a.EntityType, a.EntityId })
+            .ToListAsync(ct);
+
+        Guid[] IdsOf(AttachedEntityType type) =>
+            [.. links.Where(l => l.EntityType == type).Select(l => l.EntityId).Distinct()];
+
+        // Entrance visibility + protection follow the entrance's cave.
+        var entranceIds = IdsOf(AttachedEntityType.CaveEntrance);
+        var entranceCaves = entranceIds.Length == 0
+            ? []
+            : await db.CaveEntrances.AsNoTracking()
+                .Where(e => entranceIds.Contains(e.Id))
+                .Select(e => new { e.Id, e.CaveId })
+                .ToListAsync(ct);
+        var entranceToCave = entranceCaves.ToDictionary(e => e.Id, e => e.CaveId);
+
+        // A trip's cave links and a surface feature's linked cave reveal that cave's location too,
+        // so a photo attached to one is subject to the same protection as a direct cave attachment.
+        var tripIds = IdsOf(AttachedEntityType.TripLog);
+        var tripCaves = tripIds.Length == 0
+            ? []
+            : await db.TripLogCaves.AsNoTracking()
+                .Where(x => tripIds.Contains(x.TripLogId))
+                .Select(x => new { x.TripLogId, x.CaveId })
+                .ToListAsync(ct);
+        var tripToCaves = tripCaves.GroupBy(x => x.TripLogId).ToDictionary(g => g.Key, g => g.Select(x => x.CaveId).ToList());
+
+        var featureIds = IdsOf(AttachedEntityType.SurfaceFeature);
+        var featureCaves = featureIds.Length == 0
+            ? []
+            : await db.SurfaceFeatures.AsNoTracking()
+                .Where(f => featureIds.Contains(f.Id) && f.CaveId != null)
+                .Select(f => new { f.Id, CaveId = f.CaveId!.Value })
+                .ToListAsync(ct);
+        var featureToCave = featureCaves.ToDictionary(f => f.Id, f => f.CaveId);
+
+        // Every cave a photo touches (direct, via an entrance, via a trip cave-link, or via a
+        // surface feature's cave) — drives readability and protection.
+        var allCaveIds = IdsOf(AttachedEntityType.Cave)
+            .Concat(entranceCaves.Select(e => e.CaveId))
+            .Concat(tripCaves.Select(x => x.CaveId))
+            .Concat(featureCaves.Select(f => f.CaveId))
+            .Distinct().ToList();
+
+        var readableCaveIds = await ReadableIdsAsync(
+            db.Caves.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Cave).Select(c => c.Id), allCaveIds, ct);
+        var readableFeatureIds = await ReadableIdsAsync(
+            db.SurfaceFeatures.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.SurfaceFeature).Select(f => f.Id),
+            featureIds, ct);
+        var readableTripIds = await ReadableIdsAsync(
+            db.TripLogs.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.TripLog).Select(t => t.Id),
+            tripIds, ct);
+        var readableGeofileIds = await ReadableIdsAsync(
+            db.Geofiles.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Geofile).Select(g => g.Id),
+            IdsOf(AttachedEntityType.Geofile), ct);
+
+        // Caves whose exact location the caller may not see → any photo touching one is withheld.
+        var exactGrants = await new AclPermissionService(db).CaveExactLocationGrantsAsync(user, ct);
+        var referencedCaves = allCaveIds.Count == 0
+            ? []
+            : await db.Caves.AsNoTracking().Where(c => allCaveIds.Contains(c.Id)).ToListAsync(ct);
+        var hiddenCaveIds = referencedCaves
+            .Where(c => !LocationProtection.CanViewExactLocation(
+                user, c, exactGrants.Contains(c.Id) ? ObjectPermission.ViewExactLocation : ObjectPermission.None))
+            .Select(c => c.Id)
+            .ToHashSet();
+
+        var linksByFile = links.GroupBy(l => l.FileId).ToDictionary(g => g.Key, g => g.ToList());
+        var features = new List<GeoFeature>();
+        foreach (var candidate in candidates)
+        {
+            if (!linksByFile.TryGetValue(candidate.Id, out var fileLinks))
+            {
+                continue; // no attachment → no context and no visibility path
+            }
+
+            var photoCaveIds = fileLinks
+                .Where(l => l.EntityType == AttachedEntityType.Cave).Select(l => l.EntityId)
+                .Concat(fileLinks
+                    .Where(l => l.EntityType == AttachedEntityType.CaveEntrance)
+                    .Select(l => entranceToCave.TryGetValue(l.EntityId, out var caveId) ? caveId : (Guid?)null)
+                    .Where(caveId => caveId is not null)
+                    .Select(caveId => caveId!.Value))
+                .Concat(fileLinks
+                    .Where(l => l.EntityType == AttachedEntityType.TripLog)
+                    .SelectMany(l => tripToCaves.GetValueOrDefault(l.EntityId) ?? []))
+                .Concat(fileLinks
+                    .Where(l => l.EntityType == AttachedEntityType.SurfaceFeature)
+                    .Select(l => featureToCave.TryGetValue(l.EntityId, out var caveId) ? caveId : (Guid?)null)
+                    .Where(caveId => caveId is not null)
+                    .Select(caveId => caveId!.Value));
+            if (photoCaveIds.Any(hiddenCaveIds.Contains))
+            {
+                continue; // protected-cave location — the point itself is sensitive
+            }
+
+            var visible = fileLinks.Any(l => l.EntityType switch
+            {
+                AttachedEntityType.Cave => readableCaveIds.Contains(l.EntityId),
+                AttachedEntityType.CaveEntrance => entranceToCave.TryGetValue(l.EntityId, out var caveId) && readableCaveIds.Contains(caveId),
+                AttachedEntityType.SurfaceFeature => readableFeatureIds.Contains(l.EntityId),
+                AttachedEntityType.TripLog => readableTripIds.Contains(l.EntityId),
+                AttachedEntityType.Geofile => readableGeofileIds.Contains(l.EntityId),
+                AttachedEntityType.Team => user.IsMemberOf(l.EntityId),
+                _ => false,
+            });
+            if (!visible)
+            {
+                continue;
+            }
+
+            var token = tokens.CreateToken(candidate.Id);
+            features.Add(GeoFeature.Of(candidate.Geom!, new Dictionary<string, object?>
+            {
+                ["id"] = candidate.Id,
+                ["name"] = candidate.OriginalName,
+                ["thumbnailUrl"] = $"/api/v1/files/{candidate.Id}/thumbnail?size=160&token={Uri.EscapeDataString(token)}",
+                ["contentUrl"] = $"/api/v1/files/{candidate.Id}/content?token={Uri.EscapeDataString(token)}",
+            }));
+        }
+
+        return TypedResults.Ok(FeatureCollection.Of(features));
+    }
+
+    /// <summary>Intersects a set of candidate ids with a visibility-filtered id query (empty → empty, no round trip).</summary>
+    private static async Task<HashSet<Guid>> ReadableIdsAsync(
+        IQueryable<Guid> visibleIds, IReadOnlyList<Guid> candidates, CancellationToken ct) =>
+        candidates.Count == 0
+            ? []
+            : [.. await visibleIds.Where(id => candidates.Contains(id)).ToListAsync(ct)];
 
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> CaveCenterlinesAsync(
         string bbox,

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using NetTopologySuite.Geometries;
+
 namespace SilexGis.Domain.Entities;
 
 /// <summary>Broad file categories used for storage layout and later media handling.</summary>
@@ -36,7 +38,30 @@ public class StoredFile : ITimestamped, IAuditable
 
     public Guid? UploadedBy { get; set; }
 
+    /// <summary>
+    /// Stable document identity across versions: the id of the first version in the chain.
+    /// A file's whole version chain is <c>WHERE version_group_id = @group</c>; the head is the
+    /// row with the highest <see cref="VersionNumber"/>. Content stays immutable per row.
+    /// </summary>
+    public Guid VersionGroupId { get; set; }
+
+    /// <summary>1-based position in the version chain; unique within a group.</summary>
+    public int VersionNumber { get; set; } = 1;
+
     public FileKind Kind { get; set; } = FileKind.Other;
+
+    /// <summary>
+    /// User-set calendar date the document/photo is *from* (distinct from <see cref="CreatedAt"/>,
+    /// the upload time). Prefilled client-side from EXIF where present; copied to new versions.
+    /// </summary>
+    public DateOnly? DocumentDate { get; set; }
+
+    /// <summary>
+    /// Capture location for a photo, read from EXIF GPS at upload (null when the image carries
+    /// no GPS or is not an image). A geotagged photo's point IS location data: paths that emit
+    /// it enforce the same cave-location protection as entrance coordinates.
+    /// </summary>
+    public Point? Geom { get; set; }
 
     /// <summary>Format-specific metadata (EXIF, dimensions, layer info, …) as jsonb.</summary>
     public string Metadata { get; set; } = "{}";
