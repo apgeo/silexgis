@@ -12,18 +12,12 @@ import {
 } from '../../api/hooks.ts';
 import AttachmentDetails from './AttachmentDetails.tsx';
 import FileVersions from './FileVersions.tsx';
+import { formatSize } from './fileFormat.ts';
 
 interface AttachmentSectionProps {
   entityType: AttachedEntityType;
   entityId: string;
   canEdit: boolean;
-}
-
-function formatSize(bytes: number): string {
-  if (bytes >= 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 /**

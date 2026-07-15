@@ -4,12 +4,7 @@ import { DeleteOutlined, DownloadOutlined, HistoryOutlined, UploadOutlined } fro
 import { App, Button, List, Popconfirm, Popover, Tag, Upload } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useDeleteFileVersion, useFileVersions, useUploadFileVersion } from '../../api/hooks.ts';
-
-function formatSize(bytes: number): string {
-  return bytes >= 1024 * 1024
-    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
+import { formatSize } from './fileFormat.ts';
 
 /**
  * Version chain of a file, in a click popover. Editor-only — the server returns 403 to

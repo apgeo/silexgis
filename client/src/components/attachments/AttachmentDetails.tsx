@@ -62,14 +62,15 @@ export default function AttachmentDetails({ attachment }: { attachment: Attachme
 
   const captionValue = caption.trim() ? caption.trim() : null;
   const dateValue = documentDate?.format('YYYY-MM-DD') ?? null;
-  const dirty =
-    captionValue !== (attachment.caption ?? null) ||
-    role !== attachment.role ||
-    dateValue !== (attachment.file.documentDate ?? null);
+  // The caption/role live on the attachment; the document date on the file — each saves through
+  // its own endpoint, so track their dirtiness separately and reuse it to gate both.
+  const attachmentDirty = captionValue !== (attachment.caption ?? null) || role !== attachment.role;
+  const dateDirty = dateValue !== (attachment.file.documentDate ?? null);
+  const dirty = attachmentDirty || dateDirty;
 
   const save = async () => {
     try {
-      if (captionValue !== (attachment.caption ?? null) || role !== attachment.role) {
+      if (attachmentDirty) {
         await updateAttachment.mutateAsync({
           id: attachment.id,
           role,
@@ -77,7 +78,7 @@ export default function AttachmentDetails({ attachment }: { attachment: Attachme
           sortOrder: attachment.sortOrder,
         });
       }
-      if (dateValue !== (attachment.file.documentDate ?? null)) {
+      if (dateDirty) {
         await updateFile.mutateAsync({ id: attachment.file.id, documentDate: dateValue });
       }
       message.success(t('common.saved'));

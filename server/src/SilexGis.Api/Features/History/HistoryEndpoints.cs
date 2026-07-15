@@ -113,7 +113,7 @@ public static class HistoryEndpoints
             return new HistoryEventDto(
                 r.Row.Id, r.Row.At, r.Row.UserId, r.UserName, r.Row.Action,
                 r.Row.EntityType!, r.Row.EntityId!,
-                changes is null ? null : JsonSerializer.Deserialize<JsonElement>(changes.ToJsonString()),
+                changes is null ? null : JsonSerializer.SerializeToElement(changes),
                 [.. redacted]);
         }).ToList();
 
