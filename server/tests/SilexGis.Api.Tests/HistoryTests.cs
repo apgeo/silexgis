@@ -138,6 +138,71 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
         moved.GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldBe(ExactLon + 0.002, 1e-9);
     }
 
+    [Fact]
+    public async Task Non_exact_editor_cannot_clear_location_protection()
+    {
+        var caveId = await CreateProtectedCaveAsync();
+        await GrantAsync(caveId, editorId, ObjectPermission.Read | ObjectPermission.Write);
+
+        // The editor (no exact location) tries to un-protect the cave while echoing the
+        // obfuscated null address. Both the flag and the real address must survive, or the
+        // editor could self-serve the protected location (and its whole history).
+        var response = await editor.PutAsJsonAsync($"/api/v1/caves/{caveId}", new
+        {
+            name = $"Protected {caveId:N}"[..20],
+            caveTypeId,
+            visibility = "Authenticated",
+            locationProtected = false,
+            closestAddress = (string?)null,
+            description = "trying to unprotect",
+            explorationStatus = "Unknown",
+            isShowCave = false,
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+
+        // The editor's own view is still redacted — the exploit did not unlock anything.
+        var asEditor = await GetJsonAsync(editor, $"/api/v1/caves/{caveId}");
+        asEditor.GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
+        asEditor.GetProperty("closestAddress").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // The owner confirms the flag and the address are intact; the description edit applied.
+        var asOwner = await GetJsonAsync(owner, $"/api/v1/caves/{caveId}");
+        asOwner.GetProperty("locationProtected").GetBoolean().ShouldBeTrue();
+        asOwner.GetProperty("closestAddress").GetString().ShouldBe(SecretAddress);
+        asOwner.GetProperty("description").GetString().ShouldBe("trying to unprotect");
+    }
+
+    [Fact]
+    public async Task Entrance_update_response_is_masked_for_non_exact_editors()
+    {
+        var caveId = await CreateProtectedCaveAsync();
+        var entranceId = await CreateEntranceAsync(caveId, ExactLon, ExactLat);
+        await GrantAsync(caveId, editorId, ObjectPermission.Read | ObjectPermission.Write);
+
+        var snapped = await ReadEntranceGeomAsync(editor, caveId, entranceId);
+        var response = await editor.PutAsJsonAsync($"/api/v1/cave-entrances/{entranceId}", new
+        {
+            entranceTypeId,
+            isMain = true,
+            geom = new { type = "Point", coordinates = new[] { snapped[0], snapped[1] } },
+            description = "editor edit",
+            positionQuality = "Gps",
+        });
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+
+        // The PUT response the editor gets back must be masked — the guard restored the precise
+        // stored geometry/altitude server-side, so echoing them exact would leak them.
+        var dto = JsonDocument.Parse(body).RootElement;
+        dto.GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
+        dto.GetProperty("altitude").ValueKind.ShouldBe(JsonValueKind.Null);
+        dto.GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldNotBe(ExactLon);
+
+        // The precise value still survives for a caller who may see it.
+        var asOwner = await ReadEntranceAsync(owner, caveId, entranceId);
+        asOwner.GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldBe(ExactLon, 1e-9);
+    }
+
     // ---- helpers
 
     private static string[] Redacted(JsonElement e) =>

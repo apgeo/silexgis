@@ -93,12 +93,15 @@ public sealed class AuditInterceptor(ICurrentUser currentUser) : SaveChangesInte
     private static Dictionary<string, object?> Pair(object? oldValue, object? newValue) =>
         new() { ["old"] = Plain(oldValue), ["new"] = Plain(newValue) };
 
-    // Geometry (and anything else STJ can't represent) is stored as text in the diff.
+    // Geometry (and anything else STJ can't represent) is stored as text in the diff. Enums
+    // are stored as their camelCase name — matching how the API serializes them everywhere
+    // else — so the history UI shows "private → public", not "0 → 3".
     private static object? Plain(object? value) => value switch
     {
         null => null,
         NetTopologySuite.Geometries.Geometry geometry => geometry.AsText(),
-        string or bool or Guid or DateTimeOffset or DateOnly or Enum => value,
+        Enum e => JsonNamingPolicy.CamelCase.ConvertName(e.ToString()),
+        string or bool or Guid or DateTimeOffset or DateOnly => value,
         _ when value.GetType().IsPrimitive || value is decimal => value,
         _ => value.ToString(),
     };

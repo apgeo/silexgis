@@ -203,13 +203,16 @@ public static class CaveEndpoints
         // over the real data. Keyed off the stored protection state (what they read via GET).
         var canViewExact = await permissions.CanAsync(user, cave, ObjectPermission.ViewExactLocation, ct);
         var wasProtected = cave.LocationProtected;
-        var preserved = (cave.ClosestAddress, cave.LandRegistryNumber, cave.LocationNotes);
+        var preserved = (cave.ClosestAddress, cave.LandRegistryNumber, cave.LocationNotes, cave.LocationProtected);
 
         request.Apply(cave);
 
         if (wasProtected && !canViewExact)
         {
-            (cave.ClosestAddress, cave.LandRegistryNumber, cave.LocationNotes) = preserved;
+            // Also preserve the protection flag itself: a caller who cannot view the exact
+            // location must not be able to clear it, which would expose the very fields (and
+            // the whole coordinate history) this guard keeps from being overwritten.
+            (cave.ClosestAddress, cave.LandRegistryNumber, cave.LocationNotes, cave.LocationProtected) = preserved;
         }
 
         await db.SaveChangesAsync(ct);

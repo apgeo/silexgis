@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -170,6 +171,86 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task Editing_a_trip_preserves_hidden_protected_cave_links()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var caveId = await CreateCaveAsync($"Protected {marker}", "authenticated", locationProtected: true);
+        var create = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Trip {marker}",
+            tripDate = "2026-05-05",
+            caveIds = new[] { caveId },
+            participants = Array.Empty<object>(),
+            visibility = "authenticated",
+        });
+        var tripId = (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        // The outsider can Write the trip but not view the cave's exact location, so they see
+        // the cave link redacted (empty caveIds).
+        await GrantTripAsync(tripId, outsiderId, ObjectPermission.Read | ObjectPermission.Write);
+        (await outsider.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{tripId}"))
+            .GetProperty("caveIds").GetArrayLength().ShouldBe(0);
+
+        // Editing the title while echoing the redacted (empty) cave list must not drop the link.
+        (await outsider.PutAsJsonAsync($"/api/v1/trip-logs/{tripId}", new
+        {
+            title = $"Trip {marker} edited",
+            tripDate = "2026-05-05",
+            caveIds = Array.Empty<Guid>(),
+            participants = Array.Empty<object>(),
+            visibility = "authenticated",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var asOwner = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{tripId}");
+        asOwner.GetProperty("caveIds").GetArrayLength().ShouldBe(1);
+        asOwner.GetProperty("title").GetString().ShouldBe($"Trip {marker} edited");
+    }
+
+    [Fact]
+    public async Task Editing_a_trip_does_not_duplicate_child_history_events()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var caveId = await CreateCaveAsync($"Trip Cave {marker}", "authenticated");
+        var create = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Trip {marker}",
+            tripDate = "2026-05-05",
+            caveIds = new[] { caveId },
+            participants = new[] { new { userId = (Guid?)null, nameText = "Guest" } },
+            visibility = "authenticated",
+        });
+        var tripId = (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        // Edit the title twice, resubmitting the same cave link and participant.
+        for (var i = 0; i < 2; i++)
+        {
+            (await owner.PutAsJsonAsync($"/api/v1/trip-logs/{tripId}", new
+            {
+                title = $"Trip {marker} v{i}",
+                tripDate = "2026-05-05",
+                caveIds = new[] { caveId },
+                participants = new[] { new { userId = (Guid?)null, nameText = "Guest" } },
+                visibility = "authenticated",
+            })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        // Unchanged children must be reconciled (diffed), not delete-all/recreate-all: exactly
+        // one 'created' event each and no phantom re-creations or lost deletes in the timeline.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var tripIdStr = tripId.ToString();
+        (await db.Set<AuditEntry>().CountAsync(a =>
+            a.EntityType == "TripLogCave" && a.RootEntityId == tripIdStr && a.Action == AuditActions.Created))
+            .ShouldBe(1);
+        (await db.Set<AuditEntry>().CountAsync(a =>
+            a.EntityType == "TripLogParticipant" && a.RootEntityId == tripIdStr && a.Action == AuditActions.Created))
+            .ShouldBe(1);
+        (await db.Set<AuditEntry>().CountAsync(a =>
+            a.EntityType == "TripLogCave" && a.RootEntityId == tripIdStr && a.Action == AuditActions.Deleted))
+            .ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Tags_filter_lists_and_both_map_paths()
     {
         var marker = Guid.NewGuid().ToString("N")[..8];
@@ -275,6 +356,21 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    private async Task GrantTripAsync(Guid tripId, Guid userId, ObjectPermission permissions)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.ObjectAcls.Add(new ObjectAcl
+        {
+            EntityType = AttachedEntityType.TripLog,
+            EntityId = tripId,
+            SubjectKind = AclSubjectKind.User,
+            SubjectId = userId,
+            Permissions = permissions,
+        });
+        await db.SaveChangesAsync();
     }
 
     private async Task CreateEntranceAsync(Guid caveId, double lon, double lat)

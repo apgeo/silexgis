@@ -28,11 +28,14 @@ public static class HistoryProtection
     // (not counted as protection-redacted). MainGeom is also location data, hence removed for
     // everyone as defence in depth.
     private static readonly string[] AlwaysNoise = ["CreatedAt", "UpdatedAt"];
-    private static readonly string[] CaveNoise = ["EntranceCount", "MainGeom"];
+    private static readonly string[] CaveNoise = [nameof(Cave.EntranceCount), nameof(Cave.MainGeom)];
 
-    // Coordinate-bearing fields, mirroring the live DTO masking exactly.
-    private static readonly string[] CaveSensitive = ["ClosestAddress", "LandRegistryNumber", "LocationNotes"];
-    private static readonly string[] EntranceSensitive = ["Geom", "Altitude", "PositionQuality"];
+    // Coordinate-bearing fields, mirroring the live DTO masking exactly. Named via nameof so a
+    // property rename is a compile error here rather than a silent redaction (location) leak.
+    private static readonly string[] CaveSensitive =
+        [nameof(Cave.ClosestAddress), nameof(Cave.LandRegistryNumber), nameof(Cave.LocationNotes)];
+    private static readonly string[] EntranceSensitive =
+        [nameof(CaveEntrance.Geom), nameof(CaveEntrance.Altitude), nameof(CaveEntrance.PositionQuality)];
 
     /// <summary>Property names dropped as noise for the given entity type (never shown).</summary>
     public static IReadOnlyList<string> NoiseFor(string entityType) =>

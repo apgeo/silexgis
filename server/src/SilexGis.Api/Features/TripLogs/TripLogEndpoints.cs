@@ -133,7 +133,9 @@ public static class TripLogEndpoints
         var trip = new TripLog { Title = request.Title, OwnerUserId = user.UserId };
         Apply(trip, request);
         db.TripLogs.Add(trip);
-        await ReplaceChildrenAsync(db, trip.Id, request, ct);
+        // No existing children on create, so the reconcile helpers reduce to pure inserts.
+        await ReconcileCaveLinksAsync(db, user, trip.Id, request.CaveIds, ct);
+        await ReconcileParticipantsAsync(db, trip.Id, request.Participants, ct);
         await db.SaveChangesAsync(ct);
 
         var items = await MapWithChildrenAsync(db, user, [trip], ct);
@@ -175,9 +177,8 @@ public static class TripLogEndpoints
         }
 
         Apply(trip, request);
-        await db.TripLogCaves.Where(x => x.TripLogId == trip.Id).ExecuteDeleteAsync(ct);
-        await db.TripLogParticipants.Where(x => x.TripLogId == trip.Id).ExecuteDeleteAsync(ct);
-        await ReplaceChildrenAsync(db, trip.Id, request, ct);
+        await ReconcileCaveLinksAsync(db, user, trip.Id, request.CaveIds, ct);
+        await ReconcileParticipantsAsync(db, trip.Id, request.Participants, ct);
         await db.SaveChangesAsync(ct);
 
         var items = await MapWithChildrenAsync(db, user, [trip], ct);
@@ -237,25 +238,59 @@ public static class TripLogEndpoints
         trip.Visibility = request.Visibility;
     }
 
-    private static async Task ReplaceChildrenAsync(
-        SilexGisDbContext db, Guid tripId, TripLogWriteRequest request, CancellationToken ct)
+    // Reconcile links with a diff (add/remove only what changed) rather than delete-all +
+    // recreate-all. ExecuteDelete bypasses the audit interceptor and a full recreate logs a
+    // "created" event for every unchanged child on every save, so the diff keeps the entity's
+    // history timeline honest. Also preserves cave links the caller could not see: those were
+    // redacted out of the DTO they edited, so a full-replace list would silently drop them.
+    private static async Task ReconcileCaveLinksAsync(
+        SilexGisDbContext db, UserContext user, Guid tripId, IReadOnlyList<Guid> requestedCaveIds, CancellationToken ct)
     {
-        foreach (var caveId in request.CaveIds.Distinct())
+        var existing = await db.TripLogCaves.Where(x => x.TripLogId == tripId).ToListAsync(ct);
+        var redacted = await CaveLinkRedaction.RedactedCaveIdsAsync(db, user, existing.Select(x => x.CaveId), ct);
+        var desired = requestedCaveIds
+            .Concat(existing.Where(x => redacted.Contains(x.CaveId)).Select(x => x.CaveId))
+            .ToHashSet();
+
+        foreach (var link in existing.Where(x => !desired.Contains(x.CaveId)))
+        {
+            db.TripLogCaves.Remove(link);
+        }
+
+        foreach (var caveId in desired.Where(id => existing.All(x => x.CaveId != id)))
         {
             db.TripLogCaves.Add(new TripLogCave { TripLogId = tripId, CaveId = caveId });
         }
+    }
 
-        foreach (var participant in request.Participants)
+    private static async Task ReconcileParticipantsAsync(
+        SilexGisDbContext db, Guid tripId, IReadOnlyList<TripParticipantWrite> requested, CancellationToken ct)
+    {
+        var existing = await db.TripLogParticipants.Where(x => x.TripLogId == tripId).ToListAsync(ct);
+        var desired = requested
+            .Select(p => (p.UserId, NameText: p.UserId is null ? p.NameText!.Trim() : null))
+            .ToList();
+
+        // Keep one existing row per matching desired slot (by user id / guest name); remove the
+        // rest and add the desired entries that had no match — so unchanged participants neither
+        // churn nor generate spurious history events.
+        foreach (var participant in existing)
         {
-            db.TripLogParticipants.Add(new TripLogParticipant
+            var idx = desired.FindIndex(d => d.UserId == participant.UserId && d.NameText == participant.NameText);
+            if (idx >= 0)
             {
-                TripLogId = tripId,
-                UserId = participant.UserId,
-                NameText = participant.UserId is null ? participant.NameText!.Trim() : null,
-            });
+                desired.RemoveAt(idx);
+            }
+            else
+            {
+                db.TripLogParticipants.Remove(participant);
+            }
         }
 
-        await Task.CompletedTask;
+        foreach (var (userId, nameText) in desired)
+        {
+            db.TripLogParticipants.Add(new TripLogParticipant { TripLogId = tripId, UserId = userId, NameText = nameText });
+        }
     }
 
     /// <summary>Geometry validity, cave visibility, participant-user existence.</summary>

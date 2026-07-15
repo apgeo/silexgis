@@ -194,7 +194,10 @@ public static class EntranceEndpoints
 
         await RecomputeDerivedAsync(db, cave, ct);
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(ToDto(entrance, exact: true, access.Value.LocationGridMeters));
+        // Mask the response to the caller's own view (mirrors the list/GET rule): after the
+        // guard restored the precise stored values, returning them exact would leak them.
+        var exact = !cave.LocationProtected || canViewExact;
+        return TypedResults.Ok(ToDto(entrance, exact, access.Value.LocationGridMeters));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
