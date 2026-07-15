@@ -37,6 +37,11 @@ public sealed class AttachmentCreateRequestValidator : AbstractValidator<Attachm
         RuleFor(x => x.EntityId).NotEmpty();
         RuleFor(x => x.Caption).MaximumLength(500);
         RuleFor(x => x.EntityType).IsInEnum();
+        // A file is never an attachment target (it is only a tag target). Allowing it would let a
+        // file be attached to a file, and the polymorphic access resolver would then recurse
+        // file → attachment → file without bound. Tags travel a separate table, so are unaffected.
+        RuleFor(x => x.EntityType).NotEqual(AttachedEntityType.StoredFile)
+            .WithMessage("Files cannot be attachment targets.");
         RuleFor(x => x.Role).IsInEnum();
     }
 }

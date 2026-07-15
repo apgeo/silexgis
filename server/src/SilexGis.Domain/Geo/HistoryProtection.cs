@@ -30,6 +30,13 @@ public static class HistoryProtection
     private static readonly string[] AlwaysNoise = ["CreatedAt", "UpdatedAt"];
     private static readonly string[] CaveNoise = [nameof(Cave.EntranceCount), nameof(Cave.MainGeom)];
 
+    // A stored file's created/deleted snapshot carries its EXIF capture point (Geom), the raw
+    // metadata jsonb (which may itself hold GPS EXIF tags) and the internal storage path. A file
+    // is a polymorphic child with no governing cave resolvable here, and its geotag IS location
+    // data — so drop all three for everyone (defence in depth), never emitted in any timeline.
+    private static readonly string[] FileNoise =
+        [nameof(StoredFile.Geom), nameof(StoredFile.Metadata), nameof(StoredFile.StoragePath)];
+
     // Coordinate-bearing fields, mirroring the live DTO masking exactly. Named via nameof so a
     // property rename is a compile error here rather than a silent redaction (location) leak.
     private static readonly string[] CaveSensitive =
@@ -38,8 +45,12 @@ public static class HistoryProtection
         [nameof(CaveEntrance.Geom), nameof(CaveEntrance.Altitude), nameof(CaveEntrance.PositionQuality)];
 
     /// <summary>Property names dropped as noise for the given entity type (never shown).</summary>
-    public static IReadOnlyList<string> NoiseFor(string entityType) =>
-        entityType == nameof(Cave) ? [.. AlwaysNoise, .. CaveNoise] : AlwaysNoise;
+    public static IReadOnlyList<string> NoiseFor(string entityType) => entityType switch
+    {
+        nameof(Cave) => [.. AlwaysNoise, .. CaveNoise],
+        nameof(StoredFile) => [.. AlwaysNoise, .. FileNoise],
+        _ => AlwaysNoise,
+    };
 
     /// <summary>
     /// Strips noise and — when the governing cave's location is hidden from the caller —

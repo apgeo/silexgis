@@ -102,17 +102,42 @@ public static class MapEndpoints
                 .ToListAsync(ct);
         var entranceToCave = entranceCaves.ToDictionary(e => e.Id, e => e.CaveId);
 
-        // Every cave a photo touches (direct or via an entrance) — drives readability and protection.
-        var allCaveIds = IdsOf(AttachedEntityType.Cave).Concat(entranceCaves.Select(e => e.CaveId)).Distinct().ToList();
+        // A trip's cave links and a surface feature's linked cave reveal that cave's location too,
+        // so a photo attached to one is subject to the same protection as a direct cave attachment.
+        var tripIds = IdsOf(AttachedEntityType.TripLog);
+        var tripCaves = tripIds.Length == 0
+            ? []
+            : await db.TripLogCaves.AsNoTracking()
+                .Where(x => tripIds.Contains(x.TripLogId))
+                .Select(x => new { x.TripLogId, x.CaveId })
+                .ToListAsync(ct);
+        var tripToCaves = tripCaves.GroupBy(x => x.TripLogId).ToDictionary(g => g.Key, g => g.Select(x => x.CaveId).ToList());
+
+        var featureIds = IdsOf(AttachedEntityType.SurfaceFeature);
+        var featureCaves = featureIds.Length == 0
+            ? []
+            : await db.SurfaceFeatures.AsNoTracking()
+                .Where(f => featureIds.Contains(f.Id) && f.CaveId != null)
+                .Select(f => new { f.Id, CaveId = f.CaveId!.Value })
+                .ToListAsync(ct);
+        var featureToCave = featureCaves.ToDictionary(f => f.Id, f => f.CaveId);
+
+        // Every cave a photo touches (direct, via an entrance, via a trip cave-link, or via a
+        // surface feature's cave) — drives readability and protection.
+        var allCaveIds = IdsOf(AttachedEntityType.Cave)
+            .Concat(entranceCaves.Select(e => e.CaveId))
+            .Concat(tripCaves.Select(x => x.CaveId))
+            .Concat(featureCaves.Select(f => f.CaveId))
+            .Distinct().ToList();
 
         var readableCaveIds = await ReadableIdsAsync(
             db.Caves.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Cave).Select(c => c.Id), allCaveIds, ct);
         var readableFeatureIds = await ReadableIdsAsync(
             db.SurfaceFeatures.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.SurfaceFeature).Select(f => f.Id),
-            IdsOf(AttachedEntityType.SurfaceFeature), ct);
+            featureIds, ct);
         var readableTripIds = await ReadableIdsAsync(
             db.TripLogs.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.TripLog).Select(t => t.Id),
-            IdsOf(AttachedEntityType.TripLog), ct);
+            tripIds, ct);
         var readableGeofileIds = await ReadableIdsAsync(
             db.Geofiles.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Geofile).Select(g => g.Id),
             IdsOf(AttachedEntityType.Geofile), ct);
@@ -142,6 +167,14 @@ public static class MapEndpoints
                 .Concat(fileLinks
                     .Where(l => l.EntityType == AttachedEntityType.CaveEntrance)
                     .Select(l => entranceToCave.TryGetValue(l.EntityId, out var caveId) ? caveId : (Guid?)null)
+                    .Where(caveId => caveId is not null)
+                    .Select(caveId => caveId!.Value))
+                .Concat(fileLinks
+                    .Where(l => l.EntityType == AttachedEntityType.TripLog)
+                    .SelectMany(l => tripToCaves.GetValueOrDefault(l.EntityId) ?? []))
+                .Concat(fileLinks
+                    .Where(l => l.EntityType == AttachedEntityType.SurfaceFeature)
+                    .Select(l => featureToCave.TryGetValue(l.EntityId, out var caveId) ? caveId : (Guid?)null)
                     .Where(caveId => caveId is not null)
                     .Select(caveId => caveId!.Value));
             if (photoCaveIds.Any(hiddenCaveIds.Contains))
