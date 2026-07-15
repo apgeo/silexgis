@@ -441,7 +441,12 @@ export function useAttachments(entityType: AttachedEntityType, entityId: string 
 
 function useInvalidateAttachments() {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: ['attachments'] });
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['attachments'] });
+    // Attachments are audited children of their target entity, so any attach/detach/metadata
+    // change surfaces in that entity's timeline — refresh it here so every caller stays in sync.
+    void queryClient.invalidateQueries({ queryKey: ['history'] });
+  };
 }
 
 export type HistoryEvent = components['schemas']['HistoryEventDto'];
@@ -507,7 +512,6 @@ export function useCreateAttachment() {
 
 export function useUpdateAttachment() {
   const invalidate = useInvalidateAttachments();
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...body }: {
       id: string;
@@ -515,11 +519,9 @@ export function useUpdateAttachment() {
       caption: string | null;
       sortOrder: number;
     }) => unwrap(api.PUT('/api/v1/attachments/{id}', { params: { path: { id } }, body })),
-    onSuccess: () => {
-      invalidate();
-      // Caption/role changes are audited on the target entity — refresh its timeline.
-      void queryClient.invalidateQueries({ queryKey: ['history'] });
-    },
+    // Caption/role changes are audited on the target entity; useInvalidateAttachments refreshes
+    // both the gallery and that timeline.
+    onSuccess: () => invalidate(),
   });
 }
 
@@ -742,6 +744,8 @@ function useInvalidateTaggings() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: ['taggings'] });
     void queryClient.invalidateQueries({ queryKey: ['tags'] });
+    // Taggings are audited children of the tagged entity — refresh its timeline too.
+    void queryClient.invalidateQueries({ queryKey: ['history'] });
   };
 }
 
