@@ -9,6 +9,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -27,6 +28,7 @@ public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
     private HttpClient owner = null!;    // Editor
     private HttpClient outsider = null!; // Editor, unrelated
     private HttpClient viewer = null!;   // Viewer role
+    private HttpClient admin = null!;    // Admin role
     private long caveTypeId;
 
     public FileAttachmentTests(PostgresFixture postgres)
@@ -45,6 +47,7 @@ public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"fa-own-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"fa-out-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"fa-view-{suffix}@t.local");
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"fa-adm-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -55,6 +58,7 @@ public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
         owner = await AuthHelper.BearerClientAsync(factory, $"fa-own-{suffix}@t.local");
         outsider = await AuthHelper.BearerClientAsync(factory, $"fa-out-{suffix}@t.local");
         viewer = await AuthHelper.BearerClientAsync(factory, $"fa-view-{suffix}@t.local");
+        admin = await AuthHelper.BearerClientAsync(factory, $"fa-adm-{suffix}@t.local");
     }
 
     [Fact]
@@ -394,7 +398,126 @@ public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
         })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
+    [Fact]
+    public async Task Geotagged_photo_shows_on_the_photo_map_when_its_entity_is_readable()
+    {
+        // A JPEG with GPS EXIF; the point is inside the query bbox below.
+        var geo = await UploadAsync(owner, "geo.jpg", MakeGeotaggedJpeg(45.8, 25.8), "image/jpeg");
+        var geoId = geo.GetProperty("id").GetGuid();
+        var plain = await UploadAsync(owner, "plain.png", MakePng(16, 16), "image/png"); // no GPS
+        var plainId = plain.GetProperty("id").GetGuid();
+
+        var caveId = await CreateCaveAsync(owner, "Geo Photo Cave", "authenticated");
+        foreach (var id in new[] { geoId, plainId })
+        {
+            (await owner.PostAsJsonAsync("/api/v1/attachments/", new
+            {
+                fileId = id, entityType = "cave", entityId = caveId, role = "photoEntrance", sortOrder = 0,
+            })).StatusCode.ShouldBe(HttpStatusCode.Created);
+        }
+
+        const string bbox = "25.5,45.5,26.1,46.1";
+        // The geotagged photo is on the map for the uploader and for any reader of the cave;
+        // the photo without GPS never is.
+        (await PhotoIdsAsync(owner, bbox)).ShouldBe(new[] { geoId });
+        (await PhotoIdsAsync(outsider, bbox)).ShouldBe(new[] { geoId });
+    }
+
+    [Fact]
+    public async Task Photo_map_withholds_photos_of_protected_caves_from_callers_without_exact_location()
+    {
+        var geo = await UploadAsync(owner, "protected.jpg", MakeGeotaggedJpeg(45.8, 25.8), "image/jpeg");
+        var geoId = geo.GetProperty("id").GetGuid();
+
+        // Attached to a protected cave the outsider can read but not view exactly.
+        var protectedCave = await CreateCaveAsync(owner, "Protected Photo Cave", "authenticated", locationProtected: true);
+        (await owner.PostAsJsonAsync("/api/v1/attachments/", new
+        {
+            fileId = geoId, entityType = "cave", entityId = protectedCave, role = "photoEntrance", sortOrder = 0,
+        })).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        const string bbox = "25.5,45.5,26.1,46.1";
+        // The owner has exact-location on their own cave; the outsider does not — the EXIF point
+        // is the protected location, so it is withheld entirely (not snapped).
+        (await PhotoIdsAsync(owner, bbox)).ShouldContain(geoId);
+        (await PhotoIdsAsync(outsider, bbox)).ShouldNotContain(geoId);
+
+        // A photo attached only to a private cave is invisible to the outsider (plain visibility).
+        var privateGeo = await UploadAsync(owner, "private.jpg", MakeGeotaggedJpeg(45.81, 25.81), "image/jpeg");
+        var privateGeoId = privateGeo.GetProperty("id").GetGuid();
+        var privateCave = await CreateCaveAsync(owner, "Private Photo Cave", "private");
+        (await owner.PostAsJsonAsync("/api/v1/attachments/", new
+        {
+            fileId = privateGeoId, entityType = "cave", entityId = privateCave, role = "photoEntrance", sortOrder = 0,
+        })).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await PhotoIdsAsync(owner, bbox)).ShouldContain(privateGeoId);
+        (await PhotoIdsAsync(outsider, bbox)).ShouldNotContain(privateGeoId);
+    }
+
+    [Fact]
+    public async Task Photo_geo_backfill_repopulates_missing_points_and_requires_admin_to_enqueue()
+    {
+        var geo = await UploadAsync(owner, "backfill.jpg", MakeGeotaggedJpeg(45.8, 25.8), "image/jpeg");
+        var geoId = geo.GetProperty("id").GetGuid();
+
+        // Simulate a file that predates geotag-at-upload: clear its point.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var file = await db.StoredFiles.FirstAsync(f => f.Id == geoId);
+            file.Geom = null;
+            await db.SaveChangesAsync();
+        }
+
+        // Enqueue is admin-only.
+        (await viewer.PostAsync("/api/v1/jobs/photo-geo-backfill", null)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        var enqueue = await admin.PostAsync("/api/v1/jobs/photo-geo-backfill", null);
+        enqueue.StatusCode.ShouldBe(HttpStatusCode.OK, await enqueue.Content.ReadAsStringAsync());
+        (await enqueue.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("kind").GetString().ShouldBe("photo-geo-backfill");
+
+        // Run the handler directly (the worker executes the same code) → the point is recovered.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
+                .First(h => h.Kind == ProcessingJobKinds.PhotoGeoBackfill);
+            await handler.ExecuteAsync(new ProcessingJob { Kind = ProcessingJobKinds.PhotoGeoBackfill }, CancellationToken.None);
+
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.StoredFiles.AsNoTracking().FirstAsync(f => f.Id == geoId)).Geom.ShouldNotBeNull();
+        }
+    }
+
     // ---- helpers ----
+
+    /// <summary>File ids present in the /map/photos response for a bbox.</summary>
+    private static async Task<Guid[]> PhotoIdsAsync(HttpClient client, string bbox)
+    {
+        var collection = await client.GetFromJsonAsync<JsonElement>($"/api/v1/map/photos?bbox={bbox}");
+        return [.. collection.GetProperty("features").EnumerateArray()
+            .Select(f => f.GetProperty("properties").GetProperty("id").GetGuid())];
+    }
+
+    private static byte[] MakeGeotaggedJpeg(double lat, double lon)
+    {
+        using var image = new MagickImage(MagickColors.ForestGreen, 64, 64);
+        var exif = new ExifProfile();
+        exif.SetValue(ExifTag.GPSLatitudeRef, lat >= 0 ? "N" : "S");
+        exif.SetValue(ExifTag.GPSLatitude, ToDms(Math.Abs(lat)));
+        exif.SetValue(ExifTag.GPSLongitudeRef, lon >= 0 ? "E" : "W");
+        exif.SetValue(ExifTag.GPSLongitude, ToDms(Math.Abs(lon)));
+        image.SetProfile(exif);
+        return image.ToByteArray(MagickFormat.Jpeg);
+    }
+
+    /// <summary>Degrees → EXIF degrees/minutes/seconds rationals.</summary>
+    private static Rational[] ToDms(double degrees)
+    {
+        var d = (uint)degrees;
+        var minutesFull = (degrees - d) * 60d;
+        var m = (uint)minutesFull;
+        var seconds = (minutesFull - m) * 60d;
+        return [new Rational(d), new Rational(m), new Rational(seconds)];
+    }
 
     private static async Task<string?> ReadCodeAsync(HttpResponseMessage response)
     {
@@ -424,14 +547,14 @@ public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement;
     }
 
-    private async Task<Guid> CreateCaveAsync(HttpClient client, string name, string visibility)
+    private async Task<Guid> CreateCaveAsync(HttpClient client, string name, string visibility, bool locationProtected = false)
     {
         var response = await client.PostAsJsonAsync("/api/v1/caves", new
         {
             name = $"{name} {Guid.NewGuid():N}"[..40],
             caveTypeId,
             visibility,
-            locationProtected = false,
+            locationProtected,
             explorationStatus = "Unknown",
             isShowCave = false,
         });

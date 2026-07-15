@@ -15,6 +15,8 @@ export interface ViewConfig {
   surfaceFeaturesVisible: boolean;
   /** Added after v1 shipped; older saved views omit it (treated as true). */
   centerlinesVisible?: boolean;
+  /** Added after v1 shipped; older saved views omit it (treated as false — an opt-in overlay). */
+  photosVisible?: boolean;
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
   tagFilter: string | null;
@@ -26,6 +28,7 @@ export interface WorkspaceUiState {
   entrancesVisible: boolean;
   surfaceFeaturesVisible: boolean;
   centerlinesVisible: boolean;
+  photosVisible: boolean;
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
   tagFilter: string | null;
@@ -42,6 +45,7 @@ export function captureViewConfig(ui: WorkspaceUiState): ViewConfig {
     entrancesVisible: ui.entrancesVisible,
     surfaceFeaturesVisible: ui.surfaceFeaturesVisible,
     centerlinesVisible: ui.centerlinesVisible,
+    photosVisible: ui.photosVisible,
     geofileIds: ui.geofileIds,
     rasters: ui.rasters,
     tagFilter: ui.tagFilter,
@@ -63,6 +67,7 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     entrancesVisible: parsed.entrancesVisible ?? true,
     surfaceFeaturesVisible: parsed.surfaceFeaturesVisible ?? true,
     centerlinesVisible: parsed.centerlinesVisible ?? true,
+    photosVisible: parsed.photosVisible ?? false,
     geofileIds: parsed.geofileIds ?? [],
     rasters: parsed.rasters ?? [],
     tagFilter: parsed.tagFilter ?? null,

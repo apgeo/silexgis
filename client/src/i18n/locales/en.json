@@ -48,7 +48,8 @@
     "surfaceFeatures": "Surface features",
     "geofiles": "Imported files",
     "rasterMaps": "Raster maps",
-    "centerlines": "Cave centerlines"
+    "centerlines": "Cave centerlines",
+    "photos": "Geotagged photos"
   },
   "caves": {
     "title": "Caves",

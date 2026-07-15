@@ -22,6 +22,8 @@ import {
   setSelectedSurfaceFeature,
 } from '../map/featureLayer.ts';
 import { attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
+import { PHOTO_LAYER_ID, attachPhotoLoader, createPhotoLayer, setPhotosEnabled } from '../map/photoLayer.ts';
+import { attachPhotoPopup } from '../map/photoPopup.ts';
 import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import { subscribe } from '../workspace/workspaceBus.ts';
@@ -45,6 +47,7 @@ export default function MapPage() {
   const [tagFilter, setTagFilter] = useState<string | null>(getMapTagFilter());
   const [surfaceFeaturesVisible, setSurfaceFeaturesVisible] = useState(true);
   const [centerlinesVisible, setCenterlinesVisible] = useState(true);
+  const [photosVisible, setPhotosVisible] = useState(false);
   const [editController, setEditController] = useState<MapEditController | null>(null);
   const selection = useWorkspaceStore((s) => s.selection);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
@@ -74,6 +77,7 @@ export default function MapPage() {
       [ENTRANCE_LAYER_ID, createEntranceLayer],
       [SURFACE_FEATURE_LAYER_ID, createSurfaceFeatureLayer],
       [CENTERLINE_LAYER_ID, createCenterlineLayer],
+      [PHOTO_LAYER_ID, createPhotoLayer],
     ] as const) {
       if (!map.getLayers().getArray().some((l) => l.get('id') === id)) {
         map.addLayer(create());
@@ -84,6 +88,8 @@ export default function MapPage() {
     const detachFeatureLoader = attachSurfaceFeatureLoader(map);
     const detachCenterlineLoader = attachCenterlineLoader(map);
     const detachGeofileLoader = attachGeofileLoader(map);
+    const detachPhotoLoader = attachPhotoLoader(map);
+    const detachPhotoPopup = attachPhotoPopup(map);
     const detachSelection = attachSelection(map, setSelection);
     const detachHover = attachHoverTooltip(map);
     const controller = new MapEditController(map);
@@ -95,6 +101,8 @@ export default function MapPage() {
       detachFeatureLoader();
       detachCenterlineLoader();
       detachGeofileLoader();
+      detachPhotoLoader();
+      detachPhotoPopup();
       detachSelection();
       detachHover();
       map.setTarget(undefined);
@@ -188,12 +196,22 @@ export default function MapPage() {
     layer?.setVisible(centerlinesVisible);
   }, [centerlinesVisible]);
 
+  useEffect(() => {
+    getWorkspaceMap()
+      .getLayers()
+      .getArray()
+      .find((l) => l.get('id') === PHOTO_LAYER_ID)
+      ?.setVisible(photosVisible);
+    setPhotosEnabled(photosVisible); // gate the bbox loader so hidden = no fetches
+  }, [photosVisible]);
+
   const captureCurrentView = () =>
     captureViewConfig({
       baseLayerId: activeBaseId,
       entrancesVisible,
       surfaceFeaturesVisible,
       centerlinesVisible,
+      photosVisible,
       geofileIds: visibleGeofileIds,
       rasters: visibleRasterIds.map((id) => ({ id, opacity: rasterOpacity[id] })),
       tagFilter,
@@ -211,6 +229,7 @@ export default function MapPage() {
     setEntrancesVisible(ui.entrancesVisible);
     setSurfaceFeaturesVisible(ui.surfaceFeaturesVisible);
     setCenterlinesVisible(ui.centerlinesVisible);
+    setPhotosVisible(ui.photosVisible);
     for (const id of visibleGeofileIds) {
       if (!ui.geofileIds.includes(id)) {
         setGeofileVisible(id, false);
@@ -253,6 +272,8 @@ export default function MapPage() {
           onSurfaceFeaturesVisibleChange={setSurfaceFeaturesVisible}
           centerlinesVisible={centerlinesVisible}
           onCenterlinesVisibleChange={setCenterlinesVisible}
+          photosVisible={photosVisible}
+          onPhotosVisibleChange={setPhotosVisible}
           geofiles={importedGeofiles}
           visibleGeofileIds={visibleGeofileIds}
           onGeofileVisibleChange={setGeofileVisible}

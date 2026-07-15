@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using NetTopologySuite.Geometries;
+
 namespace SilexGis.Domain.Entities;
 
 /// <summary>Broad file categories used for storage layout and later media handling.</summary>
@@ -53,6 +55,13 @@ public class StoredFile : ITimestamped, IAuditable
     /// the upload time). Prefilled client-side from EXIF where present; copied to new versions.
     /// </summary>
     public DateOnly? DocumentDate { get; set; }
+
+    /// <summary>
+    /// Capture location for a photo, read from EXIF GPS at upload (null when the image carries
+    /// no GPS or is not an image). A geotagged photo's point IS location data: paths that emit
+    /// it enforce the same cave-location protection as entrance coordinates.
+    /// </summary>
+    public Point? Geom { get; set; }
 
     /// <summary>Format-specific metadata (EXIF, dimensions, layer info, …) as jsonb.</summary>
     public string Metadata { get; set; } = "{}";

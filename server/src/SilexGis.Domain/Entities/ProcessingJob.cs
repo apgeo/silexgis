@@ -44,4 +44,7 @@ public static class ProcessingJobKinds
 {
     public const string GeofileImport = "geofile-import";
     public const string RasterCog = "raster-cog";
+
+    /// <summary>Backfill EXIF GPS points onto existing image files that predate geotag capture.</summary>
+    public const string PhotoGeoBackfill = "photo-geo-backfill";
 }

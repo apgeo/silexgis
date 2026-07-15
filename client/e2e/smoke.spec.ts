@@ -38,6 +38,14 @@ test('login, map workspace and cave registry work end to end', async ({ page }) 
   await expect(page.getByRole('button', { name: /Add entrance/ })).toBeVisible();
 });
 
+test('geotagged photos overlay toggles on and loads the photo map layer', async ({ page }) => {
+  await login(page);
+  // Enabling the opt-in overlay triggers a bbox load of the photo endpoint.
+  const photoRequest = page.waitForRequest((r) => r.url().includes('/api/v1/map/photos'), { timeout: 15_000 });
+  await page.getByRole('checkbox', { name: 'Geotagged photos' }).check();
+  await photoRequest;
+});
+
 test('cave and entrance create/edit round-trip', async ({ page }) => {
   const caveName = `E2E Smoke Cave ${Date.now()}`;
   await login(page);

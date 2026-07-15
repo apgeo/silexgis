@@ -231,6 +231,11 @@ export async function fetchCenterlineFeatures(bbox: string): Promise<EntranceFea
   return unwrap(api.GET('/api/v1/map/cave-centerlines', { params: { query: { bbox } } }));
 }
 
+/** Imperative fetch used by the OpenLayers photo overlay loader (not a hook). */
+export async function fetchPhotoFeatures(bbox: string): Promise<EntranceFeatureCollection> {
+  return unwrap(api.GET('/api/v1/map/photos', { params: { query: { bbox } } }));
+}
+
 export function useCaveSearch(q: string) {
   return useQuery({
     queryKey: queryKeys.caveSearch(q),

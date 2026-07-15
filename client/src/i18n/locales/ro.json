@@ -48,7 +48,8 @@
     "surfaceFeatures": "Fenomene de suprafață",
     "geofiles": "Fișiere importate",
     "rasterMaps": "Hărți raster",
-    "centerlines": "Poligonații peșteri"
+    "centerlines": "Poligonații peșteri",
+    "photos": "Fotografii geolocalizate"
   },
   "caves": {
     "title": "Peșteri",

@@ -71,6 +71,7 @@ public static class FileEndpoints
         SilexGisDbContext db,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
+        IPhotoGeotagReader geotagReader,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -91,6 +92,7 @@ public static class FileEndpoints
         }
 
         var (storagePath, sha256, mimeType) = await SaveContentAsync(file, fileStore, ct);
+        var kind = KindFromMime(mimeType);
         var stored = new StoredFile
         {
             StoragePath = storagePath,
@@ -99,7 +101,8 @@ public static class FileEndpoints
             SizeBytes = file.Length,
             Sha256 = sha256,
             UploadedBy = user.UserId,
-            Kind = KindFromMime(mimeType),
+            Kind = kind,
+            Geom = kind == FileKind.Image ? geotagReader.TryReadPoint(fileStore.GetAbsolutePath(storagePath)) : null,
         };
         stored.VersionGroupId = stored.Id; // first version in its own chain
         db.StoredFiles.Add(stored);
@@ -114,6 +117,7 @@ public static class FileEndpoints
         SilexGisDbContext db,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
+        IPhotoGeotagReader geotagReader,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -143,6 +147,7 @@ public static class FileEndpoints
         }
 
         var (storagePath, sha256, mimeType) = await SaveContentAsync(file, fileStore, ct);
+        var kind = KindFromMime(mimeType);
         var stored = new StoredFile
         {
             StoragePath = storagePath,
@@ -151,10 +156,12 @@ public static class FileEndpoints
             SizeBytes = file.Length,
             Sha256 = sha256,
             UploadedBy = user.UserId,
-            Kind = KindFromMime(mimeType),
+            Kind = kind,
             VersionGroupId = head.VersionGroupId,
             VersionNumber = maxVersion + 1,
             DocumentDate = head.DocumentDate, // the document's date carries across versions
+            // Geotag is content-derived, so re-read it from this version's own EXIF.
+            Geom = kind == FileKind.Image ? geotagReader.TryReadPoint(fileStore.GetAbsolutePath(storagePath)) : null,
         };
         db.StoredFiles.Add(stored);
 
