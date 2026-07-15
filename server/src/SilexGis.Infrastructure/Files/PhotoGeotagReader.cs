@@ -32,6 +32,10 @@ public sealed class MagickPhotoGeotagReader : IPhotoGeotagReader
             var latitude = ReadDegrees(exif, ExifTag.GPSLatitude, exif.GetValue(ExifTag.GPSLatitudeRef)?.Value, 'S');
             var longitude = ReadDegrees(exif, ExifTag.GPSLongitude, exif.GetValue(ExifTag.GPSLongitudeRef)?.Value, 'W');
             if (latitude is null || longitude is null
+                // A zero-denominator rational (common in malformed EXIF) yields NaN, which slips
+                // past the range check below (every comparison against NaN is false) and would
+                // otherwise be stored as POINT(NaN NaN); reject non-finite values up front.
+                || !double.IsFinite(latitude.Value) || !double.IsFinite(longitude.Value)
                 || latitude is < -90 or > 90 || longitude is < -180 or > 180
                 || (latitude == 0 && longitude == 0)) // null-island: almost always a zeroed tag, not a real fix
             {

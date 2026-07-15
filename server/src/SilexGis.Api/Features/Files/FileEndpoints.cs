@@ -22,9 +22,11 @@ public sealed class FileUpdateRequestValidator : AbstractValidator<FileUpdateReq
 {
     public FileUpdateRequestValidator()
     {
-        // "When the document/photo is from" cannot be in the future.
+        // "When the document/photo is from" cannot be in the future. Allow one day of slack so a
+        // caller in a UTC-ahead timezone (the app's own locale is UTC+2/+3) is not rejected when
+        // picking their local "today" while the server clock is still on the previous UTC day.
         RuleFor(x => x.DocumentDate)
-            .Must(d => d is null || d <= DateOnly.FromDateTime(DateTime.UtcNow))
+            .Must(d => d is null || d <= DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)))
             .WithMessage("The document date cannot be in the future.");
     }
 }
@@ -182,7 +184,18 @@ public static class FileEndpoints
             tagging.EntityId = stored.Id;
         }
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Two uploads raced onto the same head: both computed the same next version number
+            // and the unique (version_group_id, version_number) index rejected the loser. Surface
+            // it as the same conflict a sequential not-head upload would get.
+            return ApiProblems.Conflict("file.not_head", "A newer version already exists; upload onto the current head.");
+        }
+
         return TypedResults.Created($"/api/v1/files/{stored.Id}", stored.ToDto(tokens));
     }
 
@@ -262,6 +275,14 @@ public static class FileEndpoints
         if (file.Id == head.Id)
         {
             return ApiProblems.Conflict("file.head_undeletable", "The current version cannot be deleted; upload a new version instead.");
+        }
+
+        // A version upload repoints attachments to the new head, so a superseded version normally
+        // has none. If one still points here (e.g. an attachment created directly against an old
+        // id), refuse — the attachments→files FK cascades, so deleting would silently drop it.
+        if (await db.Attachments.AsNoTracking().AnyAsync(a => a.FileId == file.Id, ct))
+        {
+            return ApiProblems.Conflict("file.version_in_use", "This version is still attached to an entity and cannot be deleted.");
         }
 
         db.StoredFiles.Remove(file);
