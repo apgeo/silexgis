@@ -283,6 +283,117 @@ public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
             .ShouldBeGreaterThan(0);
     }
 
+    [Fact]
+    public async Task File_tags_follow_the_head_across_versions_and_respect_the_write_rule()
+    {
+        var v1 = await UploadAsync(owner, "hydro.txt", "notes"u8.ToArray(), "text/plain");
+        var v1Id = v1.GetProperty("id").GetGuid();
+
+        // Attach to an authenticated cave: outsiders/viewers can Read it, only the owner can Write.
+        var caveId = await CreateCaveAsync(owner, "Tagged File Cave", "authenticated");
+        (await owner.PostAsJsonAsync("/api/v1/attachments/", new
+        {
+            fileId = v1Id, entityType = "cave", entityId = caveId, role = "document", sortOrder = 0,
+        })).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // The uploader (an editor with Write on the cave) can tag the file.
+        var tagResponse = await owner.PostAsJsonAsync("/api/v1/taggings/", new
+        {
+            tagName = "hydrology", entityType = "storedFile", entityId = v1Id,
+        });
+        tagResponse.StatusCode.ShouldBe(HttpStatusCode.Created, await tagResponse.Content.ReadAsStringAsync());
+
+        // A reader without write on any attached entity cannot tag it (403, not 404 — the file is visible).
+        (await outsider.PostAsJsonAsync("/api/v1/taggings/", new
+        {
+            tagName = "spelunking", entityType = "storedFile", entityId = v1Id,
+        })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // Upload v2 → the tag moves to the new head (tags belong to the document, not the version).
+        Guid v2Id;
+        using (var form = BuildForm("hydro.txt", "revised"u8.ToArray(), "text/plain"))
+        {
+            var response = await owner.PostAsync($"/api/v1/files/{v1Id}/versions", form);
+            response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+            v2Id = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        }
+
+        // Listing tags on the new head shows the tag; the old version carries none.
+        var headTags = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/taggings/?entityType=storedFile&entityId={v2Id}");
+        headTags.EnumerateArray().Select(t => t.GetProperty("tag").GetProperty("name").GetString()).ShouldContain("hydrology");
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/taggings/?entityType=storedFile&entityId={v1Id}"))
+            .GetArrayLength().ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Document_date_round_trips_validates_and_carries_across_versions()
+    {
+        var file = await UploadAsync(owner, "survey.txt", "field"u8.ToArray(), "text/plain");
+        var fileId = file.GetProperty("id").GetGuid();
+        file.GetProperty("documentDate").ValueKind.ShouldBe(JsonValueKind.Null); // unset on upload
+
+        // A future date is rejected.
+        var future = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(3).ToString("yyyy-MM-dd");
+        (await owner.PutAsJsonAsync($"/api/v1/files/{fileId}", new { documentDate = future }))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // A valid past date round-trips.
+        var setResponse = await owner.PutAsJsonAsync($"/api/v1/files/{fileId}", new { documentDate = "2019-08-01" });
+        setResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await setResponse.Content.ReadAsStringAsync());
+        (await setResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("documentDate").GetString().ShouldBe("2019-08-01");
+
+        // Attach to an authenticated cave: a reader-without-write cannot set the date (404, existence hidden).
+        var caveId = await CreateCaveAsync(owner, "Dated File Cave", "authenticated");
+        (await owner.PostAsJsonAsync("/api/v1/attachments/", new
+        {
+            fileId, entityType = "cave", entityId = caveId, role = "document", sortOrder = 0,
+        })).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await outsider.PutAsJsonAsync($"/api/v1/files/{fileId}", new { documentDate = "2018-01-01" }))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // The date carries to a new version.
+        using var form = BuildForm("survey.txt", "field v2"u8.ToArray(), "text/plain");
+        var versionResponse = await owner.PostAsync($"/api/v1/files/{fileId}/versions", form);
+        versionResponse.StatusCode.ShouldBe(HttpStatusCode.Created, await versionResponse.Content.ReadAsStringAsync());
+        (await versionResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("documentDate").GetString().ShouldBe("2019-08-01");
+    }
+
+    [Fact]
+    public async Task Attachment_metadata_edit_round_trips_and_forbids_non_writers()
+    {
+        var file = await UploadAsync(owner, "map.txt", "sketch"u8.ToArray(), "text/plain");
+        var fileId = file.GetProperty("id").GetGuid();
+
+        var caveId = await CreateCaveAsync(owner, "Editable Attachment Cave", "authenticated");
+        var created = await owner.PostAsJsonAsync("/api/v1/attachments/", new
+        {
+            fileId, entityType = "cave", entityId = caveId, role = "document", caption = "draft", sortOrder = 0,
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var attachmentId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        // The owner edits role/caption/order.
+        var updated = await owner.PutAsJsonAsync($"/api/v1/attachments/{attachmentId}", new
+        {
+            role = "other", caption = "final caption", sortOrder = 7,
+        });
+        updated.StatusCode.ShouldBe(HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());
+        var body = await updated.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("caption").GetString().ShouldBe("final caption");
+        body.GetProperty("role").GetString().ShouldBe("other");
+        body.GetProperty("sortOrder").GetInt32().ShouldBe(7);
+
+        // The change persists in the listing.
+        var listed = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/attachments/?entityType=cave&entityId={caveId}");
+        listed.EnumerateArray().Single().GetProperty("caption").GetString().ShouldBe("final caption");
+
+        // A reader without Write on the cave cannot edit the attachment.
+        (await outsider.PutAsJsonAsync($"/api/v1/attachments/{attachmentId}", new
+        {
+            role = "document", caption = "tampered", sortOrder = 0,
+        })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
     // ---- helpers ----
 
     private static async Task<string?> ReadCodeAsync(HttpResponseMessage response)

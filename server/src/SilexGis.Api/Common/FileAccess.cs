@@ -71,6 +71,12 @@ public static class FileAccessRules
                 var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == entityId, ct);
                 return trip is not null && await new AclPermissionService(db).CanAsync(user, trip, ObjectPermission.Read, ct);
 
+            case AttachedEntityType.StoredFile:
+                // A file (as a tag/attachment target) inherits the access of the objects it is
+                // attached to — the same rule the file endpoints use.
+                var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == entityId, ct);
+                return file is not null && await CanAccessAsync(db, user, file, ct);
+
             default:
                 return false;
         }
@@ -138,6 +144,22 @@ public static class FileAccessRules
             case AttachedEntityType.TripLog:
                 var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == entityId, ct);
                 return trip is not null && await new AclPermissionService(db).CanAsync(user, trip, ObjectPermission.Write, ct);
+
+            case AttachedEntityType.StoredFile:
+                // Writing a file's tags is governed by the file-write rule, evaluated against the
+                // chain head (the row attachments/taggings point at). Resolve the head in case a
+                // non-head id was passed.
+                var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == entityId, ct);
+                if (file is null)
+                {
+                    return false;
+                }
+
+                var head = await db.StoredFiles.AsNoTracking()
+                    .Where(f => f.VersionGroupId == file.VersionGroupId)
+                    .OrderByDescending(f => f.VersionNumber)
+                    .FirstAsync(ct);
+                return await CanWriteFileAsync(db, user, head, ct);
 
             default:
                 return false;

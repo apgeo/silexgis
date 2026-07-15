@@ -12,6 +12,7 @@ public enum AttachedEntityType : short
     Geofile = 5,
     GeoreferencedMap = 6,
     MapView = 7,
+    StoredFile = 8,
 }
 
 /// <summary>Maps protected entity instances to their polymorphic discriminator.</summary>
@@ -47,6 +48,7 @@ public static class AttachedEntityTypes
         AttachedEntityType.Geofile => nameof(AttachedEntityType.Geofile),
         AttachedEntityType.GeoreferencedMap => nameof(AttachedEntityType.GeoreferencedMap),
         AttachedEntityType.MapView => nameof(AttachedEntityType.MapView),
+        AttachedEntityType.StoredFile => nameof(AttachedEntityType.StoredFile),
         _ => type.ToString(),
     };
 }

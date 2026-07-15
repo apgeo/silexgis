@@ -2319,7 +2319,33 @@ export interface paths {
                 };
             };
         };
-        put?: never;
+        /** Updates user-set file metadata (document date); requires file-write access. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FileUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FileDto"];
+                    };
+                };
+            };
+        };
         post?: never;
         /** Deletes a superseded (non-head) file version. */
         delete: {
@@ -2561,7 +2587,33 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** Edits an attachment's role/caption/order; requires Write on the entity. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AttachmentUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AttachmentDto"];
+                    };
+                };
+            };
+        };
         post?: never;
         /** Detaches a file (the file itself is kept); requires Write on the entity. */
         delete: {
@@ -3548,7 +3600,7 @@ export interface components {
         /** @enum {unknown} */
         AclSubjectKind: "user" | "team";
         /** @enum {unknown} */
-        AttachedEntityType: "cave" | "caveEntrance" | "surfaceFeature" | "tripLog" | "team" | "geofile" | "georeferencedMap" | "mapView";
+        AttachedEntityType: "cave" | "caveEntrance" | "surfaceFeature" | "tripLog" | "team" | "geofile" | "georeferencedMap" | "mapView" | "storedFile";
         AttachmentCreateRequest: {
             /** Format: uuid */
             fileId: string;
@@ -3578,6 +3630,12 @@ export interface components {
         };
         /** @enum {unknown} */
         AttachmentRole: "photoEntrance" | "photoInterior" | "photoSurface" | "document" | "map2d" | "surveyData" | "other";
+        AttachmentUpdateRequest: {
+            role: components["schemas"]["AttachmentRole"];
+            caption: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+        };
         AuditEntryDto: {
             /** Format: int64 */
             id: number;
@@ -3815,6 +3873,8 @@ export interface components {
             kind: components["schemas"]["FileKind"];
             /** Format: int32 */
             versionNumber: number;
+            /** Format: date */
+            documentDate: null | string;
             /** Format: date-time */
             createdAt: string;
             contentUrl: string;
@@ -3822,6 +3882,10 @@ export interface components {
         };
         /** @enum {unknown} */
         FileKind: "image" | "document" | "survey" | "raster" | "vector" | "model" | "other";
+        FileUpdateRequest: {
+            /** Format: date */
+            documentDate: null | string;
+        };
         FileVersionDto: {
             /** Format: uuid */
             id: string;

@@ -299,6 +299,41 @@ test('cave attachment file versioning', async ({ page }) => {
   await deletePhotoFigures(page);
 });
 
+test('cave attachment details: caption, document date and tags persist', async ({ page }) => {
+  await login(page);
+  await page.goto('/caves');
+  await page.getByText('Peștera Demo Mare').click();
+  await expect(page.getByText('Photos & documents')).toBeVisible({ timeout: 15_000 });
+
+  const gallery = page.locator('.ant-card', { hasText: 'Photos & documents' });
+  await deletePhotoFigures(page); // start clean
+  await gallery.locator('input[type=file]').setInputFiles('e2e/fixtures/e2e-photo.png');
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  const figure = page.locator('figure').filter({ hasText: 'e2e-photo' }).first();
+  await expect(figure).toBeVisible({ timeout: 15_000 });
+
+  // Open the details editor and set caption, the document's own date, and a tag.
+  await figure.getByRole('button', { name: 'Details' }).click();
+  const popover = page.locator('.ant-popover');
+  await popover.locator('input').first().fill('Winter caption e2e');
+  await popover.getByPlaceholder('Select date').fill('2019-08-01');
+  await page.keyboard.press('Enter');
+  await popover.getByText('Add tag').click();
+  await popover.getByRole('combobox').last().fill('e2e-detail-tag');
+  await page.keyboard.press('Enter');
+  await popover.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+
+  // Reopen: caption, date and tag round-tripped through the server.
+  await figure.getByRole('button', { name: 'Details' }).click();
+  await expect(popover.locator('input').first()).toHaveValue('Winter caption e2e');
+  await expect(popover.getByPlaceholder('Select date')).toHaveValue('2019-08-01');
+  await expect(popover.getByText('e2e-detail-tag')).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await deletePhotoFigures(page);
+});
+
 async function deletePhotoFigures(page: Page) {
   const figures = page.locator('figure').filter({ hasText: 'e2e-photo' });
   for (let remaining = await figures.count(); remaining > 0; remaining--) {

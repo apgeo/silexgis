@@ -175,7 +175,20 @@
     "uploadVersion": "Încărcați o versiune nouă",
     "currentVersion": "curentă",
     "noVersions": "Încă nu există versiuni.",
-    "deleteVersionConfirm": "Ștergeți această versiune? Conținutul ei este eliminat definitiv."
+    "deleteVersionConfirm": "Ștergeți această versiune? Conținutul ei este eliminat definitiv.",
+    "details": "Detalii",
+    "caption": "Legendă",
+    "role": "Rol",
+    "documentDate": "Data documentului",
+    "roles": {
+      "photoEntrance": "Fotografie intrare",
+      "photoInterior": "Fotografie interior",
+      "photoSurface": "Fotografie suprafață",
+      "document": "Document",
+      "map2d": "Hartă 2D",
+      "surveyData": "Date topografice",
+      "other": "Altele"
+    }
   },
   "geodata": {
     "title": "Geodate",

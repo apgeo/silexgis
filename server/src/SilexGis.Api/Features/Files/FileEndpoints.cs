@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Security.Cryptography;
+using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
@@ -10,6 +11,23 @@ using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Files;
+
+/// <summary>
+/// User-settable file metadata. Content stays immutable; only these fields are editable.
+/// A full-DTO update (not a partial patch): a null field clears that value.
+/// </summary>
+public sealed record FileUpdateRequest(DateOnly? DocumentDate);
+
+public sealed class FileUpdateRequestValidator : AbstractValidator<FileUpdateRequest>
+{
+    public FileUpdateRequestValidator()
+    {
+        // "When the document/photo is from" cannot be in the future.
+        RuleFor(x => x.DocumentDate)
+            .Must(d => d is null || d <= DateOnly.FromDateTime(DateTime.UtcNow))
+            .WithMessage("The document date cannot be in the future.");
+    }
+}
 
 public static class FileEndpoints
 {
@@ -25,6 +43,9 @@ public static class FileEndpoints
             .WithSummary("Uploads a file (multipart); attach it to an entity via /attachments.");
         files.MapGet("/{id:guid}", GetAsync)
             .WithSummary("File metadata with fresh short-lived delivery URLs.");
+        files.MapPut("/{id:guid}", UpdateAsync)
+            .WithValidation<FileUpdateRequest>()
+            .WithSummary("Updates user-set file metadata (document date); requires file-write access.");
 
         files.MapPost("/{id:guid}/versions", UploadVersionAsync)
             .DisableAntiforgery()
@@ -133,6 +154,7 @@ public static class FileEndpoints
             Kind = KindFromMime(mimeType),
             VersionGroupId = head.VersionGroupId,
             VersionNumber = maxVersion + 1,
+            DocumentDate = head.DocumentDate, // the document's date carries across versions
         };
         db.StoredFiles.Add(stored);
 
@@ -142,6 +164,15 @@ public static class FileEndpoints
         foreach (var attachment in attachments)
         {
             attachment.FileId = stored.Id;
+        }
+
+        // Tags belong to the document, not a specific version — move file taggings to the new head.
+        var taggings = await db.Taggings
+            .Where(t => t.EntityType == AttachedEntityType.StoredFile && t.EntityId == head.Id)
+            .ToListAsync(ct);
+        foreach (var tagging in taggings)
+        {
+            tagging.EntityId = stored.Id;
         }
 
         await db.SaveChangesAsync(ct);
@@ -282,6 +313,41 @@ public static class FileEndpoints
             return ApiProblems.NotFound("file.not_found");
         }
 
+        return TypedResults.Ok(file.ToDto(tokens));
+    }
+
+    private static async Task<Results<Ok<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
+        Guid id,
+        FileUpdateRequest request,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var user = await userAccessor.GetAsync(ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var file = await db.StoredFiles.FirstOrDefaultAsync(f => f.Id == id, ct);
+        if (file is null)
+        {
+            return ApiProblems.NotFound("file.not_found");
+        }
+
+        // The file-write rule is evaluated against the chain head (the row attachments point at).
+        var head = await db.StoredFiles.AsNoTracking()
+            .Where(f => f.VersionGroupId == file.VersionGroupId)
+            .OrderByDescending(f => f.VersionNumber)
+            .FirstAsync(ct);
+        if (!await FileAccessRules.CanWriteFileAsync(db, user, head, ct))
+        {
+            return ApiProblems.NotFound("file.not_found"); // existence not disclosed to non-writers
+        }
+
+        file.DocumentDate = request.DocumentDate;
+        await db.SaveChangesAsync(ct);
         return TypedResults.Ok(file.ToDto(tokens));
     }
 

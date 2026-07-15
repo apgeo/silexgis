@@ -17,6 +17,7 @@ public sealed record FileDto(
     string Sha256,
     FileKind Kind,
     int VersionNumber,
+    DateOnly? DocumentDate,
     DateTimeOffset CreatedAt,
     string ContentUrl,
     string? ThumbnailUrl);
@@ -47,6 +48,7 @@ internal static class FileMapping
             f.Sha256,
             f.Kind,
             f.VersionNumber,
+            f.DocumentDate,
             f.CreatedAt,
             ContentUrl(f.Id, token),
             f.Kind == FileKind.Image

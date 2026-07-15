@@ -471,6 +471,20 @@ export function useUploadFile() {
   });
 }
 
+/** Updates user-set file metadata (document date). The gallery's file DTO carries it, so refresh attachments. */
+export function useUpdateFile() {
+  const invalidateAttachments = useInvalidateAttachments();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, documentDate }: { id: string; documentDate: string | null }) =>
+      unwrap(api.PUT('/api/v1/files/{id}', { params: { path: { id } }, body: { documentDate } })),
+    onSuccess: () => {
+      invalidateAttachments();
+      void queryClient.invalidateQueries({ queryKey: ['file-versions'] });
+    },
+  });
+}
+
 export function useCreateAttachment() {
   const invalidate = useInvalidateAttachments();
   return useMutation({
@@ -483,6 +497,24 @@ export function useCreateAttachment() {
       sortOrder: number;
     }) => unwrap(api.POST('/api/v1/attachments', { body })),
     onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateAttachment() {
+  const invalidate = useInvalidateAttachments();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: {
+      id: string;
+      role: AttachmentRole;
+      caption: string | null;
+      sortOrder: number;
+    }) => unwrap(api.PUT('/api/v1/attachments/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => {
+      invalidate();
+      // Caption/role changes are audited on the target entity — refresh its timeline.
+      void queryClient.invalidateQueries({ queryKey: ['history'] });
+    },
   });
 }
 

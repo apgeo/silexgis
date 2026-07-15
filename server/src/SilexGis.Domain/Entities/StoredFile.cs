@@ -48,6 +48,12 @@ public class StoredFile : ITimestamped, IAuditable
 
     public FileKind Kind { get; set; } = FileKind.Other;
 
+    /// <summary>
+    /// User-set calendar date the document/photo is *from* (distinct from <see cref="CreatedAt"/>,
+    /// the upload time). Prefilled client-side from EXIF where present; copied to new versions.
+    /// </summary>
+    public DateOnly? DocumentDate { get; set; }
+
     /// <summary>Format-specific metadata (EXIF, dimensions, layer info, …) as jsonb.</summary>
     public string Metadata { get; set; } = "{}";
 

@@ -175,7 +175,20 @@
     "uploadVersion": "Upload new version",
     "currentVersion": "current",
     "noVersions": "No versions yet.",
-    "deleteVersionConfirm": "Delete this version? Its content is removed permanently."
+    "deleteVersionConfirm": "Delete this version? Its content is removed permanently.",
+    "details": "Details",
+    "caption": "Caption",
+    "role": "Role",
+    "documentDate": "Document date",
+    "roles": {
+      "photoEntrance": "Entrance photo",
+      "photoInterior": "Interior photo",
+      "photoSurface": "Surface photo",
+      "document": "Document",
+      "map2d": "2D map",
+      "surveyData": "Survey data",
+      "other": "Other"
+    }
   },
   "geodata": {
     "title": "Geodata",

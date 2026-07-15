@@ -10,6 +10,7 @@ import {
   type AttachedEntityType,
   type AttachmentInfo,
 } from '../../api/hooks.ts';
+import AttachmentDetails from './AttachmentDetails.tsx';
 import FileVersions from './FileVersions.tsx';
 
 interface AttachmentSectionProps {
@@ -112,6 +113,7 @@ export default function AttachmentSection({ entityType, entityId, canEdit }: Att
                       {attachment.caption ?? attachment.file.originalName}
                     </Typography.Text>
                     <Flex align="center">
+                      {canEdit && <AttachmentDetails attachment={attachment} />}
                       <FileVersions
                         fileId={attachment.file.id}
                         versionNumber={attachment.file.versionNumber}
@@ -144,6 +146,7 @@ export default function AttachmentSection({ entityType, entityId, canEdit }: Att
             renderItem={(attachment) => (
               <List.Item
                 actions={[
+                  ...(canEdit ? [<AttachmentDetails key="details" attachment={attachment} />] : []),
                   <FileVersions
                     key="versions"
                     fileId={attachment.file.id}
@@ -174,7 +177,13 @@ export default function AttachmentSection({ entityType, entityId, canEdit }: Att
                 <List.Item.Meta
                   avatar={<FileOutlined />}
                   title={attachment.caption ?? attachment.file.originalName}
-                  description={`${attachment.file.originalName} · ${formatSize(attachment.file.sizeBytes)}`}
+                  description={[
+                    attachment.file.originalName,
+                    formatSize(attachment.file.sizeBytes),
+                    attachment.file.documentDate,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 />
               </List.Item>
             )}
