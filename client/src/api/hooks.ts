@@ -37,6 +37,7 @@ export const queryKeys = {
   teams: ['teams'] as const,
   teamMembers: (teamId: string) => ['teams', teamId, 'members'] as const,
   acl: (entityType: string, entityId: string) => ['acl', entityType, entityId] as const,
+  history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
   mfa: ['mfa'] as const,
 };
 
@@ -318,9 +319,13 @@ function useInvalidateSurfaceFeatures() {
 
 export function useUpdateSurfaceFeature() {
   const invalidate = useInvalidateSurfaceFeatures();
+  const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: SurfaceFeatureWrite }) => updateSurfaceFeature(id, body),
-    onSuccess: () => invalidate(),
+    onSuccess: () => {
+      invalidate();
+      invalidateHistory();
+    },
   });
 }
 
@@ -431,6 +436,25 @@ export function useAttachments(entityType: AttachedEntityType, entityId: string 
 function useInvalidateAttachments() {
   const queryClient = useQueryClient();
   return () => void queryClient.invalidateQueries({ queryKey: ['attachments'] });
+}
+
+export type HistoryEvent = components['schemas']['HistoryEventDto'];
+
+/** Change history for an entity (incl. its children's events via audit roots). */
+export function useHistory(entityType: string, entityId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.history(entityType, entityId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/history', {
+        params: { query: { entityType, entityId: entityId!, pageSize: 100 } },
+      })),
+    enabled: !!entityId,
+  });
+}
+
+export function useInvalidateHistory() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: ['history'] });
 }
 
 export function useUploadFile() {
@@ -588,10 +612,14 @@ export function useCreateTripLog() {
 
 export function useUpdateTripLog() {
   const invalidate = useInvalidateTripLogs();
+  const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: TripLogWrite }) =>
       unwrap(api.PUT('/api/v1/trip-logs/{id}', { params: { path: { id } }, body })),
-    onSuccess: () => invalidate(),
+    onSuccess: () => {
+      invalidate();
+      invalidateHistory();
+    },
   });
 }
 
@@ -827,10 +855,14 @@ export function useCreateCave() {
 
 export function useUpdateCave(id: string) {
   const invalidate = useInvalidateCaves();
+  const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: (body: CaveWrite) =>
       unwrap(api.PUT('/api/v1/caves/{id}', { params: { path: { id } }, body })),
-    onSuccess: () => invalidate(id),
+    onSuccess: () => {
+      invalidate(id);
+      invalidateHistory();
+    },
   });
 }
 
@@ -849,24 +881,33 @@ export function useDeleteCave() {
 
 export function useCreateEntrance(caveId: string) {
   const invalidate = useInvalidateCaves();
+  const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: (body: EntranceWrite) =>
       unwrap(api.POST('/api/v1/caves/{caveId}/entrances', { params: { path: { caveId } }, body })),
-    onSuccess: () => invalidate(caveId),
+    onSuccess: () => {
+      invalidate(caveId);
+      invalidateHistory();
+    },
   });
 }
 
 export function useUpdateEntrance(caveId: string) {
   const invalidate = useInvalidateCaves();
+  const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: EntranceWrite }) =>
       unwrap(api.PUT('/api/v1/cave-entrances/{id}', { params: { path: { id } }, body })),
-    onSuccess: () => invalidate(caveId),
+    onSuccess: () => {
+      invalidate(caveId);
+      invalidateHistory();
+    },
   });
 }
 
 export function useDeleteEntrance(caveId: string) {
   const invalidate = useInvalidateCaves();
+  const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: async (id: string) => {
       const { error, response } = await api.DELETE('/api/v1/cave-entrances/{id}', { params: { path: { id } } });
@@ -874,6 +915,9 @@ export function useDeleteEntrance(caveId: string) {
         throw new Error(`API error ${response.status}`);
       }
     },
-    onSuccess: () => invalidate(caveId),
+    onSuccess: () => {
+      invalidate(caveId);
+      invalidateHistory();
+    },
   });
 }

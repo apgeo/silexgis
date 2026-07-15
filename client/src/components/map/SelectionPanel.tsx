@@ -13,11 +13,14 @@ import {
   useMe,
   useSurfaceFeature,
   useUpdateSurfaceFeature,
+  type SurfaceFeatureWrite,
 } from '../../api/hooks.ts';
 import { formatLonLat } from '../../geo/coords.ts';
 import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
 import { fitGeoJsonGeometry, flyTo } from '../../map/mapContext.ts';
 import { useWorkspaceStore, type CaveSelection, type EntranceSelection, type FeatureSelection } from '../../stores/workspaceStore.ts';
+import HistoryPanel, { type HistoryRestore } from '../history/HistoryPanel.tsx';
+import { applyFeatureRestore } from '../history/historyModel.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 import { parsePropertiesSchema } from '../features/propertiesSchema.ts';
 
@@ -234,6 +237,24 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
           </>
         )}
       </Flex>
+      <HistoryPanel
+        entityType="surfaceFeature"
+        entityId={feature.id}
+        restore={
+          canEdit
+            ? ({
+                entityType: 'SurfaceFeature',
+                onRestore: async (event, props) => {
+                  await updateFeature.mutateAsync({
+                    id: feature.id,
+                    body: applyFeatureRestore(feature as unknown as SurfaceFeatureWrite, event.changes, props),
+                  });
+                  reloadSurfaceFeatures();
+                },
+              } satisfies HistoryRestore)
+            : undefined
+        }
+      />
       <FeatureEditModal
         open={editing}
         title={t('features.editFeature')}

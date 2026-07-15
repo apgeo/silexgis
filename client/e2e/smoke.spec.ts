@@ -71,18 +71,64 @@ test('cave and entrance create/edit round-trip', async ({ page }) => {
   await page.getByLabel('Region').fill('Testland');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('Testland')).toBeVisible();
+  // Scope to the details block: the history card also renders the new region value.
+  await expect(page.locator('.ant-descriptions').first().getByText('Testland')).toBeVisible();
 
   // Clean up: delete the cave (entrances cascade server-side).
   await page.locator('button', { hasText: 'Delete' }).click();
   await page.getByRole('button', { name: 'OK' }).click();
   await page.waitForURL(/\/caves$/);
-  await expect(page.getByText(caveName)).not.toBeVisible();
+  // The detail page's history timeline also renders the name; assert on the h3 heading
+  // (only headings carry that role) so the transient dual-match can't trip strict mode.
+  await expect(page.getByRole('heading', { name: caveName, level: 3 })).toBeHidden({ timeout: 15_000 });
 });
+
+test('cave history records edits and restores a previous value', async ({ page }) => {
+  const caveName = `E2E History Cave ${Date.now()}`;
+  await login(page);
+
+  await page.goto('/caves/new');
+  await page.getByLabel('Name', { exact: true }).fill(caveName);
+  await page.getByLabel('Type', { exact: true }).click();
+  await page.locator('.ant-select-item-option').first().click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
+
+  // Two edits so the newest event carries a real old→new region pair.
+  await editRegion(page, 'Region One');
+  await editRegion(page, 'Region Two');
+
+  // The History card records the change as an old→new row (the value shows in two
+  // adjacent events, so target the specific row rather than the bare text).
+  const history = page.locator('.ant-card').filter({ hasText: 'History' }).last();
+  const latest = history.getByRole('row', { name: /Region One.*Region Two/ });
+  await expect(latest).toBeVisible({ timeout: 15_000 });
+
+  // Restore the previous value; the main details revert and a toast confirms.
+  await latest.getByLabel('Restore this value').click();
+  await expect(page.getByText('Value restored.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.ant-descriptions').first().getByText('Region One')).toBeVisible({ timeout: 15_000 });
+
+  // Cleanup.
+  await page.locator('button', { hasText: 'Delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await page.waitForURL(/\/caves$/);
+});
+
+async function editRegion(page: Page, value: string) {
+  await page.locator('button', { hasText: 'Edit' }).click();
+  await page.getByLabel('Region').fill(value);
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.locator('.ant-descriptions').first().getByText(value)).toBeVisible({ timeout: 15_000 });
+}
 
 test('surface feature draw, attributes, selection and table round-trip', async ({ page }) => {
   const featureName = `E2E Sinkhole ${Date.now()}`;
   await login(page);
+
+  // Selection is by map click at a fixed pixel; purge e2e leftovers stacked there first.
+  await deleteFeatureRows(page, /E2E /);
+  await page.goto('/');
 
   const toolbar = page.locator('.map-edit-overlay');
   await expect(toolbar).toBeVisible();
@@ -114,7 +160,8 @@ test('surface feature draw, attributes, selection and table round-trip', async (
   await canvas.click({ position: { x: 420, y: 260 } });
   await expect(page.getByRole('heading', { name: featureName })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('Depth (m)')).toBeVisible();
-  await expect(page.getByText('12.5')).toBeVisible();
+  // Exact match: the history card renders the value inside a `{"depth_m":12.5}` JSON blob.
+  await expect(page.getByText('12.5', { exact: true })).toBeVisible();
 
   // The features table lists it; delete from the row actions (cleanup).
   await page.goto('/features');
@@ -126,6 +173,80 @@ test('surface feature draw, attributes, selection and table round-trip', async (
   await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(featureName)).not.toBeVisible();
 });
+
+test('surface feature history records edits and restores in the map panel', async ({ page }) => {
+  const featureName = `E2E Hist Feat ${Date.now()}`;
+  await login(page);
+
+  // Selection is by map click at a fixed pixel, so purge any e2e features an earlier
+  // aborted run left stacked on that spot — otherwise the click selects a stale one.
+  await deleteFeatureRows(page, /E2E /);
+  await page.goto('/');
+
+  const toolbar = page.locator('.map-edit-overlay');
+  await expect(toolbar).toBeVisible();
+  await toolbar.locator('.ant-select').click();
+  await page.locator('.ant-select-item-option', { hasText: 'Sinkhole / Doline' }).click();
+
+  // Draw and save a point feature.
+  await toolbar.getByRole('button', { name: 'edit' }).click();
+  const canvas = page.locator('.map-canvas');
+  await canvas.click({ position: { x: 420, y: 260 } });
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByText('New surface feature')).toBeVisible();
+  await modal.getByLabel('Name').fill(featureName);
+  await modal.getByRole('button', { name: 'OK' }).click();
+  const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/surface-features') && r.ok());
+  await toolbar.getByRole('button', { name: /Save/ }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  await reloaded;
+
+  // Select it; edit the description twice so the newest event carries an old→new pair.
+  await canvas.click({ position: { x: 420, y: 260 } });
+  await expect(page.getByRole('heading', { name: featureName })).toBeVisible({ timeout: 15_000 });
+  await editFeatureDescription(page, 'Desc One');
+  await editFeatureDescription(page, 'Desc Two');
+
+  // The selection panel's History card records the change as an old→new row.
+  const history = page.locator('.ant-card').filter({ hasText: 'History' });
+  const latest = history.getByRole('row', { name: /Desc One.*Desc Two/ });
+  await expect(latest).toBeVisible({ timeout: 15_000 });
+
+  // Restore the previous value; the feature detail reverts and a toast confirms.
+  await latest.getByLabel('Restore this value').click();
+  await expect(page.getByText('Value restored.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.ant-descriptions').first().getByText('Desc One')).toBeVisible({ timeout: 15_000 });
+
+  // Cleanup from the features table.
+  await deleteFeatureRows(page, new RegExp(featureName));
+});
+
+// Deletes every features-table row matching `pattern` (tolerant of leftovers from aborted runs).
+async function deleteFeatureRows(page: Page, pattern: RegExp) {
+  const listed = page.waitForResponse((r) => r.url().includes('/api/v1/surface-features') && r.ok());
+  await page.goto('/features');
+  await listed;
+  // Wait for the table body to actually paint (a data row or the empty placeholder) before
+  // the non-retrying count() — avoids racing the response→render gap without a fixed sleep.
+  await expect(page.locator('.ant-table-tbody tr').first()).toBeVisible();
+  const rows = page.getByRole('row', { name: pattern });
+  for (let remaining = await rows.count(); remaining > 0; remaining--) {
+    await rows.first().getByRole('button', { name: 'delete' }).click();
+    await page.getByRole('button', { name: 'OK' }).click();
+    await expect(rows).toHaveCount(remaining - 1, { timeout: 15_000 });
+  }
+}
+
+async function editFeatureDescription(page: Page, value: string) {
+  // antd folds an icon button's icon aria-label into its accessible name ("edit Edit"),
+  // so match the visible text instead of an exact role name.
+  await page.locator('button', { hasText: 'Edit' }).click();
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByText('Edit surface feature')).toBeVisible();
+  await modal.getByLabel('Description').fill(value);
+  await modal.getByRole('button', { name: 'OK' }).click();
+  await expect(page.locator('.ant-descriptions').getByText(value)).toBeVisible({ timeout: 15_000 });
+}
 
 test('cave photo attachment round-trip', async ({ page }) => {
   await login(page);
@@ -349,7 +470,8 @@ test('trip log with participants, tags and the audit trail', async ({ page }) =>
   await page.getByPlaceholder('Participant name').fill('Guest Caver');
   await page.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('Guest Caver')).toBeVisible();
+  // Scope to the participant tag: the history timeline also surfaces the participant name.
+  await expect(page.locator('.ant-tag', { hasText: 'Guest Caver' })).toBeVisible();
 
   // Tag it inline (the input autofocuses; Enter submits).
   await page.getByText('Add tag').click();
@@ -368,7 +490,9 @@ test('trip log with participants, tags and the audit trail', async ({ page }) =>
   await page.getByRole('button', { name: /Delete/ }).click();
   await page.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(title)).not.toBeVisible();
+  // The detail page's history timeline also renders the title (in its "created" event),
+  // so assert on the detail heading unmounting — only headings carry the h3 role.
+  await expect(page.getByRole('heading', { name: title, level: 3 })).toBeHidden({ timeout: 15_000 });
 });
 
 test('georeferenced raster upload, COG processing, map overlay and delete', async ({ page }) => {

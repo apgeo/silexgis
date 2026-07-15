@@ -1268,6 +1268,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Change history for an entity (incl. its children); protection-redacted, visibility-gated. */
+        get: {
+            parameters: {
+                query?: {
+                    entityType?: string;
+                    entityId?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfHistoryEventDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/search": {
         parameters: {
             query?: never;
@@ -3805,6 +3846,20 @@ export interface components {
             teamId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
+        HistoryEventDto: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            at: string;
+            /** Format: uuid */
+            userId: null | string;
+            userName: null | string;
+            action: string;
+            entityType: string;
+            entityId: string;
+            changes: null | components["schemas"]["JsonElement"];
+            redactedProperties: string[];
+        };
         /** Format: binary */
         IFormFile: string;
         JsonElement: unknown;
@@ -3912,6 +3967,15 @@ export interface components {
         };
         PagedResultOfGeoreferencedMapDto: {
             items: components["schemas"]["GeoreferencedMapDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfHistoryEventDto: {
+            items: components["schemas"]["HistoryEventDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */

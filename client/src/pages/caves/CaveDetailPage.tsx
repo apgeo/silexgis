@@ -13,10 +13,16 @@ import {
   useEntrances,
   useMe,
   useRockTypes,
+  useUpdateCave,
+  useUpdateEntrance,
+  type CaveWrite,
   type Entrance,
+  type EntranceWrite,
 } from '../../api/hooks.ts';
 import { formatLonLat } from '../../geo/coords.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
+import HistoryPanel, { type HistoryRestore } from '../../components/history/HistoryPanel.tsx';
+import { applyRestore } from '../../components/history/historyModel.ts';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
 import CenterlineSection from './CenterlineSection.tsx';
@@ -36,6 +42,8 @@ export default function CaveDetailPage() {
   const { data: entranceTypes } = useEntranceTypes();
   const deleteCave = useDeleteCave();
   const deleteEntrance = useDeleteEntrance(id ?? '');
+  const updateCave = useUpdateCave(id ?? '');
+  const updateEntrance = useUpdateEntrance(id ?? '');
   const { data: me } = useMe();
   const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
 
@@ -207,6 +215,42 @@ export default function CaveDetailPage() {
       {id && <CenterlineSection caveId={id} canEdit={canEdit} />}
 
       {id && <AttachmentSection entityType="cave" entityId={id} canEdit={canEdit} />}
+
+      {id && (
+        <HistoryPanel
+          entityType="cave"
+          entityId={id}
+          restore={
+            canEdit
+              ? ([
+                  {
+                    entityType: 'Cave',
+                    onRestore: async (event, props) => {
+                      await updateCave.mutateAsync(applyRestore(cave as unknown as CaveWrite, event.changes, props));
+                    },
+                  },
+                  {
+                    // Entrance events surface in the cave timeline (audit root = cave);
+                    // restore composes a PUT on the entrance the row belongs to.
+                    entityType: 'CaveEntrance',
+                    onRestore: async (event, props) => {
+                      const entrance = entrances?.find((e) => e.id === event.entityId);
+                      if (!entrance) {
+                        // The row's entrance was deleted since; surface it as a failed restore
+                        // rather than a silent no-op (HistoryPanel shows the error toast).
+                        throw new Error('entrance no longer exists');
+                      }
+                      await updateEntrance.mutateAsync({
+                        id: event.entityId,
+                        body: applyRestore(entrance as unknown as EntranceWrite, event.changes, props),
+                      });
+                    },
+                  },
+                ] satisfies HistoryRestore[])
+              : undefined
+          }
+        />
+      )}
 
       {id && (
         <PermissionsModal

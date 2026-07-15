@@ -257,6 +257,45 @@
     "entityId": "Id entitate",
     "entityTypePlaceholder": "Filtrează după tipul entității (ex. Cave)…"
   },
+  "history": {
+    "title": "Istoric",
+    "empty": "Nicio modificare înregistrată încă.",
+    "hidden": "Valoare ascunsă (locație protejată)",
+    "systemUser": "Sistem",
+    "restoreField": "Restaurează această valoare",
+    "restoreAll": "Restaurează toate valorile dinaintea acestei modificări",
+    "restored": "Valoare restaurată.",
+    "action": {
+      "created": "Creat",
+      "updated": "Modificat",
+      "deleted": "Șters"
+    },
+    "entity": {
+      "Cave": "Peșteră",
+      "CaveEntrance": "Intrare",
+      "SurfaceFeature": "Element de suprafață",
+      "TripLog": "Raport de tură",
+      "CaveCenterline": "Poligonație",
+      "SurveyModel": "Model topografic",
+      "Attachment": "Atașament",
+      "Tagging": "Etichetă",
+      "TripLogCave": "Peșteră asociată",
+      "TripLogParticipant": "Participant"
+    },
+    "field": {
+      "name": "Nume",
+      "description": "Descriere",
+      "geom": "Locație",
+      "altitude": "Altitudine",
+      "positionQuality": "Calitatea poziției",
+      "closestAddress": "Cea mai apropiată adresă",
+      "landRegistryNumber": "Număr cadastral",
+      "locationNotes": "Note despre locație",
+      "caveId": "Peșteră asociată",
+      "visibility": "Vizibilitate",
+      "caption": "Legendă"
+    }
+  },
   "teams": {
     "title": "Echipe",
     "new": "Echipă nouă",

@@ -257,6 +257,45 @@
     "entityId": "Entity id",
     "entityTypePlaceholder": "Filter by entity type (e.g. Cave)…"
   },
+  "history": {
+    "title": "History",
+    "empty": "No changes recorded yet.",
+    "hidden": "Value hidden (protected location)",
+    "systemUser": "System",
+    "restoreField": "Restore this value",
+    "restoreAll": "Restore all values from before this change",
+    "restored": "Value restored.",
+    "action": {
+      "created": "Created",
+      "updated": "Updated",
+      "deleted": "Deleted"
+    },
+    "entity": {
+      "Cave": "Cave",
+      "CaveEntrance": "Entrance",
+      "SurfaceFeature": "Surface feature",
+      "TripLog": "Trip report",
+      "CaveCenterline": "Centerline",
+      "SurveyModel": "Survey model",
+      "Attachment": "Attachment",
+      "Tagging": "Tag",
+      "TripLogCave": "Linked cave",
+      "TripLogParticipant": "Participant"
+    },
+    "field": {
+      "name": "Name",
+      "description": "Description",
+      "geom": "Location",
+      "altitude": "Altitude",
+      "positionQuality": "Position quality",
+      "closestAddress": "Closest address",
+      "landRegistryNumber": "Land registry number",
+      "locationNotes": "Location notes",
+      "caveId": "Linked cave",
+      "visibility": "Visibility",
+      "caption": "Caption"
+    }
+  },
   "teams": {
     "title": "Teams",
     "new": "New team",
