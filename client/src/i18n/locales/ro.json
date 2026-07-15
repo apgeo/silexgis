@@ -170,7 +170,12 @@
     "documents": "Documente",
     "uploadPrompt": "Apăsați sau trageți fotografii și documente aici pentru a le atașa",
     "deleteConfirm": "Eliminați acest atașament? Fișierul rămâne disponibil celui care l-a încărcat.",
-    "empty": "Încă nu există fotografii sau documente."
+    "empty": "Încă nu există fotografii sau documente.",
+    "versions": "Versiuni",
+    "uploadVersion": "Încărcați o versiune nouă",
+    "currentVersion": "curentă",
+    "noVersions": "Încă nu există versiuni.",
+    "deleteVersionConfirm": "Ștergeți această versiune? Conținutul ei este eliminat definitiv."
   },
   "geodata": {
     "title": "Geodate",

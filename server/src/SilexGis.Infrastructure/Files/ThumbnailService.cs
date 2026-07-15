@@ -14,6 +14,19 @@ public sealed class ThumbnailService(IFileStore fileStore)
     /// <summary>Allowed thumbnail bounding-box sizes (px) — a fixed set keeps the cache small.</summary>
     public static readonly int[] AllowedSizes = [160, 480, 1200];
 
+    /// <summary>Deletes every cached thumbnail size for a file (no-op when none exist).</summary>
+    public void Purge(Guid fileId)
+    {
+        foreach (var size in AllowedSizes)
+        {
+            var path = fileStore.GetAbsolutePath($"thumbs/{fileId:N}-{size}.webp");
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
     /// <summary>Returns the absolute path of the cached thumbnail, creating it when missing.</summary>
     public async Task<string> GetOrCreateAsync(Guid fileId, string sourceStoragePath, int size, CancellationToken ct)
     {

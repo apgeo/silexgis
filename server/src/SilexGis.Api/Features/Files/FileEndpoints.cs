@@ -26,6 +26,14 @@ public static class FileEndpoints
         files.MapGet("/{id:guid}", GetAsync)
             .WithSummary("File metadata with fresh short-lived delivery URLs.");
 
+        files.MapPost("/{id:guid}/versions", UploadVersionAsync)
+            .DisableAntiforgery()
+            .WithSummary("Uploads a new version onto a file's head; repoints its attachments to it.");
+        files.MapGet("/{id:guid}/versions", ListVersionsAsync)
+            .WithSummary("Version chain of a file (editor-only; superseded versions may hold removed content).");
+        files.MapDelete("/{id:guid}", DeleteVersionAsync)
+            .WithSummary("Deletes a superseded (non-head) file version.");
+
         // Content delivery authenticates via the short-lived token in the URL — browsers
         // load these ambiently (img/src, geotiff.js) and cannot send bearer headers.
         // These two routes are on the documented anonymous allow-list.
@@ -56,16 +64,188 @@ public static class FileEndpoints
             return ApiProblems.Forbidden("file.upload_requires_editor");
         }
 
-        if (file.Length == 0)
+        if (ValidateSize(file) is { } sizeProblem)
         {
-            return ApiProblems.BadRequest("file.empty", "The uploaded file is empty.");
+            return sizeProblem;
         }
 
-        if (file.Length > MaxUploadBytes)
+        var (storagePath, sha256, mimeType) = await SaveContentAsync(file, fileStore, ct);
+        var stored = new StoredFile
         {
-            return ApiProblems.BadRequest("file.too_large", $"Files are limited to {MaxUploadBytes / (1024 * 1024)} MB.");
+            StoragePath = storagePath,
+            OriginalName = Path.GetFileName(file.FileName),
+            MimeType = mimeType,
+            SizeBytes = file.Length,
+            Sha256 = sha256,
+            UploadedBy = user.UserId,
+            Kind = KindFromMime(mimeType),
+        };
+        stored.VersionGroupId = stored.Id; // first version in its own chain
+        db.StoredFiles.Add(stored);
+        await db.SaveChangesAsync(ct);
+
+        return TypedResults.Created($"/api/v1/files/{stored.Id}", stored.ToDto(tokens));
+    }
+
+    private static async Task<Results<Created<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadVersionAsync(
+        Guid id,
+        IFormFile file,
+        SilexGisDbContext db,
+        IFileStore fileStore,
+        IFileAccessTokenService tokens,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var user = await userAccessor.GetAsync(ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
         }
 
+        var head = await db.StoredFiles.FirstOrDefaultAsync(f => f.Id == id, ct);
+        if (head is null || !await FileAccessRules.CanWriteFileAsync(db, user, head, ct))
+        {
+            return ApiProblems.NotFound("file.not_found"); // existence not disclosed to non-writers
+        }
+
+        var maxVersion = await db.StoredFiles
+            .Where(f => f.VersionGroupId == head.VersionGroupId)
+            .MaxAsync(f => f.VersionNumber, ct);
+        if (head.VersionNumber != maxVersion)
+        {
+            return ApiProblems.Conflict("file.not_head", "A newer version already exists; upload onto the current head.");
+        }
+
+        if (ValidateSize(file) is { } sizeProblem)
+        {
+            return sizeProblem;
+        }
+
+        var (storagePath, sha256, mimeType) = await SaveContentAsync(file, fileStore, ct);
+        var stored = new StoredFile
+        {
+            StoragePath = storagePath,
+            OriginalName = Path.GetFileName(file.FileName),
+            MimeType = mimeType,
+            SizeBytes = file.Length,
+            Sha256 = sha256,
+            UploadedBy = user.UserId,
+            Kind = KindFromMime(mimeType),
+            VersionGroupId = head.VersionGroupId,
+            VersionNumber = maxVersion + 1,
+        };
+        db.StoredFiles.Add(stored);
+
+        // Repoint attachments from the old head to the new one, tracked so the change is audited
+        // — entity timelines get a "document updated" event from the Attachment FileId diff.
+        var attachments = await db.Attachments.Where(a => a.FileId == head.Id).ToListAsync(ct);
+        foreach (var attachment in attachments)
+        {
+            attachment.FileId = stored.Id;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return TypedResults.Created($"/api/v1/files/{stored.Id}", stored.ToDto(tokens));
+    }
+
+    private static async Task<Results<Ok<IReadOnlyList<FileVersionDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListVersionsAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var user = await userAccessor.GetAsync(ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
+        if (file is null)
+        {
+            return ApiProblems.NotFound("file.not_found");
+        }
+
+        var chain = await db.StoredFiles.AsNoTracking()
+            .Where(f => f.VersionGroupId == file.VersionGroupId)
+            .OrderByDescending(f => f.VersionNumber)
+            .GroupJoin(db.Users.AsNoTracking(), f => f.UploadedBy, u => u.Id, (f, users) => new { f, users })
+            .SelectMany(x => x.users.DefaultIfEmpty(), (x, u) => new { x.f, UploaderName = u == null ? null : (u.DisplayName ?? u.UserName) })
+            .ToListAsync(ct);
+
+        var head = chain[0].f; // ordered desc → the head is first
+        if (!await FileAccessRules.CanAccessAsync(db, user, head, ct))
+        {
+            return ApiProblems.NotFound("file.not_found"); // existence not disclosed
+        }
+
+        if (!await FileAccessRules.CanWriteFileAsync(db, user, head, ct))
+        {
+            return ApiProblems.Forbidden("file.versions_forbidden"); // old versions are editor-only
+        }
+
+        IReadOnlyList<FileVersionDto> dtos = [.. chain.Select(x => new FileVersionDto(
+            x.f.Id, x.f.VersionNumber, x.f.OriginalName, x.f.MimeType, x.f.SizeBytes,
+            x.f.UploadedBy, x.UploaderName, x.f.CreatedAt,
+            FileMapping.ContentUrl(x.f.Id, tokens.CreateToken(x.f.Id)), x.f.Id == head.Id))];
+        return TypedResults.Ok(dtos);
+    }
+
+    private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteVersionAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IFileStore fileStore,
+        ThumbnailService thumbnails,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var user = await userAccessor.GetAsync(ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var file = await db.StoredFiles.FirstOrDefaultAsync(f => f.Id == id, ct);
+        if (file is null)
+        {
+            return ApiProblems.NotFound("file.not_found");
+        }
+
+        var head = await db.StoredFiles.AsNoTracking()
+            .Where(f => f.VersionGroupId == file.VersionGroupId)
+            .OrderByDescending(f => f.VersionNumber)
+            .FirstAsync(ct);
+        if (!await FileAccessRules.CanWriteFileAsync(db, user, head, ct))
+        {
+            return ApiProblems.NotFound("file.not_found"); // non-writers: existence not disclosed
+        }
+
+        if (file.Id == head.Id)
+        {
+            return ApiProblems.Conflict("file.head_undeletable", "The current version cannot be deleted; upload a new version instead.");
+        }
+
+        db.StoredFiles.Remove(file);
+        await db.SaveChangesAsync(ct);
+
+        // Purge bytes and cached thumbnails after the row is gone (best-effort; missing files are fine).
+        await fileStore.DeleteAsync(file.StoragePath, ct);
+        thumbnails.Purge(file.Id);
+
+        return TypedResults.NoContent();
+    }
+
+    private static ProblemHttpResult? ValidateSize(IFormFile file) => file.Length switch
+    {
+        0 => ApiProblems.BadRequest("file.empty", "The uploaded file is empty."),
+        > MaxUploadBytes => ApiProblems.BadRequest("file.too_large", $"Files are limited to {MaxUploadBytes / (1024 * 1024)} MB."),
+        _ => null,
+    };
+
+    private static async Task<(string StoragePath, string Sha256, string MimeType)> SaveContentAsync(
+        IFormFile file, IFileStore fileStore, CancellationToken ct)
+    {
         string storagePath;
         await using (var content = file.OpenReadStream())
         {
@@ -79,20 +259,7 @@ public static class FileEndpoints
         }
 
         var mimeType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
-        var stored = new StoredFile
-        {
-            StoragePath = storagePath,
-            OriginalName = Path.GetFileName(file.FileName),
-            MimeType = mimeType,
-            SizeBytes = file.Length,
-            Sha256 = sha256,
-            UploadedBy = user.UserId,
-            Kind = KindFromMime(mimeType),
-        };
-        db.StoredFiles.Add(stored);
-        await db.SaveChangesAsync(ct);
-
-        return TypedResults.Created($"/api/v1/files/{stored.Id}", stored.ToDto(tokens));
+        return (storagePath, sha256, mimeType);
     }
 
     private static async Task<Results<Ok<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(

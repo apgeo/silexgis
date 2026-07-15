@@ -16,9 +16,23 @@ public sealed record FileDto(
     long SizeBytes,
     string Sha256,
     FileKind Kind,
+    int VersionNumber,
     DateTimeOffset CreatedAt,
     string ContentUrl,
     string? ThumbnailUrl);
+
+/// <summary>One entry in a file's version chain (newest first). Old versions are editor-only.</summary>
+public sealed record FileVersionDto(
+    Guid Id,
+    int VersionNumber,
+    string OriginalName,
+    string MimeType,
+    long SizeBytes,
+    Guid? UploadedBy,
+    string? UploaderName,
+    DateTimeOffset CreatedAt,
+    string ContentUrl,
+    bool IsHead);
 
 internal static class FileMapping
 {
@@ -32,10 +46,14 @@ internal static class FileMapping
             f.SizeBytes,
             f.Sha256,
             f.Kind,
+            f.VersionNumber,
             f.CreatedAt,
-            $"/api/v1/files/{f.Id}/content?token={Uri.EscapeDataString(token)}",
+            ContentUrl(f.Id, token),
             f.Kind == FileKind.Image
                 ? $"/api/v1/files/{f.Id}/thumbnail?size=480&token={Uri.EscapeDataString(token)}"
                 : null);
     }
+
+    public static string ContentUrl(Guid fileId, string token) =>
+        $"/api/v1/files/{fileId}/content?token={Uri.EscapeDataString(token)}";
 }

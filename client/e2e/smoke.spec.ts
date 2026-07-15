@@ -267,14 +267,46 @@ test('cave photo attachment round-trip', async ({ page }) => {
   await expect(photo).toHaveJSProperty('naturalWidth', 4); // decoded, not a broken image
 
   // Cleanup: remove every e2e photo (earlier aborted runs may have left extras).
+  await deletePhotoFigures(page);
+  await expect(page.getByText('e2e-photo.png')).not.toBeVisible();
+});
+
+test('cave attachment file versioning', async ({ page }) => {
+  await login(page);
+  await page.goto('/caves');
+  await page.getByText('Peștera Demo Mare').click();
+  await expect(page.getByText('Photos & documents')).toBeVisible({ timeout: 15_000 });
+
+  const gallery = page.locator('.ant-card', { hasText: 'Photos & documents' });
+  await deletePhotoFigures(page); // start clean
+  await gallery.locator('input[type=file]').setInputFiles('e2e/fixtures/e2e-photo.png');
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  const figure = page.locator('figure').filter({ hasText: 'e2e-photo' }).first();
+  await expect(figure).toBeVisible({ timeout: 15_000 });
+
+  // Open the versions popover and upload a corrected version onto the head.
+  await figure.getByRole('button', { name: 'history' }).click();
+  const popover = page.locator('.ant-popover');
+  await expect(popover.getByText('Upload new version')).toBeVisible();
+  await popover.locator('input[type=file]').setInputFiles('e2e/fixtures/e2e-photo.png');
+
+  // The chain now has two versions: the head (current) and the superseded v1.
+  await expect(popover.getByText('current')).toBeVisible({ timeout: 15_000 });
+  await expect(popover.getByText('v1')).toBeVisible();
+
+  // Cleanup (the attachment still points at one document — deleting the figure detaches it).
+  await page.keyboard.press('Escape');
+  await deletePhotoFigures(page);
+});
+
+async function deletePhotoFigures(page: Page) {
   const figures = page.locator('figure').filter({ hasText: 'e2e-photo' });
   for (let remaining = await figures.count(); remaining > 0; remaining--) {
     await figures.first().getByRole('button', { name: 'delete' }).click();
     await page.getByRole('button', { name: 'OK' }).click();
     await expect(figures).toHaveCount(remaining - 1, { timeout: 15_000 });
   }
-  await expect(page.getByText('e2e-photo.png')).not.toBeVisible();
-});
+}
 
 test('pop-out registry drives the main map across windows', async ({ page, context }) => {
   await login(page);

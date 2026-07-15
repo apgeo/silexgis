@@ -29,6 +29,7 @@ export const queryKeys = {
   surfaceFeature: (id: string) => ['surface-features', 'detail', id] as const,
   geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
   attachments: (entityType: string, entityId: string) => ['attachments', entityType, entityId] as const,
+  fileVersions: (fileId: string) => ['file-versions', fileId] as const,
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
@@ -495,6 +496,52 @@ export function useDeleteAttachment() {
       }
     },
     onSuccess: () => invalidate(),
+  });
+}
+
+export type FileVersionInfo = components['schemas']['FileVersionDto'];
+
+/** Full version chain of a file (editor-only; the server 403s read-only callers). */
+export function useFileVersions(fileId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.fileVersions(fileId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/files/{id}/versions', { params: { path: { id: fileId! } } })),
+    enabled: !!fileId && enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useUploadFileVersion() {
+  const invalidateAttachments = useInvalidateAttachments();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ fileId, file }: { fileId: string; file: File }): Promise<FileInfo> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      return unwrap(api.POST('/api/v1/files/{id}/versions', {
+        params: { path: { id: fileId } },
+        body: form as never,
+        bodySerializer: (b: unknown) => b as FormData,
+      }));
+    },
+    // The attachment now points at the new head; both the gallery and any version list refresh.
+    onSuccess: () => {
+      invalidateAttachments();
+      void queryClient.invalidateQueries({ queryKey: ['file-versions'] });
+    },
+  });
+}
+
+export function useDeleteFileVersion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/files/{id}', { params: { path: { id } } });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['file-versions'] }),
   });
 }
 

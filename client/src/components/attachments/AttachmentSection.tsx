@@ -10,6 +10,7 @@ import {
   type AttachedEntityType,
   type AttachmentInfo,
 } from '../../api/hooks.ts';
+import FileVersions from './FileVersions.tsx';
 
 interface AttachmentSectionProps {
   entityType: AttachedEntityType;
@@ -110,15 +111,22 @@ export default function AttachmentSection({ entityType, entityId, canEdit }: Att
                     <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis>
                       {attachment.caption ?? attachment.file.originalName}
                     </Typography.Text>
-                    {canEdit && (
-                      <Popconfirm
-                        title={t('attachments.deleteConfirm')}
-                        onConfirm={() => void onDelete(attachment)}
-                        okButtonProps={{ danger: true }}
-                      >
-                        <Button size="small" type="text" danger icon={<DeleteOutlined />} />
-                      </Popconfirm>
-                    )}
+                    <Flex align="center">
+                      <FileVersions
+                        fileId={attachment.file.id}
+                        versionNumber={attachment.file.versionNumber}
+                        canEdit={canEdit}
+                      />
+                      {canEdit && (
+                        <Popconfirm
+                          title={t('attachments.deleteConfirm')}
+                          onConfirm={() => void onDelete(attachment)}
+                          okButtonProps={{ danger: true }}
+                        >
+                          <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                        </Popconfirm>
+                      )}
+                    </Flex>
                   </Flex>
                 </figure>
               ))}
@@ -136,6 +144,12 @@ export default function AttachmentSection({ entityType, entityId, canEdit }: Att
             renderItem={(attachment) => (
               <List.Item
                 actions={[
+                  <FileVersions
+                    key="versions"
+                    fileId={attachment.file.id}
+                    versionNumber={attachment.file.versionNumber}
+                    canEdit={canEdit}
+                  />,
                   <Button
                     key="download"
                     size="small"

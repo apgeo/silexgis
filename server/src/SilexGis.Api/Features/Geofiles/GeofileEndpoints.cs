@@ -101,6 +101,7 @@ public static class GeofileEndpoints
             UploadedBy = user.UserId,
             Kind = FileKind.Vector,
         };
+        storedFile.VersionGroupId = storedFile.Id; // head of its own version chain
 
         var geofile = new Geofile
         {

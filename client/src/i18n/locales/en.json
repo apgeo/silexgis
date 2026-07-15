@@ -170,7 +170,12 @@
     "documents": "Documents",
     "uploadPrompt": "Click or drag photos and documents here to attach them",
     "deleteConfirm": "Remove this attachment? The file stays available to its uploader.",
-    "empty": "No photos or documents yet."
+    "empty": "No photos or documents yet.",
+    "versions": "Versions",
+    "uploadVersion": "Upload new version",
+    "currentVersion": "current",
+    "noVersions": "No versions yet.",
+    "deleteVersionConfirm": "Delete this version? Its content is removed permanently."
   },
   "geodata": {
     "title": "Geodata",

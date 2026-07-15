@@ -2321,6 +2321,92 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        /** Deletes a superseded (non-head) file version. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Version chain of a file (editor-only; superseded versions may hold removed content). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FileVersionDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Uploads a new version onto a file's head; repoints its attachments to it. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        file: components["schemas"]["IFormFile"];
+                    };
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FileDto"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -3727,6 +3813,8 @@ export interface components {
             sizeBytes: number;
             sha256: string;
             kind: components["schemas"]["FileKind"];
+            /** Format: int32 */
+            versionNumber: number;
             /** Format: date-time */
             createdAt: string;
             contentUrl: string;
@@ -3734,6 +3822,23 @@ export interface components {
         };
         /** @enum {unknown} */
         FileKind: "image" | "document" | "survey" | "raster" | "vector" | "model" | "other";
+        FileVersionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: int32 */
+            versionNumber: number;
+            originalName: string;
+            mimeType: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: uuid */
+            uploadedBy: null | string;
+            uploaderName: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            contentUrl: string;
+            isHead: boolean;
+        };
         ForgotPasswordRequest: {
             email: string;
         };

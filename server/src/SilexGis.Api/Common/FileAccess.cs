@@ -76,6 +76,37 @@ public static class FileAccessRules
         }
     }
 
+    /// <summary>
+    /// Who may modify a file's version chain (upload a new version, list/delete old versions):
+    /// an admin, the head's uploader, or anyone with Write on at least one entity the head is
+    /// attached to. A shared document is one document — a new version moves every attachment,
+    /// so Write on any one attached entity suffices. Evaluate against the chain head, which is
+    /// the row attachments point at.
+    /// </summary>
+    public static async Task<bool> CanWriteFileAsync(
+        SilexGisDbContext db, UserContext user, StoredFile head, CancellationToken ct)
+    {
+        if (user.IsAdmin || head.UploadedBy == user.UserId)
+        {
+            return true;
+        }
+
+        var links = await db.Attachments.AsNoTracking()
+            .Where(a => a.FileId == head.Id)
+            .Select(a => new { a.EntityType, a.EntityId })
+            .ToListAsync(ct);
+
+        foreach (var link in links)
+        {
+            if (await CanWriteEntityAsync(db, user, link.EntityType, link.EntityId, ct))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Write access to a polymorphic attachment target (attach/detach files).</summary>
     public static async Task<bool> CanWriteEntityAsync(
         SilexGisDbContext db, UserContext user, AttachedEntityType entityType, Guid entityId, CancellationToken ct)

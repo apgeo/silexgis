@@ -36,6 +36,16 @@ public class StoredFile : ITimestamped, IAuditable
 
     public Guid? UploadedBy { get; set; }
 
+    /// <summary>
+    /// Stable document identity across versions: the id of the first version in the chain.
+    /// A file's whole version chain is <c>WHERE version_group_id = @group</c>; the head is the
+    /// row with the highest <see cref="VersionNumber"/>. Content stays immutable per row.
+    /// </summary>
+    public Guid VersionGroupId { get; set; }
+
+    /// <summary>1-based position in the version chain; unique within a group.</summary>
+    public int VersionNumber { get; set; } = 1;
+
     public FileKind Kind { get; set; } = FileKind.Other;
 
     /// <summary>Format-specific metadata (EXIF, dimensions, layer info, …) as jsonb.</summary>

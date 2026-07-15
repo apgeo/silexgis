@@ -64,6 +64,7 @@ public sealed class RasterCogHandler(
                 UploadedBy = upload.UploadedBy,
                 Kind = FileKind.Raster,
             };
+            cogFile.VersionGroupId = cogFile.Id; // head of its own version chain
             db.StoredFiles.Add(cogFile);
 
             map.FileId = cogFile.Id;

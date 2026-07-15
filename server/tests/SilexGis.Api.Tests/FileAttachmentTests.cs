@@ -217,7 +217,79 @@ public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
         (await verifyDb.StoredFiles.CountAsync(f => f.Id == fileId)).ShouldBe(1);
     }
 
+    [Fact]
+    public async Task File_version_chain_upload_repoint_list_and_delete()
+    {
+        var v1 = await UploadAsync(owner, "report.txt", "draft"u8.ToArray(), "text/plain");
+        var v1Id = v1.GetProperty("id").GetGuid();
+        v1.GetProperty("versionNumber").GetInt32().ShouldBe(1);
+
+        var caveId = await CreateCaveAsync(owner, "Versioned Doc Cave", "authenticated");
+        (await owner.PostAsJsonAsync("/api/v1/attachments/", new
+        {
+            fileId = v1Id, entityType = "cave", entityId = caveId, role = "document", sortOrder = 0,
+        })).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // Upload v2 onto the head → the attachment repoints to v2, version number increments.
+        using (var form = BuildForm("report.txt", "corrected"u8.ToArray(), "text/plain"))
+        {
+            var response = await owner.PostAsync($"/api/v1/files/{v1Id}/versions", form);
+            var body = await response.Content.ReadAsStringAsync();
+            response.StatusCode.ShouldBe(HttpStatusCode.Created, body);
+            JsonDocument.Parse(body).RootElement.GetProperty("versionNumber").GetInt32().ShouldBe(2);
+        }
+
+        var listed = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/attachments/?entityType=cave&entityId={caveId}");
+        var headId = listed.EnumerateArray().Single().GetProperty("file").GetProperty("id").GetGuid();
+        headId.ShouldNotBe(v1Id); // repointed to the new head
+        listed.EnumerateArray().Single().GetProperty("file").GetProperty("versionNumber").GetInt32().ShouldBe(2);
+
+        // Uploading onto the now-superseded v1 fails as not-head.
+        using (var form = BuildForm("report.txt", "late"u8.ToArray(), "text/plain"))
+        {
+            var response = await owner.PostAsync($"/api/v1/files/{v1Id}/versions", form);
+            response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+            (await ReadCodeAsync(response)).ShouldBe("file.not_head");
+        }
+
+        // Version list: the editor sees both with the head flagged; a read-only user is forbidden.
+        var versions = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/files/{headId}/versions");
+        versions.GetArrayLength().ShouldBe(2);
+        versions[0].GetProperty("versionNumber").GetInt32().ShouldBe(2);
+        versions[0].GetProperty("isHead").GetBoolean().ShouldBeTrue();
+        versions[0].GetProperty("uploaderName").GetString().ShouldNotBeNullOrWhiteSpace();
+        versions[1].GetProperty("versionNumber").GetInt32().ShouldBe(1);
+        versions[1].GetProperty("isHead").GetBoolean().ShouldBeFalse();
+
+        (await outsider.GetAsync($"/api/v1/files/{headId}/versions")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // Delete the superseded v1 → 204, and its content is purged. The head cannot be deleted.
+        (await owner.DeleteAsync($"/api/v1/files/{v1Id}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        using (var anonymous = factory.CreateClient())
+        {
+            (await anonymous.GetAsync(v1.GetProperty("contentUrl").GetString()!)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        }
+
+        var deleteHead = await owner.DeleteAsync($"/api/v1/files/{headId}");
+        deleteHead.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await ReadCodeAsync(deleteHead)).ShouldBe("file.head_undeletable");
+
+        // The repoint is audited: the cave timeline carries an Attachment update (FileId diff).
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var caveIdStr = caveId.ToString();
+        (await db.Set<AuditEntry>().CountAsync(a =>
+            a.EntityType == "Attachment" && a.RootEntityId == caveIdStr && a.Action == AuditActions.Updated))
+            .ShouldBeGreaterThan(0);
+    }
+
     // ---- helpers ----
+
+    private static async Task<string?> ReadCodeAsync(HttpResponseMessage response)
+    {
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return doc.RootElement.TryGetProperty("code", out var code) ? code.GetString() : null;
+    }
 
     private static byte[] MakePng(uint width, uint height)
     {
