@@ -147,7 +147,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
         // The editor (no exact location) tries to un-protect the cave while echoing the
         // obfuscated null address. Both the flag and the real address must survive, or the
         // editor could self-serve the protected location (and its whole history).
-        var response = await editor.PutAsJsonAsync($"/api/v1/caves/{caveId}", new
+        var response = await editor.PutWithIfMatchAsync($"/api/v1/caves/{caveId}", new
         {
             name = $"Protected {caveId:N}"[..20],
             caveTypeId,
@@ -180,7 +180,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
         await GrantAsync(caveId, editorId, ObjectPermission.Read | ObjectPermission.Write);
 
         var snapped = await ReadEntranceGeomAsync(editor, caveId, entranceId);
-        var response = await editor.PutAsJsonAsync($"/api/v1/cave-entrances/{entranceId}", new
+        var response = await editor.PutWithIfMatchAsync($"/api/v1/cave-entrances/{entranceId}", new
         {
             entranceTypeId,
             isMain = true,
@@ -251,7 +251,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
 
     private async Task UpdateCaveAsync(HttpClient client, Guid caveId, string description, string? closestAddress)
     {
-        var response = await client.PutAsJsonAsync($"/api/v1/caves/{caveId}", new
+        var response = await client.PutWithIfMatchAsync($"/api/v1/caves/{caveId}", new
         {
             name = $"Protected {caveId:N}"[..20],
             caveTypeId,
@@ -268,7 +268,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
 
     private async Task UpdateEntranceAsync(HttpClient client, Guid caveId, Guid entranceId, double lon, double lat, string description)
     {
-        var response = await client.PutAsJsonAsync($"/api/v1/cave-entrances/{entranceId}", new
+        var response = await client.PutWithIfMatchAsync($"/api/v1/cave-entrances/{entranceId}", new
         {
             entranceTypeId,
             isMain = true,
