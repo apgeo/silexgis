@@ -9,6 +9,7 @@ import {
   useUploadFile,
   type AttachedEntityType,
   type AttachmentInfo,
+  type AttachmentRole,
 } from '../../api/hooks.ts';
 import AttachmentDetails from './AttachmentDetails.tsx';
 import FileVersions from './FileVersions.tsx';
@@ -18,6 +19,11 @@ interface AttachmentSectionProps {
   entityType: AttachedEntityType;
   entityId: string;
   canEdit: boolean;
+  /**
+   * When set, a distinct "Report document" slot is shown for the single report-role
+   * attachment (the completed trip report) and it is kept out of the generic lists.
+   */
+  reportSlot?: boolean;
 }
 
 /**
@@ -25,7 +31,12 @@ interface AttachmentSectionProps {
  * tokens minted by the server, so plain img/src and anchor downloads work without
  * auth headers; the query refreshes them before expiry.
  */
-export default function AttachmentSection({ entityType, entityId, canEdit }: AttachmentSectionProps) {
+export default function AttachmentSection({
+  entityType,
+  entityId,
+  canEdit,
+  reportSlot,
+}: AttachmentSectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { data: attachments } = useAttachments(entityType, entityId);
@@ -33,10 +44,12 @@ export default function AttachmentSection({ entityType, entityId, canEdit }: Att
   const createAttachment = useCreateAttachment();
   const deleteAttachment = useDeleteAttachment();
 
-  const photos = (attachments ?? []).filter((a) => a.file.kind === 'image');
-  const documents = (attachments ?? []).filter((a) => a.file.kind !== 'image');
+  // The report document (if any) lives in its own slot and is kept out of the generic lists.
+  const report = reportSlot ? (attachments ?? []).find((a) => a.role === 'report') : undefined;
+  const photos = (attachments ?? []).filter((a) => a.file.kind === 'image' && a.id !== report?.id);
+  const documents = (attachments ?? []).filter((a) => a.file.kind !== 'image' && a.id !== report?.id);
 
-  const onUpload = async (file: File) => {
+  const onUpload = async (file: File, roleOverride?: AttachmentRole) => {
     try {
       const stored = await uploadFile.mutateAsync(file);
       await createAttachment.mutateAsync({
@@ -44,9 +57,10 @@ export default function AttachmentSection({ entityType, entityId, canEdit }: Att
         entityType,
         entityId,
         // Sensible default roles; richer role/caption editing comes with the media polish.
-        role: stored.kind === 'image'
-          ? (entityType === 'cave' ? 'photoEntrance' : 'photoSurface')
-          : 'document',
+        role: roleOverride
+          ?? (stored.kind === 'image'
+            ? (entityType === 'cave' ? 'photoEntrance' : 'photoSurface')
+            : 'document'),
         caption: null,
         sortOrder: (attachments?.length ?? 0) + 1,
       });
@@ -67,6 +81,80 @@ export default function AttachmentSection({ entityType, entityId, canEdit }: Att
 
   return (
     <Card title={t('attachments.title')} size="small" style={{ marginTop: 16 }}>
+      {reportSlot && (
+        <div style={{ marginBottom: 16 }}>
+          <Typography.Text strong>{t('attachments.reportDocument')}</Typography.Text>
+          {report ? (
+            <List
+              size="small"
+              dataSource={[report]}
+              renderItem={(attachment) => (
+                <List.Item
+                  actions={[
+                    ...(canEdit ? [<AttachmentDetails key="details" attachment={attachment} />] : []),
+                    <FileVersions
+                      key="versions"
+                      fileId={attachment.file.id}
+                      versionNumber={attachment.file.versionNumber}
+                      canEdit={canEdit}
+                    />,
+                    <Button
+                      key="download"
+                      type="primary"
+                      size="small"
+                      icon={<DownloadOutlined />}
+                      href={attachment.file.contentUrl}
+                      download={attachment.file.originalName}
+                    />,
+                    ...(canEdit
+                      ? [
+                          <Popconfirm
+                            key="delete"
+                            title={t('attachments.deleteConfirm')}
+                            onConfirm={() => void onDelete(attachment)}
+                            okButtonProps={{ danger: true }}
+                          >
+                            <Button size="small" danger type="text" icon={<DeleteOutlined />} />
+                          </Popconfirm>,
+                        ]
+                      : []),
+                  ]}
+                >
+                  <List.Item.Meta
+                    avatar={<FileOutlined />}
+                    title={attachment.caption ?? attachment.file.originalName}
+                    description={[
+                      attachment.file.originalName,
+                      formatSize(attachment.file.sizeBytes),
+                      attachment.file.documentDate,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  />
+                </List.Item>
+              )}
+            />
+          ) : canEdit ? (
+            <Upload.Dragger
+              showUploadList={false}
+              customRequest={({ file, onSuccess, onError }) => {
+                onUpload(file as File, 'report').then(() => onSuccess?.(null), (e: Error) => onError?.(e));
+              }}
+              style={{ marginTop: 8 }}
+            >
+              <p className="ant-upload-drag-icon">
+                <FileOutlined />
+              </p>
+              <p className="ant-upload-text">{t('attachments.uploadReport')}</p>
+            </Upload.Dragger>
+          ) : (
+            <div style={{ marginTop: 8 }}>
+              <Empty description={t('attachments.noReport')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            </div>
+          )}
+        </div>
+      )}
+
       {canEdit && (
         <Upload.Dragger
           multiple

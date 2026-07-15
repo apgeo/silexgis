@@ -135,7 +135,8 @@ public static class TripLogEndpoints
         db.TripLogs.Add(trip);
         // No existing children on create, so the reconcile helpers reduce to pure inserts.
         await ReconcileCaveLinksAsync(db, user, trip.Id, request.CaveIds, ct);
-        await ReconcileParticipantsAsync(db, trip.Id, request.Participants, ct);
+        await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Participant, request.Participants, ct);
+        await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Proposer, request.Proposers ?? [], ct);
         await db.SaveChangesAsync(ct);
 
         var items = await MapWithChildrenAsync(db, user, [trip], ct);
@@ -178,7 +179,8 @@ public static class TripLogEndpoints
 
         Apply(trip, request);
         await ReconcileCaveLinksAsync(db, user, trip.Id, request.CaveIds, ct);
-        await ReconcileParticipantsAsync(db, trip.Id, request.Participants, ct);
+        await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Participant, request.Participants, ct);
+        await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Proposer, request.Proposers ?? [], ct);
         await db.SaveChangesAsync(ct);
 
         var items = await MapWithChildrenAsync(db, user, [trip], ct);
@@ -229,10 +231,16 @@ public static class TripLogEndpoints
     private static void Apply(TripLog trip, TripLogWriteRequest request)
     {
         trip.Title = request.Title;
+        trip.Type = request.Type;
         trip.TripDate = request.TripDate;
         trip.TripDateEnd = request.TripDateEnd;
+        trip.EntryTime = request.EntryTime;
+        trip.ExitTime = request.ExitTime;
         trip.Description = request.Description;
+        trip.Results = request.Results;
+        trip.WeatherConditions = request.WeatherConditions;
         trip.LocationText = request.LocationText;
+        trip.OrganizingClub = request.OrganizingClub;
         trip.Geom = request.Geom?.ToGeometryOrNull();
         trip.TeamId = request.TeamId;
         trip.Visibility = request.Visibility;
@@ -263,10 +271,12 @@ public static class TripLogEndpoints
         }
     }
 
+    // Reconciles one kind (attendees or proposers) independently; the same person may be both,
+    // as two rows of different kind. Diffs like the cave links so unchanged rows don't churn.
     private static async Task ReconcileParticipantsAsync(
-        SilexGisDbContext db, Guid tripId, IReadOnlyList<TripParticipantWrite> requested, CancellationToken ct)
+        SilexGisDbContext db, Guid tripId, TripParticipantKind kind, IReadOnlyList<TripParticipantWrite> requested, CancellationToken ct)
     {
-        var existing = await db.TripLogParticipants.Where(x => x.TripLogId == tripId).ToListAsync(ct);
+        var existing = await db.TripLogParticipants.Where(x => x.TripLogId == tripId && x.Kind == kind).ToListAsync(ct);
         var desired = requested
             .Select(p => (p.UserId, NameText: p.UserId is null ? p.NameText!.Trim() : null))
             .ToList();
@@ -289,7 +299,13 @@ public static class TripLogEndpoints
 
         foreach (var (userId, nameText) in desired)
         {
-            db.TripLogParticipants.Add(new TripLogParticipant { TripLogId = tripId, UserId = userId, NameText = nameText });
+            db.TripLogParticipants.Add(new TripLogParticipant
+            {
+                TripLogId = tripId,
+                Kind = kind,
+                UserId = userId,
+                NameText = nameText,
+            });
         }
     }
 
@@ -316,7 +332,8 @@ public static class TripLogEndpoints
             }
         }
 
-        var userIds = request.Participants.Where(x => x.UserId is not null).Select(x => x.UserId!.Value).Distinct().ToList();
+        var userIds = request.Participants.Concat(request.Proposers ?? [])
+            .Where(x => x.UserId is not null).Select(x => x.UserId!.Value).Distinct().ToList();
         if (userIds.Count > 0)
         {
             var found = await db.Users.CountAsync(u => userIds.Contains(u.Id), ct);
@@ -345,6 +362,7 @@ public static class TripLogEndpoints
             .SelectMany(x => x.users.DefaultIfEmpty(), (x, u) => new
             {
                 x.p.TripLogId,
+                x.p.Kind,
                 x.p.UserId,
                 x.p.NameText,
                 DisplayName = u == null ? null : (u.DisplayName ?? u.UserName),
@@ -358,13 +376,21 @@ public static class TripLogEndpoints
         return [.. trips.Select(trip => new TripLogDto(
             trip.Id,
             trip.Title,
+            trip.Type,
             trip.TripDate,
             trip.TripDateEnd,
+            trip.EntryTime,
+            trip.ExitTime,
             trip.Description,
+            trip.Results,
+            trip.WeatherConditions,
             trip.LocationText,
+            trip.OrganizingClub,
             trip.Geom is null ? null : GeoJsonGeometry.From(trip.Geom),
             [.. caveLinks.Where(x => x.TripLogId == trip.Id && !redacted.Contains(x.CaveId)).Select(x => x.CaveId)],
-            [.. participants.Where(x => x.TripLogId == trip.Id)
+            [.. participants.Where(x => x.TripLogId == trip.Id && x.Kind == TripParticipantKind.Participant)
+                .Select(x => new TripParticipantDto(x.UserId, x.NameText, x.DisplayName ?? x.NameText))],
+            [.. participants.Where(x => x.TripLogId == trip.Id && x.Kind == TripParticipantKind.Proposer)
                 .Select(x => new TripParticipantDto(x.UserId, x.NameText, x.DisplayName ?? x.NameText))],
             trip.OwnerUserId,
             trip.TeamId,

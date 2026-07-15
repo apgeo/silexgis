@@ -68,6 +68,13 @@ export default function TripLogListPage() {
         columns={[
           { title: t('trips.date'), key: 'date', width: 200, render: (_, trip) => formatDate(trip) },
           { title: t('trips.titleField'), dataIndex: 'title' },
+          {
+            title: t('trips.type'),
+            dataIndex: 'type',
+            width: 150,
+            render: (value: TripLogInfo['type']) =>
+              value ? <Tag>{t(`trips.typeValues.${value}`)}</Tag> : null,
+          },
           { title: t('trips.location'), dataIndex: 'locationText', width: 200 },
           {
             title: t('trips.participants'),

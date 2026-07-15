@@ -23,6 +23,19 @@ function CaveLink({ caveId }: { caveId: string }) {
   return <Link to={`/caves/${caveId}`}>{cave?.name ?? caveId}</Link>;
 }
 
+// Server times are "HH:mm:ss"; show "HH:mm" and derive the underground duration (handling a
+// crossing of midnight) when both ends are present.
+function formatTimeRange(entry: string | null | undefined, exit: string | null | undefined): string | null {
+  if (!entry && !exit) return null;
+  const range = `${entry?.slice(0, 5) ?? '—'} – ${exit?.slice(0, 5) ?? '—'}`;
+  if (!entry || !exit) return range;
+  const [eh, em] = entry.split(':').map(Number);
+  const [xh, xm] = exit.split(':').map(Number);
+  let minutes = xh * 60 + xm - (eh * 60 + em);
+  if (minutes < 0) minutes += 24 * 60;
+  return `${range} (${Math.floor(minutes / 60)}h ${minutes % 60}m)`;
+}
+
 export default function TripLogDetailPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -46,6 +59,7 @@ export default function TripLogDetailPage() {
   const dateText = trip.tripDateEnd
     ? `${new Date(trip.tripDate).toLocaleDateString(i18n.resolvedLanguage)} – ${new Date(trip.tripDateEnd).toLocaleDateString(i18n.resolvedLanguage)}`
     : new Date(trip.tripDate).toLocaleDateString(i18n.resolvedLanguage);
+  const timeText = formatTimeRange(trip.entryTime, trip.exitTime);
 
   const onDelete = async () => {
     try {
@@ -79,9 +93,18 @@ export default function TripLogDetailPage() {
 
       <Card size="small">
         <Descriptions column={1} size="small">
+          {trip.type && (
+            <Descriptions.Item label={t('trips.type')}>
+              <Tag>{t(`trips.typeValues.${trip.type}`)}</Tag>
+            </Descriptions.Item>
+          )}
           <Descriptions.Item label={t('trips.date')}>{dateText}</Descriptions.Item>
+          {timeText && <Descriptions.Item label={t('trips.duration')}>{timeText}</Descriptions.Item>}
           {trip.locationText && (
             <Descriptions.Item label={t('trips.location')}>{trip.locationText}</Descriptions.Item>
+          )}
+          {trip.organizingClub && (
+            <Descriptions.Item label={t('trips.organizingClub')}>{trip.organizingClub}</Descriptions.Item>
           )}
           {trip.caveIds.length > 0 && (
             <Descriptions.Item label={t('trips.caves')}>
@@ -101,6 +124,18 @@ export default function TripLogDetailPage() {
               </Flex>
             </Descriptions.Item>
           )}
+          {trip.proposers.length > 0 && (
+            <Descriptions.Item label={t('trips.proposers')}>
+              <Flex gap={4} wrap>
+                {trip.proposers.map((p, index) => (
+                  <Tag key={index}>{p.displayName ?? p.nameText}</Tag>
+                ))}
+              </Flex>
+            </Descriptions.Item>
+          )}
+          {trip.weatherConditions && (
+            <Descriptions.Item label={t('trips.weather')}>{trip.weatherConditions}</Descriptions.Item>
+          )}
           <Descriptions.Item label={t('features.visibility')}>
             <Tag>{t(`caves.visibilityValues.${trip.visibility}`)}</Tag>
           </Descriptions.Item>
@@ -108,14 +143,25 @@ export default function TripLogDetailPage() {
             <TagChips entityType="tripLog" entityId={trip.id} canEdit={canEdit} />
           </Descriptions.Item>
         </Descriptions>
+        {trip.results && (
+          <>
+            <Typography.Text strong>{t('trips.results')}</Typography.Text>
+            <Typography.Paragraph style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>
+              {trip.results}
+            </Typography.Paragraph>
+          </>
+        )}
         {trip.description && (
-          <Typography.Paragraph style={{ marginTop: 12, whiteSpace: 'pre-wrap' }}>
-            {trip.description}
-          </Typography.Paragraph>
+          <>
+            <Typography.Text strong>{t('features.description')}</Typography.Text>
+            <Typography.Paragraph style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>
+              {trip.description}
+            </Typography.Paragraph>
+          </>
         )}
       </Card>
 
-      <AttachmentSection entityType="tripLog" entityId={trip.id} canEdit={canEdit} />
+      <AttachmentSection entityType="tripLog" entityId={trip.id} canEdit={canEdit} reportSlot />
 
       <HistoryPanel
         entityType="tripLog"

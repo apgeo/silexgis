@@ -63,6 +63,9 @@ public enum AttachmentRole : short
     Map2d = 4,
     SurveyData = 5,
     Other = 6,
+
+    /// <summary>The completed trip-report document (docx/pdf/…) — the report itself.</summary>
+    Report = 7,
 }
 
 /// <summary>

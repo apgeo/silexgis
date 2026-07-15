@@ -17,6 +17,7 @@ const ROLES: AttachmentRole[] = [
   'photoInterior',
   'photoSurface',
   'document',
+  'report',
   'map2d',
   'surveyData',
   'other',

@@ -675,6 +675,9 @@ export function useDeleteRasterMap() {
 
 export type TripLogInfo = components['schemas']['TripLogDto'];
 export type TripLogWrite = components['schemas']['TripLogWriteRequest'];
+export type TripType = NonNullable<components['schemas']['TripType']>;
+export type TripParticipant = components['schemas']['TripParticipantDto'];
+export type TripParticipantWrite = components['schemas']['TripParticipantWrite'];
 export type TagInfo = components['schemas']['TagDto'];
 export type TaggingInfo = components['schemas']['TaggingDto'];
 

@@ -3,6 +3,19 @@ using NetTopologySuite.Geometries;
 
 namespace SilexGis.Domain.Entities;
 
+/// <summary>Purpose of a trip, for filtering and reporting. Stored as smallint.</summary>
+public enum TripType : short
+{
+    Exploration = 0,
+    Survey = 1,
+    Maintenance = 2,
+    Training = 3,
+    Tourism = 4,
+    Rescue = 5,
+    Science = 6,
+    Other = 7,
+}
+
 /// <summary>
 /// A dated exploration/visit report: who went where and what happened. Optionally
 /// carries a location geometry (point or area) and links to the caves involved.
@@ -13,13 +26,28 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
 
     public required string Title { get; set; }
 
+    public TripType? Type { get; set; }
+
     public DateOnly TripDate { get; set; }
 
     public DateOnly? TripDateEnd { get; set; }
 
+    /// <summary>Underground entry/exit wall-clock times (no time zone; duration is derived).</summary>
+    public TimeOnly? EntryTime { get; set; }
+
+    public TimeOnly? ExitTime { get; set; }
+
     public string? Description { get; set; }
 
+    /// <summary>Outcomes/observations, kept distinct from the narrative <see cref="Description"/>.</summary>
+    public string? Results { get; set; }
+
+    public string? WeatherConditions { get; set; }
+
     public string? LocationText { get; set; }
+
+    /// <summary>Free-text organizing club/organization (external clubs need not be a <see cref="Team"/>).</summary>
+    public string? OrganizingClub { get; set; }
 
     public Geometry? Geom { get; set; }
 
@@ -53,15 +81,26 @@ public class TripLogCave : IAuditable, IAuditChild
     public string RootEntityId => TripLogId.ToString();
 }
 
+/// <summary>Whether a person attended the trip or proposed it. Stored as smallint.</summary>
+public enum TripParticipantKind : short
+{
+    Participant = 0,
+    Proposer = 1,
+}
+
 /// <summary>
-/// Trip participant: either a registered user or a free-text name for people
-/// without accounts. Exactly one of the two is set (DB check constraint).
+/// A person tied to a trip — either a registered user or a free-text name for people
+/// without accounts (exactly one of the two is set, DB check constraint). The same
+/// identity model serves both attendees and proposers, distinguished by <see cref="Kind"/>;
+/// one person may appear once as each.
 /// </summary>
 public class TripLogParticipant : IAuditable, IAuditChild
 {
     public long Id { get; set; }
 
     public Guid TripLogId { get; set; }
+
+    public TripParticipantKind Kind { get; set; } = TripParticipantKind.Participant;
 
     public Guid? UserId { get; set; }
 

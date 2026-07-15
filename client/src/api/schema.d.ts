@@ -3886,7 +3886,7 @@ export interface components {
             file: components["schemas"]["FileDto"];
         };
         /** @enum {unknown} */
-        AttachmentRole: "photoEntrance" | "photoInterior" | "photoSurface" | "document" | "map2d" | "surveyData" | "other";
+        AttachmentRole: "photoEntrance" | "photoInterior" | "photoSurface" | "document" | "map2d" | "surveyData" | "other" | "report";
         AttachmentUpdateRequest: {
             role: components["schemas"]["AttachmentRole"];
             caption: null | string;
@@ -4619,15 +4619,24 @@ export interface components {
             /** Format: uuid */
             id: string;
             title: string;
+            type: null | components["schemas"]["TripType"];
             /** Format: date */
             tripDate: string;
             /** Format: date */
             tripDateEnd: null | string;
+            /** Format: time */
+            entryTime: null | string;
+            /** Format: time */
+            exitTime: null | string;
             description: null | string;
+            results: null | string;
+            weatherConditions: null | string;
             locationText: null | string;
+            organizingClub: null | string;
             geom: null | components["schemas"]["GeoJsonGeometry"];
             caveIds: string[];
             participants: components["schemas"]["TripParticipantDto"][];
+            proposers: components["schemas"]["TripParticipantDto"][];
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */
@@ -4640,15 +4649,24 @@ export interface components {
         };
         TripLogWriteRequest: {
             title: string;
+            type: null | components["schemas"]["TripType"];
             /** Format: date */
             tripDate: string;
             /** Format: date */
             tripDateEnd: null | string;
+            /** Format: time */
+            entryTime: null | string;
+            /** Format: time */
+            exitTime: null | string;
             description: null | string;
+            results: null | string;
+            weatherConditions: null | string;
             locationText: null | string;
+            organizingClub: null | string;
             geom: null | components["schemas"]["GeoJsonGeometry"];
             caveIds: string[];
             participants: components["schemas"]["TripParticipantWrite"][];
+            proposers: null | components["schemas"]["TripParticipantWrite"][];
             /** Format: uuid */
             teamId: null | string;
             visibility: components["schemas"]["Visibility"];
@@ -4664,6 +4682,8 @@ export interface components {
             userId: null | string;
             nameText: null | string;
         };
+        /** @enum {unknown} */
+        TripType: "exploration" | "survey" | "maintenance" | "training" | "tourism" | "rescue" | "science" | "other" | null;
         UserSummaryDto: {
             /** Format: uuid */
             id: string;

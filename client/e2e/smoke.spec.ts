@@ -551,9 +551,14 @@ test('trip log with participants, tags and the audit trail', async ({ page }) =>
   await page.getByLabel('Title', { exact: true }).fill(title);
   await page.getByRole('button', { name: /Add participant/ }).click();
   await page.getByPlaceholder('Participant name').fill('Guest Caver');
+  await page.getByRole('button', { name: /Add proposer/ }).click();
+  await page.getByPlaceholder('Proposer name').fill('Ana Proposer');
   await page.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('Guest Caver')).toBeVisible();
+  // Scope to the detail-page tags — the names also surface in the history timeline below.
+  await expect(page.locator('.ant-tag', { hasText: 'Guest Caver' })).toBeVisible();
+  // The proposer (a distinct role from attendee) round-trips to the detail page.
+  await expect(page.locator('.ant-tag', { hasText: 'Ana Proposer' })).toBeVisible();
 
   // Tag it inline (the input autofocuses; Enter submits).
   await page.getByText('Add tag').click();
@@ -572,7 +577,9 @@ test('trip log with participants, tags and the audit trail', async ({ page }) =>
   await page.getByRole('button', { name: /Delete/ }).click();
   await page.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(title)).not.toBeVisible();
+  // Back on the list, the deleted trip's row is gone (scope to a table cell — the title also
+  // lingered briefly in the detail heading/timeline during the post-delete navigation).
+  await expect(page.getByRole('cell', { name: title })).toHaveCount(0, { timeout: 15_000 });
 });
 
 test('georeferenced raster upload, COG processing, map overlay and delete', async ({ page }) => {

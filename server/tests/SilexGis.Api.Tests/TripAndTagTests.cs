@@ -140,6 +140,99 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task Trip_report_fields_and_proposers_round_trip()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+
+        // Create with the enrichment fields; the same registered user is both a participant
+        // and a proposer, alongside a free-text proposer.
+        var create = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Survey push {marker}",
+            type = "survey",
+            tripDate = "2026-06-01",
+            entryTime = "09:30:00",
+            exitTime = "16:15:00",
+            description = "Rigged the entrance series.",
+            results = "200 m of new passage surveyed.",
+            weatherConditions = "Cold, low water.",
+            locationText = "Piatra Craiului",
+            organizingClub = "Speo Club Codru",
+            caveIds = Array.Empty<Guid>(),
+            participants = new object[] { new { userId = outsiderId, nameText = (string?)null } },
+            proposers = new object[]
+            {
+                new { userId = outsiderId, nameText = (string?)null },
+                new { userId = (Guid?)null, nameText = "Ana Ionescu" },
+            },
+            visibility = "authenticated",
+        });
+        create.StatusCode.ShouldBe(HttpStatusCode.Created, await create.Content.ReadAsStringAsync());
+        var created = await create.Content.ReadFromJsonAsync<JsonElement>();
+        var tripId = created.GetProperty("id").GetGuid();
+
+        static void AssertReportFields(JsonElement t)
+        {
+            t.GetProperty("type").GetString().ShouldBe("survey");
+            t.GetProperty("entryTime").GetString().ShouldBe("09:30:00");
+            t.GetProperty("exitTime").GetString().ShouldBe("16:15:00");
+            t.GetProperty("results").GetString().ShouldBe("200 m of new passage surveyed.");
+            t.GetProperty("weatherConditions").GetString().ShouldBe("Cold, low water.");
+            t.GetProperty("organizingClub").GetString().ShouldBe("Speo Club Codru");
+            var proposers = t.GetProperty("proposers").EnumerateArray().ToList();
+            proposers.Count.ShouldBe(2);
+            proposers.ShouldContain(p => p.GetProperty("nameText").GetString() == "Ana Ionescu");
+            proposers.ShouldContain(p => p.GetProperty("userId").ValueKind == JsonValueKind.String
+                && p.GetProperty("displayName").GetString() != null);
+            // The same registered user is independently a participant (attendance ≠ proposing).
+            t.GetProperty("participants").GetArrayLength().ShouldBe(1);
+        }
+
+        AssertReportFields(created);
+        AssertReportFields(await owner.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{tripId}"));
+
+        // Update: retype the trip, clear the times, keep one free-text proposer.
+        var update = await owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{tripId}", new
+        {
+            title = $"Survey push {marker}",
+            type = "exploration",
+            tripDate = "2026-06-01",
+            entryTime = (string?)null,
+            exitTime = (string?)null,
+            results = "Survey aborted; water rising.",
+            caveIds = Array.Empty<Guid>(),
+            participants = new object[] { new { userId = outsiderId, nameText = (string?)null } },
+            proposers = new object[] { new { userId = (Guid?)null, nameText = "Ana Ionescu" } },
+            visibility = "authenticated",
+        });
+        update.StatusCode.ShouldBe(HttpStatusCode.OK, await update.Content.ReadAsStringAsync());
+        var updated = await update.Content.ReadFromJsonAsync<JsonElement>();
+        updated.GetProperty("type").GetString().ShouldBe("exploration");
+        updated.GetProperty("entryTime").ValueKind.ShouldBe(JsonValueKind.Null);
+        updated.GetProperty("proposers").GetArrayLength().ShouldBe(1);
+
+        // Validation: an unknown proposer user, and a proposer carrying both identities, are rejected.
+        (await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Bad proposer {marker}",
+            tripDate = "2026-06-01",
+            caveIds = Array.Empty<Guid>(),
+            participants = Array.Empty<object>(),
+            proposers = new object[] { new { userId = Guid.NewGuid(), nameText = (string?)null } },
+            visibility = "private",
+        })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Ambiguous proposer {marker}",
+            tripDate = "2026-06-01",
+            caveIds = Array.Empty<Guid>(),
+            participants = Array.Empty<object>(),
+            proposers = new object[] { new { userId = outsiderId, nameText = "Also named" } },
+            visibility = "private",
+        })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Trips_redact_links_to_location_protected_caves()
     {
         var marker = Guid.NewGuid().ToString("N")[..8];
@@ -192,7 +285,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             .GetProperty("caveIds").GetArrayLength().ShouldBe(0);
 
         // Editing the title while echoing the redacted (empty) cave list must not drop the link.
-        (await outsider.PutAsJsonAsync($"/api/v1/trip-logs/{tripId}", new
+        (await outsider.PutWithIfMatchAsync($"/api/v1/trip-logs/{tripId}", new
         {
             title = $"Trip {marker} edited",
             tripDate = "2026-05-05",
@@ -224,7 +317,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         // Edit the title twice, resubmitting the same cave link and participant.
         for (var i = 0; i < 2; i++)
         {
-            (await owner.PutAsJsonAsync($"/api/v1/trip-logs/{tripId}", new
+            (await owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{tripId}", new
             {
                 title = $"Trip {marker} v{i}",
                 tripDate = "2026-05-05",

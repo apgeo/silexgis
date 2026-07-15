@@ -14,7 +14,10 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
         builder.Property(x => x.Id).ValueGeneratedNever();
 
         builder.Property(x => x.Title).HasMaxLength(255);
+        builder.Property(x => x.Type).HasConversion<short>();
+        builder.Property(x => x.WeatherConditions).HasMaxLength(300);
         builder.Property(x => x.LocationText).HasMaxLength(300);
+        builder.Property(x => x.OrganizingClub).HasMaxLength(200);
         builder.Property(x => x.Visibility).HasConversion<short>();
         builder.Property(x => x.Geom).HasColumnType("geometry(Geometry, 4326)");
 
@@ -44,6 +47,7 @@ public sealed class TripLogParticipantConfiguration : IEntityTypeConfiguration<T
     public void Configure(EntityTypeBuilder<TripLogParticipant> builder)
     {
         builder.ToTable("trip_log_participants");
+        builder.Property(x => x.Kind).HasConversion<short>();
         builder.Property(x => x.NameText).HasMaxLength(200);
         builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
