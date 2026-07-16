@@ -14,7 +14,11 @@ export default function RequireAuth() {
 
   useEffect(() => {
     if (!loading && !user) {
-      void signIn(location.pathname + location.search);
+      // The hash has to travel with the return URL: tokens live in memory, so opening any
+      // deep link cold goes through this redirect, and the map encodes its position in the
+      // hash ("#zoom/lat/lon"). Dropping it would silently strip a shared map link of the
+      // very position it was shared for.
+      void signIn(location.pathname + location.search + location.hash);
     }
   }, [loading, user, signIn, location]);
 
