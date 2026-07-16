@@ -1,10 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Form, Input } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import DialogHost from './DialogHost.tsx';
+
+let mobile = false;
+
+vi.mock('../hooks/useIsMobile.ts', () => ({ useIsMobile: () => mobile }));
+
+beforeEach(() => {
+  mobile = false;
+});
 
 afterEach(() => {
   cleanup();
@@ -53,6 +61,21 @@ describe('DialogHost', () => {
     fireEvent.click(screen.getByTestId('dialog-placement-flip'));
 
     expect(screen.getByLabelText('Name')).toHaveValue('Peștera Nouă');
+  });
+
+  it('gives the drawer the whole screen on mobile, where there is no map to sit beside', () => {
+    useUiPrefsStore.getState().setDialogPlacement('feature-edit', 'drawer');
+    mobile = true;
+    render(<TestDialog />);
+
+    expect(document.querySelector('.ant-drawer-content-wrapper')).toHaveStyle({ width: '100%' });
+  });
+
+  it('keeps the drawer at its fixed side-panel width on desktop', () => {
+    useUiPrefsStore.getState().setDialogPlacement('feature-edit', 'drawer');
+    render(<TestDialog />);
+
+    expect(document.querySelector('.ant-drawer-content-wrapper')).toHaveStyle({ width: '520px' });
   });
 
   it('runs the confirm action from the drawer footer and hides OK when absent', () => {

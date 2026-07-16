@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Button, Drawer, Flex, Modal, Tooltip } from 'antd';
 import { PicCenterOutlined, PicRightOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useIsMobile } from '../hooks/useIsMobile.ts';
 import { useUiPrefsStore, type DialogKind } from '../stores/uiPrefsStore.ts';
 
 interface DialogHostProps {
@@ -39,6 +40,7 @@ export default function DialogHost({
   children,
 }: DialogHostProps) {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const placement = useUiPrefsStore((s) => s.dialogPlacement[kind] ?? 'modal');
   const setDialogPlacement = useUiPrefsStore((s) => s.setDialogPlacement);
 
@@ -63,7 +65,11 @@ export default function DialogHost({
         open={open}
         onClose={onCancel}
         afterOpenChange={afterOpenChange}
-        width={width ?? 520}
+        // A side panel next to the map is the point on desktop; on a phone there is no
+        // "next to", so the drawer takes the screen and the placement preference survives
+        // as the transition the user sees when they widen the window again.
+        // (`size` rather than `width`: antd deprecated the latter in favour of it.)
+        size={isMobile ? '100%' : (width ?? 520)}
         mask={false}
         destroyOnHidden
         extra={flipButton}

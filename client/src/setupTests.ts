@@ -2,9 +2,25 @@
 import '@testing-library/jest-dom/vitest';
 
 // antd relies on browser APIs that jsdom does not implement.
-if (!window.matchMedia) {
-  window.matchMedia = ((query: string) => ({
-    matches: false,
+//
+// jsdom's own matchMedia never evaluates the query — it answers `matches: false` for
+// everything. antd's responsive observer resolves its breakpoints through it, so an
+// always-false answer means no `min-width` breakpoint ever matches and components pick
+// their phone layout in every test, silently. Evaluate width queries against
+// window.innerWidth (jsdom defaults to 1024, a desktop) so tests see the layout their
+// assertions assume. A test that wants the mobile layout mocks `useIsMobile`; the width
+// here only has to put the default on the desktop side of the breakpoint.
+window.matchMedia = ((query: string) => {
+  const min = /\(min-width:\s*([\d.]+)px\)/.exec(query);
+  const max = /\(max-width:\s*([\d.]+)px\)/.exec(query);
+  // Non-width queries — `(hover: none)`, `(pointer: coarse)` — stay false: the test
+  // environment is not a touch device.
+  const matches =
+    (min !== null || max !== null) &&
+    (min === null || window.innerWidth >= Number.parseFloat(min[1])) &&
+    (max === null || window.innerWidth <= Number.parseFloat(max[1]));
+  return {
+    matches,
     media: query,
     onchange: null,
     addListener: () => {},
@@ -12,8 +28,8 @@ if (!window.matchMedia) {
     addEventListener: () => {},
     removeEventListener: () => {},
     dispatchEvent: () => false,
-  })) as unknown as typeof window.matchMedia;
-}
+  };
+}) as unknown as typeof window.matchMedia;
 
 if (!window.ResizeObserver) {
   class ResizeObserverStub {

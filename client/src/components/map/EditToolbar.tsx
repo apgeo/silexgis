@@ -23,6 +23,7 @@ import {
   updateSurfaceFeature,
   useFeatureTypes,
 } from '../../api/hooks.ts';
+import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
 import {
   MapEditController,
@@ -54,6 +55,7 @@ const MAX_PINNED_BUTTONS = 8;
 export default function EditToolbar({ controller }: EditToolbarProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  const isMobile = useIsMobile();
   const { data: featureTypes } = useFeatureTypes();
   const [state, setState] = useState<EditState>({
     mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0,
@@ -171,8 +173,8 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
 
   const pendingGeometryType = (pendingFeature?.getGeometry()?.getType() ?? 'Point') as DrawShape;
 
-  return (
-    <Space size={4} wrap>
+  const toolStrip = (
+    <Space size={4} wrap={!isMobile}>
       <FeaturePalette featureTypes={featureTypes ?? []} value={typeId} onChange={armType} />
       {pinnedTypes.map((ft) => {
         const id = Number(ft.id);
@@ -274,7 +276,11 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
         clickToDrawText={t('mapEdit.clickToMeasure')}
         continuePolygonMsg={t('mapEdit.continueArea')}
       />
-      <Divider orientation="vertical" />
+    </Space>
+  );
+
+  const saveCluster = (
+    <Space size={4}>
       <Badge count={state.dirty} size="small">
         <Button
           size="small"
@@ -295,6 +301,11 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           onClick={discard}
         />
       </Tooltip>
+    </Space>
+  );
+
+  const dialogs = (
+    <>
       <CaveAddModal
         mode={placement?.mode ?? null}
         lonLat={placement?.lonLat ?? null}
@@ -316,6 +327,31 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           setPendingFeature(null);
         }}
       />
-    </Space>
+    </>
+  );
+
+  // On a phone every tool stays reachable by scrolling the strip sideways, but the save
+  // cluster is pinned outside it: unsaved edits must never be the thing that scrolled off.
+  if (isMobile) {
+    return (
+      <div className="map-edit-toolbar map-edit-toolbar-mobile">
+        <div className="map-edit-tools" data-testid="edit-tool-strip">
+          {toolStrip}
+        </div>
+        <div className="map-edit-save" data-testid="edit-save-cluster">
+          {saveCluster}
+        </div>
+        {dialogs}
+      </div>
+    );
+  }
+
+  return (
+    <div className="map-edit-toolbar">
+      {toolStrip}
+      <Divider orientation="vertical" />
+      {saveCluster}
+      {dialogs}
+    </div>
   );
 }

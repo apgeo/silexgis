@@ -80,6 +80,8 @@
     "centerlines": "Poligonații peșteri",
     "showPanel": "Arată panoul",
     "hidePanel": "Ascunde panoul",
+    "layersTitle": "Straturi",
+    "detailsTitle": "Detalii",
     "tabSelection": "Selecție",
     "tabInView": "În vedere",
     "selectedCount": "{{count}} selectate",

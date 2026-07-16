@@ -4,7 +4,7 @@ import BackgroundLayerChooser from '@terrestris/react-geo/dist/BackgroundLayerCh
 import GeoLocationButton from '@terrestris/react-geo/dist/Button/GeoLocationButton/GeoLocationButton';
 import ScaleCombo from '@terrestris/react-geo/dist/Field/ScaleCombo/ScaleCombo';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
-import { App, Button, Tabs, Tooltip } from 'antd';
+import { App, Button, Drawer, Tabs, Tooltip } from 'antd';
 import {
   AimOutlined,
   BorderVerticleOutlined,
@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import { useSearchParams } from 'react-router-dom';
 import { useFeatureTypes, useGeofiles, useMapLayers, useMapViews, useMe, useRasterMaps } from '../api/hooks.ts';
+import { useIsMobile } from '../hooks/useIsMobile.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
 import FeatureListPanel from '../components/map/FeatureListPanel.tsx';
 import LayerPanel from '../components/map/LayerPanel.tsx';
@@ -68,15 +69,20 @@ import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import './MapPage.css';
 
-/** Map workspace v1: fixed resizable panes; docking comes later. */
+/** Map workspace v1: fixed resizable panes on desktop, drawers on phones. */
 export default function MapPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  const isMobile = useIsMobile();
   const mapTarget = useRef<HTMLDivElement>(null);
   const leftPanelRef = usePanelRef();
   const rightPanelRef = usePanelRef();
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  // Below md the docks are drawers over the map instead of resizable panes; the same
+  // dock-toggle buttons drive whichever one is mounted.
+  const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
+  const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
   const { data: layers } = useMapLayers();
   const { data: featureTypes } = useFeatureTypes();
   const { data: me } = useMe();
@@ -434,7 +440,14 @@ export default function MapPage() {
   useEffect(() => {
     if (selection) {
       setRightTab('selection');
+      // Bringing the tab forward means nothing on a phone, where the dock is a closed
+      // drawer: open it, or a pick appears to do nothing. Keyed on the selection alone —
+      // a viewport crossing the breakpoint must not re-open the drawer over the map.
+      if (isMobile) {
+        setRightDrawerOpen(true);
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isMobile is read here, not a trigger
   }, [selection]);
 
   // Raster swipe-compare: ephemeral, auto-disarms when the last raster goes away.
@@ -519,52 +532,101 @@ export default function MapPage() {
     reloadSurfaceFeatures();
   };
 
+  // Dock contents, hosted either by a resizable pane (desktop) or a drawer (phone).
+  const layerDock = (
+    <LayerPanel
+      layers={layers ?? []}
+      activeBaseId={activeBaseId}
+      onBaseChange={(id) => {
+        setActiveBaseId(id);
+        setActiveBaseLayer(getWorkspaceMap(), id);
+      }}
+      baseOpacity={baseOpacity}
+      onBaseOpacityChange={setBaseOpacity}
+      geofiles={importedGeofiles}
+      visibleGeofileIds={visibleGeofileIds}
+      onGeofileVisibleChange={setGeofileVisible}
+      rasters={readyRasters}
+      visibleRasterIds={visibleRasterIds}
+      onRasterVisibleChange={setRasterVisible}
+      onOverlayVisibilityChanged={onOverlayVisibilityChanged}
+      treeNonce={treeNonce}
+      tagFilter={tagFilter}
+      onTagFilterChange={(slug) => {
+        setTagFilter(slug);
+        setMapTagFilter(slug);
+        reloadEntrances();
+        reloadSurfaceFeatures();
+      }}
+      footer={<ViewsPanel onCapture={captureCurrentView} onApply={applyView} />}
+    />
+  );
+
+  const rightDock = (
+    <Tabs
+      className="map-right-tabs"
+      activeKey={rightTab}
+      onChange={setRightTab}
+      items={[
+        { key: 'selection', label: t('map.tabSelection'), children: <SelectionPanel /> },
+        { key: 'inview', label: t('map.tabInView'), children: <FeatureListPanel /> },
+      ]}
+    />
+  );
+
+  // One notion of "is this dock showing" across both layouts, so the toggle buttons keep
+  // their icon and label truthful whichever host is mounted.
+  const leftHidden = isMobile ? !leftDrawerOpen : leftCollapsed;
+  const rightHidden = isMobile ? !rightDrawerOpen : rightCollapsed;
+
+  const toggleLeftDock = () => {
+    if (isMobile) {
+      setLeftDrawerOpen((open) => !open);
+    } else if (leftCollapsed) {
+      leftPanelRef.current?.expand();
+    } else {
+      leftPanelRef.current?.collapse();
+    }
+  };
+
+  const toggleRightDock = () => {
+    if (isMobile) {
+      setRightDrawerOpen((open) => !open);
+    } else if (rightCollapsed) {
+      rightPanelRef.current?.expand();
+    } else {
+      rightPanelRef.current?.collapse();
+    }
+  };
+
   return (
     <MapContext.Provider value={getWorkspaceMap()}>
+    {/* The side panes render conditionally, but the map's slot in this list never moves:
+        React keeps its DOM (and with it the OL target the map was attached to) across a
+        viewport crossing the breakpoint. */}
     <Group orientation="horizontal" className="map-workspace">
       {/* Panel sizes: bare numbers mean pixels in react-resizable-panels v4 — use percent strings. */}
-      <Panel
-        panelRef={leftPanelRef}
-        collapsible
-        collapsedSize="0%"
-        defaultSize="16%"
-        minSize="10%"
-        className="map-workspace-panel"
-        onResize={() => setLeftCollapsed(leftPanelRef.current?.isCollapsed() ?? false)}
-      >
-        <LayerPanel
-          layers={layers ?? []}
-          activeBaseId={activeBaseId}
-          onBaseChange={(id) => {
-            setActiveBaseId(id);
-            setActiveBaseLayer(getWorkspaceMap(), id);
-          }}
-          baseOpacity={baseOpacity}
-          onBaseOpacityChange={setBaseOpacity}
-          geofiles={importedGeofiles}
-          visibleGeofileIds={visibleGeofileIds}
-          onGeofileVisibleChange={setGeofileVisible}
-          rasters={readyRasters}
-          visibleRasterIds={visibleRasterIds}
-          onRasterVisibleChange={setRasterVisible}
-          onOverlayVisibilityChanged={onOverlayVisibilityChanged}
-          treeNonce={treeNonce}
-          tagFilter={tagFilter}
-          onTagFilterChange={(slug) => {
-            setTagFilter(slug);
-            setMapTagFilter(slug);
-            reloadEntrances();
-            reloadSurfaceFeatures();
-          }}
-          footer={<ViewsPanel onCapture={captureCurrentView} onApply={applyView} />}
-        />
-      </Panel>
-      <Separator className="map-workspace-handle" />
+      {!isMobile && (
+        <Panel
+          panelRef={leftPanelRef}
+          collapsible
+          collapsedSize="0%"
+          defaultSize="16%"
+          minSize="10%"
+          className="map-workspace-panel"
+          onResize={() => setLeftCollapsed(leftPanelRef.current?.isCollapsed() ?? false)}
+        >
+          {layerDock}
+        </Panel>
+      )}
+      {!isMobile && <Separator className="map-workspace-handle" />}
       <Panel minSize="30%">
         <div className={`map-canvas-wrap${mapChromeHidden ? ' map-chrome-hidden' : ''}`}>
           <div ref={mapTarget} className="map-canvas" data-testid="map-canvas" />
-          <div className="map-search-overlay map-chrome">
-            <MapSearch />
+          {/* Search is the primary action on a phone: it gets the width the pop-out
+              buttons no longer need. */}
+          <div className={`map-search-overlay map-chrome${isMobile ? ' map-search-overlay-mobile' : ''}`}>
+            <MapSearch fullWidth={isMobile} />
           </div>
           <Tooltip title={mapChromeHidden ? t('map.showChrome') : t('map.hideChrome')} placement="left">
             <Button
@@ -587,26 +649,24 @@ export default function MapPage() {
               {t('map.unsavedEdits', { count: editDirty })}
             </Button>
           )}
-          <Tooltip title={leftCollapsed ? t('map.showPanel') : t('map.hidePanel')} placement="right">
+          <Tooltip title={leftHidden ? t('map.showPanel') : t('map.hidePanel')} placement="right">
             <Button
               className="map-dock-toggle map-dock-toggle-left"
               size="small"
-              aria-label={leftCollapsed ? t('map.showPanel') : t('map.hidePanel')}
-              icon={leftCollapsed ? <RightOutlined /> : <LeftOutlined />}
-              onClick={() =>
-                leftCollapsed ? leftPanelRef.current?.expand() : leftPanelRef.current?.collapse()
-              }
+              aria-label={leftHidden ? t('map.showPanel') : t('map.hidePanel')}
+              icon={leftHidden ? <RightOutlined /> : <LeftOutlined />}
+              onClick={toggleLeftDock}
+              data-testid="map-dock-toggle-left"
             />
           </Tooltip>
-          <Tooltip title={rightCollapsed ? t('map.showPanel') : t('map.hidePanel')} placement="left">
+          <Tooltip title={rightHidden ? t('map.showPanel') : t('map.hidePanel')} placement="left">
             <Button
               className="map-dock-toggle map-dock-toggle-right"
               size="small"
-              aria-label={rightCollapsed ? t('map.showPanel') : t('map.hidePanel')}
-              icon={rightCollapsed ? <LeftOutlined /> : <RightOutlined />}
-              onClick={() =>
-                rightCollapsed ? rightPanelRef.current?.expand() : rightPanelRef.current?.collapse()
-              }
+              aria-label={rightHidden ? t('map.showPanel') : t('map.hidePanel')}
+              icon={rightHidden ? <LeftOutlined /> : <RightOutlined />}
+              onClick={toggleRightDock}
+              data-testid="map-dock-toggle-right"
             />
           </Tooltip>
           {baseOlLayers.length > 0 && (
@@ -616,9 +676,12 @@ export default function MapPage() {
               buttonTooltip={t('map.changeBaseLayer')}
             />
           )}
-          <div className="map-scale-overlay map-chrome">
-            <ScaleCombo syncWithMap size="small" style={{ width: 128 }} />
-          </div>
+          {/* Jump-to-scale is niche clutter at phone size; OL's own scale line stays. */}
+          {!isMobile && (
+            <div className="map-scale-overlay map-chrome">
+              <ScaleCombo syncWithMap size="small" style={{ width: 128 }} />
+            </div>
+          )}
           {swipeActive && (
             <div
               className="map-swipe-handle"
@@ -649,23 +712,31 @@ export default function MapPage() {
               enableTracking
               onError={() => message.error(t('map.geolocationFailed'))}
             />
-            <Tooltip title={t('panel.popOut')}>
-              <Button
-                size="small"
-                icon={<ExportOutlined />}
-                onClick={() => window.open('/panel/registry', 'silexgis-registry', 'popup,width=900,height=700')}
-              />
-            </Tooltip>
-            <Tooltip title={t('panel.popOut3d')}>
-              <Button
-                size="small"
-                icon={<CodeSandboxOutlined />}
-                onClick={() => window.open('/panel/viewer3d', 'silexgis-viewer3d', 'popup,width=1000,height=750')}
-              />
-            </Tooltip>
+            {/* Pop-out windows are meaningless on a phone; the 3D viewer stays reachable
+                from the cave detail page. */}
+            {!isMobile && (
+              <>
+                <Tooltip title={t('panel.popOut')}>
+                  <Button
+                    size="small"
+                    icon={<ExportOutlined />}
+                    onClick={() => window.open('/panel/registry', 'silexgis-registry', 'popup,width=900,height=700')}
+                    data-testid="map-popout-registry"
+                  />
+                </Tooltip>
+                <Tooltip title={t('panel.popOut3d')}>
+                  <Button
+                    size="small"
+                    icon={<CodeSandboxOutlined />}
+                    onClick={() => window.open('/panel/viewer3d', 'silexgis-viewer3d', 'popup,width=1000,height=750')}
+                    data-testid="map-popout-viewer3d"
+                  />
+                </Tooltip>
+              </>
+            )}
           </div>
           {canEdit && editController && (
-            <div className="map-edit-overlay map-chrome">
+            <div className={`map-edit-overlay map-chrome${isMobile ? ' map-edit-overlay-mobile' : ''}`}>
               <EditToolbar controller={editController} />
             </div>
           )}
@@ -690,27 +761,49 @@ export default function MapPage() {
           />
         </div>
       </Panel>
-      <Separator className="map-workspace-handle" />
-      <Panel
-        panelRef={rightPanelRef}
-        collapsible
-        collapsedSize="0%"
-        defaultSize="22%"
-        minSize="12%"
-        className="map-workspace-panel"
-        onResize={() => setRightCollapsed(rightPanelRef.current?.isCollapsed() ?? false)}
-      >
-        <Tabs
-          className="map-right-tabs"
-          activeKey={rightTab}
-          onChange={setRightTab}
-          items={[
-            { key: 'selection', label: t('map.tabSelection'), children: <SelectionPanel /> },
-            { key: 'inview', label: t('map.tabInView'), children: <FeatureListPanel /> },
-          ]}
-        />
-      </Panel>
+      {!isMobile && <Separator className="map-workspace-handle" />}
+      {!isMobile && (
+        <Panel
+          panelRef={rightPanelRef}
+          collapsible
+          collapsedSize="0%"
+          defaultSize="22%"
+          minSize="12%"
+          className="map-workspace-panel"
+          onResize={() => setRightCollapsed(rightPanelRef.current?.isCollapsed() ?? false)}
+        >
+          {rightDock}
+        </Panel>
+      )}
     </Group>
+    {isMobile && (
+      <>
+        <Drawer
+          placement="left"
+          open={leftDrawerOpen}
+          onClose={() => setLeftDrawerOpen(false)}
+          size="min(320px, 85vw)"
+          title={t('map.layersTitle')}
+          styles={{ body: { padding: 0 } }}
+          rootClassName="map-dock-drawer"
+          data-testid="map-left-drawer"
+        >
+          {layerDock}
+        </Drawer>
+        <Drawer
+          placement="right"
+          open={rightDrawerOpen}
+          onClose={() => setRightDrawerOpen(false)}
+          size="min(320px, 85vw)"
+          title={t('map.detailsTitle')}
+          styles={{ body: { padding: 0 } }}
+          rootClassName="map-dock-drawer"
+          data-testid="map-right-drawer"
+        >
+          {rightDock}
+        </Drawer>
+      </>
+    )}
     </MapContext.Provider>
   );
 }

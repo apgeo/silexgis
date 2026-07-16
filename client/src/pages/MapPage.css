@@ -25,6 +25,16 @@
   background: #e8ecef;
 }
 
+/* Touch devices raise a long-press callout and a selection magnifier over the canvas,
+   which fight the long-press context menu for the same gesture. Scoped to coarse
+   pointers so selecting attribution text with a mouse still works. */
+@media (hover: none), (pointer: coarse) {
+  .map-canvas {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+}
+
 /* Shared treatment for on-canvas chrome: translucent panels the map shows through. */
 .map-chrome {
   padding: 4px;
@@ -78,6 +88,12 @@
   z-index: 5;
 }
 
+/* Phone: search is the primary action and takes the strip, clearing the corner toggle. */
+.map-search-overlay-mobile {
+  left: 12px;
+  right: 56px;
+}
+
 .map-edit-overlay {
   position: absolute;
   bottom: 24px;
@@ -85,6 +101,44 @@
   transform: translateX(-50%);
   z-index: 5;
   padding: 6px 10px;
+}
+
+/* Phone: a full-width bottom bar rather than a centred island. */
+.map-edit-overlay-mobile {
+  left: 8px;
+  right: 8px;
+  bottom: 12px;
+  transform: none;
+}
+
+/* Desktop edit toolbar: the single wrapping row the antd Space used to lay out. */
+.map-edit-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Phone edit bar: two zones. The tools scroll sideways so every one of them stays
+   reachable, while the save cluster is pinned outside the scroller — unsaved edits must
+   never be the thing that scrolled out of sight. */
+.map-edit-toolbar-mobile {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.map-edit-tools {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.map-edit-tools .ant-space {
+  flex-wrap: nowrap;
+}
+
+.map-edit-save {
+  flex: 0 0 auto;
 }
 
 .map-hover-tooltip {
@@ -213,6 +267,13 @@
   opacity: 1;
 }
 
+/* No hover means no way to reveal the pin: without this it is unreachable on touch. */
+@media (hover: none), (pointer: coarse) {
+  .feature-palette-pin {
+    opacity: 1;
+  }
+}
+
 .feature-palette-pin.is-pinned {
   color: #1677ff;
 }
@@ -269,6 +330,12 @@
   bottom: 34px;
   left: 8px;
   z-index: 5;
+}
+
+/* Dock drawers (phone): the hosted panels bring their own padding and scrolling, so the
+   drawer body only has to give them the height and stay out of the way. */
+.map-dock-drawer .ant-drawer-body {
+  overflow: hidden;
 }
 
 /* Right dock: selection / in-view tabs fill the panel and scroll internally. */

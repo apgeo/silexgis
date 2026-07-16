@@ -13,8 +13,13 @@ interface SearchTarget {
   zoom: number;
 }
 
+interface MapSearchProps {
+  /** Fill the container rather than the fixed desktop width — the mobile search strip. */
+  fullWidth?: boolean;
+}
+
 /** Unified search over the workspace map: internal caves + Nominatim geocoding. */
-export default function MapSearch() {
+export default function MapSearch({ fullWidth = false }: MapSearchProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const debounced = useDebouncedValue(query);
@@ -63,7 +68,7 @@ export default function MapSearch() {
     <AutoComplete
       value={query}
       options={options}
-      style={{ width: 320 }}
+      style={{ width: fullWidth ? '100%' : 320 }}
       onSearch={setQuery}
       onSelect={(value: string) => {
         const target = targets.get(value);
@@ -72,7 +77,7 @@ export default function MapSearch() {
         }
         setQuery('');
       }}
-      popupMatchSelectWidth={360}
+      popupMatchSelectWidth={fullWidth ? true : 360}
     >
       <Input prefix={<SearchOutlined />} placeholder={t('map.searchPlaceholder')} allowClear />
     </AutoComplete>

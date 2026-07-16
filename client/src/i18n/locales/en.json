@@ -80,6 +80,8 @@
     "centerlines": "Cave centerlines",
     "showPanel": "Show panel",
     "hidePanel": "Hide panel",
+    "layersTitle": "Layers",
+    "detailsTitle": "Details",
     "tabSelection": "Selection",
     "tabInView": "In view",
     "selectedCount": "{{count}} selected",

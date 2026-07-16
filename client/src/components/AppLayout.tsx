@@ -12,18 +12,32 @@ import {
   TableOutlined,
   UserOutlined,
 } from '@ant-design/icons';
+import { useEffect, useState } from 'react';
 import { Dropdown, Flex, Layout, Menu, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useMe } from '../api/hooks.ts';
 import { useAuth } from '../auth/auth.tsx';
+import { useIsMobile } from '../hooks/useIsMobile.ts';
 
-/** Application shell: slim header + collapsible icon sidebar. */
+/** Application shell: slim header + collapsible icon sidebar (off-canvas on phones). */
 export default function AppLayout() {
   const { t, i18n } = useTranslation();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const isMobile = useIsMobile();
+  const [navCollapsed, setNavCollapsed] = useState(true);
+
+  // Narrowing to phone width closes the rail rather than letting a 200px sider eat a
+  // 390px screen. antd's own `breakpoint` prop is deliberately not used here: it drives
+  // `collapsed` in both directions, so it would also force the rail *open* on every
+  // desktop load, where the collapsed icon rail is the intended default.
+  useEffect(() => {
+    if (isMobile) {
+      setNavCollapsed(true);
+    }
+  }, [isMobile]);
 
   const { data: me } = useMe();
   const isAdmin = me?.roles.includes('Admin') ?? false;
@@ -73,13 +87,28 @@ export default function AppLayout() {
         </Flex>
       </Layout.Header>
       <Layout>
-        <Layout.Sider collapsible defaultCollapsed theme="light">
+        <Layout.Sider
+          collapsible
+          collapsed={navCollapsed}
+          onCollapse={setNavCollapsed}
+          // Below md there is no room for the icon rail: zero width takes it off-canvas
+          // and antd renders its own edge trigger to bring it back.
+          collapsedWidth={isMobile ? 0 : undefined}
+          theme="light"
+          data-testid="app-sider"
+        >
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
             // "/map" rather than "/": the root dispatches to the dashboard for users who
             // chose it as their landing page, which would make this item unable to reach the map.
-            onClick={({ key }) => navigate(key === 'map' ? '/map' : `/${key}`)}
+            onClick={({ key }) => {
+              navigate(key === 'map' ? '/map' : `/${key}`);
+              // Off-canvas, the rail covers the content it just navigated to.
+              if (isMobile) {
+                setNavCollapsed(true);
+              }
+            }}
             items={[
               { key: 'map', icon: <EnvironmentOutlined />, label: t('nav.map') },
               { key: 'dashboard', icon: <DashboardOutlined />, label: t('nav.dashboard') },
