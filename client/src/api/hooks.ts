@@ -17,6 +17,7 @@ export type EntranceFeatureCollection = components['schemas']['FeatureCollection
 // Query keys live here so invalidation stays precise.
 export const queryKeys = {
   me: ['me'] as const,
+  dashboardSummary: ['dashboard', 'summary'] as const,
   mapLayers: ['map-layers'] as const,
   taxonomy: (kind: string) => ['taxonomy', kind] as const,
   caves: (params: CaveListParams) => ['caves', 'list', params] as const,
@@ -68,6 +69,19 @@ export function useMe() {
     queryKey: queryKeys.me,
     queryFn: () => unwrap(api.GET('/api/v1/me')),
   });
+}
+
+/**
+ * Global roles that may create registry content, mirroring the "Editor role and above"
+ * rule the create endpoints enforce. Client-side gating only hides controls — the server
+ * is what actually refuses.
+ */
+const CONTENT_AUTHOR_ROLES = ['Admin', 'Manager', 'Editor'];
+
+/** True when the caller may create caves, features and trips. */
+export function useCanCreateContent() {
+  const { data: me } = useMe();
+  return me?.roles.some((r) => CONTENT_AUTHOR_ROLES.includes(r)) ?? false;
 }
 
 export function useMapLayers() {
@@ -881,6 +895,19 @@ export function useUserSearch(q: string) {
     queryFn: () => unwrap(api.GET('/api/v1/users/search', { params: { query: { q } } })),
     enabled: q.trim().length >= 2,
     staleTime: 30_000,
+  });
+}
+
+export type DashboardSummary = components['schemas']['DashboardSummaryDto'];
+export type DashboardActivityItem = components['schemas']['DashboardActivityItemDto'];
+
+export function useDashboardSummary() {
+  return useQuery({
+    queryKey: queryKeys.dashboardSummary,
+    queryFn: () => unwrap(api.GET('/api/v1/dashboard/summary')),
+    // Counts and the activity feed move as other people edit; a short window keeps the
+    // page from refetching on every visit without going stale over a working session.
+    staleTime: 60_000,
   });
 }
 

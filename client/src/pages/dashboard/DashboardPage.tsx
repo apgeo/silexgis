@@ -1,0 +1,157 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import type { ReactNode } from 'react';
+import {
+  CarOutlined,
+  DatabaseOutlined,
+  EnvironmentOutlined,
+  GoldOutlined,
+  PlusOutlined,
+  TableOutlined,
+  UploadOutlined,
+} from '@ant-design/icons';
+import { Button, Card, Col, Empty, Flex, List, Row, Skeleton, Statistic, Switch, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import {
+  useCanCreateContent,
+  useDashboardSummary,
+  useMapViews,
+  type DashboardActivityItem,
+} from '../../api/hooks.ts';
+import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
+
+/** Detail route for each activity kind, so a feed row links where the record lives. */
+const activityRoute: Record<DashboardActivityItem['kind'], (id: string) => string> = {
+  cave: (id) => `/caves/${id}`,
+  // Surface features have no detail page — the map is where they are inspected.
+  surfaceFeature: () => '/features',
+  tripLog: (id) => `/trip-logs/${id}`,
+};
+
+const activityIcon: Record<DashboardActivityItem['kind'], ReactNode> = {
+  cave: <TableOutlined />,
+  surfaceFeature: <GoldOutlined />,
+  tripLog: <CarOutlined />,
+};
+
+export default function DashboardPage() {
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const { data: summary, isLoading } = useDashboardSummary();
+  const { data: views } = useMapViews();
+  const canCreate = useCanCreateContent();
+  const landingPage = useUiPrefsStore((s) => s.landingPage);
+  const setLandingPage = useUiPrefsStore((s) => s.setLandingPage);
+
+  const formatWhen = (iso: string) => new Date(iso).toLocaleString(i18n.resolvedLanguage);
+
+  const tiles = [
+    { key: 'caves', icon: <TableOutlined />, value: summary?.counts.caves, to: '/caves' },
+    { key: 'features', icon: <GoldOutlined />, value: summary?.counts.surfaceFeatures, to: '/features' },
+    { key: 'trips', icon: <CarOutlined />, value: summary?.counts.tripLogs, to: '/trip-logs' },
+    { key: 'geodata', icon: <DatabaseOutlined />, value: summary?.counts.geofiles, to: '/geodata' },
+  ];
+
+  return (
+    <div style={{ padding: 24 }}>
+      <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: 16 }}>
+        <Typography.Title level={3} style={{ margin: 0 }}>
+          {t('dashboard.title')}
+        </Typography.Title>
+        <Flex align="center" gap={8}>
+          <Typography.Text type="secondary">{t('dashboard.openOnStart')}</Typography.Text>
+          <Switch
+            checked={landingPage === 'dashboard'}
+            onChange={(checked) => setLandingPage(checked ? 'dashboard' : 'map')}
+            aria-label={t('dashboard.openOnStart')}
+          />
+        </Flex>
+      </Flex>
+
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        {tiles.map((tile) => (
+          <Col key={tile.key} xs={12} sm={12} md={6}>
+            <Card hoverable onClick={() => navigate(tile.to)} styles={{ body: { padding: 20 } }}>
+              <Statistic
+                title={t(`dashboard.counts.${tile.key}`)}
+                value={tile.value ?? 0}
+                prefix={tile.icon}
+                loading={isLoading}
+              />
+            </Card>
+          </Col>
+        ))}
+      </Row>
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={14}>
+          <Card title={t('dashboard.recentActivity')}>
+            {isLoading ? (
+              <Skeleton active paragraph={{ rows: 4 }} />
+            ) : summary?.recentActivity.length ? (
+              <List
+                dataSource={summary.recentActivity}
+                renderItem={(item) => (
+                  <List.Item
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(activityRoute[item.kind](item.id))}
+                  >
+                    <List.Item.Meta
+                      avatar={activityIcon[item.kind]}
+                      title={item.name ?? t('dashboard.untitled')}
+                      description={`${t(`dashboard.kind.${item.kind}`)} · ${formatWhen(item.updatedAt)}`}
+                    />
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <Empty description={t('dashboard.noActivity')} />
+            )}
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={10}>
+          <Flex vertical gap={16}>
+            {canCreate && (
+              <Card title={t('dashboard.quickActions')}>
+                <Flex vertical gap={8} align="stretch">
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/caves/new')}>
+                    {t('caves.newCave')}
+                  </Button>
+                  {/* The trip form is a modal on the list page; the flag opens it on arrival. */}
+                  <Button
+                    icon={<PlusOutlined />}
+                    onClick={() => navigate('/trip-logs', { state: { create: true } })}
+                  >
+                    {t('trips.new')}
+                  </Button>
+                  <Button icon={<UploadOutlined />} onClick={() => navigate('/geodata')}>
+                    {t('dashboard.importFile')}
+                  </Button>
+                </Flex>
+              </Card>
+            )}
+
+            <Card title={t('dashboard.myViews')}>
+              {views?.length ? (
+                <Flex vertical gap={8} align="stretch">
+                  {views.map((view) => (
+                    <Button
+                      key={view.id}
+                      icon={<EnvironmentOutlined />}
+                      onClick={() => navigate(`/map?view=${view.id}`)}
+                    >
+                      {view.name}
+                    </Button>
+                  ))}
+                </Flex>
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('dashboard.noViews')} />
+              )}
+            </Card>
+          </Flex>
+        </Col>
+      </Row>
+    </div>
+  );
+}

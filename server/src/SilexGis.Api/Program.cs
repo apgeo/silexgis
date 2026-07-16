@@ -12,6 +12,7 @@ using SilexGis.Api.Features.About;
 using SilexGis.Api.Features.Attachments;
 using SilexGis.Api.Features.Audit;
 using SilexGis.Api.Features.Caves;
+using SilexGis.Api.Features.Dashboard;
 using SilexGis.Api.Features.Export;
 using SilexGis.Api.Features.Files;
 using SilexGis.Api.Features.Geofiles;
@@ -151,6 +152,7 @@ try
     api.MapSurfaceFeatureEndpoints();
     api.MapMapDataEndpoints();
     api.MapSearchEndpoints();
+    api.MapDashboardEndpoints();
     api.MapGeofileEndpoints();
     api.MapJobEndpoints();
     api.MapExportEndpoints();

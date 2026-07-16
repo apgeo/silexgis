@@ -7,6 +7,9 @@ export type DialogKind = 'cave-add' | 'feature-edit' | 'entrance-edit';
 
 export type DialogPlacement = 'modal' | 'drawer';
 
+/** Where opening the app bare (no deep link) lands the user. */
+export type LandingPage = 'map' | 'dashboard';
+
 interface UiPrefsState {
   /** Feature types pinned as one-click draw shortcuts on the edit toolbar, in pin order. */
   pinnedTypeIds: number[];
@@ -17,6 +20,9 @@ interface UiPrefsState {
   /** Hides the on-canvas chrome (search, edit toolbar, scale, pop-out buttons). */
   mapChromeHidden: boolean;
   setMapChromeHidden: (hidden: boolean) => void;
+  /** Landing page for a bare app open; the map is the default. */
+  landingPage: LandingPage;
+  setLandingPage: (page: LandingPage) => void;
 }
 
 /**
@@ -40,6 +46,8 @@ export const useUiPrefsStore = create<UiPrefsState>()(
         set((state) => ({ dialogPlacement: { ...state.dialogPlacement, [kind]: placement } })),
       mapChromeHidden: false,
       setMapChromeHidden: (hidden) => set({ mapChromeHidden: hidden }),
+      landingPage: 'map',
+      setLandingPage: (page) => set({ landingPage: page }),
     }),
     { name: 'silexgis.uiPrefs', version: 1 },
   ),

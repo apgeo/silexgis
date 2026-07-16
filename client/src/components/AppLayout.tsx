@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
   CarOutlined,
+  DashboardOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
   GoldOutlined,
@@ -27,7 +28,7 @@ export default function AppLayout() {
   const { data: me } = useMe();
   const isAdmin = me?.roles.includes('Admin') ?? false;
 
-  const sections = ['caves', 'features', 'geodata', 'trip-logs', 'teams', 'admin/audit'] as const;
+  const sections = ['dashboard', 'caves', 'features', 'geodata', 'trip-logs', 'teams', 'admin/audit'] as const;
   const selectedKey = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
 
   return (
@@ -76,9 +77,12 @@ export default function AppLayout() {
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
-            onClick={({ key }) => navigate(key === 'map' ? '/' : `/${key}`)}
+            // "/map" rather than "/": the root dispatches to the dashboard for users who
+            // chose it as their landing page, which would make this item unable to reach the map.
+            onClick={({ key }) => navigate(key === 'map' ? '/map' : `/${key}`)}
             items={[
               { key: 'map', icon: <EnvironmentOutlined />, label: t('nav.map') },
+              { key: 'dashboard', icon: <DashboardOutlined />, label: t('nav.dashboard') },
               { key: 'caves', icon: <TableOutlined />, label: t('nav.caves') },
               { key: 'features', icon: <GoldOutlined />, label: t('nav.features') },
               { key: 'geodata', icon: <DatabaseOutlined />, label: t('nav.geodata') },

@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { useUiPrefsStore } from './uiPrefsStore.ts';
 
 afterEach(() => {
-  useUiPrefsStore.setState({ pinnedTypeIds: [], dialogPlacement: {}, mapChromeHidden: false });
+  useUiPrefsStore.setState({
+    pinnedTypeIds: [],
+    dialogPlacement: {},
+    mapChromeHidden: false,
+    landingPage: 'map',
+  });
   localStorage.removeItem('silexgis.uiPrefs');
 });
 
@@ -38,6 +43,22 @@ describe('uiPrefsStore pinned types', () => {
     expect(stored.version).toBe(1);
     expect(stored.state.pinnedTypeIds).toEqual([7]);
     expect(stored.state.mapChromeHidden).toBe(true);
+  });
+});
+
+describe('uiPrefsStore landing page', () => {
+  it('defaults to the map so the workspace stays the app default', () => {
+    expect(useUiPrefsStore.getState().landingPage).toBe('map');
+  });
+
+  it('persists an opt-in to the dashboard', () => {
+    useUiPrefsStore.getState().setLandingPage('dashboard');
+    expect(useUiPrefsStore.getState().landingPage).toBe('dashboard');
+
+    const stored = JSON.parse(localStorage.getItem('silexgis.uiPrefs')!) as {
+      state: { landingPage: string };
+    };
+    expect(stored.state.landingPage).toBe('dashboard');
   });
 });
 

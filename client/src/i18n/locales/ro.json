@@ -4,6 +4,7 @@
   },
   "nav": {
     "map": "Hartă",
+    "dashboard": "Panou de bord",
     "caves": "Peșteri",
     "features": "Fenomene de suprafață",
     "geodata": "Geodate",
@@ -11,6 +12,28 @@
     "audit": "Istoric",
     "teams": "Echipe",
     "security": "Securitate"
+  },
+  "dashboard": {
+    "title": "Panou de bord",
+    "openOnStart": "Deschide la pornire",
+    "counts": {
+      "caves": "Peșteri",
+      "features": "Fenomene de suprafață",
+      "trips": "Jurnale de tură",
+      "geodata": "Fișiere geodate"
+    },
+    "recentActivity": "Activitate recentă",
+    "quickActions": "Acțiuni rapide",
+    "myViews": "Vederile mele salvate",
+    "importFile": "Importă fișier",
+    "noActivity": "Nu a fost adăugat nimic încă.",
+    "noViews": "Nicio vedere salvată încă.",
+    "untitled": "Fără titlu",
+    "kind": {
+      "cave": "Peșteră",
+      "surfaceFeature": "Fenomen de suprafață",
+      "tripLog": "Jurnal de tură"
+    }
   },
   "auth": {
     "email": "Email",

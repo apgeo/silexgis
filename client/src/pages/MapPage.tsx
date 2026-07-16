@@ -21,6 +21,7 @@ import type TileLayer from 'ol/layer/Tile';
 import { unByKey } from 'ol/Observable';
 import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
+import { useSearchParams } from 'react-router-dom';
 import { useFeatureTypes, useGeofiles, useMapLayers, useMapViews, useMe, useRasterMaps } from '../api/hooks.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
 import FeatureListPanel from '../components/map/FeatureListPanel.tsx';
@@ -256,10 +257,27 @@ export default function MapPage() {
     }
   }), [setSelection]);
 
-  // Apply the user's home view once per session when the workspace first opens.
+  // Apply a view the user picked elsewhere (?view=<id>, e.g. from the dashboard), else the
+  // home view once per session when the workspace first opens.
   const { data: savedViews } = useMapViews();
+  const [searchParams] = useSearchParams();
+  const requestedViewId = searchParams.get('view');
+  // Without this the effect would re-apply — and stomp the user's panning — every time the
+  // views query refetches (window focus) and hands back a new array reference.
+  const appliedViewRef = useRef<string | null>(null);
   useEffect(() => {
-    if (savedViews && !sessionStorage.getItem('silexgis.homeApplied')) {
+    if (!savedViews) {
+      return;
+    }
+    if (requestedViewId) {
+      const requested = savedViews.find((v) => v.id === requestedViewId);
+      if (requested && appliedViewRef.current !== requestedViewId) {
+        appliedViewRef.current = requestedViewId;
+        applyView(requested);
+      }
+      return;
+    }
+    if (!sessionStorage.getItem('silexgis.homeApplied')) {
       sessionStorage.setItem('silexgis.homeApplied', '1');
       // A shareable position in the URL wins over the home view.
       const home = savedViews.find((v) => v.isHome);
@@ -268,7 +286,7 @@ export default function MapPage() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on first data
-  }, [savedViews]);
+  }, [savedViews, requestedViewId]);
 
   // Highlight follows the workspace selection (also when set from the features table).
   useEffect(() => {

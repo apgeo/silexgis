@@ -894,3 +894,54 @@ async function deletePhotoFigures(page: Page) {
     await expect(figures).toHaveCount(remaining - 1, { timeout: 15_000 });
   }
 }
+
+test('dashboard: counts, activity, saved-view jump and the landing preference', async ({ page }) => {
+  const viewName = `E2E Dash View ${Date.now()}`;
+  await login(page);
+
+  // Save a view first so the dashboard has one to list.
+  const dock = page.locator('.map-workspace-panel').first();
+  await dock.getByPlaceholder('View name…').fill(viewName);
+  await dock.getByRole('button', { name: 'save' }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+
+  await page.getByRole('menuitem', { name: 'Dashboard' }).click();
+  await page.waitForURL(/\/dashboard/);
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+
+  // Summary tiles paint from the aggregate endpoint: the seeded registry is non-empty.
+  const cavesTile = page.locator('.ant-statistic').filter({ hasText: 'Caves' });
+  await expect(cavesTile).toBeVisible({ timeout: 15_000 });
+  await expect(cavesTile.locator('.ant-statistic-content-value')).not.toHaveText('0');
+  await expect(page.getByText('Recent activity')).toBeVisible();
+
+  // A quick action reaches the cave form (admin may create).
+  await page.getByRole('button', { name: 'New cave' }).click();
+  await page.waitForURL(/\/caves\/new/);
+  await page.goBack();
+
+  // Clicking a saved view applies it and lands on the map.
+  await page.getByRole('button', { name: viewName }).click();
+  await page.waitForURL(/\/map\?view=/);
+  await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 15_000 });
+
+  // Opting in makes "/" dispatch to the dashboard; the map stays reachable at /map.
+  await page.getByRole('menuitem', { name: 'Dashboard' }).click();
+  await page.getByRole('switch').click();
+  await page.goto('/');
+  await page.waitForURL(/\/dashboard/);
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+
+  // A shared map link still shows the map despite the preference.
+  await page.goto('/#12/45.50000/25.40000');
+  await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 15_000 });
+
+  // Reset the preference and clean up the view.
+  await page.getByRole('menuitem', { name: 'Dashboard' }).click();
+  await page.getByRole('switch').click();
+  await page.getByRole('menuitem', { name: 'Map' }).click();
+  await page.locator('.map-workspace-panel').first()
+    .getByRole('listitem').filter({ hasText: viewName })
+    .getByRole('button', { name: 'delete' }).click();
+  await expect(page.getByText(viewName)).not.toBeVisible({ timeout: 15_000 });
+});

@@ -4,8 +4,13 @@ import { PlusOutlined } from '@ant-design/icons';
 import { Button, Flex, Input, Table, Tag, Typography } from 'antd';
 import type { TablePaginationConfig } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { useMe, useTripLogs, type TripLogInfo, type TripLogListParams } from '../../api/hooks.ts';
+import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  useCanCreateContent,
+  useTripLogs,
+  type TripLogInfo,
+  type TripLogListParams,
+} from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import TripFormModal from './TripFormModal.tsx';
 
@@ -16,10 +21,13 @@ export default function TripLogListPage() {
   const [searchInput, setSearchInput] = useState('');
   const search = useDebouncedValue(searchInput);
   const { data, isFetching } = useTripLogs({ ...params, search: search || undefined });
-  const { data: me } = useMe();
-  const [creating, setCreating] = useState(false);
+  // The dashboard's "new trip" action routes here asking for the form to be open on arrival.
+  const location = useLocation();
+  const [creating, setCreating] = useState(
+    Boolean((location.state as { create?: boolean } | null)?.create),
+  );
 
-  const canCreate = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
+  const canCreate = useCanCreateContent();
 
   const onTableChange = (pagination: TablePaginationConfig) => {
     setParams((p) => ({ ...p, page: pagination.current, pageSize: pagination.pageSize }));

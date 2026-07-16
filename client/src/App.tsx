@@ -6,12 +6,14 @@ import { AuthProvider } from './auth/auth.tsx';
 import RequireAuth from './auth/RequireAuth.tsx';
 import AppLayout from './components/AppLayout.tsx';
 import CallbackPage from './pages/CallbackPage.tsx';
+import LandingRoute from './pages/LandingRoute.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 
 // Route-level code-splitting: the map workspace (OpenLayers) and the cave pages load on
 // demand, keeping the initial bundle to the shell + auth. Login/callback stay eager —
 // they are tiny and always needed first.
 const MapPage = lazy(() => import('./pages/MapPage.tsx'));
+const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage.tsx'));
 const CaveListPage = lazy(() => import('./pages/caves/CaveListPage.tsx'));
 const CaveFormPage = lazy(() => import('./pages/caves/CaveFormPage.tsx'));
 const CaveDetailPage = lazy(() => import('./pages/caves/CaveDetailPage.tsx'));
@@ -45,7 +47,11 @@ const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
-          { index: true, element: <Loadable><MapPage /></Loadable> },
+          // "/" keeps rendering the map unless the user chose the dashboard as their landing
+          // page; "/map" is the map's dedicated path, which never dispatches.
+          { index: true, element: <LandingRoute map={<Loadable><MapPage /></Loadable>} /> },
+          { path: '/map', element: <Loadable><MapPage /></Loadable> },
+          { path: '/dashboard', element: <Loadable><DashboardPage /></Loadable> },
           { path: '/caves', element: <Loadable><CaveListPage /></Loadable> },
           { path: '/caves/new', element: <Loadable><CaveFormPage /></Loadable> },
           { path: '/caves/:id', element: <Loadable><CaveDetailPage /></Loadable> },

@@ -1070,6 +1070,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dashboard/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Visibility-filtered registry counts and recent activity for the dashboard. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DashboardSummaryDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs/{id}": {
         parameters: {
             query?: never;
@@ -4074,6 +4110,30 @@ export interface components {
         };
         /** @enum {unknown} */
         CenterlineSource: "uploaded" | "extracted";
+        DashboardActivityItemDto: {
+            kind: components["schemas"]["DashboardActivityKind"];
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {unknown} */
+        DashboardActivityKind: "cave" | "surfaceFeature" | "tripLog";
+        DashboardCountsDto: {
+            /** Format: int32 */
+            caves: number;
+            /** Format: int32 */
+            surfaceFeatures: number;
+            /** Format: int32 */
+            tripLogs: number;
+            /** Format: int32 */
+            geofiles: number;
+        };
+        DashboardSummaryDto: {
+            counts: components["schemas"]["DashboardCountsDto"];
+            recentActivity: components["schemas"]["DashboardActivityItemDto"][];
+        };
         EntranceDto: {
             /** Format: uuid */
             id: string;

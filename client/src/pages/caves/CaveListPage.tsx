@@ -7,7 +7,14 @@ import type { SorterResult } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { downloadFile } from '../../api/download.ts';
-import { useCaveTypes, useCaves, useMe, useTags, type CaveListItem, type CaveListParams } from '../../api/hooks.ts';
+import {
+  useCanCreateContent,
+  useCaveTypes,
+  useCaves,
+  useTags,
+  type CaveListItem,
+  type CaveListParams,
+} from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 
 const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
@@ -30,9 +37,8 @@ export default function CaveListPage() {
   const { data, isFetching } = useCaves({ ...params, search: search || undefined });
   const { data: caveTypes } = useCaveTypes();
   const { data: tags } = useTags('');
-  const { data: me } = useMe();
 
-  const canCreate = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
+  const canCreate = useCanCreateContent();
   const typeName = (id: number) => caveTypes?.find((x) => x.id === id)?.name ?? '';
 
   // Exports honor the current filters (not the current page — the server streams all rows).

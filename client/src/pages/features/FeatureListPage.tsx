@@ -46,7 +46,7 @@ export default function FeatureListPage() {
   const showOnMap = (feature: SurfaceFeatureDetail) => {
     setSelection({ kind: 'feature', featureId: feature.id });
     fitGeoJsonGeometry(feature.geometry);
-    navigate('/');
+    navigate('/map');
   };
 
   const onEditSubmit = async (values: FeatureAttributeValues) => {

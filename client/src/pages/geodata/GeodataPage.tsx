@@ -83,7 +83,7 @@ export default function GeodataPage() {
     if (geofile.bbox) {
       fitGeoJsonGeometry(geofile.bbox);
     }
-    navigate('/');
+    navigate('/map');
   };
 
   const onEditOpen = (geofile: GeofileInfo) => {

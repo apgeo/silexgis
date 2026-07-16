@@ -4,6 +4,7 @@
   },
   "nav": {
     "map": "Map",
+    "dashboard": "Dashboard",
     "caves": "Caves",
     "features": "Surface features",
     "geodata": "Geodata",
@@ -11,6 +12,28 @@
     "audit": "Audit",
     "teams": "Teams",
     "security": "Security"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "openOnStart": "Open on start",
+    "counts": {
+      "caves": "Caves",
+      "features": "Surface features",
+      "trips": "Trip logs",
+      "geodata": "Geodata files"
+    },
+    "recentActivity": "Recent activity",
+    "quickActions": "Quick actions",
+    "myViews": "My saved views",
+    "importFile": "Import file",
+    "noActivity": "Nothing has been added yet.",
+    "noViews": "No saved views yet.",
+    "untitled": "Untitled",
+    "kind": {
+      "cave": "Cave",
+      "surfaceFeature": "Surface feature",
+      "tripLog": "Trip log"
+    }
   },
   "auth": {
     "email": "Email",

@@ -85,7 +85,7 @@ export default function RasterMapsTab() {
     if (raster.bbox) {
       fitGeoJsonGeometry(raster.bbox);
     }
-    navigate('/');
+    navigate('/map');
   };
 
   const onEditOpen = (raster: RasterMapInfo) => {
