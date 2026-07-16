@@ -912,7 +912,11 @@ test('dashboard: counts, activity, saved-view jump and the landing preference', 
   // Summary tiles paint from the aggregate endpoint: the seeded registry is non-empty.
   const cavesTile = page.locator('.ant-statistic').filter({ hasText: 'Caves' });
   await expect(cavesTile).toBeVisible({ timeout: 15_000 });
-  await expect(cavesTile.locator('.ant-statistic-content-value')).not.toHaveText('0');
+  // Assert positively on the value node: while the summary is loading antd swaps it for a
+  // Skeleton, so a negated assertion here would pass against a tile that never painted a count.
+  await expect(cavesTile.locator('.ant-statistic-content-value')).toHaveText(/[1-9]\d*/, {
+    timeout: 15_000,
+  });
   await expect(page.getByText('Recent activity')).toBeVisible();
 
   // A quick action reaches the cave form (admin may create).
@@ -920,10 +924,11 @@ test('dashboard: counts, activity, saved-view jump and the landing preference', 
   await page.waitForURL(/\/caves\/new/);
   await page.goBack();
 
-  // Clicking a saved view applies it and lands on the map.
+  // Clicking a saved view applies it and lands on the map. The request is a one-shot: the
+  // param is consumed once applied, so a later reload cannot re-apply it over a shared position.
   await page.getByRole('button', { name: viewName }).click();
-  await page.waitForURL(/\/map\?view=/);
   await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 15_000 });
+  await page.waitForURL((url) => url.pathname === '/map' && !url.searchParams.has('view'));
 
   // Opting in makes "/" dispatch to the dashboard; the map stays reachable at /map.
   await page.getByRole('menuitem', { name: 'Dashboard' }).click();

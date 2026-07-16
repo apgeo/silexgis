@@ -257,33 +257,49 @@ export default function MapPage() {
     }
   }), [setSelection]);
 
-  // Apply a view the user picked elsewhere (?view=<id>, e.g. from the dashboard), else the
-  // home view once per session when the workspace first opens.
   const { data: savedViews } = useMapViews();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requestedViewId = searchParams.get('view');
-  // Without this the effect would re-apply — and stomp the user's panning — every time the
-  // views query refetches (window focus) and hands back a new array reference.
-  const appliedViewRef = useRef<string | null>(null);
+
+  // A view picked elsewhere (?view=<id>, e.g. from the dashboard) is applied on arrival, then
+  // the param is consumed. It is a one-shot instruction, not a description of the URL: the
+  // camera position is synced into the hash as the user pans, so leaving ?view= behind would
+  // let a reload of a panned-and-shared link re-apply the view over the position it was
+  // shared for. Consuming it also makes the effect self-guarding — a views refetch hands back
+  // a new array reference, which would otherwise re-apply the view and stomp the user's panning.
   useEffect(() => {
-    if (!savedViews) {
+    if (!savedViews || !requestedViewId) {
       return;
     }
-    if (requestedViewId) {
-      const requested = savedViews.find((v) => v.id === requestedViewId);
-      if (requested && appliedViewRef.current !== requestedViewId) {
-        appliedViewRef.current = requestedViewId;
-        applyView(requested);
-      }
+    const requested = savedViews.find((v) => v.id === requestedViewId);
+    if (requested) {
+      applyView(requested);
+    }
+    setSearchParams(
+      (params) => {
+        params.delete('view');
+        return params;
+      },
+      { replace: true },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyView is stable for this use
+  }, [savedViews, requestedViewId, setSearchParams]);
+
+  // The home view opens the workspace once per session. The flag is claimed on the first load
+  // of the views whichever path runs, so that a requested view or a shared position can never
+  // be overwritten by the home view later in the session.
+  useEffect(() => {
+    if (!savedViews || sessionStorage.getItem('silexgis.homeApplied')) {
       return;
     }
-    if (!sessionStorage.getItem('silexgis.homeApplied')) {
-      sessionStorage.setItem('silexgis.homeApplied', '1');
-      // A shareable position in the URL wins over the home view.
-      const home = savedViews.find((v) => v.isHome);
-      if (home && !hasMapHash()) {
-        applyView(home);
-      }
+    sessionStorage.setItem('silexgis.homeApplied', '1');
+    // An explicit view request and a shareable position in the URL both outrank the home view.
+    if (requestedViewId || hasMapHash()) {
+      return;
+    }
+    const home = savedViews.find((v) => v.isHome);
+    if (home) {
+      applyView(home);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on first data
   }, [savedViews, requestedViewId]);
