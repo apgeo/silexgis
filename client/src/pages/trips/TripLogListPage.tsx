@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PlusOutlined } from '@ant-design/icons';
 import { Button, Flex, Input, Table, Tag, Typography } from 'antd';
 import type { TablePaginationConfig } from 'antd';
@@ -26,6 +26,13 @@ export default function TripLogListPage() {
   const [creating, setCreating] = useState(
     Boolean((location.state as { create?: boolean } | null)?.create),
   );
+  // Router state is stored in the history entry, so it outlives the modal being closed: without
+  // clearing it, going Back to this entry (or reloading it) would re-open the form unasked.
+  useEffect(() => {
+    if ((location.state as { create?: boolean } | null)?.create) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   const canCreate = useCanCreateContent();
 
@@ -99,16 +106,20 @@ export default function TripLogListPage() {
           },
         ]}
       />
-      <TripFormModal
-        open={creating}
-        trip={null}
-        onClose={(savedId) => {
-          setCreating(false);
-          if (savedId) {
-            navigate(`/trip-logs/${savedId}`);
-          }
-        }}
-      />
+      {/* Gated here rather than only on the button: the form also opens from router state, and
+          that path must not hand a create form to someone the server would refuse. */}
+      {canCreate && (
+        <TripFormModal
+          open={creating}
+          trip={null}
+          onClose={(savedId) => {
+            setCreating(false);
+            if (savedId) {
+              navigate(`/trip-logs/${savedId}`);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
