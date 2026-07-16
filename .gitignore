@@ -131,6 +131,9 @@ dist
 
 # Playwright test output
 test-results
+# Scratch output from the Playwright MCP browser (snapshots, console logs, screenshots);
+# it runs in every agent session in this repo, so it would otherwise dirty every tree.
+.playwright-mcp/
 
 # windows dev helper files
 .bat
