@@ -16,11 +16,14 @@ namespace SilexGis.Api.Features.Dashboard;
 /// </summary>
 public static class DashboardEndpoints
 {
-    /// <summary>Recent-activity rows returned per entity kind, before the merged cap.</summary>
-    private const int PerKindActivityLimit = 5;
-
-    /// <summary>Rows in the merged feed. Kept small: this is a glanceable block, not a list page.</summary>
-    private const int MergedActivityLimit = 10;
+    /// <summary>
+    /// Rows in the merged recent-activity feed. Kept small: this is a glanceable block, not a
+    /// list page. Each kind is also read up to this same limit before the merge, and that is a
+    /// requirement rather than a coincidence: a record in the newest N overall is necessarily in
+    /// its own kind's newest N, so reading fewer per kind would let a burst of activity in one
+    /// kind push out rows that are newer than the ones displayed.
+    /// </summary>
+    private const int ActivityLimit = 10;
 
     public static RouteGroupBuilder MapDashboardEndpoints(this RouteGroupBuilder api)
     {
@@ -53,24 +56,24 @@ public static class DashboardEndpoints
             await trips.CountAsync(ct),
             await geofiles.CountAsync(ct));
 
-        // Each kind is trimmed server-side before the merge, so the feed costs three small
-        // indexed reads rather than sorting whole tables in memory.
+        // Each kind is trimmed server-side before the merge, so the feed reads at most three
+        // short pages rather than sorting whole tables in memory.
         var recentCaves = await caves
             .OrderByDescending(c => c.UpdatedAt)
-            .Take(PerKindActivityLimit)
+            .Take(ActivityLimit)
             .Select(c => new DashboardActivityItemDto(DashboardActivityKind.Cave, c.Id, c.Name, c.UpdatedAt))
             .ToListAsync(ct);
 
         var recentFeatures = await features
             .OrderByDescending(f => f.UpdatedAt)
-            .Take(PerKindActivityLimit)
+            .Take(ActivityLimit)
             .Select(f => new DashboardActivityItemDto(
                 DashboardActivityKind.SurfaceFeature, f.Id, f.Name, f.UpdatedAt))
             .ToListAsync(ct);
 
         var recentTrips = await trips
             .OrderByDescending(t => t.UpdatedAt)
-            .Take(PerKindActivityLimit)
+            .Take(ActivityLimit)
             .Select(t => new DashboardActivityItemDto(DashboardActivityKind.TripLog, t.Id, t.Title, t.UpdatedAt))
             .ToListAsync(ct);
 
@@ -78,7 +81,7 @@ public static class DashboardEndpoints
             .Concat(recentFeatures)
             .Concat(recentTrips)
             .OrderByDescending(x => x.UpdatedAt)
-            .Take(MergedActivityLimit)
+            .Take(ActivityLimit)
             .ToList();
 
         return TypedResults.Ok(new DashboardSummaryDto(counts, recentActivity));

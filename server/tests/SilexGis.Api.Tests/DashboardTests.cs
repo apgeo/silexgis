@@ -90,6 +90,28 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task Recent_activity_is_the_newest_records_overall_not_a_per_kind_sample()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+
+        // One more cave than the feed holds, all newer than anything else in the container, so
+        // the whole feed must be caves. Reading fewer rows per kind than the feed holds would
+        // fill the tail with older features/trips and drop caves that are genuinely newer —
+        // which the single-record-per-kind tests above cannot see.
+        var caveIds = new List<Guid>();
+        for (var i = 0; i < 11; i++)
+        {
+            caveIds.Add(await CreateCaveAsync($"Dash burst {marker} {i}", "authenticated"));
+        }
+
+        var activity = Activity(await SummaryAsync(owner));
+        activity.Count.ShouldBe(10);
+        activity.Select(x => x.GetProperty("kind").GetString()).ShouldAllBe(k => k == "cave");
+        activity.Select(x => x.GetProperty("id").GetGuid())
+            .ShouldBe(Enumerable.Reverse(caveIds).Take(10));
+    }
+
+    [Fact]
     public async Task Summary_excludes_records_the_caller_cannot_see()
     {
         var marker = Guid.NewGuid().ToString("N")[..8];
