@@ -55,13 +55,18 @@ test('cave and entrance create/edit round-trip', async ({ page }) => {
   await page.getByLabel('Region').fill('Testland');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('Testland')).toBeVisible();
+  // Scoped to the detail table: the history timeline beside it reports the same new value.
+  await expect(page.locator('.ant-descriptions').getByText('Testland')).toBeVisible();
 
   // Clean up: delete the cave (entrances cascade server-side).
   await page.locator('button', { hasText: 'Delete' }).click();
   await page.getByRole('button', { name: 'OK' }).click();
   await page.waitForURL(/\/caves$/);
-  await expect(page.getByText(caveName)).not.toBeVisible();
+  // Counted rather than "not visible": the detail page stays mounted for a tick after the
+  // URL changes, and its heading and its history timeline both carry the name. Two matches
+  // fail a visibility assertion outright, where a count waits for the list to render — and
+  // then proves the row is really gone rather than merely hidden.
+  await expect(page.getByText(caveName)).toHaveCount(0);
 });
 
 test('cluster click lists its member entrances in the panel', async ({ page }) => {
@@ -126,7 +131,11 @@ test('cave add on map: place a new cave with its entrance by clicking the canvas
   await page.locator('button', { hasText: 'Delete' }).click();
   await page.getByRole('button', { name: 'OK' }).click();
   await page.waitForURL(/\/caves$/);
-  await expect(page.getByText(caveName)).not.toBeVisible();
+  // Counted rather than "not visible": the detail page stays mounted for a tick after the
+  // URL changes, and its heading and its history timeline both carry the name. Two matches
+  // fail a visibility assertion outright, where a count waits for the list to render — and
+  // then proves the row is really gone rather than merely hidden.
+  await expect(page.getByText(caveName)).toHaveCount(0);
 });
 
 test('surface feature draw, attributes, selection and table round-trip', async ({ page }) => {
@@ -164,7 +173,8 @@ test('surface feature draw, attributes, selection and table round-trip', async (
   await canvas.click({ position: { x: 420, y: 260 } });
   await expect(page.getByRole('heading', { name: featureName })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('Depth (m)')).toBeVisible();
-  await expect(page.getByText('12.5')).toBeVisible();
+  // Scoped to the property table: the panel's history timeline logs the same value.
+  await expect(page.locator('.ant-descriptions').getByText('12.5')).toBeVisible();
 
   // The features table lists it; delete from the row actions (cleanup).
   await page.goto('/features');
@@ -308,7 +318,11 @@ test('dialog placement flip: cave-add continues as a side panel with values inta
   await page.locator('button', { hasText: 'Delete' }).click();
   await page.getByRole('button', { name: 'OK' }).click();
   await page.waitForURL(/\/caves$/);
-  await expect(page.getByText(caveName)).not.toBeVisible();
+  // Counted rather than "not visible": the detail page stays mounted for a tick after the
+  // URL changes, and its heading and its history timeline both carry the name. Two matches
+  // fail a visibility assertion outright, where a count waits for the list to render — and
+  // then proves the row is really gone rather than merely hidden.
+  await expect(page.getByText(caveName)).toHaveCount(0);
 });
 
 test('cave photo attachment round-trip', async ({ page }) => {
@@ -501,6 +515,9 @@ test('teams and per-object permission grants', async ({ page }) => {
   await modal.locator('.ant-select').first().click();
   await page.locator('.ant-select-item-option', { hasText: 'Team' }).click();
   await modal.locator('.ant-select').nth(1).click();
+  // Typed, not scrolled to: the dropdown virtualises, and every earlier run leaves its
+  // team behind, so the newest one is far below the rendered window.
+  await page.keyboard.type(teamName);
   await page.locator('.ant-select-item-option', { hasText: teamName }).click();
   await modal.getByRole('button', { name: /Add/ }).click();
   await expect(modal.getByText(teamName)).toBeVisible();
@@ -844,21 +861,28 @@ test('cave attachment details: caption, document date and tags persist', async (
   const figure = page.locator('figure').filter({ hasText: 'e2e-photo' }).first();
   await expect(figure).toBeVisible({ timeout: 15_000 });
 
-  // Open the details editor and set caption, the document's own date, and a tag.
+  // Open the details editor and set caption, the document's own date, and a tag. The
+  // caption keeps the file name in it on purpose: a figure is labelled by its caption once
+  // it has one, so a caption without it would make this figure — and the cleanup sweep at
+  // the end — unable to find the very photo they just set up.
   await figure.getByRole('button', { name: 'Details' }).click();
   const popover = page.locator('.ant-popover');
-  await popover.locator('input').first().fill('Winter caption e2e');
+  await popover.locator('input').first().fill('e2e-photo winter caption');
   await popover.getByPlaceholder('Select date').fill('2019-08-01');
   await page.keyboard.press('Enter');
   await popover.getByText('Add tag').click();
   await popover.getByRole('combobox').last().fill('e2e-detail-tag');
   await page.keyboard.press('Enter');
+  // Let the earlier toasts retire first: a second "Saved." raised while one is still
+  // fading matches twice, which fails the assertion below on ambiguity rather than on
+  // anything having gone wrong.
+  await expect(page.getByText('Saved.')).toHaveCount(0, { timeout: 10_000 });
   await popover.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
 
   // Reopen: caption, date and tag round-tripped through the server.
   await figure.getByRole('button', { name: 'Details' }).click();
-  await expect(popover.locator('input').first()).toHaveValue('Winter caption e2e');
+  await expect(popover.locator('input').first()).toHaveValue('e2e-photo winter caption');
   await expect(popover.getByPlaceholder('Select date')).toHaveValue('2019-08-01');
   await expect(popover.getByText('e2e-detail-tag')).toBeVisible();
 
