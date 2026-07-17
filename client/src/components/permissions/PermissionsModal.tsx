@@ -142,6 +142,12 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
             {subjectKind === 'team' ? (
               <Select
                 style={{ flex: 1 }}
+                // Teams arrive in full, so this filters client-side — unlike the user
+                // picker beside it, which searches the server. Named explicitly because
+                // the option values are ids: filtering the default value prop would
+                // match nothing a person could type.
+                showSearch
+                optionFilterProp="label"
                 placeholder={t('permissions.pickTeam')}
                 value={subjectId}
                 onChange={setSubjectId}
