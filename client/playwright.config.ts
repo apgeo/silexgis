@@ -21,7 +21,7 @@ export default defineConfig({
       testMatch: /smoke\.spec\.ts/,
     },
     {
-      // Pixel 7: 393x851, touch enabled, chromium.
+      // Pixel 7: 412x915 CSS px, touch enabled, coarse pointer, chromium.
       name: 'mobile-android',
       use: { ...devices['Pixel 7'] },
       testMatch: /mobile\.spec\.ts/,

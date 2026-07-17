@@ -8,6 +8,7 @@ import { Draw, Modify, Snap, Translate } from 'ol/interaction';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import type VectorSource from 'ol/source/Vector';
 import { getSurfaceFeatureSource } from './featureLayer.ts';
+import { coarsePointer } from './pointer.ts';
 
 // All OL edit interactions live here; React components only dispatch intents and
 // subscribe to plain-data snapshots via the listener. (Measuring is not an edit
@@ -23,6 +24,8 @@ export interface EditState {
   canUndo: boolean;
   canRedo: boolean;
   dirty: number; // created + geometry-modified features not yet saved
+  /** A multi-vertex sketch is in progress (between the first click and the finish). */
+  sketchActive: boolean;
   /** Shape/type the draw tool is armed with (kept while mode is 'draw'). */
   drawShape?: DrawShape;
   drawTypeId?: number;
@@ -47,7 +50,7 @@ export class MapEditController {
   private undoStack: Command[] = [];
   private redoStack: Command[] = [];
   private state: EditState = {
-    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0,
+    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0, sketchActive: false,
   };
   private readonly listeners = new Set<(s: EditState) => void>();
 
@@ -92,7 +95,8 @@ export class MapEditController {
     // snap toggle re-attaching interactions) keeps the current shape and type.
     const shape = mode === 'draw' ? (drawShape ?? this.state.drawShape ?? 'Point') : undefined;
     const typeId = mode === 'draw' ? (drawTypeId ?? this.state.drawTypeId) : undefined;
-    this.state = { ...this.state, mode, drawShape: shape, drawTypeId: typeId };
+    // Detaching killed any sketch that was in progress along with its interaction.
+    this.state = { ...this.state, mode, drawShape: shape, drawTypeId: typeId, sketchActive: false };
 
     switch (mode) {
       case 'draw':
@@ -139,6 +143,50 @@ export class MapEditController {
       command.redo();
       this.undoStack.push(command);
       this.emit();
+    }
+  }
+
+  /**
+   * Terminates the sketch in progress as if its last vertex had been double-clicked.
+   *
+   * This is the only termination path a finger has: finishing by gesture means hitting the
+   * last vertex within ~12px, and a double-tap is claimed by the map's zoom. It also covers
+   * measuring, whose Draw belongs to the measure buttons rather than to this controller —
+   * hence "every active Draw on the map" rather than just our own. OL's finish/abort/
+   * removeLastPoint are all no-ops on a Draw that has no sketch, so the ones not currently
+   * drawing ignore the call.
+   */
+  finishDrawing(): void {
+    this.forEachActiveDraw((draw) => draw.finishDrawing());
+  }
+
+  /** Discards the sketch in progress; the tool stays armed for another attempt. */
+  abortDrawing(): void {
+    this.forEachActiveDraw((draw) => draw.abortDrawing());
+  }
+
+  /** Retracts the last placed vertex — a mis-tapped point without restarting the shape. */
+  removeLastPoint(): void {
+    this.forEachActiveDraw((draw) => draw.removeLastPoint());
+  }
+
+  /**
+   * Deletes the vertex the pointer last touched, the touch stand-in for desktop's
+   * alt-click (which OL's default deleteCondition keeps). Returns false when no vertex
+   * was under the last touch, which the toolbar turns into a hint rather than a silent
+   * no-op. The removal runs through Modify's own modifystart/modifyend events, so it
+   * lands in the undo stack like any other vertex edit.
+   */
+  removeVertex(): boolean {
+    const modify = this.interactions.find((i): i is Modify => i instanceof Modify);
+    return modify?.removePoint() ?? false;
+  }
+
+  private forEachActiveDraw(action: (draw: Draw) => void): void {
+    for (const interaction of this.map.getInteractions().getArray()) {
+      if (interaction instanceof Draw && interaction.getActive()) {
+        action(interaction);
+      }
     }
   }
 
@@ -199,8 +247,14 @@ export class MapEditController {
   // ---- interactions ----
 
   private attachDraw(shape: DrawShape, typeId?: number): void {
-    const draw = new Draw({ source: this.source, type: shape });
+    // stopClick keeps sketch clicks out of the map's singleclick: without it every vertex
+    // placed also runs the selection handler, which churns the details panel mid-draw on
+    // desktop and, on touch, makes the finishing double-tap both finish and zoom.
+    const draw = new Draw({ source: this.source, type: shape, stopClick: true });
+    draw.on('drawstart', () => this.setSketchActive(true));
+    draw.on('drawabort', () => this.setSketchActive(false));
     draw.on('drawend', (event) => {
+      this.setSketchActive(false);
       const feature = event.feature;
       feature.set('pendingNew', true);
       feature.set('featureTypeId', typeId);
@@ -226,14 +280,19 @@ export class MapEditController {
   }
 
   private attachModify(): void {
-    const modify = new Modify({ source: this.source });
+    // A fingertip covers far more than the 10px OL grabs a vertex within by default.
+    const modify = new Modify({ source: this.source, pixelTolerance: coarsePointer() ? 16 : 10 });
     this.trackGeometryChanges(modify);
     this.map.addInteraction(modify);
     this.interactions.push(modify);
   }
 
   private attachTranslate(): void {
-    const translate = new Translate({ layers: (l) => l.getSource() === this.source });
+    // Translate hit-tests exactly under the pointer by default, which a finger cannot aim.
+    const translate = new Translate({
+      layers: (l) => l.getSource() === this.source,
+      hitTolerance: coarsePointer() ? 10 : 4,
+    });
     this.trackGeometryChanges(translate);
     this.map.addInteraction(translate);
     this.interactions.push(translate);
@@ -297,7 +356,7 @@ export class MapEditController {
    * the subsequent server reload own what appears on the map).
    */
   private attachPlacePoint(mode: PlacementMode): void {
-    const draw = new Draw({ type: 'Point' });
+    const draw = new Draw({ type: 'Point', stopClick: true });
     draw.on('drawend', (event) => {
       const point = event.feature.getGeometry() as Point;
       const [lon, lat] = toLonLat(point.getCoordinates());
@@ -322,6 +381,11 @@ export class MapEditController {
   }
 
   private syncDirty(): void {
+    this.emit();
+  }
+
+  private setSketchActive(active: boolean): void {
+    this.state = { ...this.state, sketchActive: active };
     this.emit();
   }
 

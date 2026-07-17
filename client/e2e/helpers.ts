@@ -21,3 +21,27 @@ export async function login(page: Page) {
 export function overlayTreeNode(page: Page, name: string) {
   return page.locator('.layer-composer .ant-tree-treenode').filter({ hasText: name });
 }
+
+/** Taps the map at a viewport-relative point, the way a finger places a vertex. */
+export async function tapMap(page: Page, x: number, y: number) {
+  const box = (await page.locator('.map-canvas').boundingBox())!;
+  await page.touchscreen.tap(box.x + x, box.y + y);
+}
+
+/**
+ * Presses and holds the map, the gesture that opens the context menu on a phone.
+ *
+ * Dispatched rather than performed with a real touch: a genuine hold makes Android
+ * Chromium raise its own `contextmenu`, which would prove nothing about the timer the app
+ * has to run for iOS Safari — where no such event ever arrives. This drives that timer.
+ * The threshold and cancel rules themselves are unit-tested with a fake clock.
+ */
+export async function longPressMap(page: Page, x: number, y: number) {
+  // The listener sits on OL's viewport; the canvas element below it would not bubble up.
+  const viewport = page.locator('.ol-viewport');
+  const box = (await viewport.boundingBox())!;
+  const at = { pointerType: 'touch', isPrimary: true, clientX: box.x + x, clientY: box.y + y };
+  await viewport.dispatchEvent('pointerdown', at);
+  await page.waitForTimeout(700); // comfortably past the 550ms the app waits
+  await viewport.dispatchEvent('pointerup', at);
+}

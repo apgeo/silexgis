@@ -101,6 +101,22 @@
   transform: translateX(-50%);
   z-index: 5;
   padding: 6px 10px;
+  /* Column so the sketch actions stack above the tools rather than beside them. */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Sketch actions: the touch replacement for double-tap-to-finish and alt-click-to-delete.
+   Centred over the tools and given real finger-sized targets — these are tapped mid-draw,
+   often one-handed, and a mis-tap costs the shape being drawn. */
+.map-sketch-bar {
+  display: flex;
+  justify-content: center;
+}
+
+.map-sketch-bar .ant-btn {
+  height: 40px;
 }
 
 /* Phone: a full-width bottom bar rather than a centred island. */

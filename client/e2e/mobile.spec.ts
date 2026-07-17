@@ -1,10 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { expect, test } from '@playwright/test';
-import { login, overlayTreeNode } from './helpers.ts';
+import { expect, test, type Page } from '@playwright/test';
+import { login, longPressMap, overlayTreeNode, tapMap } from './helpers.ts';
 
-// Runs in the `mobile-android` project only (Pixel 7, 393x851, touch). These cover the
-// phone *layout*: the docks-as-drawers swap and the chrome that has to step aside at
-// this width. Touch editing gestures land with the editing batch.
+// Runs in the `mobile-android` project only (Pixel 7, 412x915, touch). These cover the
+// phone layout — the docks-as-drawers swap and the chrome that has to step aside at this
+// width — and full editing by finger, which is the point of the phone support rather than
+// a nice-to-have: every tool a cursor has must be reachable without one.
+
+/** Arms drawing for a feature type through the palette, the way a thumb reaches it. */
+async function armType(page: Page, typeName: string) {
+  await page.locator('.map-edit-overlay').getByTestId('feature-palette-trigger').click();
+  await page.getByRole('button', { name: typeName }).click();
+}
+
+/** Deletes a feature from the registry table — cleanup for the flows that save one. */
+async function deleteFeature(page: Page, featureName: string) {
+  await page.goto('/features');
+  const row = page.getByRole('row', { name: new RegExp(featureName) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.getByRole('button', { name: 'delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
+}
 
 test('docks become drawers, and the details drawer opens when something is picked', async ({ page }) => {
   await login(page);
@@ -87,4 +104,127 @@ test('desktop-only chrome steps aside and the save cluster outlives the tool str
   await strip.evaluate((el) => el.scrollTo({ left: el.scrollWidth }));
   await expect(strip.getByTestId('tool-add-entrance')).toBeInViewport();
   await expect(saveCluster.getByRole('button', { name: /Save/ })).toBeInViewport();
+});
+
+test('a point feature is placed by long-pressing the map', async ({ page }) => {
+  const featureName = `E2E Touch Point ${Date.now()}`;
+  await login(page);
+
+  // Long-press is the phone's right-click, and the only way to place a point exactly:
+  // the feature lands where the finger pressed, not where a fat tap was guessed to be.
+  await longPressMap(page, 200, 300);
+  await expect(page.getByText('Copy coordinates')).toBeVisible();
+  await page.getByText('Add feature').click();
+  await page.getByRole('menuitem', { name: 'Sinkhole / Doline' }).click();
+
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByText('New surface feature')).toBeVisible();
+  await modal.getByLabel('Name').fill(featureName);
+  await modal.getByRole('button', { name: 'OK' }).click();
+
+  // ...and it saves through the same batched pipeline a mouse uses.
+  const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/surface-features') && r.ok());
+  await page.getByTestId('edit-save-cluster').getByRole('button', { name: /Save/ }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  await reloaded;
+
+  await deleteFeature(page, featureName);
+});
+
+test('a line is drawn, corrected and finished entirely by finger', async ({ page }) => {
+  const featureName = `E2E Touch Line ${Date.now()}`;
+  await login(page);
+
+  await armType(page, 'Fracture line / Fault');
+  const sketchBar = page.getByTestId('map-sketch-bar');
+  await expect(sketchBar).toBeHidden();
+
+  // Three taps, three vertices. The bar appears as soon as a shape is under way, because
+  // from here there is no gesture that ends it: hitting the last vertex needs a cursor's
+  // precision, and a double-tap is the map's zoom.
+  await tapMap(page, 120, 300);
+  await expect(sketchBar).toBeVisible();
+  await tapMap(page, 200, 380);
+  await tapMap(page, 280, 300);
+
+  // Retract the mis-tapped last vertex, then place it again — the shape survives.
+  await sketchBar.getByTestId('sketch-remove-point').click();
+  await tapMap(page, 300, 420);
+  await sketchBar.getByTestId('sketch-finish').click();
+  await expect(sketchBar).toBeHidden();
+
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByText('New surface feature')).toBeVisible();
+  await modal.getByLabel('Name').fill(featureName);
+  await modal.getByRole('button', { name: 'OK' }).click();
+
+  const saveCluster = page.getByTestId('edit-save-cluster');
+  await expect(saveCluster.locator('.ant-badge-count')).toHaveText('1'); // the dirty badge counts it
+  const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/surface-features') && r.ok());
+  await saveCluster.getByRole('button', { name: /Save/ }).click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  await reloaded;
+
+  // The saved line is then reshaped by finger: touch a vertex and delete it from the bar.
+  // Desktop deletes vertices with alt-click, which needs a keyboard the phone has not got.
+  await page.getByTestId('edit-tool-strip').getByRole('button', { name: 'aim' }).click();
+  await tapMap(page, 200, 380);
+  await page.getByTestId('map-sketch-bar').getByTestId('sketch-delete-vertex').click();
+
+  // The deletion is an ordinary pending geometry edit, so Save comes back to life for it.
+  // Asserted on the button rather than on the dirty badge: the badge from the save above
+  // animates away over a few hundred ms, and its lingering "1" answers a text assertion
+  // truthfully enough to hide a Delete vertex that did nothing at all.
+  await expect(saveCluster.getByRole('button', { name: /Save/ })).toBeEnabled({ timeout: 10_000 });
+  const resaved = page.waitForResponse((r) => r.url().includes('/api/v1/map/surface-features') && r.ok());
+  await saveCluster.getByRole('button', { name: /Save/ }).click();
+  await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
+  await resaved;
+
+  await deleteFeature(page, featureName);
+});
+
+test('cancelling a sketch abandons the shape but keeps the tool armed', async ({ page }) => {
+  await login(page);
+
+  await armType(page, 'Fracture line / Fault');
+  const sketchBar = page.getByTestId('map-sketch-bar');
+  await tapMap(page, 150, 300);
+  await tapMap(page, 250, 380);
+  await expect(sketchBar).toBeVisible();
+
+  await sketchBar.getByTestId('sketch-cancel').click();
+
+  // Nothing was drawn and nothing is pending — but the next tap starts a new line
+  // without re-arming, so a mistake costs one button, not the whole setup.
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByTestId('edit-save-cluster').getByRole('button', { name: /Save/ })).toBeDisabled();
+  await tapMap(page, 150, 300);
+  await expect(sketchBar).toBeVisible();
+});
+
+test('a measurement is finished from the same sketch bar', async ({ page }) => {
+  await login(page);
+
+  // Measuring is a different interaction owned by a different component, but a finger
+  // cannot end it either — so the one Finish button has to reach it too.
+  const strip = page.getByTestId('edit-tool-strip');
+  await strip.getByRole('button', { name: 'column-width' }).click();
+  const sketchBar = page.getByTestId('map-sketch-bar');
+  await expect(sketchBar).toBeVisible();
+
+  await tapMap(page, 120, 300);
+  await tapMap(page, 260, 400);
+  await sketchBar.getByTestId('sketch-finish').click();
+
+  // A finished measurement parks its total in a static tooltip; an unfinished one only
+  // ever has the dynamic one that trails the pointer.
+  const total = page.locator('.react-geo-measure-tooltip-static');
+  await expect(total.first()).toBeVisible({ timeout: 10_000 });
+  await expect(total.first()).toContainText(/\d/);
+
+  // Toggling the tool off clears the drawing and retires the bar with it.
+  await strip.getByRole('button', { name: 'column-width' }).click();
+  await expect(sketchBar).toBeHidden();
+  await expect(total).toHaveCount(0);
 });

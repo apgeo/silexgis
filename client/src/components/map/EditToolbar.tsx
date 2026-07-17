@@ -7,10 +7,12 @@ import {
   CheckOutlined,
   CloseOutlined,
   ColumnWidthOutlined,
+  DeleteOutlined,
   DragOutlined,
   EditOutlined,
   EnvironmentOutlined,
   LoginOutlined,
+  MinusOutlined,
   RedoOutlined,
   UndoOutlined,
 } from '@ant-design/icons';
@@ -32,6 +34,7 @@ import {
   type EditState,
   type PlacementMode,
 } from '../../map/mapEdit.ts';
+import { coarsePointer } from '../../map/pointer.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 import CaveAddModal from './CaveAddModal.tsx';
@@ -58,7 +61,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
   const isMobile = useIsMobile();
   const { data: featureTypes } = useFeatureTypes();
   const [state, setState] = useState<EditState>({
-    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0,
+    mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0, sketchActive: false,
   });
   const [typeId, setTypeId] = useState<number>();
   const [saving, setSaving] = useState(false);
@@ -172,6 +175,44 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
   };
 
   const pendingGeometryType = (pendingFeature?.getGeometry()?.getType() ?? 'Point') as DrawShape;
+
+  const deleteVertex = () => {
+    // Modify deletes the vertex the pointer last touched; with nothing touched yet the
+    // button would look broken, so say what the gesture is instead.
+    if (!controller.removeVertex()) {
+      message.info(t('mapEdit.deleteVertexHint'));
+    }
+  };
+
+  // Finishing a shape by gesture means hitting its last vertex, or double-tapping — which
+  // the map reads as a zoom. Everything multi-vertex therefore gets explicit buttons on a
+  // touch device. Measuring is react-geo's own interaction, so its sketch is not in
+  // EditState; the armed measure tool is the honest stand-in for "a measurement is being
+  // drawn", and the controller's finish/abort reach that Draw the same way.
+  const touch = coarsePointer();
+  const multiVertexDraw = state.drawShape === 'LineString' || state.drawShape === 'Polygon';
+  const sketching = (state.sketchActive && multiVertexDraw) || measure !== null;
+  const sketchBar = touch && (sketching || state.mode === 'modify') && (
+    <div className="map-sketch-bar" data-testid="map-sketch-bar">
+      {sketching ? (
+        <Space size={8}>
+          <Button icon={<MinusOutlined />} data-testid="sketch-remove-point" onClick={() => controller.removeLastPoint()}>
+            {t('mapEdit.removeLastPoint')}
+          </Button>
+          <Button type="primary" icon={<CheckOutlined />} data-testid="sketch-finish" onClick={() => controller.finishDrawing()}>
+            {t('mapEdit.finishDrawing')}
+          </Button>
+          <Button icon={<CloseOutlined />} data-testid="sketch-cancel" onClick={() => controller.abortDrawing()}>
+            {t('common.cancel')}
+          </Button>
+        </Space>
+      ) : (
+        <Button icon={<DeleteOutlined />} data-testid="sketch-delete-vertex" onClick={deleteVertex}>
+          {t('mapEdit.deleteVertex')}
+        </Button>
+      )}
+    </div>
+  );
 
   const toolStrip = (
     <Space size={4} wrap={!isMobile}>
@@ -334,24 +375,30 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
   // cluster is pinned outside it: unsaved edits must never be the thing that scrolled off.
   if (isMobile) {
     return (
-      <div className="map-edit-toolbar map-edit-toolbar-mobile">
-        <div className="map-edit-tools" data-testid="edit-tool-strip">
-          {toolStrip}
+      <>
+        {sketchBar}
+        <div className="map-edit-toolbar map-edit-toolbar-mobile">
+          <div className="map-edit-tools" data-testid="edit-tool-strip">
+            {toolStrip}
+          </div>
+          <div className="map-edit-save" data-testid="edit-save-cluster">
+            {saveCluster}
+          </div>
+          {dialogs}
         </div>
-        <div className="map-edit-save" data-testid="edit-save-cluster">
-          {saveCluster}
-        </div>
-        {dialogs}
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="map-edit-toolbar">
-      {toolStrip}
-      <Divider orientation="vertical" />
-      {saveCluster}
-      {dialogs}
-    </div>
+    <>
+      {sketchBar}
+      <div className="map-edit-toolbar">
+        {toolStrip}
+        <Divider orientation="vertical" />
+        {saveCluster}
+        {dialogs}
+      </div>
+    </>
   );
 }
