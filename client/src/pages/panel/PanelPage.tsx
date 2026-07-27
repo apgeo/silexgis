@@ -145,6 +145,7 @@ function RegistryPanel() {
         />
       </Flex>
       <Table<CaveListItem>
+        scroll={{ x: 'max-content' }}
         rowKey="id"
         size="small"
         loading={isFetching && !data}
