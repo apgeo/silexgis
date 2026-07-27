@@ -23,6 +23,8 @@ Previous versions:
 - **3D survey models** — Therion `.lox` / Survex `.3d` via CaveView.js, plus cave
   centerlines projected on the map.
 - **Trips, tags, saved & shareable map views**, and **multi-window** pop-out panels.
+- **Works on a phone** — the map workspace adapts to touch, including full geometry editing by
+  finger, and the app installs to a home screen.
 - **Accounts & permissions** — per-user/team/object access control, MFA (TOTP), optional
   external login (Google/GitHub/OIDC), and location protection for sensitive caves.
 - **English and Romanian** throughout.

@@ -106,6 +106,40 @@ test('desktop-only chrome steps aside and the save cluster outlives the tool str
   await expect(saveCluster.getByRole('button', { name: /Save/ })).toBeInViewport();
 });
 
+test('the app declares itself installable, with icons that exist', async ({ page }) => {
+  await login(page);
+
+  // Every part of this is silent when broken: a bad path or a missing size does not fail the
+  // page, it just quietly costs the install prompt or leaves a blank home-screen icon.
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.webmanifest');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#146262');
+
+  const response = await page.request.get('/manifest.webmanifest');
+  expect(response.status()).toBe(200);
+  const manifest = JSON.parse(await response.text()) as {
+    name: string;
+    start_url: string;
+    display: string;
+    icons: { src: string; sizes: string; purpose: string }[];
+  };
+  expect(manifest.name).toBe('SilexGIS');
+  expect(manifest.start_url).toBe('/');
+  expect(manifest.display).toBe('standalone');
+
+  // Chrome needs a 192 and a 512 to offer installation at all, and a maskable set or Android
+  // pads the icon into a white blob.
+  const sizes = manifest.icons.map((icon) => `${icon.sizes} ${icon.purpose}`);
+  expect(sizes).toEqual(
+    expect.arrayContaining(['192x192 any', '512x512 any', '192x192 maskable', '512x512 maskable']),
+  );
+
+  for (const icon of manifest.icons) {
+    const file = await page.request.get(icon.src);
+    expect(file.status(), `${icon.src} is listed in the manifest`).toBe(200);
+    expect(file.headers()['content-type']).toContain('image/png');
+  }
+});
+
 test('a point feature is placed by long-pressing the map', async ({ page }) => {
   const featureName = `E2E Touch Point ${Date.now()}`;
   await login(page);

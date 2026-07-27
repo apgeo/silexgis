@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Installable to a phone's home screen: standalone window, own icon, no browser
+         chrome. No service worker and nothing offline — a cave registry is useless without
+         its server, and the field-work story belongs to a native app. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Tints the system UI around the app. Keep in step with the theme's primary colour
+         and the manifest's theme_color; nothing derives one from the others. -->
+    <meta name="theme-color" content="#146262" />
+    <!-- iOS ignores the manifest's icons. -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>SilexGIS</title>
   </head>
   <body>
