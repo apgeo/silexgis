@@ -60,6 +60,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
       }
     >
       <Table<SurveyModelInfo>
+        scroll={{ x: 'max-content' }}
         rowKey="id"
         size="small"
         dataSource={models}

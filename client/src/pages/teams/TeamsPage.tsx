@@ -162,6 +162,7 @@ export default function TeamsPage() {
       </Flex>
 
       <Table<TeamInfo>
+        scroll={{ x: 'max-content' }}
         rowKey="id"
         size="middle"
         loading={isFetching && !teams}

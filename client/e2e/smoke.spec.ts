@@ -800,7 +800,9 @@ async function deleteFeatureRows(page: Page, pattern: RegExp) {
   await listed;
   // Wait for the table body to actually paint (a data row or the empty placeholder) before
   // the non-retrying count() — avoids racing the response→render gap without a fixed sleep.
-  await expect(page.locator('.ant-table-tbody tr').first()).toBeVisible();
+  // A horizontally scrollable table also carries a zero-height aria-hidden measure row as
+  // its first tbody child, so exclude that or the visibility wait resolves to the invisible.
+  await expect(page.locator('.ant-table-tbody tr:not(.ant-table-measure-row)').first()).toBeVisible();
   const rows = page.getByRole('row', { name: pattern });
   for (let remaining = await rows.count(); remaining > 0; remaining--) {
     await rows.first().getByRole('button', { name: 'delete' }).click();

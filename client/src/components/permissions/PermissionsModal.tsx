@@ -175,6 +175,7 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
           </Flex>
 
           <Table<DraftEntry>
+            scroll={{ x: 'max-content' }}
             rowKey={(entry) => `${entry.subjectKind}:${entry.subjectId}`}
             size="small"
             pagination={false}

@@ -114,6 +114,7 @@ export default function CaveListPage() {
         />
       </Flex>
       <Table<CaveListItem>
+        scroll={{ x: 'max-content' }}
         rowKey="id"
         size="middle"
         loading={isFetching}

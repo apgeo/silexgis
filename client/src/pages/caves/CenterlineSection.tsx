@@ -52,6 +52,7 @@ export default function CenterlineSection({ caveId, canEdit }: { caveId: string;
       }
     >
       <Table<CenterlineInfo>
+        scroll={{ x: 'max-content' }}
         rowKey="id"
         size="small"
         dataSource={centerlines}

@@ -173,6 +173,7 @@ export default function GeodataPage() {
       </Flex>
 
       <Table<GeofileInfo>
+        scroll={{ x: 'max-content' }}
         rowKey="id"
         size="middle"
         loading={isFetching && !data}

@@ -49,6 +49,7 @@ export default function AuditPage() {
         />
       </Flex>
       <Table<AuditEntry>
+        scroll={{ x: 'max-content' }}
         rowKey="id"
         size="small"
         loading={isFetching && !data}

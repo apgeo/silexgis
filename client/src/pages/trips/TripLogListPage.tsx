@@ -68,6 +68,7 @@ export default function TripLogListPage() {
         />
       </Flex>
       <Table<TripLogInfo>
+        scroll={{ x: 'max-content' }}
         rowKey="id"
         size="middle"
         loading={isFetching && !data}

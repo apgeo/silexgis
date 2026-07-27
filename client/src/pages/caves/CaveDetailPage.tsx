@@ -108,7 +108,9 @@ export default function CaveDetailPage() {
       )}
 
       <Card style={{ marginBottom: 16 }}>
-        <Descriptions column={3} size="small">
+        {/* Three columns of label+value do not fit a phone: antd would keep them and let the
+            values wrap to unreadable slivers. One column below sm, two through md. */}
+        <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small">
           {detailItem(t('caves.type'), caveTypeName)}
           {detailItem(t('caves.identificationCode'), cave.identificationCode)}
           {detailItem(t('caves.region'), cave.region)}
@@ -148,6 +150,7 @@ export default function CaveDetailPage() {
         }
       >
         <Table<Entrance>
+          scroll={{ x: 'max-content' }}
           rowKey="id"
           size="small"
           dataSource={entrances}

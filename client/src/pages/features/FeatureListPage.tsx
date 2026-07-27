@@ -146,6 +146,7 @@ export default function FeatureListPage() {
         />
       </Flex>
       <Table<SurfaceFeatureDetail>
+        scroll={{ x: 'max-content' }}
         rowKey="id"
         size="middle"
         loading={isFetching}

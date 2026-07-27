@@ -98,6 +98,7 @@ function HistoryEventItem({ event, restore }: { event: HistoryEvent; restore?: H
 
       {rows.length > 0 && (
         <Table<HistoryFieldRow>
+          scroll={{ x: 'max-content' }}
           className="history-fields"
           size="small"
           pagination={false}
