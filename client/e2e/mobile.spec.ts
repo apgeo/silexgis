@@ -116,6 +116,10 @@ test('the app declares itself installable, with icons that exist', async ({ page
 
   const response = await page.request.get('/manifest.webmanifest');
   expect(response.status()).toBe(200);
+  // The MIME type is part of the contract: `.webmanifest` is absent from common server MIME
+  // tables (nginx's among them), and a manifest served as application/octet-stream is
+  // ignored by some browsers without any visible error.
+  expect(response.headers()['content-type']).toContain('application/manifest+json');
   const manifest = JSON.parse(await response.text()) as {
     name: string;
     start_url: string;

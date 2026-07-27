@@ -47,4 +47,7 @@ test('the app is installable to the home screen', async ({ page }) => {
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', /\.png$/);
   const icon = await page.request.get('/icons/apple-touch-icon.png');
   expect(icon.status()).toBe(200);
+  // Status alone is not enough: an SPA-fallback server answers 200 with index.html for any
+  // missing path, so a deleted icon would still pass a status-only check.
+  expect(icon.headers()['content-type']).toContain('image/png');
 });
