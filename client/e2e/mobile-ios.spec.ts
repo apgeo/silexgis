@@ -28,9 +28,12 @@ test('the workspace renders, its docks open as drawers, and long-press opens the
   await expect(page.getByText('Base layers')).toBeHidden();
 
   await page.getByTestId('map-dock-toggle-right').click();
-  await expect(page.locator('.ant-drawer-right')).toBeVisible();
+  // Assert on the sliding panel, not the `.ant-drawer-right` root: antd keeps that root
+  // mounted and `display: block` even when closed, so it never reads as hidden — only the
+  // content wrapper (and the mask) actually track open/closed.
+  await expect(page.locator('.ant-drawer-right .ant-drawer-content-wrapper')).toBeVisible();
   await page.locator('.ant-drawer-mask').click({ position: { x: 30, y: 400 } });
-  await expect(page.locator('.ant-drawer-right')).toBeHidden();
+  await expect(page.locator('.ant-drawer-right .ant-drawer-content-wrapper')).toBeHidden();
 
   // The point of this project: Safari sends no contextmenu, so this menu can only come from
   // the app timing the press itself.
