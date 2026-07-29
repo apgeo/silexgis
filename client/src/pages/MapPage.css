@@ -386,6 +386,26 @@
   margin: 0 8px 0 24px;
 }
 
+/* Personal centerline-overlay limits, shown while that overlay is on. */
+.centerline-limits {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.centerline-limits label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.centerline-limits .ant-input-number {
+  width: 88px;
+}
+
 /* Layer composer tree (react-geo LayerTree in the left dock). */
 .layer-composer {
   margin-top: 8px;

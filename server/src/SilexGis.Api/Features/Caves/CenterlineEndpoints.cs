@@ -5,6 +5,7 @@ using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Persistence;
@@ -108,12 +109,14 @@ public static class CenterlineEndpoints
         {
             ".gpx" => GeofileFormat.Gpx,
             ".geojson" or ".json" => GeofileFormat.GeoJson,
+            // Survey tools export centerlines as KML more often than anything else.
+            ".kml" or ".kmz" => GeofileFormat.Kml,
             _ => (GeofileFormat?)null,
         };
         if (format is null)
         {
             return ApiProblems.BadRequest(
-                "centerline.format_unsupported", "Upload a GeoJSON or GPX centerline file.");
+                "centerline.format_unsupported", "Upload a GeoJSON, GPX or KML centerline file.");
         }
 
         if (file.Length == 0 || file.Length > MaxUploadBytes)
@@ -149,11 +152,22 @@ public static class CenterlineEndpoints
                 "centerline.no_lines", "The file contains no line geometries.");
         }
 
+        // The display skeleton is built once, here, from the geometry as surveyed: a survey
+        // export is mostly splays, and drawing one canvas path per splay is what makes the map
+        // overlay unusable. Rebuilding it later from an existing skeleton would keep pruning,
+        // so this is the only place it is computed.
+        var skeleton = CenterlineSkeleton.Build(geom);
+        var storeSkeleton = CenterlineSkeleton.IsWorthStoring(geom, skeleton);
+        var pathCount = CenterlineSkeleton.PathCount(geom);
+
         var centerline = new CaveCenterline
         {
             CaveId = caveId,
             Name = Path.GetFileNameWithoutExtension(file.FileName),
             Geom = geom,
+            Skeleton = storeSkeleton ? skeleton : null,
+            PathCount = pathCount,
+            SkeletonPathCount = storeSkeleton ? CenterlineSkeleton.PathCount(skeleton) : pathCount,
             LengthM = await CenterlineSql.GeodesicLengthMetersAsync(db, geom, ct),
         };
 
@@ -195,6 +209,8 @@ public static class CenterlineEndpoints
     /// <summary>
     /// Collects every LineString from the parsed features into one MultiLineStringZ.
     /// The column is Z-typed, so 2D sources get Z=0 rather than a mixed-dimension insert.
+    /// Zero-length components are dropped: survey exports contain them (a station written
+    /// twice) and PostGIS reports a geometry carrying them as invalid.
     /// </summary>
     private static MultiLineString MergeLines(IEnumerable<Geometry> geometries)
     {
@@ -204,15 +220,41 @@ public static class CenterlineEndpoints
             switch (geometry)
             {
                 case LineString line:
-                    lines.Add(ForceZ(line));
+                    Add(line);
                     break;
                 case MultiLineString multi:
-                    lines.AddRange(multi.Geometries.Cast<LineString>().Select(ForceZ));
+                    foreach (var component in multi.Geometries.Cast<LineString>())
+                    {
+                        Add(component);
+                    }
+
                     break;
             }
         }
 
         return new MultiLineString([.. lines]) { SRID = 4326 };
+
+        void Add(LineString line)
+        {
+            if (HasLength(line))
+            {
+                lines.Add(ForceZ(line));
+            }
+        }
+    }
+
+    /// <summary>True when a component spans at least two distinct positions (NaN Z reads as 0).</summary>
+    private static bool HasLength(LineString line)
+    {
+        if (line.Coordinates.Length < 2)
+        {
+            return false;
+        }
+
+        var first = line.Coordinates[0];
+        var firstZ = double.IsNaN(first.Z) ? 0 : first.Z;
+        return line.Coordinates.Any(c =>
+            c.X != first.X || c.Y != first.Y || (double.IsNaN(c.Z) ? 0 : c.Z) != firstZ);
     }
 
     private static LineString ForceZ(LineString line)

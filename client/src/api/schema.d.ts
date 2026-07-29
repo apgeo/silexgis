@@ -963,11 +963,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Cave centerlines as GeoJSON for the given bbox; protected caves' lines omitted. */
+        /** Cave centerlines as GeoJSON for the given bbox and zoom; splay-free below the detail zoom, protected caves' lines omitted. */
         get: {
             parameters: {
                 query: {
                     bbox: string;
+                    zoom?: number;
+                    detailZoom?: number;
+                    maxPaths?: number;
                 };
                 header?: never;
                 path?: never;
@@ -981,7 +984,43 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["FeatureCollection"];
+                        "application/json": components["schemas"]["CenterlineFeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Client-relevant map rendering limits for this installation. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MapConfigDto"];
                     };
                 };
             };
@@ -4108,6 +4147,13 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        CenterlineFeatureCollection: {
+            type: string;
+            features: components["schemas"]["GeoFeature"][];
+            /** Format: int32 */
+            withheldCount: number;
+            detail: boolean;
+        };
         /** @enum {unknown} */
         CenterlineSource: "uploaded" | "extracted";
         DashboardActivityItemDto: {
@@ -4370,6 +4416,18 @@ export interface components {
             email: string;
             password: string;
             twoFactorCode?: null | string;
+        };
+        MapConfigDto: {
+            /** Format: int32 */
+            centerlineDetailZoom: number;
+            /** Format: int32 */
+            centerlineMaxPaths: number;
+            /** Format: int32 */
+            centerlineMaxPathsLimit: number;
+            /** Format: int32 */
+            centerlineGateZoom: number;
+            /** Format: int32 */
+            clusterMaxZoom: number;
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";

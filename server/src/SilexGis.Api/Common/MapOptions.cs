@@ -1,0 +1,51 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+namespace SilexGis.Api.Common;
+
+/// <summary>
+/// Installation-wide map rendering limits. The defaults come from measurements on real survey
+/// exports: a cave's line work is dominated by splays, drawing costs one canvas path per line
+/// component, and the splays only carry information below roughly 0.4 ground metres per pixel.
+/// So overview zooms get the stored skeleton, and full detail arrives only when the viewport is
+/// small enough to bound what it costs.
+/// </summary>
+public sealed class MapOptions
+{
+    public const string SectionName = "Map";
+
+    /// <summary>
+    /// From this zoom up the map serves bbox-clipped full detail (splays included) instead of
+    /// the skeleton — provided the clipped result fits <see cref="CenterlineMaxPaths"/>.
+    /// The default is where the splays start to be visible at all.
+    /// </summary>
+    public int CenterlineDetailZoom { get; set; } = 18;
+
+    /// <summary>
+    /// Line components a single request may serve across all centerlines. Past it, remaining
+    /// centerlines are reported as withheld rather than drawn. This, not the zoom, is what
+    /// protects a cave whose whole footprint fits on one screen.
+    /// </summary>
+    public int CenterlineMaxPaths { get; set; } = 25000;
+
+    /// <summary>Hard ceiling on a client-requested <see cref="CenterlineMaxPaths"/> override.</summary>
+    public int CenterlineMaxPathsLimit { get; set; } = 100000;
+
+    /// <summary>Below this zoom, centerlines bigger than <see cref="CenterlineGatePaths"/> are withheld.</summary>
+    public int CenterlineGateZoom { get; set; } = 12;
+
+    /// <summary>Skeleton size at which a centerline is too heavy for an overview view.</summary>
+    public int CenterlineGatePaths { get; set; } = 20000;
+
+    /// <summary>
+    /// Simplification tolerance in screen pixels. Nearly a no-op on splay-heavy surveys, whose
+    /// components are single shots with no interior vertices to drop, but it does thin ordinary
+    /// imported line work.
+    /// </summary>
+    public double CenterlineSimplifyPixels { get; set; } = 1.0;
+
+    /// <summary>
+    /// Tolerance in degrees of longitude for a given zoom. Against a Web Mercator display a
+    /// pixel spans 360/(256·2^zoom) degrees of longitude, with no latitude term.
+    /// </summary>
+    public double SimplifyToleranceDegrees(int zoom) =>
+        CenterlineSimplifyPixels * 360d / (256d * Math.Pow(2, Math.Clamp(zoom, 0, 24)));
+}

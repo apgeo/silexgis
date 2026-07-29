@@ -22,7 +22,7 @@ import { unByKey } from 'ol/Observable';
 import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import { useSearchParams } from 'react-router-dom';
-import { useFeatureTypes, useGeofiles, useMapLayers, useMapViews, useMe, useRasterMaps } from '../api/hooks.ts';
+import { useFeatureTypes, useGeofiles, useMapConfig, useMapLayers, useMapViews, useMe, useRasterMaps } from '../api/hooks.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
 import FeatureListPanel from '../components/map/FeatureListPanel.tsx';
@@ -32,7 +32,14 @@ import ViewsPanel from '../components/map/ViewsPanel.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
 import SelectionPanel from '../components/map/SelectionPanel.tsx';
 import { getBaseLayerId, getBaseLayers, setActiveBaseLayer, syncBaseLayers } from '../map/baseLayers.ts';
-import { CENTERLINE_LAYER_ID, attachCenterlineLoader, createCenterlineLayer } from '../map/centerlineLayer.ts';
+import {
+  CENTERLINE_LAYER_ID,
+  attachCenterlineLoader,
+  createCenterlineLayer,
+  setCenterlineLimits,
+  setCenterlineOverrides,
+  setCenterlinesEnabled,
+} from '../map/centerlineLayer.ts';
 import { ENTRANCE_LAYER_ID, attachEntranceLoader, createEntranceLayer, reloadEntrances } from '../map/entranceLayer.ts';
 import {
   SURFACE_FEATURE_LAYER_ID,
@@ -84,13 +91,16 @@ export default function MapPage() {
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
   const { data: layers } = useMapLayers();
+  const { data: mapConfig } = useMapConfig();
   const { data: featureTypes } = useFeatureTypes();
   const { data: me } = useMe();
   const [activeBaseId, setActiveBaseId] = useState<number>();
   const [entrancesVisible, setEntrancesVisible] = useState(true);
   const [tagFilter, setTagFilter] = useState<string | null>(getMapTagFilter());
   const [surfaceFeaturesVisible, setSurfaceFeaturesVisible] = useState(true);
-  const [centerlinesVisible, setCenterlinesVisible] = useState(true);
+  // Off by default: it is the heaviest overlay by a wide margin, and a cave's splay work is
+  // invisible at the zooms most sessions spend their time at.
+  const [centerlinesVisible, setCenterlinesVisible] = useState(false);
   const [heatmapVisible, setHeatmapVisible] = useState(false);
   const [photosVisible, setPhotosVisible] = useState(false);
   const [editController, setEditController] = useState<MapEditController | null>(null);
@@ -120,6 +130,9 @@ export default function MapPage() {
   const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
   const mapChromeHidden = useUiPrefsStore((s) => s.mapChromeHidden);
   const setMapChromeHidden = useUiPrefsStore((s) => s.setMapChromeHidden);
+  const centerlineDetailZoom = useUiPrefsStore((s) => s.centerlineDetailZoom);
+  const centerlineMaxPaths = useUiPrefsStore((s) => s.centerlineMaxPaths);
+  const setCenterlinePrefs = useUiPrefsStore((s) => s.setCenterlineLimits);
 
   // Unsaved-edit count mirrored out of the edit controller so the dirty guard pill
   // can warn even while the edit toolbar is hidden with the rest of the chrome.
@@ -382,7 +395,19 @@ export default function MapPage() {
 
   useEffect(() => {
     findOverlayLayer(CENTERLINE_LAYER_ID)?.setVisible(centerlinesVisible);
+    setCenterlinesEnabled(centerlinesVisible); // gate the bbox loader so hidden = no fetches
   }, [centerlinesVisible]);
+
+  // Rendering limits are the installation's, with this viewer's overrides on top.
+  useEffect(() => {
+    if (mapConfig) {
+      setCenterlineLimits(mapConfig);
+    }
+  }, [mapConfig]);
+
+  useEffect(() => {
+    setCenterlineOverrides({ detailZoom: centerlineDetailZoom, maxPaths: centerlineMaxPaths });
+  }, [centerlineDetailZoom, centerlineMaxPaths]);
 
   useEffect(() => {
     findOverlayLayer(ENTRANCE_HEATMAP_LAYER_ID)?.setVisible(heatmapVisible);
@@ -558,6 +583,11 @@ export default function MapPage() {
         reloadEntrances();
         reloadSurfaceFeatures();
       }}
+      centerlinesVisible={centerlinesVisible}
+      mapConfig={mapConfig}
+      centerlineDetailZoom={centerlineDetailZoom}
+      centerlineMaxPaths={centerlineMaxPaths}
+      onCenterlineLimitsChange={setCenterlinePrefs}
       footer={<ViewsPanel onCapture={captureCurrentView} onApply={applyView} />}
     />
   );

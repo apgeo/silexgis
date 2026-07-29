@@ -179,6 +179,8 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Auth__OpenRegistration` | `false` | allow self-registration |
 | `SILEXGIS__Auth__ExternalOnly` | `false` | hide the password form when providers exist |
 | `SILEXGIS__Access__AllowAnonymousRead` | `false` | let anonymous visitors read public content |
+| `SILEXGIS__Map__CenterlineDetailZoom` | `18` | zoom at which cave centerlines switch from passage outlines to full survey detail |
+| `SILEXGIS__Map__CenterlineMaxPaths` | `25000` | line budget per centerline request; over it, outlines are served instead |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys (must persist across restarts) |
 

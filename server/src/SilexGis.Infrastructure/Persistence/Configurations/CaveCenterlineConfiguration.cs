@@ -16,6 +16,8 @@ public sealed class CaveCenterlineConfiguration : IEntityTypeConfiguration<CaveC
         builder.Property(x => x.Source).HasConversion<short>();
         builder.Property(x => x.LengthM).HasPrecision(12, 2);
         builder.Property(x => x.Geom).HasColumnType("geometry(MultiLineStringZ, 4326)");
+        // The skeleton is display geometry for a 2D surface map; the altitudes stay on Geom.
+        builder.Property(x => x.Skeleton).HasColumnType("geometry(MultiLineString, 4326)");
 
         builder.HasOne<Cave>().WithMany().HasForeignKey(x => x.CaveId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<SurveyModel>().WithMany().HasForeignKey(x => x.SurveyModelId).OnDelete(DeleteBehavior.SetNull);

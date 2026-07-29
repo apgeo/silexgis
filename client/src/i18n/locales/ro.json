@@ -104,7 +104,13 @@
     "coordsCopied": "Coordonate copiate.",
     "heatmap": "Hartă de căldură (intrări)",
     "baseOpacity": "Opacitatea stratului {{name}}",
-    "photos": "Fotografii geolocalizate"
+    "photos": "Fotografii geolocalizate",
+    "centerlinesWithheld": "{{count}} poligonale nu sunt afișate la această scară — apropie harta pentru a le încărca.",
+    "centerlineDetailOn": "Se afișează detaliul complet al ridicării, inclusiv razele laterale.",
+    "centerlineSkeletonOn": "Se afișează traseul galeriilor; razele către pereți apar când apropii harta.",
+    "centerlineDetailZoom": "Detaliu de la nivelul",
+    "centerlineMaxPaths": "Limită de linii",
+    "centerlineLimitsHint": "Lasă gol pentru valorile implicite ale instalării. Detaliul mai mare costă mai mult la desenare."
   },
   "dialog": {
     "dockToSide": "Andochează lângă hartă",

@@ -46,4 +46,27 @@ describe('viewConfig heatmap + base opacity', () => {
     expect(restored?.heatmapVisible).toBe(false);
     expect(restored?.baseOpacity).toEqual({});
   });
+
+  it('treats a saved view without centerlinesVisible as off', () => {
+    // The centerline overlay is opt-in: it is the heaviest one, and a saved view that predates
+    // the setting must not switch it on for whoever opens it.
+    const legacy = {
+      configVersion: 1,
+      center: [25.3, 45.7],
+      zoom: 10,
+      entrancesVisible: true,
+      surfaceFeaturesVisible: true,
+      geofileIds: [],
+      rasters: [],
+      tagFilter: null,
+    };
+    expect(applyViewConfig(legacy)?.centerlinesVisible).toBe(false);
+  });
+
+  it('round-trips an explicit centerline choice either way', () => {
+    expect(applyViewConfig(captureViewConfig(baseUi))?.centerlinesVisible).toBe(true);
+    expect(
+      applyViewConfig(captureViewConfig({ ...baseUi, centerlinesVisible: false }))?.centerlinesVisible,
+    ).toBe(false);
+  });
 });

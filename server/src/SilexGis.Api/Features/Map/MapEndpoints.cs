@@ -13,6 +13,26 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Features.Map;
 
 /// <summary>
+/// A GeoJSON FeatureCollection plus the two things the centerline overlay needs to explain
+/// itself: how many centerlines the request's limits kept back, and whether what it did return
+/// is full detail or the splay-free skeleton. Both are GeoJSON foreign members, so a plain
+/// GeoJSON reader still parses the collection.
+/// </summary>
+public sealed record CenterlineFeatureCollection(
+    string Type,
+    IReadOnlyList<GeoFeature> Features,
+    int WithheldCount,
+    bool Detail);
+
+/// <summary>Map rendering limits published to the client.</summary>
+public sealed record MapConfigDto(
+    int CenterlineDetailZoom,
+    int CenterlineMaxPaths,
+    int CenterlineMaxPathsLimit,
+    int CenterlineGateZoom,
+    int ClusterMaxZoom);
+
+/// <summary>
 /// GeoJSON layer endpoints for the map workspace. Always
 /// visibility-filtered; protected cave locations obfuscated server-side.
 /// Below the cluster zoom threshold results are aggregated into cluster features.
@@ -41,11 +61,38 @@ public static class MapEndpoints
             .WithSummary("Trip-log geometries as GeoJSON for the given bbox and date range.");
         api.MapGet("/map/cave-centerlines", CaveCenterlinesAsync)
             .WithTags("Map")
-            .WithSummary("Cave centerlines as GeoJSON for the given bbox; protected caves' lines omitted.");
+            .WithSummary("Cave centerlines as GeoJSON for the given bbox and zoom; splay-free below the detail zoom, protected caves' lines omitted.");
+        api.MapGet("/map/config", MapConfigAsync)
+            .WithTags("Map")
+            .WithSummary("Client-relevant map rendering limits for this installation.");
         api.MapGet("/map/photos", PhotosAsync)
             .WithTags("Map")
             .WithSummary("Geotagged photos as GeoJSON points for the given bbox; protected-cave photos withheld.");
         return api;
+    }
+
+    /// <summary>
+    /// The rendering limits the client needs in order to ask for the right thing: which zoom
+    /// switches the centerline overlay to full detail, and how much it may request. Serving them
+    /// rather than hard-coding them keeps a client build from disagreeing with its server.
+    /// </summary>
+    private static async Task<Results<Ok<MapConfigDto>, UnauthorizedHttpResult>> MapConfigAsync(
+        IUserContextAccessor userAccessor,
+        IOptions<MapOptions> mapOptions,
+        CancellationToken ct)
+    {
+        if (await userAccessor.GetAsync(ct) is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var options = mapOptions.Value;
+        return TypedResults.Ok(new MapConfigDto(
+            options.CenterlineDetailZoom,
+            options.CenterlineMaxPaths,
+            options.CenterlineMaxPathsLimit,
+            options.CenterlineGateZoom,
+            ClusterMaxZoom));
     }
 
     /// <summary>
@@ -217,10 +264,25 @@ public static class MapEndpoints
             ? []
             : [.. await visibleIds.Where(id => candidates.Contains(id)).ToListAsync(ct)];
 
-    private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> CaveCenterlinesAsync(
+    /// <summary>
+    /// Centerlines for the viewport. Which representation a cave gets depends on the zoom: the
+    /// stored display skeleton at overview zooms, bbox-clipped full detail once the viewport is
+    /// small enough for it to be affordable and small enough for the splays to be worth seeing.
+    /// A per-request path budget and a low-zoom size gate cap the cost; whatever they exclude is
+    /// reported as a count so the client can offer to zoom in.
+    /// <para>
+    /// Centerlines inherit their cave's visibility. Lines of location-protected caves are
+    /// omitted entirely and never counted — a centerline IS the cave's exact location.
+    /// </para>
+    /// </summary>
+    private static async Task<Results<Ok<CenterlineFeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> CaveCenterlinesAsync(
         string bbox,
+        int? zoom,
+        int? detailZoom,
+        int? maxPaths,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -234,30 +296,65 @@ public static class MapEndpoints
             return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
         }
 
-        // Centerlines inherit the cave's visibility; the join also applies the caves'
-        // soft-delete filter. Lines of location-protected caves are omitted entirely —
-        // a centerline IS the cave's exact location.
-        var polygon = box.ToPolygon();
-        var visibleCaves = db.Caves.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Cave);
-        var rows = await db.CaveCenterlines.AsNoTracking()
-            .Where(cl => cl.Geom.Intersects(polygon))
-            .Join(visibleCaves, cl => cl.CaveId, c => c.Id, (cl, c) => cl)
-            .Take(MaxPoints)
-            .ToListAsync(ct);
+        var options = mapOptions.Value;
+        var effectiveZoom = Math.Clamp(zoom ?? options.CenterlineDetailZoom, 0, 24);
+        // Per-user overrides: a caver on a fast machine can pull detail in earlier and raise the
+        // budget, someone on a phone can push both the other way. Bounded so no request can ask
+        // for more work than the installation allows.
+        var effectiveDetailZoom = Math.Clamp(detailZoom ?? options.CenterlineDetailZoom, 0, 24);
+        var effectiveMaxPaths = Math.Clamp(
+            maxPaths ?? options.CenterlineMaxPaths, 0, options.CenterlineMaxPathsLimit);
 
-        var redacted = await CaveLinkRedaction.RedactedCaveIdsAsync(db, user, rows.Select(r => r.CaveId), ct);
-        var features = rows
-            .Where(r => !redacted.Contains(r.CaveId))
-            .Select(r => GeoFeature.Of(r.Geom, new Dictionary<string, object?>
+        // The protection rule is evaluated in Domain, over the caves whose centerline bounding
+        // box meets the viewport — an index-only lookup, so nothing large is read to decide it.
+        var caveIdsInView = await CenterlineMapSql.CaveIdsInViewAsync(db, user, box, ct);
+        var protectedCaveIds = await CaveLinkRedaction.RedactedCaveIdsAsync(db, user, caveIdsInView, ct);
+
+        var rows = await CenterlineMapSql.QueryAsync(
+            db,
+            user,
+            box,
+            detail: effectiveZoom >= effectiveDetailZoom,
+            maxPaths: effectiveMaxPaths,
+            gateActive: effectiveZoom < options.CenterlineGateZoom,
+            gatePaths: options.CenterlineGatePaths,
+            simplifyToleranceDegrees: options.SimplifyToleranceDegrees(effectiveZoom),
+            withheldCaveIds: protectedCaveIds,
+            ct);
+
+        var features = new List<GeoFeature>();
+        foreach (var row in rows)
+        {
+            if (!row.Included || row.GeoJson is null)
             {
-                ["id"] = r.Id,
-                ["caveId"] = r.CaveId,
-                ["name"] = r.Name,
-                ["lengthM"] = r.LengthM,
-            }))
-            .ToList();
+                continue;
+            }
 
-        return TypedResults.Ok(FeatureCollection.Of(features));
+            // PostGIS already produced the GeoJSON; only the coordinate array is lifted out of
+            // it, so no coordinate is ever materialised as an object on this path.
+            using var document = JsonDocument.Parse(row.GeoJson);
+            var geometry = new GeoJsonGeometry(
+                document.RootElement.GetProperty("type").GetString() ?? "MultiLineString",
+                document.RootElement.GetProperty("coordinates").Clone());
+            features.Add(new GeoFeature("Feature", geometry, new Dictionary<string, object?>
+            {
+                ["id"] = row.Id,
+                ["caveId"] = row.CaveId,
+                ["name"] = row.Name,
+                ["lengthM"] = row.LengthM,
+                ["paths"] = row.Paths,
+                ["detail"] = row.Detail,
+            }));
+        }
+
+        // What was actually served, not what was asked for: a cave whose full detail would not
+        // fit the budget is sent as its skeleton instead, and saying "full detail" then would be
+        // a lie the user can see through.
+        return TypedResults.Ok(new CenterlineFeatureCollection(
+            "FeatureCollection",
+            features,
+            rows.Count(r => r.Withheld),
+            rows.Any(r => r.Included && r.Detail)));
     }
 
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> TripLogsAsync(

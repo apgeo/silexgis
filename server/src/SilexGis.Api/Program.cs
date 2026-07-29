@@ -84,6 +84,8 @@ try
         .BindConfiguration(AboutOptions.SectionName);
     builder.Services.AddOptions<AccessOptions>()
         .BindConfiguration(AccessOptions.SectionName);
+    builder.Services.AddOptions<MapOptions>()
+        .BindConfiguration(MapOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     // Credential-guessing protection: per-IP fixed window on the auth surface.
     // Limit is configurable for installations behind shared NATs.
@@ -176,6 +178,13 @@ try
         await TaxonomySeeder.SeedAsync(db);
         await MapLayerSeeder.SeedAsync(db);
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
+
+        // Centerlines stored before the map overlay used display skeletons have none yet.
+        var skeletons = await CenterlineSkeletonBackfill.RunAsync(db);
+        if (skeletons > 0)
+        {
+            Log.Information("Built display skeletons for {Count} centerline(s)", skeletons);
+        }
     }
 
     // `dotnet run -- seed-demo`: load the demo dataset and exit.

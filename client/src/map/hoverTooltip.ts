@@ -4,6 +4,7 @@ import type MapBrowserEvent from 'ol/MapBrowserEvent';
 import Overlay from 'ol/Overlay';
 import { ENTRANCE_LAYER_ID } from './entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID, getFeatureTypeName } from './featureLayer.ts';
+import { isHitTestable } from './hitTesting.ts';
 
 /**
  * Name/type tooltip near the cursor for entrances and surface features,
@@ -46,7 +47,7 @@ export function attachHoverTooltip(map: Map): () => void {
         }
         return false;
       },
-      { hitTolerance: 6 },
+      { hitTolerance: 6, layerFilter: isHitTestable },
     );
 
     map.getTargetElement().style.cursor = clickable ? 'pointer' : '';

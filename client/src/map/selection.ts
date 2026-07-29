@@ -6,6 +6,7 @@ import { toLonLat } from 'ol/proj';
 import type { WorkspaceSelection } from '../stores/workspaceStore.ts';
 import { ENTRANCE_LAYER_ID } from './entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from './featureLayer.ts';
+import { isHitTestable } from './hitTesting.ts';
 import { coarsePointer } from './pointer.ts';
 
 /**
@@ -55,7 +56,7 @@ export function attachSelection(
       },
       // A finger lands nowhere near as precisely as a cursor, and an entrance symbol is
       // only a few pixels of ink; without the wider tolerance most taps hit nothing.
-      { hitTolerance: coarsePointer() ? 12 : 6 },
+      { hitTolerance: coarsePointer() ? 12 : 6, layerFilter: isHitTestable },
     );
 
     if (!handled) {

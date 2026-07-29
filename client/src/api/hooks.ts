@@ -19,6 +19,7 @@ export const queryKeys = {
   me: ['me'] as const,
   dashboardSummary: ['dashboard', 'summary'] as const,
   mapLayers: ['map-layers'] as const,
+  mapConfig: ['map-config'] as const,
   taxonomy: (kind: string) => ['taxonomy', kind] as const,
   caves: (params: CaveListParams) => ['caves', 'list', params] as const,
   cave: (id: string) => ['caves', 'detail', id] as const,
@@ -251,9 +252,34 @@ export function useDeleteCenterline() {
   });
 }
 
-/** Imperative fetch used by the OpenLayers centerline loader (not a hook). */
-export async function fetchCenterlineFeatures(bbox: string): Promise<EntranceFeatureCollection> {
-  return unwrap(api.GET('/api/v1/map/cave-centerlines', { params: { query: { bbox } } }));
+export type CenterlineFeatureCollection =
+  components['schemas']['CenterlineFeatureCollection'];
+
+/** Installation-wide map rendering limits, published by the server. */
+export type MapConfig = components['schemas']['MapConfigDto'];
+
+export function useMapConfig() {
+  return useQuery({
+    queryKey: queryKeys.mapConfig,
+    queryFn: () => unwrap(api.GET('/api/v1/map/config')),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * Imperative fetch used by the OpenLayers centerline loader (not a hook). The zoom decides
+ * whether the server sends the splay-free skeleton or clipped full detail; `detailZoom` and
+ * `maxPaths` carry the viewer's own overrides, which the server bounds.
+ */
+export async function fetchCenterlineFeatures(
+  bbox: string,
+  zoom: number,
+  detailZoom?: number,
+  maxPaths?: number,
+): Promise<CenterlineFeatureCollection> {
+  return unwrap(api.GET('/api/v1/map/cave-centerlines', {
+    params: { query: { bbox, zoom, detailZoom, maxPaths } },
+  }));
 }
 
 /** Imperative fetch used by the OpenLayers photo overlay loader (not a hook). */

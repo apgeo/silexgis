@@ -67,6 +67,13 @@ public static class PermissionSql
         return (sql, parameters);
     }
 
+    /// <summary>
+    /// A native <c>uuid[]</c> parameter for <c>= ANY(...)</c> tests. Dapper's own list handling
+    /// expands an array into one placeholder per element, which was measured 50x slower on large
+    /// result sets — pass id sets through this instead.
+    /// </summary>
+    public static SqlMapper.ICustomQueryParameter UuidArray(Guid[] values) => new UuidArrayParameter(values);
+
     private sealed class UuidArrayParameter(Guid[] values) : SqlMapper.ICustomQueryParameter
     {
         public void AddParameter(IDbCommand command, string name)

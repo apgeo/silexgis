@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import LayerTree from '@terrestris/react-geo/dist/LayerTree/LayerTree';
 import LayerTransparencySlider from '@terrestris/react-geo/dist/Slider/LayerTransparencySlider/LayerTransparencySlider';
-import { Checkbox, Divider, Radio, Select, Slider, Typography } from 'antd';
+import { Alert, Checkbox, Divider, InputNumber, Radio, Select, Slider, Typography } from 'antd';
 import type OlLayerBase from 'ol/layer/Base';
 import { useTranslation } from 'react-i18next';
-import { useTags, type GeofileInfo, type MapLayerInfo, type RasterMapInfo } from '../../api/hooks.ts';
-import { CENTERLINE_LAYER_ID } from '../../map/centerlineLayer.ts';
+import { useTags, type GeofileInfo, type MapConfig, type MapLayerInfo, type RasterMapInfo } from '../../api/hooks.ts';
+import {
+  CENTERLINE_LAYER_ID,
+  getCenterlineLoadState,
+  subscribeCenterlineLoadState,
+  type CenterlineLoadState,
+} from '../../map/centerlineLayer.ts';
 import { ENTRANCE_LAYER_ID } from '../../map/entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from '../../map/featureLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID } from '../../map/heatmapLayer.ts';
@@ -36,6 +41,14 @@ interface LayerPanelProps {
   treeNonce: number;
   tagFilter: string | null;
   onTagFilterChange: (slug: string | null) => void;
+  /** True while the centerline overlay is on — its detail controls are hidden otherwise. */
+  centerlinesVisible: boolean;
+  /** Installation limits; undefined until /map/config has loaded. */
+  mapConfig?: MapConfig;
+  /** This viewer's overrides; undefined fields follow the installation. */
+  centerlineDetailZoom?: number;
+  centerlineMaxPaths?: number;
+  onCenterlineLimitsChange: (limits: { detailZoom?: number; maxPaths?: number }) => void;
   footer?: ReactNode;
 }
 
@@ -55,10 +68,19 @@ export default function LayerPanel({
   treeNonce,
   tagFilter,
   onTagFilterChange,
+  centerlinesVisible,
+  mapConfig,
+  centerlineDetailZoom,
+  centerlineMaxPaths,
+  onCenterlineLimitsChange,
   footer,
 }: LayerPanelProps) {
   const { t } = useTranslation();
   const { data: tags } = useTags('');
+
+  // The overlay reports what its limits held back; the panel is where that gets explained.
+  const [centerlineLoad, setCenterlineLoad] = useState<CenterlineLoadState>(getCenterlineLoadState);
+  useEffect(() => subscribeCenterlineLoadState(setCenterlineLoad), []);
 
   const overlayName = (layer: OlLayerBase): string => {
     const id = layer.get('id') as string | undefined;
@@ -152,6 +174,59 @@ export default function LayerPanel({
         nodeTitleRenderer={nodeTitle}
         onLayerVisibilityChanged={onOverlayVisibilityChanged}
       />
+      {centerlinesVisible && (
+        <div style={{ marginTop: 8 }}>
+          {centerlineLoad.withheldCount > 0 && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 8 }}
+              message={t('map.centerlinesWithheld', { count: centerlineLoad.withheldCount })}
+            />
+          )}
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {centerlineLoad.detail ? t('map.centerlineDetailOn') : t('map.centerlineSkeletonOn')}
+          </Typography.Text>
+          {/* Personal limits: the installation's values are the placeholders, so leaving a field
+              empty means "follow the server". */}
+          <div className="centerline-limits">
+            <label>
+              <span>{t('map.centerlineDetailZoom')}</span>
+              <InputNumber
+                size="small"
+                min={0}
+                max={24}
+                value={centerlineDetailZoom}
+                placeholder={String(mapConfig?.centerlineDetailZoom ?? '')}
+                onChange={(value) =>
+                  onCenterlineLimitsChange({
+                    detailZoom: value ?? undefined,
+                    maxPaths: centerlineMaxPaths,
+                  })}
+              />
+            </label>
+            <label>
+              <span>{t('map.centerlineMaxPaths')}</span>
+              <InputNumber
+                size="small"
+                min={0}
+                max={mapConfig?.centerlineMaxPathsLimit}
+                step={5000}
+                value={centerlineMaxPaths}
+                placeholder={String(mapConfig?.centerlineMaxPaths ?? '')}
+                onChange={(value) =>
+                  onCenterlineLimitsChange({
+                    detailZoom: centerlineDetailZoom,
+                    maxPaths: value ?? undefined,
+                  })}
+              />
+            </label>
+          </div>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {t('map.centerlineLimitsHint')}
+          </Typography.Text>
+        </div>
+      )}
       {geofiles.length > 0 && (
         <>
           <Divider style={{ margin: '12px 0' }} />

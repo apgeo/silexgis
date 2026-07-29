@@ -436,9 +436,16 @@ test('cave centerline: upload, computed length and map overlay toggle', async ({
   await expect(card.getByText('e2e-track')).toBeVisible({ timeout: 15_000 });
   await expect(card.getByText(/[\d,.]+ m/)).toBeVisible();
 
-  // The workspace gains the centerline overlay toggle, on by default.
+  // The workspace offers the centerline overlay but leaves it off: it is the heaviest overlay
+  // there is, so it is opt-in. Switching it on loads it and says which representation arrived.
   await page.goto('/');
-  await expect(overlayTreeNode(page, 'Cave centerlines').locator('.ant-tree-checkbox-checked')).toBeVisible();
+  const centerlineNode = overlayTreeNode(page, 'Cave centerlines');
+  await expect(centerlineNode).toBeVisible({ timeout: 15_000 });
+  await expect(centerlineNode.locator('.ant-tree-checkbox-checked')).toHaveCount(0);
+
+  await centerlineNode.locator('.ant-tree-checkbox').click();
+  await expect(centerlineNode.locator('.ant-tree-checkbox-checked')).toBeVisible();
+  await expect(page.getByText(/Showing (passage outlines|full survey detail)/)).toBeVisible({ timeout: 15_000 });
 
   // Clean up: delete the centerline, then the cave.
   await page.goto('/caves');

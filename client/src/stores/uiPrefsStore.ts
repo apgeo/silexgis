@@ -23,6 +23,14 @@ interface UiPrefsState {
   /** Landing page for a bare app open; the map is the default. */
   landingPage: LandingPage;
   setLandingPage: (page: LandingPage) => void;
+  /**
+   * Personal centerline-overlay limits, overriding the installation's. A fast workstation can
+   * pull full detail in earlier (lower zoom) and raise the path budget; a phone can push both
+   * the other way. Undefined means "follow the server". The server bounds whatever is asked for.
+   */
+  centerlineDetailZoom?: number;
+  centerlineMaxPaths?: number;
+  setCenterlineLimits: (limits: { detailZoom?: number; maxPaths?: number }) => void;
 }
 
 /**
@@ -48,6 +56,10 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       setMapChromeHidden: (hidden) => set({ mapChromeHidden: hidden }),
       landingPage: 'map',
       setLandingPage: (page) => set({ landingPage: page }),
+      centerlineDetailZoom: undefined,
+      centerlineMaxPaths: undefined,
+      setCenterlineLimits: ({ detailZoom, maxPaths }) =>
+        set({ centerlineDetailZoom: detailZoom, centerlineMaxPaths: maxPaths }),
     }),
     { name: 'silexgis.uiPrefs', version: 1 },
   ),

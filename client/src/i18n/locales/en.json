@@ -104,7 +104,13 @@
     "coordsCopied": "Coordinates copied.",
     "heatmap": "Entrance heatmap",
     "baseOpacity": "Opacity of {{name}}",
-    "photos": "Geotagged photos"
+    "photos": "Geotagged photos",
+    "centerlinesWithheld": "{{count}} more centerline(s) not shown at this zoom — zoom in to load them.",
+    "centerlineDetailOn": "Showing full survey detail, including splays.",
+    "centerlineSkeletonOn": "Showing passage outlines; wall shots appear when you zoom in.",
+    "centerlineDetailZoom": "Detail from zoom",
+    "centerlineMaxPaths": "Line budget",
+    "centerlineLimitsHint": "Leave empty to follow this installation's defaults. Higher detail costs more to draw."
   },
   "dialog": {
     "dockToSide": "Dock to the side of the map",

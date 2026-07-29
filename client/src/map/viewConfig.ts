@@ -13,7 +13,7 @@ export interface ViewConfig {
   baseLayerId?: number;
   entrancesVisible: boolean;
   surfaceFeaturesVisible: boolean;
-  /** Added after v1 shipped; older saved views omit it (treated as true). */
+  /** Added after v1 shipped; older saved views omit it (treated as off — an opt-in overlay). */
   centerlinesVisible?: boolean;
   /** Added after v1 shipped; older saved views omit it (treated as off). */
   heatmapVisible?: boolean;
@@ -87,7 +87,7 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     baseLayerId: parsed.baseLayerId,
     entrancesVisible: parsed.entrancesVisible ?? true,
     surfaceFeaturesVisible: parsed.surfaceFeaturesVisible ?? true,
-    centerlinesVisible: parsed.centerlinesVisible ?? true,
+    centerlinesVisible: parsed.centerlinesVisible ?? false,
     heatmapVisible: parsed.heatmapVisible ?? false,
     photosVisible: parsed.photosVisible ?? false,
     geofileIds: parsed.geofileIds ?? [],
