@@ -98,6 +98,10 @@ export function attachContextMenu(
       clickSuppressKey = listenOnce(map, 'pointerup', (mapEvent) => {
         clickSuppressKey = null;
         mapEvent.preventDefault();
+        // Preventing the default only stops the emulated click; the lift still reaches
+        // the interactions themselves, and an armed Draw reads it as a vertex placed
+        // under the menu that has just opened. Returning false keeps it from them too.
+        return false;
       });
       open(pressed);
     }, LONG_PRESS_MS);

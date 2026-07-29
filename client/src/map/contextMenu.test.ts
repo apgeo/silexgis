@@ -114,6 +114,16 @@ describe('long press', () => {
     expect(next.defaultPrevented).toBeFalsy();
   });
 
+  it('keeps the lift away from the interactions, not just from the emulated click', () => {
+    // Preventing the default only stops OL emulating a click. The interactions still see
+    // the event unless a listener returns false — and an armed Draw takes a pointerup as
+    // a vertex, dropped right under the menu the same press just opened.
+    viewport.dispatchEvent(pointerEvent('pointerdown', 40, 60));
+    vi.advanceTimersByTime(600);
+
+    expect(map.dispatchEvent(new BaseEvent('pointerup'))).toBe(false);
+  });
+
   it('leaves an ordinary tap free to select', () => {
     viewport.dispatchEvent(pointerEvent('pointerdown', 40, 60));
     vi.advanceTimersByTime(100);
