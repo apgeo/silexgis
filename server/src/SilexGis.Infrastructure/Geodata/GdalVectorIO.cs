@@ -140,6 +140,11 @@ public sealed class GdalVectorIO : IVectorIO
                     continue; // skip rows whose geometry cannot be represented
                 }
 
+                // Line work is cleaned rather than rejected. A survey export routinely holds a
+                // few zero-length shots (a station written twice); NTS then reports the whole
+                // multi-geometry invalid, and dropping the feature threw away an entire cave's
+                // centerline over a handful of duplicate points.
+                geometry = DropDegenerateLines(geometry);
                 if (geometry.IsEmpty || !geometry.IsValid)
                 {
                     continue;
@@ -179,6 +184,35 @@ public sealed class GdalVectorIO : IVectorIO
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Removes zero-length components from line geometries and returns everything else
+    /// untouched. Polygons are left alone deliberately: for them invalidity usually means a
+    /// self-intersection, which dropping rings would silently paper over.
+    /// </summary>
+    private static Geometry DropDegenerateLines(Geometry geometry)
+    {
+        if (geometry is not MultiLineString multi)
+        {
+            return geometry;
+        }
+
+        var kept = multi.Geometries.Cast<LineString>().Where(HasLength).ToArray();
+        return kept.Length == multi.NumGeometries
+            ? geometry
+            : new MultiLineString(kept) { SRID = geometry.SRID };
+    }
+
+    private static bool HasLength(LineString line)
+    {
+        if (line.IsEmpty || line.Coordinates.Length < 2)
+        {
+            return false;
+        }
+
+        var first = line.Coordinates[0];
+        return line.Coordinates.Any(c => c.X != first.X || c.Y != first.Y);
     }
 
     private static CoordinateTransformation? BuildTransformTo4326(SpatialReference? source)
