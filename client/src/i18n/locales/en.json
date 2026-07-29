@@ -310,6 +310,7 @@
     "measureArea": "Measure area",
     "discard": "Discard edits",
     "finishDrawing": "Finish",
+    "finishDrawingHint": "Place more points before finishing this shape.",
     "removeLastPoint": "Point",
     "deleteVertex": "Delete vertex",
     "deleteVertexHint": "Tap a vertex on the map first, then Delete vertex.",

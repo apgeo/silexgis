@@ -37,6 +37,7 @@ vi.mock('./CaveAddModal.tsx', () => ({ default: () => null }));
 vi.mock('../features/FeatureEditModal.tsx', () => ({ default: () => null }));
 
 let removedVertex = true;
+let finishedDrawing = true;
 
 function fakeController(over: Partial<EditState> = {}): MapEditController {
   const state: EditState = {
@@ -52,7 +53,7 @@ function fakeController(over: Partial<EditState> = {}): MapEditController {
     undo: vi.fn(),
     redo: vi.fn(),
     reset: vi.fn(),
-    finishDrawing: vi.fn(),
+    finishDrawing: vi.fn().mockReturnValue(finishedDrawing),
     abortDrawing: vi.fn(),
     removeLastPoint: vi.fn(),
     removeVertex: vi.fn().mockReturnValue(removedVertex),
@@ -78,6 +79,7 @@ beforeEach(() => {
   mobile = false;
   touch = false;
   removedVertex = true;
+  finishedDrawing = true;
 });
 
 afterEach(() => {
@@ -179,5 +181,15 @@ describe('EditToolbar sketch actions', () => {
     touch = true;
     renderToolbar({ mode: 'none' });
     expect(screen.queryByTestId('map-sketch-bar')).not.toBeInTheDocument();
+  });
+
+  it('explains a refused finish rather than leaving the button looking broken', async () => {
+    touch = true;
+    finishedDrawing = false; // too few vertices down for the shape to be valid yet
+    renderToolbar({ mode: 'draw', drawShape: 'Polygon', sketchActive: true });
+
+    fireEvent.click(screen.getByTestId('sketch-finish'));
+
+    await waitFor(() => expect(screen.getByText(/Place more points/)).toBeInTheDocument());
   });
 });

@@ -178,9 +178,18 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
 
   const deleteVertex = () => {
     // Modify deletes the vertex the pointer last touched; with nothing touched yet the
-    // button would look broken, so say what the gesture is instead.
+    // button would look broken, so say what the gesture is instead. Keyed so that
+    // tapping it repeatedly replaces the hint rather than stacking copies of it.
     if (!controller.removeVertex()) {
-      message.info(t('mapEdit.deleteVertexHint'));
+      message.info({ content: t('mapEdit.deleteVertexHint'), key: 'sketch-hint' });
+    }
+  };
+
+  const finishDrawing = () => {
+    // Refused while the shape is too small to be valid — which is the one case where
+    // the button genuinely cannot do anything, so it has to say why.
+    if (!controller.finishDrawing()) {
+      message.info({ content: t('mapEdit.finishDrawingHint'), key: 'sketch-hint' });
     }
   };
 
@@ -199,7 +208,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           <Button icon={<MinusOutlined />} data-testid="sketch-remove-point" onClick={() => controller.removeLastPoint()}>
             {t('mapEdit.removeLastPoint')}
           </Button>
-          <Button type="primary" icon={<CheckOutlined />} data-testid="sketch-finish" onClick={() => controller.finishDrawing()}>
+          <Button type="primary" icon={<CheckOutlined />} data-testid="sketch-finish" onClick={finishDrawing}>
             {t('mapEdit.finishDrawing')}
           </Button>
           <Button icon={<CloseOutlined />} data-testid="sketch-cancel" onClick={() => controller.abortDrawing()}>

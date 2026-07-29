@@ -310,6 +310,7 @@
     "measureArea": "Măsoară aria",
     "discard": "Renunță la editări",
     "finishDrawing": "Încheie",
+    "finishDrawingHint": "Mai adaugă puncte înainte de a încheia forma.",
     "removeLastPoint": "Punct",
     "deleteVertex": "Șterge vârful",
     "deleteVertexHint": "Atinge întâi un vârf pe hartă, apoi Șterge vârful.",
