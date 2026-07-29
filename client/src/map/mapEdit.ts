@@ -3,7 +3,9 @@ import type Map from 'ol/Map';
 import Feature from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import type Geometry from 'ol/geom/Geometry';
+import LineString from 'ol/geom/LineString';
 import Point from 'ol/geom/Point';
+import Polygon from 'ol/geom/Polygon';
 import { Draw, Modify, Snap, Translate } from 'ol/interaction';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import type VectorSource from 'ol/source/Vector';
@@ -40,6 +42,11 @@ export interface PendingEdits {
 
 type Command = { undo: () => void; redo: () => void };
 
+// Fewest vertices a shape can be finished with — the same thresholds OL enforces on the
+// finishing *gesture*, restated here because the programmatic finish enforces nothing.
+const MIN_LINE_VERTICES = 2;
+const MIN_RING_VERTICES = 3;
+
 const format = new GeoJSON();
 
 export class MapEditController {
@@ -59,6 +66,9 @@ export class MapEditController {
 
   /** Invoked when a cave/entrance placement click lands (lon/lat, EPSG:4326). */
   onPointPlaced: ((mode: PlacementMode, lonLat: [number, number]) => void) | undefined;
+
+  /** The sketch our own Draw is building, while it is being built. */
+  private sketchFeature: Feature | undefined;
 
   private createdFeatures: { feature: Feature; geometryType: DrawShape }[] = [];
   private modifiedGeometries = new globalThis.Map<string, object>();
@@ -96,6 +106,7 @@ export class MapEditController {
     const shape = mode === 'draw' ? (drawShape ?? this.state.drawShape ?? 'Point') : undefined;
     const typeId = mode === 'draw' ? (drawTypeId ?? this.state.drawTypeId) : undefined;
     // Detaching killed any sketch that was in progress along with its interaction.
+    this.sketchFeature = undefined;
     this.state = { ...this.state, mode, drawShape: shape, drawTypeId: typeId, sketchActive: false };
 
     switch (mode) {
@@ -156,8 +167,17 @@ export class MapEditController {
    * removeLastPoint are all no-ops on a Draw that has no sketch, so the ones not currently
    * drawing ignore the call.
    */
-  finishDrawing(): void {
-    this.forEachActiveDraw((draw) => draw.finishDrawing());
+  finishDrawing(): boolean {
+    if (!this.sketchCanFinish()) {
+      return false;
+    }
+    let finished = false;
+    this.forEachActiveDraw((draw) => {
+      if (draw.finishDrawing()) {
+        finished = true;
+      }
+    });
+    return finished;
   }
 
   /** Discards the sketch in progress; the tool stays armed for another attempt. */
@@ -180,6 +200,31 @@ export class MapEditController {
   removeVertex(): boolean {
     const modify = this.interactions.find((i): i is Modify => i instanceof Modify);
     return modify?.removePoint() ?? false;
+  }
+
+  /**
+   * Whether finishing the sketch in progress would produce a usable shape.
+   *
+   * OL only lets the *gesture* finish once enough vertices are down; `finishDrawing()`
+   * applies no such rule and will happily end a one-tap sketch as a single-coordinate
+   * line or a zero-area ring — which then fails server-side validation on save, long
+   * after the tap that caused it. The sketch geometry carries the placed vertices plus
+   * the one trailing the pointer, and a ring additionally repeats its first point.
+   */
+  private sketchCanFinish(): boolean {
+    const geometry = this.sketchFeature?.getGeometry();
+    // Nothing of ours in progress: a sketch owned by another tool (measuring) may still
+    // have something to finish, and its own rules apply to it.
+    if (!geometry) {
+      return true;
+    }
+    if (geometry instanceof LineString) {
+      return geometry.getCoordinates().length - 1 >= MIN_LINE_VERTICES;
+    }
+    if (geometry instanceof Polygon) {
+      return geometry.getCoordinates()[0].length - 2 >= MIN_RING_VERTICES;
+    }
+    return true;
   }
 
   private forEachActiveDraw(action: (draw: Draw) => void): void {
@@ -251,9 +296,16 @@ export class MapEditController {
     // placed also runs the selection handler, which churns the details panel mid-draw on
     // desktop and, on touch, makes the finishing double-tap both finish and zoom.
     const draw = new Draw({ source: this.source, type: shape, stopClick: true });
-    draw.on('drawstart', () => this.setSketchActive(true));
-    draw.on('drawabort', () => this.setSketchActive(false));
+    draw.on('drawstart', (event) => {
+      this.sketchFeature = event.feature;
+      this.setSketchActive(true);
+    });
+    draw.on('drawabort', () => {
+      this.sketchFeature = undefined;
+      this.setSketchActive(false);
+    });
     draw.on('drawend', (event) => {
+      this.sketchFeature = undefined;
       this.setSketchActive(false);
       const feature = event.feature;
       feature.set('pendingNew', true);

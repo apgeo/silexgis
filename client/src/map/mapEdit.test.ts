@@ -139,6 +139,35 @@ describe('sketch intents', () => {
     expect(finished).toHaveBeenCalled();
   });
 
+  it('refuses to finish a line that has only one vertex down', () => {
+    // OL guards the finishing *gesture* by vertex count but not finishDrawing(), which
+    // would end this as a one-coordinate LineString: accepted here, rejected by the
+    // server on save, with nothing to point the user at by then.
+    const map = realMap();
+    const controller = new MapEditController(map);
+    controller.setMode('draw', 'LineString', 1);
+    activeDraw(map).appendCoordinates([[0, 0]]);
+
+    expect(controller.finishDrawing()).toBe(false);
+    expect(controller.getPendingEdits().created).toHaveLength(0);
+
+    // The sketch survives the refusal, so the next tap continues the same shape.
+    activeDraw(map).appendCoordinates([[1000, 1000]]);
+    expect(controller.finishDrawing()).toBe(true);
+    expect(controller.getPendingEdits().created).toHaveLength(1);
+  });
+
+  it('refuses to finish a ring that would enclose no area', () => {
+    const map = realMap();
+    const controller = new MapEditController(map);
+    controller.setMode('draw', 'Polygon', 1);
+    activeDraw(map).appendCoordinates([[0, 0], [1000, 1000]]);
+
+    // Two vertices close into a flat, zero-area ring — a valid triangle needs three.
+    expect(controller.finishDrawing()).toBe(false);
+    expect(controller.getPendingEdits().created).toHaveLength(0);
+  });
+
   it('leaves an inactive Draw alone', () => {
     const map = realMap();
     const controller = new MapEditController(map);
