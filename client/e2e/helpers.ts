@@ -22,6 +22,16 @@ export function overlayTreeNode(page: Page, name: string) {
   return page.locator('.layer-composer .ant-tree-treenode').filter({ hasText: name });
 }
 
+/** Removes a surface feature through the registry table — cleanup for flows that save one. */
+export async function deleteFeature(page: Page, featureName: string) {
+  await page.goto('/features');
+  const row = page.getByRole('row', { name: new RegExp(featureName) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.getByRole('button', { name: 'delete' }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
+}
+
 /** Taps the map at a viewport-relative point, the way a finger places a vertex. */
 export async function tapMap(page: Page, x: number, y: number) {
   const box = (await page.locator('.map-canvas').boundingBox())!;

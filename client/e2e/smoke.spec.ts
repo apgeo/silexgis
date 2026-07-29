@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, test, type Page } from '@playwright/test';
-import { login, overlayTreeNode } from './helpers.ts';
+import { deleteFeature, login, overlayTreeNode } from './helpers.ts';
 
 test('login, map workspace and cave registry work end to end', async ({ page }) => {
   await login(page);
@@ -267,12 +267,7 @@ test('map context menu: typed add-here, cave placement and coordinate copy', asy
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
 
   // Cleanup: remove the created feature via the registry.
-  await page.goto('/features');
-  const row = page.getByRole('row', { name: new RegExp(featureName) });
-  await expect(row).toBeVisible({ timeout: 15_000 });
-  await row.getByRole('button', { name: 'delete' }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
-  await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
+  await deleteFeature(page, featureName);
 });
 
 test('dialog placement flip: cave-add continues as a side panel with values intact', async ({ page }) => {

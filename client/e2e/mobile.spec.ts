@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, test, type Page } from '@playwright/test';
-import { login, longPressMap, overlayTreeNode, tapMap } from './helpers.ts';
+import { deleteFeature, login, longPressMap, overlayTreeNode, tapMap } from './helpers.ts';
 
 // Runs in the `mobile-android` project only (Pixel 7, 412x915, touch). These cover the
 // phone layout — the docks-as-drawers swap and the chrome that has to step aside at this
@@ -11,16 +11,6 @@ import { login, longPressMap, overlayTreeNode, tapMap } from './helpers.ts';
 async function armType(page: Page, typeName: string) {
   await page.locator('.map-edit-overlay').getByTestId('feature-palette-trigger').click();
   await page.getByRole('button', { name: typeName }).click();
-}
-
-/** Deletes a feature from the registry table — cleanup for the flows that save one. */
-async function deleteFeature(page: Page, featureName: string) {
-  await page.goto('/features');
-  const row = page.getByRole('row', { name: new RegExp(featureName) });
-  await expect(row).toBeVisible({ timeout: 15_000 });
-  await row.getByRole('button', { name: 'delete' }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
-  await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
 }
 
 test('docks become drawers, and the details drawer opens when something is picked', async ({ page }) => {
