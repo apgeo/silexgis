@@ -71,7 +71,8 @@ function MemberDrawer({ team, onClose }: { team: TeamInfo; onClose: () => void }
           onChange={setSelectedUser}
           options={candidates.map((user) => ({
             value: user.id,
-            label: `${user.displayName ?? user.email}${user.email ? ` (${user.email})` : ''}`,
+            // The address is only present when the person shares it; the label always is.
+            label: user.email ? `${user.label} (${user.email})` : user.label,
           }))}
           notFoundContent={null}
         />

@@ -79,16 +79,18 @@ public static class HistoryEndpoints
         var total = await query.CountAsync(ct);
         var rows = await query.OrderByDescending(a => a.Id)
             .Skip((p - 1) * size).Take(size)
-            .GroupJoin(db.Users.AsNoTracking(), a => a.UserId, u => u.Id, (a, users) => new { a, users })
-            .SelectMany(x => x.users.DefaultIfEmpty(), (x, u) => new
-            {
-                x.a,
-                UserName = u == null ? null : (u.DisplayName ?? u.UserName),
-            })
             .ToListAsync(ct);
 
+        // Names are resolved after the page materialises rather than joined in: the label a user
+        // may be shown under is a rule, not a column, and it lives in one place.
+        var labels = await ProfileDirectory.ResolveLabelsAsync(
+            db, user, rows.Where(r => r.UserId is not null).Select(r => r.UserId!.Value), ct);
+
         var parsed = rows
-            .Select(r => (Row: r.a, r.UserName, Changes: ParseChanges(r.a.Changes)))
+            .Select(r => (
+                Row: r,
+                UserName: r.UserId is { } actor ? labels.GetValueOrDefault(actor) : null,
+                Changes: ParseChanges(r.Changes)))
             .ToList();
 
         // Protection-of-history: resolve every cave the rows touch, then which are hidden from

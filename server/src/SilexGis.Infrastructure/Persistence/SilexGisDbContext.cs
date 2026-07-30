@@ -62,6 +62,12 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<CaveCenterline> CaveCenterlines => Set<CaveCenterline>();
 
+    public DbSet<UserAddress> UserAddresses => Set<UserAddress>();
+
+    public DbSet<UserNotificationPreference> UserNotificationPreferences => Set<UserNotificationPreference>();
+
+    public DbSet<AccountDataExport> AccountDataExports => Set<AccountDataExport>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -78,13 +84,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
         builder.Entity<IdentityUserToken<Guid>>().ToTable("user_tokens");
         builder.Entity<IdentityRoleClaim<Guid>>().ToTable("role_claims");
 
-        builder.Entity<SilexGisUser>(u =>
-        {
-            u.Property(x => x.DisplayName).HasMaxLength(100);
-            u.Property(x => x.Bio).HasMaxLength(2000);
-            u.Property(x => x.Locale).HasMaxLength(10);
-        });
-
+        // User columns and every other mapping live in Configurations/, applied after the
+        // renames above so their ToTable calls agree.
         builder.ApplyConfigurationsFromAssembly(typeof(SilexGisDbContext).Assembly);
     }
 }

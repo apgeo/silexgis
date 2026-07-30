@@ -20,8 +20,9 @@ export default defineConfig({
   projects: [
     {
       // The pre-existing run, unchanged: Playwright's default desktop chromium viewport.
+      // Each project pins its own file, so a new spec runs nowhere until it is named here.
       name: 'desktop',
-      testMatch: /smoke\.spec\.ts/,
+      testMatch: /(smoke|settings)\.spec\.ts/,
     },
     {
       // Pixel 7: 412x915 CSS px, touch enabled, coarse pointer, chromium.

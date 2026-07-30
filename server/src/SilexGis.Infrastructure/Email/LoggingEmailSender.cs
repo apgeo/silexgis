@@ -10,8 +10,11 @@ namespace SilexGis.Infrastructure.Email;
 /// Message bodies may contain secrets (reset tokens) — logged at Information deliberately,
 /// matching the "no SMTP" operating mode; configure SMTP for anything internet-facing.
 /// </summary>
-public sealed partial class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : IEmailSender
+public sealed partial class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : IEmailSender, IEmailDelivery
 {
+    /// <summary>Nothing leaves the machine in this mode, and the settings UI says so.</summary>
+    public bool IsConfigured => false;
+
     public Task SendAsync(string to, string subject, string body, CancellationToken ct = default)
     {
         LogEmail(logger, to, subject, body);

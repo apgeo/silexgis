@@ -336,8 +336,8 @@ public static class TripLogEndpoints
             .Where(x => x.UserId is not null).Select(x => x.UserId!.Value).Distinct().ToList();
         if (userIds.Count > 0)
         {
-            var found = await db.Users.CountAsync(u => userIds.Contains(u.Id), ct);
-            if (found != userIds.Count)
+            var found = await ProfileDirectory.ExistingIdsAsync(db, userIds, ct);
+            if (found.Count != userIds.Count)
             {
                 return ApiProblems.BadRequest("trip_log.participant_unknown", "A participant user does not exist.");
             }
@@ -356,18 +356,26 @@ public static class TripLogEndpoints
             .Where(x => tripIds.Contains(x.TripLogId))
             .ToListAsync(ct);
 
-        var participants = await db.TripLogParticipants.AsNoTracking()
+        var participantRows = await db.TripLogParticipants.AsNoTracking()
             .Where(x => tripIds.Contains(x.TripLogId))
-            .GroupJoin(db.Users.AsNoTracking(), p => p.UserId, u => u.Id, (p, users) => new { p, users })
-            .SelectMany(x => x.users.DefaultIfEmpty(), (x, u) => new
-            {
-                x.p.TripLogId,
-                x.p.Kind,
-                x.p.UserId,
-                x.p.NameText,
-                DisplayName = u == null ? null : (u.DisplayName ?? u.UserName),
-            })
+            .Select(x => new { x.TripLogId, x.Kind, x.UserId, x.NameText })
             .ToListAsync(ct);
+
+        // Resolved rather than joined: the label a participant may be shown under is a rule with
+        // one home, and it is never their address. A participant recorded as free text keeps it.
+        var labels = await ProfileDirectory.ResolveLabelsAsync(
+            db, user, participantRows.Where(x => x.UserId is not null).Select(x => x.UserId!.Value), ct);
+
+        var participants = participantRows
+            .Select(x => new
+            {
+                x.TripLogId,
+                x.Kind,
+                x.UserId,
+                x.NameText,
+                DisplayName = x.UserId is { } participant ? labels.GetValueOrDefault(participant) : null,
+            })
+            .ToList();
 
         // Exact trip geometry + protected-cave link would disclose the cave; hide those links.
         var redacted = await CaveLinkRedaction.RedactedCaveIdsAsync(

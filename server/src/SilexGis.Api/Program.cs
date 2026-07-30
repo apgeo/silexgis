@@ -144,6 +144,12 @@ try
     api.MapAuthEndpoints();
     api.MapExternalAuthEndpoints();
     api.MapMeEndpoints();
+    api.MapMeAddressEndpoints();
+    api.MapMeEmailEndpoints();
+    api.MapMeCredentialEndpoints();
+    api.MapMeNotificationEndpoints();
+    api.MapMePreferenceEndpoints();
+    api.MapMeDataExportEndpoints();
     api.MapMfaEndpoints();
     api.MapTaxonomyEndpoints();
     api.MapMapLayerEndpoints();

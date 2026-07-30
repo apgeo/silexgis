@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { lazy, Suspense, type ReactNode } from 'react';
 import { Spin } from 'antd';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './auth/auth.tsx';
 import RequireAuth from './auth/RequireAuth.tsx';
 import AppLayout from './components/AppLayout.tsx';
 import CallbackPage from './pages/CallbackPage.tsx';
 import LandingRoute from './pages/LandingRoute.tsx';
 import LoginPage from './pages/LoginPage.tsx';
+import LegacySecurityRedirect from './pages/settings/LegacySecurityRedirect.tsx';
 
 // Route-level code-splitting: the map workspace (OpenLayers) and the cave pages load on
 // demand, keeping the initial bundle to the shell + auth. Login/callback stay eager —
@@ -23,9 +24,15 @@ const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
 const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
 const TeamsPage = lazy(() => import('./pages/teams/TeamsPage.tsx'));
-const SecurityPage = lazy(() => import('./pages/account/SecurityPage.tsx'));
 const SharedViewPage = lazy(() => import('./pages/SharedViewPage.tsx'));
 const PanelPage = lazy(() => import('./pages/panel/PanelPage.tsx'));
+const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout.tsx'));
+const ProfileSettingsPage = lazy(() => import('./pages/settings/ProfileSettingsPage.tsx'));
+const AccountSettingsPage = lazy(() => import('./pages/settings/AccountSettingsPage.tsx'));
+const EmailSettingsPage = lazy(() => import('./pages/settings/EmailSettingsPage.tsx'));
+const NotificationSettingsPage = lazy(() => import('./pages/settings/NotificationSettingsPage.tsx'));
+const SecuritySettingsPage = lazy(() => import('./pages/settings/SecuritySettingsPage.tsx'));
+const AccessibilitySettingsPage = lazy(() => import('./pages/settings/AccessibilitySettingsPage.tsx'));
 
 function Loadable({ children }: { children: ReactNode }) {
   return (
@@ -62,7 +69,21 @@ const router = createBrowserRouter([
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
           { path: '/teams', element: <Loadable><TeamsPage /></Loadable> },
-          { path: '/account/security', element: <Loadable><SecurityPage /></Loadable> },
+          {
+            path: '/settings',
+            element: <Loadable><SettingsLayout /></Loadable>,
+            children: [
+              { index: true, element: <Navigate to="/settings/profile" replace /> },
+              { path: 'profile', element: <Loadable><ProfileSettingsPage /></Loadable> },
+              { path: 'account', element: <Loadable><AccountSettingsPage /></Loadable> },
+              { path: 'emails', element: <Loadable><EmailSettingsPage /></Loadable> },
+              { path: 'notifications', element: <Loadable><NotificationSettingsPage /></Loadable> },
+              { path: 'security', element: <Loadable><SecuritySettingsPage /></Loadable> },
+              { path: 'accessibility', element: <Loadable><AccessibilitySettingsPage /></Loadable> },
+            ],
+          },
+          // The security page used to live here; links out in the wild still point at it.
+          { path: '/account/security', element: <LegacySecurityRedirect /> },
         ],
       },
     ],

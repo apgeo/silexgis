@@ -87,7 +87,7 @@ public static class ObjectAclEndpoints
                 : ApiProblems.NotFound("acl.entity_not_found");
         }
 
-        var entries = await LoadEntriesAsync(db, parsedType, id, ct);
+        var entries = await LoadEntriesAsync(db, user, parsedType, id, ct);
         return TypedResults.Ok(entries);
     }
 
@@ -123,7 +123,7 @@ public static class ObjectAclEndpoints
         foreach (var entry in request.Entries)
         {
             var exists = entry.SubjectKind == AclSubjectKind.User
-                ? await db.Users.AnyAsync(u => u.Id == entry.SubjectId, ct)
+                ? (await ProfileDirectory.ExistingIdsAsync(db, [entry.SubjectId], ct)).Count > 0
                 : await db.Teams.AnyAsync(t => t.Id == entry.SubjectId, ct);
             if (!exists)
             {
@@ -149,7 +149,7 @@ public static class ObjectAclEndpoints
         }
 
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(await LoadEntriesAsync(db, parsedType, id, ct));
+        return TypedResults.Ok(await LoadEntriesAsync(db, user, parsedType, id, ct));
     }
 
     private static async Task<Results<Ok<ObjectPermission>, UnauthorizedHttpResult, ProblemHttpResult>> EffectiveAsync(
@@ -206,7 +206,7 @@ public static class ObjectAclEndpoints
     }
 
     private static async Task<List<AclEntryDto>> LoadEntriesAsync(
-        SilexGisDbContext db, AttachedEntityType entityType, Guid entityId, CancellationToken ct)
+        SilexGisDbContext db, UserContext user, AttachedEntityType entityType, Guid entityId, CancellationToken ct)
     {
         var rows = await db.ObjectAcls.AsNoTracking()
             .Where(a => a.EntityType == entityType && a.EntityId == entityId)
@@ -214,9 +214,9 @@ public static class ObjectAclEndpoints
 
         var userIds = rows.Where(x => x.SubjectKind == AclSubjectKind.User).Select(x => x.SubjectId).ToList();
         var teamIds = rows.Where(x => x.SubjectKind == AclSubjectKind.Team).Select(x => x.SubjectId).ToList();
-        var userNames = await db.Users.AsNoTracking()
-            .Where(u => userIds.Contains(u.Id))
-            .ToDictionaryAsync(u => u.Id, u => u.DisplayName ?? u.UserName, ct);
+        // Resolved rather than projected: the label a grantee may be shown under is a rule with
+        // one home, and it is never their address.
+        var userNames = await ProfileDirectory.ResolveLabelsAsync(db, user, userIds, ct);
         var teamNames = await db.Teams.AsNoTracking()
             .Where(t => teamIds.Contains(t.Id))
             .ToDictionaryAsync(t => t.Id, t => t.Name, ct);

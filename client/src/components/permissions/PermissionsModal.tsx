@@ -70,7 +70,7 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
     }
     const name = subjectKind === 'team'
       ? teams?.find((x) => x.id === subjectId)?.name ?? null
-      : users?.find((x) => x.id === subjectId)?.displayName ?? null;
+      : users?.find((x) => x.id === subjectId)?.label ?? null;
     setEntries([...entries, {
       subjectKind,
       subjectId,
@@ -164,7 +164,8 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
                 onChange={setSubjectId}
                 options={users?.map((user) => ({
                   value: user.id,
-                  label: `${user.displayName ?? user.email}${user.email ? ` (${user.email})` : ''}`,
+                  // The address is only present when the person shares it; the label always is.
+                  label: user.email ? `${user.label} (${user.email})` : user.label,
                 }))}
                 notFoundContent={null}
               />

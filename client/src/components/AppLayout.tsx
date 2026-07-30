@@ -7,13 +7,13 @@ import {
   GoldOutlined,
   HistoryOutlined,
   LogoutOutlined,
-  SafetyOutlined,
+  SettingOutlined,
   TeamOutlined,
   TableOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
-import { Dropdown, Flex, Layout, Menu, Select, Typography } from 'antd';
+import { Avatar, Dropdown, Flex, Layout, Menu, Select, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useMe } from '../api/hooks.ts';
@@ -28,6 +28,7 @@ export default function AppLayout() {
   const location = useLocation();
   const isMobile = useIsMobile();
   const [navCollapsed, setNavCollapsed] = useState(true);
+  const { token } = theme.useToken();
 
   // Narrowing to phone width closes the rail rather than letting a 200px sider eat a
   // 390px screen. antd's own `breakpoint` prop is deliberately not used here: it drives
@@ -42,13 +43,17 @@ export default function AppLayout() {
   const { data: me } = useMe();
   const isAdmin = me?.roles.includes('Admin') ?? false;
 
-  const sections = ['dashboard', 'caves', 'features', 'geodata', 'trip-logs', 'teams', 'admin/audit'] as const;
+  // "settings" is listed so an unmatched path does not fall through to highlighting the map.
+  // It matches no menu item, so nothing lights up — settings is not a sidebar destination.
+  const sections = [
+    'dashboard', 'caves', 'features', 'geodata', 'trip-logs', 'teams', 'admin/audit', 'settings',
+  ] as const;
   const selectedKey = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
 
   return (
     <Layout style={{ height: '100%' }}>
       <Layout.Header style={{ display: 'flex', alignItems: 'center', paddingInline: 16 }}>
-        <Typography.Title level={4} style={{ color: '#fff', margin: 0, flex: 1 }}>
+        <Typography.Title level={4} style={{ color: token.colorTextLightSolid, margin: 0, flex: 1 }}>
           {t('app.name')}
         </Typography.Title>
         <Flex gap={16} align="center">
@@ -66,10 +71,11 @@ export default function AppLayout() {
             menu={{
               items: [
                 {
-                  key: 'security',
-                  icon: <SafetyOutlined />,
-                  label: t('nav.security'),
-                  onClick: () => navigate('/account/security'),
+                  key: 'settings',
+                  icon: <SettingOutlined />,
+                  label: t('nav.settings'),
+                  // Straight to the first section, so the index redirect never shows.
+                  onClick: () => navigate('/settings/profile'),
                 },
                 {
                   key: 'signout',
@@ -80,8 +86,14 @@ export default function AppLayout() {
               ],
             }}
           >
-            <Typography.Text style={{ color: '#fff', cursor: 'pointer' }}>
-              <UserOutlined /> {user?.profile.preferred_username ?? user?.profile.email}
+            <Typography.Text style={{ color: token.colorTextLightSolid, cursor: 'pointer' }}>
+              <Avatar
+                size="small"
+                src={me?.avatarUrl ?? undefined}
+                icon={<UserOutlined />}
+                style={{ marginInlineEnd: 8 }}
+              />
+              {user?.profile.preferred_username ?? user?.profile.email}
             </Typography.Text>
           </Dropdown>
         </Flex>

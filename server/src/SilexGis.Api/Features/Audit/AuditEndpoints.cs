@@ -72,23 +72,22 @@ public static class AuditEndpoints
         var total = await query.CountAsync(ct);
         var rows = await query.OrderByDescending(x => x.Id)
             .Skip((p - 1) * size).Take(size)
-            .GroupJoin(db.Users.AsNoTracking(), a => a.UserId, u => u.Id, (a, users) => new { a, users })
-            .SelectMany(x => x.users.DefaultIfEmpty(), (x, u) => new
-            {
-                x.a,
-                UserName = u == null ? null : (u.DisplayName ?? u.UserName),
-            })
             .ToListAsync(ct);
 
+        // Names are resolved after the page materialises rather than joined in: the label a user
+        // may be shown under is a rule, not a column, and it lives in one place.
+        var labels = await ProfileDirectory.ResolveLabelsAsync(
+            db, user, rows.Where(r => r.UserId is not null).Select(r => r.UserId!.Value), ct);
+
         var items = rows.Select(x => new AuditEntryDto(
-            x.a.Id,
-            x.a.At,
-            x.a.UserId,
-            x.UserName,
-            x.a.Action,
-            x.a.EntityType,
-            x.a.EntityId,
-            x.a.Changes is null ? null : JsonSerializer.Deserialize<JsonElement>(x.a.Changes))).ToList();
+            x.Id,
+            x.At,
+            x.UserId,
+            x.UserId is { } actor ? labels.GetValueOrDefault(actor) : null,
+            x.Action,
+            x.EntityType,
+            x.EntityId,
+            x.Changes is null ? null : JsonSerializer.Deserialize<JsonElement>(x.Changes))).ToList();
 
         return TypedResults.Ok(new PagedResult<AuditEntryDto>(items, p, size, total));
     }

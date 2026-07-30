@@ -1,0 +1,61 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { theme } from 'antd';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { buildThemeConfig, resolveDark } from './theme.ts';
+import { DEFAULT_APPEARANCE } from './stores/uiPrefsStore.ts';
+
+function systemPrefersDark(dark: boolean) {
+  vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+    matches: dark,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }) as MediaQueryList);
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+describe('buildThemeConfig', () => {
+  it('uses the dark algorithm when dark is chosen', () => {
+    const config = buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: 'dark' });
+
+    expect(config.algorithm).toContain(theme.darkAlgorithm);
+  });
+
+  it('uses the light algorithm when light is chosen, whatever the system says', () => {
+    systemPrefersDark(true);
+
+    const config = buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: 'light' });
+
+    expect(config.algorithm).toContain(theme.defaultAlgorithm);
+    expect(config.algorithm).not.toContain(theme.darkAlgorithm);
+  });
+
+  it('follows the system when asked to', () => {
+    systemPrefersDark(true);
+    expect(resolveDark('system')).toBe(true);
+
+    systemPrefersDark(false);
+    expect(resolveDark('system')).toBe(false);
+  });
+
+  it('adds the compact algorithm alongside the theme, not instead of it', () => {
+    const config = buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: 'dark', density: 'compact' });
+
+    expect(config.algorithm).toContain(theme.darkAlgorithm);
+    expect(config.algorithm).toContain(theme.compactAlgorithm);
+  });
+
+  it('turns component motion off when motion is reduced', () => {
+    expect(buildThemeConfig({ ...DEFAULT_APPEARANCE, reduceMotion: true }).token?.motion).toBe(false);
+    expect(buildThemeConfig(DEFAULT_APPEARANCE).token?.motion).toBe(true);
+  });
+
+  it('keeps the brand colour whatever the appearance', () => {
+    expect(buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: 'dark' }).token?.colorPrimary).toBe('#146262');
+  });
+});

@@ -208,10 +208,17 @@ public static class TeamEndpoints
 
         var members = await db.TeamMembers.AsNoTracking()
             .Where(m => m.TeamId == id)
-            .Join(db.Users.AsNoTracking(), m => m.UserId, u => u.Id,
-                (m, u) => new TeamMemberDto(m.UserId, u.DisplayName ?? u.UserName, m.Role))
+            .Select(m => new { m.UserId, m.Role })
             .ToListAsync(ct);
-        return TypedResults.Ok(members);
+
+        // Resolved rather than joined: the label a user may be shown under is a rule with one
+        // home. This also keeps a membership whose user row has gone, which the previous inner
+        // join silently dropped.
+        var labels = await ProfileDirectory.ResolveLabelsAsync(db, user, members.Select(m => m.UserId), ct);
+
+        return TypedResults.Ok(members
+            .Select(m => new TeamMemberDto(m.UserId, labels.GetValueOrDefault(m.UserId), m.Role))
+            .ToList());
     }
 
     private static async Task<Results<Ok<TeamMemberDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpsertMemberAsync(
@@ -237,8 +244,8 @@ public static class TeamEndpoints
             return ApiProblems.Forbidden("team.requires_team_admin");
         }
 
-        var target = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
-        if (target is null)
+        var existing = await ProfileDirectory.ExistingIdsAsync(db, [request.UserId], ct);
+        if (!existing.Contains(request.UserId))
         {
             return ApiProblems.BadRequest("team.user_unknown", "The user does not exist.");
         }
@@ -261,7 +268,10 @@ public static class TeamEndpoints
         }
 
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(new TeamMemberDto(member.UserId, target.DisplayName ?? target.UserName, member.Role));
+
+        var labels = await ProfileDirectory.ResolveLabelsAsync(db, user, [member.UserId], ct);
+        return TypedResults.Ok(new TeamMemberDto(
+            member.UserId, labels.GetValueOrDefault(member.UserId), member.Role));
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> RemoveMemberAsync(

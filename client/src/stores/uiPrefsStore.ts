@@ -10,6 +10,23 @@ export type DialogPlacement = 'modal' | 'drawer';
 /** Where opening the app bare (no deep link) lands the user. */
 export type LandingPage = 'map' | 'dashboard';
 
+export type ThemePref = 'system' | 'light' | 'dark';
+
+export type DensityPref = 'comfortable' | 'compact';
+
+/** Appearance choices that must be honoured before anything is painted. */
+export interface Appearance {
+  theme: ThemePref;
+  density: DensityPref;
+  reduceMotion: boolean;
+}
+
+export const DEFAULT_APPEARANCE: Appearance = {
+  theme: 'system',
+  density: 'comfortable',
+  reduceMotion: false,
+};
+
 interface UiPrefsState {
   /** Feature types pinned as one-click draw shortcuts on the edit toolbar, in pin order. */
   pinnedTypeIds: number[];
@@ -31,6 +48,13 @@ interface UiPrefsState {
   centerlineDetailZoom?: number;
   centerlineMaxPaths?: number;
   setCenterlineLimits: (limits: { detailZoom?: number; maxPaths?: number }) => void;
+  /**
+   * Local mirror of the appearance settings the server also holds. The mirror is what paints —
+   * it rehydrates synchronously, so the first render already has the right theme — while the
+   * server copy is what carries the choice to another machine.
+   */
+  appearance: Appearance;
+  setAppearance: (patch: Partial<Appearance>) => void;
 }
 
 /**
@@ -60,7 +84,18 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       centerlineMaxPaths: undefined,
       setCenterlineLimits: ({ detailZoom, maxPaths }) =>
         set({ centerlineDetailZoom: detailZoom, centerlineMaxPaths: maxPaths }),
+      appearance: DEFAULT_APPEARANCE,
+      setAppearance: (patch) => set((state) => ({ appearance: { ...state.appearance, ...patch } })),
     }),
-    { name: 'silexgis.uiPrefs', version: 1 },
+    {
+      name: 'silexgis.uiPrefs',
+      version: 2,
+      // Without a migrate, raising the version makes zustand discard the whole stored blob —
+      // wiping everyone's pinned types, landing page and centerline budgets to add one field.
+      migrate: (persisted, from) =>
+        from < 2
+          ? { ...(persisted as UiPrefsState), appearance: DEFAULT_APPEARANCE }
+          : (persisted as UiPrefsState),
+    },
   ),
 );

@@ -47,4 +47,7 @@ public static class ProcessingJobKinds
 
     /// <summary>Backfill EXIF GPS points onto existing image files that predate geotag capture.</summary>
     public const string PhotoGeoBackfill = "photo-geo-backfill";
+
+    /// <summary>Build the archive for a user's request for a copy of their own account data.</summary>
+    public const string AccountDataExport = "account-data-export";
 }

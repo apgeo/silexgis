@@ -8,7 +8,7 @@ import AppLayout from './AppLayout.tsx';
 let mobile = false;
 
 vi.mock('../hooks/useIsMobile.ts', () => ({ useIsMobile: () => mobile }));
-vi.mock('../api/hooks.ts', () => ({ useMe: () => ({ data: { roles: [] } }) }));
+vi.mock('../api/hooks.ts', () => ({ useMe: () => ({ data: { roles: [], avatarUrl: null } }) }));
 vi.mock('../auth/auth.tsx', () => ({
   useAuth: () => ({ user: { profile: { preferred_username: 'tester' } }, signOut: vi.fn() }),
 }));

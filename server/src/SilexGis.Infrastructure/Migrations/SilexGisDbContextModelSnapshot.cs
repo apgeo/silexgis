@@ -422,6 +422,59 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("OpenIddictTokens", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.AccountDataExport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("error");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<long?>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StoragePath")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("storage_path");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_account_data_exports");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("ix_account_data_exports_user_id_created_at");
+
+                    b.ToTable("account_data_exports", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.Attachment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2219,6 +2272,105 @@ namespace SilexGis.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.UserAddress", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AddressText")
+                        .HasColumnType("text")
+                        .HasColumnName("address_text");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("city");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("country");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Point>("Geom")
+                        .HasColumnType("geometry(Point, 4326)")
+                        .HasColumnName("geom");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("label");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_user_addresses");
+
+                    b.HasIndex("Geom")
+                        .HasDatabaseName("ix_user_addresses_geom");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geom"), "gist");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_user_addresses_user_id");
+
+                    b.ToTable("user_addresses", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.UserNotificationPreference", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<short>("Category")
+                        .HasColumnType("smallint")
+                        .HasColumnName("category");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("enabled");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_user_notification_preferences");
+
+                    b.HasIndex("UserId", "Category")
+                        .IsUnique()
+                        .HasDatabaseName("ix_user_notification_preferences_user_id_category");
+
+                    b.ToTable("user_notification_preferences", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Infrastructure.Identity.SilexGisRole", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2262,14 +2414,40 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("access_failed_count");
 
+                    b.Property<short>("AddressPointVisibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("address_point_visibility");
+
+                    b.Property<short>("AddressVisibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("address_visibility");
+
                     b.Property<Guid?>("AvatarFileId")
                         .HasColumnType("uuid")
                         .HasColumnName("avatar_file_id");
+
+                    b.Property<string>("AvatarPreset")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("avatar_preset");
 
                     b.Property<string>("Bio")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("bio");
+
+                    b.Property<short>("BioVisibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("bio_visibility");
+
+                    b.Property<string>("CavingClub")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("caving_club");
+
+                    b.Property<short>("CavingClubVisibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("caving_club_visibility");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -2293,6 +2471,20 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean")
                         .HasColumnName("email_confirmed");
+
+                    b.Property<short>("EmailVisibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("email_visibility");
+
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("first_name");
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("last_name");
 
                     b.Property<string>("Locale")
                         .IsRequired()
@@ -2318,9 +2510,28 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("normalized_user_name");
 
+                    b.Property<short>("NotifyDigest")
+                        .HasColumnType("smallint")
+                        .HasColumnName("notify_digest");
+
+                    b.Property<bool>("NotifyEmailEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("notify_email_enabled");
+
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text")
                         .HasColumnName("password_hash");
+
+                    b.Property<string>("PendingEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("pending_email");
+
+                    b.Property<DateTimeOffset?>("PendingEmailRequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("pending_email_requested_at");
 
                     b.Property<string>("PhoneNumber")
                         .HasColumnType("text")
@@ -2330,6 +2541,14 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("phone_number_confirmed");
 
+                    b.Property<short>("PhoneVisibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("phone_visibility");
+
+                    b.Property<short>("RealNameVisibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("real_name_visibility");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text")
                         .HasColumnName("security_stamp");
@@ -2337,6 +2556,13 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean")
                         .HasColumnName("two_factor_enabled");
+
+                    b.Property<string>("UiPreferences")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("ui_preferences")
+                        .HasDefaultValueSql("'{}'::jsonb");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -2350,6 +2576,10 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_users");
 
+                    b.HasIndex("AvatarFileId")
+                        .HasDatabaseName("ix_users_avatar_file_id")
+                        .HasFilter("avatar_file_id IS NOT NULL");
+
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
 
@@ -2357,7 +2587,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
 
-                    b.ToTable("users", (string)null);
+                    b.ToTable("users", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_users_one_avatar_source", "avatar_file_id IS NULL OR avatar_preset IS NULL");
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
@@ -2442,6 +2675,16 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Navigation("Application");
 
                     b.Navigation("Authorization");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.AccountDataExport", b =>
+                {
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_account_data_exports_users_user_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Attachment", b =>
@@ -2744,6 +2987,26 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .HasConstraintName("fk_trip_log_participants_users_user_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.UserAddress", b =>
+                {
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_addresses_users_user_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.UserNotificationPreference", b =>
+                {
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_notification_preferences_users_user_id");
                 });
 
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreApplication", b =>

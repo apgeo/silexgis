@@ -206,14 +206,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/me": {
+    "/api/v1/avatar-presets": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Profile and global roles of the authenticated caller. */
+        /** Ids of the built-in avatars a user may choose. */
         get: {
             parameters: {
                 query?: never;
@@ -229,7 +229,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["MeDto"];
+                        "application/json": components["schemas"]["AvatarPresetsDto"];
                     };
                 };
             };
@@ -1465,7 +1465,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Searches users by name/email for pickers (authenticated). */
+        /** Searches users by name (and by address, where the caller may see it). */
         get: {
             parameters: {
                 query: {
@@ -1484,6 +1484,84 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["UserSummaryDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Directory of members, each reduced to what the caller may see. */
+        get: {
+            parameters: {
+                query?: {
+                    search?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfMemberDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One member, reduced to what the caller may see. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MemberDto"];
                     };
                 };
             };
@@ -1898,6 +1976,722 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Profile, settings, addresses and global roles of the authenticated caller. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MeDto"];
+                    };
+                };
+            };
+        };
+        /** Saves the caller's profile fields and per-field visibility choices. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MeUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MeDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Picks one of the built-in avatars for the caller. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AvatarPresetRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MeDto"];
+                    };
+                };
+            };
+        };
+        /** Uploads an avatar image for the caller, replacing any previous one. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        file: components["schemas"]["IFormFile"];
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MeDto"];
+                    };
+                };
+            };
+        };
+        /** Removes the caller's avatar, uploaded or built-in. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/addresses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adds an address to the caller's profile. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UserAddressWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UserAddressDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/addresses/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replaces one of the caller's addresses. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UserAddressWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UserAddressDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Removes one of the caller's addresses. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/email/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Starts a verified change of the caller's email address. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EmailChangeRequest"];
+                };
+            };
+            responses: {
+                /** @description Accepted */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/email/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Completes a pending email change, or confirms the current address. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EmailConfirmRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MeDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/email/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends the pending change message again. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Accepted */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/email/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends a confirmation message for the caller's current, unconfirmed address. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Accepted */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/email/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Abandons a pending email change. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/username": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Changes the caller's user name. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UsernameChangeRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MeDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Changes the caller's password, verifying the current one. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PasswordChangeRequest"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's notification settings, with every category present. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotificationPreferencesDto"];
+                    };
+                };
+            };
+        };
+        /** Saves the caller's notification settings. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferencesWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotificationPreferencesDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's stored interface preferences. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UiPreferencesDto"];
+                    };
+                };
+            };
+        };
+        /** Replaces the caller's stored interface preferences. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UiPreferencesWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UiPreferencesDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/data-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's most recent account-data export and its status. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DataExportDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Asks for a copy of the caller's account data; built in the background. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Accepted */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DataExportDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/data-export/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Downloads a ready account-data export belonging to the caller. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3913,6 +4707,8 @@ export interface components {
             license: string;
             sourceUrl: string;
         };
+        /** @enum {unknown} */
+        AccountExportStatus: "queued" | "running" | "ready" | "failed";
         AclEntryDto: {
             subjectKind: components["schemas"]["AclSubjectKind"];
             /** Format: uuid */
@@ -3985,6 +4781,12 @@ export interface components {
             openRegistration: boolean;
             externalOnly: boolean;
             providers: components["schemas"]["ExternalProviderInfo"][];
+        };
+        AvatarPresetRequest: {
+            preset: string;
+        };
+        AvatarPresetsDto: {
+            presets: string[];
         };
         CaveDto: {
             /** Format: uuid */
@@ -4179,6 +4981,26 @@ export interface components {
         DashboardSummaryDto: {
             counts: components["schemas"]["DashboardCountsDto"];
             recentActivity: components["schemas"]["DashboardActivityItemDto"][];
+        };
+        DataExportDto: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["AccountExportStatus"];
+            /** Format: int64 */
+            sizeBytes: null | number;
+            error: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            completedAt: null | string;
+            /** Format: date-time */
+            expiresAt: null | string;
+        };
+        EmailChangeRequest: {
+            newEmail: string;
+        };
+        EmailConfirmRequest: {
+            token: string;
         };
         EntranceDto: {
             /** Format: uuid */
@@ -4477,11 +5299,61 @@ export interface components {
         MeDto: {
             /** Format: uuid */
             id: string;
+            userName: string;
             email: string;
+            emailConfirmed: boolean;
+            pendingEmail: null | string;
+            firstName: null | string;
+            lastName: null | string;
             displayName: null | string;
             bio: null | string;
+            phoneNumber: null | string;
+            cavingClub: null | string;
             locale: string;
+            avatarUrl: null | string;
+            avatarPreset: null | string;
+            visibility: components["schemas"]["ProfileVisibilityDto"];
+            addresses: components["schemas"]["UserAddressDto"][];
             roles: string[];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        MemberAddressDto: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+            country: null | string;
+            city: null | string;
+            addressText: null | string;
+            /** Format: double */
+            longitude: null | number;
+            /** Format: double */
+            latitude: null | number;
+        };
+        MemberDto: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+            displayName: null | string;
+            avatarUrl: null | string;
+            avatarPreset: null | string;
+            firstName: null | string;
+            lastName: null | string;
+            email: null | string;
+            phoneNumber: null | string;
+            cavingClub: null | string;
+            bio: null | string;
+            addresses: components["schemas"]["MemberAddressDto"][];
+        };
+        MeUpdateRequest: {
+            firstName: null | string;
+            lastName: null | string;
+            displayName: null | string;
+            bio: null | string;
+            phoneNumber: null | string;
+            cavingClub: null | string;
+            locale: string;
+            visibility: components["schemas"]["ProfileVisibilityDto"];
         };
         MfaConfirmRequest: {
             code: string;
@@ -4497,6 +5369,30 @@ export interface components {
             enabled: boolean;
             /** Format: int32 */
             recoveryCodesLeft: number;
+        };
+        /** @enum {unknown} */
+        NotificationCategory: "teamMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts";
+        NotificationCategoryDto: {
+            category: components["schemas"]["NotificationCategory"];
+            enabled: boolean;
+            locked: boolean;
+        };
+        NotificationCategoryWrite: {
+            category: components["schemas"]["NotificationCategory"];
+            enabled: boolean;
+        };
+        /** @enum {unknown} */
+        NotificationDigest: "immediate" | "daily";
+        NotificationPreferencesDto: {
+            emailEnabled: boolean;
+            digest: components["schemas"]["NotificationDigest"];
+            deliveryConfigured: boolean;
+            categories: components["schemas"]["NotificationCategoryDto"][];
+        };
+        NotificationPreferencesWriteRequest: {
+            emailEnabled: boolean;
+            digest: components["schemas"]["NotificationDigest"];
+            categories: components["schemas"]["NotificationCategoryWrite"][];
         };
         ObjectPermission: string;
         PagedResultOfAuditEntryDto: {
@@ -4544,6 +5440,15 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfMemberDto: {
+            items: components["schemas"]["MemberDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfSurfaceFeatureDto: {
             items: components["schemas"]["SurfaceFeatureDto"][];
             /** Format: int32 */
@@ -4562,6 +5467,10 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PasswordChangeRequest: {
+            currentPassword: string;
+            newPassword: string;
+        };
         /** @enum {unknown} */
         PositionQuality: "unknown" | "gps" | "map" | "estimated";
         ProcessingJobDto: {
@@ -4579,6 +5488,17 @@ export interface components {
         };
         /** @enum {unknown} */
         ProcessingJobStatus: "queued" | "running" | "succeeded" | "failed";
+        /** @enum {unknown} */
+        ProfileVisibility: "private" | "team" | "authenticated";
+        ProfileVisibilityDto: {
+            realName: components["schemas"]["ProfileVisibility"];
+            bio: components["schemas"]["ProfileVisibility"];
+            email: components["schemas"]["ProfileVisibility"];
+            phone: components["schemas"]["ProfileVisibility"];
+            cavingClub: components["schemas"]["ProfileVisibility"];
+            address: components["schemas"]["ProfileVisibility"];
+            addressPoint: components["schemas"]["ProfileVisibility"];
+        };
         /** @enum {unknown} */
         RasterStatus: "uploaded" | "processing" | "ready" | "failed";
         RegisterRequest: {
@@ -4802,10 +5722,39 @@ export interface components {
         };
         /** @enum {unknown} */
         TripType: "exploration" | "survey" | "maintenance" | "training" | "tourism" | "rescue" | "science" | "other" | null;
+        UiPreferencesDto: {
+            preferences: components["schemas"]["JsonElement"];
+        };
+        UiPreferencesWriteRequest: {
+            preferences: components["schemas"]["JsonElement"];
+        };
+        UserAddressDto: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+            country: null | string;
+            city: null | string;
+            addressText: null | string;
+            geom: null | components["schemas"]["GeoJsonPoint"];
+            /** Format: int32 */
+            sortOrder: number;
+        };
+        UserAddressWriteRequest: {
+            label: string;
+            country: null | string;
+            city: null | string;
+            addressText: null | string;
+            geom: null | components["schemas"]["GeoJsonPoint"];
+            /** Format: int32 */
+            sortOrder: number;
+        };
+        UsernameChangeRequest: {
+            username: string;
+        };
         UserSummaryDto: {
             /** Format: uuid */
             id: string;
-            displayName: null | string;
+            label: string;
             email: null | string;
         };
         /** @enum {unknown} */

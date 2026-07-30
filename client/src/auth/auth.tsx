@@ -20,6 +20,15 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (returnTo?: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /**
+   * Renews the tokens now instead of waiting for the automatic renewal.
+   *
+   * Needed after a credential change: the account name shown in the header comes from the token
+   * rather than from the profile, and changing an address or a user name invalidates the session
+   * the token endpoint relies on — so without an immediate renewal the header stays stale and
+   * the session lapses some minutes later.
+   */
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -50,6 +59,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       signIn: (returnTo) => userManager.signinRedirect({ state: returnTo ?? '/' }),
       signOut: () => userManager.signoutRedirect(),
+      refreshSession: async () => {
+        // Best effort: a failure here only means the header shows the previous name until the
+        // next automatic renewal, which is not worth interrupting the user for.
+        try {
+          await userManager.signinSilent();
+        } catch {
+          // ignored
+        }
+      },
     }),
     [user, loading],
   );

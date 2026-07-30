@@ -38,6 +38,29 @@ public class DependencyRuleTests
         result.IsSuccessful.ShouldBeTrue(FailureMessage(result));
     }
 
+    [Fact]
+    public void Feature_slices_do_not_read_user_rows_directly()
+    {
+        // What a caller may see of another user is a rule, applied in one place. A slice that
+        // projects a user column reaches the Identity namespace to do it, so this makes an
+        // overlooked or newly added path fail the build instead of review.
+        //
+        // Two slices are legitimately exempt: Me owns the account holder's own data, and Users
+        // owns the directory — both go through the shared resolver for anyone else's profile.
+        var result = Types.InAssembly(typeof(Program).Assembly)
+            .That()
+            .ResideInNamespaceStartingWith("SilexGis.Api.Features")
+            .And()
+            .DoNotResideInNamespaceStartingWith("SilexGis.Api.Features.Me")
+            .And()
+            .DoNotResideInNamespaceStartingWith("SilexGis.Api.Features.Users")
+            .ShouldNot()
+            .HaveDependencyOn("SilexGis.Infrastructure.Identity")
+            .GetResult();
+
+        result.IsSuccessful.ShouldBeTrue(FailureMessage(result));
+    }
+
     private static string FailureMessage(TestResult result) =>
         result.IsSuccessful
             ? string.Empty

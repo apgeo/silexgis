@@ -11,7 +11,7 @@
     "trips": "Jurnale de tură",
     "audit": "Istoric",
     "teams": "Echipe",
-    "security": "Securitate"
+    "settings": "Setări"
   },
   "dashboard": {
     "title": "Panou de bord",
@@ -27,14 +27,14 @@
     "myViews": "Vederile mele salvate",
     "importFile": "Importă fișier",
     "noActivity": "Nu a fost adăugat nimic încă.",
+    "loadFailed": "Panoul de bord nu a putut fi încărcat.",
     "noViews": "Nicio vedere salvată încă.",
     "untitled": "Fără titlu",
     "kind": {
       "cave": "Peșteră",
       "surfaceFeature": "Fenomen de suprafață",
       "tripLog": "Jurnal de tură"
-    },
-    "loadFailed": "Panoul nu a putut fi încărcat."
+    }
   },
   "auth": {
     "email": "Email",
@@ -61,8 +61,9 @@
     "saveFailed": "Operația a eșuat. Încercați din nou.",
     "deleted": "Șters.",
     "export": "Exportă",
+    "retry": "Reîncearcă",
     "conflict": "Altcineva a modificat acest element de când l-ați încărcat. Reîncărcați și reaplicați modificările.",
-    "retry": "Reîncearcă"
+    "loadFailed": "Nu s-a putut încărca. Încercați din nou."
   },
   "map": {
     "baseLayers": "Hărți de bază",
@@ -532,5 +533,175 @@
     },
     "deleteConfirm": "Ștergi această poligonație?",
     "empty": "Nicio poligonație încă"
+  },
+  "settings": {
+    "title": "Setări",
+    "nav": {
+      "profile": "Profil",
+      "account": "Cont",
+      "emails": "E-mail",
+      "notifications": "Notificări",
+      "security": "Securitate",
+      "accessibility": "Accesibilitate"
+    },
+    "visibility": {
+      "label": "Cine poate vedea",
+      "tooltip": "Vizibil pentru: {{audience}}",
+      "legend": "Pictograma de lângă un câmp stabilește cine îl vede: doar dumneavoastră, cei din echipele dumneavoastră sau orice membru autentificat."
+    },
+    "visibilityValues": {
+      "private": "Doar eu",
+      "team": "Echipele mele",
+      "authenticated": "Membrii autentificați"
+    },
+    "profile": {
+      "identity": "Identitate",
+      "about": "Despre dumneavoastră",
+      "username": "Nume de utilizator",
+      "email": "Adresă de e-mail",
+      "manageElsewhere": "Modifică",
+      "firstName": "Prenume",
+      "lastName": "Nume",
+      "displayName": "Nume afișat",
+      "displayNameHint": "Apare lângă tot ce adăugați. Fără el apăreți sub un nume generat.",
+      "bio": "Descriere",
+      "phone": "Telefon",
+      "cavingClub": "Club de speologie",
+      "avatar": "Poză de profil",
+      "addresses": "Adrese",
+      "addressesHint": "Unde puteți fi găsit. Fiecare adresă poate avea un punct pe hartă.",
+      "locationAudience": "Puncte pe hartă:",
+      "noAddresses": "Nicio adresă încă.",
+      "addAddress": "Adaugă o adresă",
+      "editAddress": "Modifică adresa",
+      "removeAddress": "Șterge adresa",
+      "removeAddressConfirm": "Ștergeți această adresă?",
+      "addressLabel": "Etichetă",
+      "country": "Țară",
+      "city": "Oraș",
+      "addressText": "Strada și restul",
+      "location": "Punct pe hartă",
+      "noLocation": "Niciun punct",
+      "pickLocation": "Alege pe hartă",
+      "changeLocation": "Schimbă punctul",
+      "clearLocation": "Șterge punctul"
+    },
+    "avatar": {
+      "upload": "Încarcă o imagine",
+      "preset": "Alege una predefinită",
+      "choosePreset": "Imagini predefinite",
+      "remove": "Șterge",
+      "tooLarge": "Alegeți o imagine sub 5 MB.",
+      "uploadFailed": "Imaginea nu a putut fi folosită.",
+      "presetNames": {
+        "bat": "Liliac",
+        "helmet": "Cască",
+        "lamp": "Frontală",
+        "rope": "Coardă",
+        "karst": "Carst",
+        "stalactite": "Stalactită",
+        "compass": "Busolă",
+        "sump": "Sifon"
+      }
+    },
+    "emails": {
+      "current": "Adresă de e-mail",
+      "confirmed": "Confirmată",
+      "unconfirmed": "Neconfirmată",
+      "verify": "Trimite un link de confirmare",
+      "verifySent": "Verificați-vă căsuța.",
+      "change": "Schimbați adresa",
+      "changeHint": "Trimitem un link la noua adresă. Nimic nu se schimbă până nu îl deschideți.",
+      "newEmail": "Adresa nouă",
+      "sendLink": "Trimite linkul",
+      "requested": "Dacă adresa este liberă, un link este pe drum către ea.",
+      "requestFailed": "Adresa nu a putut fi folosită.",
+      "pending": "Se așteaptă confirmarea pentru {{email}}",
+      "pendingHint": "Deschideți linkul trimis la acea adresă. Până atunci vă autentificați cu cea curentă.",
+      "resend": "Trimite din nou",
+      "resent": "Trimis din nou.",
+      "tooSoon": "Așteptați un minut înainte de a cere din nou.",
+      "cancelChange": "Anulează schimbarea",
+      "cancelled": "Schimbare anulată.",
+      "confirmSuccess": "Adresa a fost schimbată.",
+      "confirmFailed": "Linkul este invalid sau a expirat."
+    },
+    "account": {
+      "usernameSection": "Nume de utilizator",
+      "usernameHint": "Vă autentificați întotdeauna cu adresa de e-mail, deci aceasta schimbă doar felul în care apăreți în listă.",
+      "changeUsername": "Schimbă numele",
+      "usernameConfirm": "Schimbați numele de utilizator?",
+      "usernameChanged": "Nume schimbat.",
+      "usernameTaken": "Numele este deja folosit.",
+      "usernameInvalid": "Numele nu poate fi folosit.",
+      "usernameCharacters": "Folosiți doar litere, cifre și . _ @ + -",
+      "noDeletion": "Conturile nu se șterg de aici. Ce ați adăugat rămâne la club, așa că adresați-vă unui administrator.",
+      "export": {
+        "heading": "Exportați-vă datele",
+        "intro": "O copie a profilului, adreselor, setărilor și o listă a ce ați adăugat.",
+        "request": "Pregătește un export",
+        "requested": "Se pregătește exportul.",
+        "download": "Descarcă",
+        "status": {
+          "queued": "În așteptare",
+          "running": "Se pregătește…",
+          "ready": "Gata",
+          "failed": "Eșuat"
+        }
+      }
+    },
+    "notifications": {
+      "delivery": "Livrare",
+      "masterEmail": "Anunțați-mă pe e-mail",
+      "digest": "Cât de des",
+      "digestValues": {
+        "immediate": "Pe măsură ce se întâmplă",
+        "daily": "Un rezumat zilnic"
+      },
+      "categories": "Despre ce să fiu anunțat",
+      "alwaysOn": "Se trimit mereu — acestea vă avertizează despre propriul cont.",
+      "noDelivery": "Această instalare nu are un server de e-mail configurat, deci nu se trimite nimic încă. Alegerile sunt salvate și vor fi folosite când va exista unul.",
+      "events": {
+        "teamMembership": "Schimbări în echipe",
+        "permissionGranted": "Cineva îmi dă acces la ceva",
+        "tripParticipation": "Sunt adăugat la o tură",
+        "jobCompleted": "Fișierele mele termină de procesat",
+        "securityAlerts": "Alerte de securitate"
+      }
+    },
+    "accessibility": {
+      "heading": "Aspect",
+      "intro": "Acestea vă urmează pe orice dispozitiv pe care vă autentificați.",
+      "theme": "Temă",
+      "themeValues": {
+        "system": "Ca sistemul",
+        "light": "Luminoasă",
+        "dark": "Întunecată"
+      },
+      "density": "Densitate",
+      "densityValues": {
+        "comfortable": "Confortabilă",
+        "compact": "Compactă"
+      },
+      "reduceMotion": "Reduce animațiile",
+      "reduceMotionHint": "Oprește animațiile și deplasarea hărții.",
+      "deviceOnly": "Doar acest browser",
+      "deviceOnlyIntro": "Acestea rămân pe acest dispozitiv — un telefon și o stație de lucru cer răspunsuri diferite.",
+      "landingPage": "Deschide aplicația pe",
+      "landingValues": {
+        "map": "Hartă",
+        "dashboard": "Panou"
+      },
+      "mapChrome": "Ascunde controalele de pe hartă",
+      "centerlineDetailZoom": "Detaliu poligonale de la zoom",
+      "centerlineMaxPaths": "Buget de trasee",
+      "reset": "Resetează",
+      "resetDone": "Resetat."
+    },
+    "pointPicker": {
+      "title": "Alegeți un punct",
+      "hint": "Faceți clic pe hartă sau scrieți coordonatele.",
+      "use": "Folosește punctul"
+    }
   }
 }

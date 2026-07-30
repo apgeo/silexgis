@@ -11,7 +11,7 @@
     "trips": "Trip logs",
     "audit": "Audit",
     "teams": "Teams",
-    "security": "Security"
+    "settings": "Settings"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -27,14 +27,14 @@
     "myViews": "My saved views",
     "importFile": "Import file",
     "noActivity": "Nothing has been added yet.",
+    "loadFailed": "The dashboard could not be loaded.",
     "noViews": "No saved views yet.",
     "untitled": "Untitled",
     "kind": {
       "cave": "Cave",
       "surfaceFeature": "Surface feature",
       "tripLog": "Trip log"
-    },
-    "loadFailed": "The dashboard could not be loaded."
+    }
   },
   "auth": {
     "email": "Email",
@@ -61,8 +61,9 @@
     "saveFailed": "The operation failed. Please try again.",
     "deleted": "Deleted.",
     "export": "Export",
+    "retry": "Retry",
     "conflict": "Someone else changed this since you loaded it. Reload and reapply your changes.",
-    "retry": "Retry"
+    "loadFailed": "Could not load this. Please try again."
   },
   "map": {
     "baseLayers": "Base layers",
@@ -532,5 +533,175 @@
     },
     "deleteConfirm": "Delete this centerline?",
     "empty": "No centerlines yet"
+  },
+  "settings": {
+    "title": "Settings",
+    "nav": {
+      "profile": "Profile",
+      "account": "Account",
+      "emails": "Emails",
+      "notifications": "Notifications",
+      "security": "Security",
+      "accessibility": "Accessibility"
+    },
+    "visibility": {
+      "label": "Who can see this",
+      "tooltip": "Visible to: {{audience}}",
+      "legend": "The small icon beside a field sets who can see it: only you, people who share a team with you, or anyone signed in."
+    },
+    "visibilityValues": {
+      "private": "Only me",
+      "team": "My teams",
+      "authenticated": "Signed-in members"
+    },
+    "profile": {
+      "identity": "Identity",
+      "about": "About you",
+      "username": "Username",
+      "email": "Email address",
+      "manageElsewhere": "Change",
+      "firstName": "First name",
+      "lastName": "Surname",
+      "displayName": "Display name",
+      "displayNameHint": "Shown beside everything you add. Without one you appear under a generated name.",
+      "bio": "About",
+      "phone": "Phone number",
+      "cavingClub": "Caving club",
+      "avatar": "Profile picture",
+      "addresses": "Addresses",
+      "addressesHint": "Where you can be reached. Each address can carry a point on the map.",
+      "locationAudience": "Map points:",
+      "noAddresses": "No addresses yet.",
+      "addAddress": "Add an address",
+      "editAddress": "Edit address",
+      "removeAddress": "Remove address",
+      "removeAddressConfirm": "Remove this address?",
+      "addressLabel": "Label",
+      "country": "Country",
+      "city": "City",
+      "addressText": "Street and the rest",
+      "location": "Point on the map",
+      "noLocation": "No point set",
+      "pickLocation": "Pick on the map",
+      "changeLocation": "Change point",
+      "clearLocation": "Clear the point"
+    },
+    "avatar": {
+      "upload": "Upload a picture",
+      "preset": "Pick a built-in one",
+      "choosePreset": "Built-in pictures",
+      "remove": "Remove",
+      "tooLarge": "Pick an image under 5 MB.",
+      "uploadFailed": "That image could not be used.",
+      "presetNames": {
+        "bat": "Bat",
+        "helmet": "Helmet",
+        "lamp": "Headlamp",
+        "rope": "Rope",
+        "karst": "Karst",
+        "stalactite": "Stalactite",
+        "compass": "Compass",
+        "sump": "Sump"
+      }
+    },
+    "emails": {
+      "current": "Email address",
+      "confirmed": "Confirmed",
+      "unconfirmed": "Not confirmed",
+      "verify": "Send a confirmation link",
+      "verifySent": "Check your inbox.",
+      "change": "Change your address",
+      "changeHint": "We send a link to the new address. Nothing changes until you open it.",
+      "newEmail": "New address",
+      "sendLink": "Send the link",
+      "requested": "If that address is free, a link is on its way to it.",
+      "requestFailed": "That address could not be used.",
+      "pending": "Waiting for {{email}} to be confirmed",
+      "pendingHint": "Open the link we sent to that address. Until then you keep signing in with the current one.",
+      "resend": "Send it again",
+      "resent": "Sent again.",
+      "tooSoon": "Wait a minute before asking again.",
+      "cancelChange": "Cancel the change",
+      "cancelled": "Change cancelled.",
+      "confirmSuccess": "Your address has been changed.",
+      "confirmFailed": "That link is invalid or has expired."
+    },
+    "account": {
+      "usernameSection": "Username",
+      "usernameHint": "You always sign in with your email address, so changing this only changes how you are listed.",
+      "changeUsername": "Change username",
+      "usernameConfirm": "Change your username?",
+      "usernameChanged": "Username changed.",
+      "usernameTaken": "That name is already in use.",
+      "usernameInvalid": "That name cannot be used.",
+      "usernameCharacters": "Use letters, digits and . _ @ + - only.",
+      "noDeletion": "Accounts are not deleted from here. Anything you have added stays with the club, so ask an administrator.",
+      "export": {
+        "heading": "Export your data",
+        "intro": "A copy of your profile, addresses, settings and a list of what you have added.",
+        "request": "Prepare an export",
+        "requested": "Preparing your export.",
+        "download": "Download",
+        "status": {
+          "queued": "Queued",
+          "running": "Preparing…",
+          "ready": "Ready",
+          "failed": "Failed"
+        }
+      }
+    },
+    "notifications": {
+      "delivery": "Delivery",
+      "masterEmail": "Notify me by email",
+      "digest": "How often",
+      "digestValues": {
+        "immediate": "As things happen",
+        "daily": "A daily summary"
+      },
+      "categories": "What to notify me about",
+      "alwaysOn": "Always sent — this one warns you about your own account.",
+      "noDelivery": "This installation has no mail server configured, so nothing is sent yet. Your choices are saved and will be used once one is.",
+      "events": {
+        "teamMembership": "Team membership changes",
+        "permissionGranted": "Someone shares something with me",
+        "tripParticipation": "I am added to a trip",
+        "jobCompleted": "My uploads finish processing",
+        "securityAlerts": "Security alerts"
+      }
+    },
+    "accessibility": {
+      "heading": "Appearance",
+      "intro": "These follow you to every device you sign in on.",
+      "theme": "Theme",
+      "themeValues": {
+        "system": "Match my system",
+        "light": "Light",
+        "dark": "Dark"
+      },
+      "density": "Density",
+      "densityValues": {
+        "comfortable": "Comfortable",
+        "compact": "Compact"
+      },
+      "reduceMotion": "Reduce motion",
+      "reduceMotionHint": "Turns off animations and map fly-to movement.",
+      "deviceOnly": "This browser only",
+      "deviceOnlyIntro": "These stay on this device — a phone and a workstation want different answers.",
+      "landingPage": "Open the app on",
+      "landingValues": {
+        "map": "The map",
+        "dashboard": "The dashboard"
+      },
+      "mapChrome": "Hide the on-map controls",
+      "centerlineDetailZoom": "Centerline detail from zoom",
+      "centerlineMaxPaths": "Centerline path budget",
+      "reset": "Reset these",
+      "resetDone": "Reset."
+    },
+    "pointPicker": {
+      "title": "Pick a point",
+      "hint": "Click the map, or type the coordinates.",
+      "use": "Use this point"
+    }
   }
 }

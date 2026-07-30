@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, GeofileImportHandler>();
         services.AddScoped<IProcessingJobHandler, RasterCogHandler>();
         services.AddScoped<IProcessingJobHandler, PhotoGeoBackfillHandler>();
+        services.AddScoped<IProcessingJobHandler, AccountDataExportHandler>();
         services.AddHostedService<ProcessingJobWorker>();
         return services;
     }

@@ -31,7 +31,7 @@ function providerIcon(name: string) {
  * otpauth URI for authenticator apps (manual entry; QR rendering is a later nicety).
  * Recovery codes appear exactly once — the user must store them.
  */
-export default function SecurityPage() {
+export default function SecuritySettingsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
@@ -81,7 +81,7 @@ export default function SecurityPage() {
   }, [params, setParams, message, t]);
 
   const linkHref = (name: string) =>
-    `/api/v1/auth/external/${encodeURIComponent(name)}?mode=link&returnUrl=${encodeURIComponent('/account/security')}`;
+    `/api/v1/auth/external/${encodeURIComponent(name)}?mode=link&returnUrl=${encodeURIComponent('/settings/security')}`;
 
   const unlink = async (provider: string) => {
     const { error } = await api.DELETE('/api/v1/me/external-logins/{provider}', {
@@ -143,8 +143,8 @@ export default function SecurityPage() {
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 640 }}>
-      <Typography.Title level={3} style={{ marginTop: 0 }}>
+    <Flex vertical gap={16}>
+      <Typography.Title level={4} style={{ margin: 0 }}>
         <SafetyOutlined /> {t('security.title')}
       </Typography.Title>
 
@@ -222,7 +222,7 @@ export default function SecurityPage() {
       </Card>
 
       {(linked.length > 0 || linkable.length > 0) && (
-        <Card size="small" title={t('security.linkedAccounts')} style={{ marginTop: 16 }}>
+        <Card size="small" title={t('security.linkedAccounts')}>
           <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
             {t('security.linkedIntro')}
           </Typography.Paragraph>
@@ -265,6 +265,6 @@ export default function SecurityPage() {
           )}
         </Card>
       )}
-    </div>
+    </Flex>
   );
 }

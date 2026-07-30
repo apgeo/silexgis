@@ -221,11 +221,9 @@ public static class FileEndpoints
         var chain = await db.StoredFiles.AsNoTracking()
             .Where(f => f.VersionGroupId == file.VersionGroupId)
             .OrderByDescending(f => f.VersionNumber)
-            .GroupJoin(db.Users.AsNoTracking(), f => f.UploadedBy, u => u.Id, (f, users) => new { f, users })
-            .SelectMany(x => x.users.DefaultIfEmpty(), (x, u) => new { x.f, UploaderName = u == null ? null : (u.DisplayName ?? u.UserName) })
             .ToListAsync(ct);
 
-        var head = chain[0].f; // ordered desc → the head is first
+        var head = chain[0]; // ordered desc → the head is first
         if (!await FileAccessRules.CanAccessAsync(db, user, head, ct))
         {
             return ApiProblems.NotFound("file.not_found"); // existence not disclosed
@@ -236,10 +234,15 @@ public static class FileEndpoints
             return ApiProblems.Forbidden("file.versions_forbidden"); // old versions are editor-only
         }
 
-        IReadOnlyList<FileVersionDto> dtos = [.. chain.Select(x => new FileVersionDto(
-            x.f.Id, x.f.VersionNumber, x.f.OriginalName, x.f.MimeType, x.f.SizeBytes,
-            x.f.UploadedBy, x.UploaderName, x.f.CreatedAt,
-            FileMapping.ContentUrl(x.f.Id, tokens.CreateToken(x.f.Id)), x.f.Id == head.Id))];
+        // Resolved rather than joined: the label an uploader may be shown under is a rule with
+        // one home, and it is never their address.
+        var labels = await ProfileDirectory.ResolveLabelsAsync(
+            db, user, chain.Where(f => f.UploadedBy is not null).Select(f => f.UploadedBy!.Value), ct);
+
+        IReadOnlyList<FileVersionDto> dtos = [.. chain.Select(f => new FileVersionDto(
+            f.Id, f.VersionNumber, f.OriginalName, f.MimeType, f.SizeBytes,
+            f.UploadedBy, f.UploadedBy is { } uploader ? labels.GetValueOrDefault(uploader) : null, f.CreatedAt,
+            FileMapping.ContentUrl(f.Id, tokens.CreateToken(f.Id)), f.Id == head.Id))];
         return TypedResults.Ok(dtos);
     }
 

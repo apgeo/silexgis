@@ -6,3 +6,37 @@ body,
   height: 100%;
   margin: 0;
 }
+
+/* The page background behind the app, set before React mounts so the first paint already
+   matches the chosen theme. These two values are antd's own container backgrounds; nothing
+   derives one from the other. */
+html[data-theme='dark'] {
+  background: #141414;
+}
+
+html[data-theme='light'] {
+  background: #fff;
+}
+
+/* Reduced motion, honoured whether it comes from the operating system or from the app's own
+   accessibility setting. antd's own animations are switched off through the motion token; this
+   covers the CSS this app writes and anything a library animates directly. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html[data-reduce-motion='true'] *,
+html[data-reduce-motion='true'] *::before,
+html[data-reduce-motion='true'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}

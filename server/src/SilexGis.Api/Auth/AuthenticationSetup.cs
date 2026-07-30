@@ -128,7 +128,10 @@ public static class AuthenticationSetup
         services.AddHttpContextAccessor();
         // Replaces the AnonymousCurrentUser registered by AddSilexGisPersistence (last wins).
         services.AddSingleton<ICurrentUser, Common.HttpContextCurrentUser>();
-        services.AddScoped<IEmailSender, LoggingEmailSender>();
+        // One implementation answers both seams: what sends mail, and whether mail goes anywhere.
+        services.AddScoped<LoggingEmailSender>();
+        services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<LoggingEmailSender>());
+        services.AddScoped<IEmailDelivery>(sp => sp.GetRequiredService<LoggingEmailSender>());
 
         return services;
     }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, describe, expect, it } from 'vitest';
-import { useUiPrefsStore } from './uiPrefsStore.ts';
+import { DEFAULT_APPEARANCE, useUiPrefsStore } from './uiPrefsStore.ts';
 
 afterEach(() => {
   useUiPrefsStore.setState({
@@ -8,6 +8,7 @@ afterEach(() => {
     dialogPlacement: {},
     mapChromeHidden: false,
     landingPage: 'map',
+    appearance: DEFAULT_APPEARANCE,
   });
   localStorage.removeItem('silexgis.uiPrefs');
 });
@@ -40,7 +41,7 @@ describe('uiPrefsStore pinned types', () => {
     const raw = localStorage.getItem('silexgis.uiPrefs');
     expect(raw).not.toBeNull();
     const stored = JSON.parse(raw!) as { state: { pinnedTypeIds: number[]; mapChromeHidden: boolean }; version: number };
-    expect(stored.version).toBe(1);
+    expect(stored.version).toBe(2);
     expect(stored.state.pinnedTypeIds).toEqual([7]);
     expect(stored.state.mapChromeHidden).toBe(true);
   });
@@ -59,6 +60,38 @@ describe('uiPrefsStore landing page', () => {
       state: { landingPage: string };
     };
     expect(stored.state.landingPage).toBe('dashboard');
+  });
+});
+
+describe('uiPrefsStore appearance', () => {
+  it('starts on the system theme so nothing is imposed before the user chooses', () => {
+    expect(useUiPrefsStore.getState().appearance).toEqual(DEFAULT_APPEARANCE);
+  });
+
+  it('patches one appearance field without disturbing the others', () => {
+    useUiPrefsStore.getState().setAppearance({ theme: 'dark' });
+    useUiPrefsStore.getState().setAppearance({ reduceMotion: true });
+
+    expect(useUiPrefsStore.getState().appearance).toEqual({
+      theme: 'dark',
+      density: 'comfortable',
+      reduceMotion: true,
+    });
+  });
+
+  it('keeps everything already stored when upgrading from the previous version', () => {
+    // The guard on the version bump: without a migration, zustand throws the whole stored blob
+    // away, quietly wiping every user's pinned types, landing page and centerline budgets.
+    localStorage.setItem(
+      'silexgis.uiPrefs',
+      JSON.stringify({ version: 1, state: { pinnedTypeIds: [4, 9], landingPage: 'dashboard' } }),
+    );
+
+    useUiPrefsStore.persist.rehydrate();
+
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([4, 9]);
+    expect(useUiPrefsStore.getState().landingPage).toBe('dashboard');
+    expect(useUiPrefsStore.getState().appearance).toEqual(DEFAULT_APPEARANCE);
   });
 });
 

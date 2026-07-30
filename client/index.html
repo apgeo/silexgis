@@ -14,6 +14,25 @@
     <!-- iOS ignores the manifest's icons. -->
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>SilexGIS</title>
+    <!-- Paints the page in the user's chosen theme before the app bundle loads, so a dark-mode
+         user never gets a white flash. Reads the same browser-stored preferences the app
+         persists ("silexgis.uiPrefs" → state.appearance); the two must change together. Wrapped
+         so a corrupt or absent value can only fall back to the light default, never blank the
+         page. -->
+    <script>
+      try {
+        var stored = JSON.parse(localStorage.getItem('silexgis.uiPrefs') || '{}');
+        var appearance = (stored.state || {}).appearance || {};
+        var dark = appearance.theme === 'dark'
+          || ((appearance.theme || 'system') === 'system'
+            && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        document.documentElement.dataset.reduceMotion = String(!!appearance.reduceMotion);
+      } catch (e) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
