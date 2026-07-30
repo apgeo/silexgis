@@ -33,7 +33,8 @@
       "cave": "Peșteră",
       "surfaceFeature": "Fenomen de suprafață",
       "tripLog": "Jurnal de tură"
-    }
+    },
+    "loadFailed": "Panoul nu a putut fi încărcat."
   },
   "auth": {
     "email": "Email",
@@ -60,7 +61,8 @@
     "saveFailed": "Operația a eșuat. Încercați din nou.",
     "deleted": "Șters.",
     "export": "Exportă",
-    "conflict": "Altcineva a modificat acest element de când l-ați încărcat. Reîncărcați și reaplicați modificările."
+    "conflict": "Altcineva a modificat acest element de când l-ați încărcat. Reîncărcați și reaplicați modificările.",
+    "retry": "Reîncearcă"
   },
   "map": {
     "baseLayers": "Hărți de bază",

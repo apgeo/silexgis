@@ -25,6 +25,20 @@ export function isConcurrencyConflict(error: unknown): boolean {
 }
 
 /**
+ * How often a failed read is attempted again. A 4xx is the server's settled answer — the
+ * identical request cannot produce anything else, so the three default attempts merely hold
+ * the screen in its loading state for the whole 1s + 2s + 4s backoff before the failure
+ * finally becomes visible. Rate limiting is the one client error worth waiting out: 429
+ * clears by itself once the window rolls over. Network faults and 5xx keep the retries.
+ */
+export function retryQuery(failureCount: number, error: unknown): boolean {
+  if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429) {
+    return false;
+  }
+  return failureCount < 3;
+}
+
+/**
  * Typed API client generated from the server OpenAPI contract.
  * `schema.d.ts` is generated — regenerate with `npm run generate:api`, never hand-edit.
  */

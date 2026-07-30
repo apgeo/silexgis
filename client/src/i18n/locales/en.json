@@ -33,7 +33,8 @@
       "cave": "Cave",
       "surfaceFeature": "Surface feature",
       "tripLog": "Trip log"
-    }
+    },
+    "loadFailed": "The dashboard could not be loaded."
   },
   "auth": {
     "email": "Email",
@@ -60,7 +61,8 @@
     "saveFailed": "The operation failed. Please try again.",
     "deleted": "Deleted.",
     "export": "Export",
-    "conflict": "Someone else changed this since you loaded it. Reload and reapply your changes."
+    "conflict": "Someone else changed this since you loaded it. Reload and reapply your changes.",
+    "retry": "Retry"
   },
   "map": {
     "baseLayers": "Base layers",

@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App as AntApp } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { isConcurrencyConflict } from './client.ts';
+import { isConcurrencyConflict, retryQuery } from './client.ts';
 
 /**
  * Hosts the TanStack Query client inside the antd App context, so a lost-update conflict on
@@ -16,6 +16,7 @@ export function QueryProvider({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
+        defaultOptions: { queries: { retry: retryQuery } },
         mutationCache: new MutationCache({
           onError: (error) => {
             if (isConcurrencyConflict(error)) {

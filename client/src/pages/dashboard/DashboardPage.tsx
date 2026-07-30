@@ -9,7 +9,20 @@ import {
   TableOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
-import { Button, Card, Col, Empty, Flex, List, Row, Skeleton, Statistic, Switch, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Empty,
+  Flex,
+  List,
+  Row,
+  Skeleton,
+  Statistic,
+  Switch,
+  Typography,
+} from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -37,7 +50,7 @@ const activityIcon: Record<DashboardActivityItem['kind'], ReactNode> = {
 export default function DashboardPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { data: summary, isLoading } = useDashboardSummary();
+  const { data: summary, isLoading, isError, refetch } = useDashboardSummary();
   const { data: views } = useMapViews();
   const canCreate = useCanCreateContent();
   const landingPage = useUiPrefsStore((s) => s.landingPage);
@@ -68,13 +81,30 @@ export default function DashboardPage() {
         </Flex>
       </Flex>
 
+      {isError && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={t('dashboard.loadFailed')}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
+
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         {tiles.map((tile) => (
           <Col key={tile.key} xs={12} sm={12} md={6}>
             <Card hoverable onClick={() => navigate(tile.to)} styles={{ body: { padding: 20 } }}>
               <Statistic
                 title={t(`dashboard.counts.${tile.key}`)}
-                value={tile.value ?? 0}
+                // A dash, not a zero: while loading the skeleton covers this, so the only way
+                // a count is missing here is that the summary failed — and "0" would read as
+                // an empty registry rather than as an unanswered question.
+                value={tile.value ?? '—'}
                 prefix={tile.icon}
                 loading={isLoading}
               />
@@ -88,6 +118,10 @@ export default function DashboardPage() {
           <Card title={t('dashboard.recentActivity')}>
             {isLoading ? (
               <Skeleton active paragraph={{ rows: 4 }} />
+            ) : isError ? (
+              // The feed is unknown, not empty — the "nothing added yet" copy below would be
+              // a claim about the data that the failed request never made.
+              <Empty description={t('dashboard.loadFailed')} />
             ) : summary?.recentActivity.length ? (
               <List
                 dataSource={summary.recentActivity}

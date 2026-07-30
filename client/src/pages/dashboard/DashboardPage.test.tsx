@@ -23,9 +23,11 @@ const views: MapViewInfo[] = [
 ];
 
 const canCreate = vi.fn(() => true);
+const refetch = vi.fn();
+const summaryQuery = vi.fn(() => ({ data: summary, isLoading: false, isError: false, refetch }));
 
 vi.mock('../../api/hooks.ts', () => ({
-  useDashboardSummary: () => ({ data: summary, isLoading: false }),
+  useDashboardSummary: () => summaryQuery(),
   useMapViews: () => ({ data: views }),
   useCanCreateContent: () => canCreate(),
 }));
@@ -59,6 +61,8 @@ const countOn = (title: string) =>
 afterEach(() => {
   cleanup();
   canCreate.mockReturnValue(true);
+  refetch.mockClear();
+  summaryQuery.mockReturnValue({ data: summary, isLoading: false, isError: false, refetch });
 });
 
 describe('DashboardPage', () => {
@@ -86,6 +90,21 @@ describe('DashboardPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Bihor/ }));
     // The id in the URL is the whole mechanism: the map applies the view it names on arrival.
     expect(screen.getByTestId('location')).toHaveTextContent('/map?view=v1');
+  });
+
+  it('reports a failed summary instead of painting it as an empty registry', () => {
+    summaryQuery.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch });
+    renderPage();
+
+    // The distinction this guards: a zero on every tile is a truthful-looking answer, so a
+    // failed request that renders one is indistinguishable from a genuinely empty install.
+    expect(countOn('Caves')).toBe('—');
+    expect(countOn('Geodata files')).toBe('—');
+    expect(screen.getAllByText('The dashboard could not be loaded.').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Nothing has been added yet.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalled();
   });
 
   it('hides quick actions from users who cannot create content', () => {

@@ -6,7 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.14.0" />
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.16.0" />
     <PackageReference Include="MaxRev.Gdal.Core" Version="3.13.1.534" />
     <PackageReference Include="MaxRev.Gdal.LinuxRuntime.Minimal" Version="3.13.1.534" />
     <PackageReference Include="MaxRev.Gdal.WindowsRuntime.Minimal" Version="3.13.1.534" />
