@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using OpenIddict.Validation.AspNetCore;
 using SilexGis.Domain;
-using SilexGis.Infrastructure.Email;
+using SilexGis.Infrastructure;
 using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -17,6 +17,12 @@ namespace SilexGis.Api.Auth;
 /// </summary>
 public static class AuthenticationSetup
 {
+    /// <summary>
+    /// Lifetime of an emailed confirmation or password-reset link. Public because the message
+    /// templates state it to the recipient — the number in the mail is this one, not a guess.
+    /// </summary>
+    public const int EmailLinkLifetimeHours = 24;
+
     public static IServiceCollection AddSilexGisAuth(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<AuthOptions>().BindConfiguration(AuthOptions.SectionName);
@@ -38,6 +44,23 @@ public static class AuthenticationSetup
             })
             .AddEntityFrameworkStores<SilexGisDbContext>()
             .AddDefaultTokenProviders();
+
+        // Replace Identity's two delivered-code providers with the single-use ones. The link
+        // tokens (confirmation, reset) keep the data-protector provider they already used.
+        services.AddScoped<EmailCodeTokenProvider>();
+        services.AddScoped<PhoneCodeTokenProvider>();
+        services.Configure<IdentityOptions>(options =>
+        {
+            options.Tokens.ProviderMap[TokenOptions.DefaultEmailProvider] =
+                new TokenProviderDescriptor(typeof(EmailCodeTokenProvider));
+            options.Tokens.ProviderMap[TokenOptions.DefaultPhoneProvider] =
+                new TokenProviderDescriptor(typeof(PhoneCodeTokenProvider));
+        });
+
+        // How long a confirmation or reset link stays good. A day is the framework default and
+        // what the shipped message wording states; the two must be changed together.
+        services.Configure<DataProtectionTokenProviderOptions>(options =>
+            options.TokenLifespan = TimeSpan.FromHours(EmailLinkLifetimeHours));
 
         services.ConfigureApplicationCookie(options =>
         {
@@ -128,10 +151,8 @@ public static class AuthenticationSetup
         services.AddHttpContextAccessor();
         // Replaces the AnonymousCurrentUser registered by AddSilexGisPersistence (last wins).
         services.AddSingleton<ICurrentUser, Common.HttpContextCurrentUser>();
-        // One implementation answers both seams: what sends mail, and whether mail goes anywhere.
-        services.AddScoped<LoggingEmailSender>();
-        services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<LoggingEmailSender>());
-        services.AddScoped<IEmailDelivery>(sp => sp.GetRequiredService<LoggingEmailSender>());
+        // Mail and SMS delivery, the message templates, and the settings behind all three.
+        services.AddSilexGisMessaging();
 
         return services;
     }

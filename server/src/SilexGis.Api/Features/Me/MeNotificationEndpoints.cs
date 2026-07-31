@@ -82,7 +82,7 @@ public static class MeNotificationEndpoints
         return TypedResults.Ok(new NotificationPreferencesDto(
             account.NotifyEmailEnabled,
             account.NotifyDigest,
-            delivery.IsConfigured,
+            await delivery.IsConfiguredAsync(ct),
             [.. NotificationCategories.All.Select(c => new NotificationCategoryDto(
                 c,
                 stored.TryGetValue(c, out var enabled) ? enabled : NotificationCategories.DefaultEnabled(c),
@@ -153,7 +153,7 @@ public static class MeNotificationEndpoints
         return TypedResults.Ok(new NotificationPreferencesDto(
             account.NotifyEmailEnabled,
             account.NotifyDigest,
-            delivery.IsConfigured,
+            await delivery.IsConfiguredAsync(ct),
             [.. NotificationCategories.All.Select(c => new NotificationCategoryDto(
                 c,
                 saved.TryGetValue(c, out var enabled) ? enabled : NotificationCategories.DefaultEnabled(c),

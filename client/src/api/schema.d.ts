@@ -1731,7 +1731,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Requests a password-reset token by email. Always returns 202. */
+        /** Requests a password-reset link by email. Always returns 202. */
         post: {
             parameters: {
                 query?: never;
@@ -1789,6 +1789,122 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/email/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirms an account's address from the emailed link, without a session. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ConfirmEmailRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/email/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends the address-confirmation message again. Always returns 202. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ForgotPasswordRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/2fa/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends a sign-in code to the pending account's email or phone. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorSendRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorSentDto"];
+                    };
                 };
             };
         };
@@ -2407,6 +2523,176 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/phone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's phone number and its verification state. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhoneStatusDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Removes the number, switching off SMS as a second factor with it. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/phone/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Starts a verified change of the caller's phone number; texts a code to it. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhoneChangeRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhoneChallengeDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/phone/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Texts the pending verification code again. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhoneChallengeDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/phone/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Completes a pending phone change with the texted code. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhoneConfirmRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhoneStatusDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/username": {
         parameters: {
             query?: never;
@@ -2704,7 +2990,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Two-factor status of the caller. */
+        /** Two-factor status of the caller, method by method. */
         get: {
             parameters: {
                 query?: never;
@@ -2769,7 +3055,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/me/mfa/confirm": {
+    "/api/v1/me/mfa/methods/{method}/challenge": {
         parameters: {
             query?: never;
             header?: never;
@@ -2778,12 +3064,52 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Verifies an authenticator code, enables 2FA and returns one-time recovery codes. */
+        /** Sends a verification code to the address or number a delivered method would use. */
         post: {
             parameters: {
                 query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    method: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MfaChallengeDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/methods/{method}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verifies a code and switches that method on, issuing recovery codes the first time. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    method: string;
+                };
                 cookie?: never;
             };
             requestBody: {
@@ -2803,6 +3129,68 @@ export interface paths {
                 };
             };
         };
+        /** Switches one method off. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    method: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MfaStatusDto"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/preferred": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Chooses which method is offered first at sign-in. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MfaPreferredRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MfaStatusDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2818,7 +3206,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Disables 2FA and clears the authenticator key. */
+        /** Switches two-factor off entirely and clears the authenticator key. */
         post: {
             parameters: {
                 query?: never;
@@ -4697,6 +5085,340 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mail, SMS and sign-in policy, with secrets redacted. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminSettingsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Saves the mail server settings. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MailSettingsWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminSettingsDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/sms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Saves the SMS gateway settings. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SmsSettingsWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminSettingsDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/security": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Saves the sign-in policy: address confirmation and which second factors are allowed. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SecuritySettingsDto"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminSettingsDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/mail/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends a test message to prove the mail server works. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TestMessageRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TestMessageResultDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/sms/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends a test text to prove the gateway works. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TestMessageRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TestMessageResultDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/message-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every message the application sends, in every language, with the shipped wording alongside. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MessageTemplateDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/message-templates/{key}/{locale}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Rewrites one message in one language. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    key: string;
+                    locale: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MessageTemplateWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        /** Drops a rewrite so the shipped wording applies again. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    key: string;
+                    locale: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4727,6 +5449,13 @@ export interface components {
         };
         /** @enum {unknown} */
         AclSubjectKind: "user" | "team";
+        AdminSettingsDto: {
+            mail: components["schemas"]["MailSettingsDto"];
+            sms: components["schemas"]["SmsSettingsDto"];
+            security: components["schemas"]["SecuritySettingsDto"];
+            mailConfigured: boolean;
+            smsConfigured: boolean;
+        };
         /** @enum {unknown} */
         AttachedEntityType: "cave" | "caveEntrance" | "surfaceFeature" | "tripLog" | "team" | "geofile" | "georeferencedMap" | "mapView" | "storedFile";
         AttachmentCreateRequest: {
@@ -4958,6 +5687,11 @@ export interface components {
         };
         /** @enum {unknown} */
         CenterlineSource: "uploaded" | "extracted";
+        ConfirmEmailRequest: {
+            /** Format: uuid */
+            userId: string;
+            token: string;
+        };
         DashboardActivityItemDto: {
             kind: components["schemas"]["DashboardActivityKind"];
             /** Format: uuid */
@@ -5238,7 +5972,40 @@ export interface components {
             email: string;
             password: string;
             twoFactorCode?: null | string;
+            twoFactorMethod?: null | components["schemas"]["TwoFactorMethod"];
         };
+        MailSettingsDto: {
+            enabled: boolean;
+            host: string;
+            /** Format: int32 */
+            port: number;
+            security: components["schemas"]["MailTransportSecurity"];
+            username: null | string;
+            hasPassword: boolean;
+            fromAddress: string;
+            fromName: string;
+            replyTo: null | string;
+            /** Format: int32 */
+            timeoutSeconds: number;
+            acceptInvalidCertificate: boolean;
+        };
+        MailSettingsWriteRequest: {
+            enabled: boolean;
+            host: string;
+            /** Format: int32 */
+            port: number;
+            security: components["schemas"]["MailTransportSecurity"];
+            username: null | string;
+            password: null | string;
+            fromAddress: string;
+            fromName: string;
+            replyTo: null | string;
+            /** Format: int32 */
+            timeoutSeconds: number;
+            acceptInvalidCertificate: boolean;
+        };
+        /** @enum {unknown} */
+        MailTransportSecurity: "auto" | "none" | "startTls" | "sslOnConnect";
         MapConfigDto: {
             /** Format: int32 */
             centerlineDetailZoom: number;
@@ -5345,6 +6112,27 @@ export interface components {
             bio: null | string;
             addresses: components["schemas"]["MemberAddressDto"][];
         };
+        /** @enum {unknown} */
+        MessageChannel: "email" | "sms";
+        MessageTemplateDto: {
+            key: string;
+            channel: components["schemas"]["MessageChannel"];
+            description: string;
+            placeholders: string[];
+            locales: components["schemas"]["MessageTemplateLocaleDto"][];
+        };
+        MessageTemplateLocaleDto: {
+            locale: string;
+            subject: null | string;
+            body: string;
+            defaultSubject: null | string;
+            defaultBody: string;
+            customised: boolean;
+        };
+        MessageTemplateWriteRequest: {
+            subject: null | string;
+            body: string;
+        };
         MeUpdateRequest: {
             firstName: null | string;
             lastName: null | string;
@@ -5355,12 +6143,27 @@ export interface components {
             locale: string;
             visibility: components["schemas"]["ProfileVisibilityDto"];
         };
+        MfaChallengeDto: {
+            destination: string;
+            /** Format: int32 */
+            expiresMinutes: number;
+        };
         MfaConfirmRequest: {
             code: string;
         };
         MfaEnrollDto: {
             sharedKey: string;
             authenticatorUri: string;
+        };
+        MfaMethodDto: {
+            method: components["schemas"]["TwoFactorMethod"];
+            enabled: boolean;
+            allowed: boolean;
+            ready: boolean;
+            destination: null | string;
+        };
+        MfaPreferredRequest: {
+            method: null | components["schemas"]["TwoFactorMethod"];
         };
         MfaRecoveryCodesDto: {
             codes: string[];
@@ -5369,6 +6172,8 @@ export interface components {
             enabled: boolean;
             /** Format: int32 */
             recoveryCodesLeft: number;
+            preferredMethod: null | components["schemas"]["TwoFactorMethod"];
+            methods: components["schemas"]["MfaMethodDto"][];
         };
         /** @enum {unknown} */
         NotificationCategory: "teamMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts";
@@ -5471,6 +6276,23 @@ export interface components {
             currentPassword: string;
             newPassword: string;
         };
+        PhoneChallengeDto: {
+            destination: string;
+            /** Format: int32 */
+            expiresMinutes: number;
+        };
+        PhoneChangeRequest: {
+            phoneNumber: string;
+        };
+        PhoneConfirmRequest: {
+            code: string;
+        };
+        PhoneStatusDto: {
+            phoneNumber: null | string;
+            confirmed: boolean;
+            pendingPhoneNumber: null | string;
+            smsConfigured: boolean;
+        };
         /** @enum {unknown} */
         PositionQuality: "unknown" | "gps" | "map" | "estimated";
         ProcessingJobDto: {
@@ -5532,9 +6354,48 @@ export interface components {
             tripDate: string;
             center: null | components["schemas"]["GeoJsonPoint"];
         };
+        SecuritySettingsDto: {
+            requireConfirmedEmail: boolean;
+            sendConfirmationOnRegistration: boolean;
+            authenticatorTwoFactorEnabled: boolean;
+            emailTwoFactorEnabled: boolean;
+            smsTwoFactorEnabled: boolean;
+            /** Format: int32 */
+            twoFactorCodeLifetimeMinutes: number;
+            /** Format: int32 */
+            twoFactorResendIntervalSeconds: number;
+        };
         SharedViewDto: {
             name: string;
             config: components["schemas"]["JsonElement"];
+        };
+        SmsSettingsDto: {
+            enabled: boolean;
+            url: string;
+            method: string;
+            contentType: string;
+            bodyTemplate: string;
+            headers: {
+                [key: string]: string;
+            };
+            hasAuthHeader: boolean;
+            from: null | string;
+            /** Format: int32 */
+            timeoutSeconds: number;
+        };
+        SmsSettingsWriteRequest: {
+            enabled: boolean;
+            url: string;
+            method: string;
+            contentType: string;
+            bodyTemplate: string;
+            headers: null | {
+                [key: string]: string;
+            };
+            authHeader: null | string;
+            from: null | string;
+            /** Format: int32 */
+            timeoutSeconds: number;
         };
         SurfaceFeatureDto: {
             /** Format: uuid */
@@ -5653,6 +6514,13 @@ export interface components {
             description: null | string;
             website: null | string;
         };
+        TestMessageRequest: {
+            recipient: string;
+        };
+        TestMessageResultDto: {
+            sent: boolean;
+            error: null | string;
+        };
         TripLogDto: {
             /** Format: uuid */
             id: string;
@@ -5722,6 +6590,17 @@ export interface components {
         };
         /** @enum {unknown} */
         TripType: "exploration" | "survey" | "maintenance" | "training" | "tourism" | "rescue" | "science" | "other" | null;
+        /** @enum {unknown} */
+        TwoFactorMethod: "authenticator" | "email" | "sms" | null;
+        TwoFactorSendRequest: {
+            method: components["schemas"]["TwoFactorMethod"];
+        };
+        TwoFactorSentDto: {
+            method: components["schemas"]["TwoFactorMethod"];
+            destination: string;
+            /** Format: int32 */
+            expiresMinutes: number;
+        };
         UiPreferencesDto: {
             preferences: components["schemas"]["JsonElement"];
         };

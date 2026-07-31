@@ -2,6 +2,9 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using SilexGis.Domain;
+using SilexGis.Domain.Auth;
+using SilexGis.Domain.Messaging;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Identity;
 
 namespace SilexGis.Api.Auth;
@@ -12,6 +15,9 @@ namespace SilexGis.Api.Auth;
 /// </summary>
 public static class AuthEndpoints
 {
+    /// <summary>Prefix marking a recovery code, which is accepted whatever the enabled methods are.</summary>
+    private const string RecoveryPrefix = "recovery:";
+
     public static RouteGroupBuilder MapAuthEndpoints(this RouteGroupBuilder api)
     {
         var auth = api.MapGroup("/auth").WithTags("Auth").AllowAnonymous().RequireRateLimiting("auth");
@@ -23,15 +29,25 @@ public static class AuthEndpoints
         auth.MapPost("/register", RegisterAsync)
             .WithSummary("Creates an account (enabled per installation via Auth:OpenRegistration).");
         auth.MapPost("/password/forgot", ForgotPasswordAsync)
-            .WithSummary("Requests a password-reset token by email. Always returns 202.");
+            .WithSummary("Requests a password-reset link by email. Always returns 202.");
         auth.MapPost("/password/reset", ResetPasswordAsync)
             .WithSummary("Resets the password using a reset token.");
+        auth.MapPost("/email/confirm", ConfirmEmailAsync)
+            .WithSummary("Confirms an account's address from the emailed link, without a session.");
+        auth.MapPost("/email/resend", ResendConfirmationAsync)
+            .WithSummary("Sends the address-confirmation message again. Always returns 202.");
 
         return api;
     }
 
     private static async Task<IResult> LoginAsync(
-        LoginRequest request, SignInManager<SilexGisUser> signInManager, UserManager<SilexGisUser> userManager)
+        LoginRequest request,
+        SignInManager<SilexGisUser> signInManager,
+        UserManager<SilexGisUser> userManager,
+        IAppSettingsService settings,
+        IEmailDelivery emailDelivery,
+        ISmsDelivery smsDelivery,
+        CancellationToken ct)
     {
         var user = string.IsNullOrWhiteSpace(request.Email) ? null : await userManager.FindByEmailAsync(request.Email);
         if (user is null)
@@ -45,26 +61,28 @@ public static class AuthEndpoints
             return AuthProblem(StatusCodes.Status401Unauthorized, "auth.locked_out", "Account temporarily locked after repeated failures.");
         }
 
+        var policy = await settings.GetSecurityAsync(ct);
+        var mailConfigured = await emailDelivery.IsConfiguredAsync(ct);
+
+        // Only once the password has been accepted — either outright or by being held at the
+        // second factor — so an unconfirmed address is never disclosed to someone guessing. And
+        // only while mail can actually be sent: enforcing it with no mail server would lock out
+        // every account that has no way to become confirmed.
+        if ((result.Succeeded || result.RequiresTwoFactor)
+            && policy.RequireConfirmedEmail && !user.EmailConfirmed && mailConfigured)
+        {
+            // PasswordSignInAsync has already established something — the session cookie, or the
+            // partial one that carries the second-factor step. Neither may survive a refusal.
+            await signInManager.SignOutAsync();
+            return AuthProblem(
+                StatusCodes.Status401Unauthorized,
+                "auth.email_not_confirmed",
+                "Confirm your email address before signing in.");
+        }
+
         if (result.RequiresTwoFactor)
         {
-            // Password was correct; the SPA must resubmit with the authenticator code
-            // (or a recovery code prefixed "recovery:"). Stable code drives that UI.
-            if (string.IsNullOrWhiteSpace(request.TwoFactorCode))
-            {
-                return AuthProblem(StatusCodes.Status401Unauthorized, "auth.mfa_required", "A two-factor code is required.");
-            }
-
-            var code = request.TwoFactorCode.Trim();
-            var mfaResult = code.StartsWith("recovery:", StringComparison.OrdinalIgnoreCase)
-                ? await signInManager.TwoFactorRecoveryCodeSignInAsync(code["recovery:".Length..].Replace(" ", string.Empty))
-                : await signInManager.TwoFactorAuthenticatorSignInAsync(
-                    code.Replace(" ", string.Empty), isPersistent: true, rememberClient: false);
-            if (!mfaResult.Succeeded)
-            {
-                return AuthProblem(StatusCodes.Status401Unauthorized, "auth.mfa_invalid", "The two-factor code is not valid.");
-            }
-
-            return TypedResults.Ok(new SessionDto(user.Id, user.Email!, user.DisplayName));
+            return await TwoFactorAsync(request, user, signInManager, policy, mailConfigured, smsDelivery, ct);
         }
 
         if (!result.Succeeded)
@@ -73,6 +91,80 @@ public static class AuthEndpoints
         }
 
         return TypedResults.Ok(new SessionDto(user.Id, user.Email!, user.DisplayName));
+    }
+
+    /// <summary>
+    /// The password was right and a second factor is due. With no code supplied this answers which
+    /// methods the account can use, so the client can offer a choice and ask for the code to be
+    /// sent; with a code it completes the sign-in.
+    /// </summary>
+    private static async Task<IResult> TwoFactorAsync(
+        LoginRequest request,
+        SilexGisUser user,
+        SignInManager<SilexGisUser> signInManager,
+        SecuritySettings policy,
+        bool mailConfigured,
+        ISmsDelivery smsDelivery,
+        CancellationToken ct)
+    {
+        var state = user.ToTwoFactorState();
+        var smsConfigured = await smsDelivery.IsConfiguredAsync(ct);
+        var available = TwoFactorPolicy.AvailableMethods(state, policy, mailConfigured, smsConfigured);
+
+        if (string.IsNullOrWhiteSpace(request.TwoFactorCode))
+        {
+            return AuthProblem(
+                StatusCodes.Status401Unauthorized,
+                "auth.mfa_required",
+                "A two-factor code is required.",
+                new Dictionary<string, object?>
+                {
+                    ["methods"] = available.Select(m => m.ToString().ToLowerInvariant()).ToArray(),
+                    ["preferredMethod"] = TwoFactorPolicy
+                        .PreferredMethod(state, policy, mailConfigured, smsConfigured)?.ToString().ToLowerInvariant(),
+                    // Every method can be taken away by someone other than the person signing in:
+                    // they turn one off, an administrator disallows it, or a channel stops working.
+                    // Recovery codes are what stops that from being a lockout, so the client is
+                    // always told they will be accepted.
+                    ["recoveryAccepted"] = true,
+                });
+        }
+
+        var code = request.TwoFactorCode.Trim();
+        var signIn = code.StartsWith(RecoveryPrefix, StringComparison.OrdinalIgnoreCase)
+            ? await signInManager.TwoFactorRecoveryCodeSignInAsync(
+                code[RecoveryPrefix.Length..].Replace(" ", string.Empty))
+            : await SignInWithMethodAsync(signInManager, request, code, available);
+
+        if (!signIn.Succeeded)
+        {
+            return signIn.IsLockedOut
+                ? AuthProblem(StatusCodes.Status401Unauthorized, "auth.locked_out", "Account temporarily locked after repeated failures.")
+                : AuthProblem(StatusCodes.Status401Unauthorized, "auth.mfa_invalid", "The two-factor code is not valid.");
+        }
+
+        return TypedResults.Ok(new SessionDto(user.Id, user.Email!, user.DisplayName));
+    }
+
+    private static async Task<SignInResult> SignInWithMethodAsync(
+        SignInManager<SilexGisUser> signInManager,
+        LoginRequest request,
+        string code,
+        IReadOnlyList<TwoFactorMethod> available)
+    {
+        // No stated method means the authenticator, which is the only one that needs no prior
+        // request and the only one older clients ever sent.
+        var method = request.TwoFactorMethod ?? TwoFactorMethod.Authenticator;
+        if (!available.Contains(method))
+        {
+            return SignInResult.Failed;
+        }
+
+        var stripped = code.Replace(" ", string.Empty);
+        return method == TwoFactorMethod.Authenticator
+            ? await signInManager.TwoFactorAuthenticatorSignInAsync(stripped, isPersistent: true, rememberClient: false)
+            : await signInManager.TwoFactorSignInAsync(
+                TwoFactorProviders.For(method), stripped, isPersistent: true, rememberClient: false);
     }
 
     private static async Task<IResult> LogoutAsync(SignInManager<SilexGisUser> signInManager)
@@ -84,7 +176,11 @@ public static class AuthEndpoints
     private static async Task<IResult> RegisterAsync(
         RegisterRequest request,
         UserManager<SilexGisUser> userManager,
-        IOptions<AuthOptions> options)
+        IOptions<AuthOptions> options,
+        IAppSettingsService settings,
+        IMessageDispatcher dispatcher,
+        IConfiguration configuration,
+        CancellationToken ct)
     {
         if (!options.Value.OpenRegistration)
         {
@@ -105,21 +201,34 @@ public static class AuthEndpoints
         }
 
         await userManager.AddToRoleAsync(user, options.Value.DefaultRole);
-        return TypedResults.Created($"/api/v1/users/{user.Id}", new SessionDto(user.Id, user.Email!, user.DisplayName));
+
+        var policy = await settings.GetSecurityAsync(ct);
+        var confirmationSent = false;
+        if (policy.SendConfirmationOnRegistration)
+        {
+            var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
+            var sent = await AccountMessages.SendEmailConfirmationAsync(dispatcher, configuration, user, token, ct);
+            confirmationSent = sent.Sent && sent.ChannelConfigured;
+        }
+
+        return TypedResults.Created(
+            $"/api/v1/users/{user.Id}",
+            new RegistrationDto(user.Id, user.Email!, user.DisplayName, confirmationSent, policy.RequireConfirmedEmail));
     }
 
     private static async Task<IResult> ForgotPasswordAsync(
-        ForgotPasswordRequest request, UserManager<SilexGisUser> userManager, IEmailSender emailSender)
+        ForgotPasswordRequest request,
+        UserManager<SilexGisUser> userManager,
+        IMessageDispatcher dispatcher,
+        IConfiguration configuration,
+        CancellationToken ct)
     {
         // Always 202 — never reveal whether an account exists.
         if (!string.IsNullOrWhiteSpace(request.Email)
             && await userManager.FindByEmailAsync(request.Email) is { } user)
         {
             var token = await userManager.GeneratePasswordResetTokenAsync(user);
-            await emailSender.SendAsync(
-                user.Email!,
-                "SilexGIS password reset",
-                $"Use this token to reset your password: {token}");
+            await AccountMessages.SendPasswordResetAsync(dispatcher, configuration, user, token, ct);
         }
 
         return TypedResults.Accepted((string?)null);
@@ -140,8 +249,59 @@ public static class AuthEndpoints
             : AuthProblem(StatusCodes.Status400BadRequest, "auth.reset_invalid", "The reset token is invalid or expired.");
     }
 
-    private static IResult AuthProblem(int status, string code, string detail) =>
-        Results.Problem(detail: detail, statusCode: status, extensions: new Dictionary<string, object?> { ["code"] = code });
+    /// <summary>
+    /// Confirms an address from the emailed link. Anonymous on purpose: the link is often opened on
+    /// a device that has never signed in, and the token is the proof — requiring a session as well
+    /// would only mean fewer confirmed addresses.
+    /// </summary>
+    private static async Task<IResult> ConfirmEmailAsync(
+        ConfirmEmailRequest request, UserManager<SilexGisUser> userManager)
+    {
+        var user = await userManager.FindByIdAsync(request.UserId.ToString());
+        if (user is null)
+        {
+            return AuthProblem(StatusCodes.Status400BadRequest, "auth.confirm_invalid", "The link is invalid or has expired.");
+        }
+
+        if (user.EmailConfirmed)
+        {
+            // Mail clients prefetch links and people click twice; a second confirmation is a
+            // success, not an error to puzzle over.
+            return TypedResults.NoContent();
+        }
+
+        var result = await userManager.ConfirmEmailAsync(user, request.Token);
+        return result.Succeeded
+            ? TypedResults.NoContent()
+            : AuthProblem(StatusCodes.Status400BadRequest, "auth.confirm_invalid", "The link is invalid or has expired.");
+    }
+
+    private static async Task<IResult> ResendConfirmationAsync(
+        ForgotPasswordRequest request,
+        UserManager<SilexGisUser> userManager,
+        IMessageDispatcher dispatcher,
+        IConfiguration configuration,
+        CancellationToken ct)
+    {
+        // Always 202, for the same reason the forgotten-password endpoint is: the response must
+        // not say whether an address has an account, nor whether it has been confirmed.
+        if (!string.IsNullOrWhiteSpace(request.Email)
+            && await userManager.FindByEmailAsync(request.Email) is { EmailConfirmed: false } user)
+        {
+            var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
+            await AccountMessages.SendEmailConfirmationAsync(dispatcher, configuration, user, token, ct);
+        }
+
+        return TypedResults.Accepted((string?)null);
+    }
+
+    private static IResult AuthProblem(
+        int status, string code, string detail, Dictionary<string, object?>? extensions = null)
+    {
+        var payload = extensions ?? [];
+        payload["code"] = code;
+        return Results.Problem(detail: detail, statusCode: status, extensions: payload);
+    }
 
     private static IResult IdentityProblem(IdentityResult result) =>
         Results.Problem(
@@ -154,7 +314,8 @@ public static class AuthEndpoints
             });
 }
 
-public sealed record LoginRequest(string Email, string Password, string? TwoFactorCode = null);
+public sealed record LoginRequest(
+    string Email, string Password, string? TwoFactorCode = null, TwoFactorMethod? TwoFactorMethod = null);
 
 public sealed record RegisterRequest(string Email, string Password, string? DisplayName);
 
@@ -162,4 +323,13 @@ public sealed record ForgotPasswordRequest(string Email);
 
 public sealed record ResetPasswordRequest(string Email, string Token, string NewPassword);
 
+public sealed record ConfirmEmailRequest(Guid UserId, string Token);
+
 public sealed record SessionDto(Guid UserId, string Email, string? DisplayName);
+
+/// <summary>
+/// What a new account needs to be told: whether a confirmation message actually went out, and
+/// whether signing in will require it.
+/// </summary>
+public sealed record RegistrationDto(
+    Guid UserId, string Email, string? DisplayName, bool ConfirmationSent, bool ConfirmationRequired);

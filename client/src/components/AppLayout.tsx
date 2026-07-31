@@ -4,9 +4,11 @@ import {
   DashboardOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
+  FileTextOutlined,
   GoldOutlined,
   HistoryOutlined,
   LogoutOutlined,
+  MailOutlined,
   SettingOutlined,
   TeamOutlined,
   TableOutlined,
@@ -46,7 +48,8 @@ export default function AppLayout() {
   // "settings" is listed so an unmatched path does not fall through to highlighting the map.
   // It matches no menu item, so nothing lights up — settings is not a sidebar destination.
   const sections = [
-    'dashboard', 'caves', 'features', 'geodata', 'trip-logs', 'teams', 'admin/audit', 'settings',
+    'dashboard', 'caves', 'features', 'geodata', 'trip-logs', 'teams',
+    'admin/audit', 'admin/messaging', 'admin/message-templates', 'settings',
   ] as const;
   const selectedKey = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
 
@@ -130,7 +133,11 @@ export default function AppLayout() {
               { key: 'trip-logs', icon: <CarOutlined />, label: t('nav.trips') },
               { key: 'teams', icon: <TeamOutlined />, label: t('nav.teams') },
               ...(isAdmin
-                ? [{ key: 'admin/audit', icon: <HistoryOutlined />, label: t('nav.audit') }]
+                ? [
+                    { key: 'admin/audit', icon: <HistoryOutlined />, label: t('nav.audit') },
+                    { key: 'admin/messaging', icon: <MailOutlined />, label: t('nav.messaging') },
+                    { key: 'admin/message-templates', icon: <FileTextOutlined />, label: t('nav.templates') },
+                  ]
                 : []),
             ]}
           />

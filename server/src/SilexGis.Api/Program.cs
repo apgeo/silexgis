@@ -9,6 +9,7 @@ using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using Microsoft.AspNetCore.DataProtection;
 using SilexGis.Api.Features.About;
+using SilexGis.Api.Features.Admin;
 using SilexGis.Api.Features.Attachments;
 using SilexGis.Api.Features.Audit;
 using SilexGis.Api.Features.Caves;
@@ -142,10 +143,12 @@ try
     var api = app.MapGroup("/api/v1").RequireAuthorization();
     api.MapAboutEndpoints();
     api.MapAuthEndpoints();
+    api.MapTwoFactorChallengeEndpoints();
     api.MapExternalAuthEndpoints();
     api.MapMeEndpoints();
     api.MapMeAddressEndpoints();
     api.MapMeEmailEndpoints();
+    api.MapMePhoneEndpoints();
     api.MapMeCredentialEndpoints();
     api.MapMeNotificationEndpoints();
     api.MapMePreferenceEndpoints();
@@ -175,6 +178,8 @@ try
     api.MapTeamEndpoints();
     api.MapUserEndpoints();
     api.MapMapViewEndpoints();
+    api.MapAdminSettingsEndpoints();
+    api.MapAdminTemplateEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {

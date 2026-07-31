@@ -25,8 +25,12 @@ Previous versions:
 - **Trips, tags, saved & shareable map views**, and **multi-window** pop-out panels.
 - **Works on a phone** — the map workspace adapts to touch, including full geometry editing by
   finger, and the app installs to a home screen.
-- **Accounts & permissions** — per-user/team/object access control, MFA (TOTP), optional
-  external login (Google/GitHub/OIDC), and location protection for sensitive caves.
+- **Accounts & permissions** — per-user/team/object access control, two-factor sign-in
+  (authenticator app, emailed code or texted code), optional external login (Google/GitHub/OIDC),
+  and location protection for sensitive caves.
+- **Email and SMS that an operator controls** — any SMTP server, any SMS gateway that speaks
+  HTTP, and the wording of every message editable per language from the admin pages. Configure
+  nothing and the app still runs: links and codes go to the server log instead.
 - **English and Romanian** throughout.
 
 ## Quick start

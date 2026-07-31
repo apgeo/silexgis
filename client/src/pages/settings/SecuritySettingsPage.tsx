@@ -8,12 +8,14 @@ import {
   LoginOutlined,
   SafetyOutlined,
 } from '@ant-design/icons';
-import { App, Alert, Button, Card, Flex, Input, List, Popconfirm, Tag, Typography } from 'antd';
+import { App, Button, Card, Flex, List, Popconfirm, Tag, Typography } from 'antd';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client.ts';
-import { useMfaStatus } from '../../api/hooks.ts';
+import { queryKeys, useMfaStatus } from '../../api/hooks.ts';
+import PhoneNumberCard from './PhoneNumberCard.tsx';
+import TwoFactorMethods from './TwoFactorMethods.tsx';
 
 interface LinkedLogin {
   provider: string;
@@ -36,16 +38,20 @@ export default function SecuritySettingsPage() {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data: status } = useMfaStatus();
-  const [enrollment, setEnrollment] = useState<{ sharedKey: string; authenticatorUri: string } | null>(null);
-  const [code, setCode] = useState('');
-  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
-  const [busy, setBusy] = useState(false);
   const [linked, setLinked] = useState<LinkedLogin[]>([]);
   const [hasPassword, setHasPassword] = useState(true);
   const [available, setAvailable] = useState<LinkedLogin[]>([]);
   const [params, setParams] = useSearchParams();
 
-  const refresh = () => void queryClient.invalidateQueries({ queryKey: ['mfa'] });
+  const disableAll = async () => {
+    const { error } = await api.POST('/api/v1/me/mfa/disable');
+    if (error !== undefined) {
+      message.error(t('common.saveFailed'));
+      return;
+    }
+    void queryClient.invalidateQueries({ queryKey: queryKeys.mfa });
+    message.success(t('security.disabled'));
+  };
 
   const loadLogins = useCallback(async () => {
     const [logins, config] = await Promise.all([
@@ -97,51 +103,6 @@ export default function SecuritySettingsPage() {
 
   const linkable = available.filter((a) => !linked.some((l) => l.provider === a.provider));
 
-  const enroll = async () => {
-    setBusy(true);
-    try {
-      const { data, error } = await api.POST('/api/v1/me/mfa/enroll');
-      if (error !== undefined || !data) {
-        throw new Error('enroll failed');
-      }
-      setEnrollment(data);
-      setRecoveryCodes(null);
-    } catch {
-      message.error(t('common.saveFailed'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const confirm = async () => {
-    setBusy(true);
-    try {
-      const { data, error } = await api.POST('/api/v1/me/mfa/confirm', { body: { code } });
-      if (error !== undefined || !data) {
-        message.error(t('security.codeInvalid'));
-        return;
-      }
-      setRecoveryCodes([...data.codes]);
-      setEnrollment(null);
-      setCode('');
-      refresh();
-      message.success(t('security.enabled'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const disable = async () => {
-    const { error } = await api.POST('/api/v1/me/mfa/disable');
-    if (error !== undefined) {
-      message.error(t('common.saveFailed'));
-      return;
-    }
-    setRecoveryCodes(null);
-    refresh();
-    message.success(t('security.disabled'));
-  };
-
   return (
     <Flex vertical gap={16}>
       <Typography.Title level={4} style={{ margin: 0 }}>
@@ -159,67 +120,21 @@ export default function SecuritySettingsPage() {
           )
         }
       >
-        {!status?.enabled && !enrollment && (
-          <Flex vertical gap={12}>
-            <Typography.Paragraph style={{ margin: 0 }}>{t('security.intro')}</Typography.Paragraph>
-            <Button type="primary" loading={busy} onClick={() => void enroll()}>
-              {t('security.enable')}
-            </Button>
-          </Flex>
-        )}
-
-        {enrollment && (
-          <Flex vertical gap={12}>
-            <Alert type="info" showIcon message={t('security.enterKey')} />
-            <Typography.Text code copyable={{ text: enrollment.sharedKey.replace(/ /g, '') }}>
-              {enrollment.sharedKey}
-            </Typography.Text>
-            <Typography.Text type="secondary" copyable={{ text: enrollment.authenticatorUri }} ellipsis>
-              {enrollment.authenticatorUri}
-            </Typography.Text>
-            <Flex gap={8}>
-              <Input
-                style={{ width: 180 }}
-                placeholder={t('security.codePlaceholder')}
-                value={code}
-                maxLength={6}
-                onChange={(e) => setCode(e.target.value)}
-                onPressEnter={() => void confirm()}
-              />
-              <Button type="primary" loading={busy} disabled={code.length < 6} onClick={() => void confirm()}>
-                {t('security.confirm')}
-              </Button>
-            </Flex>
-          </Flex>
-        )}
-
-        {status?.enabled && (
-          <Flex vertical gap={12}>
-            <Typography.Text>
-              {t('security.recoveryLeft', { count: status.recoveryCodesLeft })}
-            </Typography.Text>
-            <Flex gap={8}>
-              <Popconfirm title={t('security.disableConfirm')} onConfirm={() => void disable()}>
-                <Button danger>{t('security.disable')}</Button>
+        <Flex vertical gap={12}>
+          <Typography.Paragraph style={{ margin: 0 }}>{t('security.intro')}</Typography.Paragraph>
+          {status && <TwoFactorMethods status={status} />}
+          {status?.enabled && (
+            <Flex gap={8} align="center" wrap>
+              <Typography.Text>{t('security.recoveryLeft', { count: status.recoveryCodesLeft })}</Typography.Text>
+              <Popconfirm title={t('security.disableConfirm')} onConfirm={() => void disableAll()}>
+                <Button danger size="small">{t('security.disable')}</Button>
               </Popconfirm>
             </Flex>
-          </Flex>
-        )}
-
-        {recoveryCodes && (
-          <Alert
-            style={{ marginTop: 12 }}
-            type="warning"
-            showIcon
-            message={t('security.recoveryTitle')}
-            description={
-              <Typography.Paragraph copyable={{ text: recoveryCodes.join('\n') }} style={{ margin: 0 }}>
-                <pre style={{ margin: 0 }}>{recoveryCodes.join('\n')}</pre>
-              </Typography.Paragraph>
-            }
-          />
-        )}
+          )}
+        </Flex>
       </Card>
+
+      <PhoneNumberCard />
 
       {(linked.length > 0 || linkable.length > 0) && (
         <Card size="small" title={t('security.linkedAccounts')}>

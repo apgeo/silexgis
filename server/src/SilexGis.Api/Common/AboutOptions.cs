@@ -11,4 +11,10 @@ public sealed class AboutOptions
     public const string SectionName = "About";
 
     public string SourceUrl { get; set; } = "https://github.com/apgeo/silexgis";
+
+    /// <summary>
+    /// What this installation calls itself in the messages it sends — the <c>{appName}</c>
+    /// placeholder every message template may use.
+    /// </summary>
+    public string InstanceName { get; set; } = "SilexGIS";
 }

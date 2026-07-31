@@ -12,6 +12,9 @@ namespace SilexGis.Domain;
 /// </remarks>
 public interface IEmailDelivery
 {
-    /// <summary>False when messages are only written to the log for the operator to read.</summary>
-    bool IsConfigured { get; }
+    /// <summary>
+    /// False when messages are only written to the log for the operator to read. Asynchronous
+    /// because the mail server is administrator-editable and therefore read from the database.
+    /// </summary>
+    ValueTask<bool> IsConfiguredAsync(CancellationToken ct = default);
 }

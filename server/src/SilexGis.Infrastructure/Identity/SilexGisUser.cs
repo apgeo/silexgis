@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Identity;
 using SilexGis.Domain;
+using SilexGis.Domain.Auth;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Profiles;
 
@@ -49,6 +50,31 @@ public class SilexGisUser : IdentityUser<Guid>, ITimestamped, IUserProfile
     /// <summary>When the pending-change message was last sent; throttles resends.</summary>
     public DateTimeOffset? PendingEmailRequestedAt { get; set; }
 
+    /// <summary>
+    /// Number awaiting confirmation. Mirrors the email rule: <see cref="IdentityUser{TKey}.PhoneNumber"/>
+    /// only takes the new value once a texted code comes back, so a mistyped number cannot quietly
+    /// become the destination for sign-in codes.
+    /// </summary>
+    public string? PendingPhoneNumber { get; set; }
+
+    /// <summary>When the phone verification code was last texted; throttles resends.</summary>
+    public DateTimeOffset? PendingPhoneRequestedAt { get; set; }
+
+    /// <summary>
+    /// The three second factors, tracked separately because Identity's own
+    /// <see cref="IdentityUser{TKey}.TwoFactorEnabled"/> is a single flag with no room for which
+    /// method. That flag stays as the master switch it has to be — Identity consults it to decide
+    /// a sign-in needs a second step — and is kept equal to "any of these three".
+    /// </summary>
+    public bool TwoFactorAuthenticatorEnabled { get; set; }
+
+    public bool TwoFactorEmailEnabled { get; set; }
+
+    public bool TwoFactorSmsEnabled { get; set; }
+
+    /// <summary>Method offered first at sign-in. Null means "whichever is strongest".</summary>
+    public TwoFactorMethod? PreferredTwoFactorMethod { get; set; }
+
     public ProfileVisibility RealNameVisibility { get; set; } = ProfileVisibility.Private;
 
     public ProfileVisibility BioVisibility { get; set; } = ProfileVisibility.Private;
@@ -78,6 +104,15 @@ public class SilexGisUser : IdentityUser<Guid>, ITimestamped, IUserProfile
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
+
+    /// <summary>Gathers what the two-factor rules need, so they can stay free of Identity types.</summary>
+    public TwoFactorState ToTwoFactorState() => new(
+        TwoFactorAuthenticatorEnabled,
+        TwoFactorEmailEnabled,
+        TwoFactorSmsEnabled,
+        EmailConfirmed,
+        PhoneNumberConfirmed,
+        PreferredTwoFactorMethod);
 
     // IUserProfile forwards to the Identity-owned properties, whose names it cannot reuse.
     string? IUserProfile.UserNameValue => UserName;

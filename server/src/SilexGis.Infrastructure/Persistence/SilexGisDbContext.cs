@@ -68,6 +68,10 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<AccountDataExport> AccountDataExports => Set<AccountDataExport>();
 
+    public DbSet<AppSetting> AppSettings => Set<AppSetting>();
+
+    public DbSet<MessageTemplate> MessageTemplates => Set<MessageTemplate>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

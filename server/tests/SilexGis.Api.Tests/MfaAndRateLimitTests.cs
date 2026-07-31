@@ -23,8 +23,9 @@ public sealed class MfaAndRateLimitTests : IAsyncLifetime, IDisposable
     public MfaAndRateLimitTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
-            // Tight limit so the limiter is testable without hammering.
-            ["Auth:RateLimitPerMinute"] = "8",
+            // Headroom: /me/mfa is on the rate-limited credential surface now that it sends
+            // messages, and this walkthrough makes a dozen calls across it.
+            ["Auth:RateLimitPerMinute"] = "200",
         });
 
     public async Task InitializeAsync()
@@ -49,9 +50,10 @@ public sealed class MfaAndRateLimitTests : IAsyncLifetime, IDisposable
         enrollBody.GetProperty("authenticatorUri").GetString().ShouldStartWith("otpauth://totp/");
 
         // Confirm with a wrong code → 400; with a real TOTP → recovery codes issued.
-        (await client.PostAsJsonAsync("/api/v1/me/mfa/confirm", new { code = "000000" }))
+        (await client.PostAsJsonAsync("/api/v1/me/mfa/methods/authenticator", new { code = "000000" }))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        var confirm = await client.PostAsJsonAsync("/api/v1/me/mfa/confirm", new { code = Totp(sharedKey) });
+        var confirm = await client.PostAsJsonAsync(
+            "/api/v1/me/mfa/methods/authenticator", new { code = Totp(sharedKey) });
         confirm.StatusCode.ShouldBe(HttpStatusCode.OK, await confirm.Content.ReadAsStringAsync());
         var recoveryCodes = (await confirm.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("codes").EnumerateArray().Select(x => x.GetString()!).ToList();
@@ -65,8 +67,11 @@ public sealed class MfaAndRateLimitTests : IAsyncLifetime, IDisposable
             password = AuthHelper.Password,
         });
         withoutCode.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        (await withoutCode.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("code").GetString().ShouldBe("auth.mfa_required");
+        var refusal = await withoutCode.Content.ReadFromJsonAsync<JsonElement>();
+        refusal.GetProperty("code").GetString().ShouldBe("auth.mfa_required");
+        refusal.GetProperty("methods").EnumerateArray().Select(x => x.GetString())
+            .ShouldBe(["authenticator"]);
+        refusal.GetProperty("preferredMethod").GetString().ShouldBe("authenticator");
 
         // …and succeeds with the authenticator code.
         var withCode = await second.PostAsJsonAsync("/api/v1/auth/login", new
@@ -100,24 +105,6 @@ public sealed class MfaAndRateLimitTests : IAsyncLifetime, IDisposable
             email,
             password = AuthHelper.Password,
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
-    }
-
-    [Fact]
-    public async Task Auth_surface_rate_limits_per_ip()
-    {
-        using var client = factory.CreateClient();
-        var saw429 = false;
-        for (var i = 0; i < 12 && !saw429; i++)
-        {
-            var response = await client.PostAsJsonAsync("/api/v1/auth/login", new
-            {
-                email = "nobody@t.local",
-                password = "wrong-password-1",
-            });
-            saw429 = response.StatusCode == HttpStatusCode.TooManyRequests;
-        }
-
-        saw429.ShouldBeTrue("the limiter should trip within the configured window");
     }
 
     /// <summary>RFC 6238 TOTP (SHA1, 6 digits, 30 s step) over a base32 key.</summary>
@@ -157,6 +144,40 @@ public sealed class MfaAndRateLimitTests : IAsyncLifetime, IDisposable
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
+
+    public void Dispose() => factory.Dispose();
+}
+
+/// <summary>
+/// The per-IP fixed window on the auth surface. Its own class because it needs a limit tight
+/// enough to trip deliberately, which would starve any other test sharing the factory.
+/// </summary>
+[Collection(PostgresCollection.Name)]
+public sealed class AuthRateLimitTests(PostgresFixture postgres) : IDisposable
+{
+    private readonly SilexGisApiFactory factory =
+        new(postgres.ConnectionString, new Dictionary<string, string?>
+        {
+            ["Auth:RateLimitPerMinute"] = "8",
+        });
+
+    [Fact]
+    public async Task Auth_surface_rate_limits_per_ip()
+    {
+        using var client = factory.CreateClient();
+        var saw429 = false;
+        for (var i = 0; i < 12 && !saw429; i++)
+        {
+            var response = await client.PostAsJsonAsync("/api/v1/auth/login", new
+            {
+                email = "nobody@t.local",
+                password = "wrong-password-1",
+            });
+            saw429 = response.StatusCode == HttpStatusCode.TooManyRequests;
+        }
+
+        saw429.ShouldBeTrue("the limiter should trip within the configured window");
+    }
 
     public void Dispose() => factory.Dispose();
 }

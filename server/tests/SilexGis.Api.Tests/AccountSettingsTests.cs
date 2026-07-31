@@ -286,14 +286,17 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task Notification_settings_list_every_category_and_lock_security_alerts()
     {
+        // Nothing is delivered on an installation with no mail server, and the page must say so —
+        // so this reads the settings with the channel reporting itself as absent.
+        factory.Messages.MailConfigured = false;
         var read = JsonDocument.Parse(
             await (await me.GetAsync("/api/v1/me/notifications/")).Content.ReadAsStringAsync()).RootElement;
+        factory.Messages.MailConfigured = true;
 
         var categories = read.GetProperty("categories").EnumerateArray().ToList();
         categories.Count.ShouldBe(NotificationCategories.All.Count);
         categories.Single(c => c.GetProperty("category").GetString() == "securityAlerts")
             .GetProperty("locked").GetBoolean().ShouldBeTrue();
-        // Nothing is delivered on an installation with no mail server, and the page must say so.
         read.GetProperty("deliveryConfigured").GetBoolean().ShouldBeFalse();
 
         var saved = await me.PutAsJsonAsync("/api/v1/me/notifications/", new

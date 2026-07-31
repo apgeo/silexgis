@@ -4,7 +4,8 @@ using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using SilexGis.Api.Common;
-using SilexGis.Domain;
+using SilexGis.Api.Auth;
+using SilexGis.Domain.Messaging;
 using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
@@ -61,9 +62,8 @@ public static class MeEmailEndpoints
         ClaimsPrincipal principal,
         UserManager<SilexGisUser> userManager,
         SilexGisDbContext db,
-        IEmailSender emailSender,
+        IMessageDispatcher dispatcher,
         IConfiguration configuration,
-        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
         var user = await userManager.GetUserAsync(principal);
@@ -88,7 +88,7 @@ public static class MeEmailEndpoints
             user.PendingEmailRequestedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
 
-            await SendChangeMessageAsync(user, newEmail, userManager, emailSender, configuration, loggerFactory);
+            await SendChangeMessageAsync(user, newEmail, userManager, dispatcher, configuration, ct);
         }
 
         return TypedResults.Accepted((string?)null);
@@ -156,9 +156,8 @@ public static class MeEmailEndpoints
         ClaimsPrincipal principal,
         UserManager<SilexGisUser> userManager,
         SilexGisDbContext db,
-        IEmailSender emailSender,
+        IMessageDispatcher dispatcher,
         IConfiguration configuration,
-        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
         var user = await userManager.GetUserAsync(principal);
@@ -179,7 +178,7 @@ public static class MeEmailEndpoints
 
         user.PendingEmailRequestedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
-        await SendChangeMessageAsync(user, pending, userManager, emailSender, configuration, loggerFactory);
+        await SendChangeMessageAsync(user, pending, userManager, dispatcher, configuration, ct);
         return TypedResults.Accepted((string?)null);
     }
 
@@ -187,9 +186,8 @@ public static class MeEmailEndpoints
         ClaimsPrincipal principal,
         UserManager<SilexGisUser> userManager,
         SilexGisDbContext db,
-        IEmailSender emailSender,
+        IMessageDispatcher dispatcher,
         IConfiguration configuration,
-        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
         var user = await userManager.GetUserAsync(principal);
@@ -212,12 +210,7 @@ public static class MeEmailEndpoints
         await db.SaveChangesAsync(ct);
 
         var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
-        await TrySendAsync(
-            emailSender,
-            loggerFactory,
-            user.Email!,
-            "Confirm your SilexGIS address",
-            $"Confirm this address by opening {ConfirmUrl(configuration, token)}");
+        await AccountMessages.SendEmailConfirmationAsync(dispatcher, configuration, user, token, ct);
         return TypedResults.Accepted((string?)null);
     }
 
@@ -246,41 +239,11 @@ public static class MeEmailEndpoints
         SilexGisUser user,
         string newEmail,
         UserManager<SilexGisUser> userManager,
-        IEmailSender emailSender,
+        IMessageDispatcher dispatcher,
         IConfiguration configuration,
-        ILoggerFactory loggerFactory)
+        CancellationToken ct)
     {
         var token = await userManager.GenerateChangeEmailTokenAsync(user, newEmail);
-        await TrySendAsync(
-            emailSender,
-            loggerFactory,
-            newEmail,
-            "Confirm your new SilexGIS address",
-            $"Confirm this address by opening {ConfirmUrl(configuration, token)}"
-            + " If you did not ask for this, ignore this message — nothing has changed.");
-    }
-
-    private static string ConfirmUrl(IConfiguration configuration, string token)
-    {
-        var publicUrl = configuration.GetValue("PublicUrl", "http://localhost:8080")!.TrimEnd('/');
-        return $"{publicUrl}/settings/emails?confirm={Uri.EscapeDataString(token)}";
-    }
-
-    /// <summary>
-    /// Sends without letting a broken mail server fail the request. The pending change is already
-    /// committed by the time this runs, so a failure is recoverable with a resend.
-    /// </summary>
-    private static async Task TrySendAsync(
-        IEmailSender emailSender, ILoggerFactory loggerFactory, string to, string subject, string body)
-    {
-        try
-        {
-            await emailSender.SendAsync(to, subject, body);
-        }
-        catch (Exception ex)
-        {
-            loggerFactory.CreateLogger(typeof(MeEmailEndpoints))
-                .LogWarning(ex, "Could not send the address-confirmation message");
-        }
+        await AccountMessages.SendEmailChangeAsync(dispatcher, configuration, user, newEmail, token, ct);
     }
 }

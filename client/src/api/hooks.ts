@@ -23,6 +23,15 @@ export type MemberSummary = components['schemas']['MemberDto'];
 export type NotificationPreferences = components['schemas']['NotificationPreferencesDto'];
 export type NotificationCategory = components['schemas']['NotificationCategoryDto'];
 export type DataExport = components['schemas']['DataExportDto'];
+export type MfaStatus = components['schemas']['MfaStatusDto'];
+export type MfaMethod = components['schemas']['MfaMethodDto'];
+export type TwoFactorMethod = components['schemas']['TwoFactorMethod'];
+export type PhoneStatus = components['schemas']['PhoneStatusDto'];
+export type AdminSettings = components['schemas']['AdminSettingsDto'];
+export type MailSettingsWrite = components['schemas']['MailSettingsWriteRequest'];
+export type SmsSettingsWrite = components['schemas']['SmsSettingsWriteRequest'];
+export type SecuritySettings = components['schemas']['SecuritySettingsDto'];
+export type MessageTemplate = components['schemas']['MessageTemplateDto'];
 
 // Query keys live here so invalidation stays precise.
 export const queryKeys = {
@@ -59,6 +68,9 @@ export const queryKeys = {
   notificationPrefs: ['me', 'notifications'] as const,
   uiPreferences: ['me', 'preferences'] as const,
   dataExport: ['me', 'data-export'] as const,
+  phone: ['me', 'phone'] as const,
+  adminSettings: ['admin', 'settings'] as const,
+  messageTemplates: ['admin', 'message-templates'] as const,
 };
 
 async function unwrap<T>(
@@ -1068,7 +1080,6 @@ export type TeamInfo = components['schemas']['TeamDto'];
 export type TeamMemberInfo = components['schemas']['TeamMemberDto'];
 export type AclEntry = components['schemas']['AclEntryDto'];
 export type AclEntryWrite = components['schemas']['AclEntryWrite'];
-export type MfaStatus = components['schemas']['MfaStatusDto'];
 
 export function useTeams() {
   return useQuery({
@@ -1226,6 +1237,30 @@ export function useMfaStatus() {
   return useQuery({
     queryKey: queryKeys.mfa,
     queryFn: () => unwrap(api.GET('/api/v1/me/mfa')),
+  });
+}
+
+export function usePhoneStatus() {
+  return useQuery({
+    queryKey: queryKeys.phone,
+    queryFn: () => unwrap(api.GET('/api/v1/me/phone')),
+  });
+}
+
+/** Admin-only; the query is left disabled for anyone else so no 403 is provoked. */
+export function useAdminSettings(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.adminSettings,
+    queryFn: () => unwrap(api.GET('/api/v1/admin/settings')),
+    enabled,
+  });
+}
+
+export function useMessageTemplates(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.messageTemplates,
+    queryFn: () => unwrap(api.GET('/api/v1/admin/message-templates')),
+    enabled,
   });
 }
 

@@ -7,7 +7,9 @@ import RequireAuth from './auth/RequireAuth.tsx';
 import AppLayout from './components/AppLayout.tsx';
 import CallbackPage from './pages/CallbackPage.tsx';
 import LandingRoute from './pages/LandingRoute.tsx';
+import ConfirmEmailPage from './pages/ConfirmEmailPage.tsx';
 import LoginPage from './pages/LoginPage.tsx';
+import ResetPasswordPage from './pages/ResetPasswordPage.tsx';
 import LegacySecurityRedirect from './pages/settings/LegacySecurityRedirect.tsx';
 
 // Route-level code-splitting: the map workspace (OpenLayers) and the cave pages load on
@@ -23,6 +25,8 @@ const GeodataPage = lazy(() => import('./pages/geodata/GeodataPage.tsx'));
 const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
 const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
+const MessagingSettingsPage = lazy(() => import('./pages/admin/MessagingSettingsPage.tsx'));
+const MessageTemplatesPage = lazy(() => import('./pages/admin/MessageTemplatesPage.tsx'));
 const TeamsPage = lazy(() => import('./pages/teams/TeamsPage.tsx'));
 const SharedViewPage = lazy(() => import('./pages/SharedViewPage.tsx'));
 const PanelPage = lazy(() => import('./pages/panel/PanelPage.tsx'));
@@ -45,6 +49,8 @@ function Loadable({ children }: { children: ReactNode }) {
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/auth/callback', element: <CallbackPage /> },
+  { path: '/confirm-email', element: <ConfirmEmailPage /> },
+  { path: '/reset-password', element: <ResetPasswordPage /> },
   { path: '/shared/view/:token', element: <Loadable><SharedViewPage /></Loadable> },
   {
     element: <RequireAuth />,
@@ -68,6 +74,8 @@ const router = createBrowserRouter([
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
+          { path: '/admin/messaging', element: <Loadable><MessagingSettingsPage /></Loadable> },
+          { path: '/admin/message-templates', element: <Loadable><MessageTemplatesPage /></Loadable> },
           { path: '/teams', element: <Loadable><TeamsPage /></Loadable> },
           {
             path: '/settings',

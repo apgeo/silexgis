@@ -31,6 +31,17 @@ public static class AuthHelper
         return user.Id;
     }
 
+    /// <summary>
+    /// The authorize URL the SPA uses. Exposed because it is also how a test checks whether a
+    /// cookie session exists at all — that endpoint is the only thing that consumes one.
+    /// </summary>
+    public static string AuthorizeUrl(string? codeChallenge = null) =>
+        "/connect/authorize?client_id=silexgis-spa" +
+        "&redirect_uri=" + Uri.EscapeDataString("http://localhost/auth/callback") +
+        "&response_type=code" +
+        "&scope=" + Uri.EscapeDataString("openid profile email roles offline_access") +
+        $"&code_challenge={codeChallenge ?? "x"}&code_challenge_method=S256&state=s";
+
     /// <summary>Returns a client whose default Authorization header carries a valid access token.</summary>
     public static async Task<HttpClient> BearerClientAsync(SilexGisApiFactory factory, string email)
     {
@@ -41,14 +52,8 @@ public static class AuthHelper
 
         var verifier = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(48));
         var challenge = WebEncoders.Base64UrlEncode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
-        var authorizeUrl =
-            "/connect/authorize?client_id=silexgis-spa" +
-            "&redirect_uri=" + Uri.EscapeDataString("http://localhost/auth/callback") +
-            "&response_type=code" +
-            "&scope=" + Uri.EscapeDataString("openid profile email roles offline_access") +
-            $"&code_challenge={challenge}&code_challenge_method=S256&state=s";
 
-        var authorize = await client.GetAsync(authorizeUrl);
+        var authorize = await client.GetAsync(AuthorizeUrl(challenge));
         authorize.StatusCode.ShouldBe(HttpStatusCode.Redirect);
         var code = QueryHelpers.ParseQuery(authorize.Headers.Location!.Query)["code"].ToString();
 

@@ -132,6 +132,69 @@ is configured, set `SILEXGIS__Auth__ExternalOnly=true`.
 
 See `deploy/.env.example` for GitHub and generic-OIDC examples.
 
+## Email and SMS
+
+SilexGIS runs perfectly well with neither configured — confirmation links and sign-in codes are
+written to the API log for you to read, which is the intended mode for a small installation. To
+have them actually delivered, configure one or both. Everything below is also editable in the app
+under **Messaging** (administrators only); what you save there replaces the values here.
+
+**Email (SMTP).**
+
+```env
+SILEXGIS__Mail__Enabled=true
+SILEXGIS__Mail__Host=smtp.example.org
+SILEXGIS__Mail__Port=587
+SILEXGIS__Mail__Security=Auto          # Auto | StartTls | SslOnConnect (465) | None
+SILEXGIS__Mail__Username=silexgis@example.org
+SILEXGIS__Mail__Password=...
+SILEXGIS__Mail__FromAddress=silexgis@example.org
+SILEXGIS__Mail__FromName=Cave Register
+```
+
+**SMS.** There is no vendor lock-in: you describe the HTTP request your gateway expects, and
+`{to}`, `{text}` and `{from}` are substituted in (escaped for the content type, so message text
+can contain anything).
+
+```env
+SILEXGIS__Sms__Enabled=true
+SILEXGIS__Sms__Url=https://gateway.example.org/send
+SILEXGIS__Sms__Method=POST
+SILEXGIS__Sms__ContentType=application/x-www-form-urlencoded
+SILEXGIS__Sms__BodyTemplate=To={to}&From={from}&Body={text}
+SILEXGIS__Sms__AuthHeader=Basic <base64 of user:password>
+SILEXGIS__Sms__From=+40712345678
+```
+
+For Twilio, point `Url` at
+`https://api.twilio.com/2010-04-01/Accounts/<ACCOUNT_SID>/Messages.json` and set `AuthHeader` to
+`Basic <base64 of ACCOUNT_SID:AUTH_TOKEN>`. For a JSON gateway, set
+`ContentType=application/json` and a body such as
+`{"to":"{to}","from":"{from}","message":"{text}"}`.
+
+Use **Messaging → Send test** in the admin pages to confirm a channel works before anyone
+depends on it; a failure is reported with the server's own error message.
+
+**Message wording** is editable per language under **Message texts**. Leave a message alone and
+it follows the product; rewrite it and your version is used until you reset it.
+
+## Sign-in security
+
+Users choose their own second factor under *Settings → Security*: an authenticator app (scan the
+QR code), an emailed code, or a texted code. Recovery codes are issued the first time any of them
+is switched on and are always accepted, so nobody is locked out if a channel later becomes
+unavailable.
+
+As an administrator you decide what the installation permits, under **Messaging → Sign-in
+policy**:
+
+- **Require a confirmed address to sign in** — off by default. It has no effect until a mail
+  server is configured, because otherwise nobody could ever confirm. Existing accounts are not
+  affected by upgrading.
+- **Which second factors are allowed.** Texted codes are **off by default**: a phone number can be
+  moved to another SIM by persuading a mobile operator, which makes SMS the weakest of the three.
+- **Code lifetime and the wait between codes.**
+
 ## Non-Docker install
 
 1. **Database.** Create a PostgreSQL database and enable extensions:
@@ -178,6 +241,15 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Admin__Email` / `__Password` | — | first-run administrator |
 | `SILEXGIS__Auth__OpenRegistration` | `false` | allow self-registration |
 | `SILEXGIS__Auth__ExternalOnly` | `false` | hide the password form when providers exist |
+| `SILEXGIS__Mail__Enabled` / `__Host` / `__Port` | `false` / — / `587` | SMTP server; unset means messages go to the log |
+| `SILEXGIS__Mail__Security` | `Auto` | `Auto`, `StartTls`, `SslOnConnect` (465) or `None` |
+| `SILEXGIS__Mail__FromAddress` / `__FromName` | — / `SilexGIS` | sender of every message |
+| `SILEXGIS__Sms__Enabled` / `__Url` | `false` / — | SMS gateway endpoint |
+| `SILEXGIS__Sms__BodyTemplate` | `To={to}&From={from}&Body={text}` | request body; `{to}`, `{text}`, `{from}` are escaped for the content type |
+| `SILEXGIS__Security__RequireConfirmedEmail` | `false` | refuse sign-in until confirmed (inert with no mail server) |
+| `SILEXGIS__Security__SmsTwoFactorEnabled` | `false` | allow texted codes as a second factor |
+| `SILEXGIS__Security__TwoFactorCodeLifetimeMinutes` | `5` | how long a delivered code stays valid |
+| `SILEXGIS__About__InstanceName` | `SilexGIS` | name used in the messages this installation sends |
 | `SILEXGIS__Access__AllowAnonymousRead` | `false` | let anonymous visitors read public content |
 | `SILEXGIS__Map__CenterlineDetailZoom` | `18` | zoom at which cave centerlines switch from passage outlines to full survey detail |
 | `SILEXGIS__Map__CenterlineMaxPaths` | `25000` | line budget per centerline request; over it, outlines are served instead |

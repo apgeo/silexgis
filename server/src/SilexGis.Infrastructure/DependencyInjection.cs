@@ -3,10 +3,16 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SilexGis.Domain;
+using SilexGis.Domain.Messaging;
+using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Email;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Jobs;
+using SilexGis.Infrastructure.Messaging;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Settings;
+using SilexGis.Infrastructure.Sms;
 
 namespace SilexGis.Infrastructure;
 
@@ -36,6 +42,37 @@ public static class DependencyInjection
                 sp.GetRequiredService<TimestampInterceptor>(),
                 sp.GetRequiredService<AuditInterceptor>(),
                 sp.GetRequiredService<UserIdTransactionInterceptor>()));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Administrator-editable settings, the message templates, and the two delivery channels.
+    /// </summary>
+    /// <remarks>
+    /// The senders are scoped because they read settings through the DbContext. Both fall back to
+    /// writing messages to the log when nothing is configured, so an installation with no mail
+    /// server and no SMS gateway still works end to end — every flow completes and the operator
+    /// can read the links and codes out of the log.
+    /// </remarks>
+    public static IServiceCollection AddSilexGisMessaging(this IServiceCollection services)
+    {
+        services.AddMemoryCache();
+        services.AddHttpClient(Sms.HttpSmsSender.HttpClientName);
+
+        services.AddScoped<IAppSettingsService, AppSettingsService>();
+        services.AddScoped<MessageTemplateStore>();
+
+        services.AddScoped<LoggingEmailSender>();
+        services.AddScoped<SmtpEmailSender>();
+        services.AddScoped<IEmailSender>(sp => sp.GetRequiredService<SmtpEmailSender>());
+        services.AddScoped<IEmailDelivery>(sp => sp.GetRequiredService<SmtpEmailSender>());
+
+        services.AddScoped<HttpSmsSender>();
+        services.AddScoped<ISmsSender>(sp => sp.GetRequiredService<HttpSmsSender>());
+        services.AddScoped<ISmsDelivery>(sp => sp.GetRequiredService<HttpSmsSender>());
+
+        services.AddScoped<IMessageDispatcher, MessageDispatcher>();
 
         return services;
     }

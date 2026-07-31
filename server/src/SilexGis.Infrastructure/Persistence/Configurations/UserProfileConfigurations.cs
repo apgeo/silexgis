@@ -18,6 +18,8 @@ public sealed class SilexGisUserConfiguration : IEntityTypeConfiguration<SilexGi
         builder.Property(x => x.CavingClub).HasMaxLength(200);
         builder.Property(x => x.AvatarPreset).HasMaxLength(40);
         builder.Property(x => x.PendingEmail).HasMaxLength(256);
+        builder.Property(x => x.PendingPhoneNumber).HasMaxLength(32);
+        builder.Property(x => x.PreferredTwoFactorMethod).HasConversion<short?>();
 
         builder.Property(x => x.RealNameVisibility).HasConversion<short>();
         builder.Property(x => x.BioVisibility).HasConversion<short>();

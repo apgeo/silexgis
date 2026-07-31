@@ -475,6 +475,34 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("account_data_exports", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.AppSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("key");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("value")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.HasKey("Key")
+                        .HasName("pk_app_settings");
+
+                    b.ToTable("app_settings", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.Attachment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1518,6 +1546,60 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("map_views", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.MessageTemplate", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)")
+                        .HasColumnName("body");
+
+                    b.Property<short>("Channel")
+                        .HasColumnType("smallint")
+                        .HasColumnName("channel");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Locale")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("locale");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("subject");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_message_templates");
+
+                    b.HasIndex("Key", "Locale")
+                        .IsUnique()
+                        .HasDatabaseName("ix_message_templates_key_locale");
+
+                    b.ToTable("message_templates", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.ObjectAcl", b =>
                 {
                     b.Property<long>("Id")
@@ -2533,6 +2615,15 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("pending_email_requested_at");
 
+                    b.Property<string>("PendingPhoneNumber")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("pending_phone_number");
+
+                    b.Property<DateTimeOffset?>("PendingPhoneRequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("pending_phone_requested_at");
+
                     b.Property<string>("PhoneNumber")
                         .HasColumnType("text")
                         .HasColumnName("phone_number");
@@ -2545,6 +2636,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("phone_visibility");
 
+                    b.Property<short?>("PreferredTwoFactorMethod")
+                        .HasColumnType("smallint")
+                        .HasColumnName("preferred_two_factor_method");
+
                     b.Property<short>("RealNameVisibility")
                         .HasColumnType("smallint")
                         .HasColumnName("real_name_visibility");
@@ -2553,9 +2648,21 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("security_stamp");
 
+                    b.Property<bool>("TwoFactorAuthenticatorEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("two_factor_authenticator_enabled");
+
+                    b.Property<bool>("TwoFactorEmailEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("two_factor_email_enabled");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean")
                         .HasColumnName("two_factor_enabled");
+
+                    b.Property<bool>("TwoFactorSmsEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("two_factor_sms_enabled");
 
                     b.Property<string>("UiPreferences")
                         .IsRequired()
