@@ -1,0 +1,47 @@
+# pgAdmin overlay: a database browser attached to the stack's internal network.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.pgadmin.yml up -d pgadmin
+#   → http://127.0.0.1:5050
+#
+# Requires in .env:
+#   SILEXGIS_PGADMIN_PASSWORD=…                # pgAdmin login password
+#   SILEXGIS_PGADMIN_EMAIL=you@example.org     # optional, defaults to admin@example.com
+#   SILEXGIS_PGADMIN_PORT=5050                 # optional
+#
+# pgAdmin joins `silexgis_default`, so it reaches the database at host `db` port 5432 with
+# no port published to the host — the database stays unreachable from outside Docker.
+# Sign in to the database as user `silexgis` with SILEXGIS_DB_PASSWORD.
+#
+# Stop it again with:
+#   docker compose -f docker-compose.yml -f docker-compose.pgadmin.yml stop pgadmin
+name: silexgis
+
+services:
+  pgadmin:
+    image: dpage/pgadmin4:9.17
+    depends_on:
+      - db
+    environment:
+      # The image refuses to start without both of these. The password has no default:
+      # pgAdmin holds saved database credentials, so a shipped one would be a real key.
+      PGADMIN_DEFAULT_EMAIL: ${SILEXGIS_PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${SILEXGIS_PGADMIN_PASSWORD:?set SILEXGIS_PGADMIN_PASSWORD in .env}
+      # Without this pgAdmin demands a second, separate "master password" on every browser
+      # session before it will decrypt saved server passwords.
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      # No mail server in the container; skip the bundled Postfix it otherwise starts.
+      PGADMIN_DISABLE_POSTFIX: "True"
+    ports:
+      # Loopback only. This is an administrative tool with stored database credentials —
+      # publishing it on 0.0.0.0 would put it on every network the host is attached to.
+      - "127.0.0.1:${SILEXGIS_PGADMIN_PORT:-5050}:80"
+    volumes:
+      # Imported once, when the volume below is still empty; edits made in the UI win
+      # afterwards. Delete the volume to pick up changes to this file.
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - silexgis-pgadmin:/var/lib/pgadmin
+    # No restart policy on purpose: this is started on demand, not part of the service.
+
+volumes:
+  silexgis-pgadmin:

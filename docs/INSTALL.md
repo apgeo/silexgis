@@ -96,6 +96,37 @@ A cron example that keeps nightly backups:
 15 3 * * *  cd /opt/silexgis/deploy && sh scripts/backup.sh >> /var/log/silexgis-backup.log 2>&1
 ```
 
+## Browsing the database
+
+The database container publishes no port — it is reachable only from inside the stack's Docker
+network. To inspect it, add pgAdmin to that network instead of opening the database to the host:
+
+```bash
+cd deploy
+# set SILEXGIS_PGADMIN_PASSWORD in .env first
+docker compose -f docker-compose.yml -f docker-compose.pgadmin.yml up -d pgadmin
+```
+
+Open <http://127.0.0.1:5050> and sign in with `SILEXGIS_PGADMIN_EMAIL` (default
+`admin@example.com`) and `SILEXGIS_PGADMIN_PASSWORD`. A server entry named **SilexGIS** is
+already there; expanding it asks for the database password, which is `SILEXGIS_DB_PASSWORD`.
+Tick *Save password* to be asked only once.
+
+The web UI binds to `127.0.0.1` — it is not reachable from other machines, which is deliberate
+for a tool that stores database credentials. Reach a remote installation's pgAdmin over an SSH
+tunnel (`ssh -L 5050:127.0.0.1:5050 user@host`) rather than by changing the binding.
+
+Stop it when you are done; it is not part of the running service:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.pgadmin.yml stop pgadmin
+```
+
+**Using a client on your own machine instead** (psql, DBeaver, a desktop pgAdmin) means giving
+the database a host port, so prefer the above where you can. If you do need one, add a small
+overlay publishing it on loopback only — `ports: ["127.0.0.1:5433:5432"]` under `db` — and
+connect to `localhost:5433`, database `silexgis`, user `silexgis`.
+
 ## Upgrades
 
 ```bash
