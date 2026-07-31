@@ -24,11 +24,27 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
+    public DbSet<Feature> Features => Set<Feature>();
+
     public DbSet<Cave> Caves => Set<Cave>();
 
     public DbSet<CaveEntrance> CaveEntrances => Set<CaveEntrance>();
 
-    public DbSet<SurfaceFeature> SurfaceFeatures => Set<SurfaceFeature>();
+    public DbSet<Centerline> Centerlines => Set<Centerline>();
+
+    public DbSet<FeatureHierarchyEdge> FeatureHierarchyEdges => Set<FeatureHierarchyEdge>();
+
+    public DbSet<FeatureAncestor> FeatureAncestors => Set<FeatureAncestor>();
+
+    public DbSet<Hierarchy> Hierarchies => Set<Hierarchy>();
+
+    public DbSet<HierarchyMembership> HierarchyMemberships => Set<HierarchyMembership>();
+
+    public DbSet<LinkKind> LinkKinds => Set<LinkKind>();
+
+    public DbSet<FeatureLink> FeatureLinks => Set<FeatureLink>();
+
+    public DbSet<FeatureShare> FeatureShares => Set<FeatureShare>();
 
     public DbSet<MapLayer> MapLayers => Set<MapLayer>();
 
@@ -60,8 +76,6 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<SurveyModel> SurveyModels => Set<SurveyModel>();
 
-    public DbSet<CaveCenterline> CaveCenterlines => Set<CaveCenterline>();
-
     public DbSet<UserAddress> UserAddresses => Set<UserAddress>();
 
     public DbSet<UserNotificationPreference> UserNotificationPreferences => Set<UserNotificationPreference>();
@@ -80,6 +94,7 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
         builder.HasPostgresExtension("postgis");
         builder.HasPostgresExtension("unaccent");
+        builder.HasPostgresExtension("ltree");
 
         // Identity tables use plain names (users/roles/…), not AspNet* defaults.
         builder.Entity<SilexGisUser>().ToTable("users");

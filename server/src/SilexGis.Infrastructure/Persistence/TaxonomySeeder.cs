@@ -38,6 +38,7 @@ public static class TaxonomySeeder
             ("volcanic", "Volcanic rock"),
             ("other", "Other"));
 
+        await SeedLinkKindsAsync(db, ct);
         await SeedFeatureTypesAsync(db, ct);
 
         await db.SaveChangesAsync(ct);
@@ -61,11 +62,36 @@ public static class TaxonomySeeder
         }
     }
 
+    // Locating is security-bearing (a locating link to a protected feature is redacted).
+    // Everything defaults to locating = true; only kinds that provably carry no positional
+    // information may ever be relaxed, by an administrator, audited.
+    private static async Task SeedLinkKindsAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        (string Code, string Name, bool Locating)[] items =
+        [
+            ("associated_cave", "Associated cave", true),
+            ("hydro_connection", "Hydrological connection", true),
+            ("same_system", "Same cave system", true),
+            ("related", "Related feature", true),
+        ];
+
+        var existing = await db.LinkKinds.Select(x => x.Code).ToHashSetAsync(ct);
+        var sort = 0;
+        foreach (var (code, name, locating) in items)
+        {
+            sort += 10;
+            if (!existing.Contains(code))
+            {
+                db.LinkKinds.Add(new LinkKind { Code = code, Name = name, Locating = locating, SortOrder = sort });
+            }
+        }
+    }
+
     private static async Task SeedFeatureTypesAsync(SilexGisDbContext db, CancellationToken ct)
     {
         // Typed-properties JSON schemas (minimal subset: object with string/number/
         // integer/boolean/enum properties). The client renders these as extra form
-        // fields; the values live in surface_features.properties (jsonb).
+        // fields; the values live in features.properties (jsonb).
         const string sinkholeSchema =
             """
             {"type":"object","properties":{
@@ -81,33 +107,62 @@ public static class TaxonomySeeder
             }}
             """;
 
-        // Symbol files reference the bundled legacy symbol set.
-        (string Code, string Name, GeometryKind Kind, string Symbol, string? Schema)[] items =
+        // Accepted geometry classes follow the legacy loose semantics: a kind accepts its
+        // class plus the matching Multi* (imported multi-part features round-trip).
+        GeometryClass[] point = [GeometryClass.Point, GeometryClass.MultiPoint];
+        GeometryClass[] line = [GeometryClass.LineString, GeometryClass.MultiLineString];
+        GeometryClass[] area = [GeometryClass.Polygon, GeometryClass.MultiPolygon];
+        GeometryClass[] any =
         [
-            ("sinkhole", "Sinkhole / Doline", GeometryKind.Point, "sinkhole.png", sinkholeSchema),
-            ("pit", "Pit", GeometryKind.Point, "pit.png", null),
-            ("pitch", "Pitch", GeometryKind.Point, "pitch.png", null),
-            ("chimney", "Chimney", GeometryKind.Point, "chimney.png", null),
-            ("tunnel", "Tunnel", GeometryKind.Point, "tunnel.png", null),
-            ("lake", "Lake / Pond", GeometryKind.Any, "lake.png", null),
-            ("water_flow", "Spring / Water flow", GeometryKind.Point, "water_flow.png", waterFlowSchema),
-            ("fracture_line", "Fracture line / Fault", GeometryKind.Line, "fracture_line.png", null),
-            ("peak", "Peak", GeometryKind.Point, "peak.png", null),
-            ("bivouac", "Bivouac", GeometryKind.Point, "bivouac.png", null),
-            ("exploration_point", "Exploration point", GeometryKind.Point, "exploration_point.png", null),
-            ("desobstruction", "Desobstruction", GeometryKind.Point, "desobstruction.png", null),
-            ("continuation", "Continuation", GeometryKind.Point, "continuation.png", null),
-            ("calm", "Calm", GeometryKind.Point, "calm.png", null),
-            ("detritus", "Detritus", GeometryKind.Point, "dedritus.png", null),
-            ("driller", "Drilling point", GeometryKind.Point, "driller.png", null),
-            ("flag", "Flag / Marker", GeometryKind.Point, "flag.png", null),
-            ("generic", "Generic feature", GeometryKind.Any, "generic_feature.png", null),
-            ("arrow", "Arrow / Direction", GeometryKind.Line, "arrows.png", null),
+            GeometryClass.Point, GeometryClass.LineString, GeometryClass.Polygon,
+            GeometryClass.MultiPoint, GeometryClass.MultiLineString, GeometryClass.MultiPolygon,
+        ];
+
+        // Symbol files reference the bundled legacy symbol set. Categories drive map-layer
+        // separation and index partitioning; RequiresParent marks kinds meaningless outside
+        // a containing feature (in-cave palette).
+        (string Code, string Name, FeatureCategory Category, GeometryClass[] Classes,
+            bool RequiresParent, string? Symbol, string? Schema)[] items =
+        [
+            // Surface palette (v1/v2 heritage)
+            ("sinkhole", "Sinkhole / Doline", FeatureCategory.Surface, point, false, "sinkhole.png", sinkholeSchema),
+            ("pit", "Pit", FeatureCategory.Surface, point, false, "pit.png", null),
+            ("pitch", "Pitch", FeatureCategory.Surface, point, false, "pitch.png", null),
+            ("chimney", "Chimney", FeatureCategory.Surface, point, false, "chimney.png", null),
+            ("tunnel", "Tunnel", FeatureCategory.Surface, point, false, "tunnel.png", null),
+            ("lake", "Lake / Pond", FeatureCategory.Surface, any, false, "lake.png", null),
+            ("water_flow", "Spring / Water flow", FeatureCategory.Surface, point, false, "water_flow.png", waterFlowSchema),
+            ("fracture_line", "Fracture line / Fault", FeatureCategory.Surface, line, false, "fracture_line.png", null),
+            ("peak", "Peak", FeatureCategory.Surface, point, false, "peak.png", null),
+            ("wall", "Wall / Crag", FeatureCategory.Surface, line, false, "fracture_line.png", null),
+            ("bivouac", "Bivouac", FeatureCategory.Surface, point, false, "bivouac.png", null),
+            ("exploration_point", "Exploration point", FeatureCategory.Surface, point, false, "exploration_point.png", null),
+            ("desobstruction", "Desobstruction", FeatureCategory.Surface, point, false, "desobstruction.png", null),
+            ("continuation", "Continuation", FeatureCategory.Surface, point, false, "continuation.png", null),
+            ("calm", "Calm", FeatureCategory.Surface, point, false, "calm.png", null),
+            ("detritus", "Detritus", FeatureCategory.Surface, point, false, "dedritus.png", null),
+            ("driller", "Drilling point", FeatureCategory.Surface, point, false, "driller.png", null),
+            ("flag", "Flag / Marker", FeatureCategory.Surface, point, false, "flag.png", null),
+            ("generic", "Generic feature", FeatureCategory.Surface, any, false, "generic_feature.png", null),
+            ("arrow", "Arrow / Direction", FeatureCategory.Surface, line, false, "arrows.png", null),
+
+            // Underground palette (inside a cave — parent required)
+            ("stalactite", "Stalactite / Speleothem", FeatureCategory.Underground, point, true, "generic_feature.png", null),
+            ("calcite_dome", "Calcite dome", FeatureCategory.Underground, point, true, "generic_feature.png", null),
+            ("cave_sector", "Cave sector", FeatureCategory.Underground, area, true, "generic_feature.png", null),
+
+            // Areas & groupings
+            ("karst_area", "Karst area", FeatureCategory.Area, area, false, null, null),
+            ("massif", "Massif / Mountain", FeatureCategory.Area, area, false, null, null),
+            ("cave_system", "Cave system", FeatureCategory.Area, area, false, null, null),
+
+            // Structures
+            ("building", "Building", FeatureCategory.Structure, [.. point, .. area], false, null, null),
         ];
 
         var existing = await db.FeatureTypes.ToDictionaryAsync(x => x.Code, ct);
         var sort = 0;
-        foreach (var (code, name, kind, symbol, schema) in items)
+        foreach (var (code, name, category, classes, requiresParent, symbol, schema) in items)
         {
             sort += 10;
             if (existing.TryGetValue(code, out var row))
@@ -122,7 +177,9 @@ public static class TaxonomySeeder
                 {
                     Code = code,
                     Name = name,
-                    GeometryKind = kind,
+                    Category = category,
+                    AcceptedGeometryClasses = classes,
+                    RequiresParent = requiresParent,
                     SymbolFile = symbol,
                     SortOrder = sort,
                     PropertiesSchema = schema,

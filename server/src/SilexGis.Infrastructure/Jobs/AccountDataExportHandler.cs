@@ -167,13 +167,11 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
     /// </summary>
     private async Task<object> ContentInventoryAsync(Guid userId, CancellationToken ct) => new
     {
-        Caves = await db.Caves.AsNoTracking()
-            .Where(c => c.OwnerUserId == userId && c.DeletedAt == null)
-            .Select(c => new { c.Id, c.Name, c.CreatedAt })
-            .ToListAsync(ct),
-        SurfaceFeatures = await db.SurfaceFeatures.AsNoTracking()
+        // One inventory over the supertype covers caves, entrances, centerlines and every
+        // generic kind (the soft-delete query filter hides deleted rows).
+        Features = await db.Features.AsNoTracking()
             .Where(f => f.OwnerUserId == userId)
-            .Select(f => new { f.Id, f.Name, f.CreatedAt })
+            .Select(f => new { f.Id, Kind = f.Kind.ToString(), f.Name, f.CreatedAt })
             .ToListAsync(ct),
         TripLogs = await db.TripLogs.AsNoTracking()
             .Where(t => t.OwnerUserId == userId)

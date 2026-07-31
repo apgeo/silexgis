@@ -23,12 +23,12 @@ public sealed class GeoreferencedMapConfiguration : IEntityTypeConfiguration<Geo
         builder.Property(x => x.Bbox).HasColumnType("geometry(Polygon, 4326)");
 
         builder.HasOne<StoredFile>().WithMany().HasForeignKey(x => x.FileId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<Cave>().WithMany().HasForeignKey(x => x.CaveId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<Cave>().WithMany().HasForeignKey(x => x.CaveFeatureId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Team>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => x.Bbox).HasMethod("gist");
         builder.HasIndex(x => x.OwnerUserId);
-        builder.HasIndex(x => x.CaveId);
+        builder.HasIndex(x => x.CaveFeatureId);
     }
 }

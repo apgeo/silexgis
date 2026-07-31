@@ -75,11 +75,18 @@ public sealed class TaggingConfiguration : IEntityTypeConfiguration<Tagging>
 {
     public void Configure(EntityTypeBuilder<Tagging> builder)
     {
-        builder.ToTable("taggings");
-        builder.Property(x => x.EntityType).HasConversion<short>();
+        // Two-world target, same XOR convention as attachments.
+        builder.ToTable("taggings", t => t.HasCheckConstraint(
+            "ck_taggings_one_target",
+            "(feature_id IS NOT NULL AND entity_type IS NULL AND entity_id IS NULL) OR " +
+            "(feature_id IS NULL AND entity_type IS NOT NULL AND entity_id IS NOT NULL)"));
+        builder.Property(x => x.EntityType).HasConversion<short?>();
         builder.HasOne<Tag>().WithMany().HasForeignKey(x => x.TagId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<Feature>().WithMany().HasForeignKey(x => x.FeatureId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.AddedBy).OnDelete(DeleteBehavior.SetNull);
-        builder.HasIndex(x => new { x.TagId, x.EntityType, x.EntityId }).IsUnique();
+        builder.HasIndex(x => new { x.TagId, x.FeatureId }).IsUnique().HasFilter("feature_id IS NOT NULL");
+        builder.HasIndex(x => new { x.TagId, x.EntityType, x.EntityId }).IsUnique().HasFilter("entity_type IS NOT NULL");
+        builder.HasIndex(x => x.FeatureId);
         builder.HasIndex(x => new { x.EntityType, x.EntityId });
     }
 }

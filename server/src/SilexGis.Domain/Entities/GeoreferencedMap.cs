@@ -58,7 +58,8 @@ public class GeoreferencedMap : IProtectedEntity, ITimestamped, IAuditable
     /// <summary>Initial layer opacity, 0–1.</summary>
     public decimal DefaultOpacity { get; set; } = 0.8m;
 
-    public Guid? CaveId { get; set; }
+    /// <summary>Optional owning cave (feature id, FK to the cave subtype row) for georeferenced cave maps.</summary>
+    public Guid? CaveFeatureId { get; set; }
 
     public Guid OwnerUserId { get; set; }
 

@@ -8,7 +8,12 @@ namespace SilexGis.Domain.Geo;
 /// Protection-of-history: the audit trail records precise coordinates (geometry as WKT) and
 /// other location-revealing fields in its change diffs. This mirrors the live-DTO masking
 /// (see <see cref="LocationProtection"/>) for historical values, so a caller who may not
-/// view a protected cave's exact location cannot recover it from the timeline either.
+/// view a protected feature's exact location cannot recover it from the timeline either.
+/// <para>
+/// Feature-world rows arrive with kind-qualified types ("Feature:Cave", …, see
+/// <see cref="FeatureAudit"/>) and carry the merged supertype+subtype diff, so each case
+/// below covers both parts of the aggregate.
+/// </para>
 /// <para>
 /// Redacted properties are <em>removed</em> from the payload (no masked placeholder that could
 /// leak shape or length) and named so the UI can show an honest "hidden (protected location)"
@@ -16,24 +21,30 @@ namespace SilexGis.Domain.Geo;
 /// and stays visible.
 /// </para>
 /// <para>
-/// <b>Current protection state governs.</b> Redaction follows the cave's present
-/// <c>LocationProtected</c> flag and the caller's present grants, not the state at each row's
-/// timestamp (which the diffs cannot reconstruct, and which would leak during the
-/// pre-protection window anyway).
+/// <b>Current protection state governs.</b> Redaction follows the present protected-ancestor
+/// set and the caller's present grants, not the state at each row's timestamp (which the
+/// diffs cannot reconstruct, and which would leak during the pre-protection window anyway —
+/// and which the owner confirmed for re-parenting: moving a subtree under a protected root
+/// retroactively hides its coordinate history).
 /// </para>
 /// </summary>
 public static class HistoryProtection
 {
     // Derived/bookkeeping props that are never interesting in a timeline; dropped silently
-    // (not counted as protection-redacted). MainGeom is also location data, hence removed for
-    // everyone as defence in depth.
-    private static readonly string[] AlwaysNoise = ["CreatedAt", "UpdatedAt"];
-    private static readonly string[] CaveNoise = [nameof(Cave.EntranceCount), nameof(Cave.MainGeom)];
+    // (not counted as protection-redacted). The cave feature's Geom is the derived
+    // main-entrance cache — location data, removed for everyone as defence in depth (the
+    // entrance's own row carries the governed original). AncestorIds/IsProtectedEffective
+    // are write-service bookkeeping.
+    private static readonly string[] AlwaysNoise =
+        ["CreatedAt", "UpdatedAt", nameof(Feature.AncestorIds), nameof(Feature.IsProtectedEffective),
+         nameof(Feature.PropertiesSchemaVersion)];
+    private static readonly string[] CaveNoise = [nameof(Cave.EntranceCount), nameof(Feature.Geom)];
 
     // A stored file's created/deleted snapshot carries its EXIF capture point (Geom), the raw
     // metadata jsonb (which may itself hold GPS EXIF tags) and the internal storage path. A file
-    // is a polymorphic child with no governing cave resolvable here, and its geotag IS location
-    // data — so drop all three for everyone (defence in depth), never emitted in any timeline.
+    // is a polymorphic child with no governing feature resolvable here, and its geotag IS
+    // location data — so drop all three for everyone (defence in depth), never emitted in any
+    // timeline.
     private static readonly string[] FileNoise =
         [nameof(StoredFile.Geom), nameof(StoredFile.Metadata), nameof(StoredFile.StoragePath)];
 
@@ -42,32 +53,35 @@ public static class HistoryProtection
     private static readonly string[] CaveSensitive =
         [nameof(Cave.ClosestAddress), nameof(Cave.LandRegistryNumber), nameof(Cave.LocationNotes)];
     private static readonly string[] EntranceSensitive =
-        [nameof(CaveEntrance.Geom), nameof(CaveEntrance.Altitude), nameof(CaveEntrance.PositionQuality)];
+        [nameof(Feature.Geom), nameof(CaveEntrance.Altitude), nameof(CaveEntrance.PositionQuality)];
+
+    private static readonly string FeatureCave = FeatureAudit.TypeName(FeatureKind.Cave);
+    private static readonly string FeatureEntrance = FeatureAudit.TypeName(FeatureKind.CaveEntrance);
+    private static readonly string FeatureCenterline = FeatureAudit.TypeName(FeatureKind.Centerline);
+    private static readonly string FeatureGeneric = FeatureAudit.TypeName(FeatureKind.Generic);
 
     /// <summary>Property names dropped as noise for the given entity type (never shown).</summary>
-    public static IReadOnlyList<string> NoiseFor(string entityType) => entityType switch
-    {
-        nameof(Cave) => [.. AlwaysNoise, .. CaveNoise],
-        nameof(StoredFile) => [.. AlwaysNoise, .. FileNoise],
-        _ => AlwaysNoise,
-    };
+    public static IReadOnlyList<string> NoiseFor(string entityType) =>
+        entityType == FeatureCave ? [.. AlwaysNoise, .. CaveNoise]
+        : entityType == nameof(StoredFile) ? [.. AlwaysNoise, .. FileNoise]
+        : AlwaysNoise;
 
     /// <summary>
-    /// Strips noise and — when the governing cave's location is hidden from the caller —
+    /// Strips noise and — when the row's protected ancestry denies the caller exact view —
     /// the location-revealing properties from one history row's change set.
     /// </summary>
-    /// <param name="entityType">CLR type name the audit row belongs to.</param>
+    /// <param name="entityType">Audit type name of the row ("Feature:Cave", "SurveyModel", …).</param>
     /// <param name="changes">Parsed change JSON (mutated in place); null when the row has none.</param>
-    /// <param name="governingCaveHidden">
-    /// The row's own cave (a Cave row) or parent cave (entrance/centerline/survey child rows)
-    /// is protected and the caller may not view its exact location.
+    /// <param name="governingHidden">
+    /// The row's protected ancestry (its own protection root or any protected ancestor)
+    /// denies the caller exact view.
     /// </param>
-    /// <param name="caveLinkHidden">
-    /// Predicate over a referenced cave id: whether that cave link must be hidden (for rows
-    /// that merely reference a cave — surface features, trip cave-links).
+    /// <param name="linkTargetHidden">
+    /// Predicate over a referenced feature id: whether a locating link to it must be hidden
+    /// (for rows that merely reference a protected feature — feature links, trip cave-links).
     /// </param>
     public static RedactionResult Redact(
-        string entityType, JsonObject? changes, bool governingCaveHidden, Func<Guid, bool> caveLinkHidden)
+        string entityType, JsonObject? changes, bool governingHidden, Func<Guid, bool> linkTargetHidden)
     {
         if (changes is null)
         {
@@ -80,42 +94,51 @@ public static class HistoryProtection
         }
 
         var redacted = new List<string>();
-        switch (entityType)
+        if (entityType == FeatureCave)
         {
-            case nameof(Cave):
-                if (governingCaveHidden)
-                {
-                    RemoveNamed(changes, CaveSensitive, redacted);
-                }
-
-                break;
-
-            case nameof(CaveEntrance):
-                if (governingCaveHidden)
-                {
-                    RemoveNamed(changes, EntranceSensitive, redacted);
-                }
-
-                break;
-
-            case nameof(CaveCenterline):
-            case nameof(SurveyModel):
-                // Coordinate-bearing rows in a cave timeline: when the cave is hidden, drop the
-                // whole payload but keep the event. These rows only reach a caller who already
-                // failed the exact-location check.
-                if (governingCaveHidden && changes.Count > 0)
-                {
-                    redacted.AddRange(changes.Select(kv => kv.Key));
-                    return new RedactionResult(null, redacted);
-                }
-
-                break;
-
-            case nameof(SurfaceFeature):
-            case nameof(TripLogCave):
-                // Own geometry stays exact (matches live policy); only the cave link is hidden.
-                RemoveCaveLink(changes, caveLinkHidden, redacted);
-                break;
+            if (governingHidden)
+            {
+                RemoveNamed(changes, CaveSensitive, redacted);
+            }
+        }
+        else if (entityType == FeatureEntrance)
+        {
+            if (governingHidden)
+            {
+                RemoveNamed(changes, EntranceSensitive, redacted);
+            }
+        }
+        else if (entityType == FeatureCenterline || entityType == nameof(SurveyModel))
+        {
+            // Coordinate-bearing rows in a protected timeline: when hidden, drop the whole
+            // payload but keep the event. These rows only reach a caller who already failed
+            // the exact-location check.
+            if (governingHidden && changes.Count > 0)
+            {
+                redacted.AddRange(changes.Select(kv => kv.Key));
+                return new RedactionResult(null, redacted);
+            }
+        }
+        else if (entityType == FeatureGeneric)
+        {
+            // A generic feature under a protected root: its geometry is governed by the
+            // ancestry like any descendant (snap/withhold live; here: removed when hidden).
+            if (governingHidden)
+            {
+                RemoveNamed(changes, [nameof(Feature.Geom)], redacted);
+            }
+        }
+        else if (entityType == nameof(FeatureLink))
+        {
+            // A locating link's endpoints disclose a protected feature's position by
+            // proximity. Either endpoint hidden → the row's ids are removed.
+            RemoveHiddenReference(changes, nameof(FeatureLink.FromId), linkTargetHidden, redacted);
+            RemoveHiddenReference(changes, nameof(FeatureLink.ToId), linkTargetHidden, redacted);
+        }
+        else if (entityType == nameof(TripLogCave))
+        {
+            // The trip's own data stays; only the cave reference is hidden.
+            RemoveHiddenReference(changes, nameof(TripLogCave.CaveId), linkTargetHidden, redacted);
         }
 
         return new RedactionResult(changes.Count == 0 ? null : changes, redacted);
@@ -132,25 +155,27 @@ public static class HistoryProtection
         }
     }
 
-    // Removes CaveId when either the old or new referenced cave must be link-hidden — a cave
-    // link on a record with exact coordinates would disclose the cave by proximity.
-    private static void RemoveCaveLink(JsonObject changes, Func<Guid, bool> caveLinkHidden, List<string> redacted)
+    // Removes an id-bearing property when either the old or new referenced feature must be
+    // hidden — a locating reference on a record with exact coordinates would disclose the
+    // target by proximity.
+    private static void RemoveHiddenReference(
+        JsonObject changes, string property, Func<Guid, bool> linkTargetHidden, List<string> redacted)
     {
-        if (changes["CaveId"] is not JsonObject pair)
+        if (changes[property] is not JsonObject pair)
         {
             return;
         }
 
-        if ((ReferencedCaveHidden(pair["old"], caveLinkHidden) || ReferencedCaveHidden(pair["new"], caveLinkHidden))
-            && changes.Remove("CaveId"))
+        if ((ReferencedHidden(pair["old"], linkTargetHidden) || ReferencedHidden(pair["new"], linkTargetHidden))
+            && changes.Remove(property))
         {
-            redacted.Add("CaveId");
+            redacted.Add(property);
         }
     }
 
-    private static bool ReferencedCaveHidden(JsonNode? side, Func<Guid, bool> caveLinkHidden) =>
+    private static bool ReferencedHidden(JsonNode? side, Func<Guid, bool> linkTargetHidden) =>
         side is JsonValue value && value.TryGetValue<string>(out var text)
-        && Guid.TryParse(text, out var id) && caveLinkHidden(id);
+        && Guid.TryParse(text, out var id) && linkTargetHidden(id);
 }
 
 /// <summary>Outcome of <see cref="HistoryProtection.Redact"/>: the surviving change set and the removed property names.</summary>

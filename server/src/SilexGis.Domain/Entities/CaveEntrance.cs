@@ -1,42 +1,37 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using NetTopologySuite.Geometries;
-
 namespace SilexGis.Domain.Entities;
 
 /// <summary>
-/// An entrance of a cave. Inherits the cave's access control —
-/// no own RLS columns. Geometry is a 2D point; altitude is the dedicated column.
+/// Cave-entrance subtype row (shared PK with its <see cref="Feature"/>, which owns the
+/// name and the entrance point — a PointZ; Z mirrors <see cref="Altitude"/> when known).
+/// The entrance is a child of its cave in the containment hierarchy; it has no access
+/// control of its own — visibility and protection resolve through the feature row and
+/// its ancestors.
 /// </summary>
-public class CaveEntrance : ITimestamped, IAuditable, IAuditChild
+public class CaveEntrance : IAuditable
 {
-    public Guid Id { get; set; } = Guid.CreateVersion7();
+    /// <summary>Equals the feature id (shared primary key).</summary>
+    public Guid Id { get; set; }
 
-    public Guid CaveId { get; set; }
+    public Feature Feature { get; set; } = null!;
 
-    public string? Name { get; set; }
+    /// <summary>
+    /// The owning cave (feature id; FK to the cave subtype row). Structural truth for the
+    /// exactly-one-cave constraint; the write service mirrors it as the primary
+    /// containment edge, and the verifier checks the two agree.
+    /// </summary>
+    public Guid CaveFeatureId { get; set; }
 
     public long EntranceTypeId { get; set; }
 
+    /// <summary>The cave's representative entrance — mirrored into the cave feature's point geometry.</summary>
     public bool IsMain { get; set; }
 
-    public required Point Geom { get; set; }
-
     public decimal? Altitude { get; set; }
-
-    public string? Description { get; set; }
 
     public PositionQuality PositionQuality { get; set; } = PositionQuality.Unknown;
 
     public DateOnly? SurveyedAt { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
-
-    public DateTimeOffset UpdatedAt { get; set; }
-
     public string AuditId => Id.ToString();
-
-    // Entrances surface in their cave's timeline.
-    public string RootEntityType => nameof(Cave);
-
-    public string RootEntityId => CaveId.ToString();
 }

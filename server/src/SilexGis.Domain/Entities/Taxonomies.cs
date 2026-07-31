@@ -30,10 +30,26 @@ public class EntranceType : TaxonomyBase;
 
 public class RockType : TaxonomyBase;
 
-/// <summary>Surface-feature taxonomy with symbology.</summary>
+/// <summary>
+/// Data-level feature-kind registry: every generic feature names its kind here (subtyped
+/// kinds — caves, entrances, centerlines — keep their own taxonomies instead). Adding a
+/// feature kind is a row, not DDL.
+/// </summary>
 public class FeatureType : TaxonomyBase
 {
-    public GeometryKind GeometryKind { get; set; } = GeometryKind.Point;
+    public FeatureCategory Category { get; set; } = FeatureCategory.Surface;
+
+    /// <summary>OGC geometry classes rows of this kind may carry (incl. Multi* variants, opt-in).</summary>
+    public GeometryClass[] AcceptedGeometryClasses { get; set; } = [GeometryClass.Point];
+
+    /// <summary>
+    /// Display of protected rows for callers without exact view. Security-bearing:
+    /// admin-only edits, audited; seeded values contract-tested.
+    /// </summary>
+    public ProtectedDisplay ProtectedDisplay { get; set; } = ProtectedDisplay.SnapPoint;
+
+    /// <summary>Kinds that only make sense inside a parent (e.g. a cave sector) refuse rootless rows.</summary>
+    public bool RequiresParent { get; set; }
 
     /// <summary>File name inside the bundled symbol set (e.g. "sinkhole.png").</summary>
     public string? SymbolFile { get; set; }
@@ -43,4 +59,10 @@ public class FeatureType : TaxonomyBase
 
     /// <summary>Optional JSON schema for typed feature properties (jsonb).</summary>
     public string? PropertiesSchema { get; set; }
+
+    /// <summary>
+    /// Bumped whenever <see cref="PropertiesSchema"/> changes; feature rows stamp the
+    /// version they validated against and are revalidated lazily on their next edit.
+    /// </summary>
+    public int PropertiesSchemaVersion { get; set; } = 1;
 }

@@ -22,7 +22,8 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
-    public Guid CaveId { get; set; }
+    /// <summary>The owning cave's feature id (FK to the cave subtype row).</summary>
+    public Guid CaveFeatureId { get; set; }
 
     public required string Name { get; set; }
 
@@ -40,8 +41,8 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
 
     public string AuditId => Id.ToString();
 
-    // Survey models surface in their cave's timeline.
-    public string RootEntityType => nameof(Cave);
+    // Survey models surface in their cave's timeline (features audit as "Feature").
+    public string RootEntityType => nameof(Feature);
 
-    public string RootEntityId => CaveId.ToString();
+    public string RootEntityId => CaveFeatureId.ToString();
 }

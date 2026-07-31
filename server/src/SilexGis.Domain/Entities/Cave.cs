@@ -1,27 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using NetTopologySuite.Geometries;
-
 namespace SilexGis.Domain.Entities;
 
 /// <summary>
-/// A cave with toponymy, localization, geology, morphometry and protection data.
-/// Soft-deleted; geometry lives on entrances — <see cref="MainGeom"/>
-/// and <see cref="EntranceCount"/> are derived copies maintained by the entrance handlers.
+/// Cave subtype row (shared PK with its <see cref="Feature"/>, which owns name,
+/// description, access control, protection and the representative point geometry —
+/// the main-entrance cache). This table holds only cave-specific attributes.
+/// The cave's physical shape lives in its default <see cref="Centerline"/> child.
 /// </summary>
-public class Cave : IProtectedEntity, ITimestamped, IAuditable
+public class Cave : IAuditable
 {
-    public Guid Id { get; set; } = Guid.CreateVersion7();
+    /// <summary>Equals the feature id (shared primary key).</summary>
+    public Guid Id { get; set; }
 
-    // Identification & toponymy
-    public required string Name { get; set; }
+    public Feature Feature { get; set; } = null!;
 
+    // Identification & toponymy (Name lives on the feature row)
     public string? OtherToponyms { get; set; }
 
     public string? IdentificationCode { get; set; }
 
     public long CaveTypeId { get; set; }
-
-    public string? Description { get; set; }
 
     public string? Website { get; set; }
 
@@ -86,26 +84,8 @@ public class Cave : IProtectedEntity, ITimestamped, IAuditable
 
     public string? Discoverer { get; set; }
 
-    /// <summary>When true, exact coordinates require the ViewExactLocation permission.</summary>
-    public bool LocationProtected { get; set; }
-
-    // Derived from entrances (maintained by entrance handlers)
+    // Derived from entrance children (maintained by the feature write service)
     public int EntranceCount { get; set; }
-
-    public Point? MainGeom { get; set; }
-
-    // Access control (RLS-ready columns)
-    public Guid OwnerUserId { get; set; }
-
-    public Guid? TeamId { get; set; }
-
-    public Visibility Visibility { get; set; } = Visibility.Private;
-
-    public DateTimeOffset CreatedAt { get; set; }
-
-    public DateTimeOffset UpdatedAt { get; set; }
-
-    public DateTimeOffset? DeletedAt { get; set; }
 
     public string AuditId => Id.ToString();
 }

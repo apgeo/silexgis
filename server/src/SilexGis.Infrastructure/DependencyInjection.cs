@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddSingleton<ICurrentUser, AnonymousCurrentUser>();
         services.AddSingleton<TimestampInterceptor>();
         services.AddSingleton<AuditInterceptor>();
+        services.AddSingleton<FeatureAggregateInterceptor>();
         services.AddSingleton<UserIdTransactionInterceptor>();
 
         services.AddDbContext<SilexGisDbContext>((sp, options) => options
@@ -41,8 +42,16 @@ public static class DependencyInjection
             .UseOpenIddict()
             .AddInterceptors(
                 sp.GetRequiredService<TimestampInterceptor>(),
+                // The aggregate touch must run before the audit diff so the bumped
+                // feature row is part of the same audit merge.
+                sp.GetRequiredService<FeatureAggregateInterceptor>(),
                 sp.GetRequiredService<AuditInterceptor>(),
                 sp.GetRequiredService<UserIdTransactionInterceptor>()));
+
+        services.AddSingleton<Domain.Features.IFeaturePropertiesValidator,
+            Features.JsonSchemaFeaturePropertiesValidator>();
+        services.AddScoped<Features.FeatureWriteService>();
+        services.AddScoped<Features.FeatureIntegrityVerifier>();
 
         return services;
     }

@@ -18,8 +18,10 @@ public class PermissionEvaluatorTests
         role is null ? new HashSet<string>() : new HashSet<string> { role },
         team is null ? new Dictionary<Guid, TeamRole>() : new Dictionary<Guid, TeamRole> { [team.Value.Team] = team.Value.Role });
 
-    private static Cave Cave(Visibility visibility, Guid? teamId = null, bool locationProtected = false) => new()
+    // The evaluator works on IProtectedEntity; a cave feature is the canonical instance.
+    private static Feature Cave(Visibility visibility, Guid? teamId = null, bool locationProtected = false) => new()
     {
+        Kind = FeatureKind.Cave,
         Name = "x",
         OwnerUserId = Owner,
         TeamId = teamId,

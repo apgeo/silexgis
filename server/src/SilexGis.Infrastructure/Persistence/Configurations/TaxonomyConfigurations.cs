@@ -38,7 +38,19 @@ public sealed class FeatureTypeConfiguration : IEntityTypeConfiguration<FeatureT
     public void Configure(EntityTypeBuilder<FeatureType> builder)
     {
         builder.ConfigureTaxonomy("feature_types");
-        builder.Property(x => x.GeometryKind).HasConversion<short>();
+        builder.Property(x => x.Category).HasConversion<short>();
+        // Accepted OGC classes as a smallint[] — kinds opt into Multi* explicitly.
+        builder.Property(x => x.AcceptedGeometryClasses)
+            .HasConversion(
+                v => v.Select(c => (short)c).ToArray(),
+                v => v.Select(c => (SilexGis.Domain.GeometryClass)c).ToArray(),
+                new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<SilexGis.Domain.GeometryClass[]>(
+                    (a, b) => (a ?? Array.Empty<SilexGis.Domain.GeometryClass>())
+                        .SequenceEqual(b ?? Array.Empty<SilexGis.Domain.GeometryClass>()),
+                    v => v.Aggregate(0, (h, c) => HashCode.Combine(h, c)),
+                    v => v.ToArray()))
+            .HasColumnType("smallint[]");
+        builder.Property(x => x.ProtectedDisplay).HasConversion<short>();
         builder.Property(x => x.SymbolFile).HasMaxLength(100);
         builder.Property(x => x.Style).HasColumnType("jsonb");
         builder.Property(x => x.PropertiesSchema).HasColumnType("jsonb");

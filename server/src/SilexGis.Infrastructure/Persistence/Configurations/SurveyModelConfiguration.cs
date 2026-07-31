@@ -16,10 +16,10 @@ public sealed class SurveyModelConfiguration : IEntityTypeConfiguration<SurveyMo
         builder.Property(x => x.Description).HasMaxLength(4000);
         builder.Property(x => x.Format).HasConversion<short>();
 
-        // Models die with their cave (hard delete path); the stored file survives.
-        builder.HasOne<Cave>().WithMany().HasForeignKey(x => x.CaveId).OnDelete(DeleteBehavior.Cascade);
+        // Models die with their cave (purge path); the stored file survives.
+        builder.HasOne<Cave>().WithMany().HasForeignKey(x => x.CaveFeatureId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<StoredFile>().WithMany().HasForeignKey(x => x.FileId).OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(x => x.CaveId);
+        builder.HasIndex(x => x.CaveFeatureId);
     }
 }
