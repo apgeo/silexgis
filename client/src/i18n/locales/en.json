@@ -846,5 +846,14 @@
       "name_sms_two_factor_code": "Sign-in code by text",
       "name_sms_verify_phone": "Phone verification code"
     }
+  },
+  "unsubscribe": {
+    "title": "Notification settings",
+    "working": "Applying your choice…",
+    "done": "You will no longer be emailed about: {{category}}.",
+    "theseMessages": "these messages",
+    "changeAnyTime": "You can turn it back on, or change any of your other notification settings, at any time.",
+    "failed": "That link is no longer valid. You can change your notification settings after signing in.",
+    "manage": "Manage notification settings"
   }
 }

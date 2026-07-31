@@ -4,7 +4,9 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.TripLogs;
@@ -135,8 +137,9 @@ public static class TripLogEndpoints
         db.TripLogs.Add(trip);
         // No existing children on create, so the reconcile helpers reduce to pure inserts.
         await ReconcileCaveLinksAsync(db, user, trip.Id, request.CaveIds, ct);
-        await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Participant, request.Participants, ct);
-        await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Proposer, request.Proposers ?? [], ct);
+        var added = await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Participant, request.Participants, ct);
+        added.AddRange(await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Proposer, request.Proposers ?? [], ct));
+        await NotifyParticipantsAsync(db, user, trip, added, ct);
         await db.SaveChangesAsync(ct);
 
         var items = await MapWithChildrenAsync(db, user, [trip], ct);
@@ -179,8 +182,9 @@ public static class TripLogEndpoints
 
         Apply(trip, request);
         await ReconcileCaveLinksAsync(db, user, trip.Id, request.CaveIds, ct);
-        await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Participant, request.Participants, ct);
-        await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Proposer, request.Proposers ?? [], ct);
+        var added = await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Participant, request.Participants, ct);
+        added.AddRange(await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Proposer, request.Proposers ?? [], ct));
+        await NotifyParticipantsAsync(db, user, trip, added, ct);
         await db.SaveChangesAsync(ct);
 
         var items = await MapWithChildrenAsync(db, user, [trip], ct);
@@ -273,7 +277,12 @@ public static class TripLogEndpoints
 
     // Reconciles one kind (attendees or proposers) independently; the same person may be both,
     // as two rows of different kind. Diffs like the cave links so unchanged rows don't churn.
-    private static async Task ReconcileParticipantsAsync(
+    /// <summary>
+    /// Brings a trip's participants of one kind in line with what was asked for, and reports the
+    /// registered users genuinely newly listed — the only point at which that is knowable, since
+    /// afterwards an added row is indistinguishable from one that was already there.
+    /// </summary>
+    private static async Task<List<Guid>> ReconcileParticipantsAsync(
         SilexGisDbContext db, Guid tripId, TripParticipantKind kind, IReadOnlyList<TripParticipantWrite> requested, CancellationToken ct)
     {
         var existing = await db.TripLogParticipants.Where(x => x.TripLogId == tripId && x.Kind == kind).ToListAsync(ct);
@@ -306,6 +315,53 @@ public static class TripLogEndpoints
                 UserId = userId,
                 NameText = nameText,
             });
+        }
+
+        // Guests are free text with no account, so there is nobody to tell.
+        return [.. desired.Where(d => d.UserId is not null).Select(d => d.UserId!.Value)];
+    }
+
+    /// <summary>
+    /// Tells the people newly listed on a trip. Queued before the caller's save, so a notification
+    /// exists only if the trip write it describes actually committed.
+    /// </summary>
+    /// <remarks>
+    /// The message names the trip and its date and nothing else. A trip's linked caves are
+    /// deliberately absent: a cave link beside a trip's own location is exactly the disclosure the
+    /// cave-link redaction rules exist to prevent, and a notification is no less an outbound copy
+    /// of that data than a DTO is.
+    /// </remarks>
+    private static async Task NotifyParticipantsAsync(
+        SilexGisDbContext db,
+        UserContext user,
+        TripLog trip,
+        IEnumerable<Guid> addedUserIds,
+        CancellationToken ct)
+    {
+        // The same person can be listed as both participant and proposer in one request.
+        var recipients = addedUserIds.Distinct().Where(id => id != user.UserId).ToList();
+        if (recipients.Count == 0)
+        {
+            return;
+        }
+
+        var actorLabels = await ProfileDirectory.ResolveLabelsAsync(db, user, [user.UserId], ct);
+        var actorName = actorLabels.GetValueOrDefault(user.UserId) ?? string.Empty;
+
+        foreach (var recipient in recipients)
+        {
+            NotificationQueue.Enqueue(
+                db,
+                recipient,
+                NotificationCategory.TripParticipation,
+                MessageTemplateCatalog.NotifyTripParticipation,
+                new Dictionary<string, string>
+                {
+                    ["actorName"] = actorName,
+                    ["tripTitle"] = trip.Title,
+                    ["tripDate"] = trip.TripDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+                    ["url"] = $"/trip-logs/{trip.Id}",
+                });
         }
     }
 

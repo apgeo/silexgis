@@ -10,6 +10,7 @@ using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Messaging;
+using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Settings;
 using SilexGis.Infrastructure.Sms;
@@ -74,6 +75,21 @@ public static class DependencyInjection
 
         services.AddScoped<IMessageDispatcher, MessageDispatcher>();
 
+        return services;
+    }
+
+    /// <summary>
+    /// Notification delivery: the outbox worker and the opt-out tokens it puts in each message.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not folded into <see cref="AddSilexGisMessaging"/>, which is called from the
+    /// authentication setup — hanging a background sender off the auth wiring would be surprising.
+    /// Messaging is the transport; this is the thing that decides what to put on it.
+    /// </remarks>
+    public static IServiceCollection AddSilexGisNotifications(this IServiceCollection services)
+    {
+        services.AddScoped<NotificationOutboxService>();
+        services.AddHostedService<NotificationOutboxWorker>();
         return services;
     }
 

@@ -25,6 +25,7 @@ using SilexGis.Api.Features.MapViews;
 using SilexGis.Api.Features.Permissions;
 using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
+using SilexGis.Api.Features.Notifications;
 using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.SurfaceFeatures;
 using SilexGis.Api.Features.Tags;
@@ -33,6 +34,7 @@ using SilexGis.Api.Features.Teams;
 using SilexGis.Api.Features.TripLogs;
 using SilexGis.Api.Features.Users;
 using SilexGis.Domain;
+using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure;
 using SilexGis.Infrastructure.Identity;
@@ -68,6 +70,7 @@ try
     builder.Services.AddSilexGisPersistence(builder.Configuration);
     builder.Services.AddSilexGisGeodata(builder.Configuration);
     builder.Services.AddSilexGisAuth(builder.Configuration);
+    builder.Services.AddSilexGisNotifications();
 
     // Data-protection keys persist to disk so file-access tokens (and cookies) survive
     // restarts and container recreation; deployments mount a volume at Keys:Path.
@@ -79,6 +82,7 @@ try
         .SetApplicationName("silexgis")
         .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
     builder.Services.AddSingleton<IFileAccessTokenService, FileAccessTokenService>();
+    builder.Services.AddSingleton<IUnsubscribeTokens, UnsubscribeTokenService>();
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<SilexGisDbContext>("database");
     builder.Services.AddOptions<AboutOptions>()
@@ -153,6 +157,7 @@ try
     api.MapMeNotificationEndpoints();
     api.MapMePreferenceEndpoints();
     api.MapMeDataExportEndpoints();
+    api.MapUnsubscribeEndpoints();
     api.MapMfaEndpoints();
     api.MapTaxonomyEndpoints();
     api.MapMapLayerEndpoints();

@@ -4,6 +4,9 @@ using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using SilexGis.Api.Common;
+using SilexGis.Domain.Entities;
+using SilexGis.Domain.Messaging;
+using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
@@ -104,7 +107,9 @@ public static class MeCredentialEndpoints
         PasswordChangeRequest request,
         ClaimsPrincipal principal,
         UserManager<SilexGisUser> userManager,
-        SignInManager<SilexGisUser> signInManager)
+        SignInManager<SilexGisUser> signInManager,
+        SilexGisDbContext db,
+        CancellationToken ct)
     {
         var user = await userManager.GetUserAsync(principal);
         if (user is null)
@@ -126,6 +131,15 @@ public static class MeCredentialEndpoints
                 ? ApiProblems.BadRequest("me.password_incorrect", "The current password is not right.")
                 : IdentityProblems.From(result, "me.password_invalid");
         }
+
+        // Warns the account holder that this happened, which is the whole point of a security
+        // alert: if it was not them, someone else knows their password. Saved separately because
+        // the password itself is committed by the Identity store, not by this context.
+        NotificationQueue.Enqueue(
+            db, user.Id, NotificationCategory.SecurityAlerts,
+            MessageTemplateCatalog.NotifySecurityPasswordChanged,
+            new Dictionary<string, string>());
+        await db.SaveChangesAsync(ct);
 
         await signInManager.RefreshSignInAsync(user);
         return TypedResults.NoContent();

@@ -846,5 +846,14 @@
       "name_sms_two_factor_code": "Cod de autentificare prin SMS",
       "name_sms_verify_phone": "Cod de verificare a telefonului"
     }
+  },
+  "unsubscribe": {
+    "title": "Setări notificări",
+    "working": "Se aplică alegerea dumneavoastră…",
+    "done": "Nu veți mai primi e-mailuri despre: {{category}}.",
+    "theseMessages": "aceste mesaje",
+    "changeAnyTime": "Puteți reactiva oricând sau modifica oricare dintre celelalte setări de notificare.",
+    "failed": "Linkul nu mai este valid. Puteți modifica setările de notificare după autentificare.",
+    "manage": "Gestionează setările de notificare"
   }
 }

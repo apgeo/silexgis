@@ -242,6 +242,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Switches off one notification category using the token from a message. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UnsubscribeRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UnsubscribeResultDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cave-types": {
         parameters: {
             query?: never;
@@ -6606,6 +6646,12 @@ export interface components {
         };
         UiPreferencesWriteRequest: {
             preferences: components["schemas"]["JsonElement"];
+        };
+        UnsubscribeRequest: {
+            token: string;
+        };
+        UnsubscribeResultDto: {
+            category: components["schemas"]["NotificationCategory"];
         };
         UserAddressDto: {
             /** Format: uuid */

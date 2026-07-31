@@ -91,3 +91,25 @@ public sealed class AccountDataExportConfiguration : IEntityTypeConfiguration<Ac
         builder.HasIndex(x => new { x.UserId, x.CreatedAt });
     }
 }
+
+public sealed class NotificationOutboxConfiguration : IEntityTypeConfiguration<NotificationOutboxEntry>
+{
+    public void Configure(EntityTypeBuilder<NotificationOutboxEntry> builder)
+    {
+        builder.ToTable("notification_outbox");
+
+        builder.Property(x => x.Status).HasConversion<short>();
+        builder.Property(x => x.Category).HasConversion<short>();
+        builder.Property(x => x.TemplateKey).HasMaxLength(64);
+        builder.Property(x => x.Placeholders).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+        // Shorter than the processing queue's cap because this one is written inside the failure
+        // path itself: a message too long to store would fail the save that records the failure.
+        builder.Property(x => x.Error).HasMaxLength(1000);
+
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        // Serves both claims — the immediate drain and the due-digest gather.
+        builder.HasIndex(x => new { x.Status, x.NotBefore, x.Id });
+        builder.HasIndex(x => new { x.UserId, x.Status });
+    }
+}

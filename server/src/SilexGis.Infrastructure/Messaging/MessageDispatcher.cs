@@ -32,19 +32,7 @@ public sealed class MessageDispatcher(
         IReadOnlyDictionary<string, string> values,
         CancellationToken ct = default)
     {
-        var definition = MessageTemplateCatalog.Find(templateKey)
-            ?? throw new ArgumentException($"No message template named '{templateKey}'.", nameof(templateKey));
-
-        var text = await templates.ResolveAsync(definition, locale, ct);
-
-        // Every template may name the installation without each caller having to pass it.
-        var withBranding = new Dictionary<string, string>(values, StringComparer.Ordinal)
-        {
-            ["appName"] = InstanceName,
-        };
-
-        var body = MessageTemplateRenderer.Tidy(MessageTemplateRenderer.Render(text.Body, withBranding));
-        var subject = MessageTemplateRenderer.Render(text.Subject ?? string.Empty, withBranding).Trim();
+        var (definition, body, subject) = await ComposeAsync(templateKey, locale, values, ct);
 
         var configured = definition.Channel == MessageChannel.Email
             ? await emailDelivery.IsConfiguredAsync(ct)
@@ -68,6 +56,44 @@ public sealed class MessageDispatcher(
             logger.LogWarning(ex, "Could not send {TemplateKey} on {Channel}", templateKey, definition.Channel);
             return MessageResult.Failed(ex.Message);
         }
+    }
+
+    public async Task<string> RenderSubjectAsync(
+        string templateKey,
+        string? locale,
+        IReadOnlyDictionary<string, string> values,
+        CancellationToken ct = default)
+    {
+        var (_, _, subject) = await ComposeAsync(templateKey, locale, values, ct);
+        return subject;
+    }
+
+    /// <summary>
+    /// Resolves a template — the operator's wording if they rewrote it, the shipped wording
+    /// otherwise — and renders it. Shared so that a subject rendered for the daily summary is
+    /// character-for-character the subject the standalone message would have carried.
+    /// </summary>
+    private async Task<(MessageTemplateDefinition Definition, string Body, string Subject)> ComposeAsync(
+        string templateKey,
+        string? locale,
+        IReadOnlyDictionary<string, string> values,
+        CancellationToken ct)
+    {
+        var definition = MessageTemplateCatalog.Find(templateKey)
+            ?? throw new ArgumentException($"No message template named '{templateKey}'.", nameof(templateKey));
+
+        var text = await templates.ResolveAsync(definition, locale, ct);
+
+        // Every template may name the installation without each caller having to pass it.
+        var withBranding = new Dictionary<string, string>(values, StringComparer.Ordinal)
+        {
+            ["appName"] = InstanceName,
+        };
+
+        return (
+            definition,
+            MessageTemplateRenderer.Tidy(MessageTemplateRenderer.Render(text.Body, withBranding)),
+            MessageTemplateRenderer.Render(text.Subject ?? string.Empty, withBranding).Trim());
     }
 
     /// <summary>

@@ -39,4 +39,19 @@ public interface IMessageDispatcher
         string? locale,
         IReadOnlyDictionary<string, string> values,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Renders only a message's subject line, without sending anything.
+    /// </summary>
+    /// <remarks>
+    /// The daily summary needs one line per event, in the recipient's language and editable by the
+    /// operator — which is exactly what each event's own subject already is. Rendering it here
+    /// rather than in the summary's own template avoids a second set of catalogue entries saying
+    /// the same things, and keeps the branding and tidying rules in one place.
+    /// </remarks>
+    Task<string> RenderSubjectAsync(
+        string templateKey,
+        string? locale,
+        IReadOnlyDictionary<string, string> values,
+        CancellationToken ct = default);
 }

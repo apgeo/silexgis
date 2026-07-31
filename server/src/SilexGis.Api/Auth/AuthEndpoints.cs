@@ -5,6 +5,9 @@ using SilexGis.Domain;
 using SilexGis.Domain.Auth;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Settings;
+using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Notifications;
+using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Identity;
 
 namespace SilexGis.Api.Auth;
@@ -235,7 +238,10 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> ResetPasswordAsync(
-        ResetPasswordRequest request, UserManager<SilexGisUser> userManager)
+        ResetPasswordRequest request,
+        UserManager<SilexGisUser> userManager,
+        SilexGisDbContext db,
+        CancellationToken ct)
     {
         var user = string.IsNullOrWhiteSpace(request.Email) ? null : await userManager.FindByEmailAsync(request.Email);
         if (user is null)
@@ -244,9 +250,20 @@ public static class AuthEndpoints
         }
 
         var result = await userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
-        return result.Succeeded
-            ? TypedResults.NoContent()
-            : AuthProblem(StatusCodes.Status400BadRequest, "auth.reset_invalid", "The reset token is invalid or expired.");
+        if (!result.Succeeded)
+        {
+            return AuthProblem(StatusCodes.Status400BadRequest, "auth.reset_invalid", "The reset token is invalid or expired.");
+        }
+
+        // The reset path is the one an attacker holding a stolen mailbox would use, so it warns
+        // exactly as the signed-in change does.
+        NotificationQueue.Enqueue(
+            db, user.Id, NotificationCategory.SecurityAlerts,
+            MessageTemplateCatalog.NotifySecurityPasswordChanged,
+            new Dictionary<string, string>());
+        await db.SaveChangesAsync(ct);
+
+        return TypedResults.NoContent();
     }
 
     /// <summary>

@@ -8,9 +8,11 @@ using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Auth;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Identity;
+using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Me;
@@ -417,6 +419,17 @@ public static class MfaEndpoints
         var any = TwoFactorPolicy.AnyEnabled(user.ToTwoFactorState());
         if (user.TwoFactorEnabled != any)
         {
+            // Only the transition to "nothing left" is worth a warning: switching one method off
+            // while another remains has not weakened the account. Every enable and disable path
+            // passes through here, so this one place covers them all.
+            if (!any)
+            {
+                NotificationQueue.Enqueue(
+                    db, user.Id, NotificationCategory.SecurityAlerts,
+                    MessageTemplateCatalog.NotifySecurityTwoFactorDisabled,
+                    new Dictionary<string, string>());
+            }
+
             await userManager.SetTwoFactorEnabledAsync(user, any);
         }
 

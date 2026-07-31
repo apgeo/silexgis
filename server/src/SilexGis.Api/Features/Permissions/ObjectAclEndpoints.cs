@@ -5,7 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Permissions;
@@ -131,6 +133,14 @@ public static class ObjectAclEndpoints
             }
         }
 
+        // Who already had a grant, read before the replace wipes it: a full-replace save that
+        // leaves an existing grant untouched is not news, and mailing everyone on every ACL edit
+        // would train people to ignore the message that matters.
+        var alreadyGranted = await db.ObjectAcls.AsNoTracking()
+            .Where(a => a.EntityType == parsedType && a.EntityId == id)
+            .Select(a => new { a.SubjectKind, a.SubjectId })
+            .ToListAsync(ct);
+
         // Full replace: the ACL is small per object; diffing buys nothing.
         await db.ObjectAcls
             .Where(a => a.EntityType == parsedType && a.EntityId == id)
@@ -148,9 +158,108 @@ public static class ObjectAclEndpoints
             });
         }
 
+        var newlyGranted = request.Entries
+            .Where(e => !alreadyGranted.Any(a => a.SubjectKind == e.SubjectKind && a.SubjectId == e.SubjectId))
+            .ToList();
+        await NotifyGranteesAsync(db, user, parsedType, id, newlyGranted, ct);
+
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(await LoadEntriesAsync(db, user, parsedType, id, ct));
     }
+
+    /// <summary>
+    /// Tells the people who just gained access to something. A grant to a team reaches each of its
+    /// members, since a team grant is how most people actually receive access.
+    /// </summary>
+    /// <remarks>
+    /// Naming the record is safe here and nowhere near the location rules: a grant confers Read on
+    /// it, names are shown in every list to anyone with Read, and what location protection hides is
+    /// coordinates and address fields — never the name. The message carries the name and a link,
+    /// and no geometry of any kind.
+    /// </remarks>
+    private static async Task NotifyGranteesAsync(
+        SilexGisDbContext db,
+        UserContext user,
+        AttachedEntityType entityType,
+        Guid entityId,
+        IReadOnlyList<AclEntryWrite> granted,
+        CancellationToken ct)
+    {
+        if (granted.Count == 0)
+        {
+            return;
+        }
+
+        var recipients = new HashSet<Guid>(granted
+            .Where(e => e.SubjectKind == AclSubjectKind.User)
+            .Select(e => e.SubjectId));
+
+        var teamIds = granted.Where(e => e.SubjectKind == AclSubjectKind.Team).Select(e => e.SubjectId).ToList();
+        if (teamIds.Count > 0)
+        {
+            var members = await db.TeamMembers.AsNoTracking()
+                .Where(m => teamIds.Contains(m.TeamId))
+                .Select(m => m.UserId)
+                .ToListAsync(ct);
+            recipients.UnionWith(members);
+        }
+
+        // Granting yourself access, or being in a team you just granted, is not news.
+        recipients.Remove(user.UserId);
+        if (recipients.Count == 0)
+        {
+            return;
+        }
+
+        var objectName = await NameOfAsync(db, entityType, entityId, ct);
+        var actorLabels = await ProfileDirectory.ResolveLabelsAsync(db, user, [user.UserId], ct);
+        var actorName = actorLabels.GetValueOrDefault(user.UserId) ?? string.Empty;
+
+        foreach (var recipient in recipients)
+        {
+            NotificationQueue.Enqueue(
+                db,
+                recipient,
+                NotificationCategory.PermissionGranted,
+                MessageTemplateCatalog.NotifyPermissionGranted,
+                new Dictionary<string, string>
+                {
+                    ["actorName"] = actorName,
+                    ["objectName"] = objectName,
+                    ["url"] = LinkTo(entityType, entityId),
+                });
+        }
+    }
+
+    /// <summary>
+    /// What the record is called. <see cref="IProtectedEntity"/> carries no name, and the field
+    /// differs per type, so the projection is per type rather than shared.
+    /// </summary>
+    private static async Task<string> NameOfAsync(
+        SilexGisDbContext db, AttachedEntityType entityType, Guid id, CancellationToken ct) =>
+        entityType switch
+        {
+            AttachedEntityType.Cave =>
+                await db.Caves.Where(x => x.Id == id).Select(x => x.Name).FirstOrDefaultAsync(ct),
+            AttachedEntityType.SurfaceFeature =>
+                await db.SurfaceFeatures.Where(x => x.Id == id).Select(x => x.Name).FirstOrDefaultAsync(ct),
+            AttachedEntityType.Geofile =>
+                await db.Geofiles.Where(x => x.Id == id).Select(x => x.Name).FirstOrDefaultAsync(ct),
+            AttachedEntityType.TripLog =>
+                await db.TripLogs.Where(x => x.Id == id).Select(x => x.Title).FirstOrDefaultAsync(ct),
+            AttachedEntityType.GeoreferencedMap =>
+                await db.GeoreferencedMaps.Where(x => x.Id == id).Select(x => x.Name).FirstOrDefaultAsync(ct),
+            _ => null,
+        } ?? string.Empty;
+
+    private static string LinkTo(AttachedEntityType entityType, Guid id) => entityType switch
+    {
+        AttachedEntityType.Cave => $"/caves/{id}",
+        AttachedEntityType.TripLog => $"/trip-logs/{id}",
+        AttachedEntityType.SurfaceFeature => "/features",
+        AttachedEntityType.Geofile or AttachedEntityType.GeoreferencedMap => "/geodata",
+        _ => "/",
+    };
 
     private static async Task<Results<Ok<ObjectPermission>, UnauthorizedHttpResult, ProblemHttpResult>> EffectiveAsync(
         string entityType,

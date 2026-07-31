@@ -51,6 +51,35 @@ public static class MessageTemplateCatalog
     /// <summary>Confirms a phone number before it may carry second-factor codes.</summary>
     public const string SmsVerifyPhone = "sms.verify-phone";
 
+    // Notifications. Unlike the messages above — which answer something the recipient just did —
+    // these report something that happened to them, and every one of them is governed by the
+    // notification settings. Their wording deliberately names no role, kind or status word: those
+    // would have to arrive as placeholders in one language and would then be untranslatable.
+
+    public const string NotifyTeamJoined = "notify.team-joined";
+
+    public const string NotifyTeamRoleChanged = "notify.team-role-changed";
+
+    public const string NotifyTeamRemoved = "notify.team-removed";
+
+    public const string NotifyPermissionGranted = "notify.permission-granted";
+
+    public const string NotifyTripParticipation = "notify.trip-participation";
+
+    public const string NotifyJobCompleted = "notify.job-completed";
+
+    public const string NotifyJobFailed = "notify.job-failed";
+
+    public const string NotifySecurityPasswordChanged = "notify.security-password-changed";
+
+    /// <summary>Warns the address an account is moving away from. Sent to the old address.</summary>
+    public const string NotifySecurityEmailChanged = "notify.security-email-changed";
+
+    public const string NotifySecurityTwoFactorDisabled = "notify.security-two-factor-disabled";
+
+    /// <summary>The daily summary. Its lines are the other messages' own subjects.</summary>
+    public const string NotifyDigest = "notify.digest";
+
     /// <summary>Languages every template ships in. A locale outside this set falls back to English.</summary>
     public static IReadOnlyList<string> Locales { get; } = ["en", "ro"];
 
@@ -61,6 +90,18 @@ public static class MessageTemplateCatalog
 
     /// <summary>Placeholder every template may use: how the recipient is addressed.</summary>
     private const string DisplayName = "displayName";
+
+    /// <summary>Notification placeholder: whoever did the thing being reported.</summary>
+    private const string ActorName = "actorName";
+
+    /// <summary>Notification placeholder: where the installation lives, for a "go and look" link.</summary>
+    private const string SiteUrl = "siteUrl";
+
+    /// <summary>
+    /// Notification placeholder: the one-click opt-out line. Filled by the worker, which is the
+    /// only thing that knows the recipient and can sign a token for them.
+    /// </summary>
+    private const string UnsubscribeUrl = "unsubscribeUrl";
 
     public static IReadOnlyList<MessageTemplateDefinition> All { get; } =
     [
@@ -212,6 +253,368 @@ public static class MessageTemplateCatalog
             {
                 ["en"] = new(null, "{code} is your {appName} phone verification code. It expires in {expiresMinutes} minutes."),
                 ["ro"] = new(null, "{code} este codul dumneavoastră de verificare a telefonului {appName}. Expiră în {expiresMinutes} minute."),
+            }),
+
+        new(
+            NotifyTeamJoined,
+            MessageChannel.Email,
+            "Someone was added to a team.",
+            [AppName, DisplayName, ActorName, "teamName", SiteUrl, UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "You were added to {teamName}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} added you to the team {teamName} on {appName}.
+
+                    {siteUrl}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Ați fost adăugat în {teamName}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} v-a adăugat în echipa {teamName} pe {appName}.
+
+                    {siteUrl}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTeamRoleChanged,
+            MessageChannel.Email,
+            "Someone's role within a team was changed.",
+            [AppName, DisplayName, ActorName, "teamName", SiteUrl, UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "Your role in {teamName} changed",
+                    """
+                    Hello {displayName},
+
+                    {actorName} changed your role in the team {teamName}. You can see what you can
+                    now do from the team's page:
+
+                    {siteUrl}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Rolul dumneavoastră în {teamName} s-a schimbat",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} v-a schimbat rolul în echipa {teamName}. Puteți vedea ce puteți face
+                    acum din pagina echipei:
+
+                    {siteUrl}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTeamRemoved,
+            MessageChannel.Email,
+            "Someone was removed from a team.",
+            [AppName, DisplayName, ActorName, "teamName", SiteUrl, UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "You were removed from {teamName}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} removed you from the team {teamName} on {appName}. You may no longer
+                    have access to what that team could see.
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Ați fost eliminat din {teamName}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} v-a eliminat din echipa {teamName} pe {appName}. Este posibil să nu
+                    mai aveți acces la ce vedea acea echipă.
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyPermissionGranted,
+            MessageChannel.Email,
+            "Someone was given access to a record — directly, or through a team they belong to.",
+            [AppName, DisplayName, ActorName, "objectName", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "You were given access to {objectName}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} gave you access to {objectName} on {appName}:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Ați primit acces la {objectName}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} v-a dat acces la {objectName} pe {appName}:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripParticipation,
+            MessageChannel.Email,
+            "Someone was listed as taking part in a trip.",
+            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "You were listed on the trip {tripTitle}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} listed you as taking part in {tripTitle} on {tripDate}:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Ați fost trecut în tura {tripTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} v-a trecut ca participant la {tripTitle} în data de {tripDate}:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyJobCompleted,
+            MessageChannel.Email,
+            "A background task someone started finished successfully.",
+            [AppName, DisplayName, SiteUrl, UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "Your {appName} upload has finished processing",
+                    """
+                    Hello {displayName},
+
+                    A task you started has finished processing and the result is ready:
+
+                    {siteUrl}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Sarcina dumneavoastră {appName} s-a încheiat",
+                    """
+                    Bună ziua {displayName},
+
+                    O sarcină pe care ați pornit-o s-a încheiat, iar rezultatul este gata:
+
+                    {siteUrl}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyJobFailed,
+            MessageChannel.Email,
+            "A background task someone started could not be completed.",
+            [AppName, DisplayName, "error", SiteUrl, UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "Your {appName} upload could not be processed",
+                    """
+                    Hello {displayName},
+
+                    A task you started could not be completed:
+
+                    {error}
+
+                    You can try again from {siteUrl} — if it keeps failing, tell an administrator.
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Sarcina dumneavoastră {appName} nu a putut fi finalizată",
+                    """
+                    Bună ziua {displayName},
+
+                    O sarcină pe care ați pornit-o nu a putut fi finalizată:
+
+                    {error}
+
+                    Puteți încerca din nou de la {siteUrl} — dacă eșuează în continuare, anunțați un
+                    administrator.
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        // The three security alerts carry no unsubscribe link: the settings page refuses to switch
+        // this category off, so offering a link that cannot work would be a lie.
+        new(
+            NotifySecurityPasswordChanged,
+            MessageChannel.Email,
+            "Warns an account holder that the password on their account was changed.",
+            [AppName, DisplayName, SiteUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "The password on your {appName} account was changed",
+                    """
+                    Hello {displayName},
+
+                    The password on your {appName} account has just been changed.
+
+                    If that was you, nothing more is needed. If it was not, someone else has access
+                    to your account — reset your password immediately and tell an administrator:
+
+                    {siteUrl}
+                    """),
+                ["ro"] = new(
+                    "Parola contului dumneavoastră {appName} a fost schimbată",
+                    """
+                    Bună ziua {displayName},
+
+                    Parola contului dumneavoastră {appName} tocmai a fost schimbată.
+
+                    Dacă dumneavoastră ați făcut acest lucru, nu mai este nimic de făcut. Dacă nu,
+                    altcineva are acces la contul dumneavoastră — resetați parola imediat și anunțați
+                    un administrator:
+
+                    {siteUrl}
+                    """),
+            }),
+
+        new(
+            NotifySecurityEmailChanged,
+            MessageChannel.Email,
+            "Warns the address an account is moving away from. Sent to the old address, not the new one.",
+            [AppName, DisplayName, "newEmail", SiteUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "The address on your {appName} account was changed",
+                    """
+                    Hello {displayName},
+
+                    The address on your {appName} account has been changed to {newEmail}. This
+                    message is the last one this address will receive.
+
+                    If that was not you, someone else has access to your account — tell an
+                    administrator now, because you can no longer reset the password yourself:
+
+                    {siteUrl}
+                    """),
+                ["ro"] = new(
+                    "Adresa contului dumneavoastră {appName} a fost schimbată",
+                    """
+                    Bună ziua {displayName},
+
+                    Adresa contului dumneavoastră {appName} a fost schimbată în {newEmail}. Acesta
+                    este ultimul mesaj primit la această adresă.
+
+                    Dacă nu dumneavoastră ați făcut acest lucru, altcineva are acces la contul
+                    dumneavoastră — anunțați imediat un administrator, deoarece nu mai puteți reseta
+                    singur parola:
+
+                    {siteUrl}
+                    """),
+            }),
+
+        new(
+            NotifySecurityTwoFactorDisabled,
+            MessageChannel.Email,
+            "Warns an account holder that two-factor sign-in was switched off on their account.",
+            [AppName, DisplayName, SiteUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "Two-factor sign-in was switched off on your {appName} account",
+                    """
+                    Hello {displayName},
+
+                    Two-factor sign-in has been switched off on your {appName} account. Your password
+                    is now the only thing protecting it.
+
+                    If that was not you, switch it back on and change your password:
+
+                    {siteUrl}
+                    """),
+                ["ro"] = new(
+                    "Autentificarea în doi pași a fost dezactivată pe contul {appName}",
+                    """
+                    Bună ziua {displayName},
+
+                    Autentificarea în doi pași a fost dezactivată pe contul dumneavoastră {appName}.
+                    Parola este acum singurul lucru care îl protejează.
+
+                    Dacă nu dumneavoastră ați făcut acest lucru, reactivați-o și schimbați-vă parola:
+
+                    {siteUrl}
+                    """),
+            }),
+
+        new(
+            NotifyDigest,
+            MessageChannel.Email,
+            "The daily summary, for people who asked for one message a day rather than each as it happens.",
+            [AppName, DisplayName, "itemCount", "items", SiteUrl, UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "Your {appName} summary: {itemCount} update(s)",
+                    """
+                    Hello {displayName},
+
+                    Here is what happened on {appName} since your last summary:
+
+                    {items}
+
+                    {siteUrl}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Rezumatul dumneavoastră {appName}: {itemCount} noutăți",
+                    """
+                    Bună ziua {displayName},
+
+                    Iată ce s-a întâmplat pe {appName} de la ultimul rezumat:
+
+                    {items}
+
+                    {siteUrl}
+
+                    {unsubscribeUrl}
+                    """),
             }),
     ];
 

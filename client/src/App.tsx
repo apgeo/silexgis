@@ -10,6 +10,7 @@ import LandingRoute from './pages/LandingRoute.tsx';
 import ConfirmEmailPage from './pages/ConfirmEmailPage.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import ResetPasswordPage from './pages/ResetPasswordPage.tsx';
+import UnsubscribePage from './pages/UnsubscribePage.tsx';
 import LegacySecurityRedirect from './pages/settings/LegacySecurityRedirect.tsx';
 
 // Route-level code-splitting: the map workspace (OpenLayers) and the cave pages load on
@@ -51,6 +52,8 @@ const router = createBrowserRouter([
   { path: '/auth/callback', element: <CallbackPage /> },
   { path: '/confirm-email', element: <ConfirmEmailPage /> },
   { path: '/reset-password', element: <ResetPasswordPage /> },
+  // The opt-out link in a notification; anonymous, because it is opened from a mail client.
+  { path: '/unsubscribe', element: <UnsubscribePage /> },
   { path: '/shared/view/:token', element: <Loadable><SharedViewPage /></Loadable> },
   {
     element: <RequireAuth />,

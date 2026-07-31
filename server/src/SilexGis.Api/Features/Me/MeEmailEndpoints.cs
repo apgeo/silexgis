@@ -101,6 +101,8 @@ public static class MeEmailEndpoints
         SignInManager<SilexGisUser> signInManager,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
+        IMessageDispatcher dispatcher,
+        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
         var user = await userManager.GetUserAsync(principal);
@@ -142,6 +144,25 @@ public static class MeEmailEndpoints
         user.PendingEmail = null;
         user.PendingEmailRequestedAt = null;
         await db.SaveChangesAsync(ct);
+
+        // Warns the address the account just left. Sent straight rather than queued, because the
+        // outbox addresses a recipient by user id and would resolve that to the *new* address —
+        // and the whole value of this warning is that it reaches the old mailbox, which is the one
+        // an attacker changing the address is trying to cut off.
+        if (pending is not null && previousEmail is not null)
+        {
+            await TrySendAsync(
+                dispatcher,
+                loggerFactory,
+                MessageTemplateCatalog.NotifySecurityEmailChanged,
+                previousEmail,
+                user.Locale,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["displayName"] = user.DisplayName ?? user.FirstName ?? "there",
+                    ["newEmail"] = pending,
+                });
+        }
 
         // Changing the address rotates the security stamp, which invalidates the sign-in cookie
         // the authorization endpoint needs to issue every future token. Without this the user is
@@ -234,6 +255,30 @@ public static class MeEmailEndpoints
 
     private static bool TooSoon(DateTimeOffset? lastRequestedAt) =>
         lastRequestedAt is { } last && DateTimeOffset.UtcNow - last < ResendInterval;
+
+    /// <summary>
+    /// Sends without letting a mail failure fail the request. The address change is already
+    /// committed by the time this runs, so throwing here would report an error for something that
+    /// succeeded.
+    /// </summary>
+    private static async Task TrySendAsync(
+        IMessageDispatcher dispatcher,
+        ILoggerFactory loggerFactory,
+        string templateKey,
+        string recipient,
+        string? locale,
+        IReadOnlyDictionary<string, string> values)
+    {
+        try
+        {
+            await dispatcher.SendAsync(templateKey, recipient, locale, values);
+        }
+        catch (Exception ex)
+        {
+            loggerFactory.CreateLogger(typeof(MeEmailEndpoints))
+                .LogWarning(ex, "Could not warn the previous address about an account change");
+        }
+    }
 
     private static async Task SendChangeMessageAsync(
         SilexGisUser user,

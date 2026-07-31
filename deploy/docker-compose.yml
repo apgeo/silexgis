@@ -30,6 +30,10 @@ services:
       SILEXGIS__Admin__Email: ${SILEXGIS_ADMIN_EMAIL:-}
       SILEXGIS__Admin__Password: ${SILEXGIS_ADMIN_PASSWORD:-}
       SILEXGIS__Auth__OpenRegistration: ${SILEXGIS_OPEN_REGISTRATION:-false}
+      # Notification sending. Unlike mail and SMS — which an administrator edits from the admin
+      # pages — these two are deployment facts, so they stay plain configuration.
+      SILEXGIS__Notifications__PollSeconds: ${SILEXGIS_NOTIFICATIONS_POLL_SECONDS:-15}
+      SILEXGIS__Notifications__DigestHourUtc: ${SILEXGIS_NOTIFICATIONS_DIGEST_HOUR_UTC:-7}
       SILEXGIS__Files__Root: /data/files
       SILEXGIS__Keys__Path: /data/keys
     volumes:

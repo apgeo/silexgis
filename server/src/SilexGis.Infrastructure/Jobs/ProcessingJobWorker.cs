@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Messaging;
+using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Jobs;
@@ -97,8 +99,39 @@ public sealed class ProcessingJobWorker(
         }
 
         job.CompletedAt = DateTimeOffset.UtcNow;
+        NotifyRequester(db, job);
         await db.SaveChangesAsync(ct);
         return true;
+    }
+
+    /// <summary>
+    /// Tells whoever asked for the job how it went. Queued on the same context as the job's own
+    /// terminal save, so the notification and the outcome commit together.
+    /// </summary>
+    /// <remarks>
+    /// The worker knows the job's kind but not its subject's name — only each handler does — so
+    /// the message names nothing and links to where the result is. That is a deliberate trade
+    /// against giving every handler a second responsibility, and against a per-kind noun that
+    /// would arrive in one language and be untranslatable.
+    /// </remarks>
+    private static void NotifyRequester(SilexGisDbContext db, ProcessingJob job)
+    {
+        // Nothing enforces a requester (the column is nullable), so a job queued by the system
+        // itself simply notifies nobody.
+        if (job.RequestedBy is not { } requester)
+        {
+            return;
+        }
+
+        var failed = job.Status == ProcessingJobStatus.Failed;
+        NotificationQueue.Enqueue(
+            db,
+            requester,
+            NotificationCategory.JobCompleted,
+            failed ? MessageTemplateCatalog.NotifyJobFailed : MessageTemplateCatalog.NotifyJobCompleted,
+            failed
+                ? new Dictionary<string, string> { ["error"] = job.Error ?? string.Empty }
+                : new Dictionary<string, string>());
     }
 
     private async Task WaitForQueueAsync(CancellationToken ct)

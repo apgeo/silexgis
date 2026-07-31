@@ -5,7 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Teams;
@@ -234,7 +236,9 @@ public static class TeamEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!await db.Teams.AnyAsync(t => t.Id == id, ct))
+        // The name is read rather than an existence check, because the notification names the team.
+        var teamName = await db.Teams.Where(t => t.Id == id).Select(t => t.Name).FirstOrDefaultAsync(ct);
+        if (teamName is null)
         {
             return ApiProblems.NotFound("team.not_found");
         }
@@ -251,6 +255,7 @@ public static class TeamEndpoints
         }
 
         var member = await db.TeamMembers.FirstOrDefaultAsync(m => m.TeamId == id && m.UserId == request.UserId, ct);
+        var joined = member is null;
         if (member is null)
         {
             member = new TeamMember { TeamId = id, UserId = request.UserId, Role = request.Role };
@@ -265,6 +270,23 @@ public static class TeamEndpoints
             }
 
             member.Role = request.Role;
+        }
+
+        // Queued before the save, so the notification and the membership commit together — and
+        // never for someone acting on their own membership, who does not need telling.
+        if (member.UserId != user.UserId)
+        {
+            var actorLabels = await ProfileDirectory.ResolveLabelsAsync(db, user, [user.UserId], ct);
+            NotificationQueue.Enqueue(
+                db,
+                member.UserId,
+                NotificationCategory.TeamMembership,
+                joined ? MessageTemplateCatalog.NotifyTeamJoined : MessageTemplateCatalog.NotifyTeamRoleChanged,
+                new Dictionary<string, string>
+                {
+                    ["actorName"] = actorLabels.GetValueOrDefault(user.UserId) ?? string.Empty,
+                    ["teamName"] = teamName,
+                });
         }
 
         await db.SaveChangesAsync(ct);
@@ -306,6 +328,24 @@ public static class TeamEndpoints
         }
 
         db.TeamMembers.Remove(member);
+
+        // Someone leaving of their own accord already knows; only a removal by someone else is news.
+        if (!selfRemoval)
+        {
+            var teamName = await db.Teams.Where(t => t.Id == id).Select(t => t.Name).FirstAsync(ct);
+            var actorLabels = await ProfileDirectory.ResolveLabelsAsync(db, user, [user.UserId], ct);
+            NotificationQueue.Enqueue(
+                db,
+                userId,
+                NotificationCategory.TeamMembership,
+                MessageTemplateCatalog.NotifyTeamRemoved,
+                new Dictionary<string, string>
+                {
+                    ["actorName"] = actorLabels.GetValueOrDefault(user.UserId) ?? string.Empty,
+                    ["teamName"] = teamName,
+                });
+        }
+
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }
