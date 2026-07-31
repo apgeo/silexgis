@@ -1,0 +1,24 @@
+# DEVELOPMENT ONLY — publishes the stack database on a host port so desktop clients
+# (DBeaver, psql, a locally installed pgAdmin) can reach it.
+#
+# Do not use this overlay on a deployed installation. Without it the database is reachable
+# only from inside the compose network, which is what keeps a single weak password from
+# being a remotely exploitable one; use docker-compose.pgadmin.yml there instead.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dbport.yml up -d db
+#   → localhost:5433, database `silexgis`, user `silexgis`, password SILEXGIS_DB_PASSWORD
+#
+# Optional in .env:
+#   SILEXGIS_DB_HOST_PORT=5433   # default; 5432 is normally taken by docker-compose.dev.yml
+#
+# Drop the overlay again — plain `up -d db` recreates the container without the port:
+#   docker compose -f docker-compose.yml up -d db
+name: silexgis
+
+services:
+  db:
+    ports:
+      # Loopback only: a LAN-reachable database would be one guessed password away from
+      # every row in the installation, entrance coordinates included.
+      - "127.0.0.1:${SILEXGIS_DB_HOST_PORT:-5433}:5432"

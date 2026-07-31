@@ -122,10 +122,31 @@ Stop it when you are done; it is not part of the running service:
 docker compose -f docker-compose.yml -f docker-compose.pgadmin.yml stop pgadmin
 ```
 
-**Using a client on your own machine instead** (psql, DBeaver, a desktop pgAdmin) means giving
-the database a host port, so prefer the above where you can. If you do need one, add a small
-overlay publishing it on loopback only — `ports: ["127.0.0.1:5433:5432"]` under `db` — and
-connect to `localhost:5433`, database `silexgis`, user `silexgis`.
+### Desktop clients, during development only
+
+A client on your own machine (DBeaver, psql, a desktop pgAdmin) needs the database to have a
+host port, which the deployed stack deliberately does not give it.
+`deploy/docker-compose.dbport.yml` adds one, bound to `127.0.0.1`:
+
+```bash
+cd deploy
+docker compose -f docker-compose.yml -f docker-compose.dbport.yml up -d db
+```
+
+| Setting | Value |
+|---|---|
+| Host / Port | `localhost` / `5433` (`SILEXGIS_DB_HOST_PORT` to change it) |
+| Database | `silexgis` |
+| User | `silexgis` |
+| Password | `SILEXGIS_DB_PASSWORD` from `.env` |
+
+Applying or removing the overlay recreates the database container — the data is in a named
+volume and survives, but open connections drop, so the API logs one connection error and
+reconnects. Plain `docker compose up -d db` puts it back the way it was, without the port.
+
+Do not use this overlay on a deployed installation. Keeping the database off the host is what
+stops a single guessed password from reaching every row, entrance coordinates included; use
+the pgAdmin overlay above there instead.
 
 ## Upgrades
 
