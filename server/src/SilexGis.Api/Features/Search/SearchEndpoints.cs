@@ -5,6 +5,7 @@ using NpgsqlTypes;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Search;
@@ -35,6 +36,12 @@ public sealed record SearchResultDto(
 /// the detail endpoint the client follows applies the location rules. Listing a protected
 /// feature by name is not a location disclosure: which caves exist has always been public
 /// on this installation, only where they are is guarded.
+///
+/// Centerlines are the exception, because that reasoning does not reach them: a centerline
+/// IS the cave's course, so under protection it is withheld outright everywhere else — the
+/// registry, the resolver, the cave's own list, the map overlay and exports all refuse to
+/// admit it exists. Naming one here would disclose that a cave whose position is guarded has
+/// a survey at all, so they are dropped from results the same way.
 /// </summary>
 public static class SearchEndpoints
 {
@@ -52,8 +59,10 @@ public static class SearchEndpoints
 
     private static async Task<Results<Ok<SearchResultDto>, UnauthorizedHttpResult, ProblemHttpResult>> SearchAsync(
         string q,
+        string? kind,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        FeatureProtection protection,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -67,6 +76,19 @@ public static class SearchEndpoints
             return ApiProblems.BadRequest("search.query_too_short", $"Provide at least {MinimumQueryLength} characters.");
         }
 
+        // Enum query parameters arrive as the camelCase strings the JSON contract uses;
+        // parse case-insensitively (route binding's Enum.TryParse would not).
+        FeatureKind? kindFilter = null;
+        if (!string.IsNullOrWhiteSpace(kind))
+        {
+            if (!Enum.TryParse<FeatureKind>(kind, ignoreCase: true, out var kindValue) || !Enum.IsDefined(kindValue))
+            {
+                return ApiProblems.BadRequest("feature.kind_invalid", $"Unknown feature kind '{kind}'.");
+            }
+
+            kindFilter = kindValue;
+        }
+
         var term = q.Trim();
         var pattern = $"%{term}%";
 
@@ -74,8 +96,17 @@ public static class SearchEndpoints
         // name + description; caves additionally carry their own vector on the subtype row
         // (other toponyms + cadastral code), so both are consulted — ORing them is what
         // makes a search for a cadastral code find its cave.
-        var hits = await db.Features.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls)
+        // The hit budget is shared across kinds, so a caller after one kind (the cave
+        // pickers) must narrow the query rather than sift the answer: twenty matching
+        // dolines would otherwise push every cave out of the result and leave the picker
+        // looking empty while a matching cave exists.
+        var candidates = db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls);
+        if (kindFilter is { } wanted)
+        {
+            candidates = candidates.Where(f => f.Kind == wanted);
+        }
+
+        var hits = await candidates
             .Where(f =>
                 EF.Property<NpgsqlTsVector>(f, "SearchVector")
                     .Matches(EF.Functions.PlainToTsQuery("simple", EF.Functions.Unaccent(term)))
@@ -90,6 +121,18 @@ public static class SearchEndpoints
             .Take(FeatureLimit)
             .Select(f => new { f.Id, f.Kind, f.Name, f.FeatureTypeId })
             .ToListAsync(ct);
+
+        // Withhold protected centerlines. Filtered after the query rather than before it:
+        // the exclusion the registry does up front exists so its paging total stays right,
+        // and search has no total — while re-running the match predicate to pre-exclude
+        // would double the text-search work on every request for no gain. The cost here is
+        // one id lookup, and only when a centerline actually matched.
+        var centerlineIds = hits.Where(h => h.Kind == FeatureKind.Centerline).Select(h => h.Id).ToList();
+        if (centerlineIds.Count > 0)
+        {
+            var exact = await protection.ExactViewIdsAsync(user, centerlineIds, ct);
+            hits = hits.Where(h => h.Kind != FeatureKind.Centerline || exact.Contains(h.Id)).ToList();
+        }
 
         var typeIds = hits.Where(h => h.FeatureTypeId != null).Select(h => h.FeatureTypeId!.Value).Distinct().ToList();
         var typeCodes = new Dictionary<long, string>();

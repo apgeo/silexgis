@@ -143,9 +143,21 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
         DefaultFlagOf(listed, firstId).ShouldBeFalse();
         DefaultFlagOf(listed, secondId).ShouldBeTrue();
 
+        // Promoting BACK to the earlier survey must work too. One default per cave is a
+        // partial unique index checked per statement, so if the demotion and the promotion
+        // are written in id order rather than in intent order, this direction — and only
+        // this direction, since ids are time-ordered — collides on the index.
+        var promotedBack = await owner.PutAsJsonAsync(
+            $"/api/v1/centerlines/{firstId}", Update("Original survey", isDefault: true));
+        promotedBack.StatusCode.ShouldBe(HttpStatusCode.OK, await promotedBack.Content.ReadAsStringAsync());
+
+        listed = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines");
+        DefaultFlagOf(listed, firstId).ShouldBeTrue();
+        DefaultFlagOf(listed, secondId).ShouldBeFalse();
+
         // The flag is only ever moved, never cleared: a cave with centerlines always has a shape.
         var cleared = await owner.PutAsJsonAsync(
-            $"/api/v1/centerlines/{secondId}", Update("Resurvey 2025", isDefault: false));
+            $"/api/v1/centerlines/{firstId}", Update("Original survey", isDefault: false));
         cleared.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await cleared.Content.ReadAsStringAsync()).ShouldContain("centerline.default_required");
     }
@@ -174,7 +186,9 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
     public async Task Centerlines_of_protected_caves_are_withheld_without_exact_location()
     {
         var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: true);
-        var created = await UploadAsync(caveId, "secret.geojson", GeoJsonLine(25.5, 45.5));
+        // The file name becomes the centerline's name, so make it searchable and unique.
+        var secretName = $"secret-{Guid.NewGuid():N}"[..20];
+        var created = await UploadAsync(caveId, $"{secretName}.geojson", GeoJsonLine(25.5, 45.5));
         var centerlineId = created.GetProperty("id").GetGuid();
 
         // Empty list and no map feature for the plain reader; the owner sees both.
@@ -191,12 +205,25 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
         (await reader.PutAsJsonAsync($"/api/v1/centerlines/{centerlineId}", Update("Nope", isDefault: false)))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
+        // Search must not name it either: a hit would disclose that a cave whose position
+        // is guarded has a survey at all, which every other read path spends code to hide.
+        (await SearchFindsCenterlineAsync(reader, secretName, centerlineId)).ShouldBeFalse();
+        (await SearchFindsCenterlineAsync(owner, secretName, centerlineId)).ShouldBeTrue();
+
         // An explicit ViewExactLocation ACL grant on the protected root flips them visible.
         await GrantExactViewAsync(caveId);
 
         (await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines"))
             .GetArrayLength().ShouldBe(1);
         (await MapFeaturesOfAsync(reader, caveId, "25.4,45.4,25.6,45.6")).Count.ShouldBe(1);
+        (await SearchFindsCenterlineAsync(reader, secretName, centerlineId)).ShouldBeTrue();
+    }
+
+    private static async Task<bool> SearchFindsCenterlineAsync(HttpClient client, string term, Guid centerlineId)
+    {
+        var results = await client.GetFromJsonAsync<JsonElement>($"/api/v1/search?q={term}");
+        return results.GetProperty("features").EnumerateArray()
+            .Any(f => f.GetProperty("id").GetGuid() == centerlineId);
     }
 
     [Fact]

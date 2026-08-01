@@ -55,7 +55,9 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
   // "New entrance" flow: pick the cave first, then edit the entrance itself.
   const [caveQuery, setCaveQuery] = useState('');
   const debouncedQuery = useDebouncedValue(caveQuery);
-  const { data: searchResults } = useSearch(debouncedQuery);
+  // Only caves can receive a new entrance, and the server's hit budget is shared across
+  // kinds — ask for caves rather than sifting them out of a mixed answer.
+  const { data: searchResults } = useSearch(debouncedQuery, 'cave');
   const [pickedCaveId, setPickedCaveId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -207,8 +209,6 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
           value={caveQuery}
           onSearch={setCaveQuery}
           options={(searchResults?.features ?? [])
-            // Cross-kind search: only caves can receive a new entrance.
-            .filter((feature) => feature.kind === 'cave')
             .map((feature) => ({
               value: feature.id,
               label: feature.name ?? t('features.unnamed'),

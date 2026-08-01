@@ -144,6 +144,69 @@ public sealed class AclAndTeamTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_team_bound_row_is_readable_by_its_members_whatever_the_visibility()
+    {
+        // Binding a row to a team is its own grant: members read it even when the
+        // visibility says private. The single-row check and the list filter must agree —
+        // if they disagree, a member can open the cave but everything that hangs off it
+        // (attachments, tags, history, files) answers 404 for the same caller.
+        var teamId = await CreateTeamAsync();
+        (await manager.PostAsJsonAsync($"/api/v1/teams/{teamId}/members", new
+        {
+            userId = granteeId,
+            role = "member",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Created by the team's own manager: binding a row to a team requires membership.
+        var response = await manager.PostAsJsonAsync("/api/v1/caves", new
+        {
+            name = $"Team Bound Cave {Guid.NewGuid():N}"[..40],
+            caveTypeId,
+            visibility = "private",
+            teamId,
+            locationProtected = false,
+            explorationStatus = "Unknown",
+            isShowCave = false,
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        var caveId = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        // The single-row gate lets the member in...
+        (await grantee.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        // ...so every list and every dependent read must too.
+        (await ListCaveIdsAsync(grantee)).ShouldContain(caveId);
+        (await grantee.GetAsync($"/api/v1/attachments?entityType=feature&entityId={caveId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await grantee.GetAsync($"/api/v1/taggings?entityType=feature&entityId={caveId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // A non-member still sees nothing at all — the arm keys on membership, not on
+        // the row merely carrying a team id.
+        var strangerEmail = $"acl-stranger-{Guid.NewGuid():N}"[..20] + "@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, strangerEmail);
+        using var stranger = await AuthHelper.BearerClientAsync(factory, strangerEmail);
+        (await stranger.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await ListCaveIdsAsync(stranger)).ShouldNotContain(caveId);
+
+        // EF <-> SQL parity for the team arm specifically.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var teams = await db.TeamMembers.Where(m => m.UserId == granteeId)
+            .ToDictionaryAsync(m => m.TeamId, m => m.Role);
+        var user = new UserContext(granteeId, new HashSet<string>(), teams);
+        var efIds = await db.Features.VisibleTo(user, db.ObjectAcls)
+            .Where(f => f.Id == caveId).Select(f => f.Id).ToListAsync();
+        var (fragment, parameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
+        parameters.Add("scope_id", caveId);
+        var sqlIds = (await db.Database.GetDbConnection().QueryAsync<Guid>(
+                $"SELECT f.id FROM features f WHERE f.deleted_at IS NULL AND f.id = @scope_id AND {fragment}",
+                parameters))
+            .ToList();
+        efIds.ShouldContain(caveId);
+        sqlIds.ShouldBe(efIds);
+    }
+
+    [Fact]
     public async Task ViewExactLocation_grant_reveals_protected_coordinates()
     {
         var caveId = await CreateCaveAsync("Exact Location Cave", "authenticated", locationProtected: true);

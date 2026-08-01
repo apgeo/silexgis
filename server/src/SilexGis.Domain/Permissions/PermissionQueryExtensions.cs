@@ -24,7 +24,12 @@ public static class PermissionQueryExtensions
         return query.Where(e =>
             e.OwnerUserId == userId
             || e.Visibility >= Visibility.Authenticated
-            || (e.Visibility == Visibility.Team && e.TeamId != null && teamIds.Contains(e.TeamId.Value)));
+            // Binding a row to a team grants its members Read whatever the visibility
+            // says: team membership is its own layer, not a rung of the visibility
+            // ladder. Gating this on Visibility.Team would hide a private team object
+            // from the very team that owns it — while the exact-location rule, which
+            // has never been gated, still hands them its coordinates.
+            || (e.TeamId != null && teamIds.Contains(e.TeamId.Value)));
     }
 
     /// <summary>
@@ -48,7 +53,8 @@ public static class PermissionQueryExtensions
         return query.Where(f =>
             f.OwnerUserId == userId
             || f.Visibility >= Visibility.Authenticated
-            || (f.Visibility == Visibility.Team && f.TeamId != null && teamIds.Contains(f.TeamId.Value))
+            // Team membership is its own layer, independent of the visibility ladder.
+            || (f.TeamId != null && teamIds.Contains(f.TeamId.Value))
             || acls.Any(a => a.FeatureId == f.Id
                 && ((a.SubjectKind == AclSubjectKind.User && a.SubjectId == userId)
                     || (a.SubjectKind == AclSubjectKind.Team && teamIds.Contains(a.SubjectId)))
@@ -75,7 +81,8 @@ public static class PermissionQueryExtensions
         return query.Where(e =>
             e.OwnerUserId == userId
             || e.Visibility >= Visibility.Authenticated
-            || (e.Visibility == Visibility.Team && e.TeamId != null && teamIds.Contains(e.TeamId.Value))
+            // Team membership is its own layer, independent of the visibility ladder.
+            || (e.TeamId != null && teamIds.Contains(e.TeamId.Value))
             || acls.Any(a => a.EntityType == entityType && a.EntityId == e.Id
                 && ((a.SubjectKind == AclSubjectKind.User && a.SubjectId == userId)
                     || (a.SubjectKind == AclSubjectKind.Team && teamIds.Contains(a.SubjectId)))

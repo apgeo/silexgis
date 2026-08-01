@@ -95,7 +95,9 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
 
   const [caveQuery, setCaveQuery] = useState('');
   const debouncedCaveQuery = useDebouncedValue(caveQuery);
-  const { data: caveResults } = useSearch(debouncedCaveQuery);
+  // A trip is logged against caves, and the server's hit budget is shared across kinds —
+  // ask for caves so commoner kinds cannot crowd them out of the answer.
+  const { data: caveResults } = useSearch(debouncedCaveQuery, 'cave');
   // Options accumulate across searches so selected entries keep their labels.
   const [knownCaves, setKnownCaves] = useState<Map<string, string>>(new Map());
   useEffect(() => {
@@ -103,7 +105,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
       setKnownCaves((previous) => {
         const next = new Map(previous);
         for (const hit of caveResults.features) {
-          if (hit.kind === 'cave' && hit.name) {
+          if (hit.name) {
             next.set(hit.id, hit.name);
           }
         }

@@ -231,7 +231,27 @@ public sealed class FeatureWriteService(
 
         var entrances = await EntrancesOfCaveAsync(caveFeatureId, ct);
         cave.EntranceCount = entrances.Count;
-        var main = entrances.FirstOrDefault(e => e.IsMain) ?? entrances.FirstOrDefault();
+
+        // A cave that has entrances always has exactly one main: it is the cave's anchor
+        // on the map and what the detail pages label. Deleting the main entrance, or
+        // demoting it, would otherwise leave the cave with none — silently, because the
+        // representative point below falls back to any entrance and the cave keeps
+        // plotting. The oldest survivor takes over, the same rule that makes a cave's
+        // first entrance its main one; ordering by creation keeps the choice stable.
+        var main = entrances.FirstOrDefault(e => e.IsMain);
+        if (main is null && entrances.Count > 0)
+        {
+            var dated = new List<(CaveEntrance Entrance, DateTimeOffset CreatedAt)>();
+            foreach (var entrance in entrances)
+            {
+                var feature = await FeatureByIdAsync(entrance.Id, ct);
+                dated.Add((entrance, feature?.CreatedAt ?? DateTimeOffset.MaxValue));
+            }
+
+            main = dated.OrderBy(d => d.CreatedAt).ThenBy(d => d.Entrance.Id).First().Entrance;
+            main.IsMain = true;
+        }
+
         caveFeature.Geom = main is null ? null : (await FeatureByIdAsync(main.Id, ct))?.Geom;
     }
 
@@ -454,13 +474,16 @@ public sealed class FeatureWriteService(
 
     private async Task ClearDefaultCenterlineAsync(Guid caveFeatureId, Guid exceptId, CancellationToken ct)
     {
-        var others = await db.Centerlines
+        // One default per cave is a plain partial unique index, which PostgreSQL checks
+        // per statement. Demoting and promoting as two tracked edits in the same flush
+        // leaves the order to the change tracker — which sorts by primary key, not by
+        // intent — so promoting a centerline whose id sorts below the current default
+        // wrote the second flag while the first was still set and hit the index. Since
+        // ids are time-ordered, that was exactly "go back to the earlier survey".
+        // Clearing on its own statement means the flag is always free before it is taken.
+        await db.Centerlines
             .Where(c => c.CaveFeatureId == caveFeatureId && c.IsDefault && c.Id != exceptId)
-            .ToListAsync(ct);
-        foreach (var other in others)
-        {
-            other.IsDefault = false;
-        }
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.IsDefault, false), ct);
     }
 
     // Delegated children carry their cave's access columns; whatever the caller set on

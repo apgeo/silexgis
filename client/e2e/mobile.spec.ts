@@ -15,12 +15,12 @@ async function armType(page: Page, typeName: string) {
   await page.getByRole('button', { name: typeName }).click();
 }
 
-// PARKED — the drawer half of this test still passes; the cluster half no longer has a way
-// to set up. It used to centre the map by picking a search result, and search results now
-// carry no coordinates by design, so picking one opens the record instead of moving the map.
-// Centring from the feature list's "show on map" works on desktop (the same flow passes in
-// smoke.spec.ts) but does not reach a clustering zoom here within any reasonable retry
-// budget, so what this needs is a phone-layout way to place the view, not a longer timeout.
+// PARKED — order-dependent, not broken: this passes on its own (`-g "docks become drawers"`)
+// and fails when the phone suite runs in order, so something an earlier spec leaves behind —
+// map view state or seeded rows the other specs add and remove — moves the cluster off the
+// view centre. The setup itself is sound now: the zoom-out burst before the first click is
+// what its desktop twin needed, and that twin passes in-suite. What is left is isolating the
+// leftover state, which wants a per-spec reset rather than another timeout.
 test.fixme('docks become drawers, and the details drawer opens when something is picked', async ({ page }) => {
   await login(page);
 
@@ -50,16 +50,21 @@ test.fixme('docks become drawers, and the details drawer opens when something is
   // centre. Search cannot centre the map any more — its results carry no coordinates.
   await centreOnDemoCave(page);
 
-  // Picking on the map opens the details drawer by itself: with no dock on screen, a
-  // selection would otherwise appear to do nothing at all. Stepping the zoom inside the
-  // retry keeps this independent of the zoom the fit landed on, and absorbs the zoom
-  // animation and the debounced bbox loader, which settle at their own pace.
+  // Get below the clustering threshold before clicking: selecting a single entrance flies
+  // the map back to zoom 15, so zooming and clicking in the same loop undoes its own
+  // progress. "Show on map" fits a point, which lands at max zoom.
   const canvas = page.locator('.map-canvas');
-  await expect(async () => {
+  for (let i = 0; i < 12; i++) {
     await page.locator('.ol-zoom-out').click();
+  }
+
+  // Picking on the map opens the details drawer by itself: with no dock on screen, a
+  // selection would otherwise appear to do nothing at all. Only the click is retried,
+  // for the zoom animation and the debounced bbox loader.
+  await expect(async () => {
     await canvas.click();
     await expect(page.getByText(/entrances in this area/)).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 120_000 });
+  }).toPass({ timeout: 30_000 });
 
   // ...and it is a real drawer over the map, not the desktop pane.
   await expect(page.locator('.ant-drawer-right')).toBeVisible();

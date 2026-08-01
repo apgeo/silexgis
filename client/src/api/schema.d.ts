@@ -1224,6 +1224,7 @@ export interface paths {
             parameters: {
                 query: {
                     q: string;
+                    kind?: string;
                 };
                 header?: never;
                 path?: never;

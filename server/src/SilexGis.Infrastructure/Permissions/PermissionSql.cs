@@ -38,8 +38,7 @@ public static class PermissionSql
             (@vis_is_admin
              OR {alias}.owner_user_id = @vis_user_id
              OR {alias}.visibility >= {(short)Visibility.Authenticated}
-             OR ({alias}.visibility = {(short)Visibility.Team}
-                 AND {alias}.team_id = ANY(@vis_team_ids))
+             OR ({alias}.team_id IS NOT NULL AND {alias}.team_id = ANY(@vis_team_ids))
              OR EXISTS (SELECT 1 FROM object_acl acl
                         WHERE acl.feature_id = {alias}.id
                           AND ((acl.subject_kind = 0 AND acl.subject_id = @vis_user_id)
@@ -111,8 +110,7 @@ public static class PermissionSql
             (@vis_is_admin
              OR {prefix}owner_user_id = @vis_user_id
              OR {prefix}visibility >= {(short)Visibility.Authenticated}
-             OR ({prefix}visibility = {(short)Visibility.Team}
-                 AND {prefix}team_id = ANY(@vis_team_ids)){aclSql})
+             OR ({prefix}team_id IS NOT NULL AND {prefix}team_id = ANY(@vis_team_ids)){aclSql})
             """;
 
         return (sql, parameters);

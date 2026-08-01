@@ -69,11 +69,12 @@ export default function RasterMapsTab() {
   // every feature kind, so only cave results become options here.
   const [caveQuery, setCaveQuery] = useState('');
   const debouncedCaveQuery = useDebouncedValue(caveQuery);
-  const { data: searchResults } = useSearch(debouncedCaveQuery);
+  // Ask the server for caves: its hit budget is shared across kinds, so filtering a mixed
+  // answer here can leave the picker empty while a matching cave exists.
+  const { data: searchResults } = useSearch(debouncedCaveQuery, 'cave');
   const { data: linkedCave } = useCave(editing?.caveFeatureId ?? undefined);
   const caveOptions = useMemo(() => {
     const options = (searchResults?.features ?? [])
-      .filter((feature) => feature.kind === 'cave')
       .map((cave) => ({ value: cave.id, label: cave.name ?? cave.id }));
     if (linkedCave && !options.some((o) => o.value === linkedCave.id)) {
       options.unshift({ value: linkedCave.id, label: linkedCave.name });

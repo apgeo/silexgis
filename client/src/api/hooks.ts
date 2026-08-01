@@ -46,7 +46,7 @@ export const queryKeys = {
   entrances: (caveId: string) => ['entrances', caveId] as const,
   surveyModels: (caveId: string) => ['survey-models', caveId] as const,
   centerlines: (caveId: string) => ['centerlines', caveId] as const,
-  search: (q: string) => ['search', q] as const,
+  search: (q: string, kind?: string) => ['search', q, kind ?? 'all'] as const,
   nominatim: (q: string) => ['nominatim', q] as const,
   features: (params: FeatureListParams) => ['features', 'list', params] as const,
   feature: (id: string) => ['features', 'detail', id] as const,
@@ -582,11 +582,15 @@ export type SearchTripItem = components['schemas']['SearchTripItemDto'];
 /**
  * Global search: features of every kind plus trip logs. Results carry no coordinates —
  * navigate to the entity (or fetch it) instead of centering the map from here.
+ *
+ * Pass `kind` when only one kind can be picked. The server's hit budget is shared across
+ * kinds, so filtering the answer here instead would let commoner kinds crowd the wanted
+ * one out of the response entirely.
  */
-export function useSearch(q: string) {
+export function useSearch(q: string, kind?: FeatureKind) {
   return useQuery({
-    queryKey: queryKeys.search(q),
-    queryFn: () => unwrap(api.GET('/api/v1/search', { params: { query: { q } } })),
+    queryKey: queryKeys.search(q, kind),
+    queryFn: () => unwrap(api.GET('/api/v1/search', { params: { query: { q, kind } } })),
     enabled: q.trim().length >= 2,
     staleTime: 30_000,
   });

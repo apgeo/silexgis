@@ -77,16 +77,22 @@ test('cluster click lists its member entrances in the panel', async ({ page }) =
   // map" is the action that centres it.
   await centreOnDemoCave(page);
 
-  // Zoom out until the cave's two entrances aggregate into one cluster at the view
-  // centre. Stepping until the cluster answers rather than counting clicks keeps this
-  // independent of the zoom the fit happened to land on; the retry also absorbs the
-  // zoom animation and the debounced bbox loader, which settle at their own pace.
+  // Get below the clustering threshold BEFORE clicking anything. Interleaving the two
+  // cannot work: a click that lands on a single entrance selects it, and selecting one
+  // flies the map back to zoom 15 — so a loop that zooms out and clicks in the same
+  // breath undoes its own progress and never reaches a cluster. "Show on map" fits a
+  // point, which lands at max zoom, so come down far enough to be sure.
   const canvas = page.locator('.map-canvas');
-  await expect(async () => {
+  for (let i = 0; i < 12; i++) {
     await page.locator('.ol-zoom-out').click();
+  }
+
+  // Now only the click is retried — for the zoom animation and the debounced bbox
+  // loader, which settle at their own pace.
+  await expect(async () => {
     await canvas.click();
     await expect(page.getByText(/entrances in this area/)).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 60_000 });
+  }).toPass({ timeout: 30_000 });
 
   // Picking a member selects the entrance and the cave card takes over.
   await page.getByRole('button', { name: /entrance|Peșter/i }).first().click();

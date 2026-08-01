@@ -202,6 +202,34 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
         mainEntrance.GetProperty("id").GetGuid().ShouldBe(main.GetProperty("id").GetGuid());
         mainEntrance.GetProperty("approximateLocation").GetBoolean().ShouldBeFalse();
         mainEntrance.GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldBe(25.51, 1e-9);
+        // Deleting the main entrance re-elects one: a cave with entrances always has a main,
+        // otherwise it loses its anchor silently — the representative point keeps working
+        // off any entrance, so nothing else would show the gap.
+        var mainId = main.GetProperty("id").GetGuid();
+        var secondId = second.GetProperty("id").GetGuid();
+        (await owner.DeleteAsync($"/api/v1/cave-entrances/{mainId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var afterDelete = await GetJsonAsync(owner, $"/api/v1/caves/{caveId}/summary");
+        afterDelete.GetProperty("entranceCount").GetInt32().ShouldBe(1);
+        afterDelete.GetProperty("mainEntrance").GetProperty("id").GetGuid().ShouldBe(secondId);
+
+        // Same rule when the last main is merely demoted rather than deleted.
+        var demoted = await owner.PutAsJsonAsync($"/api/v1/cave-entrances/{secondId}", new
+        {
+            name = "Demoted",
+            entranceTypeId,
+            geom = new { type = "Point", coordinates = new[] { 25.52, 45.62 } },
+            isMain = false,
+        });
+        demoted.StatusCode.ShouldBe(HttpStatusCode.OK, await demoted.Content.ReadAsStringAsync());
+        (await GetJsonAsync(owner, $"/api/v1/caves/{caveId}/summary"))
+            .GetProperty("mainEntrance").GetProperty("id").GetGuid().ShouldBe(secondId);
+
+        // Restore the two-entrance shape the rest of this test expects.
+        main = await CreateEntranceAsync(owner, caveId, 25.51, 45.61, isMain: true);
+        summary = await GetJsonAsync(owner, $"/api/v1/caves/{caveId}/summary");
+        summary.GetProperty("entranceCount").GetInt32().ShouldBe(2);
+
         var ownerCaps = summary.GetProperty("permissions");
         ownerCaps.GetProperty("canWrite").GetBoolean().ShouldBeTrue();
         ownerCaps.GetProperty("canDelete").GetBoolean().ShouldBeTrue();
