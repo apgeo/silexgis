@@ -14,9 +14,11 @@ namespace SilexGis.Api.Tests;
 
 /// <summary>
 /// Cave centerlines end-to-end: GPX/GeoJSON upload → MultiLineStringZ with a
-/// PostGIS-computed geodesic length; the bbox map layer; and the location-protection
-/// rule — centerlines of a protected cave are withheld entirely unless the caller may
-/// view the exact location.
+/// PostGIS-computed geodesic length; the default-centerline rule (the first one uploaded
+/// is the cave's shape, promotion goes through PUT); the bbox map layer; and the
+/// location-protection rule — a centerline is withheld entirely from callers who may not
+/// view the exact location of every protected feature above it, whether the protection
+/// root is the cave itself or an area containing it.
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class CenterlineTests : IAsyncLifetime, IDisposable
@@ -28,6 +30,7 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
     private HttpClient reader = null!;
     private Guid readerId;
     private long caveTypeId;
+    private long karstAreaTypeId;
 
     public CenterlineTests(PostgresFixture postgres)
     {
@@ -53,6 +56,8 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
+            karstAreaTypeId = await db.FeatureTypes
+                .Where(t => t.Code == "karst_area").Select(t => t.Id).SingleAsync();
         }
 
         owner = await AuthHelper.BearerClientAsync(factory, $"ctl-own-{suffix}@t.local");
@@ -72,6 +77,11 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
         centerline.GetProperty("name").GetString().ShouldBe("main-gallery");
         centerline.GetProperty("source").GetString().ShouldBe("uploaded");
         centerline.GetProperty("geom").GetProperty("type").GetString().ShouldBe("MultiLineString");
+        // The centerline is a feature in its own right, anchored to the cave's feature id.
+        centerline.GetProperty("caveId").GetGuid().ShouldBe(caveId);
+        centerline.GetProperty("id").GetGuid().ShouldNotBe(caveId);
+        // Nothing else claimed the cave's shape yet, so the upload takes it.
+        centerline.GetProperty("isDefault").GetBoolean().ShouldBeTrue();
 
         // GPX elevations survive into the GeoJSON positions ([lon, lat, ele]).
         var firstPosition = centerline.GetProperty("geom").GetProperty("coordinates")[0][0];
@@ -86,44 +96,166 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
         // Any cave reader sees the list and the bbox map layer.
         var list = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines");
         list.GetArrayLength().ShouldBe(1);
-        var mapFeatures = await MapFeaturesOfAsync(reader, caveId);
+        var mapFeatures = await MapFeaturesOfAsync(reader, caveId, "25.4,45.4,25.6,45.6");
         mapFeatures.Count.ShouldBe(1);
         mapFeatures[0].GetProperty("properties").GetProperty("name").GetString().ShouldBe("main-gallery");
 
         // The reader may not delete; the owner may.
         var id = centerline.GetProperty("id").GetGuid();
-        (await reader.DeleteAsync($"/api/v1/cave-centerlines/{id}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await owner.DeleteAsync($"/api/v1/cave-centerlines/{id}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await reader.DeleteAsync($"/api/v1/centerlines/{id}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await owner.DeleteAsync($"/api/v1/centerlines/{id}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines"))
             .GetArrayLength().ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task The_first_centerline_is_the_default_and_a_put_promotes_another()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        var first = await UploadAsync(caveId, "first.geojson", GeoJsonLine(25.5, 45.5));
+        var second = await UploadAsync(caveId, "second.geojson", GeoJsonLine(25.52, 45.52));
+
+        first.GetProperty("isDefault").GetBoolean().ShouldBeTrue();
+        second.GetProperty("isDefault").GetBoolean().ShouldBeFalse();
+        var firstId = first.GetProperty("id").GetGuid();
+        var secondId = second.GetProperty("id").GetGuid();
+
+        // A reader may see them but not rename or promote them.
+        (await reader.PutAsJsonAsync($"/api/v1/centerlines/{secondId}", Update("Nope", isDefault: false)))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // A survey model that is not this cave's cannot be attached.
+        var wrongModel = await owner.PutAsJsonAsync(
+            $"/api/v1/centerlines/{secondId}",
+            new { name = "Resurvey", description = (string?)null, surveyModelId = Guid.NewGuid(), isDefault = false });
+        wrongModel.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await wrongModel.Content.ReadAsStringAsync()).ShouldContain("centerline.survey_model_invalid");
+
+        // Promotion moves the flag; it is never held by two rows of one cave.
+        var promoted = await owner.PutAsJsonAsync(
+            $"/api/v1/centerlines/{secondId}", Update("Resurvey 2025", isDefault: true));
+        promoted.StatusCode.ShouldBe(HttpStatusCode.OK, await promoted.Content.ReadAsStringAsync());
+        var promotedDto = await promoted.Content.ReadFromJsonAsync<JsonElement>();
+        promotedDto.GetProperty("isDefault").GetBoolean().ShouldBeTrue();
+        promotedDto.GetProperty("name").GetString().ShouldBe("Resurvey 2025");
+
+        var listed = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines");
+        DefaultFlagOf(listed, firstId).ShouldBeFalse();
+        DefaultFlagOf(listed, secondId).ShouldBeTrue();
+
+        // The flag is only ever moved, never cleared: a cave with centerlines always has a shape.
+        var cleared = await owner.PutAsJsonAsync(
+            $"/api/v1/centerlines/{secondId}", Update("Resurvey 2025", isDefault: false));
+        cleared.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await cleared.Content.ReadAsStringAsync()).ShouldContain("centerline.default_required");
+    }
+
+    [Fact]
+    public async Task Deleting_the_default_centerline_hands_the_flag_to_the_survivor()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        var first = await UploadAsync(caveId, "first.geojson", GeoJsonLine(25.54, 45.54));
+        var second = await UploadAsync(caveId, "second.geojson", GeoJsonLine(25.56, 45.56));
+        var firstId = first.GetProperty("id").GetGuid();
+        var secondId = second.GetProperty("id").GetGuid();
+
+        (await owner.DeleteAsync($"/api/v1/centerlines/{firstId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var remaining = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines");
+        remaining.GetArrayLength().ShouldBe(1);
+        remaining[0].GetProperty("id").GetGuid().ShouldBe(secondId);
+        remaining[0].GetProperty("isDefault").GetBoolean().ShouldBeTrue();
+
+        // The deleted row is gone from every read path, and deleting it twice is not found.
+        (await owner.DeleteAsync($"/api/v1/centerlines/{firstId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
     public async Task Centerlines_of_protected_caves_are_withheld_without_exact_location()
     {
         var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: true);
-        using var form = BuildForm("secret.geojson", GeoJsonLine());
-        (await owner.PostAsync($"/api/v1/caves/{caveId}/centerlines", form))
-            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        var created = await UploadAsync(caveId, "secret.geojson", GeoJsonLine(25.5, 45.5));
+        var centerlineId = created.GetProperty("id").GetGuid();
 
         // Empty list and no map feature for the plain reader; the owner sees both.
         (await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines"))
             .GetArrayLength().ShouldBe(0);
-        (await MapFeaturesOfAsync(reader, caveId)).Count.ShouldBe(0);
+        (await MapFeaturesOfAsync(reader, caveId, "25.4,45.4,25.6,45.6")).Count.ShouldBe(0);
         (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines"))
             .GetArrayLength().ShouldBe(1);
-        (await MapFeaturesOfAsync(owner, caveId)).Count.ShouldBe(1);
+        (await MapFeaturesOfAsync(owner, caveId, "25.4,45.4,25.6,45.6")).Count.ShouldBe(1);
 
-        // An explicit ViewExactLocation ACL grant flips them visible for the reader.
-        var grant = await owner.PutAsJsonAsync($"/api/v1/objects/cave/{caveId}/acl", new
-        {
-            entries = new[] { new { subjectKind = "user", subjectId = readerId, permissions = "read, viewExactLocation" } },
-        });
-        grant.StatusCode.ShouldBe(HttpStatusCode.OK, await grant.Content.ReadAsStringAsync());
+        // A withheld centerline is not disclosed by the write paths either: 404, never 403.
+        (await reader.DeleteAsync($"/api/v1/centerlines/{centerlineId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.PutAsJsonAsync($"/api/v1/centerlines/{centerlineId}", Update("Nope", isDefault: false)))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // An explicit ViewExactLocation ACL grant on the protected root flips them visible.
+        await GrantExactViewAsync(caveId);
 
         (await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines"))
             .GetArrayLength().ShouldBe(1);
-        (await MapFeaturesOfAsync(reader, caveId)).Count.ShouldBe(1);
+        (await MapFeaturesOfAsync(reader, caveId, "25.4,45.4,25.6,45.6")).Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_protected_parent_area_withholds_the_centerlines_of_the_caves_inside_it()
+    {
+        // Protection is a property of the ancestry, not of the cave row: an unprotected cave
+        // inside a protected karst area is protected, and only a grant on the AREA — the
+        // actual protection root — can lift it.
+        var areaId = await CreateProtectedAreaAsync();
+        var caveId = await CreateCaveAsync(
+            visibility: "authenticated", locationProtected: false, parentId: areaId);
+        const string bbox = "26.59,46.59,26.61,46.61";
+        var created = await UploadAsync(caveId, "inside-area.geojson", GeoJsonLine(26.600, 46.600));
+        var centerlineId = created.GetProperty("id").GetGuid();
+
+        // The cave itself is readable and its protection is inherited, not stored on the row.
+        var cave = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}");
+        cave.GetProperty("locationProtected").GetBoolean().ShouldBeFalse();
+        cave.GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
+
+        (await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines"))
+            .GetArrayLength().ShouldBe(0);
+        (await MapFeaturesOfAsync(reader, caveId, bbox)).Count.ShouldBe(0);
+        (await reader.DeleteAsync($"/api/v1/centerlines/{centerlineId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // A grant on the cave is not a grant on the root above it, so it reveals nothing.
+        await GrantExactViewAsync(caveId);
+        (await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines"))
+            .GetArrayLength().ShouldBe(0);
+        (await MapFeaturesOfAsync(reader, caveId, bbox)).Count.ShouldBe(0);
+
+        // The grant on the area does.
+        await GrantExactViewAsync(areaId);
+        (await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines"))
+            .GetArrayLength().ShouldBe(1);
+        (await MapFeaturesOfAsync(reader, caveId, bbox)).Count.ShouldBe(1);
+
+        // The row owner never lost sight of their own cave under a protected area.
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines"))
+            .GetArrayLength().ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Deleting_a_cave_takes_its_centerlines_out_of_every_read_path()
+    {
+        // Feature deletion is soft and stamps the whole containment subtree; a centerline is
+        // a child of its cave, so it must vanish with it rather than linger on the overlay.
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        const string bbox = "26.69,46.69,26.71,46.71";
+        var created = await UploadAsync(caveId, "doomed.geojson", GeoJsonLine(26.700, 46.700));
+        var centerlineId = created.GetProperty("id").GetGuid();
+        (await MapFeaturesOfAsync(owner, caveId, bbox)).Count.ShouldBe(1);
+
+        (await owner.DeleteAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        (await owner.GetAsync($"/api/v1/caves/{caveId}/centerlines")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await owner.DeleteAsync($"/api/v1/centerlines/{centerlineId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await MapFeaturesOfAsync(owner, caveId, bbox)).Count.ShouldBe(0);
     }
 
     [Fact]
@@ -328,6 +460,14 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
         return features[0];
     }
 
+    /// <summary>The default flag of one listed centerline, found by id rather than position.</summary>
+    private static bool DefaultFlagOf(JsonElement list, Guid centerlineId)
+    {
+        var row = list.EnumerateArray().SingleOrDefault(x => x.GetProperty("id").GetGuid() == centerlineId);
+        row.ValueKind.ShouldBe(JsonValueKind.Object, $"centerline {centerlineId} missing from the list");
+        return row.GetProperty("isDefault").GetBoolean();
+    }
+
     /// <summary>
     /// A traverse of four shots with a fan of eight wall shots at each of two interior stations —
     /// 20 components, of which the skeleton should keep one sewn polyline. Written one shot per
@@ -391,15 +531,53 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>Bbox map features of one cave — keeps tests independent of other rows in the shared DB.</summary>
-    private static async Task<List<JsonElement>> MapFeaturesOfAsync(HttpClient client, Guid caveId)
+    private static async Task<List<JsonElement>> MapFeaturesOfAsync(HttpClient client, Guid caveId, string bbox)
     {
-        var map = await client.GetFromJsonAsync<JsonElement>(
-            "/api/v1/map/cave-centerlines?bbox=25.4,45.4,25.6,45.6");
+        var map = await client.GetFromJsonAsync<JsonElement>($"/api/v1/map/cave-centerlines?bbox={bbox}");
         return [.. map.GetProperty("features").EnumerateArray()
             .Where(f => f.GetProperty("properties").GetProperty("caveId").GetGuid() == caveId)];
     }
 
-    private async Task<Guid> CreateCaveAsync(string visibility, bool locationProtected)
+    /// <summary>Uploads one centerline and returns the created DTO.</summary>
+    private async Task<JsonElement> UploadAsync(Guid caveId, string fileName, byte[] bytes)
+    {
+        using var form = BuildForm(fileName, bytes);
+        var response = await owner.PostAsync($"/api/v1/caves/{caveId}/centerlines", form);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+    }
+
+    private static object Update(string name, bool isDefault) =>
+        new { name, description = (string?)null, surveyModelId = (Guid?)null, isDefault };
+
+    /// <summary>Grants the reader Read + ViewExactLocation on one feature, whatever its kind.</summary>
+    private async Task GrantExactViewAsync(Guid featureId)
+    {
+        var grant = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/acl", new
+        {
+            entries = new[] { new { subjectKind = "user", subjectId = readerId, permissions = "read, viewExactLocation" } },
+        });
+        grant.StatusCode.ShouldBe(HttpStatusCode.OK, await grant.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>A location-protected karst area: a protection root that is not a cave.</summary>
+    private async Task<Guid> CreateProtectedAreaAsync()
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/features", new
+        {
+            kind = "generic",
+            name = $"Protected Karst {Guid.NewGuid():N}"[..30],
+            featureTypeId = karstAreaTypeId,
+            geometry = (object?)null,
+            description = (string?)null,
+            locationProtected = true,
+            visibility = "authenticated",
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    private async Task<Guid> CreateCaveAsync(string visibility, bool locationProtected, Guid? parentId = null)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/caves", new
         {
@@ -409,6 +587,7 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
             locationProtected,
             explorationStatus = "Unknown",
             isShowCave = false,
+            parentId,
         });
         response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
@@ -427,8 +606,13 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
         </gpx>
         """);
 
-    private static byte[] GeoJsonLine() => Encoding.UTF8.GetBytes(
-        """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[[25.5,45.5],[25.51,45.51]]},"properties":{}}]}""");
+    /// <summary>A single-shot GeoJSON line starting at the given position.</summary>
+    private static byte[] GeoJsonLine(double lon, double lat) => Collection(
+    [
+        LineFeature(
+            FormattableString.Invariant($"[{lon:R},{lat:R}]"),
+            FormattableString.Invariant($"[{lon + 0.001:R},{lat + 0.001:R}]")),
+    ]);
 
     private static MultipartFormDataContent BuildForm(string fileName, byte[] bytes)
     {

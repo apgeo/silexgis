@@ -27,6 +27,26 @@ public sealed class GeoJsonGeometryTests
     }
 
     [Fact]
+    public void Elevation_survives_the_round_trip()
+    {
+        // Entrances are PointZ and centerlines MultiLineStringZ: a parse that kept only
+        // two ordinates would flatten every depth the API is given, and a client that
+        // read a feature and wrote it back would erase the elevation already stored.
+        var point = Geo("Point", "[25.5, 45.25, 912.5]").ToGeometryOrNull().ShouldBeOfType<Point>();
+        point.Z.ShouldBe(912.5);
+        GeoJsonGeometry.From(point).Coordinates.GetRawText().ShouldBe("[25.5,45.25,912.5]");
+
+        var line = Geo("MultiLineString", "[[[25.0,45.0,900],[25.1,45.1,880]]]")
+            .ToGeometryOrNull().ShouldBeOfType<MultiLineString>();
+        line.Coordinates[0].Z.ShouldBe(900);
+        line.Coordinates[1].Z.ShouldBe(880);
+
+        // A position without the third ordinate stays 2D rather than gaining a zero.
+        Geo("Point", "[25.5, 45.25]").ToGeometryOrNull()
+            .ShouldBeOfType<Point>().Z.ShouldBe(double.NaN);
+    }
+
+    [Fact]
     public void LineString_round_trips()
     {
         var geom = Geo("LineString", "[[25.0,45.0],[25.1,45.1],[25.2,45.15]]").ToGeometryOrNull();

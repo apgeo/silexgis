@@ -19,10 +19,16 @@ Previous versions:
   geometry editing with snapping and undo, measurement, and search (internal + Nominatim).
 - **Surface features, files & media** — typed symbols and properties, photo galleries,
   documents, and georeferenced raster (COG) map overlays.
+- **One model for everything on the map** — caves, entrances, centerlines and surface
+  features share a single feature model, so any of them can contain another (a karst area
+  holding caves, a cave holding its entrances) and be linked to another by a named
+  relation. Containment drives breadcrumbs and inherits location protection downwards.
 - **Vector import/export** — GPX, KML, Shapefile, GeoJSON, WKT/CSV.
 - **3D survey models** — Therion `.lox` / Survex `.3d` via CaveView.js, plus cave
   centerlines projected on the map.
 - **Trips, tags, saved & shareable map views**, and **multi-window** pop-out panels.
+- **Share links** — hand out a revocable link to one feature and what it contains, either
+  public or sign-in-only. A share never reveals a protected location.
 - **Works on a phone** — the map workspace adapts to touch, including full geometry editing by
   finger, and the app installs to a home screen.
 - **Accounts & permissions** — per-user/team/object access control, two-factor sign-in

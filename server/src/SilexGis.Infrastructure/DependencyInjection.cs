@@ -121,7 +121,12 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, RasterCogHandler>();
         services.AddScoped<IProcessingJobHandler, PhotoGeoBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, AccountDataExportHandler>();
+        services.AddScoped<IProcessingJobHandler, FeatureIntegrityVerifyHandler>();
         services.AddHostedService<ProcessingJobWorker>();
+
+        services.Configure<FeatureIntegrityOptions>(
+            configuration.GetSection(FeatureIntegrityOptions.SectionName));
+        services.AddHostedService<FeatureIntegrityScheduler>();
         return services;
     }
 }

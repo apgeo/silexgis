@@ -50,4 +50,7 @@ public static class ProcessingJobKinds
 
     /// <summary>Build the archive for a user's request for a copy of their own account data.</summary>
     public const string AccountDataExport = "account-data-export";
+
+    /// <summary>Re-derive and check the feature aggregate's maintained state. Scheduled.</summary>
+    public const string FeatureIntegrityVerify = "feature-integrity-verify";
 }

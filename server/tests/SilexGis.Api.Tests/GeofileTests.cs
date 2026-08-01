@@ -33,6 +33,13 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable
     private HttpClient viewer = null!;
     private Guid editorId;
 
+    /// <summary>
+    /// Token woven into every name this instance seeds. The whole suite shares one
+    /// database, so search-scoped export assertions must not be able to see another
+    /// class's rows (xUnit builds one instance per test, so the token is per test).
+    /// </summary>
+    private string tag = null!;
+
     public GeofileTests(PostgresFixture postgres)
     {
         filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-files-{Guid.NewGuid():N}");
@@ -44,13 +51,13 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable
 
     public async Task InitializeAsync()
     {
-        var suffix = Guid.NewGuid().ToString("N")[..8];
-        editorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"gf-editor-{suffix}@t.local");
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"gf-out-{suffix}@t.local");
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"gf-view-{suffix}@t.local");
-        editor = await AuthHelper.BearerClientAsync(factory, $"gf-editor-{suffix}@t.local");
-        outsider = await AuthHelper.BearerClientAsync(factory, $"gf-out-{suffix}@t.local");
-        viewer = await AuthHelper.BearerClientAsync(factory, $"gf-view-{suffix}@t.local");
+        tag = Guid.NewGuid().ToString("N")[..8];
+        editorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"gf-editor-{tag}@t.local");
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"gf-out-{tag}@t.local");
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"gf-view-{tag}@t.local");
+        editor = await AuthHelper.BearerClientAsync(factory, $"gf-editor-{tag}@t.local");
+        outsider = await AuthHelper.BearerClientAsync(factory, $"gf-out-{tag}@t.local");
+        viewer = await AuthHelper.BearerClientAsync(factory, $"gf-view-{tag}@t.local");
     }
 
     [Fact]
@@ -105,16 +112,18 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task Shapefile_zip_export_reimports_losslessly()
     {
-        // Native surface features → zipped-shapefile export → import as a geofile.
-        var typeId = await FeatureTypeIdAsync("generic");
-        await CreateFeatureAsync("Shp Point", typeId, new { type = "Point", coordinates = new[] { 25.71, 45.71 } });
-        await CreateFeatureAsync("Shp Line", typeId, new
+        // Native features → zipped-shapefile export → import as a geofile.
+        var pointName = $"Shp Point {tag}";
+        var lineName = $"Shp Line {tag}";
+        var genericTypeId = await FeatureTypeIdAsync("generic");
+        await CreateFeatureAsync(pointName, genericTypeId, new { type = "Point", coordinates = new[] { 25.71, 45.71 } });
+        await CreateFeatureAsync(lineName, genericTypeId, new
         {
             type = "LineString",
             coordinates = new[] { new[] { 25.72, 45.72 }, new[] { 25.73, 45.73 } },
         });
 
-        var export = await editor.GetAsync("/api/v1/export/surface-features?format=shapefile&search=Shp");
+        var export = await editor.GetAsync($"/api/v1/export/features?format=shapefile&search={tag}");
         export.StatusCode.ShouldBe(HttpStatusCode.OK);
         export.Content.Headers.ContentType!.MediaType.ShouldBe("application/zip");
         var zip = await export.Content.ReadAsByteArrayAsync();
@@ -130,7 +139,7 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable
         var names = collection.GetProperty("features").EnumerateArray()
             .Select(f => f.GetProperty("properties").GetProperty("name").GetString())
             .ToList();
-        names.ShouldBe(["Shp Point", "Shp Line"], ignoreOrder: true);
+        names.ShouldBe([pointName, lineName], ignoreOrder: true);
     }
 
     [Fact]
@@ -139,9 +148,13 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable
         var caveTypeId = await CaveTypeIdAsync();
         var entranceTypeId = await EntranceTypeIdAsync();
 
-        var openCave = await CreateCaveAsync("Export Open Cave", caveTypeId, locationProtected: false);
-        var protectedCave = await CreateCaveAsync("Export Protected Cave", caveTypeId, locationProtected: true);
-        var privateCave = await CreateCaveAsync("Export Private Cave", caveTypeId, locationProtected: false, visibility: "private");
+        var openName = $"Export Open Cave {tag}";
+        var protectedName = $"Export Protected Cave {tag}";
+        var privateName = $"Export Private Cave {tag}";
+
+        var openCave = await CreateCaveAsync(openName, caveTypeId, locationProtected: false);
+        var protectedCave = await CreateCaveAsync(protectedName, caveTypeId, locationProtected: true);
+        var privateCave = await CreateCaveAsync(privateName, caveTypeId, locationProtected: false, visibility: "private");
 
         const double exactLon = 25.44721;
         const double exactLat = 45.53127;
@@ -151,15 +164,13 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable
         }
 
         // Viewer GeoJSON export: private cave absent, protected cave snapped to the grid.
-        var response = await viewer.GetAsync("/api/v1/export/caves?format=geojson&search=Export");
+        var response = await viewer.GetAsync($"/api/v1/export/caves?format=geojson&search={tag}");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var geojson = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
         var features = geojson.GetProperty("features").EnumerateArray().ToList();
 
         var names = features.Select(f => f.GetProperty("properties").GetProperty("name").GetString()).ToList();
-        names.ShouldContain("Export Open Cave");
-        names.ShouldContain("Export Protected Cave");
-        names.ShouldNotContain("Export Private Cave");
+        names.ShouldBe([openName, protectedName], ignoreOrder: true);
 
         var cell = LocationProtection.CellDegrees(5000);
         foreach (var feature in features)
@@ -169,7 +180,7 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable
             var lon = coords[0].GetDouble();
             var lat = coords[1].GetDouble();
 
-            if (props.GetProperty("name").GetString() == "Export Protected Cave")
+            if (props.GetProperty("name").GetString() == protectedName)
             {
                 props.GetProperty("approximate").GetString().ShouldBe("yes");
                 (lon / cell).ShouldBe(Math.Round(lon / cell), 1e-6, "obfuscated lon must sit on the grid");
@@ -185,21 +196,84 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable
 
         // Owner (editor) sees exact coordinates for their own protected cave.
         var ownerExport = JsonDocument.Parse(await (await editor.GetAsync(
-            "/api/v1/export/caves?format=geojson&search=Export Protected")).Content.ReadAsStringAsync()).RootElement;
-        var ownerCoords = ownerExport.GetProperty("features")[0].GetProperty("geometry").GetProperty("coordinates");
-        ownerCoords[0].GetDouble().ShouldBe(exactLon, 1e-9);
+            $"/api/v1/export/caves?format=geojson&search={tag}")).Content.ReadAsStringAsync()).RootElement;
+        var ownerProtected = ownerExport.GetProperty("features").EnumerateArray()
+            .Single(f => f.GetProperty("properties").GetProperty("name").GetString() == protectedName);
+        ownerProtected.GetProperty("geometry").GetProperty("coordinates")[0].GetDouble().ShouldBe(exactLon, 1e-9);
 
         // CSV and GPX flavors materialize with the right shapes.
-        var csv = await viewer.GetAsync("/api/v1/export/caves?format=csv&search=Export");
+        var csv = await viewer.GetAsync($"/api/v1/export/caves?format=csv&search={tag}");
         csv.Content.Headers.ContentType!.MediaType.ShouldBe("text/csv");
-        (await csv.Content.ReadAsStringAsync()).ShouldContain("Export Open Cave");
+        (await csv.Content.ReadAsStringAsync()).ShouldContain(openName);
 
-        var gpxResponse = await viewer.GetAsync("/api/v1/export/caves?format=gpx&search=Export");
+        var gpxResponse = await viewer.GetAsync($"/api/v1/export/caves?format=gpx&search={tag}");
         var gpxDoc = XDocument.Parse(await gpxResponse.Content.ReadAsStringAsync());
         gpxDoc.Descendants().Count(e => e.Name.LocalName == "wpt").ShouldBe(2);
 
         (await viewer.GetAsync("/api/v1/export/caves?format=dwg"))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    /// <summary>
+    /// The feature export applies the same protection rule as the map: a protected point
+    /// leaves snapped and flagged, and protected geometry that cannot be snapped without
+    /// disclosing shape or extent does not leave at all.
+    /// </summary>
+    [Fact]
+    public async Task Feature_exports_snap_protected_points_and_drop_protected_extended_geometry()
+    {
+        var openName = $"Export Open Point {tag}";
+        var protectedPointName = $"Export Protected Point {tag}";
+        var protectedLineName = $"Export Protected Line {tag}";
+
+        var pointTypeId = await FeatureTypeIdAsync("sinkhole");
+        var lineTypeId = await FeatureTypeIdAsync("fracture_line");
+
+        const double exactLon = 25.61233;
+        const double exactLat = 45.61377;
+        await CreateFeatureAsync(openName, pointTypeId, new { type = "Point", coordinates = new[] { exactLon, exactLat } });
+        await CreateFeatureAsync(
+            protectedPointName,
+            pointTypeId,
+            new { type = "Point", coordinates = new[] { exactLon, exactLat } },
+            locationProtected: true);
+        await CreateFeatureAsync(
+            protectedLineName,
+            lineTypeId,
+            new
+            {
+                type = "LineString",
+                coordinates = new[] { new[] { 25.62, 45.62 }, new[] { 25.63, 45.63 } },
+            },
+            locationProtected: true);
+
+        var viewerExport = JsonDocument.Parse(await (await viewer.GetAsync(
+            $"/api/v1/export/features?format=geojson&search={tag}")).Content.ReadAsStringAsync()).RootElement;
+        var rows = viewerExport.GetProperty("features").EnumerateArray().ToList();
+
+        // The protected line is absent entirely — it is never degraded, only dropped.
+        rows.Select(f => f.GetProperty("properties").GetProperty("name").GetString())
+            .ShouldBe([openName, protectedPointName], ignoreOrder: true);
+
+        var cell = LocationProtection.CellDegrees(5000);
+        var snapped = rows.Single(f => f.GetProperty("properties").GetProperty("name").GetString() == protectedPointName);
+        snapped.GetProperty("properties").GetProperty("approximate").GetString().ShouldBe("yes");
+        var snappedLon = snapped.GetProperty("geometry").GetProperty("coordinates")[0].GetDouble();
+        snappedLon.ShouldNotBe(exactLon);
+        (snappedLon / cell).ShouldBe(Math.Round(snappedLon / cell), 1e-6, "obfuscated lon must sit on the grid");
+
+        var open = rows.Single(f => f.GetProperty("properties").GetProperty("name").GetString() == openName);
+        open.GetProperty("geometry").GetProperty("coordinates")[0].GetDouble().ShouldBe(exactLon, 1e-9);
+
+        // The owner keeps every row, exactly.
+        var ownerExport = JsonDocument.Parse(await (await editor.GetAsync(
+            $"/api/v1/export/features?format=geojson&search={tag}")).Content.ReadAsStringAsync()).RootElement;
+        var ownerRows = ownerExport.GetProperty("features").EnumerateArray().ToList();
+        ownerRows.Select(f => f.GetProperty("properties").GetProperty("name").GetString())
+            .ShouldBe([openName, protectedPointName, protectedLineName], ignoreOrder: true);
+        ownerRows
+            .Single(f => f.GetProperty("properties").GetProperty("name").GetString() == protectedLineName)
+            .GetProperty("geometry").GetProperty("type").GetString().ShouldBe("LineString");
     }
 
     [Fact]
@@ -344,16 +418,22 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable
         return await db.EntranceTypes.Where(t => t.Code == "natural").Select(t => t.Id).SingleAsync();
     }
 
-    private async Task CreateFeatureAsync(string name, long featureTypeId, object geometry)
+    /// <summary>Creates a generic feature — the kind the surface palette became.</summary>
+    private async Task<Guid> CreateFeatureAsync(
+        string name, long featureTypeId, object geometry, bool locationProtected = false)
     {
-        var response = await editor.PostAsJsonAsync("/api/v1/surface-features", new
+        var response = await editor.PostAsJsonAsync("/api/v1/features", new
         {
+            kind = "generic",
             name,
             featureTypeId,
             geometry,
+            locationProtected,
             visibility = "authenticated",
         });
-        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
     private async Task<Guid> CreateCaveAsync(

@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using SilexGis.Api.Common;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Infrastructure.Persistence;
@@ -12,8 +13,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// Optimistic concurrency: single GETs carry an ETag, writes honor If-Match with 412 on
-/// staleness, and a fresh ETag is issued after a successful update.
+/// Optimistic concurrency over the feature aggregate. The version token is the FEATURE
+/// row — one ETag covers a cave's own columns, its subtype attributes and the derived
+/// mirror an entrance change refreshes — so a stale editor of any part is refused. Single
+/// GETs carry the ETag, writes honor If-Match with 412 on staleness, and a fresh ETag is
+/// issued after every successful update.
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable
@@ -21,6 +25,7 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable
     private readonly SilexGisApiFactory factory;
     private HttpClient owner = null!;
     private long caveTypeId;
+    private long entranceTypeId;
 
     public ConcurrencyTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
@@ -33,6 +38,7 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
+            entranceTypeId = await db.EntranceTypes.Select(t => t.Id).FirstAsync();
         }
 
         owner = await AuthHelper.BearerClientAsync(factory, $"cc-own-{suffix}@t.local");
@@ -41,60 +47,120 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task Etag_and_if_match_guard_against_lost_updates()
     {
-        // Create, then GET to obtain the current ETag.
-        var create = await owner.PostAsJsonAsync("/api/v1/caves", CaveBody("Concurrent Cave v1"));
-        create.StatusCode.ShouldBe(HttpStatusCode.Created);
-        var caveId = (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var caveId = await CreateCaveAsync("Concurrent Cave v1");
 
         var get = await owner.GetAsync($"/api/v1/caves/{caveId}");
         get.StatusCode.ShouldBe(HttpStatusCode.OK);
         var etag = get.Headers.ETag!.Tag;
         etag.ShouldNotBeNullOrWhiteSpace();
+        // The token is the feature row's version, not something the cave subtype owns.
+        etag.ShouldBe(await FeatureETagAsync(caveId));
 
         // Update WITH the fresh ETag → accepted, and a new ETag is issued.
-        using var okUpdate = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/caves/{caveId}")
-        {
-            Content = JsonContent.Create(CaveBody("Concurrent Cave v2")),
-        };
-        okUpdate.Headers.TryAddWithoutValidation("If-Match", etag);
-        var okResponse = await owner.SendAsync(okUpdate);
+        var okResponse = await owner.PutWithIfMatchAsync(
+            $"/api/v1/caves/{caveId}", CaveBody("Concurrent Cave v2"), etag);
         okResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await okResponse.Content.ReadAsStringAsync());
         var newEtag = okResponse.Headers.ETag!.Tag;
         newEtag.ShouldNotBe(etag); // xmin advanced with the update
 
         // Replaying the OLD ETag now → 412 with the stable code; nothing is written.
-        using var staleUpdate = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/caves/{caveId}")
-        {
-            Content = JsonContent.Create(CaveBody("Concurrent Cave v3 (lost)")),
-        };
-        staleUpdate.Headers.TryAddWithoutValidation("If-Match", etag);
-        var staleResponse = await owner.SendAsync(staleUpdate);
+        var staleResponse = await owner.PutWithIfMatchAsync(
+            $"/api/v1/caves/{caveId}", CaveBody("Concurrent Cave v3 (lost)"), etag);
         staleResponse.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
         (await staleResponse.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("code").GetString().ShouldBe("concurrency.version_mismatch");
         (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}"))
             .GetProperty("name").GetString().ShouldBe("Concurrent Cave v2");
 
-        // Stale delete → 412; delete with the current ETag → gone.
-        using var staleDelete = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/caves/{caveId}");
-        staleDelete.Headers.TryAddWithoutValidation("If-Match", etag);
-        (await owner.SendAsync(staleDelete)).StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
-
-        using var freshDelete = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/caves/{caveId}");
-        freshDelete.Headers.TryAddWithoutValidation("If-Match", newEtag);
-        (await owner.SendAsync(freshDelete)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
-
-        // The freeze makes If-Match mandatory on edits of loaded resources: a PUT without it
-        // is refused with 428 and the stable code, so an edit can never silently overwrite.
-        var create2 = await owner.PostAsJsonAsync("/api/v1/caves", CaveBody("Frozen Cave"));
-        var caveId2 = (await create2.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
-        var noHeader = await owner.PutAsJsonAsync($"/api/v1/caves/{caveId2}", CaveBody("Frozen Cave v2"));
+        // A PUT without the header is refused with 428, so an edit of a loaded resource can
+        // never silently overwrite.
+        var noHeader = await owner.PutAsJsonAsync($"/api/v1/caves/{caveId}", CaveBody("Concurrent Cave v3"));
         noHeader.StatusCode.ShouldBe(HttpStatusCode.PreconditionRequired);
         (await noHeader.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("code").GetString().ShouldBe("concurrency.if_match_required");
 
+        // Stale delete → 412; delete with the current ETag → gone.
+        var currentEtag = await FeatureETagAsync(caveId);
+        currentEtag.ShouldBe(newEtag);
+        (await DeleteWithIfMatchAsync($"/api/v1/caves/{caveId}", etag))
+            .StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
+        (await DeleteWithIfMatchAsync($"/api/v1/caves/{caveId}", currentEtag))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
         // DELETE stays lenient — list/map deletes carry no loaded version — so no header deletes.
-        (await owner.DeleteAsync($"/api/v1/caves/{caveId2}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var second = await CreateCaveAsync("Lenient Delete Cave");
+        (await owner.DeleteAsync($"/api/v1/caves/{second}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task Entrance_edits_version_on_the_feature_row_and_bump_the_cave_aggregate()
+    {
+        var caveId = await CreateCaveAsync("Aggregate Token Cave");
+        var caveEtagBefore = await FeatureETagAsync(caveId);
+
+        // Adding an entrance refreshes the cave's derived mirror (count + representative
+        // point), so the cave's own token advances and a stale editor is refused.
+        var create = await owner.PostAsJsonAsync(
+            $"/api/v1/caves/{caveId}/entrances", EntranceBody("Main", 25.81, 45.91, surveyedAt: null));
+        create.StatusCode.ShouldBe(HttpStatusCode.Created, await create.Content.ReadAsStringAsync());
+        var entranceId = (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        var caveEtagAfter = await FeatureETagAsync(caveId);
+        caveEtagAfter.ShouldNotBe(caveEtagBefore);
+        (await owner.PutWithIfMatchAsync(
+            $"/api/v1/caves/{caveId}", CaveBody("Aggregate Token Cave v2"), caveEtagBefore))
+            .StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
+
+        // An entrance is versioned on its own feature row, and a subtype-only edit still
+        // advances that token — otherwise an attribute change would slip past a concurrent
+        // editor unnoticed.
+        var entranceEtag = await FeatureETagAsync(entranceId);
+        var edit = await owner.PutWithIfMatchAsync(
+            $"/api/v1/cave-entrances/{entranceId}",
+            EntranceBody("Main", 25.81, 45.91, surveyedAt: new DateOnly(2026, 5, 17)),
+            entranceEtag);
+        edit.StatusCode.ShouldBe(HttpStatusCode.OK, await edit.Content.ReadAsStringAsync());
+        (await edit.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("surveyedAt").GetString().ShouldBe("2026-05-17");
+
+        var entranceEtagAfter = await FeatureETagAsync(entranceId);
+        entranceEtagAfter.ShouldNotBe(entranceEtag);
+
+        (await owner.PutWithIfMatchAsync(
+            $"/api/v1/cave-entrances/{entranceId}",
+            EntranceBody("Main", 25.81, 45.91, surveyedAt: new DateOnly(2026, 6, 1)),
+            entranceEtag))
+            .StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
+
+        // Entrance edits keep the lenient contract: no header is still last-write-wins.
+        (await owner.PutAsJsonAsync(
+            $"/api/v1/cave-entrances/{entranceId}",
+            EntranceBody("Main entrance", 25.81, 45.91, surveyedAt: null)))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>The row's current version as an ETag value — the token every feature kind shares.</summary>
+    private async Task<string> FeatureETagAsync(Guid featureId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var version = await ConcurrencySql.VersionAsync(db, VersionedTable.Features, featureId, CancellationToken.None);
+        version.ShouldNotBeNull();
+        return $"\"{version}\"";
+    }
+
+    private async Task<Guid> CreateCaveAsync(string name)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/caves", CaveBody(name));
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    private async Task<HttpResponseMessage> DeleteWithIfMatchAsync(string url, string ifMatch)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, url);
+        request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
+        return await owner.SendAsync(request);
     }
 
     private object CaveBody(string name) => new
@@ -103,11 +169,27 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable
         caveTypeId,
         visibility = "private",
         locationProtected = false,
-        explorationStatus = "Unknown",
+        explorationStatus = "unknown",
         isShowCave = false,
+    };
+
+    private object EntranceBody(string? name, double lon, double lat, DateOnly? surveyedAt) => new
+    {
+        name,
+        entranceTypeId,
+        isMain = true,
+        geom = new { type = "Point", coordinates = new[] { lon, lat } },
+        altitude = (decimal?)null,
+        description = (string?)null,
+        positionQuality = "gps",
+        surveyedAt,
     };
 
     public Task DisposeAsync() => Task.CompletedTask;
 
-    public void Dispose() => factory.Dispose();
+    public void Dispose()
+    {
+        owner.Dispose();
+        factory.Dispose();
+    }
 }

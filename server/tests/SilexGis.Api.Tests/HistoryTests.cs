@@ -2,36 +2,42 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// Entity history end-to-end: timeline (incl. child events via audit roots), the
-/// protection-of-history redaction that mirrors live DTO masking, and the write-path guard
-/// that stops non-exact editors from round-tripping obfuscated values over precise data.
+/// Entity history end-to-end over the feature supertype: one merged event per feature edit
+/// (the aggregate is one thing to a reader), kind-qualified event types, descendant roll-up
+/// through the containment closure at any depth, the protection-of-history redaction that
+/// mirrors the live DTO masking — including its "current protection state governs" rule —
+/// and the soft-delete forensics a timeline exists to show.
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class HistoryTests : IAsyncLifetime, IDisposable
 {
     private readonly SilexGisApiFactory factory;
 
-    private HttpClient owner = null!;    // Editor, owns the cave — has exact location (owner)
+    private HttpClient owner = null!;    // Editor, owns everything seeded here — always exact
     private HttpClient editor = null!;   // Editor granted Read+Write, but NOT ViewExactLocation
     private HttpClient outsider = null!; // Editor, unrelated
     private Guid editorId;
     private long caveTypeId;
     private long entranceTypeId;
+    private long karstAreaTypeId;
 
     private const double ExactLon = 25.46110;
     private const double ExactLat = 45.53220;
     private const string SecretAddress = "Str. Secreta 5";
+    private const string MovedSecretAddress = "Str. Secreta 7";
 
     public HistoryTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
@@ -48,6 +54,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             caveTypeId = await db.CaveTypes.Where(t => t.Code == "cave").Select(t => t.Id).SingleAsync();
             entranceTypeId = await db.EntranceTypes.Where(t => t.Code == "natural").Select(t => t.Id).SingleAsync();
+            karstAreaTypeId = await db.FeatureTypes.Where(t => t.Code == "karst_area").Select(t => t.Id).SingleAsync();
         }
 
         owner = await AuthHelper.BearerClientAsync(factory, $"hown-{suffix}@t.local");
@@ -56,264 +63,432 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
-    public async Task Timeline_includes_children_and_redacts_protected_location()
+    public async Task Feature_edit_is_one_kind_qualified_event_carrying_both_halves_of_the_aggregate()
     {
-        var caveId = await CreateProtectedCaveAsync();
-        var entranceId = await CreateEntranceAsync(caveId, ExactLon, ExactLat);
-        await GrantAsync(caveId, editorId, ObjectPermission.Read | ObjectPermission.Write);
+        var caveId = await CreateCaveAsync(owner, protectedLocation: false);
 
-        // Owner edits the cave and moves the entrance — both must surface in the cave timeline.
-        await UpdateCaveAsync(owner, caveId, description: "Owner note", closestAddress: SecretAddress);
-        await UpdateEntranceAsync(owner, caveId, entranceId, ExactLon + 0.001, ExactLat + 0.001, "moved");
+        // One save touching the feature row (name, description) and the cave row (region):
+        // a reader edits "the cave", so the timeline must show one event, not two.
+        await UpdateCaveAsync(
+            owner, caveId, name: "Merged edit", protectedLocation: false,
+            description: "Both halves", region: "Bihor");
 
-        // ---- auth & existence
-        using (var anon = factory.CreateClient())
+        var (_, events) = await HistoryAsync(owner, "feature", caveId);
+
+        // Kind-qualified vocabulary throughout — a bare "Cave"/"Feature" row would mean the
+        // supertype and subtype audited separately.
+        events.Select(EntityType).ShouldAllBe(t => t.StartsWith("Feature:", StringComparison.Ordinal));
+
+        var created = events
+            .Where(e => Action(e) == "created" && EntityId(e) == caveId)
+            .ToList();
+        created.Count.ShouldBe(1);
+        EntityType(created[0]).ShouldBe("Feature:Cave");
+        HasChange(created[0], "Name").ShouldBeTrue();       // supertype half
+        HasChange(created[0], "CaveTypeId").ShouldBeTrue(); // subtype half
+
+        var edits = events
+            .Where(e => Action(e) == "updated" && EntityId(e) == caveId && HasChange(e, "Description"))
+            .ToList();
+        edits.Count.ShouldBe(1);
+        EntityType(edits[0]).ShouldBe("Feature:Cave");
+        NewText(edits[0], "Description").ShouldBe("Both halves");
+        NewText(edits[0], "Name").ShouldBe("Merged edit");
+        NewText(edits[0], "Region").ShouldBe("Bihor");
+    }
+
+    [Fact]
+    public async Task Parent_timelines_roll_up_descendants_through_the_closure()
+    {
+        var areaId = await CreateAreaAsync(owner, protectedLocation: false);
+        var caveId = await CreateCaveAsync(owner, protectedLocation: false, parentId: areaId);
+        var entranceId = await CreateEntranceAsync(owner, caveId, ExactLon, ExactLat);
+        var unrelatedCaveId = await CreateCaveAsync(owner, protectedLocation: false);
+
+        // One level down: the entrance's creation is part of its cave's story.
+        var (_, caveEvents) = await HistoryAsync(owner, "feature", caveId);
+        caveEvents.ShouldContain(e => EntityType(e) == "Feature:CaveEntrance" && EntityId(e) == entranceId);
+
+        // Two levels down: the closure — not a pointer stamped at write time — decides scope,
+        // so the entrance under the cave under the area shows in the area's timeline too.
+        var (_, areaEvents) = await HistoryAsync(owner, "feature", areaId);
+        areaEvents.ShouldContain(e =>
+            EntityType(e) == "Feature:Generic" && EntityId(e) == areaId && Action(e) == "created");
+        areaEvents.ShouldContain(e => EntityType(e) == "Feature:Cave" && EntityId(e) == caveId);
+        areaEvents.ShouldContain(e => EntityType(e) == "Feature:CaveEntrance" && EntityId(e) == entranceId);
+
+        // …and nothing outside the subtree leaks in.
+        areaEvents.ShouldNotContain(e => EntityId(e) == unrelatedCaveId);
+    }
+
+    [Fact]
+    public async Task Timeline_requires_authentication_and_never_discloses_unreadable_entities()
+    {
+        var privateCaveId = await CreateCaveAsync(owner, protectedLocation: false, visibility: "private");
+
+        using (var anonymous = factory.CreateClient())
         {
-            (await anon.GetAsync($"/api/v1/history?entityType=Cave&entityId={caveId}"))
+            (await anonymous.GetAsync($"/api/v1/history?entityType=feature&entityId={privateCaveId}"))
                 .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         }
 
-        (await outsider.GetAsync($"/api/v1/history?entityType=Cave&entityId={Guid.NewGuid()}"))
-            .StatusCode.ShouldBe(HttpStatusCode.NotFound); // existence not disclosed
+        // A row the caller may not read answers exactly like one that never existed.
+        foreach (var id in new[] { Guid.NewGuid(), privateCaveId })
+        {
+            var response = await outsider.GetAsync($"/api/v1/history?entityType=feature&entityId={id}");
+            response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            (await ProblemCodeAsync(response)).ShouldBe("history.entity_not_found");
+        }
+    }
 
-        // ---- owner (exact): timeline carries the entrance child event and exact values (WKT).
-        var (ownerBody, ownerEvents) = await HistoryAsync(owner, "Cave", caveId);
-        ownerEvents.ShouldContain(e => e.GetProperty("entityType").GetString() == "CaveEntrance");
-        ownerBody.ShouldContain("POINT");   // entrance geometry WKT is visible
-        ownerBody.ShouldContain("Secreta"); // cave address is visible
+    [Fact]
+    public async Task Protected_timeline_hides_coordinates_and_address_until_exact_view_is_granted()
+    {
+        var caveId = await CreateCaveAsync(owner, protectedLocation: true, closestAddress: SecretAddress);
+        var entranceId = await CreateEntranceAsync(owner, caveId, ExactLon, ExactLat);
+        await GrantAsync(caveId, editorId, ObjectPermission.Read | ObjectPermission.Write);
 
-        // ---- editor (no exact): coordinate + address values are removed and named, no WKT leaks.
-        var (editorBody, editorEvents) = await HistoryAsync(editor, "Cave", caveId);
+        await UpdateCaveAsync(
+            owner, caveId, name: "Protected cave", protectedLocation: true,
+            description: "Owner note", closestAddress: MovedSecretAddress);
+        await UpdateEntranceAsync(owner, entranceId, ExactLon + 0.001, ExactLat + 0.001, "moved");
+
+        // ---- owner (exact): the timeline carries the entrance WKT and the address verbatim.
+        var (ownerBody, _) = await HistoryAsync(owner, "feature", caveId);
+        ownerBody.ShouldContain("POINT");
+        ownerBody.ShouldContain("Secreta");
+
+        // ---- editor (no exact view): the location-revealing values are removed and named.
+        var (editorBody, editorEvents) = await HistoryAsync(editor, "feature", caveId);
         editorBody.ShouldNotContain("POINT");
         editorBody.ShouldNotContain("Secreta");
 
-        var entranceUpdate = editorEvents.First(e =>
-            e.GetProperty("entityType").GetString() == "CaveEntrance"
-            && e.GetProperty("action").GetString() == "updated");
+        var entranceUpdate = editorEvents.Single(e =>
+            EntityId(e) == entranceId && Action(e) == "updated");
+        EntityType(entranceUpdate).ShouldBe("Feature:CaveEntrance");
         Redacted(entranceUpdate).ShouldContain("Geom");
-        entranceUpdate.GetProperty("changes").ValueKind.ShouldNotBe(JsonValueKind.Null);
-        entranceUpdate.GetProperty("changes").TryGetProperty("Geom", out _).ShouldBeFalse();
+        HasChange(entranceUpdate, "Geom").ShouldBeFalse();
+        // The event itself (who changed what, when) is activity metadata, not location data.
+        entranceUpdate.GetProperty("userId").ValueKind.ShouldNotBe(JsonValueKind.Null);
 
-        // The entrance's *created* snapshot must not leak the birth coordinates either.
-        var entranceCreate = editorEvents.First(e =>
-            e.GetProperty("entityType").GetString() == "CaveEntrance"
-            && e.GetProperty("action").GetString() == "created");
+        // The birth coordinates in the created snapshot are governed by the same rule.
+        var entranceCreate = editorEvents.Single(e =>
+            EntityId(e) == entranceId && Action(e) == "created");
         Redacted(entranceCreate).ShouldContain("Geom");
 
-        // ---- grant flip: granting ViewExactLocation lifts the redaction retroactively.
+        var caveEdit = editorEvents.Single(e =>
+            EntityId(e) == caveId && Action(e) == "updated" && HasChange(e, "Description"));
+        Redacted(caveEdit).ShouldContain("ClosestAddress");
+        HasChange(caveEdit, "ClosestAddress").ShouldBeFalse();
+
+        // ---- granting ViewExactLocation lifts the redaction retroactively.
         await GrantAsync(caveId, editorId, ObjectPermission.ViewExactLocation);
-        var (editorBody2, _) = await HistoryAsync(editor, "Cave", caveId);
-        editorBody2.ShouldContain("POINT");
-        editorBody2.ShouldContain("Secreta");
+        var (grantedBody, _) = await HistoryAsync(editor, "feature", caveId);
+        grantedBody.ShouldContain("POINT");
+        grantedBody.ShouldContain("Secreta");
     }
 
     [Fact]
-    public async Task Write_path_guard_preserves_protected_fields_for_non_exact_editors()
+    public async Task Re_parenting_under_a_protected_root_hides_the_coordinate_history_retroactively()
     {
-        var caveId = await CreateProtectedCaveAsync();
-        var entranceId = await CreateEntranceAsync(caveId, ExactLon, ExactLat);
-        await GrantAsync(caveId, editorId, ObjectPermission.Read | ObjectPermission.Write);
+        var caveId = await CreateCaveAsync(owner, protectedLocation: false);
+        var entranceId = await CreateEntranceAsync(owner, caveId, ExactLon, ExactLat);
 
-        // The editor only ever sees obfuscated values; a normal full-replace edit submits the
-        // address as null (redacted) and the snapped coordinates — the server must ignore those
-        // for the protected fields and keep the precise stored data.
-        var snapped = await ReadEntranceGeomAsync(editor, caveId, entranceId);
-        await UpdateCaveAsync(editor, caveId, description: "Editor note", closestAddress: null);
-        await UpdateEntranceAsync(editor, caveId, entranceId, snapped[0], snapped[1], "editor moved");
+        // Nothing above the cave is protected yet, so its coordinates are public record.
+        var (before, _) = await HistoryAsync(outsider, "feature", caveId);
+        before.ShouldContain("POINT");
 
-        // Owner (exact) confirms the protected fields survived untouched, while the editor's
-        // non-protected edits (descriptions) did apply.
-        var cave = await GetJsonAsync(owner, $"/api/v1/caves/{caveId}");
-        cave.GetProperty("closestAddress").GetString().ShouldBe(SecretAddress);
-        cave.GetProperty("description").GetString().ShouldBe("Editor note");
-
-        var entrance = await ReadEntranceAsync(owner, caveId, entranceId);
-        entrance.GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldBe(ExactLon, 1e-9);
-        entrance.GetProperty("description").GetString().ShouldBe("editor moved");
-
-        // A privileged editor's coordinate change still applies.
-        await GrantAsync(caveId, editorId, ObjectPermission.ViewExactLocation);
-        await UpdateEntranceAsync(editor, caveId, entranceId, ExactLon + 0.002, ExactLat + 0.002, "exact move");
-        var moved = await ReadEntranceAsync(owner, caveId, entranceId);
-        moved.GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldBe(ExactLon + 0.002, 1e-9);
-    }
-
-    [Fact]
-    public async Task Non_exact_editor_cannot_clear_location_protection()
-    {
-        var caveId = await CreateProtectedCaveAsync();
-        await GrantAsync(caveId, editorId, ObjectPermission.Read | ObjectPermission.Write);
-
-        // The editor (no exact location) tries to un-protect the cave while echoing the
-        // obfuscated null address. Both the flag and the real address must survive, or the
-        // editor could self-serve the protected location (and its whole history).
-        var response = await editor.PutWithIfMatchAsync($"/api/v1/caves/{caveId}", new
+        var areaId = await CreateAreaAsync(owner, protectedLocation: true);
+        var reparent = await owner.PutWithIfMatchAsync($"/api/v1/features/{caveId}/parents", new
         {
-            name = $"Protected {caveId:N}"[..20],
-            caveTypeId,
-            visibility = "Authenticated",
-            locationProtected = false,
-            closestAddress = (string?)null,
-            description = "trying to unprotect",
-            explorationStatus = "Unknown",
-            isShowCave = false,
+            parents = new[] { new { parentId = areaId, isPrimary = true } },
         });
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        reparent.StatusCode.ShouldBe(HttpStatusCode.OK, await reparent.Content.ReadAsStringAsync());
 
-        // The editor's own view is still redacted — the exploit did not unlock anything.
-        var asEditor = await GetJsonAsync(editor, $"/api/v1/caves/{caveId}");
-        asEditor.GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
-        asEditor.GetProperty("closestAddress").ValueKind.ShouldBe(JsonValueKind.Null);
+        // Redaction follows the CURRENT protected-ancestor set: a root two levels up now
+        // vetoes exact view, and the history written before the move is covered by it.
+        var (after, afterEvents) = await HistoryAsync(outsider, "feature", caveId);
+        after.ShouldNotContain("POINT");
+        Redacted(afterEvents.Single(e => EntityId(e) == entranceId && Action(e) == "created"))
+            .ShouldContain("Geom");
 
-        // The owner confirms the flag and the address are intact; the description edit applied.
-        var asOwner = await GetJsonAsync(owner, $"/api/v1/caves/{caveId}");
-        asOwner.GetProperty("locationProtected").GetBoolean().ShouldBeTrue();
-        asOwner.GetProperty("closestAddress").GetString().ShouldBe(SecretAddress);
-        asOwner.GetProperty("description").GetString().ShouldBe("trying to unprotect");
+        // The row's own owner keeps exact view of their cave under a protected area.
+        var (ownerBody, _) = await HistoryAsync(owner, "feature", caveId);
+        ownerBody.ShouldContain("POINT");
     }
 
     [Fact]
-    public async Task Entrance_update_response_is_masked_for_non_exact_editors()
+    public async Task Soft_deletion_events_survive_in_the_parent_timeline()
     {
-        var caveId = await CreateProtectedCaveAsync();
-        var entranceId = await CreateEntranceAsync(caveId, ExactLon, ExactLat);
-        await GrantAsync(caveId, editorId, ObjectPermission.Read | ObjectPermission.Write);
+        var areaId = await CreateAreaAsync(owner, protectedLocation: false);
+        var caveId = await CreateCaveAsync(owner, protectedLocation: false, parentId: areaId);
+        var entranceId = await CreateEntranceAsync(owner, caveId, ExactLon, ExactLat);
 
-        var snapped = await ReadEntranceGeomAsync(editor, caveId, entranceId);
-        var response = await editor.PutWithIfMatchAsync($"/api/v1/cave-entrances/{entranceId}", new
-        {
-            entranceTypeId,
-            isMain = true,
-            geom = new { type = "Point", coordinates = new[] { snapped[0], snapped[1] } },
-            description = "editor edit",
-            positionQuality = "Gps",
-        });
-        var body = await response.Content.ReadAsStringAsync();
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        var deleted = await owner.DeleteAsync($"/api/v1/caves/{caveId}");
+        deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent, await deleted.Content.ReadAsStringAsync());
 
-        // The PUT response the editor gets back must be masked — the guard restored the precise
-        // stored geometry/altitude server-side, so echoing them exact would leak them.
-        var dto = JsonDocument.Parse(body).RootElement;
-        dto.GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
-        dto.GetProperty("altitude").ValueKind.ShouldBe(JsonValueKind.Null);
-        dto.GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldNotBe(ExactLon);
+        // The deletion of a subtree is precisely the event a timeline exists to show, so the
+        // stamped rows stay in the parent's scope with their kind-qualified types.
+        var (_, areaEvents) = await HistoryAsync(owner, "feature", areaId);
+        areaEvents.ShouldContain(e =>
+            Action(e) == "deleted" && EntityType(e) == "Feature:Cave" && EntityId(e) == caveId);
+        areaEvents.ShouldContain(e =>
+            Action(e) == "deleted" && EntityType(e) == "Feature:CaveEntrance" && EntityId(e) == entranceId);
 
-        // The precise value still survives for a caller who may see it.
-        var asOwner = await ReadEntranceAsync(owner, caveId, entranceId);
-        asOwner.GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldBe(ExactLon, 1e-9);
+        // The deleted row itself is no longer addressable — same answer as a row that never was.
+        var gone = await owner.GetAsync($"/api/v1/history?entityType=feature&entityId={caveId}");
+        gone.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await ProblemCodeAsync(gone)).ShouldBe("history.entity_not_found");
     }
 
-    // ---- helpers
+    [Fact]
+    public async Task Trip_timeline_redacts_the_reference_to_a_protected_cave()
+    {
+        var caveId = await CreateCaveAsync(owner, protectedLocation: true, closestAddress: SecretAddress);
+        var tripId = await CreateTripAsync(owner, caveId);
+
+        // The owner may place the cave, so the link record reads as written.
+        var (ownerBody, _) = await HistoryAsync(owner, "tripLog", tripId);
+        ownerBody.ShouldContain(caveId.ToString());
+
+        // For everyone else the reference alone would place the protected cave by proximity:
+        // the id goes, the fact that a cave link changed stays.
+        var (outsiderBody, outsiderEvents) = await HistoryAsync(outsider, "tripLog", tripId);
+        outsiderBody.ShouldNotContain(caveId.ToString());
+
+        var link = outsiderEvents.Single(e => EntityType(e) == "TripLogCave");
+        Redacted(link).ShouldContain("CaveId");
+        HasChange(link, "CaveId").ShouldBeFalse();
+        HasChange(link, "TripLogId").ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// The locating-link rule the timeline composes for feature-link rows: either endpoint
+    /// hidden removes both ids (the pairing itself is what discloses the protected one).
+    /// Exercised directly because a feature-link audit row carries no parent pointer, so no
+    /// timeline currently serves one — the rule must still be pinned, or the redaction would
+    /// be silently lost the day those rows do surface.
+    /// </summary>
+    [Fact]
+    public void Locating_link_history_drops_the_endpoint_ids_of_a_hidden_feature()
+    {
+        var visibleId = Guid.CreateVersion7();
+        var protectedId = Guid.CreateVersion7();
+
+        var hiddenTarget = HistoryProtection.Redact(
+            nameof(FeatureLink), LinkChanges(visibleId, protectedId), governingHidden: false,
+            id => id == protectedId);
+        var hiddenTargetChanges = hiddenTarget.Changes;
+        hiddenTarget.Redacted.ShouldContain(nameof(FeatureLink.ToId));
+        hiddenTargetChanges.ShouldNotBeNull();
+        hiddenTargetChanges!.ContainsKey(nameof(FeatureLink.ToId)).ShouldBeFalse();
+        // The note is not location data; only the endpoints go.
+        hiddenTargetChanges.ContainsKey("Note").ShouldBeTrue();
+
+        // Redaction runs in both directions — the source endpoint discloses just as much.
+        var hiddenSource = HistoryProtection.Redact(
+            nameof(FeatureLink), LinkChanges(protectedId, visibleId), governingHidden: false,
+            id => id == protectedId);
+        var hiddenSourceChanges = hiddenSource.Changes;
+        hiddenSource.Redacted.ShouldContain(nameof(FeatureLink.FromId));
+        hiddenSourceChanges.ShouldNotBeNull();
+        hiddenSourceChanges!.ContainsKey(nameof(FeatureLink.FromId)).ShouldBeFalse();
+
+        // Same row, nothing hidden: the removal is driven by the protection predicate, not
+        // by the property name.
+        var visible = HistoryProtection.Redact(
+            nameof(FeatureLink), LinkChanges(visibleId, protectedId), governingHidden: false, _ => false);
+        var visibleChanges = visible.Changes;
+        visible.Redacted.ShouldBeEmpty();
+        visibleChanges.ShouldNotBeNull();
+        visibleChanges!.ContainsKey(nameof(FeatureLink.FromId)).ShouldBeTrue();
+        visibleChanges.ContainsKey(nameof(FeatureLink.ToId)).ShouldBeTrue();
+    }
+
+    // ---- event accessors
+
+    private static string EntityType(JsonElement e) => e.GetProperty("entityType").GetString()!;
+
+    private static string Action(JsonElement e) => e.GetProperty("action").GetString()!;
+
+    private static Guid? EntityId(JsonElement e) =>
+        Guid.TryParse(e.GetProperty("entityId").GetString(), out var id) ? id : null;
+
+    private static bool HasChange(JsonElement e, string property)
+    {
+        var changes = e.GetProperty("changes");
+        return changes.ValueKind == JsonValueKind.Object && changes.TryGetProperty(property, out _);
+    }
+
+    private static string? NewText(JsonElement e, string property) =>
+        e.GetProperty("changes").GetProperty(property).GetProperty("new").GetString();
 
     private static string[] Redacted(JsonElement e) =>
         [.. e.GetProperty("redactedProperties").EnumerateArray().Select(x => x.GetString()!)];
 
-    private async Task<(string Body, List<JsonElement> Events)> HistoryAsync(HttpClient client, string type, Guid id)
+    /// <summary>A feature-link audit diff as the interceptor writes one (ids as strings).</summary>
+    private static JsonObject LinkChanges(Guid fromId, Guid toId) => new()
     {
-        var response = await client.GetAsync($"/api/v1/history?entityType={type}&entityId={id}&pageSize=200");
+        [nameof(FeatureLink.FromId)] = new JsonObject { ["old"] = null, ["new"] = fromId.ToString() },
+        [nameof(FeatureLink.ToId)] = new JsonObject { ["old"] = null, ["new"] = toId.ToString() },
+        ["Note"] = new JsonObject { ["old"] = null, ["new"] = "sump connection" },
+    };
+
+    // ---- API helpers
+
+    private async Task<(string Body, List<JsonElement> Events)> HistoryAsync(
+        HttpClient client, string entityType, Guid entityId)
+    {
+        var response = await client.GetAsync(
+            $"/api/v1/history?entityType={entityType}&entityId={entityId}&pageSize=200");
         var body = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
         var items = JsonDocument.Parse(body).RootElement.GetProperty("items").EnumerateArray().ToList();
         return (body, items);
     }
 
-    private async Task<Guid> CreateProtectedCaveAsync()
+    private async Task<Guid> CreateCaveAsync(
+        HttpClient client,
+        bool protectedLocation,
+        string? closestAddress = null,
+        Guid? parentId = null,
+        string visibility = "authenticated")
     {
-        var response = await owner.PostAsJsonAsync("/api/v1/caves", new
+        var response = await client.PostAsJsonAsync("/api/v1/caves", new
         {
-            name = $"Protected {Guid.NewGuid():N}",
+            name = $"History cave {Guid.NewGuid():N}",
             caveTypeId,
-            visibility = "Authenticated",
-            locationProtected = true,
-            closestAddress = SecretAddress,
+            visibility,
+            locationProtected = protectedLocation,
+            closestAddress,
             explorationStatus = "Unknown",
             isShowCave = false,
+            parentId,
         });
-        var body = await response.Content.ReadAsStringAsync();
-        response.StatusCode.ShouldBe(HttpStatusCode.Created, body);
-        return JsonDocument.Parse(body).RootElement.GetProperty("id").GetGuid();
+        return await CreatedIdAsync(response);
     }
 
-    private async Task<Guid> CreateEntranceAsync(Guid caveId, double lon, double lat)
+    /// <summary>A karst area — a generic feature that can hold caves and carry the protection root.</summary>
+    private async Task<Guid> CreateAreaAsync(HttpClient client, bool protectedLocation)
     {
-        var response = await owner.PostAsJsonAsync($"/api/v1/caves/{caveId}/entrances", new
+        var response = await client.PostAsJsonAsync("/api/v1/features", new
         {
+            kind = "generic",
+            name = $"Karst area {Guid.NewGuid():N}",
+            featureTypeId = karstAreaTypeId,
+            geometry = new
+            {
+                type = "Polygon",
+                coordinates = new[]
+                {
+                    new[]
+                    {
+                        new[] { 25.40, 45.50 },
+                        new[] { 25.60, 45.50 },
+                        new[] { 25.60, 45.60 },
+                        new[] { 25.40, 45.60 },
+                        new[] { 25.40, 45.50 },
+                    },
+                },
+            },
+            locationProtected = protectedLocation,
+            visibility = "authenticated",
+        });
+        return await CreatedIdAsync(response);
+    }
+
+    private async Task<Guid> CreateEntranceAsync(HttpClient client, Guid caveId, double lon, double lat)
+    {
+        var response = await client.PostAsJsonAsync($"/api/v1/caves/{caveId}/entrances", new
+        {
+            name = "Main entrance",
             entranceTypeId,
             isMain = true,
             geom = new { type = "Point", coordinates = new[] { lon, lat } },
             altitude = 900m,
             positionQuality = "Gps",
         });
-        var body = await response.Content.ReadAsStringAsync();
-        response.StatusCode.ShouldBe(HttpStatusCode.Created, body);
-        return JsonDocument.Parse(body).RootElement.GetProperty("id").GetGuid();
+        return await CreatedIdAsync(response);
     }
 
-    private async Task UpdateCaveAsync(HttpClient client, Guid caveId, string description, string? closestAddress)
+    private static async Task<Guid> CreateTripAsync(HttpClient client, Guid caveId)
+    {
+        var response = await client.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"History trip {Guid.NewGuid():N}",
+            tripDate = "2026-07-01",
+            caveIds = new[] { caveId },
+            participants = Array.Empty<object>(),
+            visibility = "authenticated",
+        });
+        return await CreatedIdAsync(response);
+    }
+
+    private async Task UpdateCaveAsync(
+        HttpClient client,
+        Guid caveId,
+        string name,
+        bool protectedLocation,
+        string? description = null,
+        string? closestAddress = null,
+        string? region = null)
     {
         var response = await client.PutWithIfMatchAsync($"/api/v1/caves/{caveId}", new
         {
-            name = $"Protected {caveId:N}"[..20],
+            name,
             caveTypeId,
-            visibility = "Authenticated",
-            locationProtected = true,
+            visibility = "authenticated",
+            locationProtected = protectedLocation,
             closestAddress,
             description,
+            region,
             explorationStatus = "Unknown",
             isShowCave = false,
         });
-        var body = await response.Content.ReadAsStringAsync();
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
-    private async Task UpdateEntranceAsync(HttpClient client, Guid caveId, Guid entranceId, double lon, double lat, string description)
+    private async Task UpdateEntranceAsync(
+        HttpClient client, Guid entranceId, double lon, double lat, string description)
     {
         var response = await client.PutWithIfMatchAsync($"/api/v1/cave-entrances/{entranceId}", new
         {
+            name = "Main entrance",
             entranceTypeId,
             isMain = true,
             geom = new { type = "Point", coordinates = new[] { lon, lat } },
             description,
             positionQuality = "Gps",
         });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    private static async Task<Guid> CreatedIdAsync(HttpResponseMessage response)
+    {
         var body = await response.Content.ReadAsStringAsync();
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, body);
+        return JsonDocument.Parse(body).RootElement.GetProperty("id").GetGuid();
     }
 
-    private async Task<double[]> ReadEntranceGeomAsync(HttpClient client, Guid caveId, Guid entranceId)
+    private static async Task<string?> ProblemCodeAsync(HttpResponseMessage response)
     {
-        var entrance = await ReadEntranceAsync(client, caveId, entranceId);
-        var coords = entrance.GetProperty("geom").GetProperty("coordinates");
-        return [coords[0].GetDouble(), coords[1].GetDouble()];
-    }
-
-    private async Task<JsonElement> ReadEntranceAsync(HttpClient client, Guid caveId, Guid entranceId)
-    {
-        var list = await GetJsonAsync(client, $"/api/v1/caves/{caveId}/entrances");
-        return list.EnumerateArray().First(e => e.GetProperty("id").GetGuid() == entranceId).Clone();
-    }
-
-    private static async Task<JsonElement> GetJsonAsync(HttpClient client, string url)
-    {
-        var response = await client.GetAsync(url);
         var body = await response.Content.ReadAsStringAsync();
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, $"{url}: {body}");
-        return JsonDocument.Parse(body).RootElement.Clone();
+        var root = JsonDocument.Parse(body).RootElement;
+        return root.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
-    private async Task GrantAsync(Guid caveId, Guid userId, ObjectPermission permissions)
+    /// <summary>Grants (ORs in) permissions on a feature; one ACL row per subject per target.</summary>
+    private async Task GrantAsync(Guid featureId, Guid userId, ObjectPermission permissions)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var acl = await db.ObjectAcls.FirstOrDefaultAsync(a =>
-            a.EntityType == AttachedEntityType.Cave && a.EntityId == caveId
-            && a.SubjectKind == AclSubjectKind.User && a.SubjectId == userId);
+            a.FeatureId == featureId && a.SubjectKind == AclSubjectKind.User && a.SubjectId == userId);
         if (acl is null)
         {
             db.ObjectAcls.Add(new ObjectAcl
             {
-                EntityType = AttachedEntityType.Cave,
-                EntityId = caveId,
+                FeatureId = featureId,
                 SubjectKind = AclSubjectKind.User,
                 SubjectId = userId,
                 Permissions = permissions,
@@ -321,7 +496,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
         }
         else
         {
-            acl.Permissions |= permissions; // one row per subject (unique index); OR grants in
+            acl.Permissions |= permissions;
         }
 
         await db.SaveChangesAsync();

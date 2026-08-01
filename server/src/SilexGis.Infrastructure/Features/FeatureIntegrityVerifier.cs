@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Buffers.Text;
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
@@ -93,14 +95,16 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
             }
         }
 
-        // Cave mirror: entrance count and representative point.
-        var caveMirrors = await db.Caves.IgnoreQueryFilters()
+        // Cave mirror: entrance count and representative point. Live rows only on both
+        // sides — the mirror describes what readers can see, and the write service
+        // recomputes it from live entrances (a soft-deleted entrance is not counted).
+        var caveMirrors = await db.Caves
             .Select(c => new
             {
                 c.Id,
                 c.EntranceCount,
                 CaveGeom = c.Feature.Geom,
-                Entrances = db.CaveEntrances.IgnoreQueryFilters()
+                Entrances = db.CaveEntrances
                     .Where(e => e.CaveFeatureId == c.Id)
                     .Select(e => new { e.IsMain, e.Feature.Geom })
                     .ToList(),
@@ -129,9 +133,11 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
         var featureAccess = await db.Features.IgnoreQueryFilters()
             .Select(f => new { f.Id, f.OwnerUserId, f.TeamId, f.Visibility })
             .ToDictionaryAsync(f => f.Id, ct);
-        var delegated = (await db.CaveEntrances.IgnoreQueryFilters()
+        // Live rows only: a soft-deleted child's stale trio is invisible and gets
+        // recopied by the sync when its cave next changes.
+        var delegated = (await db.CaveEntrances
                 .Select(e => new { e.Id, e.CaveFeatureId }).ToListAsync(ct))
-            .Concat(await db.Centerlines.IgnoreQueryFilters()
+            .Concat(await db.Centerlines
                 .Select(c => new { c.Id, c.CaveFeatureId }).ToListAsync(ct));
         foreach (var child in delegated)
         {
@@ -141,6 +147,41 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
             {
                 problems.Add(new IntegrityProblem("delegated_trio", child.Id,
                     "access columns diverge from the owning cave's"));
+            }
+        }
+
+        // Default centerline: a cave that has any live centerline has exactly one default
+        // — that one is the cave's current shape on the map. The partial unique index
+        // already makes two impossible, so what this catches is the zero case: a delete
+        // path that removed the default without promoting a successor would silently drop
+        // the cave off the centerline overlay.
+        var centerlinesByCave = (await db.Centerlines
+                .Select(c => new { c.CaveFeatureId, c.IsDefault })
+                .ToListAsync(ct))
+            .GroupBy(c => c.CaveFeatureId);
+        foreach (var cave in centerlinesByCave)
+        {
+            var defaults = cave.Count(c => c.IsDefault);
+            if (defaults != 1)
+            {
+                problems.Add(new IntegrityProblem("default_centerline", cave.Key,
+                    $"{cave.Count()} centerline(s), {defaults} marked default"));
+            }
+        }
+
+        // Share tokens: the stored value must be a SHA-256 digest, base64url. Uniqueness
+        // and the feature FK are enforced by the schema, so what is left to check is the
+        // shape — a truncated, re-encoded or otherwise differently-derived value means a
+        // mint path that did not go through the hash. Note this cannot prove a plaintext
+        // token was never stored: the tokens are themselves 32 random bytes, so a digest
+        // and a token are indistinguishable by width alone.
+        foreach (var share in await db.FeatureShares.Select(s => new { s.Id, s.TokenHash }).ToListAsync(ct))
+        {
+            if (!Base64Url.IsValid(share.TokenHash)
+                || Base64Url.DecodeFromChars(share.TokenHash).Length != SHA256.HashSizeInBytes)
+            {
+                problems.Add(new IntegrityProblem("share_token_hash", share.Id,
+                    "token hash is not a base64url SHA-256 digest"));
             }
         }
 

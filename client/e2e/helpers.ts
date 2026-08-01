@@ -32,6 +32,20 @@ export async function deleteFeature(page: Page, featureName: string) {
   await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
 }
 
+/**
+ * Puts the workspace map over the demo cave. Search cannot do this: its results carry no
+ * coordinates by design, so picking one opens the record instead of moving the map. The
+ * feature list's "show on map" fits the map to the row's geometry and goes there.
+ */
+export async function centreOnDemoCave(page: Page) {
+  await page.goto('/features');
+  const row = page.getByRole('row', { name: /Peștera Demo Mare/ });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  // Icon-only antd button: its accessible name is the icon's aria-label.
+  await row.getByRole('button', { name: 'aim' }).click();
+  await expect(page.locator('.map-canvas')).toBeVisible({ timeout: 15_000 });
+}
+
 /** Taps the map at a viewport-relative point, the way a finger places a vertex. */
 export async function tapMap(page: Page, x: number, y: number) {
   const box = (await page.locator('.map-canvas').boundingBox())!;

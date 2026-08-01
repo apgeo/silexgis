@@ -309,5 +309,6 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Map__CenterlineMaxPaths` | `25000` | line budget per centerline request; over it, outlines are served instead |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys (must persist across restarts) |
+| `SILEXGIS__FeatureIntegrity__Interval` | `24:00:00` | how often a background pass re-checks the map data for internal inconsistencies; findings go to the log and the admin jobs list. `00:00:00` turns the schedule off |
 
 Secrets belong only in the environment / `.env`, never in the repository.

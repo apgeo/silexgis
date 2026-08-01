@@ -81,7 +81,13 @@ public sealed record GeoJsonGeometry(string Type, JsonElement Coordinates)
                 throw new JsonException("A position must be an array of at least two numbers.");
             }
 
-            return new Coordinate(e[0].GetDouble(), e[1].GetDouble());
+            // A position may carry a third ordinate (elevation). Entrances are stored as
+            // PointZ and centerlines as MultiLineStringZ, so dropping it here would
+            // silently flatten every depth that arrives over the API — and the writer
+            // above emits Z, which would make a read-modify-write lose it.
+            return e.GetArrayLength() >= 3 && e[2].ValueKind == JsonValueKind.Number
+                ? new CoordinateZ(e[0].GetDouble(), e[1].GetDouble(), e[2].GetDouble())
+                : new Coordinate(e[0].GetDouble(), e[1].GetDouble());
         }
 
         static Coordinate[] ParseLine(JsonElement e)

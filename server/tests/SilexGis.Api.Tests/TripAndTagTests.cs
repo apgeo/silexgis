@@ -13,8 +13,14 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// Phase-4 surface: trip logs (participants/caves/visibility/map/search), tags with
-/// entity filters down to the clustered map SQL, and the admin-only audit trail.
+/// Trip logs (participants/report fields/caves/visibility/map/search), tags with entity
+/// filters down to the clustered map SQL, and the admin-only audit trail.
+/// <para>
+/// A trip's cave links point at cave FEATURE ids, and tags address their target in the
+/// two-world vocabulary — "feature" plus a feature id for anything physical. Both are
+/// re-anchored addresses for unchanged rules: a link to a location-protected cave is still
+/// redacted for callers without exact view, and still preserved across their edits.
+/// </para>
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
@@ -74,6 +80,11 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         });
         badParticipant.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
+        // A cave id the caller cannot read is reported exactly like a nonexistent one, so
+        // linking cannot be used to probe for caves.
+        (await owner.PostAsJsonAsync("/api/v1/trip-logs/", TripBody($"Ghost {marker}", caveIds: [Guid.NewGuid()])))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
         // Create with a linked cave, a registered participant and a guest name.
         var create = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
         {
@@ -100,6 +111,11 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         participants.ShouldContain(p => p.GetProperty("nameText").GetString() == "Guest Caver");
         participants.ShouldContain(p => p.GetProperty("userId").ValueKind == JsonValueKind.String
             && p.GetProperty("displayName").GetString() != null);
+
+        // The linked id is the cave's feature id — the same id the uniform resolver answers.
+        var resolved = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/features/{caveId}");
+        resolved.GetProperty("kind").GetString().ShouldBe("cave");
+        resolved.GetProperty("feature").GetProperty("id").GetGuid().ShouldBe(caveId);
 
         // Visible to other authenticated users; a private trip is not.
         (await outsider.GetAsync($"/api/v1/trip-logs/{tripId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -256,6 +272,11 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         (await outsider.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{tripId}"))
             .GetProperty("caveIds").GetArrayLength().ShouldBe(0);
 
+        // The paged list is redacted the same way as the detail view.
+        var listed = await outsider.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/?search=Rigging day {marker}");
+        listed.GetProperty("items").EnumerateArray().Single()
+            .GetProperty("caveIds").GetArrayLength().ShouldBe(0);
+
         // Cave-filtered trip lists behave as if nothing were linked.
         (await outsider.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/?caveId={caveId}"))
             .GetProperty("items").GetArrayLength().ShouldBe(0);
@@ -296,6 +317,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
 
         var asOwner = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{tripId}");
         asOwner.GetProperty("caveIds").GetArrayLength().ShouldBe(1);
+        asOwner.GetProperty("caveIds").EnumerateArray().Single().GetGuid().ShouldBe(caveId);
         asOwner.GetProperty("title").GetString().ShouldBe($"Trip {marker} edited");
     }
 
@@ -332,13 +354,13 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var tripIdStr = tripId.ToString();
-        (await db.Set<AuditEntry>().CountAsync(a =>
+        (await db.AuditEntries.CountAsync(a =>
             a.EntityType == "TripLogCave" && a.RootEntityId == tripIdStr && a.Action == AuditActions.Created))
             .ShouldBe(1);
-        (await db.Set<AuditEntry>().CountAsync(a =>
+        (await db.AuditEntries.CountAsync(a =>
             a.EntityType == "TripLogParticipant" && a.RootEntityId == tripIdStr && a.Action == AuditActions.Created))
             .ShouldBe(1);
-        (await db.Set<AuditEntry>().CountAsync(a =>
+        (await db.AuditEntries.CountAsync(a =>
             a.EntityType == "TripLogCave" && a.RootEntityId == tripIdStr && a.Action == AuditActions.Deleted))
             .ShouldBe(0);
     }
@@ -349,43 +371,34 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         var marker = Guid.NewGuid().ToString("N")[..8];
         var tagged = await CreateCaveAsync($"Tagged {marker}", "authenticated");
         var untagged = await CreateCaveAsync($"Untagged {marker}", "authenticated");
-        await CreateEntranceAsync(tagged, 25.31, 45.31);
+        var taggedEntrance = await CreateEntranceAsync(tagged, 25.31, 45.31);
         await CreateEntranceAsync(untagged, 25.32, 45.32);
 
         // Tag with diacritics → slug is normalized; tagging twice is idempotent.
         var tagName = $"Zonă Verticală {marker}";
         var slug = $"zona-verticala-{marker}";
-        var tagging = await owner.PostAsJsonAsync("/api/v1/taggings/", new
-        {
-            tagName,
-            entityType = "cave",
-            entityId = tagged,
-        });
+        var tagging = await TagAsync(owner, tagName, "feature", tagged);
         tagging.StatusCode.ShouldBe(HttpStatusCode.Created, await tagging.Content.ReadAsStringAsync());
-        (await tagging.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("tag").GetProperty("slug").GetString().ShouldBe(slug);
-        (await owner.PostAsJsonAsync("/api/v1/taggings/", new
-        {
-            tagName,
-            entityType = "cave",
-            entityId = tagged,
-        })).StatusCode.ShouldBe(HttpStatusCode.Created);
+        var taggingDto = await tagging.Content.ReadFromJsonAsync<JsonElement>();
+        taggingDto.GetProperty("tag").GetProperty("slug").GetString().ShouldBe(slug);
+        taggingDto.GetProperty("entityType").GetString().ShouldBe("feature");
+        taggingDto.GetProperty("entityId").GetGuid().ShouldBe(tagged);
+        (await TagAsync(owner, tagName, "feature", tagged)).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // The map layers filter the ENTRANCE features by their own tags — an entrance is a
+        // feature in its own right, so it carries the tags that place it on the map.
+        (await TagAsync(owner, tagName, "feature", taggedEntrance)).StatusCode.ShouldBe(HttpStatusCode.Created);
 
         // The catalog finds it (accent-insensitive) and the entity lists it.
         var tags = await outsider.GetFromJsonAsync<JsonElement>($"/api/v1/tags?search=zona verticala {marker}");
         tags.EnumerateArray().Count(x => x.GetProperty("slug").GetString() == slug).ShouldBe(1);
         var taggings = await outsider.GetFromJsonAsync<JsonElement>(
-            $"/api/v1/taggings/?entityType=cave&entityId={tagged}");
+            $"/api/v1/taggings/?entityType=feature&entityId={tagged}");
         taggings.GetArrayLength().ShouldBe(1);
         var taggingId = taggings[0].GetProperty("id").GetInt64();
 
         // Viewer role: readable entity but not writable → cannot tag or untag.
-        (await viewer.PostAsJsonAsync("/api/v1/taggings/", new
-        {
-            tagName,
-            entityType = "cave",
-            entityId = untagged,
-        })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await TagAsync(viewer, tagName, "feature", untagged)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await viewer.DeleteAsync($"/api/v1/taggings/{taggingId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
         // Cave list filter.
@@ -394,16 +407,25 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         ids.ShouldContain(tagged);
         ids.ShouldNotContain(untagged);
 
+        // The cross-kind feature list honors the same tag over the supertype.
+        var features = await outsider.GetFromJsonAsync<JsonElement>($"/api/v1/features?tag={slug}&pageSize=50");
+        var featureIds = features.GetProperty("items").EnumerateArray()
+            .Select(x => x.GetProperty("id").GetGuid()).ToList();
+        featureIds.ShouldContain(tagged);
+        featureIds.ShouldContain(taggedEntrance);
+
         // Map: point path (zoom 14) and clustered SQL path (zoom 7) both honor the tag.
         var points = await outsider.GetFromJsonAsync<JsonElement>(
             $"/api/v1/map/cave-entrances?bbox=25.2,45.2,25.4,45.4&zoom=14&tag={slug}");
         points.GetProperty("features").GetArrayLength().ShouldBe(1);
+        points.GetProperty("features")[0].GetProperty("properties").GetProperty("id").GetGuid()
+            .ShouldBe(taggedEntrance);
         var clusters = await outsider.GetFromJsonAsync<JsonElement>(
             $"/api/v1/map/cave-entrances?bbox=25.2,45.2,25.4,45.4&zoom=7&tag={slug}");
         clusters.GetProperty("features").EnumerateArray()
             .Sum(f => f.GetProperty("properties").GetProperty("count").GetInt32()).ShouldBe(1);
 
-        // Owner removes the tag; the filter empties.
+        // Owner removes the cave's tag; the cave filter empties (the entrance keeps its own).
         (await owner.DeleteAsync($"/api/v1/taggings/{taggingId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await outsider.GetFromJsonAsync<JsonElement>($"/api/v1/caves?tag={slug}"))
             .GetProperty("items").GetArrayLength().ShouldBe(0);
@@ -417,11 +439,21 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
 
         (await owner.GetAsync("/api/v1/audit")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
+        // Feature rows are typed by kind; the qualified name selects exactly one kind.
+        var kindName = Uri.EscapeDataString(FeatureAudit.TypeName(FeatureKind.Cave));
         var audit = await admin.GetFromJsonAsync<JsonElement>(
-            $"/api/v1/audit?entityType=Cave&entityId={caveId}");
+            $"/api/v1/audit?entityType={kindName}&entityId={caveId}");
         var items = audit.GetProperty("items").EnumerateArray().ToList();
-        items.ShouldContain(x => x.GetProperty("action").GetString() == "created");
+        items.ShouldContain(x => x.GetProperty("action").GetString() == AuditActions.Created);
         items[0].GetProperty("userName").GetString().ShouldNotBeNullOrWhiteSpace();
+
+        // The bare word selects the whole feature world, whatever the row's kind.
+        var everyKind = await admin.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/audit?entityType={FeatureAudit.RootName}&entityId={caveId}");
+        var kinds = everyKind.GetProperty("items").EnumerateArray()
+            .Select(x => x.GetProperty("entityType").GetString()).ToList();
+        kinds.Count.ShouldBe(items.Count);
+        kinds.ShouldAllBe(t => t == FeatureAudit.TypeName(FeatureKind.Cave));
     }
 
     // ---- helpers ----
@@ -434,6 +466,10 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         participants = Array.Empty<object>(),
         visibility = "private",
     };
+
+    /// <summary>Tags a target named in the two-world vocabulary ("feature" + a feature id, or an entity name).</summary>
+    private static Task<HttpResponseMessage> TagAsync(HttpClient client, string tagName, string entityType, Guid entityId) =>
+        client.PostAsJsonAsync("/api/v1/taggings/", new { tagName, entityType, entityId });
 
     private async Task<Guid> CreateCaveAsync(string name, string visibility, bool locationProtected = false)
     {
@@ -466,7 +502,8 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         await db.SaveChangesAsync();
     }
 
-    private async Task CreateEntranceAsync(Guid caveId, double lon, double lat)
+    /// <summary>Adds an entrance and returns its own feature id.</summary>
+    private async Task<Guid> CreateEntranceAsync(Guid caveId, double lon, double lat)
     {
         var response = await owner.PostAsJsonAsync($"/api/v1/caves/{caveId}/entrances", new
         {
@@ -475,7 +512,9 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             geom = new { type = "Point", coordinates = new[] { lon, lat } },
             positionQuality = "Gps",
         });
-        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

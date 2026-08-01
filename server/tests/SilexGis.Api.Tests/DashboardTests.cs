@@ -12,7 +12,10 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// Dashboard summary: visibility-filtered registry counts and the recent-activity feed.
+/// Dashboard summary: visibility-filtered registry counts over the feature supertype and the
+/// merged recent-activity feed. Caves and data-driven features are counted separately (the two
+/// headline numbers must be readable side by side), while every feature kind — entrances
+/// included — is routable activity.
 /// The PostGIS container is shared by the whole collection, so every count assertion here is
 /// a *delta* around a freshly-read baseline — absolute totals would race other test classes'
 /// seeded rows.
@@ -25,6 +28,7 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable
     private HttpClient owner = null!;    // Editor
     private HttpClient outsider = null!; // Editor, unrelated
     private long caveTypeId;
+    private long entranceTypeId;
     private long featureTypeId;
 
     public DashboardTests(PostgresFixture postgres) =>
@@ -39,8 +43,9 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-            caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
-            featureTypeId = await db.FeatureTypes.Select(t => t.Id).FirstAsync();
+            caveTypeId = await db.CaveTypes.Where(t => t.Code == "cave").Select(t => t.Id).SingleAsync();
+            entranceTypeId = await db.EntranceTypes.Where(t => t.Code == "natural").Select(t => t.Id).SingleAsync();
+            featureTypeId = await db.FeatureTypes.Where(t => t.Code == "generic").Select(t => t.Id).SingleAsync();
         }
 
         owner = await AuthHelper.BearerClientAsync(factory, $"db-own-{suffix}@t.local");
@@ -56,36 +61,60 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
-    public async Task Summary_counts_new_records_and_lists_them_newest_first()
+    public async Task Counts_separate_caves_from_data_driven_features_and_skip_delegated_kinds()
     {
         var marker = Guid.NewGuid().ToString("N")[..8];
         var before = await SummaryAsync(owner);
+
+        var caveId = await CreateCaveAsync($"Dash cave {marker}", "authenticated");
+        _ = await CreateFeatureAsync($"Dash feature {marker}", "authenticated");
+        _ = await CreateTripAsync($"Dash trip {marker}", "authenticated");
+
+        var after = await SummaryAsync(owner);
+        Counts(after, "caves").ShouldBe(Counts(before, "caves") + 1);
+        Counts(after, "features").ShouldBe(Counts(before, "features") + 1);
+        Counts(after, "tripLogs").ShouldBe(Counts(before, "tripLogs") + 1);
+        Counts(after, "geofiles").ShouldBe(Counts(before, "geofiles"));
+
+        // Caves live in the same table as every other feature now, so a cave must be counted
+        // once and only under its own figure.
+        after.GetProperty("counts").TryGetProperty("surfaceFeatures", out _).ShouldBeFalse();
+
+        // An entrance is a feature row of a delegated kind: it belongs to its cave, not to the
+        // registry totals — but it is still activity, tagged with its own kind so the client
+        // can route the link.
+        var entranceId = await CreateEntranceAsync(caveId);
+        var withEntrance = await SummaryAsync(owner);
+        Counts(withEntrance, "caves").ShouldBe(Counts(after, "caves"));
+        Counts(withEntrance, "features").ShouldBe(Counts(after, "features"));
+        Activity(withEntrance).ShouldContain(x => Id(x) == entranceId && Kind(x) == "caveEntrance");
+    }
+
+    [Fact]
+    public async Task Recent_activity_lists_the_newest_records_first_with_their_routing_kind()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
 
         // Created oldest-to-newest so the expected feed order is the reverse of creation.
         var caveId = await CreateCaveAsync($"Dash cave {marker}", "authenticated");
         var featureId = await CreateFeatureAsync($"Dash feature {marker}", "authenticated");
         var tripId = await CreateTripAsync($"Dash trip {marker}", "authenticated");
 
-        var after = await SummaryAsync(owner);
-        Counts(after, "caves").ShouldBe(Counts(before, "caves") + 1);
-        Counts(after, "surfaceFeatures").ShouldBe(Counts(before, "surfaceFeatures") + 1);
-        Counts(after, "tripLogs").ShouldBe(Counts(before, "tripLogs") + 1);
-        Counts(after, "geofiles").ShouldBe(Counts(before, "geofiles"));
-
-        var activity = Activity(after);
+        var activity = Activity(await SummaryAsync(owner));
         activity.Count.ShouldBeLessThanOrEqualTo(10);
         activity.Select(x => x.GetProperty("updatedAt").GetDateTimeOffset())
             .ShouldBeInOrder(SortDirection.Descending);
 
         // The three just-created records lead the feed, newest first, each tagged with its kind.
         var mine = activity.Take(3).ToList();
-        mine.Select(x => x.GetProperty("id").GetGuid()).ShouldBe([tripId, featureId, caveId]);
-        mine.Select(x => x.GetProperty("kind").GetString())
-            .ShouldBe(["tripLog", "surfaceFeature", "cave"]);
+        mine.Select(Id).ShouldBe([tripId, featureId, caveId]);
+        mine.Select(Kind).ShouldBe(["tripLog", "feature", "cave"]);
         mine[2].GetProperty("name").GetString().ShouldBe($"Dash cave {marker}");
 
-        // The feed is a link list only — it must never carry coordinates.
+        // The feed is a link list only — it must never carry coordinates, so location
+        // protection has no second code path to go wrong here.
         mine[2].TryGetProperty("geom", out _).ShouldBeFalse();
+        mine[2].TryGetProperty("geometry", out _).ShouldBeFalse();
         mine[2].TryGetProperty("center", out _).ShouldBeFalse();
     }
 
@@ -95,9 +124,9 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable
         var marker = Guid.NewGuid().ToString("N")[..8];
 
         // One more cave than the feed holds, all newer than anything else in the container, so
-        // the whole feed must be caves. Reading fewer rows per kind than the feed holds would
-        // fill the tail with older features/trips and drop caves that are genuinely newer —
-        // which the single-record-per-kind tests above cannot see.
+        // the whole feed must be caves. Reading fewer rows per source than the feed holds would
+        // fill the tail with older trips and drop caves that are genuinely newer — which the
+        // single-record-per-kind tests above cannot see.
         var caveIds = new List<Guid>();
         for (var i = 0; i < 11; i++)
         {
@@ -106,9 +135,8 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable
 
         var activity = Activity(await SummaryAsync(owner));
         activity.Count.ShouldBe(10);
-        activity.Select(x => x.GetProperty("kind").GetString()).ShouldAllBe(k => k == "cave");
-        activity.Select(x => x.GetProperty("id").GetGuid())
-            .ShouldBe(Enumerable.Reverse(caveIds).Take(10));
+        activity.Select(Kind).ShouldAllBe(k => k == "cave");
+        activity.Select(Id).ShouldBe(Enumerable.Reverse(caveIds).Take(10));
     }
 
     [Fact]
@@ -119,18 +147,45 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable
         var outsiderBefore = await SummaryAsync(outsider);
 
         var secretId = await CreateCaveAsync($"Secret cave {marker}", "private");
+        // The entrance inherits the cave's access columns, so it must disappear with it.
+        var secretEntranceId = await CreateEntranceAsync(secretId);
 
-        // The owner sees their private cave…
+        // The owner sees their private cave and its entrance…
         var ownerAfter = await SummaryAsync(owner);
         Counts(ownerAfter, "caves").ShouldBe(Counts(ownerBefore, "caves") + 1);
-        Activity(ownerAfter).Select(x => x.GetProperty("id").GetGuid()).ShouldContain(secretId);
+        Activity(ownerAfter).Select(Id).ShouldContain(secretId);
+        Activity(ownerAfter).Select(Id).ShouldContain(secretEntranceId);
 
-        // …and an unrelated Editor sees neither the count nor the activity row. The paired
+        // …and an unrelated Editor sees neither the count nor the activity rows. The paired
         // assertions matter: without the owner's side above, absence here could pass simply
         // because nothing was created.
         var outsiderAfter = await SummaryAsync(outsider);
         Counts(outsiderAfter, "caves").ShouldBe(Counts(outsiderBefore, "caves"));
-        Activity(outsiderAfter).Select(x => x.GetProperty("id").GetGuid()).ShouldNotContain(secretId);
+        Activity(outsiderAfter).Select(Id).ShouldNotContain(secretId);
+        Activity(outsiderAfter).Select(Id).ShouldNotContain(secretEntranceId);
+    }
+
+    [Fact]
+    public async Task Soft_deleted_features_leave_the_counts_and_the_feed_with_their_subtree()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var before = await SummaryAsync(owner);
+
+        var caveId = await CreateCaveAsync($"Dash doomed {marker}", "authenticated");
+        var entranceId = await CreateEntranceAsync(caveId);
+
+        var seeded = await SummaryAsync(owner);
+        Counts(seeded, "caves").ShouldBe(Counts(before, "caves") + 1);
+        Activity(seeded).Select(Id).ShouldContain(entranceId);
+
+        var deleted = await owner.DeleteAsync($"/api/v1/caves/{caveId}");
+        deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent, await deleted.Content.ReadAsStringAsync());
+
+        // The delete stamps the whole containment subtree, so the entrance goes with the cave.
+        var after = await SummaryAsync(owner);
+        Counts(after, "caves").ShouldBe(Counts(before, "caves"));
+        Activity(after).Select(Id).ShouldNotContain(caveId);
+        Activity(after).Select(Id).ShouldNotContain(entranceId);
     }
 
     private static async Task<JsonElement> SummaryAsync(HttpClient client) =>
@@ -141,6 +196,10 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable
 
     private static List<JsonElement> Activity(JsonElement summary) =>
         [.. summary.GetProperty("recentActivity").EnumerateArray()];
+
+    private static Guid Id(JsonElement item) => item.GetProperty("id").GetGuid();
+
+    private static string Kind(JsonElement item) => item.GetProperty("kind").GetString()!;
 
     private async Task<Guid> CreateCaveAsync(string name, string visibility)
     {
@@ -156,14 +215,27 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable
         return await CreatedIdAsync(response);
     }
 
+    private async Task<Guid> CreateEntranceAsync(Guid caveId)
+    {
+        var response = await owner.PostAsJsonAsync($"/api/v1/caves/{caveId}/entrances", new
+        {
+            name = "Dash entrance",
+            entranceTypeId,
+            isMain = true,
+            geom = new { type = "Point", coordinates = new[] { 25.4611, 45.5322 } },
+            positionQuality = "Gps",
+        });
+        return await CreatedIdAsync(response);
+    }
+
     private async Task<Guid> CreateFeatureAsync(string name, string visibility)
     {
-        var response = await owner.PostAsJsonAsync("/api/v1/surface-features", new
+        var response = await owner.PostAsJsonAsync("/api/v1/features", new
         {
+            kind = "generic",
             name,
             featureTypeId,
             geometry = new { type = "Point", coordinates = new[] { 25.4455, 45.5301 } },
-            properties = (object?)null,
             visibility,
         });
         return await CreatedIdAsync(response);
@@ -189,7 +261,12 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public Task DisposeAsync()
+    {
+        owner.Dispose();
+        outsider.Dispose();
+        return Task.CompletedTask;
+    }
 
     public void Dispose() => factory.Dispose();
 }

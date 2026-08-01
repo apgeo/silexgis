@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, test, type Page } from '@playwright/test';
-import { deleteFeature, login, overlayTreeNode } from './helpers.ts';
+import { centreOnDemoCave, deleteFeature, login, overlayTreeNode } from './helpers.ts';
 
 test('login, map workspace and cave registry work end to end', async ({ page }) => {
   await login(page);
@@ -72,22 +72,21 @@ test('cave and entrance create/edit round-trip', async ({ page }) => {
 test('cluster click lists its member entrances in the panel', async ({ page }) => {
   await login(page);
 
-  // Center on the demo cave via the map search (stays inside the SPA session),
-  // then zoom out below the clustering threshold: 15 → 9. The cave's two
-  // entrances aggregate into one cluster ~1px from the view center.
-  await page.getByPlaceholder('Search caves or places…').fill('Peștera Demo');
-  await page.locator('.ant-select-dropdown').getByText(/Peștera Demo Mare/).first().click();
-  for (let i = 0; i < 6; i++) {
-    await page.locator('.ol-zoom-out').click();
-  }
+  // Centre on the demo cave from the feature list. Search results deliberately carry no
+  // coordinates, so picking one opens the record rather than moving the map — "show on
+  // map" is the action that centres it.
+  await centreOnDemoCave(page);
 
-  // Retry the click until the cluster card shows — zoom animations and the
-  // debounced bbox loader settle at their own pace.
+  // Zoom out until the cave's two entrances aggregate into one cluster at the view
+  // centre. Stepping until the cluster answers rather than counting clicks keeps this
+  // independent of the zoom the fit happened to land on; the retry also absorbs the
+  // zoom animation and the debounced bbox loader, which settle at their own pace.
   const canvas = page.locator('.map-canvas');
   await expect(async () => {
+    await page.locator('.ol-zoom-out').click();
     await canvas.click();
     await expect(page.getByText(/entrances in this area/)).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 30_000 });
+  }).toPass({ timeout: 60_000 });
 
   // Picking a member selects the entrance and the cave card takes over.
   await page.getByRole('button', { name: /entrance|Peșter/i }).first().click();
@@ -157,13 +156,13 @@ test('surface feature draw, attributes, selection and table round-trip', async (
 
   // Attribute modal opens for the freshly drawn feature; schema fields render.
   const modal = page.getByRole('dialog');
-  await expect(modal.getByText('New surface feature')).toBeVisible();
+  await expect(modal.getByText('New feature')).toBeVisible();
   await modal.getByLabel('Name').fill(featureName);
   await modal.getByLabel('Depth (m)').fill('12.5');
   await modal.getByRole('button', { name: 'OK' }).click();
 
   // Batched save posts the feature and reloads the layer.
-  const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/surface-features') && r.ok());
+  const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/features') && r.ok());
   await toolbar.getByRole('button', { name: /Save/ }).click();
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
   await reloaded;
@@ -211,7 +210,7 @@ test('pinned feature-type shortcuts and the map chrome toggle', async ({ page })
   // Draw a point so there is a pending edit, then dismiss the attribute dialog.
   await page.locator('.map-canvas').click({ position: { x: 400, y: 240 } });
   const modal = page.getByRole('dialog');
-  await expect(modal.getByText('New surface feature')).toBeVisible();
+  await expect(modal.getByText('New feature')).toBeVisible();
   await modal.getByRole('button', { name: 'Cancel' }).click();
 
   // Hiding the chrome hides the on-canvas toolbars but keeps the unsaved-edits pill.
@@ -249,13 +248,13 @@ test('map context menu: typed add-here, cave placement and coordinate copy', asy
   // Picking closes the menu entirely (its layers would sit above the dialog).
   await expect(page.getByRole('menuitem', { name: 'Sinkhole / Doline' })).toBeHidden();
   const modal = page.getByRole('dialog');
-  await expect(modal.getByText('New surface feature')).toBeVisible();
+  await expect(modal.getByText('New feature')).toBeVisible();
   await modal.getByLabel('Name').fill(featureName);
   await modal.getByRole('button', { name: 'OK' }).click();
 
   // The placement is a pending edit saved through the normal batched flow.
   const toolbar = page.locator('.map-edit-overlay');
-  const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/surface-features') && r.ok());
+  const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/features') && r.ok());
   await toolbar.getByRole('button', { name: /Save/ }).click();
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
   await reloaded;
@@ -767,10 +766,10 @@ test('surface feature history records edits and restores in the map panel', asyn
   const canvas = page.locator('.map-canvas');
   await canvas.click({ position: { x: 420, y: 260 } });
   const modal = page.getByRole('dialog');
-  await expect(modal.getByText('New surface feature')).toBeVisible();
+  await expect(modal.getByText('New feature')).toBeVisible();
   await modal.getByLabel('Name').fill(featureName);
   await modal.getByRole('button', { name: 'OK' }).click();
-  const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/surface-features') && r.ok());
+  const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/features') && r.ok());
   await toolbar.getByRole('button', { name: /Save/ }).click();
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
   await reloaded;
@@ -797,7 +796,7 @@ test('surface feature history records edits and restores in the map panel', asyn
 
 // Deletes every features-table row matching `pattern` (tolerant of leftovers from aborted runs).
 async function deleteFeatureRows(page: Page, pattern: RegExp) {
-  const listed = page.waitForResponse((r) => r.url().includes('/api/v1/surface-features') && r.ok());
+  const listed = page.waitForResponse((r) => r.url().includes('/api/v1/features') && r.ok());
   await page.goto('/features');
   await listed;
   // Wait for the table body to actually paint (a data row or the empty placeholder) before
@@ -818,7 +817,7 @@ async function editFeatureDescription(page: Page, value: string) {
   // so match the visible text instead of an exact role name.
   await page.locator('button', { hasText: 'Edit' }).click();
   const modal = page.getByRole('dialog');
-  await expect(modal.getByText('Edit surface feature')).toBeVisible();
+  await expect(modal.getByText('Edit feature')).toBeVisible();
   await modal.getByLabel('Description').fill(value);
   await modal.getByRole('button', { name: 'OK' }).click();
   await expect(page.locator('.ant-descriptions').getByText(value)).toBeVisible({ timeout: 15_000 });

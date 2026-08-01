@@ -10,7 +10,8 @@ namespace SilexGis.Api.Tests;
 
 /// <summary>
 /// Saved map views: CRUD with visibility, single home view per user, share-token
-/// lifecycle, and the anonymous shared endpoint exposing name+config only.
+/// lifecycle, the anonymous shared endpoint exposing name+config only, and explicit
+/// grants on a view.
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class MapViewTests : IAsyncLifetime, IDisposable
@@ -18,6 +19,7 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable
     private readonly SilexGisApiFactory factory;
     private HttpClient owner = null!;
     private HttpClient outsider = null!;
+    private Guid outsiderId;
 
     public MapViewTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
@@ -26,7 +28,7 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"mv-own-{suffix}@t.local");
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"mv-out-{suffix}@t.local");
+        outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"mv-out-{suffix}@t.local");
         owner = await AuthHelper.BearerClientAsync(factory, $"mv-own-{suffix}@t.local");
         outsider = await AuthHelper.BearerClientAsync(factory, $"mv-out-{suffix}@t.local");
     }
@@ -44,8 +46,7 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable
         _ = first;
 
         // Private views are invisible to others.
-        var outsiderList = await outsider.GetFromJsonAsync<JsonElement>("/api/v1/map-views/");
-        outsiderList.EnumerateArray().Any(x => x.GetProperty("id").GetGuid() == second).ShouldBeFalse();
+        (await ViewIdsAsync(outsider)).ShouldNotContain(second);
 
         // Share: mint once, reuse on repeat; the anonymous page gets name+config ONLY.
         var share1 = await owner.PostAsync($"/api/v1/map-views/{second}/share", null);
@@ -76,20 +77,79 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable
         (await owner.DeleteAsync($"/api/v1/map-views/{second}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
+    /// <summary>
+    /// A saved view carries its own access control, so an explicit grant on it is what
+    /// makes a private view reachable for someone else — and a Read grant stays a Read
+    /// grant: it opens the list, never the edit.
+    /// </summary>
+    [Fact]
+    public async Task Acl_grants_make_a_private_view_readable_for_the_grantee()
+    {
+        var viewId = await CreateAsync("Granted area", isHome: false);
+        (await ViewIdsAsync(outsider)).ShouldNotContain(viewId);
+        (await outsider.PutAsJsonAsync($"/api/v1/map-views/{viewId}", ViewBody("Renamed by grantee", isHome: false)))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        await ReplaceViewAclAsync(owner, viewId, [(outsiderId, ObjectPermission.Read)]);
+
+        (await ViewIdsAsync(outsider)).ShouldContain(viewId);
+        // Read is not Write: the view now exists for the grantee, so refusal is 403, not 404.
+        (await outsider.PutAsJsonAsync($"/api/v1/map-views/{viewId}", ViewBody("Renamed by grantee", isHome: false)))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // Write closes the gap; revoking everything takes the view away again.
+        await ReplaceViewAclAsync(
+            owner, viewId, [(outsiderId, ObjectPermission.Read | ObjectPermission.Write)]);
+        (await outsider.PutAsJsonAsync($"/api/v1/map-views/{viewId}", ViewBody("Renamed by grantee", isHome: false)))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await ReplaceViewAclAsync(owner, viewId, []);
+        (await ViewIdsAsync(outsider)).ShouldNotContain(viewId);
+        (await outsider.PutAsJsonAsync($"/api/v1/map-views/{viewId}", ViewBody("Renamed again", isHome: false)))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    private static object ViewBody(string name, bool isHome) => new
+    {
+        name,
+        description = (string?)null,
+        config = new { configVersion = 1, zoom = 12, center = new[] { 25.4, 45.5 } },
+        isHome,
+        teamId = (Guid?)null,
+        visibility = "private",
+    };
+
     private async Task<Guid> CreateAsync(string name, bool isHome)
     {
-        var response = await owner.PostAsJsonAsync("/api/v1/map-views/", new
-        {
-            name,
-            description = (string?)null,
-            config = new { configVersion = 1, zoom = 12, center = new[] { 25.4, 45.5 } },
-            isHome,
-            teamId = (Guid?)null,
-            visibility = "private",
-        });
+        var response = await owner.PostAsJsonAsync("/api/v1/map-views/", ViewBody(name, isHome));
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    private static async Task<List<Guid>> ViewIdsAsync(HttpClient client)
+    {
+        var response = await client.GetAsync("/api/v1/map-views/");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return [.. JsonDocument.Parse(payload).RootElement.EnumerateArray()
+            .Select(x => x.GetProperty("id").GetGuid())];
+    }
+
+    /// <summary>Replaces the grants on a saved view (the "mapView" ACL target).</summary>
+    private static async Task ReplaceViewAclAsync(
+        HttpClient client, Guid viewId, (Guid SubjectId, ObjectPermission Permissions)[] entries)
+    {
+        var response = await client.PutAsJsonAsync($"/api/v1/objects/mapView/{viewId}/acl", new
+        {
+            entries = entries.Select(e => new
+            {
+                subjectKind = "user",
+                subjectId = e.SubjectId,
+                permissions = e.Permissions.ToString().Replace(" ", string.Empty),
+            }).ToArray(),
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

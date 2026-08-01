@@ -17,7 +17,8 @@ namespace SilexGis.Api.Tests;
 
 /// <summary>
 /// Georeferenced raster maps end-to-end: GeoTIFF upload → background COG normalization →
-/// signed delivery URL with range requests; visibility and the protected-cave omission rule.
+/// signed delivery URL with range requests; visibility, the protected-cave omission rule
+/// and the exact-location grant that lifts it.
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
@@ -27,6 +28,7 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
 
     private HttpClient owner = null!;
     private HttpClient outsider = null!;
+    private Guid outsiderId;
     private long caveTypeId;
 
     public GeoreferencedMapTests(PostgresFixture postgres)
@@ -43,7 +45,7 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"grm-own-{suffix}@t.local");
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"grm-out-{suffix}@t.local");
+        outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"grm-out-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -105,8 +107,13 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
         dataset.GetMetadataItem("LAYOUT", "IMAGE_STRUCTURE").ShouldBe("COG");
     }
 
+    /// <summary>
+    /// A cave-linked raster IS the cave's location — it cannot be degraded, only withheld.
+    /// The rule is the ordinary exact-location rule, so an explicit ViewExactLocation grant
+    /// on the cave restores the raster exactly like it restores the coordinates.
+    /// </summary>
     [Fact]
-    public async Task Rasters_linked_to_protected_caves_are_omitted_entirely()
+    public async Task Rasters_linked_to_protected_caves_are_omitted_until_exact_location_is_granted()
     {
         var tiff = MakeGeoTiff(25.50, 45.50, 0.001, 32);
         var map = await UploadAsync(owner, "cave-plan.tif", tiff);
@@ -124,7 +131,7 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
             isShowCave = false,
         });
         caveResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
-        var caveId = (await caveResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var caveFeatureId = (await caveResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
 
         var update = await owner.PutAsJsonAsync($"/api/v1/georeferenced-maps/{id}", new
         {
@@ -135,19 +142,31 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
             maxZoom = (int?)null,
             attribution = (string?)null,
             defaultOpacity = 0.8,
-            caveId,
+            caveFeatureId,
             teamId = (Guid?)null,
             visibility = "authenticated",
         });
-        update.StatusCode.ShouldBe(HttpStatusCode.OK, await update.Content.ReadAsStringAsync());
+        var updated = await update.Content.ReadAsStringAsync();
+        update.StatusCode.ShouldBe(HttpStatusCode.OK, updated);
+        JsonDocument.Parse(updated).RootElement.GetProperty("caveFeatureId").GetGuid().ShouldBe(caveFeatureId);
 
         // The owner still sees it; others don't — not in lists, not by id.
         (await owner.GetAsync($"/api/v1/georeferenced-maps/{id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await outsider.GetAsync($"/api/v1/georeferenced-maps/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await MapIdsOfCaveAsync(outsider, caveFeatureId)).ShouldNotContain(id);
 
-        var outsiderList = await outsider.GetFromJsonAsync<JsonElement>("/api/v1/georeferenced-maps/");
-        outsiderList.GetProperty("items").EnumerateArray()
-            .Any(m => m.GetProperty("id").GetGuid() == id).ShouldBeFalse();
+        // An explicit ViewExactLocation grant on the cave is exactly what the omission
+        // waits for: with it, the raster becomes readable and listable again.
+        await ReplaceFeatureAclAsync(
+            owner, caveFeatureId, [(outsiderId, ObjectPermission.Read | ObjectPermission.ViewExactLocation)]);
+
+        (await outsider.GetAsync($"/api/v1/georeferenced-maps/{id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await MapIdsOfCaveAsync(outsider, caveFeatureId)).ShouldContain(id);
+
+        // Revoking the grant hides it again — the grant is the only thing holding it open.
+        await ReplaceFeatureAclAsync(owner, caveFeatureId, []);
+        (await outsider.GetAsync($"/api/v1/georeferenced-maps/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await MapIdsOfCaveAsync(outsider, caveFeatureId)).ShouldNotContain(id);
     }
 
     [Fact]
@@ -241,6 +260,35 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement;
+    }
+
+    /// <summary>
+    /// Catalog ids for one cave, so the assertion never depends on how many rasters the
+    /// shared database happens to hold or on which page they land.
+    /// </summary>
+    private static async Task<List<Guid>> MapIdsOfCaveAsync(HttpClient client, Guid caveFeatureId)
+    {
+        var response = await client.GetAsync($"/api/v1/georeferenced-maps/?caveFeatureId={caveFeatureId}");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return [.. JsonDocument.Parse(payload).RootElement.GetProperty("items").EnumerateArray()
+            .Select(m => m.GetProperty("id").GetGuid())];
+    }
+
+    /// <summary>Replaces the grants on a feature (the one ACL route name of the feature world).</summary>
+    private static async Task ReplaceFeatureAclAsync(
+        HttpClient client, Guid featureId, (Guid SubjectId, ObjectPermission Permissions)[] entries)
+    {
+        var response = await client.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/acl", new
+        {
+            entries = entries.Select(e => new
+            {
+                subjectKind = "user",
+                subjectId = e.SubjectId,
+                permissions = e.Permissions.ToString().Replace(" ", string.Empty),
+            }).ToArray(),
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
     private async Task<JsonElement> WaitForProcessingAsync(HttpClient client, Guid id, bool expectFailure = false)

@@ -43,11 +43,27 @@ public sealed class ApiSmokeTests : IDisposable
     }
 
     [Fact]
-    public async Task OpenApi_document_is_served()
+    public async Task OpenApi_document_is_served_and_publishes_the_feature_surface()
     {
         var response = await factory.CreateClient().GetAsync("/openapi/v1.json");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The generated TS client is built from this document, so the routes the client
+        // navigates by must actually be in it.
+        var document = await response.Content.ReadAsStringAsync();
+        document.ShouldContain("/api/v1/caves/{id}/summary");
+        document.ShouldContain("/api/v1/caves/{caveId}/entrances");
+        document.ShouldContain("/api/v1/features/{id}");
+        document.ShouldContain("/api/v1/features/{id}/parents");
+        document.ShouldContain("/api/v1/features/{id}/links");
+        document.ShouldContain("/api/v1/centerlines/{id}");
+        document.ShouldContain("/api/v1/export/features");
+        document.ShouldContain("/api/v1/shared/features/{token}");
+
+        // Routes the feature supertype replaced must be gone, not merely unused.
+        document.ShouldNotContain("surface-features");
+        document.ShouldNotContain("/api/v1/cave-centerlines/");
     }
 
     public void Dispose() => factory.Dispose();

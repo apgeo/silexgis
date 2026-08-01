@@ -441,9 +441,10 @@ public static class FeatureEndpoints
         if (feature.Kind == FeatureKind.CaveEntrance && feature.Entrance is not null)
         {
             await writeService.SyncCaveMirrorAsync(feature.Entrance.CaveFeatureId, ct);
-            await db.SaveChangesAsync(ct);
         }
 
+        // The soft delete stamps rows immediately, but its audit entries ride the context.
+        await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }
 
