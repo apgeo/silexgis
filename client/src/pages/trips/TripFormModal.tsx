@@ -5,7 +5,7 @@ import { App, Button, DatePicker, Flex, Form, Input, Modal, Select, TimePicker }
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {
-  useCaveSearch,
+  useSearch,
   useCreateTripLog,
   useUpdateTripLog,
   type TripLogInfo,
@@ -95,15 +95,17 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
 
   const [caveQuery, setCaveQuery] = useState('');
   const debouncedCaveQuery = useDebouncedValue(caveQuery);
-  const { data: caveResults } = useCaveSearch(debouncedCaveQuery);
+  const { data: caveResults } = useSearch(debouncedCaveQuery);
   // Options accumulate across searches so selected entries keep their labels.
   const [knownCaves, setKnownCaves] = useState<Map<string, string>>(new Map());
   useEffect(() => {
     if (caveResults) {
       setKnownCaves((previous) => {
         const next = new Map(previous);
-        for (const cave of caveResults.caves) {
-          next.set(cave.id, cave.name);
+        for (const hit of caveResults.features) {
+          if (hit.kind === 'cave' && hit.name) {
+            next.set(hit.id, hit.name);
+          }
         }
         return next;
       });

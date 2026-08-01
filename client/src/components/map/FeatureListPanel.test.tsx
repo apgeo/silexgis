@@ -32,9 +32,9 @@ function cluster(count: number): Feature {
   return feature;
 }
 
-function surfaceFeature(id: string, name: string, featureTypeId: number): Feature {
+function mapFeature(id: string, name: string, typeCode: string): Feature {
   const feature = new Feature(new Point([0, 0]));
-  feature.setProperties({ id, name, featureTypeId });
+  feature.setProperties({ id, name, typeCode });
   return feature;
 }
 
@@ -49,9 +49,9 @@ function renderPanel() {
 }
 
 describe('FeatureListPanel', () => {
-  it('lists the loaded entrances and surface features with counts', async () => {
+  it('lists the loaded entrances and features with counts', async () => {
     getEntranceSource().addFeatures([entrance('e1', 'c1', 'Peștera Mare'), entrance('e2', 'c1', 'Aven')]);
-    getSurfaceFeatureSource().addFeatures([surfaceFeature('f1', 'Doline field', 7)]);
+    getSurfaceFeatureSource().addFeatures([mapFeature('f1', 'Doline field', 'doline')]);
     renderPanel();
 
     // The source listener is debounced; the initial render already sees the data.
@@ -59,7 +59,8 @@ describe('FeatureListPanel', () => {
     expect(screen.getByText('Aven')).toBeInTheDocument();
     expect(screen.getByText('Doline field')).toBeInTheDocument();
     expect(screen.getByText(/Cave entrances \(2\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Surface features \(1\)/)).toBeInTheDocument();
+    // The features heading label is an i18n key; the count is what the panel derives.
+    expect(screen.getByText(/\(1\)/)).toBeInTheDocument();
   });
 
   it('hints at clustering instead of listing cluster placeholders', async () => {

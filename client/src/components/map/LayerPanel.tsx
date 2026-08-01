@@ -88,7 +88,7 @@ export default function LayerPanel({
       case ENTRANCE_LAYER_ID:
         return t('map.entrances');
       case SURFACE_FEATURE_LAYER_ID:
-        return t('map.surfaceFeatures');
+        return t('map.features');
       case CENTERLINE_LAYER_ID:
         return t('map.centerlines');
       case ENTRANCE_HEATMAP_LAYER_ID:

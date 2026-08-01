@@ -21,12 +21,19 @@ vi.mock('../../map/pointer.ts', () => ({ coarsePointer: () => touch }));
 vi.mock('../../api/hooks.ts', () => ({
   useFeatureTypes: () => ({
     data: [
-      { id: 1, name: 'Sinkhole', code: 'sinkhole', geometryKind: 'point', symbolFile: null, sortOrder: 0 },
+      {
+        id: 1,
+        name: 'Sinkhole',
+        code: 'sinkhole',
+        acceptedGeometryClasses: ['point'],
+        symbolFile: null,
+        sortOrder: 0,
+      },
     ],
   }),
-  createSurfaceFeature: vi.fn(),
-  fetchSurfaceFeature: vi.fn(),
-  updateSurfaceFeature: vi.fn(),
+  createFeature: vi.fn(),
+  fetchFeature: vi.fn(),
+  updateFeature: vi.fn(),
 }));
 
 vi.mock('../../map/featureLayer.ts', () => ({ reloadSurfaceFeatures: vi.fn() }));

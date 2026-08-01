@@ -24,6 +24,11 @@ interface AttachmentSectionProps {
    * attachment (the completed trip report) and it is kept out of the generic lists.
    */
   reportSlot?: boolean;
+  /**
+   * Role given to image uploads without an explicit role. Cave pages pass
+   * photoEntrance; everything else photographs the surface.
+   */
+  defaultPhotoRole?: AttachmentRole;
 }
 
 /**
@@ -36,6 +41,7 @@ export default function AttachmentSection({
   entityId,
   canEdit,
   reportSlot,
+  defaultPhotoRole = 'photoSurface',
 }: AttachmentSectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -57,10 +63,7 @@ export default function AttachmentSection({
         entityType,
         entityId,
         // Sensible default roles; richer role/caption editing comes with the media polish.
-        role: roleOverride
-          ?? (stored.kind === 'image'
-            ? (entityType === 'cave' ? 'photoEntrance' : 'photoSurface')
-            : 'document'),
+        role: roleOverride ?? (stored.kind === 'image' ? defaultPhotoRole : 'document'),
         caption: null,
         sortOrder: (attachments?.length ?? 0) + 1,
       });

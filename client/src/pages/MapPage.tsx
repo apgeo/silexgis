@@ -26,6 +26,7 @@ import { useFeatureTypes, useGeofiles, useMapConfig, useMapLayers, useMapViews, 
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
 import FeatureListPanel from '../components/map/FeatureListPanel.tsx';
+import { drawShapeForType } from '../components/map/featureTypeGroups.ts';
 import LayerPanel from '../components/map/LayerPanel.tsx';
 import MapContextMenu from '../components/map/MapContextMenu.tsx';
 import ViewsPanel from '../components/map/ViewsPanel.tsx';
@@ -777,13 +778,12 @@ export default function MapPage() {
             onClose={() => setContextTarget(null)}
             onAddFeature={(typeId, lonLat) => {
               const picked = featureTypes?.find((ft) => Number(ft.id) === typeId);
-              const pickedKind = (picked?.geometryKind ?? 'point').toString().toLowerCase();
-              if (pickedKind === 'line' || pickedKind === 'polygon') {
+              const shape: DrawShape = drawShapeForType(picked) ?? 'Point';
+              if (shape === 'LineString' || shape === 'Polygon') {
                 // Multi-click shapes start at the user's next clicks; just arm the tool.
-                const shape: DrawShape = pickedKind === 'line' ? 'LineString' : 'Polygon';
                 editController?.setMode('draw', shape, typeId);
               } else {
-                // Point kinds land exactly where the menu was opened.
+                // Point types land exactly where the menu was opened.
                 editController?.placePointAt(lonLat, typeId);
               }
             }}

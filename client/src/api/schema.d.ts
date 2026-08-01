@@ -422,6 +422,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/link-kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LinkKindDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/map-layers": {
         parameters: {
             query?: never;
@@ -765,7 +800,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Uploads a GeoJSON/GPX centerline (Write on the cave). */
+        /** Uploads a GeoJSON/GPX/KML centerline (Write on the cave). */
         post: {
             parameters: {
                 query?: never;
@@ -800,7 +835,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/cave-centerlines/{id}": {
+    "/api/v1/centerlines/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -808,7 +843,33 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** Metadata update, including which centerline is the cave's shape (Write on the cave). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CenterlineUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CenterlineDto"];
+                    };
+                };
+            };
+        };
         post?: never;
         /** Deletes the centerline (Write on the cave). */
         delete: {
@@ -831,6 +892,44 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shared/features/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolves a share link to the shared feature envelope. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SharedFeatureEnvelopeDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -876,19 +975,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/map/surface-features": {
+    "/api/v1/map/features": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Surface features as GeoJSON for the given bbox, optionally filtered by type. */
+        /** Features as GeoJSON for the given bbox, filtered by kinds/type/category/tag; protected points snapped, other protected geometry omitted. */
         get: {
             parameters: {
                 query: {
                     bbox: string;
+                    kinds?: string;
                     featureTypeId?: number;
+                    category?: string;
                     tag?: string;
                 };
                 header?: never;
@@ -1080,7 +1181,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Geotagged photos as GeoJSON points for the given bbox; protected-cave photos withheld. */
+        /** Geotagged photos as GeoJSON points for the given bbox; photos touching protected features withheld. */
         get: {
             parameters: {
                 query: {
@@ -1118,7 +1219,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Searches caves by name/toponyms (accent-insensitive). */
+        /** Searches features of every kind and trip logs (accent-insensitive). */
         get: {
             parameters: {
                 query: {
@@ -1299,20 +1400,20 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/export/surface-features": {
+    "/api/v1/export/features": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Surface features as GeoJSON/GPX/KML/CSV/zipped shapefile. */
+        /** Features of any kind as GeoJSON/GPX/KML/CSV/zipped shapefile. */
         get: {
             parameters: {
                 query: {
                     format: string;
+                    kind?: string;
                     featureTypeId?: number;
-                    caveId?: string;
                     search?: string;
                     bbox?: string;
                 };
@@ -1422,7 +1523,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Audit trail, filterable by entity; admins only until per-object managers exist. */
+        /** Audit trail, filterable by entity ("Feature" selects every feature kind); admins only until per-object managers exist. */
         get: {
             parameters: {
                 query?: {
@@ -1464,7 +1565,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Change history for an entity (incl. its children); protection-redacted, visibility-gated. */
+        /** Change history for an entity (features incl. their subtree); protection-redacted, visibility-gated. */
         get: {
             parameters: {
                 query?: {
@@ -3435,7 +3536,7 @@ export interface paths {
             };
         };
         post?: never;
-        /** Soft delete (Delete permission). */
+        /** Soft delete of the cave and its subtree (Delete permission). */
         delete: {
             parameters: {
                 query?: never;
@@ -3461,82 +3562,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/surface-features": {
+    "/api/v1/caves/{id}/summary": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Paged surface-feature list with filters; visibility-filtered. */
-        get: {
-            parameters: {
-                query?: {
-                    page?: number;
-                    pageSize?: number;
-                    featureTypeId?: number;
-                    caveId?: string;
-                    search?: string;
-                    bbox?: string;
-                    tag?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["PagedResultOfSurfaceFeatureDto"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        /** Creates a surface feature (Editor role and above); the caller becomes owner. */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["SurfaceFeatureWriteRequest"];
-                };
-            };
-            responses: {
-                /** @description Created */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["SurfaceFeatureDto"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/surface-features/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Single surface feature. */
+        /** Cave header data: related-record counts, main entrance, caller capabilities. */
         get: {
             parameters: {
                 query?: never;
@@ -3554,12 +3587,119 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["SurfaceFeatureDto"];
+                        "application/json": components["schemas"]["CaveSummaryDto"];
                     };
                 };
             };
         };
-        /** Full update (Write permission). */
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paged cross-kind feature list with filters; visibility-filtered and location-protected. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                    kind?: string;
+                    featureTypeId?: number;
+                    category?: string;
+                    bbox?: string;
+                    tag?: string;
+                    search?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfFeatureListItemDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates a generic feature (Editor role and above); the caller becomes owner. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FeatureCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolves any feature id to a typed envelope (common view plus subtype attributes). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureEnvelopeDto"];
+                    };
+                };
+            };
+        };
+        /** Full update of a generic feature (Write permission, If-Match required). */
         put: {
             parameters: {
                 query?: never;
@@ -3571,7 +3711,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["SurfaceFeatureWriteRequest"];
+                    "application/json": components["schemas"]["FeatureUpdateRequest"];
                 };
             };
             responses: {
@@ -3581,19 +3721,289 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["SurfaceFeatureDto"];
+                        "application/json": components["schemas"]["FeatureDto"];
                     };
                 };
             };
         };
         post?: never;
-        /** Deletes a surface feature (Delete permission). */
+        /** Soft-deletes a feature and its containment subtree (Delete permission). */
         delete: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
                     id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/parents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The feature's parent edges (readable parents only). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureParentDto"][];
+                    };
+                };
+            };
+        };
+        /** Replaces the feature's parent edges (Write permission; exactly one primary edge). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetParentsRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureParentDto"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paged children of the feature; visibility-filtered. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfFeatureChildDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The feature's links, both directions; protected endpoints redacted. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureLinkDto"][];
+                    };
+                };
+            };
+        };
+        /** Replaces the feature's outgoing links (Write permission). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetLinksRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureLinkDto"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The feature's share links — metadata only, never tokens (Share permission). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureShareDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Mints a share link for the feature (Share permission); the token is returned once and never stored. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FeatureShareCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureShareCreatedDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/shares/{shareId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revokes a share link (Share permission). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    shareId: string;
                 };
                 cookie?: never;
             };
@@ -4077,7 +4487,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Attachments of one entity, ordered; requires Read on the entity. */
+        /** Attachments of one target, ordered; requires Read on the target. */
         get: {
             parameters: {
                 query: {
@@ -4102,7 +4512,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Attaches an uploaded file to an entity; requires Write on the entity. */
+        /** Attaches an uploaded file to a target; requires Write on the target. */
         post: {
             parameters: {
                 query?: never;
@@ -4141,7 +4551,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Edits an attachment's role/caption/order; requires Write on the entity. */
+        /** Edits an attachment's role/caption/order; requires Write on the target. */
         put: {
             parameters: {
                 query?: never;
@@ -4169,7 +4579,7 @@ export interface paths {
             };
         };
         post?: never;
-        /** Detaches a file (the file itself is kept); requires Write on the entity. */
+        /** Detaches a file (the file itself is kept); requires Write on the target. */
         delete: {
             parameters: {
                 query?: never;
@@ -4208,7 +4618,7 @@ export interface paths {
                 query?: {
                     page?: number;
                     pageSize?: number;
-                    caveId?: string;
+                    caveFeatureId?: string;
                 };
                 header?: never;
                 path?: never;
@@ -4503,7 +4913,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Tags of one entity; requires Read on the entity. */
+        /** Tags of one target; requires Read on the target. */
         get: {
             parameters: {
                 query: {
@@ -4528,7 +4938,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Tags an entity, creating the tag if new; requires Write on the entity. Idempotent. */
+        /** Tags a target, creating the tag if new; requires Write on the target. Idempotent. */
         post: {
             parameters: {
                 query?: never;
@@ -4569,7 +4979,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Removes a tag from an entity; requires Write on the entity. */
+        /** Removes a tag from a target; requires Write on the target. */
         delete: {
             parameters: {
                 query?: never;
@@ -4602,7 +5012,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** ACL entries of one object (ManagePermissions). */
+        /**
+         * ACL entries of one object (ManagePermissions).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView' (case-insensitive).
+         */
         get: {
             parameters: {
                 query?: never;
@@ -4626,7 +5039,10 @@ export interface paths {
                 };
             };
         };
-        /** Replaces the object's ACL entries (ManagePermissions). */
+        /**
+         * Replaces the object's ACL entries (ManagePermissions).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView' (case-insensitive).
+         */
         put: {
             parameters: {
                 query?: never;
@@ -4668,7 +5084,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The caller's own effective permissions on the object. */
+        /**
+         * The caller's own effective permissions on the object.
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView' (case-insensitive).
+         */
         get: {
             parameters: {
                 query?: never;
@@ -5496,12 +5915,10 @@ export interface components {
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
-        /** @enum {unknown} */
-        AttachedEntityType: "cave" | "caveEntrance" | "surfaceFeature" | "tripLog" | "team" | "geofile" | "georeferencedMap" | "mapView" | "storedFile";
         AttachmentCreateRequest: {
             /** Format: uuid */
             fileId: string;
-            entityType: components["schemas"]["AttachedEntityType"];
+            entityType: string;
             /** Format: uuid */
             entityId: string;
             role: components["schemas"]["AttachmentRole"];
@@ -5514,7 +5931,7 @@ export interface components {
             id: string;
             /** Format: uuid */
             fileId: string;
-            entityType: components["schemas"]["AttachedEntityType"];
+            entityType: string;
             /** Format: uuid */
             entityId: string;
             role: components["schemas"]["AttachmentRole"];
@@ -5560,6 +5977,7 @@ export interface components {
         CaveDto: {
             /** Format: uuid */
             id: string;
+            kind: components["schemas"]["FeatureKind"];
             name: string;
             otherToponyms: null | string;
             identificationCode: null | string;
@@ -5613,8 +6031,10 @@ export interface components {
             locationProtected: boolean;
             /** Format: int32 */
             entranceCount: number;
-            mainGeom: null | components["schemas"]["GeoJsonPoint"];
+            properties: components["schemas"]["JsonElement"];
+            geom: null | components["schemas"]["GeoJsonPoint"];
             approximateLocation: boolean;
+            parents: components["schemas"]["CaveParentDto"][];
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */
@@ -5628,6 +6048,7 @@ export interface components {
         CaveListItemDto: {
             /** Format: uuid */
             id: string;
+            kind: components["schemas"]["FeatureKind"];
             name: string;
             identificationCode: null | string;
             /** Format: int64 */
@@ -5641,11 +6062,48 @@ export interface components {
             locationProtected: boolean;
             /** Format: int32 */
             entranceCount: number;
-            mainGeom: null | components["schemas"]["GeoJsonPoint"];
+            geom: null | components["schemas"]["GeoJsonPoint"];
             approximateLocation: boolean;
             visibility: components["schemas"]["Visibility"];
             /** Format: date-time */
             updatedAt: string;
+        };
+        CaveMainEntranceDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            geom: null | components["schemas"]["GeoJsonPoint"];
+            approximateLocation: boolean;
+        };
+        CaveParentDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            isPrimary: boolean;
+        };
+        CavePermissionsDto: {
+            canWrite: boolean;
+            canDelete: boolean;
+            canShare: boolean;
+            canManagePermissions: boolean;
+            canViewExactLocation: boolean;
+        };
+        CaveSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: int32 */
+            entranceCount: number;
+            /** Format: int32 */
+            centerlineCount: number;
+            /** Format: int32 */
+            surveyModelCount: number;
+            /** Format: int32 */
+            attachmentCount: number;
+            /** Format: int32 */
+            tripLogCount: number;
+            mainEntrance: null | components["schemas"]["CaveMainEntranceDto"];
+            permissions: components["schemas"]["CavePermissionsDto"];
         };
         CaveWriteRequest: {
             name: string;
@@ -5699,6 +6157,9 @@ export interface components {
             discoveryDate: null | string;
             discoverer: null | string;
             locationProtected: boolean;
+            properties: null | components["schemas"]["JsonElement"];
+            /** Format: uuid */
+            parentId: null | string;
             /** Format: uuid */
             teamId: null | string;
             visibility: components["schemas"]["Visibility"];
@@ -5711,12 +6172,18 @@ export interface components {
             /** Format: uuid */
             surveyModelId: null | string;
             name: string;
+            description: null | string;
             geom: components["schemas"]["GeoJsonGeometry"];
             /** Format: double */
             lengthM: null | number;
+            /** Format: int32 */
+            pathCount: number;
+            isDefault: boolean;
             source: components["schemas"]["CenterlineSource"];
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
         };
         CenterlineFeatureCollection: {
             type: string;
@@ -5727,6 +6194,13 @@ export interface components {
         };
         /** @enum {unknown} */
         CenterlineSource: "uploaded" | "extracted";
+        CenterlineUpdateRequest: {
+            name: string;
+            description: null | string;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            isDefault: boolean;
+        };
         ConfirmEmailRequest: {
             /** Format: uuid */
             userId: string;
@@ -5741,12 +6215,12 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {unknown} */
-        DashboardActivityKind: "cave" | "surfaceFeature" | "tripLog";
+        DashboardActivityKind: "feature" | "cave" | "caveEntrance" | "centerline" | "tripLog";
         DashboardCountsDto: {
             /** Format: int32 */
             caves: number;
             /** Format: int32 */
-            surfaceFeatures: number;
+            features: number;
             /** Format: int32 */
             tripLogs: number;
             /** Format: int32 */
@@ -5821,10 +6295,212 @@ export interface components {
             name: string;
             displayName: string;
         };
+        FeatureBreadcrumbDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+        };
+        /** @enum {unknown} */
+        FeatureCategory: "surface" | "underground" | "area" | "structure";
+        FeatureCaveDto: {
+            otherToponyms: null | string;
+            identificationCode: null | string;
+            /** Format: int64 */
+            caveTypeId: number;
+            website: null | string;
+            region: null | string;
+            hydrographicBasin: null | string;
+            valley: null | string;
+            tributaryRiver: null | string;
+            closestAddress: null | string;
+            landRegistryNumber: null | string;
+            locationNotes: null | string;
+            /** Format: int64 */
+            rockTypeId: null | number;
+            rockAge: null | string;
+            /** Format: double */
+            surveyedLength: null | number;
+            /** Format: double */
+            estimatedLength: null | number;
+            /** Format: double */
+            realExtension: null | number;
+            /** Format: double */
+            projectedExtension: null | number;
+            /** Format: double */
+            depth: null | number;
+            /** Format: double */
+            positiveDepth: null | number;
+            /** Format: double */
+            negativeDepth: null | number;
+            /** Format: double */
+            potentialDepth: null | number;
+            /** Format: double */
+            altitude: null | number;
+            /** Format: double */
+            volume: null | number;
+            /** Format: double */
+            area: null | number;
+            /** Format: double */
+            ramificationIndex: null | number;
+            /** Format: int32 */
+            caveAge: null | number;
+            explorationStatus: components["schemas"]["ExplorationStatus"];
+            protectionClass: null | string;
+            isShowCave: boolean;
+            /** Format: double */
+            showCaveLength: null | number;
+            discoveryDate: null | string;
+            discoverer: null | string;
+            /** Format: int32 */
+            entranceCount: number;
+        };
+        FeatureCenterlineDto: {
+            /** Format: uuid */
+            caveFeatureId: string;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            isDefault: boolean;
+            /** Format: double */
+            lengthM: null | number;
+            /** Format: int32 */
+            pathCount: number;
+            /** Format: int32 */
+            skeletonPathCount: null | number;
+            source: components["schemas"]["CenterlineSource"];
+        };
+        FeatureChildDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FeatureKind"];
+            name: null | string;
+            isPrimary: boolean;
+        };
         FeatureCollection: {
             type: string;
             features: components["schemas"]["GeoFeature"][];
         };
+        FeatureCreateRequest: {
+            kind: components["schemas"]["FeatureKind"];
+            name: null | string;
+            /** Format: int64 */
+            featureTypeId: number;
+            geometry: null | components["schemas"]["GeoJsonGeometry"];
+            description: null | string;
+            properties: null | components["schemas"]["JsonElement"];
+            parents: null | components["schemas"]["ParentEdgeRequest"][];
+            locationProtected: boolean;
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
+        };
+        FeatureDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FeatureKind"];
+            featureTypeCode: null | string;
+            category: components["schemas"]["FeatureCategory"];
+            name: null | string;
+            description: null | string;
+            geometry: null | components["schemas"]["GeoJsonGeometry"];
+            properties: components["schemas"]["JsonElement"];
+            locationProtected: boolean;
+            approximateLocation: boolean;
+            omittedLocation: boolean;
+            parents: components["schemas"]["FeatureBreadcrumbDto"][];
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        FeatureEntranceDto: {
+            /** Format: uuid */
+            caveFeatureId: string;
+            /** Format: int64 */
+            entranceTypeId: number;
+            isMain: boolean;
+            /** Format: double */
+            altitude: null | number;
+            positionQuality: components["schemas"]["PositionQuality"];
+            /** Format: date */
+            surveyedAt: null | string;
+        };
+        FeatureEnvelopeDto: {
+            kind: components["schemas"]["FeatureKind"];
+            feature: components["schemas"]["FeatureDto"];
+            cave: null | components["schemas"]["FeatureCaveDto"];
+            entrance: null | components["schemas"]["FeatureEntranceDto"];
+            centerline: null | components["schemas"]["FeatureCenterlineDto"];
+        };
+        /** @enum {unknown} */
+        FeatureKind: "generic" | "cave" | "caveEntrance" | "centerline";
+        FeatureLinkDto: {
+            /** Format: uuid */
+            fromId: string;
+            /** Format: uuid */
+            toId: string;
+            linkKindCode: string;
+            note: null | string;
+        };
+        FeatureLinkWriteRequest: {
+            /** Format: uuid */
+            toId: string;
+            linkKindCode: string;
+            note: null | string;
+        };
+        FeatureListItemDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FeatureKind"];
+            featureTypeCode: null | string;
+            category: components["schemas"]["FeatureCategory"];
+            name: null | string;
+            geometry: null | components["schemas"]["GeoJsonGeometry"];
+            locationProtected: boolean;
+            approximateLocation: boolean;
+            omittedLocation: boolean;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        FeatureParentDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            isPrimary: boolean;
+        };
+        FeatureShareCreatedDto: {
+            /** Format: uuid */
+            id: string;
+            token: string;
+            mode: components["schemas"]["FeatureShareMode"];
+            includeSubtree: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        FeatureShareCreateRequest: {
+            mode: components["schemas"]["FeatureShareMode"];
+            /** @default true */
+            includeSubtree: boolean;
+        };
+        FeatureShareDto: {
+            /** Format: uuid */
+            id: string;
+            mode: components["schemas"]["FeatureShareMode"];
+            includeSubtree: boolean;
+            /** Format: uuid */
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt: null | string;
+        };
+        /** @enum {unknown} */
+        FeatureShareMode: "public" | "requiresLogin";
         FeatureTypeDto: {
             /** Format: int64 */
             id: number;
@@ -5833,10 +6509,27 @@ export interface components {
             description: null | string;
             /** Format: int32 */
             sortOrder: number;
-            geometryKind: components["schemas"]["GeometryKind"];
+            category: components["schemas"]["FeatureCategory"];
+            acceptedGeometryClasses: components["schemas"]["GeometryClass"][];
+            requiresParent: boolean;
+            /** Format: int32 */
+            propertiesSchemaVersion: number;
+            protectedDisplay: components["schemas"]["ProtectedDisplay"];
             symbolFile: null | string;
             style: null | string;
             propertiesSchema: null | string;
+        };
+        FeatureUpdateRequest: {
+            name: null | string;
+            /** Format: int64 */
+            featureTypeId: number;
+            geometry: null | components["schemas"]["GeoJsonGeometry"];
+            description: null | string;
+            properties: null | components["schemas"]["JsonElement"];
+            locationProtected: boolean;
+            /** Format: uuid */
+            teamId: null | string;
+            visibility: components["schemas"]["Visibility"];
         };
         FileDto: {
             /** Format: uuid */
@@ -5942,7 +6635,7 @@ export interface components {
             coordinates: number[];
         };
         /** @enum {unknown} */
-        GeometryKind: "point" | "line" | "polygon" | "any";
+        GeometryClass: "point" | "lineString" | "polygon" | "multiPoint" | "multiLineString" | "multiPolygon";
         GeoreferencedMapDto: {
             /** Format: uuid */
             id: string;
@@ -5962,7 +6655,7 @@ export interface components {
             /** Format: double */
             defaultOpacity: number;
             /** Format: uuid */
-            caveId: null | string;
+            caveFeatureId: null | string;
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */
@@ -5986,7 +6679,7 @@ export interface components {
             /** Format: double */
             defaultOpacity: number;
             /** Format: uuid */
-            caveId: null | string;
+            caveFeatureId: null | string;
             /** Format: uuid */
             teamId: null | string;
             visibility: components["schemas"]["Visibility"];
@@ -6008,6 +6701,16 @@ export interface components {
         /** Format: binary */
         IFormFile: string;
         JsonElement: unknown;
+        LinkKindDto: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            locating: boolean;
+        };
         LoginRequest: {
             email: string;
             password: string;
@@ -6258,6 +6961,24 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfFeatureChildDto: {
+            items: components["schemas"]["FeatureChildDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfFeatureListItemDto: {
+            items: components["schemas"]["FeatureListItemDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfGeofileDto: {
             items: components["schemas"]["GeofileDto"][];
             /** Format: int32 */
@@ -6294,15 +7015,6 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
-        PagedResultOfSurfaceFeatureDto: {
-            items: components["schemas"]["SurfaceFeatureDto"][];
-            /** Format: int32 */
-            page: number;
-            /** Format: int32 */
-            pageSize: number;
-            /** Format: int32 */
-            totalItems: number;
-        };
         PagedResultOfTripLogDto: {
             items: components["schemas"]["TripLogDto"][];
             /** Format: int32 */
@@ -6311,6 +7023,11 @@ export interface components {
             pageSize: number;
             /** Format: int32 */
             totalItems: number;
+        };
+        ParentEdgeRequest: {
+            /** Format: uuid */
+            parentId: string;
+            isPrimary: boolean;
         };
         PasswordChangeRequest: {
             currentPassword: string;
@@ -6362,6 +7079,8 @@ export interface components {
             addressPoint: components["schemas"]["ProfileVisibility"];
         };
         /** @enum {unknown} */
+        ProtectedDisplay: "snapPoint" | "withhold";
+        /** @enum {unknown} */
         RasterStatus: "uploaded" | "processing" | "ready" | "failed";
         RegisterRequest: {
             email: string;
@@ -6376,13 +7095,11 @@ export interface components {
         SearchFeatureItemDto: {
             /** Format: uuid */
             id: string;
+            kind: components["schemas"]["FeatureKind"];
             name: null | string;
-            /** Format: int64 */
-            featureTypeId: number;
-            center: components["schemas"]["GeoJsonPoint"];
+            typeCode: null | string;
         };
         SearchResultDto: {
-            caves: components["schemas"]["CaveListItemDto"][];
             features: components["schemas"]["SearchFeatureItemDto"][];
             trips: components["schemas"]["SearchTripItemDto"][];
         };
@@ -6392,7 +7109,6 @@ export interface components {
             title: string;
             /** Format: date */
             tripDate: string;
-            center: null | components["schemas"]["GeoJsonPoint"];
         };
         SecuritySettingsDto: {
             requireConfirmedEmail: boolean;
@@ -6404,6 +7120,113 @@ export interface components {
             twoFactorCodeLifetimeMinutes: number;
             /** Format: int32 */
             twoFactorResendIntervalSeconds: number;
+        };
+        SetLinksRequest: {
+            links: components["schemas"]["FeatureLinkWriteRequest"][];
+        };
+        SetParentsRequest: {
+            parents: components["schemas"]["ParentEdgeRequest"][];
+        };
+        SharedCaveDto: {
+            otherToponyms: null | string;
+            identificationCode: null | string;
+            /** Format: int64 */
+            caveTypeId: number;
+            website: null | string;
+            region: null | string;
+            hydrographicBasin: null | string;
+            valley: null | string;
+            tributaryRiver: null | string;
+            closestAddress: null | string;
+            landRegistryNumber: null | string;
+            locationNotes: null | string;
+            /** Format: int64 */
+            rockTypeId: null | number;
+            rockAge: null | string;
+            /** Format: double */
+            surveyedLength: null | number;
+            /** Format: double */
+            estimatedLength: null | number;
+            /** Format: double */
+            realExtension: null | number;
+            /** Format: double */
+            projectedExtension: null | number;
+            /** Format: double */
+            depth: null | number;
+            /** Format: double */
+            positiveDepth: null | number;
+            /** Format: double */
+            negativeDepth: null | number;
+            /** Format: double */
+            potentialDepth: null | number;
+            /** Format: double */
+            altitude: null | number;
+            /** Format: double */
+            volume: null | number;
+            /** Format: double */
+            area: null | number;
+            /** Format: double */
+            ramificationIndex: null | number;
+            /** Format: int32 */
+            caveAge: null | number;
+            explorationStatus: components["schemas"]["ExplorationStatus"];
+            protectionClass: null | string;
+            isShowCave: boolean;
+            /** Format: double */
+            showCaveLength: null | number;
+            discoveryDate: null | string;
+            discoverer: null | string;
+            /** Format: int32 */
+            entranceCount: number;
+        };
+        SharedCenterlineDto: {
+            isDefault: boolean;
+            /** Format: double */
+            lengthM: null | number;
+            /** Format: int32 */
+            pathCount: number;
+            source: components["schemas"]["CenterlineSource"];
+        };
+        SharedEntranceDto: {
+            /** Format: int64 */
+            entranceTypeId: number;
+            isMain: boolean;
+            /** Format: double */
+            altitude: null | number;
+            positionQuality: null | components["schemas"]["PositionQuality"];
+            /** Format: date */
+            surveyedAt: null | string;
+        };
+        SharedFeatureChildDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FeatureKind"];
+            name: null | string;
+        };
+        SharedFeatureDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FeatureKind"];
+            /** Format: int64 */
+            featureTypeId: null | number;
+            category: components["schemas"]["FeatureCategory"];
+            name: null | string;
+            geometry: null | components["schemas"]["GeoJsonGeometry"];
+            approximateLocation: boolean;
+            description: null | string;
+            properties: components["schemas"]["JsonElement"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SharedFeatureEnvelopeDto: {
+            kind: components["schemas"]["FeatureKind"];
+            feature: components["schemas"]["SharedFeatureDto"];
+            cave: null | components["schemas"]["SharedCaveDto"];
+            entrance: null | components["schemas"]["SharedEntranceDto"];
+            centerline: null | components["schemas"]["SharedCenterlineDto"];
+            children: null | components["schemas"]["SharedFeatureChildDto"][];
         };
         SharedViewDto: {
             name: string;
@@ -6436,40 +7259,6 @@ export interface components {
             from: null | string;
             /** Format: int32 */
             timeoutSeconds: number;
-        };
-        SurfaceFeatureDto: {
-            /** Format: uuid */
-            id: string;
-            name: null | string;
-            /** Format: int64 */
-            featureTypeId: number;
-            geometry: components["schemas"]["GeoJsonGeometry"];
-            description: null | string;
-            properties: components["schemas"]["JsonElement"];
-            /** Format: uuid */
-            caveId: null | string;
-            /** Format: uuid */
-            ownerUserId: string;
-            /** Format: uuid */
-            teamId: null | string;
-            visibility: components["schemas"]["Visibility"];
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        SurfaceFeatureWriteRequest: {
-            name: null | string;
-            /** Format: int64 */
-            featureTypeId: number;
-            geometry: components["schemas"]["GeoJsonGeometry"];
-            description: null | string;
-            properties: null | components["schemas"]["JsonElement"];
-            /** Format: uuid */
-            caveId: null | string;
-            /** Format: uuid */
-            teamId: null | string;
-            visibility: components["schemas"]["Visibility"];
         };
         SurveyModelDto: {
             /** Format: uuid */
@@ -6505,7 +7294,7 @@ export interface components {
         };
         TaggingCreateRequest: {
             tagName: string;
-            entityType: components["schemas"]["AttachedEntityType"];
+            entityType: string;
             /** Format: uuid */
             entityId: string;
         };
@@ -6513,7 +7302,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             tag: components["schemas"]["TagDto"];
-            entityType: components["schemas"]["AttachedEntityType"];
+            entityType: string;
             /** Format: uuid */
             entityId: string;
         };

@@ -42,13 +42,18 @@ export const queryKeys = {
   taxonomy: (kind: string) => ['taxonomy', kind] as const,
   caves: (params: CaveListParams) => ['caves', 'list', params] as const,
   cave: (id: string) => ['caves', 'detail', id] as const,
+  caveSummary: (id: string) => ['caves', 'summary', id] as const,
   entrances: (caveId: string) => ['entrances', caveId] as const,
   surveyModels: (caveId: string) => ['survey-models', caveId] as const,
   centerlines: (caveId: string) => ['centerlines', caveId] as const,
-  caveSearch: (q: string) => ['cave-search', q] as const,
+  search: (q: string) => ['search', q] as const,
   nominatim: (q: string) => ['nominatim', q] as const,
-  surfaceFeatures: (params: SurfaceFeatureListParams) => ['surface-features', 'list', params] as const,
-  surfaceFeature: (id: string) => ['surface-features', 'detail', id] as const,
+  features: (params: FeatureListParams) => ['features', 'list', params] as const,
+  feature: (id: string) => ['features', 'detail', id] as const,
+  featureParents: (id: string) => ['features', id, 'parents'] as const,
+  featureChildren: (id: string, params: FeatureChildrenParams) => ['features', id, 'children', params] as const,
+  featureLinks: (id: string) => ['features', id, 'links'] as const,
+  featureShares: (id: string) => ['features', id, 'shares'] as const,
   geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
   attachments: (entityType: string, entityId: string) => ['attachments', entityType, entityId] as const,
   fileVersions: (fileId: string) => ['file-versions', fileId] as const,
@@ -368,6 +373,17 @@ export function useFeatureTypes() {
   });
 }
 
+export type LinkKind = components['schemas']['LinkKindDto'];
+
+/** Feature-link taxonomy (drains-to, connects-with, …). */
+export function useLinkKinds() {
+  return useQuery({
+    queryKey: queryKeys.taxonomy('link-kinds'),
+    queryFn: () => unwrap(api.GET('/api/v1/link-kinds')),
+    staleTime: 5 * 60_000,
+  });
+}
+
 export interface CaveListParams {
   page?: number;
   pageSize?: number;
@@ -375,6 +391,8 @@ export interface CaveListParams {
   caveTypeId?: number;
   region?: string;
   search?: string;
+  minLength?: number;
+  bbox?: string;
   tag?: string;
 }
 
@@ -390,6 +408,17 @@ export function useCave(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.cave(id ?? ''),
     queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+  });
+}
+
+export type CaveSummary = components['schemas']['CaveSummaryDto'];
+
+/** Cave header block: related-record counts, main entrance and the caller's capabilities. */
+export function useCaveSummary(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveSummary(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/summary', { params: { path: { id: id! } } })),
     enabled: !!id,
   });
 }
@@ -486,11 +515,23 @@ export function useUploadCenterline() {
   });
 }
 
+export type CenterlineUpdate = components['schemas']['CenterlineUpdateRequest'];
+
+/** Centerline metadata update, including promoting one to the cave's default shape. */
+export function useUpdateCenterline() {
+  const invalidate = useInvalidateCenterlines();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; caveId: string; body: CenterlineUpdate }) =>
+      unwrap(api.PUT('/api/v1/centerlines/{id}', { params: { path: { id } }, body })),
+    onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
 export function useDeleteCenterline() {
   const invalidate = useInvalidateCenterlines();
   return useMutation({
     mutationFn: async ({ id }: { id: string; caveId: string }) => {
-      const { error, response } = await api.DELETE('/api/v1/cave-centerlines/{id}', { params: { path: { id } } });
+      const { error, response } = await api.DELETE('/api/v1/centerlines/{id}', { params: { path: { id } } });
       if (error !== undefined) {
         throw new Error(`API error ${response.status}`);
       }
@@ -534,9 +575,17 @@ export async function fetchPhotoFeatures(bbox: string): Promise<EntranceFeatureC
   return unwrap(api.GET('/api/v1/map/photos', { params: { query: { bbox } } }));
 }
 
-export function useCaveSearch(q: string) {
+export type SearchResult = components['schemas']['SearchResultDto'];
+export type SearchFeatureItem = components['schemas']['SearchFeatureItemDto'];
+export type SearchTripItem = components['schemas']['SearchTripItemDto'];
+
+/**
+ * Global search: features of every kind plus trip logs. Results carry no coordinates —
+ * navigate to the entity (or fetch it) instead of centering the map from here.
+ */
+export function useSearch(q: string) {
   return useQuery({
-    queryKey: queryKeys.caveSearch(q),
+    queryKey: queryKeys.search(q),
     queryFn: () => unwrap(api.GET('/api/v1/search', { params: { query: { q } } })),
     enabled: q.trim().length >= 2,
     staleTime: 30_000,
@@ -582,63 +631,96 @@ export function useClusterEntrances(lon: number, lat: number, zoom: number, tag?
   });
 }
 
-/** Imperative fetch used by the OpenLayers surface-feature loader (not a hook). */
-export async function fetchSurfaceFeatureCollection(bbox: string, tag?: string): Promise<EntranceFeatureCollection> {
-  return unwrap(api.GET('/api/v1/map/surface-features', { params: { query: { bbox, tag } } }));
-}
+export type FeatureKind = components['schemas']['FeatureKind'];
+export type FeatureCategory = components['schemas']['FeatureCategory'];
 
-export type SurfaceFeatureDetail = components['schemas']['SurfaceFeatureDto'];
-export type SurfaceFeatureWrite = components['schemas']['SurfaceFeatureWriteRequest'];
-
-// Imperative surface-feature calls used by the map edit controller (outside React).
-export async function fetchSurfaceFeature(id: string): Promise<SurfaceFeatureDetail> {
-  return unwrap(api.GET('/api/v1/surface-features/{id}', { params: { path: { id } } }));
-}
-
-export async function createSurfaceFeature(body: SurfaceFeatureWrite): Promise<SurfaceFeatureDetail> {
-  return unwrap(api.POST('/api/v1/surface-features', { body }));
-}
-
-export async function updateSurfaceFeature(id: string, body: SurfaceFeatureWrite): Promise<SurfaceFeatureDetail> {
-  return unwrap(api.PUT('/api/v1/surface-features/{id}', { params: { path: { id } }, body }));
-}
-
-export interface SurfaceFeatureListParams {
-  page?: number;
-  pageSize?: number;
+/** Optional filters the map feature layer applies on top of the viewport bbox. */
+export interface MapFeatureFilters {
+  /** Comma-separated FeatureKind names, e.g. "generic,cave". */
+  kinds?: string;
   featureTypeId?: number;
-  caveId?: string;
-  search?: string;
+  category?: FeatureCategory;
   tag?: string;
 }
 
-export function useSurfaceFeatures(params: SurfaceFeatureListParams) {
+/**
+ * Imperative fetch used by the OpenLayers feature-layer loader (not a hook). Protected
+ * non-point geometry arrives with a null geometry — the layer must tolerate it.
+ */
+export async function fetchMapFeatures(
+  bbox: string,
+  filters?: MapFeatureFilters,
+): Promise<EntranceFeatureCollection> {
+  return unwrap(api.GET('/api/v1/map/features', { params: { query: { bbox, ...filters } } }));
+}
+
+export type FeatureListItem = components['schemas']['FeatureListItemDto'];
+export type FeatureDetail = components['schemas']['FeatureDto'];
+export type FeatureEnvelope = components['schemas']['FeatureEnvelopeDto'];
+export type FeatureCreate = components['schemas']['FeatureCreateRequest'];
+export type FeatureUpdate = components['schemas']['FeatureUpdateRequest'];
+
+// Imperative feature calls used by the map edit controller (outside React).
+export async function fetchFeature(id: string): Promise<FeatureEnvelope> {
+  return unwrap(api.GET('/api/v1/features/{id}', { params: { path: { id } } }));
+}
+
+export async function createFeature(body: FeatureCreate): Promise<FeatureDetail> {
+  return unwrap(api.POST('/api/v1/features', { body }));
+}
+
+export async function updateFeature(id: string, body: FeatureUpdate): Promise<FeatureDetail> {
+  return unwrap(api.PUT('/api/v1/features/{id}', { params: { path: { id } }, body }));
+}
+
+export interface FeatureListParams {
+  page?: number;
+  pageSize?: number;
+  kind?: FeatureKind;
+  featureTypeId?: number;
+  category?: FeatureCategory;
+  bbox?: string;
+  tag?: string;
+  search?: string;
+}
+
+export function useFeatures(params: FeatureListParams, enabled = true) {
   return useQuery({
-    queryKey: queryKeys.surfaceFeatures(params),
-    queryFn: () => unwrap(api.GET('/api/v1/surface-features', { params: { query: params } })),
+    queryKey: queryKeys.features(params),
+    queryFn: () => unwrap(api.GET('/api/v1/features', { params: { query: params } })),
     placeholderData: keepPreviousData,
+    // Pickers (parent/link target selects) pass enabled=false until they open.
+    enabled,
   });
 }
 
-export function useSurfaceFeature(id: string | undefined) {
+/** Resolves any feature id — generic, cave, entrance or centerline — to its typed envelope. */
+export function useFeature(id: string | undefined) {
   return useQuery({
-    queryKey: queryKeys.surfaceFeature(id ?? ''),
-    queryFn: () =>
-      unwrap(api.GET('/api/v1/surface-features/{id}', { params: { path: { id: id! } } })),
+    queryKey: queryKeys.feature(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/features/{id}', { params: { path: { id: id! } } })),
     enabled: !!id,
   });
 }
 
-function useInvalidateSurfaceFeatures() {
+function useInvalidateFeatures() {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: ['surface-features'] });
+  return () => void queryClient.invalidateQueries({ queryKey: ['features'] });
 }
 
-export function useUpdateSurfaceFeature() {
-  const invalidate = useInvalidateSurfaceFeatures();
+export function useCreateFeature() {
+  const invalidate = useInvalidateFeatures();
+  return useMutation({
+    mutationFn: (body: FeatureCreate) => createFeature(body),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateFeature() {
+  const invalidate = useInvalidateFeatures();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: SurfaceFeatureWrite }) => updateSurfaceFeature(id, body),
+    mutationFn: ({ id, body }: { id: string; body: FeatureUpdate }) => updateFeature(id, body),
     onSuccess: () => {
       invalidate();
       invalidateHistory();
@@ -646,13 +728,134 @@ export function useUpdateSurfaceFeature() {
   });
 }
 
-export function useDeleteSurfaceFeature() {
-  const invalidate = useInvalidateSurfaceFeatures();
+/** Soft-deletes the feature and its containment subtree. */
+export function useDeleteFeature() {
+  const invalidate = useInvalidateFeatures();
   return useMutation({
     mutationFn: (id: string) =>
-      unwrapVoid(api.DELETE('/api/v1/surface-features/{id}', { params: { path: { id } } })),
+      unwrapVoid(api.DELETE('/api/v1/features/{id}', { params: { path: { id } } })),
     onSuccess: () => invalidate(),
   });
+}
+
+export type FeatureParent = components['schemas']['FeatureParentDto'];
+export type ParentEdgeWrite = components['schemas']['ParentEdgeRequest'];
+export type FeatureChild = components['schemas']['FeatureChildDto'];
+
+export function useFeatureParents(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.featureParents(id ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/features/{id}/parents', { params: { path: { id: id! } } })),
+    enabled: !!id,
+  });
+}
+
+/** Replaces the feature's parent edges (the DAG requires exactly one primary edge). */
+export function useSetFeatureParents() {
+  const invalidate = useInvalidateFeatures();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ id, parents }: { id: string; parents: ParentEdgeWrite[] }) =>
+      unwrap(api.PUT('/api/v1/features/{id}/parents', { params: { path: { id } }, body: { parents } })),
+    onSuccess: () => {
+      invalidate();
+      invalidateHistory();
+    },
+  });
+}
+
+export interface FeatureChildrenParams {
+  page?: number;
+  pageSize?: number;
+}
+
+export function useFeatureChildren(id: string | undefined, params: FeatureChildrenParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.featureChildren(id ?? '', params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/features/{id}/children', {
+        params: { path: { id: id! }, query: params },
+      })),
+    enabled: !!id,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export type FeatureLink = components['schemas']['FeatureLinkDto'];
+export type FeatureLinkWrite = components['schemas']['FeatureLinkWriteRequest'];
+
+/** Links in both directions; protected far endpoints arrive redacted. */
+export function useFeatureLinks(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.featureLinks(id ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/features/{id}/links', { params: { path: { id: id! } } })),
+    enabled: !!id,
+  });
+}
+
+/** Replaces the feature's outgoing links; incoming ones belong to the other feature. */
+export function useSetFeatureLinks() {
+  const invalidate = useInvalidateFeatures();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ id, links }: { id: string; links: FeatureLinkWrite[] }) =>
+      unwrap(api.PUT('/api/v1/features/{id}/links', { params: { path: { id } }, body: { links } })),
+    onSuccess: () => {
+      invalidate();
+      invalidateHistory();
+    },
+  });
+}
+
+export type FeatureShare = components['schemas']['FeatureShareDto'];
+export type FeatureShareCreate = components['schemas']['FeatureShareCreateRequest'];
+export type FeatureShareCreated = components['schemas']['FeatureShareCreatedDto'];
+export type SharedFeatureEnvelope = components['schemas']['SharedFeatureEnvelopeDto'];
+
+/** Share-link metadata only — tokens are shown once at mint time and never again. */
+export function useFeatureShares(id: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.featureShares(id ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/features/{id}/shares', { params: { path: { id: id! } } })),
+    enabled: !!id && enabled,
+    // Requires Share permission; a 403 is a settled answer, not worth retrying.
+    retry: false,
+  });
+}
+
+function useInvalidateFeatureShares() {
+  const queryClient = useQueryClient();
+  return (id: string) =>
+    void queryClient.invalidateQueries({ queryKey: queryKeys.featureShares(id) });
+}
+
+/** Mints a share link; the response carries the one-time token. */
+export function useCreateFeatureShare() {
+  const invalidate = useInvalidateFeatureShares();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: FeatureShareCreate }) =>
+      unwrap(api.POST('/api/v1/features/{id}/shares', { params: { path: { id } }, body })),
+    onSuccess: (_, { id }) => invalidate(id),
+  });
+}
+
+export function useRevokeFeatureShare() {
+  const invalidate = useInvalidateFeatureShares();
+  return useMutation({
+    mutationFn: ({ id, shareId }: { id: string; shareId: string }) =>
+      unwrapVoid(api.DELETE('/api/v1/features/{id}/shares/{shareId}', {
+        params: { path: { id, shareId } },
+      })),
+    onSuccess: (_, { id }) => invalidate(id),
+  });
+}
+
+/** Imperative fetch for the anonymous shared-feature page (no auth required for public shares). */
+export async function fetchSharedFeature(token: string): Promise<SharedFeatureEnvelope> {
+  return unwrap(api.GET('/api/v1/shared/features/{token}', { params: { path: { token } } }));
 }
 
 export type GeofileInfo = components['schemas']['GeofileDto'];
@@ -731,7 +934,16 @@ export async function fetchGeofileFeatureCollection(id: string, bbox: string): P
 
 export type FileInfo = components['schemas']['FileDto'];
 export type AttachmentInfo = components['schemas']['AttachmentDto'];
-export type AttachedEntityType = AttachmentInfo['entityType'];
+
+/**
+ * entityType vocabulary shared by attachments, taggings and ACLs. Any feature — generic,
+ * cave, entrance or centerline — is addressed as 'feature' with its feature id. The wire
+ * type is a plain string; this union is the documented set of accepted values.
+ */
+export type EntityType = 'feature' | 'tripLog' | 'geofile' | 'georeferencedMap' | 'mapView';
+// Stored files additionally carry taggings (never attachments or grants) — the tag
+// endpoints accept the extra target; the server rejects it everywhere else.
+export type AttachedEntityType = EntityType | 'storedFile';
 export type AttachmentRole = AttachmentInfo['role'];
 
 export function useAttachments(entityType: AttachedEntityType, entityId: string | undefined) {
@@ -897,7 +1109,7 @@ export type RasterMapUpdate = components['schemas']['GeoreferencedMapUpdateReque
 export interface RasterMapListParams {
   page?: number;
   pageSize?: number;
-  caveId?: string;
+  caveFeatureId?: string;
 }
 
 export function useRasterMaps(params: RasterMapListParams, pollWhileProcessing = false) {
@@ -1135,7 +1347,7 @@ export function useRemoveTeamMember(teamId: string) {
   });
 }
 
-export function useAcl(entityType: string, entityId: string | undefined, enabled: boolean) {
+export function useAcl(entityType: EntityType, entityId: string | undefined, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.acl(entityType, entityId ?? ''),
     queryFn: () =>
@@ -1147,7 +1359,7 @@ export function useAcl(entityType: string, entityId: string | undefined, enabled
   });
 }
 
-export function useReplaceAcl(entityType: string, entityId: string) {
+export function useReplaceAcl(entityType: EntityType, entityId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (entries: AclEntryWrite[]) =>
@@ -1172,6 +1384,7 @@ export function useUserSearch(q: string) {
 
 export type DashboardSummary = components['schemas']['DashboardSummaryDto'];
 export type DashboardActivityItem = components['schemas']['DashboardActivityItemDto'];
+export type DashboardActivityKind = components['schemas']['DashboardActivityKind'];
 
 export function useDashboardSummary() {
   return useQuery({

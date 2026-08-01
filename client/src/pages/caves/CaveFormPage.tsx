@@ -43,6 +43,10 @@ export default function CaveFormPage() {
       explorationStatus: values.explorationStatus ?? 'unknown',
       visibility: values.visibility ?? 'private',
       teamId: cave?.teamId ?? null,
+      // Not editable here yet: round-trip the typed-properties document and keep the cave
+      // under its current primary parent (the write DTO addresses containment by parent id).
+      properties: cave?.properties ?? null,
+      parentId: cave?.parents.find((p) => p.isPrimary)?.id ?? null,
     };
     try {
       const saved = isEdit ? await updateCave.mutateAsync(body) : await createCave.mutateAsync(body);

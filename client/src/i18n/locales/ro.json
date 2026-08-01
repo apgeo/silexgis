@@ -6,7 +6,7 @@
     "map": "Hartă",
     "dashboard": "Panou de bord",
     "caves": "Peșteri",
-    "features": "Fenomene de suprafață",
+    "features": "Elemente",
     "geodata": "Geodate",
     "trips": "Jurnale de tură",
     "audit": "Istoric",
@@ -20,7 +20,7 @@
     "openOnStart": "Deschide la pornire",
     "counts": {
       "caves": "Peșteri",
-      "features": "Fenomene de suprafață",
+      "features": "Fenomene",
       "trips": "Jurnale de tură",
       "geodata": "Fișiere geodate"
     },
@@ -34,8 +34,10 @@
     "untitled": "Fără titlu",
     "kind": {
       "cave": "Peșteră",
-      "surfaceFeature": "Fenomen de suprafață",
-      "tripLog": "Jurnal de tură"
+      "tripLog": "Jurnal de tură",
+      "feature": "Fenomen",
+      "caveEntrance": "Intrare de peșteră",
+      "centerline": "Poligonație"
     }
   },
   "auth": {
@@ -100,7 +102,7 @@
     "activeOverlays": "Straturi pe hartă",
     "changeBaseLayer": "Schimbă harta de bază",
     "entrances": "Intrări în peșteri",
-    "searchPlaceholder": "Caută peșteri sau locuri…",
+    "searchPlaceholder": "Caută fenomene, ture sau locuri…",
     "caves": "Peșteri",
     "places": "Locuri",
     "zoomTo": "Centrează",
@@ -143,7 +145,9 @@
     "centerlineSkeletonOn": "Se afișează traseul galeriilor; razele către pereți apar când apropii harta.",
     "centerlineDetailZoom": "Detaliu de la nivelul",
     "centerlineMaxPaths": "Limită de linii",
-    "centerlineLimitsHint": "Lasă gol pentru valorile implicite ale instalării. Detaliul mai mare costă mai mult la desenare."
+    "centerlineLimitsHint": "Lasă gol pentru valorile implicite ale instalării. Detaliul mai mare costă mai mult la desenare.",
+    "features": "Elemente",
+    "locationWithheld": "Localizare nedivulgată — geometria exactă este protejată."
   },
   "dialog": {
     "dockToSide": "Andochează lângă hartă",
@@ -219,6 +223,13 @@
       "ongoing": "În desfășurare",
       "finished": "Finalizată",
       "abandoned": "Abandonată"
+    },
+    "summary": {
+      "entrances": "{{count}} intrări",
+      "centerlines": "{{count}} poligonații",
+      "surveyModels": "{{count}} modele 3D",
+      "attachments": "{{count}} atașamente",
+      "tripLogs": "{{count}} jurnale de tură"
     }
   },
   "entrances": {
@@ -235,10 +246,11 @@
       "gps": "GPS",
       "map": "De pe hartă",
       "estimated": "Estimată"
-    }
+    },
+    "surveyedAt": "Cartată"
   },
   "features": {
-    "title": "Fenomene de suprafață",
+    "title": "Elemente",
     "name": "Denumire",
     "type": "Tip",
     "geometry": "Geometrie",
@@ -249,19 +261,65 @@
     "linkedCave": "Peșteră asociată",
     "linkedCavePlaceholder": "Caută peșteri…",
     "typedProperties": "Proprietăți",
-    "newFeature": "Fenomen de suprafață nou",
-    "editFeature": "Editare fenomen de suprafață",
+    "newFeature": "Element nou",
+    "editFeature": "Editare element",
     "edit": "Editează",
     "delete": "Șterge",
-    "deleteConfirm": "Ștergeți acest fenomen de suprafață?",
+    "deleteConfirm": "Ștergeți acest element? Elementele conținute se șterg odată cu el.",
     "showOnMap": "Arată pe hartă",
     "searchPlaceholder": "Caută după denumire…",
     "allTypes": "Toate tipurile",
     "geometryTypes": {
       "Point": "Punct",
       "LineString": "Linie",
-      "Polygon": "Poligon"
-    }
+      "Polygon": "Poligon",
+      "MultiPoint": "Multipunct",
+      "MultiLineString": "Multilinie",
+      "MultiPolygon": "Multipoligon"
+    },
+    "kind": "Fel",
+    "allKinds": "Toate felurile",
+    "kinds": {
+      "generic": "Element",
+      "cave": "Peșteră",
+      "caveEntrance": "Intrare",
+      "centerline": "Poligonație"
+    },
+    "category": "Categorie",
+    "allCategories": "Toate categoriile",
+    "categories": {
+      "surface": "Suprafață",
+      "underground": "Subteran",
+      "area": "Areal",
+      "structure": "Structură"
+    },
+    "locationWithheld": "Locație nedivulgată",
+    "locationProtected": "Locație protejată",
+    "open": "Deschide",
+    "openTypedPage": "Deschide pagina completă",
+    "summary": "Rezumat",
+    "entranceCount": "Intrări",
+    "isDefault": "Implicită",
+    "hierarchy": "Ierarhie",
+    "parent": "Părinte",
+    "parents": "Părinți",
+    "noParents": "Fără părinți",
+    "editParents": "Editează părinții",
+    "addParent": "Adaugă părinte…",
+    "parentSearchPlaceholder": "Caută elemente…",
+    "primary": "Principal",
+    "children": "Elemente conținute",
+    "noChildren": "Niciun element conținut",
+    "links": "Legături",
+    "editLinks": "Editează legăturile",
+    "addLink": "Adaugă",
+    "linkKind": "Tip legătură",
+    "linkTarget": "Element legat",
+    "linkNote": "Notă",
+    "noLinks": "Nicio legătură",
+    "incoming": "Legătură de intrare",
+    "outgoing": "Legătură de ieșire",
+    "inaccessible": "Inaccesibil"
   },
   "attachments": {
     "title": "Fotografii și documente",
@@ -597,7 +655,11 @@
       "extracted": "Extrasă"
     },
     "deleteConfirm": "Ștergi această poligonație?",
-    "empty": "Nicio poligonație încă"
+    "empty": "Nicio poligonație încă",
+    "default": "Implicită",
+    "makeDefault": "Setează ca formă implicită",
+    "promoted": "Poligonația a devenit forma implicită a peșterii",
+    "paths": "Trasee"
   },
   "settings": {
     "title": "Setări",
@@ -855,5 +917,45 @@
     "changeAnyTime": "Puteți reactiva oricând sau modifica oricare dintre celelalte setări de notificare.",
     "failed": "Linkul nu mai este valid. Puteți modifica setările de notificare după autentificare.",
     "manage": "Gestionează setările de notificare"
+  },
+  "featureKinds": {
+    "generic": "Fenomen",
+    "cave": "Peșteră",
+    "caveEntrance": "Intrare de peșteră",
+    "centerline": "Poligonație"
+  },
+  "search": {
+    "features": "Fenomene",
+    "trips": "Jurnale de tură",
+    "openFailed": "Înregistrarea nu a putut fi deschisă."
+  },
+  "shares": {
+    "title": "Linkuri de partajare",
+    "button": "Partajează",
+    "create": "Creează link",
+    "mode": "Acces",
+    "modes": {
+      "public": "Public",
+      "requiresLogin": "Necesită autentificare"
+    },
+    "includeSubtree": "Include înregistrările conținute",
+    "linkReady": "Link de partajare creat",
+    "tokenOnce": "Copiază-l acum — linkul este afișat o singură dată.",
+    "linkCopied": "Link de partajare copiat.",
+    "copy": "Copiază",
+    "createdAt": "Creat",
+    "status": "Stare",
+    "statusActive": "Activ",
+    "statusRevoked": "Revocat",
+    "revoke": "Revocă",
+    "revokeConfirm": "Revoci acest link de partajare?",
+    "revoked": "Link de partajare revocat.",
+    "empty": "Niciun link de partajare încă",
+    "notAllowed": "Nu poți partaja această înregistrare.",
+    "readOnly": "Vizualizare partajată, doar citire",
+    "childrenTitle": "Înregistrări incluse",
+    "sharedNotFound": "Acest link partajat nu există sau a fost revocat.",
+    "loginRequired": "Autentifică-te pentru a vedea această înregistrare partajată.",
+    "signIn": "Autentificare"
   }
 }

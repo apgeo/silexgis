@@ -79,11 +79,11 @@ function Viewer3dPanel() {
         zoom: 17,
       });
       publish({ kind: 'selection', selection: { kind: 'entrance', entranceId: match.id, caveId: match.caveId } });
-    } else if (cave?.mainGeom) {
+    } else if (cave?.geom) {
       publish({
         kind: 'fly-to',
-        lon: Number(cave.mainGeom.coordinates[0]),
-        lat: Number(cave.mainGeom.coordinates[1]),
+        lon: Number(cave.geom.coordinates[0]),
+        lat: Number(cave.geom.coordinates[1]),
         zoom: 15,
       });
     }
@@ -121,11 +121,11 @@ function RegistryPanel() {
 
   const pick = (cave: CaveListItem) => {
     publish({ kind: 'selection', selection: { kind: 'cave', caveId: cave.id } });
-    if (cave.mainGeom) {
+    if (cave.geom) {
       publish({
         kind: 'fly-to',
-        lon: cave.mainGeom.coordinates[0],
-        lat: cave.mainGeom.coordinates[1],
+        lon: cave.geom.coordinates[0],
+        lat: cave.geom.coordinates[1],
         zoom: 14,
       });
     }

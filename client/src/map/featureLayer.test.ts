@@ -7,13 +7,13 @@ import type Style from 'ol/style/Style';
 import { describe, expect, it } from 'vitest';
 import { createSurfaceFeatureLayer, setFeatureTypeSymbols } from './featureLayer.ts';
 
-describe('surface feature styling', () => {
+describe('feature styling', () => {
   const styleFn = createSurfaceFeatureLayer().getStyle() as (f: FeatureLike, r: number) => Style | Style[];
 
   // A registered symbol makes point-like features style via a (lazily-loaded) icon, which
   // avoids constructing OpenLayers' canvas-rendered fallback circle in the jsdom test env.
   setFeatureTypeSymbols([
-    { id: 7, name: 'Doline', symbolFile: 'doline.png' },
+    { id: 7, code: 'doline', name: 'Doline', symbolFile: 'doline.png' },
   ] as Parameters<typeof setFeatureTypeSymbols>[0]);
 
   function stylesFor(feature: Feature): Style[] {
@@ -22,14 +22,22 @@ describe('surface feature styling', () => {
   }
 
   function pointLike(geom: Point | MultiPoint): Feature {
+    // Server rows carry the symbol file directly in their properties.
     const feature = new Feature(geom);
-    feature.set('featureTypeId', 7);
+    feature.set('symbol', 'doline.png');
     return feature;
   }
 
   it('renders MultiPoint with a point image, like Point (not an invisible stroke/fill)', () => {
     expect(stylesFor(pointLike(new MultiPoint([[0, 0], [1, 1]]))).some((s) => s.getImage())).toBe(true);
     expect(stylesFor(pointLike(new Point([0, 0]))).some((s) => s.getImage())).toBe(true);
+  });
+
+  it('styles a pending locally drawn point through the catalog by featureTypeId', () => {
+    const pending = new Feature(new Point([0, 0]));
+    pending.set('pendingNew', true);
+    pending.set('featureTypeId', 7);
+    expect(stylesFor(pending).some((s) => s.getImage())).toBe(true);
   });
 
   it('renders lines with a stroke and no image', () => {

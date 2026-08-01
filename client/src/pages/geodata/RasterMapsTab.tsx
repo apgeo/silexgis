@@ -20,10 +20,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   useCave,
-  useCaveSearch,
   useDeleteRasterMap,
   useMe,
   useRasterMaps,
+  useSearch,
   useUpdateRasterMap,
   useUploadRasterMap,
   type RasterMapInfo,
@@ -45,7 +45,7 @@ interface EditFormValues {
   mapKind: RasterMapInfo['mapKind'];
   attribution?: string;
   defaultOpacity: number;
-  caveId?: string;
+  caveFeatureId?: string;
   visibility: RasterMapInfo['visibility'];
 }
 
@@ -65,18 +65,21 @@ export default function RasterMapsTab() {
   const [editing, setEditing] = useState<RasterMapInfo | null>(null);
   const [form] = Form.useForm<EditFormValues>();
 
-  // Cave link: remote-search select (same pattern as the feature editor).
+  // Cave link: remote-search select (same pattern as the feature editor). The search spans
+  // every feature kind, so only cave results become options here.
   const [caveQuery, setCaveQuery] = useState('');
   const debouncedCaveQuery = useDebouncedValue(caveQuery);
-  const { data: caveResults } = useCaveSearch(debouncedCaveQuery);
-  const { data: linkedCave } = useCave(editing?.caveId ?? undefined);
+  const { data: searchResults } = useSearch(debouncedCaveQuery);
+  const { data: linkedCave } = useCave(editing?.caveFeatureId ?? undefined);
   const caveOptions = useMemo(() => {
-    const options = (caveResults?.caves ?? []).map((cave) => ({ value: cave.id, label: cave.name }));
+    const options = (searchResults?.features ?? [])
+      .filter((feature) => feature.kind === 'cave')
+      .map((cave) => ({ value: cave.id, label: cave.name ?? cave.id }));
     if (linkedCave && !options.some((o) => o.value === linkedCave.id)) {
       options.unshift({ value: linkedCave.id, label: linkedCave.name });
     }
     return options;
-  }, [caveResults, linkedCave]);
+  }, [searchResults, linkedCave]);
 
   const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
 
@@ -96,7 +99,7 @@ export default function RasterMapsTab() {
       mapKind: raster.mapKind,
       attribution: raster.attribution ?? undefined,
       defaultOpacity: Number(raster.defaultOpacity),
-      caveId: raster.caveId ?? undefined,
+      caveFeatureId: raster.caveFeatureId ?? undefined,
       visibility: raster.visibility,
     });
     setCaveQuery('');
@@ -118,7 +121,7 @@ export default function RasterMapsTab() {
           maxZoom: editing.maxZoom,
           attribution: values.attribution ?? null,
           defaultOpacity: values.defaultOpacity,
-          caveId: values.caveId ?? null,
+          caveFeatureId: values.caveFeatureId ?? null,
           teamId: editing.teamId,
           visibility: values.visibility,
         },
@@ -277,7 +280,7 @@ export default function RasterMapsTab() {
               }))}
             />
           </Form.Item>
-          <Form.Item name="caveId" label={t('features.linkedCave')}>
+          <Form.Item name="caveFeatureId" label={t('features.linkedCave')}>
             <Select
               allowClear
               showSearch

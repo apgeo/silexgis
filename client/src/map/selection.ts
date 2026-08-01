@@ -11,7 +11,7 @@ import { coarsePointer } from './pointer.ts';
 
 /**
  * Click behavior: cluster → publish a cluster selection (the panel lists its
- * members and offers zoom); entrance / surface feature → publish selection
+ * members and offers zoom); entrance / feature → publish selection
  * (discriminated by the owning layer); empty → clear. Returns a detach function.
  */
 export function attachSelection(

@@ -1,78 +1,56 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { AimOutlined, DeleteOutlined, DownloadOutlined, EditOutlined } from '@ant-design/icons';
+import { AimOutlined, DeleteOutlined, DownloadOutlined, EyeOutlined } from '@ant-design/icons';
 import { App, Button, Dropdown, Flex, Input, Popconfirm, Select, Table, Tag, Tooltip, Typography } from 'antd';
 import type { TablePaginationConfig } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { downloadFile } from '../../api/download.ts';
 import {
-  useDeleteSurfaceFeature,
+  useDeleteFeature,
   useFeatureTypes,
+  useFeatures,
   useMe,
-  useSurfaceFeatures,
   useTags,
-  useUpdateSurfaceFeature,
-  type SurfaceFeatureDetail,
-  type SurfaceFeatureListParams,
+  type FeatureCategory,
+  type FeatureKind,
+  type FeatureListItem,
+  type FeatureListParams,
 } from '../../api/hooks.ts';
-import FeatureEditModal, { type FeatureAttributeValues } from '../../components/features/FeatureEditModal.tsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 
 const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
+const featureKinds: FeatureKind[] = ['generic', 'cave', 'caveEntrance', 'centerline'];
+const featureCategories: FeatureCategory[] = ['surface', 'underground', 'area', 'structure'];
 
 export default function FeatureListPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { message } = App.useApp();
-  const [params, setParams] = useState<SurfaceFeatureListParams>({ page: 1, pageSize: 20 });
+  const [params, setParams] = useState<FeatureListParams>({ page: 1, pageSize: 20 });
   const [searchInput, setSearchInput] = useState('');
   const search = useDebouncedValue(searchInput);
-  const { data, isFetching } = useSurfaceFeatures({ ...params, search: search || undefined });
+  const { data, isFetching } = useFeatures({ ...params, search: search || undefined });
   const { data: featureTypes } = useFeatureTypes();
   const { data: tags } = useTags('');
   const { data: me } = useMe();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
-  const updateFeature = useUpdateSurfaceFeature();
-  const deleteFeature = useDeleteSurfaceFeature();
-  const [editing, setEditing] = useState<SurfaceFeatureDetail | null>(null);
+  const deleteFeature = useDeleteFeature();
 
   const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
-  const typeName = (id: number) => featureTypes?.find((x) => Number(x.id) === id)?.name ?? String(id);
+  const typeName = (code: string | null) =>
+    code === null ? '' : featureTypes?.find((x) => x.code === code)?.name ?? code;
 
-  const showOnMap = (feature: SurfaceFeatureDetail) => {
+  const showOnMap = (feature: FeatureListItem) => {
+    if (!feature.geometry) {
+      return;
+    }
     setSelection({ kind: 'feature', featureId: feature.id });
     fitGeoJsonGeometry(feature.geometry);
     navigate('/map');
-  };
-
-  const onEditSubmit = async (values: FeatureAttributeValues) => {
-    if (!editing) {
-      return;
-    }
-    try {
-      await updateFeature.mutateAsync({
-        id: editing.id,
-        body: {
-          name: values.name,
-          featureTypeId: values.featureTypeId,
-          geometry: editing.geometry,
-          description: values.description,
-          properties: values.properties as never,
-          caveId: values.caveId,
-          teamId: editing.teamId,
-          visibility: values.visibility,
-        },
-      });
-      reloadSurfaceFeatures();
-      setEditing(null);
-      message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
-    }
   };
 
   const onDelete = async (id: string) => {
@@ -95,10 +73,13 @@ export default function FeatureListPage() {
     if (search) {
       query.set('search', search);
     }
+    if (params.kind !== undefined) {
+      query.set('kind', params.kind);
+    }
     if (params.featureTypeId !== undefined) {
       query.set('featureTypeId', String(params.featureTypeId));
     }
-    downloadFile(`/api/v1/export/surface-features?${query}`).catch(() =>
+    downloadFile(`/api/v1/export/features?${query}`).catch(() =>
       message.error(t('common.saveFailed')),
     );
   };
@@ -121,7 +102,7 @@ export default function FeatureListPage() {
           <Button icon={<DownloadOutlined />}>{t('common.export')}</Button>
         </Dropdown>
       </Flex>
-      <Flex gap={8} style={{ marginBottom: 12 }}>
+      <Flex gap={8} wrap style={{ marginBottom: 12 }}>
         <Input.Search
           placeholder={t('features.searchPlaceholder')}
           allowClear
@@ -130,10 +111,24 @@ export default function FeatureListPage() {
         />
         <Select
           allowClear
+          placeholder={t('features.allKinds')}
+          style={{ width: 170 }}
+          options={featureKinds.map((k) => ({ value: k, label: t(`features.kinds.${k}`) }))}
+          onChange={(value?: FeatureKind) => setParams((p) => ({ ...p, page: 1, kind: value }))}
+        />
+        <Select
+          allowClear
           placeholder={t('features.allTypes')}
           style={{ width: 220 }}
           options={featureTypes?.map((x) => ({ value: Number(x.id), label: x.name }))}
           onChange={(value?: number) => setParams((p) => ({ ...p, page: 1, featureTypeId: value }))}
+        />
+        <Select
+          allowClear
+          placeholder={t('features.allCategories')}
+          style={{ width: 170 }}
+          options={featureCategories.map((c) => ({ value: c, label: t(`features.categories.${c}`) }))}
+          onChange={(value?: FeatureCategory) => setParams((p) => ({ ...p, page: 1, category: value }))}
         />
         <Select
           allowClear
@@ -145,13 +140,17 @@ export default function FeatureListPage() {
           onChange={(value?: string) => setParams((p) => ({ ...p, page: 1, tag: value }))}
         />
       </Flex>
-      <Table<SurfaceFeatureDetail>
+      <Table<FeatureListItem>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="middle"
         loading={isFetching}
         dataSource={data?.items}
         onChange={onTableChange}
+        onRow={(record) => ({
+          onClick: () => navigate(`/features/${record.id}`),
+          style: { cursor: 'pointer' },
+        })}
         pagination={{
           current: data?.page,
           pageSize: data?.pageSize,
@@ -169,13 +168,23 @@ export default function FeatureListPage() {
                 </Typography.Text>
               ),
           },
-          { title: t('features.type'), dataIndex: 'featureTypeId', width: 200, render: typeName },
+          {
+            title: t('features.kind'),
+            dataIndex: 'kind',
+            width: 130,
+            render: (kind: FeatureKind) => <Tag>{t(`features.kinds.${kind}`)}</Tag>,
+          },
+          { title: t('features.type'), dataIndex: 'featureTypeCode', width: 200, render: typeName },
           {
             title: t('features.geometry'),
             dataIndex: 'geometry',
-            width: 120,
-            render: (geometry: SurfaceFeatureDetail['geometry']) =>
-              t(`features.geometryTypes.${geometry.type}`),
+            width: 130,
+            render: (geometry: FeatureListItem['geometry'], record) =>
+              geometry
+                ? t(`features.geometryTypes.${geometry.type}`)
+                : record.omittedLocation
+                  ? t('features.locationWithheld')
+                  : '—',
           },
           {
             title: t('features.visibility'),
@@ -194,48 +203,36 @@ export default function FeatureListPage() {
             key: 'actions',
             width: 130,
             render: (_, record) => (
-              <Flex gap={4}>
+              // Buttons must not also trigger the row's navigate-to-detail click.
+              <Flex gap={4} onClick={(e) => e.stopPropagation()}>
                 <Tooltip title={t('features.showOnMap')}>
-                  <Button size="small" icon={<AimOutlined />} onClick={() => showOnMap(record)} />
+                  <Button
+                    size="small"
+                    icon={<AimOutlined />}
+                    disabled={!record.geometry}
+                    onClick={() => showOnMap(record)}
+                  />
+                </Tooltip>
+                <Tooltip title={t('features.open')}>
+                  <Button
+                    size="small"
+                    icon={<EyeOutlined />}
+                    onClick={() => navigate(`/features/${record.id}`)}
+                  />
                 </Tooltip>
                 {canEdit && (
-                  <>
-                    <Tooltip title={t('features.edit')}>
-                      <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(record)} />
-                    </Tooltip>
-                    <Popconfirm
-                      title={t('features.deleteConfirm')}
-                      onConfirm={() => void onDelete(record.id)}
-                      okButtonProps={{ danger: true }}
-                    >
-                      <Button size="small" icon={<DeleteOutlined />} danger />
-                    </Popconfirm>
-                  </>
+                  <Popconfirm
+                    title={t('features.deleteConfirm')}
+                    onConfirm={() => void onDelete(record.id)}
+                    okButtonProps={{ danger: true }}
+                  >
+                    <Button size="small" icon={<DeleteOutlined />} danger />
+                  </Popconfirm>
                 )}
               </Flex>
             ),
           },
         ]}
-      />
-      <FeatureEditModal
-        open={editing !== null}
-        title={t('features.editFeature')}
-        geometryType={(editing?.geometry.type ?? 'Point') as 'Point' | 'LineString' | 'Polygon'}
-        initial={
-          editing
-            ? {
-                name: editing.name,
-                featureTypeId: editing.featureTypeId,
-                description: editing.description,
-                visibility: editing.visibility,
-                caveId: editing.caveId,
-                properties: (editing.properties ?? {}) as Record<string, unknown>,
-              }
-            : {}
-        }
-        busy={updateFeature.isPending}
-        onCancel={() => setEditing(null)}
-        onSubmit={(values) => void onEditSubmit(values)}
       />
     </div>
   );

@@ -3,18 +3,18 @@ import { useMemo, useState } from 'react';
 import { AimOutlined, DeleteOutlined, EditOutlined, ExportOutlined } from '@ant-design/icons';
 import { Alert, App, Button, Descriptions, Empty, Flex, Popconfirm, Spin, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   useCave,
   useCaveTypes,
   useClusterEntrances,
-  useDeleteSurfaceFeature,
+  useDeleteFeature,
   useEntrances,
+  useFeature,
   useFeatureTypes,
   useMe,
-  useSurfaceFeature,
-  useUpdateSurfaceFeature,
-  type SurfaceFeatureWrite,
+  useUpdateFeature,
+  type FeatureUpdate,
 } from '../../api/hooks.ts';
 import { formatLonLat } from '../../geo/coords.ts';
 import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
@@ -200,15 +200,15 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
-  const { data: feature, isPending } = useSurfaceFeature(selection.featureId);
+  const { data: envelope, isPending } = useFeature(selection.featureId);
   const { data: featureTypes } = useFeatureTypes();
-  const { data: linkedCave } = useCave(feature?.caveId ?? undefined);
   const { data: me } = useMe();
-  const updateFeature = useUpdateSurfaceFeature();
-  const deleteFeature = useDeleteSurfaceFeature();
+  const updateFeatureM = useUpdateFeature();
+  const deleteFeatureM = useDeleteFeature();
   const [editing, setEditing] = useState(false);
 
-  const featureType = featureTypes?.find((x) => Number(x.id) === feature?.featureTypeId);
+  const feature = envelope?.feature;
+  const featureType = featureTypes?.find((x) => x.code === feature?.featureTypeCode);
 
   // Typed-property labels come from the type's schema; unknown keys show raw.
   const propertyRows = useMemo(() => {
@@ -225,7 +225,7 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
     }));
   }, [feature, featureType]);
 
-  if (isPending || !feature) {
+  if (isPending || !envelope || !feature) {
     return (
       <Flex align="center" justify="center" style={{ height: '100%' }}>
         <Spin />
@@ -233,12 +233,50 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
     );
   }
 
-  const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
-  const geometryType = feature.geometry.type as 'Point' | 'LineString' | 'Polygon';
+  // Any feature id can land here (the list page and the envelope route are
+  // cross-kind); caves and entrances have a richer card of their own.
+  if (envelope.kind === 'cave') {
+    return <CaveCard selection={{ kind: 'cave', caveId: feature.id }} />;
+  }
+  if (envelope.kind === 'caveEntrance' && envelope.entrance) {
+    return (
+      <CaveCard
+        selection={{ kind: 'entrance', entranceId: feature.id, caveId: envelope.entrance.caveFeatureId }}
+      />
+    );
+  }
+
+  const canEdit =
+    envelope.kind === 'generic' &&
+    (me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false);
+  // A protected feature the viewer may not see exactly can arrive without geometry.
+  // Multi* geometries (imported geodata) collapse to their base shape for display
+  // and for constraining the edit modal's type options.
+  const baseShapes: Record<string, 'Point' | 'LineString' | 'Polygon'> = {
+    Point: 'Point',
+    MultiPoint: 'Point',
+    LineString: 'LineString',
+    MultiLineString: 'LineString',
+    Polygon: 'Polygon',
+    MultiPolygon: 'Polygon',
+  };
+  const geometryType = feature.geometry ? (baseShapes[feature.geometry.type] ?? null) : null;
+
+  // The detail DTO names the type by code; the write contract wants its id.
+  const writeDto = (): FeatureUpdate => ({
+    name: feature.name,
+    featureTypeId: Number(featureType?.id ?? 0),
+    geometry: feature.geometry,
+    description: feature.description,
+    properties: feature.properties,
+    locationProtected: feature.locationProtected,
+    teamId: feature.teamId,
+    visibility: feature.visibility,
+  });
 
   const onEditSubmit = async (values: FeatureAttributeValues) => {
     try {
-      await updateFeature.mutateAsync({
+      await updateFeatureM.mutateAsync({
         id: feature.id,
         body: {
           name: values.name,
@@ -246,7 +284,7 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
           geometry: feature.geometry,
           description: values.description,
           properties: values.properties as never,
-          caveId: values.caveId,
+          locationProtected: values.locationProtected,
           teamId: feature.teamId,
           visibility: values.visibility,
         },
@@ -261,7 +299,7 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
 
   const onDelete = async () => {
     try {
-      await deleteFeature.mutateAsync(feature.id);
+      await deleteFeatureM.mutateAsync(feature.id);
       reloadSurfaceFeatures();
       setSelection(null);
       message.success(t('common.deleted'));
@@ -275,19 +313,29 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
       <Typography.Title level={5} style={{ marginTop: 0 }}>
         {feature.name ?? featureType?.name ?? t('features.unnamed')}
       </Typography.Title>
+      {feature.omittedLocation && (
+        <Alert type="warning" showIcon message={t('map.locationWithheld')} style={{ marginBottom: 12 }} />
+      )}
+      {!feature.omittedLocation && feature.approximateLocation && (
+        <Alert type="warning" showIcon message={t('map.approximate')} style={{ marginBottom: 12 }} />
+      )}
       <Descriptions column={1} size="small">
         <Descriptions.Item label={t('features.type')}>
-          {featureType?.name ?? feature.featureTypeId}
+          {featureType?.name ?? feature.featureTypeCode}
         </Descriptions.Item>
-        <Descriptions.Item label={t('features.geometry')}>
-          {t(`features.geometryTypes.${geometryType}`)}
-        </Descriptions.Item>
+        {geometryType && (
+          <Descriptions.Item label={t('features.geometry')}>
+            {t(`features.geometryTypes.${geometryType}`)}
+          </Descriptions.Item>
+        )}
         {feature.description && (
           <Descriptions.Item label={t('features.description')}>{feature.description}</Descriptions.Item>
         )}
-        {linkedCave && (
-          <Descriptions.Item label={t('features.linkedCave')}>
-            <Link to={`/caves/${linkedCave.id}`}>{linkedCave.name}</Link>
+        {feature.parents.length > 0 && (
+          <Descriptions.Item label={t('features.parent')}>
+            {feature.parents.map((parent) => (
+              <Tag key={parent.id}>{parent.name ?? t('features.unnamed')}</Tag>
+            ))}
           </Descriptions.Item>
         )}
         {propertyRows.map((row) => (
@@ -300,13 +348,15 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
         </Descriptions.Item>
       </Descriptions>
       <Flex gap={8} style={{ marginTop: 12 }} wrap>
-        <Button
-          icon={<AimOutlined />}
-          size="small"
-          onClick={() => fitGeoJsonGeometry(feature.geometry)}
-        >
-          {t('map.zoomTo')}
-        </Button>
+        {feature.geometry && (
+          <Button
+            icon={<AimOutlined />}
+            size="small"
+            onClick={() => fitGeoJsonGeometry(feature.geometry!)}
+          >
+            {t('map.zoomTo')}
+          </Button>
+        )}
         {canEdit && (
           <>
             <Button icon={<EditOutlined />} size="small" onClick={() => setEditing(true)}>
@@ -315,7 +365,7 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
             <Popconfirm
               title={t('features.deleteConfirm')}
               onConfirm={() => void onDelete()}
-              okButtonProps={{ danger: true, loading: deleteFeature.isPending }}
+              okButtonProps={{ danger: true, loading: deleteFeatureM.isPending }}
             >
               <Button icon={<DeleteOutlined />} size="small" danger>
                 {t('features.delete')}
@@ -325,16 +375,17 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
         )}
       </Flex>
       <HistoryPanel
-        entityType="surfaceFeature"
+        entityType="feature"
         entityId={feature.id}
         restore={
           canEdit
             ? ({
-                entityType: 'SurfaceFeature',
+                // Audit rows carry the kind-qualified entity name.
+                entityType: 'Feature:Generic',
                 onRestore: async (event, props) => {
-                  await updateFeature.mutateAsync({
+                  await updateFeatureM.mutateAsync({
                     id: feature.id,
-                    body: applyFeatureRestore(feature as unknown as SurfaceFeatureWrite, event.changes, props),
+                    body: applyFeatureRestore(writeDto(), event.changes, props),
                   });
                   reloadSurfaceFeatures();
                 },
@@ -348,13 +399,13 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
         geometryType={geometryType}
         initial={{
           name: feature.name,
-          featureTypeId: feature.featureTypeId,
+          featureTypeId: featureType ? Number(featureType.id) : undefined,
           description: feature.description,
           visibility: feature.visibility,
-          caveId: feature.caveId,
+          locationProtected: feature.locationProtected,
           properties: (feature.properties ?? {}) as Record<string, unknown>,
         }}
-        busy={updateFeature.isPending}
+        busy={updateFeatureM.isPending}
         onCancel={() => setEditing(false)}
         onSubmit={(values) => void onEditSubmit(values)}
       />

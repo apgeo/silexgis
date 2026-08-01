@@ -2,15 +2,16 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { DashboardSummary, MapViewInfo } from '../../api/hooks.ts';
 
 const summary: DashboardSummary = {
-  counts: { caves: 12, surfaceFeatures: 34, tripLogs: 5, geofiles: 2 },
+  counts: { caves: 12, features: 34, tripLogs: 5, geofiles: 2 },
   recentActivity: [
     { kind: 'tripLog', id: 't1', name: 'Winter camp', updatedAt: '2026-07-15T10:00:00Z' },
     { kind: 'cave', id: 'c1', name: 'Peștera Mare', updatedAt: '2026-07-14T10:00:00Z' },
-    { kind: 'surfaceFeature', id: 'f1', name: null, updatedAt: '2026-07-13T10:00:00Z' },
+    { kind: 'feature', id: 'f1', name: null, updatedAt: '2026-07-13T10:00:00Z' },
+    { kind: 'caveEntrance', id: 'e1', name: 'Intrarea de sus', updatedAt: '2026-07-12T10:00:00Z' },
   ],
 };
 
@@ -30,6 +31,9 @@ vi.mock('../../api/hooks.ts', () => ({
   useDashboardSummary: () => summaryQuery(),
   useMapViews: () => ({ data: views }),
   useCanCreateContent: () => canCreate(),
+  // Imported by the feature-navigation helper the activity feed uses; only entrance or
+  // centerline rows would actually call it.
+  fetchFeature: vi.fn(),
 }));
 
 // Imported after the mock so the component binds to the mocked hooks.
@@ -72,7 +76,10 @@ describe('DashboardPage', () => {
     // field names, so searching the page for a bare number would pass even with every count
     // wired to the wrong tile.
     expect(countOn('Caves')).toBe('12');
-    expect(countOn('Surface features')).toBe('34');
+    // The generic-features tile is looked up by its key: the label copy is mid-rename
+    // ("Surface features" → "Features") and this assertion ties the number to the tile,
+    // not to the wording.
+    expect(countOn(i18n.t('dashboard.counts.features'))).toBe('34');
     expect(countOn('Trip logs')).toBe('5');
     expect(countOn('Geodata files')).toBe('2');
   });
@@ -81,7 +88,8 @@ describe('DashboardPage', () => {
     renderPage();
     expect(screen.getByText('Winter camp')).toBeInTheDocument();
     expect(screen.getByText('Peștera Mare')).toBeInTheDocument();
-    // Surface features are often unnamed; the row must still be readable.
+    expect(screen.getByText('Intrarea de sus')).toBeInTheDocument();
+    // Generic features are often unnamed; the row must still be readable.
     expect(screen.getByText('Untitled')).toBeInTheDocument();
   });
 

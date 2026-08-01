@@ -20,9 +20,9 @@ import { App, Badge, Button, Divider, Space, Tooltip } from 'antd';
 import type Feature from 'ol/Feature';
 import { useTranslation } from 'react-i18next';
 import {
-  createSurfaceFeature,
-  fetchSurfaceFeature,
-  updateSurfaceFeature,
+  createFeature,
+  fetchFeature,
+  updateFeature,
   useFeatureTypes,
 } from '../../api/hooks.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
@@ -39,17 +39,11 @@ import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 import CaveAddModal from './CaveAddModal.tsx';
 import FeaturePalette, { FeatureSymbol } from './FeaturePalette.tsx';
+import { drawShapeForType } from './featureTypeGroups.ts';
 
 interface EditToolbarProps {
   controller: MapEditController;
 }
-
-const shapeForKind: Record<string, DrawShape | null> = {
-  point: 'Point',
-  line: 'LineString',
-  polygon: 'Polygon',
-  any: null, // user picks the shape explicitly
-};
 
 /** Pinned shortcuts beyond this many stay reachable through the palette only. */
 const MAX_PINNED_BUTTONS = 8;
@@ -101,17 +95,16 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
     .slice(0, MAX_PINNED_BUTTONS);
 
   const selectedType = featureTypes?.find((ft) => Number(ft.id) === typeId);
-  const kind = (selectedType?.geometryKind ?? 'point').toString().toLowerCase();
-  const fixedShape = shapeForKind[kind] ?? 'Point';
+  const fixedShape = drawShapeForType(selectedType) ?? 'Point';
 
   // Picking a symbol (palette or pinned shortcut) arms drawing immediately
-  // (reference-software behavior), with the shape implied by the geometry kind.
+  // (reference-software behavior), with the shape implied by the type's
+  // accepted geometry classes.
   const armType = (id: number) => {
     setTypeId(id);
     setMeasure(null);
     const picked = featureTypes?.find((ft) => Number(ft.id) === id);
-    const pickedKind = (picked?.geometryKind ?? 'point').toString().toLowerCase();
-    controller.setMode('draw', shapeForKind[pickedKind] ?? 'Point', id);
+    controller.setMode('draw', drawShapeForType(picked) ?? 'Point', id);
   };
 
   const setMode = (mode: EditMode, shape?: DrawShape) => {
@@ -135,26 +128,33 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
       const { created, modified } = controller.getPendingEdits();
       for (const { feature } of created) {
         const attrs = feature.get('pendingAttrs') as FeatureAttributeValues | undefined;
-        await createSurfaceFeature({
+        await createFeature({
+          kind: 'generic',
           name: attrs?.name ?? null,
           featureTypeId: attrs?.featureTypeId ?? Number(feature.get('featureTypeId') ?? typeId ?? 0),
           geometry: MapEditController.toGeoJsonGeometry(feature.getGeometry()!) as never,
           description: attrs?.description ?? null,
           properties: (attrs?.properties ?? null) as never,
-          caveId: attrs?.caveId ?? null,
+          parents: attrs?.primaryParentId
+            ? [{ parentId: attrs.primaryParentId, isPrimary: true }]
+            : null,
+          locationProtected: attrs?.locationProtected ?? false,
           teamId: null,
           visibility: attrs?.visibility ?? 'private',
         });
       }
       for (const [id, geometry] of modified) {
-        const current = await fetchSurfaceFeature(id);
-        await updateSurfaceFeature(id, {
+        // The detail DTO carries the type as its code; the update contract wants the id.
+        const { feature: current } = await fetchFeature(id);
+        await updateFeature(id, {
           name: current.name,
-          featureTypeId: current.featureTypeId,
+          featureTypeId: Number(
+            featureTypes?.find((ft) => ft.code === current.featureTypeCode)?.id ?? 0,
+          ),
           geometry: geometry as never,
           description: current.description,
           properties: current.properties,
-          caveId: current.caveId,
+          locationProtected: current.locationProtected,
           teamId: current.teamId,
           visibility: current.visibility,
         });
@@ -365,6 +365,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
         open={pendingFeature !== null}
         title={t('features.newFeature')}
         geometryType={pendingGeometryType}
+        withParent
         initial={{
           featureTypeId: Number(pendingFeature?.get('featureTypeId') ?? typeId),
           visibility: 'private',

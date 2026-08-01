@@ -6,9 +6,12 @@ import VectorLayer from 'ol/layer/Vector';
 import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Circle as CircleStyle, Fill, Icon, Stroke, Style } from 'ol/style';
-import { fetchSurfaceFeatureCollection, type FeatureType } from '../api/hooks.ts';
+import { fetchMapFeatures, type FeatureType } from '../api/hooks.ts';
 import { getMapTagFilter } from './mapFilters.ts';
 
+// The cross-kind features overlay. The layer id keeps its historical string:
+// saved views persist overlay ids (visibility, opacity, stacking), and renaming
+// it would silently drop the layer from every view saved before the rename.
 export const SURFACE_FEATURE_LAYER_ID = 'surface-features';
 
 const source = new VectorSource();
@@ -19,10 +22,13 @@ export function getSurfaceFeatureSource(): VectorSource {
   return source;
 }
 
-// featureTypeId → symbol file / display name, fed from the /feature-types
-// catalog by the map page. Names back the hover tooltip for unnamed features.
+// Feature-type catalog lookups, fed from /feature-types by the map page.
+// Server-loaded features carry `symbol` and `typeCode` in their properties;
+// the by-id maps cover freshly drawn (unsaved) features, which only know the
+// featureTypeId the palette armed. Names back the hover tooltip and lists.
 let symbolByTypeId = new globalThis.Map<number, string>();
 let nameByTypeId = new globalThis.Map<number, string>();
+let nameByTypeCode = new globalThis.Map<string, string>();
 const iconCache = new globalThis.Map<string, Icon>();
 
 export function setFeatureTypeSymbols(types: FeatureType[]): void {
@@ -30,11 +36,16 @@ export function setFeatureTypeSymbols(types: FeatureType[]): void {
     types.filter((t) => t.symbolFile).map((t) => [Number(t.id), t.symbolFile!]),
   );
   nameByTypeId = new globalThis.Map(types.map((t) => [Number(t.id), t.name]));
+  nameByTypeCode = new globalThis.Map(types.map((t) => [t.code, t.name]));
   source.changed(); // restyle already-loaded features with the fresh catalog
 }
 
 export function getFeatureTypeName(featureTypeId: unknown): string | undefined {
   return nameByTypeId.get(Number(featureTypeId));
+}
+
+export function getFeatureTypeNameByCode(typeCode: unknown): string | undefined {
+  return typeof typeCode === 'string' ? nameByTypeCode.get(typeCode) : undefined;
 }
 
 // Selection highlight: the styling reads this id so the highlight survives
@@ -77,12 +88,18 @@ export function attachSurfaceFeatureLoader(map: Map): () => void {
     const bbox = extent.map((n) => n.toFixed(5)).join(',');
     const seq = ++requestSeq;
     try {
-      const collection = await fetchSurfaceFeatureCollection(bbox, getMapTagFilter() ?? undefined);
+      const collection = await fetchMapFeatures(bbox, { tag: getMapTagFilter() ?? undefined });
       if (seq !== requestSeq) {
         return; // a newer request superseded this one
       }
       source.clear(true);
-      source.addFeatures(format.readFeatures(collection, { featureProjection: 'EPSG:3857' }));
+      source.addFeatures(
+        format
+          .readFeatures(collection, { featureProjection: 'EPSG:3857' })
+          // A protected non-point feature the viewer may not see exactly arrives as a
+          // readable row with a null geometry — nothing to draw, list or hit-test here.
+          .filter((feature) => feature.getGeometry() !== undefined),
+      );
     } catch {
       // Keep previous features on transient errors; next moveend retries.
     }
@@ -130,7 +147,10 @@ function featureStyle(feature: FeatureLike): Style | Style[] {
         })]
       : [];
 
-    const symbol = symbolByTypeId.get(Number(feature.get('featureTypeId')));
+    // Server rows carry their symbol file; pending locally drawn features only
+    // carry the armed featureTypeId, resolved through the catalog instead.
+    const symbolProp = feature.get('symbol') as string | null | undefined;
+    const symbol = symbolProp ?? symbolByTypeId.get(Number(feature.get('featureTypeId')));
     if (symbol) {
       let icon = iconCache.get(symbol);
       if (!icon) {

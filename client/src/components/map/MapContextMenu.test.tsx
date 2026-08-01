@@ -9,8 +9,8 @@ import MapContextMenu from './MapContextMenu.tsx';
 afterEach(cleanup);
 
 const types = [
-  { id: 1, name: 'Sinkhole', geometryKind: 'point' },
-  { id: 2, name: 'Fault', geometryKind: 'line' },
+  { id: 1, name: 'Sinkhole', acceptedGeometryClasses: ['point'] },
+  { id: 2, name: 'Fault', acceptedGeometryClasses: ['lineString'] },
 ] as FeatureType[];
 
 const target = { pixel: [100, 120] as [number, number], lonLat: [25.5, 45.25] as [number, number] };

@@ -3,11 +3,15 @@ import type Map from 'ol/Map';
 import type MapBrowserEvent from 'ol/MapBrowserEvent';
 import Overlay from 'ol/Overlay';
 import { ENTRANCE_LAYER_ID } from './entranceLayer.ts';
-import { SURFACE_FEATURE_LAYER_ID, getFeatureTypeName } from './featureLayer.ts';
+import {
+  SURFACE_FEATURE_LAYER_ID,
+  getFeatureTypeName,
+  getFeatureTypeNameByCode,
+} from './featureLayer.ts';
 import { isHitTestable } from './hitTesting.ts';
 
 /**
- * Name/type tooltip near the cursor for entrances and surface features,
+ * Name/type tooltip near the cursor for entrances and features,
  * plus a pointer cursor over any clickable feature. Returns a detach fn.
  */
 export function attachHoverTooltip(map: Map): () => void {
@@ -35,12 +39,19 @@ export function attachHoverTooltip(map: Map): () => void {
         }
         if (layerId === ENTRANCE_LAYER_ID) {
           clickable = true;
-          label = typeof props.name === 'string' ? props.name : undefined;
+          // `name` is the entrance's own name (falling back to the cave server-side);
+          // when the entrance is named, its cave's name gives the missing context.
+          const name = typeof props.name === 'string' && props.name ? props.name : undefined;
+          const caveName =
+            typeof props.caveName === 'string' && props.caveName ? props.caveName : undefined;
+          label = name && caveName && name !== caveName ? `${name} — ${caveName}` : name;
           return true;
         }
         if (layerId === SURFACE_FEATURE_LAYER_ID) {
           clickable = true;
-          const typeName = getFeatureTypeName(props.featureTypeId);
+          // Server rows carry typeCode; pending locally drawn ones only a featureTypeId.
+          const typeName =
+            getFeatureTypeNameByCode(props.typeCode) ?? getFeatureTypeName(props.featureTypeId);
           const name = typeof props.name === 'string' && props.name ? props.name : undefined;
           label = name && typeName ? `${name} — ${typeName}` : (name ?? typeName);
           return true;

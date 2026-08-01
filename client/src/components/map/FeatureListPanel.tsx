@@ -10,9 +10,8 @@ import { createEmpty, extend, isEmpty } from 'ol/extent';
 import { unByKey } from 'ol/Observable';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
-import { useFeatureTypes } from '../../api/hooks.ts';
 import { getEntranceSource } from '../../map/entranceLayer.ts';
-import { getFeatureTypeName, getSurfaceFeatureSource } from '../../map/featureLayer.ts';
+import { getFeatureTypeNameByCode, getSurfaceFeatureSource } from '../../map/featureLayer.ts';
 import { fitExtent } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 
@@ -128,10 +127,9 @@ function InViewGrid({ features, attributeFilter, columns, onPick }: InViewGridPr
   );
 }
 
-/** Live index of the viewport: entrances and surface features currently loaded. */
+/** Live index of the viewport: entrances and features currently loaded. */
 export default function FeatureListPanel() {
   const { t } = useTranslation();
-  const { data: featureTypes } = useFeatureTypes();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
 
   // The bbox loaders clear+refill the sources on moveend; a debounced nonce
@@ -163,7 +161,7 @@ export default function FeatureListPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce mirrors source content
     [nonce],
   );
-  const surfaceFeatures = useMemo(
+  const mapFeatures = useMemo(
     () =>
       getSurfaceFeatureSource()
         .getFeatures()
@@ -185,12 +183,11 @@ export default function FeatureListPanel() {
 
   const typeColumn: ColumnsType<Record<string, unknown>>[number] = {
     title: t('features.type'),
-    dataIndex: 'featureTypeId',
-    key: 'featureTypeId',
+    dataIndex: 'typeCode',
+    key: 'typeCode',
     width: 110,
     ellipsis: true,
-    render: (value: unknown) =>
-      getFeatureTypeName(value) ?? featureTypes?.find((x) => Number(x.id) === Number(value))?.name ?? '',
+    render: (value: unknown) => getFeatureTypeNameByCode(value) ?? '',
   };
 
   return (
@@ -224,12 +221,12 @@ export default function FeatureListPanel() {
         />
       )}
       <Typography.Text strong style={{ display: 'block', marginTop: 12 }}>
-        {t('map.surfaceFeatures')} ({surfaceFeatures.length})
+        {t('map.features')} ({mapFeatures.length})
       </Typography.Text>
-      {surfaceFeatures.length > 0 && (
+      {mapFeatures.length > 0 && (
         <InViewGrid
-          features={surfaceFeatures}
-          attributeFilter={['name', 'featureTypeId']}
+          features={mapFeatures}
+          attributeFilter={['name', 'typeCode']}
           columns={[nameColumn(t('caves.name')), typeColumn]}
           onPick={(feature) => {
             const id = feature.get('id') as string | undefined;
@@ -243,7 +240,7 @@ export default function FeatureListPanel() {
           }}
         />
       )}
-      {entrances.length === 0 && surfaceFeatures.length === 0 && !clustered && (
+      {entrances.length === 0 && mapFeatures.length === 0 && !clustered && (
         <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
           {t('map.nothingInView')}
         </Typography.Paragraph>

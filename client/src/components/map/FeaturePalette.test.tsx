@@ -13,7 +13,9 @@ afterEach(() => {
   useUiPrefsStore.setState({ pinnedTypeIds: [] });
 });
 
-function makeType(over: Partial<FeatureType> & Pick<FeatureType, 'id' | 'name' | 'geometryKind'>): FeatureType {
+function makeType(
+  over: Partial<FeatureType> & Pick<FeatureType, 'id' | 'name' | 'acceptedGeometryClasses'>,
+): FeatureType {
   return {
     code: `code-${over.id}`,
     description: null,
@@ -26,9 +28,9 @@ function makeType(over: Partial<FeatureType> & Pick<FeatureType, 'id' | 'name' |
 }
 
 const types: FeatureType[] = [
-  makeType({ id: 1, name: 'Sinkhole', geometryKind: 'point', symbolFile: 'sinkhole.png' }),
-  makeType({ id: 2, name: 'Fault', geometryKind: 'line', symbolFile: 'fracture_line.png' }),
-  makeType({ id: 3, name: 'Cave zone', geometryKind: 'polygon' }),
+  makeType({ id: 1, name: 'Sinkhole', acceptedGeometryClasses: ['point'], symbolFile: 'sinkhole.png' }),
+  makeType({ id: 2, name: 'Fault', acceptedGeometryClasses: ['lineString'], symbolFile: 'fracture_line.png' }),
+  makeType({ id: 3, name: 'Cave zone', acceptedGeometryClasses: ['polygon'] }),
 ];
 
 describe('FeaturePalette', () => {

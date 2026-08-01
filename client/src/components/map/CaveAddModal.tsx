@@ -4,10 +4,10 @@ import { App, AutoComplete, Checkbox, Flex, Form, Input, Select, Typography } fr
 import { useTranslation } from 'react-i18next';
 import {
   createEntranceFor,
-  useCaveSearch,
   useCaveTypes,
   useCreateCave,
   useEntranceTypes,
+  useSearch,
   type CaveWrite,
 } from '../../api/hooks.ts';
 import { formatLonLat } from '../../geo/coords.ts';
@@ -55,7 +55,7 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
   // "New entrance" flow: pick the cave first, then edit the entrance itself.
   const [caveQuery, setCaveQuery] = useState('');
   const debouncedQuery = useDebouncedValue(caveQuery);
-  const { data: caveResults } = useCaveSearch(debouncedQuery);
+  const { data: searchResults } = useSearch(debouncedQuery);
   const [pickedCaveId, setPickedCaveId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -82,6 +82,8 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
         locationProtected: values.locationProtected ?? false,
         isShowCave: false,
         explorationStatus: 'unknown',
+        properties: null,
+        parentId: null,
         teamId: null,
         otherToponyms: null,
         identificationCode: null,
@@ -204,10 +206,13 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
           style={{ width: '100%' }}
           value={caveQuery}
           onSearch={setCaveQuery}
-          options={(caveResults?.caves ?? []).map((cave) => ({
-            value: cave.id,
-            label: `${cave.name}${cave.region ? ` — ${cave.region}` : ''}`,
-          }))}
+          options={(searchResults?.features ?? [])
+            // Cross-kind search: only caves can receive a new entrance.
+            .filter((feature) => feature.kind === 'cave')
+            .map((feature) => ({
+              value: feature.id,
+              label: feature.name ?? t('features.unnamed'),
+            }))}
           onSelect={(caveId: string) => setPickedCaveId(caveId)}
         >
           <Input.Search placeholder={t('caves.searchPlaceholder')} />

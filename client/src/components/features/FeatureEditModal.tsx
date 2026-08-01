@@ -3,16 +3,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { Checkbox, Divider, Form, Input, InputNumber, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
-  useCave,
-  useCaveSearch,
   useFeatureTypes,
-  type SurfaceFeatureDetail,
+  useFeatures,
+  type FeatureDetail,
+  type FeatureType,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import DialogHost from '../DialogHost.tsx';
 import { parsePropertiesSchema } from './propertiesSchema.ts';
 
-type Visibility = SurfaceFeatureDetail['visibility'];
+type Visibility = FeatureDetail['visibility'];
+type GeometryClass = FeatureType['acceptedGeometryClasses'][number];
 type DrawShape = 'Point' | 'LineString' | 'Polygon';
 
 export interface FeatureAttributeValues {
@@ -20,16 +21,26 @@ export interface FeatureAttributeValues {
   featureTypeId: number;
   description: string | null;
   visibility: Visibility;
-  caveId: string | null;
+  locationProtected: boolean;
   properties: Record<string, unknown>;
+  /** Chosen primary parent — only populated when the parent picker is shown. */
+  primaryParentId: string | null;
 }
 
 interface FeatureEditModalProps {
   open: boolean;
   title: string;
-  /** Constrains the feature-type options to kinds compatible with the geometry. */
-  geometryType: DrawShape;
+  /**
+   * Constrains the feature-type options to types accepting the drawn geometry
+   * class; null (geometry withheld/absent) leaves all types selectable.
+   */
+  geometryType: DrawShape | null;
   initial: Partial<FeatureAttributeValues>;
+  /**
+   * Shows the primary-parent picker (create flow). Editing hides it — parent
+   * edges of an existing feature are managed on its detail page instead.
+   */
+  withParent?: boolean;
   busy?: boolean;
   onCancel: () => void;
   onSubmit: (values: FeatureAttributeValues) => void;
@@ -40,18 +51,21 @@ interface FormValues {
   featureTypeId: number;
   description?: string;
   visibility: Visibility;
-  caveId?: string;
+  locationProtected?: boolean;
+  primaryParentId?: string;
   properties?: Record<string, unknown>;
 }
 
-const compatibleKinds: Record<DrawShape, string[]> = {
-  Point: ['point', 'any'],
-  LineString: ['line', 'any'],
-  Polygon: ['polygon', 'any'],
+// A single drawn shape also fits types that accept the corresponding multi-class:
+// the server wraps as needed, so both count as compatible here.
+const compatibleClasses: Record<DrawShape, GeometryClass[]> = {
+  Point: ['point', 'multiPoint'],
+  LineString: ['lineString', 'multiLineString'],
+  Polygon: ['polygon', 'multiPolygon'],
 };
 
 /**
- * Attribute form for a surface feature. Deliberately API-agnostic: the caller
+ * Attribute form for a generic feature. Deliberately API-agnostic: the caller
  * decides whether the values become a POST (freshly drawn feature) or a PUT
  * (editing an existing one). Extra fields render from the feature type's
  * optional properties schema; unknown existing property keys are preserved.
@@ -61,6 +75,7 @@ export default function FeatureEditModal({
   title,
   geometryType,
   initial,
+  withParent,
   busy,
   onCancel,
   onSubmit,
@@ -69,26 +84,32 @@ export default function FeatureEditModal({
   const [form] = Form.useForm<FormValues>();
   const { data: featureTypes } = useFeatureTypes();
 
-  // Cave link: remote-search select. The currently linked cave may not be in
-  // the search results, so its label is fetched separately.
-  const [caveQuery, setCaveQuery] = useState('');
-  const debouncedCaveQuery = useDebouncedValue(caveQuery);
-  const { data: caveResults, isFetching: searchingCaves } = useCaveSearch(debouncedCaveQuery);
-  const { data: linkedCave } = useCave(initial.caveId ?? undefined);
+  // Parent picker: remote-search select over the generic feature list.
+  const [parentQuery, setParentQuery] = useState('');
+  const debouncedParentQuery = useDebouncedValue(parentQuery);
+  const { data: parentResults, isFetching: searchingParents } = useFeatures(
+    { search: debouncedParentQuery || undefined, pageSize: 20 },
+    open && !!withParent,
+  );
 
   const typeOptions = useMemo(
     () =>
       (featureTypes ?? [])
-        .filter((ft) => compatibleKinds[geometryType].includes(ft.geometryKind))
+        .filter(
+          (ft) =>
+            geometryType === null ||
+            ft.acceptedGeometryClasses.some((c) => compatibleClasses[geometryType].includes(c)),
+        )
         .map((ft) => ({ value: Number(ft.id), label: ft.name })),
     [featureTypes, geometryType],
   );
 
   const selectedTypeId = Form.useWatch('featureTypeId', form);
-  const schemaFields = useMemo(() => {
-    const type = featureTypes?.find((ft) => Number(ft.id) === selectedTypeId);
-    return parsePropertiesSchema(type?.propertiesSchema);
-  }, [featureTypes, selectedTypeId]);
+  const selectedType = featureTypes?.find((ft) => Number(ft.id) === selectedTypeId);
+  const schemaFields = useMemo(
+    () => parsePropertiesSchema(selectedType?.propertiesSchema),
+    [selectedType],
+  );
 
   useEffect(() => {
     if (open) {
@@ -98,24 +119,23 @@ export default function FeatureEditModal({
         featureTypeId: initial.featureTypeId,
         description: initial.description ?? undefined,
         visibility: initial.visibility ?? 'private',
-        caveId: initial.caveId ?? undefined,
+        locationProtected: initial.locationProtected ?? false,
+        primaryParentId: initial.primaryParentId ?? undefined,
         properties: initial.properties,
       });
-      setCaveQuery('');
+      setParentQuery('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reinitialize only when the modal opens
   }, [open]);
 
-  const caveOptions = useMemo(() => {
-    const options = (caveResults?.caves ?? []).map((cave) => ({
-      value: cave.id,
-      label: `${cave.name}${cave.region ? ` — ${cave.region}` : ''}`,
-    }));
-    if (linkedCave && !options.some((o) => o.value === linkedCave.id)) {
-      options.unshift({ value: linkedCave.id, label: linkedCave.name });
-    }
-    return options;
-  }, [caveResults, linkedCave]);
+  const parentOptions = useMemo(
+    () =>
+      (parentResults?.items ?? []).map((f) => ({
+        value: f.id,
+        label: f.name ?? t('features.unnamed'),
+      })),
+    [parentResults, t],
+  );
 
   const onOk = async () => {
     const values = await form.validateFields();
@@ -137,7 +157,8 @@ export default function FeatureEditModal({
       featureTypeId: values.featureTypeId,
       description: values.description?.trim() ? values.description.trim() : null,
       visibility: values.visibility,
-      caveId: values.caveId ?? null,
+      locationProtected: values.locationProtected ?? false,
+      primaryParentId: values.primaryParentId ?? null,
       properties,
     });
   };
@@ -167,18 +188,33 @@ export default function FeatureEditModal({
             }))}
           />
         </Form.Item>
-        <Form.Item name="caveId" label={t('features.linkedCave')}>
-          <Select
-            allowClear
-            showSearch
-            filterOption={false}
-            loading={searchingCaves}
-            onSearch={setCaveQuery}
-            placeholder={t('features.linkedCavePlaceholder')}
-            options={caveOptions}
-            notFoundContent={null}
-          />
+        <Form.Item
+          name="locationProtected"
+          valuePropName="checked"
+          // The label rides the checkbox itself; an empty Form.Item label would
+          // reserve a blank row above it.
+          style={{ marginBottom: 12 }}
+        >
+          <Checkbox>{t('features.locationProtected')}</Checkbox>
         </Form.Item>
+        {withParent && (
+          <Form.Item
+            name="primaryParentId"
+            label={t('features.parent')}
+            rules={selectedType?.requiresParent ? [{ required: true }] : undefined}
+          >
+            <Select
+              allowClear
+              showSearch
+              filterOption={false}
+              loading={searchingParents}
+              onSearch={setParentQuery}
+              placeholder={t('features.parentSearchPlaceholder')}
+              options={parentOptions}
+              notFoundContent={null}
+            />
+          </Form.Item>
+        )}
         <Form.Item name="description" label={t('features.description')}>
           <Input.TextArea rows={3} />
         </Form.Item>

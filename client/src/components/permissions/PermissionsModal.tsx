@@ -9,6 +9,7 @@ import {
   useTeams,
   useUserSearch,
   type AclEntry,
+  type EntityType,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 
@@ -23,7 +24,8 @@ interface DraftEntry {
 }
 
 interface PermissionsModalProps {
-  entityType: string; // camelCase discriminator, e.g. "cave"
+  /** Grantable object class; anything in the feature world is granted as 'feature'. */
+  entityType: EntityType;
   entityId: string;
   open: boolean;
   onClose: () => void;

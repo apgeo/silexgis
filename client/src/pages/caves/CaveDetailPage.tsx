@@ -1,11 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DeleteOutlined, EditOutlined, EnvironmentOutlined, LockOutlined, PlusOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Card, Descriptions, Flex, Popconfirm, Spin, Table, Tag, Typography } from 'antd';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  EnvironmentOutlined,
+  LockOutlined,
+  PlusOutlined,
+  ShareAltOutlined,
+} from '@ant-design/icons';
+import {
+  Alert,
+  App,
+  Breadcrumb,
+  Button,
+  Card,
+  Descriptions,
+  Flex,
+  Popconfirm,
+  Spin,
+  Table,
+  Tag,
+  Typography,
+} from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   useCave,
+  useCaveSummary,
   useCaveTypes,
   useDeleteCave,
   useDeleteEntrance,
@@ -24,6 +45,7 @@ import AttachmentSection from '../../components/attachments/AttachmentSection.ts
 import HistoryPanel, { type HistoryRestore } from '../../components/history/HistoryPanel.tsx';
 import { applyRestore } from '../../components/history/historyModel.ts';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
+import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
 import CenterlineSection from './CenterlineSection.tsx';
 import EntranceEditorModal from '../../components/caves/EntranceEditorModal.tsx';
@@ -36,6 +58,7 @@ export default function CaveDetailPage() {
   const { id } = useParams<{ id: string }>();
 
   const { data: cave, isPending } = useCave(id);
+  const { data: summary } = useCaveSummary(id);
   const { data: entrances } = useEntrances(id);
   const { data: caveTypes } = useCaveTypes();
   const { data: rockTypes } = useRockTypes();
@@ -45,11 +68,18 @@ export default function CaveDetailPage() {
   const updateCave = useUpdateCave(id ?? '');
   const updateEntrance = useUpdateEntrance(id ?? '');
   const { data: me } = useMe();
-  const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
+  // Per-object capabilities from the summary once loaded; the coarse role check only
+  // bridges the first render (the server enforces regardless).
+  const roleFallback = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
+  const canEdit = summary?.permissions.canWrite ?? roleFallback;
+  const canDelete = summary?.permissions.canDelete ?? roleFallback;
+  const canShare = summary?.permissions.canShare ?? roleFallback;
+  const canManagePermissions = summary?.permissions.canManagePermissions ?? roleFallback;
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingEntrance, setEditingEntrance] = useState<Entrance | null>(null);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   if (isPending || !cave) {
     return (
@@ -70,6 +100,15 @@ export default function CaveDetailPage() {
       </Descriptions.Item>
     );
 
+  // The write DTO addresses containment by primary-parent id, which the read DTO carries
+  // as the parents breadcrumb — map it back so an update/restore keeps the cave where it is.
+  const caveAsWrite = (): CaveWrite => ({
+    ...(cave as unknown as CaveWrite),
+    parentId: cave.parents.find((p) => p.isPrimary)?.id ?? null,
+  });
+
+  const parentCrumbs = [...cave.parents].sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
+
   const onDeleteCave = async () => {
     try {
       await deleteCave.mutateAsync(cave.id);
@@ -82,26 +121,71 @@ export default function CaveDetailPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 1100 }}>
+      {parentCrumbs.length > 0 && (
+        <Breadcrumb
+          style={{ marginBottom: 4 }}
+          items={[
+            ...parentCrumbs.map((parent) => ({
+              title: (
+                <Typography.Link onClick={() => navigate(`/features/${parent.id}`)}>
+                  {parent.name ?? t('features.unnamed')}
+                </Typography.Link>
+              ),
+            })),
+            { title: cave.name },
+          ]}
+        />
+      )}
+
       <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
           {cave.name}
         </Typography.Title>
-        <Flex gap={8}>
-          {canEdit && (
+        <Flex gap={8} wrap justify="end">
+          {canShare && (
+            <Button icon={<ShareAltOutlined />} onClick={() => setShareOpen(true)}>
+              {t('shares.button')}
+            </Button>
+          )}
+          {canManagePermissions && (
             <Button icon={<LockOutlined />} onClick={() => setPermissionsOpen(true)}>
               {t('permissions.button')}
             </Button>
           )}
-          <Button icon={<EditOutlined />} onClick={() => navigate(`/caves/${cave.id}/edit`)}>
-            {t('caves.edit')}
-          </Button>
-          <Popconfirm title={t('caves.deleteConfirm')} onConfirm={() => void onDeleteCave()}>
-            <Button danger icon={<DeleteOutlined />}>
-              {t('caves.delete')}
+          {canEdit && (
+            <Button icon={<EditOutlined />} onClick={() => navigate(`/caves/${cave.id}/edit`)}>
+              {t('caves.edit')}
             </Button>
-          </Popconfirm>
+          )}
+          {canDelete && (
+            <Popconfirm title={t('caves.deleteConfirm')} onConfirm={() => void onDeleteCave()}>
+              <Button danger icon={<DeleteOutlined />}>
+                {t('caves.delete')}
+              </Button>
+            </Popconfirm>
+          )}
         </Flex>
       </Flex>
+
+      {summary && (
+        <Flex gap={16} wrap style={{ marginBottom: 12 }}>
+          <Typography.Text type="secondary">
+            {t('caves.summary.entrances', { count: summary.entranceCount })}
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            {t('caves.summary.centerlines', { count: summary.centerlineCount })}
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            {t('caves.summary.surveyModels', { count: summary.surveyModelCount })}
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            {t('caves.summary.attachments', { count: summary.attachmentCount })}
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            {t('caves.summary.tripLogs', { count: summary.tripLogCount })}
+          </Typography.Text>
+        </Flex>
+      )}
 
       {cave.approximateLocation && (
         <Alert type="warning" showIcon message={t('map.approximate')} style={{ marginBottom: 12 }} />
@@ -137,16 +221,18 @@ export default function CaveDetailPage() {
       <Card
         title={t('caves.entrances')}
         extra={
-          <Button
-            size="small"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              setEditingEntrance(null);
-              setEditorOpen(true);
-            }}
-          >
-            {t('entrances.add')}
-          </Button>
+          canEdit && (
+            <Button
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditingEntrance(null);
+                setEditorOpen(true);
+              }}
+            >
+              {t('entrances.add')}
+            </Button>
+          )
         }
       >
         <Table<Entrance>
@@ -180,36 +266,40 @@ export default function CaveDetailPage() {
               width: 130,
               render: (value: string) => t(`entrances.qualityValues.${value}`),
             },
-            {
-              key: 'actions',
-              width: 110,
-              render: (_, e) => (
-                <Flex gap={4}>
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<EditOutlined />}
-                    onClick={() => {
-                      setEditingEntrance(e);
-                      setEditorOpen(true);
-                    }}
-                  />
-                  <Popconfirm
-                    title={t('entrances.deleteConfirm')}
-                    onConfirm={() => void deleteEntrance.mutateAsync(e.id)}
-                  >
-                    <Button size="small" type="text" danger icon={<DeleteOutlined />} />
-                  </Popconfirm>
-                </Flex>
-              ),
-            },
+            ...(canEdit
+              ? [
+                  {
+                    key: 'actions',
+                    width: 110,
+                    render: (_: unknown, e: Entrance) => (
+                      <Flex gap={4}>
+                        <Button
+                          size="small"
+                          type="text"
+                          icon={<EditOutlined />}
+                          onClick={() => {
+                            setEditingEntrance(e);
+                            setEditorOpen(true);
+                          }}
+                        />
+                        <Popconfirm
+                          title={t('entrances.deleteConfirm')}
+                          onConfirm={() => void deleteEntrance.mutateAsync(e.id)}
+                        >
+                          <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                        </Popconfirm>
+                      </Flex>
+                    ),
+                  },
+                ]
+              : []),
           ]}
         />
       </Card>
 
       {id && (
         <div style={{ marginTop: 12 }}>
-          <TagChips entityType="cave" entityId={id} canEdit={canEdit} />
+          <TagChips entityType="feature" entityId={id} canEdit={canEdit} />
         </div>
       )}
 
@@ -217,25 +307,33 @@ export default function CaveDetailPage() {
 
       {id && <CenterlineSection caveId={id} canEdit={canEdit} />}
 
-      {id && <AttachmentSection entityType="cave" entityId={id} canEdit={canEdit} />}
+      {id && (
+        <AttachmentSection
+          entityType="feature"
+          entityId={id}
+          canEdit={canEdit}
+          defaultPhotoRole="photoEntrance"
+        />
+      )}
 
       {id && (
         <HistoryPanel
-          entityType="cave"
+          entityType="feature"
           entityId={id}
           restore={
             canEdit
               ? ([
                   {
-                    entityType: 'Cave',
+                    // Cave events carry the kind-qualified feature audit identity.
+                    entityType: 'Feature:Cave',
                     onRestore: async (event, props) => {
-                      await updateCave.mutateAsync(applyRestore(cave as unknown as CaveWrite, event.changes, props));
+                      await updateCave.mutateAsync(applyRestore(caveAsWrite(), event.changes, props));
                     },
                   },
                   {
-                    // Entrance events surface in the cave timeline (audit root = cave);
+                    // Entrance events surface in the cave timeline (audit root = the cave feature);
                     // restore composes a PUT on the entrance the row belongs to.
-                    entityType: 'CaveEntrance',
+                    entityType: 'Feature:CaveEntrance',
                     onRestore: async (event, props) => {
                       const entrance = entrances?.find((e) => e.id === event.entityId);
                       if (!entrance) {
@@ -257,19 +355,21 @@ export default function CaveDetailPage() {
 
       {id && (
         <PermissionsModal
-          entityType="cave"
+          entityType="feature"
           entityId={id}
           open={permissionsOpen}
           onClose={() => setPermissionsOpen(false)}
         />
       )}
 
+      {id && <ShareLinksModal featureId={id} open={shareOpen} onClose={() => setShareOpen(false)} />}
+
       {id && (
         <EntranceEditorModal
           caveId={id}
           entrance={editingEntrance}
           defaultCenter={
-            cave.mainGeom ? [cave.mainGeom.coordinates[0], cave.mainGeom.coordinates[1]] : [25.3, 45.7]
+            cave.geom ? [cave.geom.coordinates[0], cave.geom.coordinates[1]] : [25.3, 45.7]
           }
           open={editorOpen}
           onClose={() => setEditorOpen(false)}

@@ -5,12 +5,14 @@ import {
   DatabaseOutlined,
   EnvironmentOutlined,
   GoldOutlined,
+  NodeIndexOutlined,
   PlusOutlined,
   TableOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
 import {
   Alert,
+  App,
   Button,
   Card,
   Col,
@@ -31,25 +33,21 @@ import {
   useMapViews,
   type DashboardActivityItem,
 } from '../../api/hooks.ts';
+import { featureDetailPath } from '../../components/features/featureNavigation.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
-/** Detail route for each activity kind, so a feed row links where the record lives. */
-const activityRoute: Record<DashboardActivityItem['kind'], (id: string) => string> = {
-  cave: (id) => `/caves/${id}`,
-  // Surface features have no detail page — the map is where they are inspected.
-  surfaceFeature: () => '/features',
-  tripLog: (id) => `/trip-logs/${id}`,
-};
-
 const activityIcon: Record<DashboardActivityItem['kind'], ReactNode> = {
+  feature: <GoldOutlined />,
   cave: <TableOutlined />,
-  surfaceFeature: <GoldOutlined />,
+  caveEntrance: <EnvironmentOutlined />,
+  centerline: <NodeIndexOutlined />,
   tripLog: <CarOutlined />,
 };
 
 export default function DashboardPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { message } = App.useApp();
   const { data: summary, isLoading, isError, refetch } = useDashboardSummary();
   const { data: views } = useMapViews();
   const canCreate = useCanCreateContent();
@@ -58,9 +56,21 @@ export default function DashboardPage() {
 
   const formatWhen = (iso: string) => new Date(iso).toLocaleString(i18n.resolvedLanguage);
 
+  // Feed rows link where the record lives. Trip logs have their own pages; everything else
+  // is a feature and resolves by kind (entrances/centerlines land on their parent cave).
+  const openActivity = (item: DashboardActivityItem) => {
+    if (item.kind === 'tripLog') {
+      navigate(`/trip-logs/${item.id}`);
+      return;
+    }
+    featureDetailPath(item.kind === 'feature' ? 'generic' : item.kind, item.id)
+      .then((path) => navigate(path))
+      .catch(() => message.error(t('search.openFailed')));
+  };
+
   const tiles = [
     { key: 'caves', icon: <TableOutlined />, value: summary?.counts.caves, to: '/caves' },
-    { key: 'features', icon: <GoldOutlined />, value: summary?.counts.surfaceFeatures, to: '/features' },
+    { key: 'features', icon: <GoldOutlined />, value: summary?.counts.features, to: '/features' },
     { key: 'trips', icon: <CarOutlined />, value: summary?.counts.tripLogs, to: '/trip-logs' },
     { key: 'geodata', icon: <DatabaseOutlined />, value: summary?.counts.geofiles, to: '/geodata' },
   ];
@@ -128,7 +138,7 @@ export default function DashboardPage() {
                 renderItem={(item) => (
                   <List.Item
                     style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(activityRoute[item.kind](item.id))}
+                    onClick={() => openActivity(item)}
                   >
                     <List.Item.Meta
                       avatar={activityIcon[item.kind]}

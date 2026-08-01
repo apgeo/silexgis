@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { DeleteOutlined, UploadOutlined } from '@ant-design/icons';
-import { App, Button, Card, Popconfirm, Table, Tag, Upload } from 'antd';
+import { DeleteOutlined, StarFilled, StarOutlined, UploadOutlined } from '@ant-design/icons';
+import { App, Button, Card, Popconfirm, Table, Tag, Tooltip, Upload } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   useCenterlines,
   useDeleteCenterline,
+  useUpdateCenterline,
   useUploadCenterline,
   type CenterlineInfo,
 } from '../../api/hooks.ts';
@@ -13,12 +14,15 @@ import {
  * Cave centerlines: uploaded GeoJSON/GPX line work shown as a map overlay. The server
  * withholds centerlines of location-protected caves from callers without the
  * exact-location permission, so an empty list here needs no special casing.
+ * One centerline is the cave's default shape — the geometry the map and exports use;
+ * promoting another one demotes the current default server-side.
  */
 export default function CenterlineSection({ caveId, canEdit }: { caveId: string; canEdit: boolean }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { data: centerlines } = useCenterlines(caveId);
   const upload = useUploadCenterline();
+  const update = useUpdateCenterline();
   const remove = useDeleteCenterline();
 
   const onUpload = async (file: File) => {
@@ -27,6 +31,24 @@ export default function CenterlineSection({ caveId, canEdit }: { caveId: string;
       message.success(t('centerlines.uploaded'));
     } catch {
       message.error(t('centerlines.uploadFailed'));
+    }
+  };
+
+  const onPromote = async (centerline: CenterlineInfo) => {
+    try {
+      await update.mutateAsync({
+        id: centerline.id,
+        caveId,
+        body: {
+          name: centerline.name,
+          description: centerline.description,
+          surveyModelId: centerline.surveyModelId,
+          isDefault: true,
+        },
+      });
+      message.success(t('centerlines.promoted'));
+    } catch {
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -60,6 +82,28 @@ export default function CenterlineSection({ caveId, canEdit }: { caveId: string;
         locale={{ emptyText: t('centerlines.empty') }}
         columns={[
           { title: t('caves.name'), dataIndex: 'name' },
+          {
+            title: t('centerlines.default'),
+            dataIndex: 'isDefault',
+            width: 100,
+            render: (isDefault: boolean, centerline) =>
+              isDefault ? (
+                <Tag color="gold" icon={<StarFilled />}>
+                  {t('centerlines.default')}
+                </Tag>
+              ) : canEdit ? (
+                <Tooltip title={t('centerlines.makeDefault')}>
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<StarOutlined />}
+                    loading={update.isPending && update.variables?.id === centerline.id}
+                    aria-label={t('centerlines.makeDefault')}
+                    onClick={() => void onPromote(centerline)}
+                  />
+                </Tooltip>
+              ) : null,
+          },
           {
             title: t('centerlines.length'),
             dataIndex: 'lengthM',

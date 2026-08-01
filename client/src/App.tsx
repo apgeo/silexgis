@@ -22,6 +22,8 @@ const CaveListPage = lazy(() => import('./pages/caves/CaveListPage.tsx'));
 const CaveFormPage = lazy(() => import('./pages/caves/CaveFormPage.tsx'));
 const CaveDetailPage = lazy(() => import('./pages/caves/CaveDetailPage.tsx'));
 const FeatureListPage = lazy(() => import('./pages/features/FeatureListPage.tsx'));
+const FeatureDetailPage = lazy(() => import('./pages/features/FeatureDetailPage.tsx'));
+const SharedFeaturePage = lazy(() => import('./pages/SharedFeaturePage.tsx'));
 const GeodataPage = lazy(() => import('./pages/geodata/GeodataPage.tsx'));
 const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
@@ -55,6 +57,7 @@ const router = createBrowserRouter([
   // The opt-out link in a notification; anonymous, because it is opened from a mail client.
   { path: '/unsubscribe', element: <UnsubscribePage /> },
   { path: '/shared/view/:token', element: <Loadable><SharedViewPage /></Loadable> },
+  { path: '/shared/features/:token', element: <Loadable><SharedFeaturePage /></Loadable> },
   {
     element: <RequireAuth />,
     children: [
@@ -73,6 +76,7 @@ const router = createBrowserRouter([
           { path: '/caves/:id', element: <Loadable><CaveDetailPage /></Loadable> },
           { path: '/caves/:id/edit', element: <Loadable><CaveFormPage /></Loadable> },
           { path: '/features', element: <Loadable><FeatureListPage /></Loadable> },
+          { path: '/features/:id', element: <Loadable><FeatureDetailPage /></Loadable> },
           { path: '/geodata', element: <Loadable><GeodataPage /></Loadable> },
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },

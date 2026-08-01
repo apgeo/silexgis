@@ -6,7 +6,7 @@
     "map": "Map",
     "dashboard": "Dashboard",
     "caves": "Caves",
-    "features": "Surface features",
+    "features": "Features",
     "geodata": "Geodata",
     "trips": "Trip logs",
     "audit": "Audit",
@@ -20,7 +20,7 @@
     "openOnStart": "Open on start",
     "counts": {
       "caves": "Caves",
-      "features": "Surface features",
+      "features": "Features",
       "trips": "Trip logs",
       "geodata": "Geodata files"
     },
@@ -34,8 +34,10 @@
     "untitled": "Untitled",
     "kind": {
       "cave": "Cave",
-      "surfaceFeature": "Surface feature",
-      "tripLog": "Trip log"
+      "tripLog": "Trip log",
+      "feature": "Feature",
+      "caveEntrance": "Cave entrance",
+      "centerline": "Centerline"
     }
   },
   "auth": {
@@ -100,7 +102,7 @@
     "activeOverlays": "Map layers",
     "changeBaseLayer": "Change the base map",
     "entrances": "Cave entrances",
-    "searchPlaceholder": "Search caves or places…",
+    "searchPlaceholder": "Search features, trips or places…",
     "caves": "Caves",
     "places": "Places",
     "zoomTo": "Zoom to",
@@ -143,7 +145,9 @@
     "centerlineSkeletonOn": "Showing passage outlines; wall shots appear when you zoom in.",
     "centerlineDetailZoom": "Detail from zoom",
     "centerlineMaxPaths": "Line budget",
-    "centerlineLimitsHint": "Leave empty to follow this installation's defaults. Higher detail costs more to draw."
+    "centerlineLimitsHint": "Leave empty to follow this installation's defaults. Higher detail costs more to draw.",
+    "features": "Features",
+    "locationWithheld": "Location withheld — exact geometry is protected."
   },
   "dialog": {
     "dockToSide": "Dock to the side of the map",
@@ -219,6 +223,13 @@
       "ongoing": "Ongoing",
       "finished": "Finished",
       "abandoned": "Abandoned"
+    },
+    "summary": {
+      "entrances": "{{count}} entrances",
+      "centerlines": "{{count}} centerlines",
+      "surveyModels": "{{count}} 3D models",
+      "attachments": "{{count}} attachments",
+      "tripLogs": "{{count}} trip logs"
     }
   },
   "entrances": {
@@ -235,10 +246,11 @@
       "gps": "GPS",
       "map": "From map",
       "estimated": "Estimated"
-    }
+    },
+    "surveyedAt": "Surveyed"
   },
   "features": {
-    "title": "Surface features",
+    "title": "Features",
     "name": "Name",
     "type": "Type",
     "geometry": "Geometry",
@@ -249,19 +261,65 @@
     "linkedCave": "Linked cave",
     "linkedCavePlaceholder": "Search caves…",
     "typedProperties": "Properties",
-    "newFeature": "New surface feature",
-    "editFeature": "Edit surface feature",
+    "newFeature": "New feature",
+    "editFeature": "Edit feature",
     "edit": "Edit",
     "delete": "Delete",
-    "deleteConfirm": "Delete this surface feature?",
+    "deleteConfirm": "Delete this feature? Contained features are deleted with it.",
     "showOnMap": "Show on map",
     "searchPlaceholder": "Search by name…",
     "allTypes": "All types",
     "geometryTypes": {
       "Point": "Point",
       "LineString": "Line",
-      "Polygon": "Polygon"
-    }
+      "Polygon": "Polygon",
+      "MultiPoint": "Multi-point",
+      "MultiLineString": "Multi-line",
+      "MultiPolygon": "Multi-polygon"
+    },
+    "kind": "Kind",
+    "allKinds": "All kinds",
+    "kinds": {
+      "generic": "Feature",
+      "cave": "Cave",
+      "caveEntrance": "Entrance",
+      "centerline": "Centerline"
+    },
+    "category": "Category",
+    "allCategories": "All categories",
+    "categories": {
+      "surface": "Surface",
+      "underground": "Underground",
+      "area": "Area",
+      "structure": "Structure"
+    },
+    "locationWithheld": "Location withheld",
+    "locationProtected": "Protected location",
+    "open": "Open",
+    "openTypedPage": "Open full page",
+    "summary": "Summary",
+    "entranceCount": "Entrances",
+    "isDefault": "Default",
+    "hierarchy": "Hierarchy",
+    "parent": "Parent",
+    "parents": "Parents",
+    "noParents": "No parents",
+    "editParents": "Edit parents",
+    "addParent": "Add parent…",
+    "parentSearchPlaceholder": "Search features…",
+    "primary": "Primary",
+    "children": "Contained features",
+    "noChildren": "No contained features",
+    "links": "Links",
+    "editLinks": "Edit links",
+    "addLink": "Add",
+    "linkKind": "Link kind",
+    "linkTarget": "Linked feature",
+    "linkNote": "Note",
+    "noLinks": "No links",
+    "incoming": "Incoming link",
+    "outgoing": "Outgoing link",
+    "inaccessible": "Not accessible"
   },
   "attachments": {
     "title": "Photos & documents",
@@ -597,7 +655,11 @@
       "extracted": "Extracted"
     },
     "deleteConfirm": "Delete this centerline?",
-    "empty": "No centerlines yet"
+    "empty": "No centerlines yet",
+    "default": "Default",
+    "makeDefault": "Make default shape",
+    "promoted": "Centerline set as the cave's default shape",
+    "paths": "Paths"
   },
   "settings": {
     "title": "Settings",
@@ -855,5 +917,45 @@
     "changeAnyTime": "You can turn it back on, or change any of your other notification settings, at any time.",
     "failed": "That link is no longer valid. You can change your notification settings after signing in.",
     "manage": "Manage notification settings"
+  },
+  "featureKinds": {
+    "generic": "Feature",
+    "cave": "Cave",
+    "caveEntrance": "Cave entrance",
+    "centerline": "Centerline"
+  },
+  "search": {
+    "features": "Features",
+    "trips": "Trip logs",
+    "openFailed": "Could not open this record."
+  },
+  "shares": {
+    "title": "Share links",
+    "button": "Share",
+    "create": "Create link",
+    "mode": "Access",
+    "modes": {
+      "public": "Public",
+      "requiresLogin": "Requires sign-in"
+    },
+    "includeSubtree": "Include contained records",
+    "linkReady": "Share link created",
+    "tokenOnce": "Copy it now — this link is shown only once.",
+    "linkCopied": "Share link copied.",
+    "copy": "Copy",
+    "createdAt": "Created",
+    "status": "Status",
+    "statusActive": "Active",
+    "statusRevoked": "Revoked",
+    "revoke": "Revoke",
+    "revokeConfirm": "Revoke this share link?",
+    "revoked": "Share link revoked.",
+    "empty": "No share links yet",
+    "notAllowed": "You cannot share this record.",
+    "readOnly": "Shared read-only view",
+    "childrenTitle": "Included records",
+    "sharedNotFound": "This shared link does not exist or was revoked.",
+    "loginRequired": "Sign in to view this shared record.",
+    "signIn": "Sign in"
   }
 }
