@@ -6,6 +6,14 @@ RUN dotnet publish src/SilexGis.Api -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
+# The PostgreSQL driver probes for Kerberos support while opening a connection. The library
+# is absent from this base image, and the loader reports that miss on stderr as "Error:
+# libgssapi_krb5.so.2: cannot open shared object file" — once per start, before any log line
+# the application controls. Password authentication is unaffected, but the wording reads as a
+# failed startup to anyone following the container logs, so carry the library and stay quiet.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
 # Mount points for the uploads and data-protection-key volumes. Both must exist in the
 # image and be owned by the non-root app user: Docker seeds a fresh named volume from the
