@@ -10,8 +10,8 @@ namespace SilexGis.Domain.Profiles;
 /// <list type="bullet">
 /// <item>there is no <c>Public</c> level, so no setting value can ever expose personal data to an
 /// unauthenticated caller — the illegal state is unrepresentable rather than validator-rejected;</item>
-/// <item><c>Team</c> means a different thing here. For content it means "members of the object's
-/// own team"; for a profile it means "anyone who shares at least one team with the subject".</item>
+/// <item><c>CavingGroup</c> means a different thing here. For content it means "members of the object's
+/// own caving group"; for a profile it means "anyone who shares at least one caving group with the subject".</item>
 /// </list>
 /// </remarks>
 public enum ProfileVisibility : short
@@ -19,8 +19,8 @@ public enum ProfileVisibility : short
     /// <summary>Only the subject.</summary>
     Private = 0,
 
-    /// <summary>The subject, plus anyone sharing a team with them.</summary>
-    Team = 1,
+    /// <summary>The subject, plus anyone sharing a caving group with them.</summary>
+    CavingGroup = 1,
 
     /// <summary>Any signed-in user. Never anonymous callers.</summary>
     Authenticated = 2,

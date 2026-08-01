@@ -55,7 +55,7 @@ public sealed record CaveDto(
     bool ApproximateLocation,
     IReadOnlyList<CaveParentDto> Parents,
     Guid OwnerUserId,
-    Guid? TeamId,
+    Guid? CavingGroupId,
     Visibility Visibility,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
@@ -146,7 +146,7 @@ public sealed record CaveWriteRequest(
     bool LocationProtected,
     JsonElement? Properties,
     Guid? ParentId,
-    Guid? TeamId,
+    Guid? CavingGroupId,
     Visibility Visibility);
 
 internal static class CaveMapping
@@ -177,7 +177,7 @@ internal static class CaveMapping
             MapGeom(f.Geom, exact, gridMeters),
             ApproximateLocation: !exact,
             parents,
-            f.OwnerUserId, f.TeamId, f.Visibility, f.CreatedAt, f.UpdatedAt);
+            f.OwnerUserId, f.CavingGroupId, f.Visibility, f.CreatedAt, f.UpdatedAt);
     }
 
     public static CaveListItemDto ToListItem(this Feature f, bool exact, double gridMeters)
@@ -201,7 +201,7 @@ internal static class CaveMapping
         f.Name = r.Name;
         f.Description = r.Description;
         f.Properties = r.Properties is { ValueKind: JsonValueKind.Object } p ? p.GetRawText() : "{}";
-        f.TeamId = r.TeamId;
+        f.CavingGroupId = r.CavingGroupId;
         f.Visibility = r.Visibility;
         c.OtherToponyms = r.OtherToponyms;
         c.IdentificationCode = r.IdentificationCode;

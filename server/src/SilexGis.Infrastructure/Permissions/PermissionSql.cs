@@ -16,7 +16,7 @@ namespace SilexGis.Infrastructure.Permissions;
 public static class PermissionSql
 {
     /// <summary>
-    /// Read-visibility fragment over the features table (columns owner_user_id/team_id/
+    /// Read-visibility fragment over the features table (columns owner_user_id/caving_group_id/
     /// visibility on <paramref name="alias"/>), including the explicit object_acl Read
     /// grants keyed by the feature FK. Grants are deliberately non-cascading — the
     /// hierarchy-cascade semantics belong to the planned ruleset permission system.
@@ -38,11 +38,11 @@ public static class PermissionSql
             (@vis_is_admin
              OR {alias}.owner_user_id = @vis_user_id
              OR {alias}.visibility >= {(short)Visibility.Authenticated}
-             OR ({alias}.team_id IS NOT NULL AND {alias}.team_id = ANY(@vis_team_ids))
+             OR ({alias}.caving_group_id IS NOT NULL AND {alias}.caving_group_id = ANY(@vis_caving_group_ids))
              OR EXISTS (SELECT 1 FROM object_acl acl
                         WHERE acl.feature_id = {alias}.id
                           AND ((acl.subject_kind = 0 AND acl.subject_id = @vis_user_id)
-                               OR (acl.subject_kind = 1 AND acl.subject_id = ANY(@vis_team_ids)))
+                               OR (acl.subject_kind = 1 AND acl.subject_id = ANY(@vis_caving_group_ids)))
                           AND (acl.permissions & {(int)ObjectPermission.Read}) <> 0))
             """;
 
@@ -64,11 +64,11 @@ public static class PermissionSql
                         WHERE root.id = ANY({alias}.ancestor_ids)
                           AND root.location_protected
                           AND NOT (root.owner_user_id = @vis_user_id
-                                   OR (root.team_id IS NOT NULL AND root.team_id = ANY(@vis_team_ids))
+                                   OR (root.caving_group_id IS NOT NULL AND root.caving_group_id = ANY(@vis_caving_group_ids))
                                    OR EXISTS (SELECT 1 FROM object_acl acl
                                               WHERE acl.feature_id = root.id
                                                 AND ((acl.subject_kind = 0 AND acl.subject_id = @vis_user_id)
-                                                     OR (acl.subject_kind = 1 AND acl.subject_id = ANY(@vis_team_ids)))
+                                                     OR (acl.subject_kind = 1 AND acl.subject_id = ANY(@vis_caving_group_ids)))
                                                 AND (acl.permissions & {(int)ObjectPermission.ViewExactLocation}) <> 0))))
         """;
 
@@ -85,7 +85,7 @@ public static class PermissionSql
         var parameters = BaseParameters(user);
 
         // Mirrors the ACL branch of the polymorphic VisibleTo overload. Subject kinds
-        // 0=user, 1=team; Read flag = 1 — schema-contract values, locked by tests.
+        // 0=user, 1=caving group; Read flag = 1 — schema-contract values, locked by tests.
         var aclSql = string.Empty;
         if (aclEntityType is not null)
         {
@@ -101,7 +101,7 @@ public static class PermissionSql
                             WHERE acl.entity_type = @vis_acl_entity_type
                               AND acl.entity_id = {prefix}id
                               AND ((acl.subject_kind = 0 AND acl.subject_id = @vis_user_id)
-                                   OR (acl.subject_kind = 1 AND acl.subject_id = ANY(@vis_team_ids)))
+                                   OR (acl.subject_kind = 1 AND acl.subject_id = ANY(@vis_caving_group_ids)))
                               AND (acl.permissions & {(int)ObjectPermission.Read}) <> 0)
                 """;
         }
@@ -110,7 +110,7 @@ public static class PermissionSql
             (@vis_is_admin
              OR {prefix}owner_user_id = @vis_user_id
              OR {prefix}visibility >= {(short)Visibility.Authenticated}
-             OR ({prefix}team_id IS NOT NULL AND {prefix}team_id = ANY(@vis_team_ids)){aclSql})
+             OR ({prefix}caving_group_id IS NOT NULL AND {prefix}caving_group_id = ANY(@vis_caving_group_ids)){aclSql})
             """;
 
         return (sql, parameters);
@@ -123,7 +123,7 @@ public static class PermissionSql
         parameters.Add("vis_is_admin", user.IsAdmin);
         // A plain Guid[] would be list-expanded by Dapper into a per-row construct
         // (observed 50x slowdown at 50k rows); send a native uuid[] parameter instead.
-        parameters.Add("vis_team_ids", new UuidArrayParameter([.. user.TeamIds]));
+        parameters.Add("vis_caving_group_ids", new UuidArrayParameter([.. user.CavingGroupIds]));
         return parameters;
     }
 

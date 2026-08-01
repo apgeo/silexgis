@@ -10,21 +10,21 @@ public class PermissionEvaluatorTests
 {
     private static readonly Guid Owner = Guid.CreateVersion7();
     private static readonly Guid Stranger = Guid.CreateVersion7();
-    private static readonly Guid TeamId = Guid.CreateVersion7();
+    private static readonly Guid CavingGroupId = Guid.CreateVersion7();
 
     private static UserContext User(
-        Guid? id = null, string? role = null, (Guid Team, TeamRole Role)? team = null) => new(
+        Guid? id = null, string? role = null, (Guid CavingGroup, CavingGroupRole Role)? cavingGroup = null) => new(
         id ?? Stranger,
         role is null ? new HashSet<string>() : new HashSet<string> { role },
-        team is null ? new Dictionary<Guid, TeamRole>() : new Dictionary<Guid, TeamRole> { [team.Value.Team] = team.Value.Role });
+        cavingGroup is null ? new Dictionary<Guid, CavingGroupRole>() : new Dictionary<Guid, CavingGroupRole> { [cavingGroup.Value.CavingGroup] = cavingGroup.Value.Role });
 
     // The evaluator works on IProtectedEntity; a cave feature is the canonical instance.
-    private static Feature Cave(Visibility visibility, Guid? teamId = null, bool locationProtected = false) => new()
+    private static Feature Cave(Visibility visibility, Guid? cavingGroupId = null, bool locationProtected = false) => new()
     {
         Kind = FeatureKind.Cave,
         Name = "x",
         OwnerUserId = Owner,
-        TeamId = teamId,
+        CavingGroupId = cavingGroupId,
         Visibility = visibility,
         LocationProtected = locationProtected,
     };
@@ -52,7 +52,7 @@ public class PermissionEvaluatorTests
     [Theory]
     [InlineData(Visibility.Public, true)]
     [InlineData(Visibility.Authenticated, true)]
-    [InlineData(Visibility.Team, false)]
+    [InlineData(Visibility.CavingGroup, false)]
     [InlineData(Visibility.Private, false)]
     public void Visibility_governs_read_for_unrelated_users(Visibility visibility, bool expected)
     {
@@ -62,10 +62,10 @@ public class PermissionEvaluatorTests
     }
 
     [Fact]
-    public void Team_member_reads_and_writes_team_objects_but_cannot_delete()
+    public void CavingGroup_member_reads_and_writes_caving_group_objects_but_cannot_delete()
     {
-        var member = User(team: (TeamId, TeamRole.Member));
-        var cave = Cave(Visibility.Team, TeamId);
+        var member = User(cavingGroup: (CavingGroupId, CavingGroupRole.Member));
+        var cave = Cave(Visibility.CavingGroup, CavingGroupId);
 
         PermissionEvaluator.Can(member, cave, ObjectPermission.Read).ShouldBeTrue();
         PermissionEvaluator.Can(member, cave, ObjectPermission.Write).ShouldBeTrue();
@@ -75,21 +75,21 @@ public class PermissionEvaluatorTests
     }
 
     [Fact]
-    public void Team_admin_gets_full_team_object_control()
+    public void CavingGroup_admin_gets_full_caving_group_object_control()
     {
-        var teamAdmin = User(team: (TeamId, TeamRole.Admin));
-        var cave = Cave(Visibility.Team, TeamId);
+        var cavingGroupAdmin = User(cavingGroup: (CavingGroupId, CavingGroupRole.Admin));
+        var cave = Cave(Visibility.CavingGroup, CavingGroupId);
 
-        PermissionEvaluator.Can(teamAdmin, cave, ObjectPermission.Delete).ShouldBeTrue();
-        PermissionEvaluator.Can(teamAdmin, cave, ObjectPermission.ManagePermissions).ShouldBeTrue();
+        PermissionEvaluator.Can(cavingGroupAdmin, cave, ObjectPermission.Delete).ShouldBeTrue();
+        PermissionEvaluator.Can(cavingGroupAdmin, cave, ObjectPermission.ManagePermissions).ShouldBeTrue();
     }
 
     [Fact]
-    public void Membership_in_another_team_grants_nothing()
+    public void Membership_in_another_caving_group_grants_nothing()
     {
-        var otherTeamMember = User(team: (Guid.CreateVersion7(), TeamRole.Owner));
-        var cave = Cave(Visibility.Team, TeamId);
+        var otherCavingGroupMember = User(cavingGroup: (Guid.CreateVersion7(), CavingGroupRole.Owner));
+        var cave = Cave(Visibility.CavingGroup, CavingGroupId);
 
-        PermissionEvaluator.Can(otherTeamMember, cave, ObjectPermission.Read).ShouldBeFalse();
+        PermissionEvaluator.Can(otherCavingGroupMember, cave, ObjectPermission.Read).ShouldBeFalse();
     }
 }

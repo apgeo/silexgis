@@ -12,7 +12,7 @@ public interface IProtectedEntity
 
     Guid OwnerUserId { get; set; }
 
-    Guid? TeamId { get; set; }
+    Guid? CavingGroupId { get; set; }
 
     Visibility Visibility { get; set; }
 }

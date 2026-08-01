@@ -209,7 +209,7 @@ public static class CenterlineEndpoints
         var name = Path.GetFileNameWithoutExtension(file.FileName);
         var feature = new Feature
         {
-            // Owner/team/visibility are copied from the cave by the write service: a centerline
+            // Owner/caving group/visibility are copied from the cave by the write service: a centerline
             // has no access control of its own.
             Name = name.Length > MaxNameLength ? name[..MaxNameLength] : name,
             Geom = geom,

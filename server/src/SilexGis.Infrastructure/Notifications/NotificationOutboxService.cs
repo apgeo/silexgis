@@ -95,7 +95,7 @@ public sealed class NotificationOutboxService(
         var values = BaseValues(user);
         values["itemCount"] = rows.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
         values["items"] = string.Join("\n", lines);
-        values["unsubscribeUrl"] = UnsubscribeLine(user.Id, NotificationCategory.TeamMembership);
+        values["unsubscribeUrl"] = UnsubscribeLine(user.Id, NotificationCategory.CavingGroupMembership);
 
         var result = await dispatcher.SendAsync(
             MessageTemplateCatalog.NotifyDigest, user.Email, user.Locale, values, ct);

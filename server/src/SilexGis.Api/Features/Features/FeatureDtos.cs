@@ -31,7 +31,7 @@ public sealed record FeatureDto(
     bool OmittedLocation,
     IReadOnlyList<FeatureBreadcrumbDto> Parents,
     Guid OwnerUserId,
-    Guid? TeamId,
+    Guid? CavingGroupId,
     Visibility Visibility,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
@@ -130,7 +130,7 @@ public sealed record FeatureCreateRequest(
     JsonElement? Properties,
     IReadOnlyList<ParentEdgeRequest>? Parents,
     bool LocationProtected,
-    Guid? TeamId,
+    Guid? CavingGroupId,
     Visibility Visibility);
 
 /// <summary>Full-update payload (generic kinds only). Containment edges are edited via the parents endpoint.</summary>
@@ -141,7 +141,7 @@ public sealed record FeatureUpdateRequest(
     string? Description,
     JsonElement? Properties,
     bool LocationProtected,
-    Guid? TeamId,
+    Guid? CavingGroupId,
     Visibility Visibility);
 
 /// <summary>Full replacement of a feature's containment edges.</summary>
@@ -226,7 +226,7 @@ internal static class FeatureMapping
             omitted,
             parents,
             f.OwnerUserId,
-            f.TeamId,
+            f.CavingGroupId,
             f.Visibility,
             f.CreatedAt,
             f.UpdatedAt);

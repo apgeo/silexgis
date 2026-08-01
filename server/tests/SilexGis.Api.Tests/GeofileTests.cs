@@ -312,7 +312,7 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable
             name = "Shared Notes",
             description = "now shared",
             style = new { stroke = "#ff0000" },
-            teamId = (Guid?)null,
+            cavingGroupId = (Guid?)null,
             visibility = "authenticated",
         });
         update.StatusCode.ShouldBe(HttpStatusCode.OK);

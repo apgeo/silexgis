@@ -201,15 +201,15 @@ public static class GeofileEndpoints
             return stale;
         }
 
-        if (request.TeamId is not null && !user.IsAdmin && !user.IsMemberOf(request.TeamId.Value))
+        if (request.CavingGroupId is not null && !user.IsAdmin && !user.IsMemberOf(request.CavingGroupId.Value))
         {
-            return ApiProblems.Forbidden("geofile.team_membership_required");
+            return ApiProblems.Forbidden("geofile.caving_group_membership_required");
         }
 
         geofile.Name = request.Name;
         geofile.Description = request.Description;
         geofile.Style = request.Style is { ValueKind: JsonValueKind.Object } s ? s.GetRawText() : null;
-        geofile.TeamId = request.TeamId;
+        geofile.CavingGroupId = request.CavingGroupId;
         geofile.Visibility = request.Visibility;
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(geofile.ToDto());

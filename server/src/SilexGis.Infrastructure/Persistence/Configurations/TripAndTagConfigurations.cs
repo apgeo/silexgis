@@ -22,7 +22,7 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
         builder.Property(x => x.Geom).HasColumnType("geometry(Geometry, 4326)");
 
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<Team>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.CavingGroupId).OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => x.Geom).HasMethod("gist");
         builder.HasIndex(x => x.TripDate);

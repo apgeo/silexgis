@@ -102,7 +102,7 @@ public static class UserEndpoints
                 && EF.Functions.ILike(EF.Functions.Unaccent(u.DisplayName), EF.Functions.Unaccent(pattern)));
 
         var byEmail = db.Users.AsNoTracking()
-            .WhereFieldVisibleTo(ProfileField.Email, user, db.TeamMembers.AsNoTracking())
+            .WhereFieldVisibleTo(ProfileField.Email, user, db.CavingGroupMembers.AsNoTracking())
             .Where(u => u.Email != null && EF.Functions.ILike(u.Email, pattern));
 
         var matches = await byName.Union(byEmail)

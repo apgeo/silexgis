@@ -34,7 +34,7 @@ public class NotificationCategoryTests
     [Fact]
     public void Category_values_are_the_schema_contract()
     {
-        ((short)NotificationCategory.TeamMembership).ShouldBe((short)0);
+        ((short)NotificationCategory.CavingGroupMembership).ShouldBe((short)0);
         ((short)NotificationCategory.PermissionGranted).ShouldBe((short)1);
         ((short)NotificationCategory.TripParticipation).ShouldBe((short)2);
         ((short)NotificationCategory.JobCompleted).ShouldBe((short)3);

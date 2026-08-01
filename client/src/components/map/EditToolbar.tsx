@@ -139,7 +139,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
             ? [{ parentId: attrs.primaryParentId, isPrimary: true }]
             : null,
           locationProtected: attrs?.locationProtected ?? false,
-          teamId: null,
+          cavingGroupId: null,
           visibility: attrs?.visibility ?? 'private',
         });
       }
@@ -155,7 +155,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           description: current.description,
           properties: current.properties,
           locationProtected: current.locationProtected,
-          teamId: current.teamId,
+          cavingGroupId: current.cavingGroupId,
           visibility: current.visibility,
         });
       }

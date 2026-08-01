@@ -18,7 +18,7 @@ const summary: DashboardSummary = {
 const views: MapViewInfo[] = [
   {
     id: 'v1', name: 'Bihor', description: null, config: {}, isHome: true,
-    ownerUserId: 'u1', teamId: null, visibility: 'private', shareToken: null,
+    ownerUserId: 'u1', cavingGroupId: null, visibility: 'private', shareToken: null,
     createdAt: '2026-07-01T10:00:00Z', updatedAt: '2026-07-01T10:00:00Z',
   } as unknown as MapViewInfo,
 ];

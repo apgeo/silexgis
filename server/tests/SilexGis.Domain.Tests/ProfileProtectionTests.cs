@@ -11,14 +11,14 @@ public class ProfileProtectionTests
 {
     private static readonly Guid Subject = Guid.CreateVersion7();
     private static readonly Guid Viewer = Guid.CreateVersion7();
-    private static readonly Guid SharedTeam = Guid.CreateVersion7();
-    private static readonly Guid OtherTeam = Guid.CreateVersion7();
+    private static readonly Guid SharedCavingGroup = Guid.CreateVersion7();
+    private static readonly Guid OtherCavingGroup = Guid.CreateVersion7();
 
-    private static UserContext User(Guid id, params Guid[] teams) =>
-        new(id, new HashSet<string>(), teams.ToDictionary(t => t, _ => TeamRole.Member));
+    private static UserContext User(Guid id, params Guid[] cavingGroups) =>
+        new(id, new HashSet<string>(), cavingGroups.ToDictionary(t => t, _ => CavingGroupRole.Member));
 
     private static UserContext Admin(Guid id) =>
-        new(id, new HashSet<string> { GlobalRoles.Admin }, new Dictionary<Guid, TeamRole>());
+        new(id, new HashSet<string> { GlobalRoles.Admin }, new Dictionary<Guid, CavingGroupRole>());
 
     private sealed class FakeProfile : IUserProfile
     {
@@ -54,19 +54,19 @@ public class ProfileProtectionTests
     [Theory]
     // Self sees every setting.
     [InlineData(ProfileViewerRelation.Self, ProfileVisibility.Private, true)]
-    [InlineData(ProfileViewerRelation.Self, ProfileVisibility.Team, true)]
+    [InlineData(ProfileViewerRelation.Self, ProfileVisibility.CavingGroup, true)]
     [InlineData(ProfileViewerRelation.Self, ProfileVisibility.Authenticated, true)]
     // Anonymous sees nothing, whatever the setting.
     [InlineData(ProfileViewerRelation.Anonymous, ProfileVisibility.Private, false)]
-    [InlineData(ProfileViewerRelation.Anonymous, ProfileVisibility.Team, false)]
+    [InlineData(ProfileViewerRelation.Anonymous, ProfileVisibility.CavingGroup, false)]
     [InlineData(ProfileViewerRelation.Anonymous, ProfileVisibility.Authenticated, false)]
-    // A teammate sees Team and above.
-    [InlineData(ProfileViewerRelation.SharesTeam, ProfileVisibility.Private, false)]
-    [InlineData(ProfileViewerRelation.SharesTeam, ProfileVisibility.Team, true)]
-    [InlineData(ProfileViewerRelation.SharesTeam, ProfileVisibility.Authenticated, true)]
+    // A groupMate sees CavingGroup and above.
+    [InlineData(ProfileViewerRelation.SharesCavingGroup, ProfileVisibility.Private, false)]
+    [InlineData(ProfileViewerRelation.SharesCavingGroup, ProfileVisibility.CavingGroup, true)]
+    [InlineData(ProfileViewerRelation.SharesCavingGroup, ProfileVisibility.Authenticated, true)]
     // Any other signed-in user sees only Authenticated.
     [InlineData(ProfileViewerRelation.Authenticated, ProfileVisibility.Private, false)]
-    [InlineData(ProfileViewerRelation.Authenticated, ProfileVisibility.Team, false)]
+    [InlineData(ProfileViewerRelation.Authenticated, ProfileVisibility.CavingGroup, false)]
     [InlineData(ProfileViewerRelation.Authenticated, ProfileVisibility.Authenticated, true)]
     public void Can_view_covers_every_relation_and_setting(
         ProfileViewerRelation relation, ProfileVisibility setting, bool expected) =>
@@ -87,7 +87,7 @@ public class ProfileProtectionTests
     public void Visibility_values_are_the_schema_contract()
     {
         ((short)ProfileVisibility.Private).ShouldBe((short)0);
-        ((short)ProfileVisibility.Team).ShouldBe((short)1);
+        ((short)ProfileVisibility.CavingGroup).ShouldBe((short)1);
         ((short)ProfileVisibility.Authenticated).ShouldBe((short)2);
     }
 
@@ -117,15 +117,15 @@ public class ProfileProtectionTests
     }
 
     [Fact]
-    public void Relate_prefers_self_then_shared_team()
+    public void Relate_prefers_self_then_shared_caving_group()
     {
-        ProfileProtection.Relate(User(Subject, OtherTeam), Subject, new HashSet<Guid>())
+        ProfileProtection.Relate(User(Subject, OtherCavingGroup), Subject, new HashSet<Guid>())
             .ShouldBe(ProfileViewerRelation.Self);
-        ProfileProtection.Relate(User(Viewer, SharedTeam), Subject, new HashSet<Guid> { SharedTeam })
-            .ShouldBe(ProfileViewerRelation.SharesTeam);
-        ProfileProtection.Relate(User(Viewer, OtherTeam), Subject, new HashSet<Guid> { SharedTeam })
+        ProfileProtection.Relate(User(Viewer, SharedCavingGroup), Subject, new HashSet<Guid> { SharedCavingGroup })
+            .ShouldBe(ProfileViewerRelation.SharesCavingGroup);
+        ProfileProtection.Relate(User(Viewer, OtherCavingGroup), Subject, new HashSet<Guid> { SharedCavingGroup })
             .ShouldBe(ProfileViewerRelation.Authenticated);
-        ProfileProtection.Relate(null, Subject, new HashSet<Guid> { SharedTeam })
+        ProfileProtection.Relate(null, Subject, new HashSet<Guid> { SharedCavingGroup })
             .ShouldBe(ProfileViewerRelation.Anonymous);
     }
 
@@ -165,18 +165,18 @@ public class ProfileProtectionTests
     }
 
     [Fact]
-    public void Project_shows_a_teammate_what_the_subject_shared_with_their_teams()
+    public void Project_shows_a_group_mate_what_the_subject_shared_with_their_caving_groups()
     {
         var profile = new FakeProfile
         {
-            RealNameVisibility = ProfileVisibility.Team,
+            RealNameVisibility = ProfileVisibility.CavingGroup,
             EmailVisibility = ProfileVisibility.Private,
             PhoneVisibility = ProfileVisibility.Authenticated,
-            AddressVisibility = ProfileVisibility.Team,
+            AddressVisibility = ProfileVisibility.CavingGroup,
         };
 
         var result = ProfileProtection.Project(
-            profile, ProfileProtection.SettingsOf(profile), [Address()], ProfileViewerRelation.SharesTeam);
+            profile, ProfileProtection.SettingsOf(profile), [Address()], ProfileViewerRelation.SharesCavingGroup);
 
         result.FirstName.ShouldBe("Ana");
         result.LastName.ShouldBe("Pop");

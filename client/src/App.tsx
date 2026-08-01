@@ -30,7 +30,7 @@ const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx
 const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
 const MessagingSettingsPage = lazy(() => import('./pages/admin/MessagingSettingsPage.tsx'));
 const MessageTemplatesPage = lazy(() => import('./pages/admin/MessageTemplatesPage.tsx'));
-const TeamsPage = lazy(() => import('./pages/teams/TeamsPage.tsx'));
+const CavingGroupsPage = lazy(() => import('./pages/cavingGroups/CavingGroupsPage.tsx'));
 const SharedViewPage = lazy(() => import('./pages/SharedViewPage.tsx'));
 const PanelPage = lazy(() => import('./pages/panel/PanelPage.tsx'));
 const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout.tsx'));
@@ -83,7 +83,7 @@ const router = createBrowserRouter([
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
           { path: '/admin/messaging', element: <Loadable><MessagingSettingsPage /></Loadable> },
           { path: '/admin/message-templates', element: <Loadable><MessageTemplatesPage /></Loadable> },
-          { path: '/teams', element: <Loadable><TeamsPage /></Loadable> },
+          { path: '/caving-groups', element: <Loadable><CavingGroupsPage /></Loadable> },
           {
             path: '/settings',
             element: <Loadable><SettingsLayout /></Loadable>,

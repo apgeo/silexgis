@@ -18,7 +18,7 @@ public sealed class MapViewConfiguration : IEntityTypeConfiguration<MapView>
         builder.Property(x => x.Visibility).HasConversion<short>();
 
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne<Team>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.CavingGroupId).OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => x.ShareToken).IsUnique().HasFilter("share_token IS NOT NULL");
         builder.HasIndex(x => x.OwnerUserId);

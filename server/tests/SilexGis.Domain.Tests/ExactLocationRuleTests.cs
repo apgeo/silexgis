@@ -18,18 +18,18 @@ public class ExactLocationRuleTests
     private static readonly Guid OwnerA = Guid.CreateVersion7();
     private static readonly Guid OwnerB = Guid.CreateVersion7();
     private static readonly Guid Caller = Guid.CreateVersion7();
-    private static readonly Guid TeamId = Guid.CreateVersion7();
+    private static readonly Guid CavingGroupId = Guid.CreateVersion7();
 
     private static UserContext User(
-        Guid? id = null, string? role = null, (Guid Team, TeamRole Role)? team = null) => new(
+        Guid? id = null, string? role = null, (Guid CavingGroup, CavingGroupRole Role)? cavingGroup = null) => new(
         id ?? Caller,
         role is null ? [] : new HashSet<string> { role },
-        team is null ? [] : new Dictionary<Guid, TeamRole> { [team.Value.Team] = team.Value.Role });
+        cavingGroup is null ? [] : new Dictionary<Guid, CavingGroupRole> { [cavingGroup.Value.CavingGroup] = cavingGroup.Value.Role });
 
-    private static Feature Protected(Guid owner, Guid? teamId = null) => new()
+    private static Feature Protected(Guid owner, Guid? cavingGroupId = null) => new()
     {
         OwnerUserId = owner,
-        TeamId = teamId,
+        CavingGroupId = cavingGroupId,
         Visibility = Visibility.Private,
         LocationProtected = true,
         IsProtectedEffective = true,
@@ -95,7 +95,7 @@ public class ExactLocationRuleTests
     }
 
     [Fact]
-    public void Root_owner_and_root_team_membership_satisfy_that_root()
+    public void Root_owner_and_root_caving_group_membership_satisfy_that_root()
     {
         // Owning one root satisfies it; the other still needs a grant.
         var myRoot = Protected(Caller);
@@ -106,11 +106,11 @@ public class ExactLocationRuleTests
         LocationProtection.CanViewExactLocation(User(), Row(OwnerB),
             [Grant(myRoot), Grant(foreignRoot, ObjectPermission.ViewExactLocation)]).ShouldBeTrue();
 
-        // Team membership on the root's team implies exact view (kept code semantics,
+        // CavingGroup membership on the root's caving group implies exact view (kept code semantics,
         // revisited by the ruleset redesign).
-        var teamRoot = Protected(OwnerB, TeamId);
+        var cavingGroupRoot = Protected(OwnerB, CavingGroupId);
         LocationProtection.CanViewExactLocation(
-            User(team: (TeamId, TeamRole.Member)), Row(OwnerB), [Grant(teamRoot)]).ShouldBeTrue();
+            User(cavingGroup: (CavingGroupId, CavingGroupRole.Member)), Row(OwnerB), [Grant(cavingGroupRoot)]).ShouldBeTrue();
     }
 
     [Fact]

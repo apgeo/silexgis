@@ -19,8 +19,8 @@ namespace SilexGis.Api.Tests;
 /// visibility filter (<c>Features.VisibleTo</c> vs
 /// <c>PermissionSql.FeatureVisibleToFragment</c>) and the exact-location rule
 /// (<c>FeatureProtection.ExactViewIdsAsync</c> vs <c>PermissionSql.ExactViewFragment</c>),
-/// each evaluated for five caller contexts — owner, teammate, stranger, ACL-Read grantee
-/// and ViewExactLocation grantee — over one seeded matrix of visibilities, team
+/// each evaluated for five caller contexts — owner, groupMate, stranger, ACL-Read grantee
+/// and ViewExactLocation grantee — over one seeded matrix of visibilities, caving group
 /// bindings, ACL grants and a protected containment chain. The twins may never diverge:
 /// a mismatch is a security bug, not a flake.
 /// </summary>
@@ -30,9 +30,9 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
     private readonly SilexGisApiFactory factory;
 
     private HttpClient owner = null!;   // Editor, owns every seeded feature
-    private HttpClient manager = null!; // Manager, creates the team
+    private HttpClient manager = null!; // Manager, creates the caving group
     private Guid ownerId;
-    private Guid teammateId;
+    private Guid groupMateId;
     private Guid strangerId;
     private Guid aclReaderId;
     private Guid velGranteeId;
@@ -43,15 +43,15 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
     // The seeded matrix (all owned by the owner).
     private Guid cavePrivate;      // private, no grants
     private Guid caveAuth;         // authenticated
-    private Guid caveTeam;         // team visibility, bound to the team
+    private Guid caveCavingGroup;         // caving group visibility, bound to the caving group
     private Guid caveAclOnly;      // private + ACL Read grant to aclReader
     private Guid areaProt;         // protected karst area + ACL Read|VEL grant to velGrantee
     private Guid caveChain;        // protected cave INSIDE areaProt (two protected roots)
     private Guid entranceChain;
     private Guid caveProt;         // protected cave, no parent + ACL Read|VEL grant to velGrantee
     private Guid entranceProt;
-    private Guid caveTeamProt;     // protected cave, team visibility (members implicitly hold VEL)
-    private Guid entranceTeamProt;
+    private Guid caveCavingGroupProt;     // protected cave, caving group visibility (members implicitly hold VEL)
+    private Guid entranceCavingGroupProt;
     private Guid[] candidateIds = [];
 
     public FilterParityTests(PostgresFixture postgres) =>
@@ -61,7 +61,7 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-own-{suffix}@t.local");
-        teammateId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-team-{suffix}@t.local");
+        groupMateId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-group-mate-{suffix}@t.local");
         strangerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-str-{suffix}@t.local");
         aclReaderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-read-{suffix}@t.local");
         velGranteeId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-vel-{suffix}@t.local");
@@ -78,22 +78,22 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         owner = await AuthHelper.BearerClientAsync(factory, $"par-own-{suffix}@t.local");
         manager = await AuthHelper.BearerClientAsync(factory, $"par-mgr-{suffix}@t.local");
 
-        // A team with the owner (so team-bound rows can be created) and the teammate.
-        var teamId = await CreateTeamAsync();
-        await AddMemberAsync(teamId, ownerId);
-        await AddMemberAsync(teamId, teammateId);
+        // A caving group with the owner (so caving group-bound rows can be created) and the groupMate.
+        var cavingGroupId = await CreateCavingGroupAsync();
+        await AddMemberAsync(cavingGroupId, ownerId);
+        await AddMemberAsync(cavingGroupId, groupMateId);
 
         cavePrivate = await CreateCaveAsync("Par Private", "private");
         caveAuth = await CreateCaveAsync("Par Auth", "authenticated");
-        caveTeam = await CreateCaveAsync("Par Team", "team", teamId: teamId);
+        caveCavingGroup = await CreateCaveAsync("Par CavingGroup", "cavingGroup", cavingGroupId: cavingGroupId);
         caveAclOnly = await CreateCaveAsync("Par AclOnly", "private");
         areaProt = await CreateProtectedAreaAsync("Par Area");
         caveChain = await CreateCaveAsync("Par Chain", "authenticated", locationProtected: true, parentId: areaProt);
         entranceChain = await AddEntranceAsync(caveChain);
         caveProt = await CreateCaveAsync("Par Prot", "authenticated", locationProtected: true);
         entranceProt = await AddEntranceAsync(caveProt);
-        caveTeamProt = await CreateCaveAsync("Par TeamProt", "team", locationProtected: true, teamId: teamId);
-        entranceTeamProt = await AddEntranceAsync(caveTeamProt);
+        caveCavingGroupProt = await CreateCaveAsync("Par CavingGroupProt", "cavingGroup", locationProtected: true, cavingGroupId: cavingGroupId);
+        entranceCavingGroupProt = await AddEntranceAsync(caveCavingGroupProt);
 
         await ReplaceFeatureAclAsync(caveAclOnly, [(aclReaderId, ObjectPermission.Read)]);
         await ReplaceFeatureAclAsync(areaProt,
@@ -103,8 +103,8 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
 
         candidateIds =
         [
-            cavePrivate, caveAuth, caveTeam, caveAclOnly, areaProt, caveChain,
-            entranceChain, caveProt, entranceProt, caveTeamProt, entranceTeamProt,
+            cavePrivate, caveAuth, caveCavingGroup, caveAclOnly, areaProt, caveChain,
+            entranceChain, caveProt, entranceProt, caveCavingGroupProt, entranceCavingGroupProt,
         ];
     }
 
@@ -137,13 +137,13 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         // Anchors keeping the parity meaningful (both sides agreeing on nonsense would
         // still be parity): each layer of the filter admits and denies as specified.
         visible["owner"].ShouldBe(candidateIds.OrderBy(id => id).ToList());
-        visible["teammate"].ShouldContain(caveTeam);
-        visible["teammate"].ShouldContain(caveTeamProt);
-        visible["teammate"].ShouldNotContain(cavePrivate);
-        visible["teammate"].ShouldNotContain(caveAclOnly);
+        visible["groupMate"].ShouldContain(caveCavingGroup);
+        visible["groupMate"].ShouldContain(caveCavingGroupProt);
+        visible["groupMate"].ShouldNotContain(cavePrivate);
+        visible["groupMate"].ShouldNotContain(caveAclOnly);
         visible["stranger"].ShouldContain(caveAuth);
         visible["stranger"].ShouldNotContain(cavePrivate);
-        visible["stranger"].ShouldNotContain(caveTeam);
+        visible["stranger"].ShouldNotContain(caveCavingGroup);
         visible["stranger"].ShouldNotContain(caveAclOnly);
         visible["acl-reader"].ShouldContain(caveAclOnly);
         visible["acl-reader"].ShouldNotContain(cavePrivate);
@@ -178,23 +178,23 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
             exact[name] = domainIds;
         }
 
-        // Anchors: the row owner always sees exactly; team members implicitly hold
-        // ViewExactLocation on team-bound roots; an explicit grant opens exactly the
+        // Anchors: the row owner always sees exactly; caving group members implicitly hold
+        // ViewExactLocation on caving group-bound roots; an explicit grant opens exactly the
         // granted root's subtree — and a chain under TWO protected roots stays closed
         // until every root is granted; strangers get nothing protected.
         exact["owner"].ShouldBe(candidateIds.OrderBy(id => id).ToList());
-        exact["teammate"].ShouldContain(caveTeamProt);
-        exact["teammate"].ShouldContain(entranceTeamProt);
-        exact["teammate"].ShouldNotContain(caveChain);
-        exact["teammate"].ShouldNotContain(entranceChain);
-        exact["teammate"].ShouldNotContain(entranceProt);
+        exact["groupMate"].ShouldContain(caveCavingGroupProt);
+        exact["groupMate"].ShouldContain(entranceCavingGroupProt);
+        exact["groupMate"].ShouldNotContain(caveChain);
+        exact["groupMate"].ShouldNotContain(entranceChain);
+        exact["groupMate"].ShouldNotContain(entranceProt);
         exact["stranger"].ShouldNotContain(areaProt);
         exact["stranger"].ShouldNotContain(caveChain);
         exact["stranger"].ShouldNotContain(entranceChain);
         exact["stranger"].ShouldNotContain(caveProt);
         exact["stranger"].ShouldNotContain(entranceProt);
-        exact["stranger"].ShouldNotContain(caveTeamProt);
-        exact["stranger"].ShouldNotContain(entranceTeamProt);
+        exact["stranger"].ShouldNotContain(caveCavingGroupProt);
+        exact["stranger"].ShouldNotContain(entranceCavingGroupProt);
         exact["acl-reader"].ShouldNotContain(caveProt);
         exact["acl-reader"].ShouldNotContain(entranceProt);
         exact["vel-grantee"].ShouldContain(areaProt);
@@ -207,11 +207,11 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
 
     // ---- seeding helpers ----
 
-    private async Task<Guid> CreateTeamAsync()
+    private async Task<Guid> CreateCavingGroupAsync()
     {
-        var response = await manager.PostAsJsonAsync("/api/v1/teams/", new
+        var response = await manager.PostAsJsonAsync("/api/v1/caving-groups/", new
         {
-            name = $"Parity Team {Guid.NewGuid():N}"[..30],
+            name = $"Parity CavingGroup {Guid.NewGuid():N}"[..30],
             description = (string?)null,
             website = (string?)null,
         });
@@ -219,9 +219,9 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
 
-    private async Task AddMemberAsync(Guid teamId, Guid userId)
+    private async Task AddMemberAsync(Guid cavingGroupId, Guid userId)
     {
-        (await manager.PostAsJsonAsync($"/api/v1/teams/{teamId}/members", new
+        (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members", new
         {
             userId,
             role = "member",
@@ -233,7 +233,7 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         string visibility,
         bool locationProtected = false,
         Guid? parentId = null,
-        Guid? teamId = null)
+        Guid? cavingGroupId = null)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/caves", new
         {
@@ -242,7 +242,7 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
             visibility,
             locationProtected,
             parentId,
-            teamId,
+            cavingGroupId,
             explorationStatus = "Unknown",
             isShowCave = false,
         });
@@ -306,18 +306,18 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
-    /// <summary>The five caller contexts, with team memberships loaded from the database.</summary>
+    /// <summary>The five caller contexts, with caving group memberships loaded from the database.</summary>
     private async Task<(string Name, UserContext User)[]> CallersAsync(SilexGisDbContext db)
     {
         async Task<UserContext> ContextOf(Guid userId) => new(
             userId,
             new HashSet<string>(),
-            await db.TeamMembers.Where(m => m.UserId == userId).ToDictionaryAsync(m => m.TeamId, m => m.Role));
+            await db.CavingGroupMembers.Where(m => m.UserId == userId).ToDictionaryAsync(m => m.CavingGroupId, m => m.Role));
 
         return
         [
             ("owner", await ContextOf(ownerId)),
-            ("teammate", await ContextOf(teammateId)),
+            ("groupMate", await ContextOf(groupMateId)),
             ("stranger", await ContextOf(strangerId)),
             ("acl-reader", await ContextOf(aclReaderId)),
             ("vel-grantee", await ContextOf(velGranteeId)),

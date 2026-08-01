@@ -84,6 +84,25 @@ namespace SilexGis.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "caving_groups",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    slug = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    type = table.Column<short>(type: "smallint", nullable: false),
+                    description = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true),
+                    website = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    logo_file_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_caving_groups", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "entrance_types",
                 columns: table => new
                 {
@@ -319,24 +338,6 @@ namespace SilexGis.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "teams",
-                columns: table => new
-                {
-                    id = table.Column<Guid>(type: "uuid", nullable: false),
-                    name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    slug = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    description = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true),
-                    website = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
-                    logo_file_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_teams", x => x.id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "users",
                 columns: table => new
                 {
@@ -462,6 +463,35 @@ namespace SilexGis.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "caving_group_members",
+                columns: table => new
+                {
+                    id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    caving_group_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    user_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    role = table.Column<short>(type: "smallint", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_caving_group_members", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_caving_group_members_caving_groups_caving_group_id",
+                        column: x => x.caving_group_id,
+                        principalTable: "caving_groups",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_caving_group_members_users_user_id",
+                        column: x => x.user_id,
+                        principalTable: "users",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "features",
                 columns: table => new
                 {
@@ -478,7 +508,7 @@ namespace SilexGis.Infrastructure.Migrations
                     is_protected_effective = table.Column<bool>(type: "boolean", nullable: false),
                     ancestor_ids = table.Column<Guid[]>(type: "uuid[]", nullable: false, defaultValueSql: "'{}'::uuid[]"),
                     owner_user_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    team_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    caving_group_id = table.Column<Guid>(type: "uuid", nullable: true),
                     visibility = table.Column<short>(type: "smallint", nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
@@ -495,17 +525,17 @@ namespace SilexGis.Infrastructure.Migrations
                     table.CheckConstraint("ck_features_generic_type", "(kind = 0) = (feature_type_id IS NOT NULL)");
                     table.CheckConstraint("ck_features_geom_srid", "geom IS NULL OR st_srid(geom) = 4326");
                     table.ForeignKey(
+                        name: "fk_features_caving_groups_caving_group_id",
+                        column: x => x.caving_group_id,
+                        principalTable: "caving_groups",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
                         name: "fk_features_feature_types_feature_type_id",
                         column: x => x.feature_type_id,
                         principalTable: "feature_types",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "fk_features_teams_team_id",
-                        column: x => x.team_id,
-                        principalTable: "teams",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "fk_features_users_owner_user_id",
                         column: x => x.owner_user_id,
@@ -556,7 +586,7 @@ namespace SilexGis.Infrastructure.Migrations
                     share_token = table.Column<Guid>(type: "uuid", nullable: true),
                     is_home = table.Column<bool>(type: "boolean", nullable: false),
                     owner_user_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    team_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    caving_group_id = table.Column<Guid>(type: "uuid", nullable: true),
                     visibility = table.Column<short>(type: "smallint", nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
@@ -565,9 +595,9 @@ namespace SilexGis.Infrastructure.Migrations
                 {
                     table.PrimaryKey("pk_map_views", x => x.id);
                     table.ForeignKey(
-                        name: "fk_map_views_teams_team_id",
-                        column: x => x.team_id,
-                        principalTable: "teams",
+                        name: "fk_map_views_caving_groups_caving_group_id",
+                        column: x => x.caving_group_id,
+                        principalTable: "caving_groups",
                         principalColumn: "id",
                         onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
@@ -607,35 +637,6 @@ namespace SilexGis.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "team_members",
-                columns: table => new
-                {
-                    id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    team_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    user_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    role = table.Column<short>(type: "smallint", nullable: false),
-                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_team_members", x => x.id);
-                    table.ForeignKey(
-                        name: "fk_team_members_teams_team_id",
-                        column: x => x.team_id,
-                        principalTable: "teams",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "fk_team_members_users_user_id",
-                        column: x => x.user_id,
-                        principalTable: "users",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "trip_logs",
                 columns: table => new
                 {
@@ -653,7 +654,7 @@ namespace SilexGis.Infrastructure.Migrations
                     organizing_club = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                     geom = table.Column<Geometry>(type: "geometry(Geometry, 4326)", nullable: true),
                     owner_user_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    team_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    caving_group_id = table.Column<Guid>(type: "uuid", nullable: true),
                     visibility = table.Column<short>(type: "smallint", nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
@@ -662,9 +663,9 @@ namespace SilexGis.Infrastructure.Migrations
                 {
                     table.PrimaryKey("pk_trip_logs", x => x.id);
                     table.ForeignKey(
-                        name: "fk_trip_logs_teams_team_id",
-                        column: x => x.team_id,
-                        principalTable: "teams",
+                        name: "fk_trip_logs_caving_groups_caving_group_id",
+                        column: x => x.caving_group_id,
+                        principalTable: "caving_groups",
                         principalColumn: "id",
                         onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
@@ -1191,7 +1192,7 @@ namespace SilexGis.Infrastructure.Migrations
                     bbox = table.Column<Polygon>(type: "geometry(Polygon, 4326)", nullable: true),
                     style = table.Column<string>(type: "jsonb", nullable: true),
                     owner_user_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    team_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    caving_group_id = table.Column<Guid>(type: "uuid", nullable: true),
                     visibility = table.Column<short>(type: "smallint", nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
@@ -1200,17 +1201,17 @@ namespace SilexGis.Infrastructure.Migrations
                 {
                     table.PrimaryKey("pk_geofiles", x => x.id);
                     table.ForeignKey(
+                        name: "fk_geofiles_caving_groups_caving_group_id",
+                        column: x => x.caving_group_id,
+                        principalTable: "caving_groups",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
                         name: "fk_geofiles_stored_files_file_id",
                         column: x => x.file_id,
                         principalTable: "files",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "fk_geofiles_teams_team_id",
-                        column: x => x.team_id,
-                        principalTable: "teams",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "fk_geofiles_users_owner_user_id",
                         column: x => x.owner_user_id,
@@ -1303,7 +1304,7 @@ namespace SilexGis.Infrastructure.Migrations
                     default_opacity = table.Column<decimal>(type: "numeric(3,2)", precision: 3, scale: 2, nullable: false),
                     cave_feature_id = table.Column<Guid>(type: "uuid", nullable: true),
                     owner_user_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    team_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    caving_group_id = table.Column<Guid>(type: "uuid", nullable: true),
                     visibility = table.Column<short>(type: "smallint", nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
@@ -1318,17 +1319,17 @@ namespace SilexGis.Infrastructure.Migrations
                         principalColumn: "id",
                         onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
+                        name: "fk_georeferenced_maps_caving_groups_caving_group_id",
+                        column: x => x.caving_group_id,
+                        principalTable: "caving_groups",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
                         name: "fk_georeferenced_maps_stored_files_file_id",
                         column: x => x.file_id,
                         principalTable: "files",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "fk_georeferenced_maps_teams_team_id",
-                        column: x => x.team_id,
-                        principalTable: "teams",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "fk_georeferenced_maps_users_owner_user_id",
                         column: x => x.owner_user_id,
@@ -1547,6 +1548,29 @@ namespace SilexGis.Infrastructure.Migrations
                 .Annotation("Npgsql:IndexMethod", "gin");
 
             migrationBuilder.CreateIndex(
+                name: "ix_caving_group_members_caving_group_id_user_id",
+                table: "caving_group_members",
+                columns: new[] { "caving_group_id", "user_id" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_caving_group_members_user_id",
+                table: "caving_group_members",
+                column: "user_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_caving_groups_name",
+                table: "caving_groups",
+                column: "name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_caving_groups_slug",
+                table: "caving_groups",
+                column: "slug",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix_centerlines_default_per_cave",
                 table: "centerlines",
                 column: "cave_feature_id",
@@ -1632,6 +1656,11 @@ namespace SilexGis.Infrastructure.Migrations
                 column: "category");
 
             migrationBuilder.CreateIndex(
+                name: "ix_features_caving_group_id",
+                table: "features",
+                column: "caving_group_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_features_deleted_at",
                 table: "features",
                 column: "deleted_at",
@@ -1677,11 +1706,6 @@ namespace SilexGis.Infrastructure.Migrations
                 .Annotation("Npgsql:IndexMethod", "gin");
 
             migrationBuilder.CreateIndex(
-                name: "ix_features_team_id",
-                table: "features",
-                column: "team_id");
-
-            migrationBuilder.CreateIndex(
                 name: "ix_files_geom",
                 table: "files",
                 column: "geom")
@@ -1715,6 +1739,11 @@ namespace SilexGis.Infrastructure.Migrations
                 .Annotation("Npgsql:IndexMethod", "gist");
 
             migrationBuilder.CreateIndex(
+                name: "ix_geofiles_caving_group_id",
+                table: "geofiles",
+                column: "caving_group_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_geofiles_file_id",
                 table: "geofiles",
                 column: "file_id");
@@ -1723,11 +1752,6 @@ namespace SilexGis.Infrastructure.Migrations
                 name: "ix_geofiles_owner_user_id",
                 table: "geofiles",
                 column: "owner_user_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_geofiles_team_id",
-                table: "geofiles",
-                column: "team_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_georeferenced_maps_bbox",
@@ -1741,6 +1765,11 @@ namespace SilexGis.Infrastructure.Migrations
                 column: "cave_feature_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_georeferenced_maps_caving_group_id",
+                table: "georeferenced_maps",
+                column: "caving_group_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_georeferenced_maps_file_id",
                 table: "georeferenced_maps",
                 column: "file_id");
@@ -1749,11 +1778,6 @@ namespace SilexGis.Infrastructure.Migrations
                 name: "ix_georeferenced_maps_owner_user_id",
                 table: "georeferenced_maps",
                 column: "owner_user_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_georeferenced_maps_team_id",
-                table: "georeferenced_maps",
-                column: "team_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_hierarchies_name",
@@ -1802,6 +1826,11 @@ namespace SilexGis.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "ix_map_views_caving_group_id",
+                table: "map_views",
+                column: "caving_group_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_map_views_owner_user_id",
                 table: "map_views",
                 column: "owner_user_id");
@@ -1812,11 +1841,6 @@ namespace SilexGis.Infrastructure.Migrations
                 column: "share_token",
                 unique: true,
                 filter: "share_token IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_map_views_team_id",
-                table: "map_views",
-                column: "team_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_message_templates_key_locale",
@@ -1965,29 +1989,6 @@ namespace SilexGis.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_team_members_team_id_user_id",
-                table: "team_members",
-                columns: new[] { "team_id", "user_id" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "ix_team_members_user_id",
-                table: "team_members",
-                column: "user_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_teams_name",
-                table: "teams",
-                column: "name",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "ix_teams_slug",
-                table: "teams",
-                column: "slug",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "ix_trip_log_caves_cave_id",
                 table: "trip_log_caves",
                 column: "cave_id");
@@ -2009,6 +2010,11 @@ namespace SilexGis.Infrastructure.Migrations
                 column: "user_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_trip_logs_caving_group_id",
+                table: "trip_logs",
+                column: "caving_group_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_trip_logs_geom",
                 table: "trip_logs",
                 column: "geom")
@@ -2018,11 +2024,6 @@ namespace SilexGis.Infrastructure.Migrations
                 name: "ix_trip_logs_owner_user_id",
                 table: "trip_logs",
                 column: "owner_user_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_trip_logs_team_id",
-                table: "trip_logs",
-                column: "team_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_trip_logs_trip_date",
@@ -2098,6 +2099,9 @@ namespace SilexGis.Infrastructure.Migrations
                 name: "cave_entrances");
 
             migrationBuilder.DropTable(
+                name: "caving_group_members");
+
+            migrationBuilder.DropTable(
                 name: "centerlines");
 
             migrationBuilder.DropTable(
@@ -2150,9 +2154,6 @@ namespace SilexGis.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "taggings");
-
-            migrationBuilder.DropTable(
-                name: "team_members");
 
             migrationBuilder.DropTable(
                 name: "trip_log_caves");
@@ -2224,10 +2225,10 @@ namespace SilexGis.Infrastructure.Migrations
                 name: "rock_types");
 
             migrationBuilder.DropTable(
-                name: "feature_types");
+                name: "caving_groups");
 
             migrationBuilder.DropTable(
-                name: "teams");
+                name: "feature_types");
 
             migrationBuilder.DropTable(
                 name: "users");

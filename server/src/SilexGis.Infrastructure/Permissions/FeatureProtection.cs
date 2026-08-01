@@ -35,7 +35,7 @@ public sealed class FeatureProtection(SilexGisDbContext db, AclPermissionService
 
         var rows = await db.Features.AsNoTracking().IgnoreQueryFilters()
             .Where(f => ids.Contains(f.Id))
-            .Select(f => new { f.Id, f.OwnerUserId, f.TeamId, f.Visibility, f.IsProtectedEffective, f.AncestorIds })
+            .Select(f => new { f.Id, f.OwnerUserId, f.CavingGroupId, f.Visibility, f.IsProtectedEffective, f.AncestorIds })
             .ToListAsync(ct);
 
         // The fast path: nothing in the candidate set is protected.
@@ -68,7 +68,7 @@ public sealed class FeatureProtection(SilexGisDbContext db, AclPermissionService
             {
                 Id = row.Id,
                 OwnerUserId = row.OwnerUserId,
-                TeamId = row.TeamId,
+                CavingGroupId = row.CavingGroupId,
                 Visibility = row.Visibility,
                 IsProtectedEffective = row.IsProtectedEffective,
             };

@@ -215,9 +215,9 @@ public static class CaveEndpoints
             return ApiProblems.Forbidden("cave.create_requires_editor");
         }
 
-        if (!await TeamBindingAllowedAsync(db, user, request.TeamId, ct))
+        if (!await CavingGroupBindingAllowedAsync(db, user, request.CavingGroupId, ct))
         {
-            return ApiProblems.Forbidden("cave.team_membership_required");
+            return ApiProblems.Forbidden("cave.caving_group_membership_required");
         }
 
         IReadOnlyList<ParentSpec> parents = [];
@@ -296,9 +296,9 @@ public static class CaveEndpoints
             return stale;
         }
 
-        if (request.TeamId != feature.TeamId && !await TeamBindingAllowedAsync(db, user, request.TeamId, ct))
+        if (request.CavingGroupId != feature.CavingGroupId && !await CavingGroupBindingAllowedAsync(db, user, request.CavingGroupId, ct))
         {
-            return ApiProblems.Forbidden("cave.team_membership_required");
+            return ApiProblems.Forbidden("cave.caving_group_membership_required");
         }
 
         var cave = feature.Cave!;
@@ -309,7 +309,7 @@ public static class CaveEndpoints
         // obfuscated echo back over the real data.
         var exact = (await protection.ExactViewIdsAsync(user, [feature.Id], ct)).Contains(feature.Id);
         var preserved = (cave.ClosestAddress, cave.LandRegistryNumber, cave.LocationNotes);
-        var accessChanged = feature.TeamId != request.TeamId || feature.Visibility != request.Visibility;
+        var accessChanged = feature.CavingGroupId != request.CavingGroupId || feature.Visibility != request.Visibility;
 
         request.Apply(feature, cave);
 
@@ -335,7 +335,7 @@ public static class CaveEndpoints
 
             if (accessChanged)
             {
-                // Entrance/centerline children carry a copy of the cave's owner/team/visibility.
+                // Entrance/centerline children carry a copy of the cave's owner/caving group/visibility.
                 await writer.SyncDelegatedAccessAsync(feature.Id, ct);
             }
         }
@@ -407,15 +407,15 @@ public static class CaveEndpoints
             .Select(x => new CaveParentDto(x.Id, x.Name, x.IsPrimary))];
     }
 
-    private static async Task<bool> TeamBindingAllowedAsync(
-        SilexGisDbContext db, UserContext user, Guid? teamId, CancellationToken ct)
+    private static async Task<bool> CavingGroupBindingAllowedAsync(
+        SilexGisDbContext db, UserContext user, Guid? cavingGroupId, CancellationToken ct)
     {
-        if (teamId is null || user.IsAdmin)
+        if (cavingGroupId is null || user.IsAdmin)
         {
-            return teamId is null || await db.Teams.AnyAsync(t => t.Id == teamId, ct);
+            return cavingGroupId is null || await db.CavingGroups.AnyAsync(t => t.Id == cavingGroupId, ct);
         }
 
-        return user.IsMemberOf(teamId.Value);
+        return user.IsMemberOf(cavingGroupId.Value);
     }
 
     private static IQueryable<Feature> ApplySort(IQueryable<Feature> query, string? sort) =>

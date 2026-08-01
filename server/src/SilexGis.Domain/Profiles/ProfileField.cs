@@ -7,7 +7,7 @@ namespace SilexGis.Domain.Profiles;
 /// </summary>
 /// <remarks>
 /// Username, display name and avatar are deliberately absent: they are the only handles the
-/// team member list, trip participant list, ACL editor, file version list, audit row and
+/// caving group member list, trip participant list, ACL editor, file version list, audit row and
 /// history row have to render, so making them hideable would break attribution across six
 /// surfaces. A cave's existence is likewise never hidden — only its coordinates.
 /// </remarks>

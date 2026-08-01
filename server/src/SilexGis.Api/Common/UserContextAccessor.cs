@@ -10,7 +10,7 @@ namespace SilexGis.Api.Common;
 
 /// <summary>
 /// Builds the request's <see cref="UserContext"/>: identity + roles from the bearer token,
-/// team memberships from the database (once per request, cached in the scoped instance).
+/// caving group memberships from the database (once per request, cached in the scoped instance).
 /// </summary>
 public sealed class UserContextAccessor(IHttpContextAccessor httpContextAccessor, SilexGisDbContext db)
     : IUserContextAccessor
@@ -38,11 +38,11 @@ public sealed class UserContextAccessor(IHttpContextAccessor httpContextAccessor
             .Select(c => c.Value)
             .ToHashSet(StringComparer.Ordinal);
 
-        var teams = await db.TeamMembers
+        var cavingGroups = await db.CavingGroupMembers
             .Where(m => m.UserId == userId)
-            .ToDictionaryAsync(m => m.TeamId, m => m.Role, ct);
+            .ToDictionaryAsync(m => m.CavingGroupId, m => m.Role, ct);
 
-        cached = new UserContext(userId, roles, teams);
+        cached = new UserContext(userId, roles, cavingGroups);
         resolved = true;
         return cached;
     }

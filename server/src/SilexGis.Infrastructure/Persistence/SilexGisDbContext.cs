@@ -10,9 +10,9 @@ namespace SilexGis.Infrastructure.Persistence;
 public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
     : IdentityDbContext<SilexGisUser, SilexGisRole, Guid>(options)
 {
-    public DbSet<Team> Teams => Set<Team>();
+    public DbSet<CavingGroup> CavingGroups => Set<CavingGroup>();
 
-    public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+    public DbSet<CavingGroupMember> CavingGroupMembers => Set<CavingGroupMember>();
 
     public DbSet<CaveType> CaveTypes => Set<CaveType>();
 

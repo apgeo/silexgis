@@ -9,7 +9,7 @@ public class NotificationRoutingTests
 {
     /// <summary>Everything on and immediate, so each test names only what it varies.</summary>
     private static NotificationRoute Decide(
-        NotificationCategory category = NotificationCategory.TeamMembership,
+        NotificationCategory category = NotificationCategory.CavingGroupMembership,
         bool categoryEnabled = true,
         bool masterEmailEnabled = true,
         NotificationDigest digest = NotificationDigest.Immediate,

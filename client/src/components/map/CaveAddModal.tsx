@@ -29,7 +29,7 @@ interface NewCaveFormValues {
   name: string;
   caveTypeId: number;
   entranceTypeId: number;
-  visibility: 'private' | 'team' | 'authenticated' | 'public';
+  visibility: 'private' | 'cavingGroup' | 'authenticated' | 'public';
   locationProtected: boolean;
 }
 
@@ -86,7 +86,7 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
         explorationStatus: 'unknown',
         properties: null,
         parentId: null,
-        teamId: null,
+        cavingGroupId: null,
         otherToponyms: null,
         identificationCode: null,
         description: null,
@@ -182,7 +182,7 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
           <Flex gap={12} wrap>
             <Form.Item name="visibility" label={t('caves.visibility')} style={{ width: 220 }}>
               <Select
-                options={['private', 'team', 'authenticated', 'public'].map((v) => ({
+                options={['private', 'cavingGroup', 'authenticated', 'public'].map((v) => ({
                   value: v,
                   label: t(`caves.visibilityValues.${v}`),
                 }))}

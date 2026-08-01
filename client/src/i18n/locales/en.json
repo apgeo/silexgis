@@ -10,7 +10,7 @@
     "geodata": "Geodata",
     "trips": "Trip logs",
     "audit": "Audit",
-    "teams": "Teams",
+    "cavingGroups": "Caving groups",
     "settings": "Settings",
     "messaging": "Messaging",
     "templates": "Message texts"
@@ -216,7 +216,7 @@
     },
     "visibilityValues": {
       "private": "Private",
-      "team": "Team",
+      "cavingGroup": "Caving group",
       "authenticated": "Authenticated users",
       "public": "Public"
     },
@@ -519,10 +519,16 @@
       "caption": "Caption"
     }
   },
-  "teams": {
-    "title": "Teams",
-    "new": "New team",
+  "cavingGroups": {
+    "title": "Caving groups",
+    "new": "New caving group",
     "name": "Name",
+    "type": "Type",
+    "types": {
+      "cavingClub": "Caving club",
+      "group": "Group",
+      "organization": "Organization"
+    },
     "members": "Members",
     "manage": "Manage",
     "addMember": "Add",
@@ -538,9 +544,9 @@
     "button": "Permissions",
     "subject": "Subject",
     "user": "User",
-    "team": "Team",
+    "cavingGroup": "Caving group",
     "pickUser": "Search users…",
-    "pickTeam": "Pick a team…",
+    "pickCavingGroup": "Pick a caving group…",
     "addGrant": "Add",
     "notManager": "You cannot manage permissions on this object.",
     "flags": {
@@ -676,11 +682,11 @@
     "visibility": {
       "label": "Who can see this",
       "tooltip": "Visible to: {{audience}}",
-      "legend": "The small icon beside a field sets who can see it: only you, people who share a team with you, or anyone signed in."
+      "legend": "The small icon beside a field sets who can see it: only you, people who share a caving group with you, or anyone signed in."
     },
     "visibilityValues": {
       "private": "Only me",
-      "team": "My teams",
+      "cavingGroup": "My caving groups",
       "authenticated": "Signed-in members"
     },
     "profile": {
@@ -791,7 +797,7 @@
       "alwaysOn": "Always sent — this one warns you about your own account.",
       "noDelivery": "This installation has no mail server configured, so nothing is sent yet. Your choices are saved and will be used once one is.",
       "events": {
-        "teamMembership": "Team membership changes",
+        "cavingGroupMembership": "Caving group membership changes",
         "permissionGranted": "Someone shares something with me",
         "tripParticipation": "I am added to a trip",
         "jobCompleted": "My uploads finish processing",

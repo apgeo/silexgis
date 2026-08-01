@@ -28,7 +28,7 @@ public sealed record TripLogDto(
     IReadOnlyList<TripParticipantDto> Participants,
     IReadOnlyList<TripParticipantDto> Proposers,
     Guid OwnerUserId,
-    Guid? TeamId,
+    Guid? CavingGroupId,
     Visibility Visibility,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
@@ -49,7 +49,7 @@ public sealed record TripLogWriteRequest(
     IReadOnlyList<Guid> CaveIds,
     IReadOnlyList<TripParticipantWrite> Participants,
     IReadOnlyList<TripParticipantWrite>? Proposers,
-    Guid? TeamId,
+    Guid? CavingGroupId,
     Visibility Visibility);
 
 public sealed class TripLogWriteRequestValidator : AbstractValidator<TripLogWriteRequest>

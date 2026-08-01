@@ -22,7 +22,7 @@ namespace SilexGis.Api.Tests;
 /// Targets speak a two-world vocabulary: "feature" plus a feature id addresses any
 /// physical feature whatever its kind (caves, entrances, centerlines, generic kinds),
 /// while non-feature entities keep their own names ("tripLog", "geofile",
-/// "georeferencedMap", "mapView", "team", and "storedFile" for taggings only).
+/// "georeferencedMap", "mapView", "cavingGroup", and "storedFile" for taggings only).
 /// </para>
 /// </summary>
 [Collection(PostgresCollection.Name)]

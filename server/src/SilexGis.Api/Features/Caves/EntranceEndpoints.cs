@@ -163,7 +163,7 @@ public static class EntranceEndpoints
 
         try
         {
-            // Owner, team and visibility are copied from the cave by the write service: an
+            // Owner, caving group and visibility are copied from the cave by the write service: an
             // entrance is never more (or less) visible than the cave it belongs to.
             await writer.CreateEntranceAsync(feature, entrance, ct);
             if (entrance.IsMain)

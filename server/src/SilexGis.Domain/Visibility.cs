@@ -8,7 +8,7 @@ namespace SilexGis.Domain;
 public enum Visibility : short
 {
     Private = 0,
-    Team = 1,
+    CavingGroup = 1,
     Authenticated = 2,
     Public = 3,
 }

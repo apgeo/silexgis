@@ -9,7 +9,7 @@ namespace SilexGis.Infrastructure.Permissions;
 
 /// <summary>
 /// IPermissionService backed by object_acl: loads the caller's applicable grants for the
-/// entity (direct user grants plus grants to any of their teams), ORs the flags and hands
+/// entity (direct user grants plus grants to any of their caving groups), ORs the flags and hands
 /// them to the pure evaluator. Fast paths (admin/owner) skip the lookup entirely.
 /// Features are keyed by the feature FK; non-feature entities by the polymorphic pair.
 ///
@@ -70,18 +70,18 @@ public sealed class AclPermissionService(SilexGisDbContext db) : IPermissionServ
     /// <summary>
     /// Bulk variant for obfuscation paths that process many features per request: all
     /// feature ids on which the caller holds an explicit ViewExactLocation grant
-    /// (directly or via a team). The exact-view rule evaluates these against a row's
+    /// (directly or via a caving group). The exact-view rule evaluates these against a row's
     /// protected ROOTS — generalizing the old cave-hardcoded lookup to any protection
     /// root. Admin/owner fast paths are evaluated per row by the caller.
     /// </summary>
     public async Task<HashSet<Guid>> ExactLocationGrantFeatureIdsAsync(UserContext user, CancellationToken ct)
     {
         var userId = user.UserId;
-        var teamIds = user.TeamIds;
+        var cavingGroupIds = user.CavingGroupIds;
         var ids = await db.ObjectAcls.AsNoTracking()
             .Where(a => a.FeatureId != null
                 && ((a.SubjectKind == AclSubjectKind.User && a.SubjectId == userId)
-                    || (a.SubjectKind == AclSubjectKind.Team && teamIds.Contains(a.SubjectId)))
+                    || (a.SubjectKind == AclSubjectKind.CavingGroup && cavingGroupIds.Contains(a.SubjectId)))
                 && a.Permissions.HasFlag(ObjectPermission.ViewExactLocation))
             .Select(a => a.FeatureId!.Value)
             .ToListAsync(ct);
@@ -93,7 +93,7 @@ public sealed class AclPermissionService(SilexGisDbContext db) : IPermissionServ
     {
         var entityId = entity.Id;
         var userId = user.UserId;
-        var teamIds = user.TeamIds;
+        var cavingGroupIds = user.CavingGroupIds;
 
         IQueryable<ObjectAcl> query;
         if (entity is Feature)
@@ -109,7 +109,7 @@ public sealed class AclPermissionService(SilexGisDbContext db) : IPermissionServ
 
         var flags = await query
             .Where(a => (a.SubjectKind == AclSubjectKind.User && a.SubjectId == userId)
-                || (a.SubjectKind == AclSubjectKind.Team && teamIds.Contains(a.SubjectId)))
+                || (a.SubjectKind == AclSubjectKind.CavingGroup && cavingGroupIds.Contains(a.SubjectId)))
             .Select(a => (int)a.Permissions)
             .ToListAsync(ct);
 

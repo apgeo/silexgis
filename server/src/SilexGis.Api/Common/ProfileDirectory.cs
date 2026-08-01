@@ -14,10 +14,10 @@ namespace SilexGis.Api.Common;
 /// </summary>
 public static class ProfileDirectory
 {
-    private static readonly IReadOnlySet<Guid> NoTeams = new HashSet<Guid>();
+    private static readonly IReadOnlySet<Guid> NoCavingGroups = new HashSet<Guid>();
 
     /// <summary>
-    /// Display labels for attribution rows — team members, trip participants, ACL grants, audit
+    /// Display labels for attribution rows — caving group members, trip participants, ACL grants, audit
     /// and history rows, file uploaders.
     /// </summary>
     /// <remarks>
@@ -72,14 +72,14 @@ public static class ProfileDirectory
             return [];
         }
 
-        var teamsBySubject = await TeamsAsync(db, ids, ct);
+        var cavingGroupsBySubject = await CavingGroupsAsync(db, ids, ct);
 
         // Addresses are read only for the subjects whose address setting could possibly pass, so
         // an ordinary directory page does not drag everyone's home address out of the database.
         var addressCandidates = users
             .Where(u => ProfileProtection.CanView(
                 u.AddressVisibility,
-                ProfileProtection.Relate(user, u.Id, teamsBySubject.GetValueOrDefault(u.Id, NoTeams))))
+                ProfileProtection.Relate(user, u.Id, cavingGroupsBySubject.GetValueOrDefault(u.Id, NoCavingGroups))))
             .Select(u => u.Id)
             .ToList();
 
@@ -99,7 +99,7 @@ public static class ProfileDirectory
                 u,
                 ProfileProtection.SettingsOf(u),
                 addressesBySubject.GetValueOrDefault(u.Id, []),
-                ProfileProtection.Relate(user, u.Id, teamsBySubject.GetValueOrDefault(u.Id, NoTeams))));
+                ProfileProtection.Relate(user, u.Id, cavingGroupsBySubject.GetValueOrDefault(u.Id, NoCavingGroups))));
     }
 
     /// <summary>
@@ -136,16 +136,16 @@ public static class ProfileDirectory
         return resolved.GetValueOrDefault(userId);
     }
 
-    private static async Task<Dictionary<Guid, IReadOnlySet<Guid>>> TeamsAsync(
+    private static async Task<Dictionary<Guid, IReadOnlySet<Guid>>> CavingGroupsAsync(
         SilexGisDbContext db, IReadOnlyList<Guid> userIds, CancellationToken ct)
     {
-        var memberships = await db.TeamMembers.AsNoTracking()
+        var memberships = await db.CavingGroupMembers.AsNoTracking()
             .Where(m => userIds.Contains(m.UserId))
-            .Select(m => new { m.UserId, m.TeamId })
+            .Select(m => new { m.UserId, m.CavingGroupId })
             .ToListAsync(ct);
 
         return memberships
             .GroupBy(m => m.UserId)
-            .ToDictionary(g => g.Key, IReadOnlySet<Guid> (g) => g.Select(m => m.TeamId).ToHashSet());
+            .ToDictionary(g => g.Key, IReadOnlySet<Guid> (g) => g.Select(m => m.CavingGroupId).ToHashSet());
     }
 }

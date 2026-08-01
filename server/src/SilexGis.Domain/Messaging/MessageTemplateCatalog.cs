@@ -56,11 +56,11 @@ public static class MessageTemplateCatalog
     // notification settings. Their wording deliberately names no role, kind or status word: those
     // would have to arrive as placeholders in one language and would then be untranslatable.
 
-    public const string NotifyTeamJoined = "notify.team-joined";
+    public const string NotifyCavingGroupJoined = "notify.caving-group-joined";
 
-    public const string NotifyTeamRoleChanged = "notify.team-role-changed";
+    public const string NotifyCavingGroupRoleChanged = "notify.caving-group-role-changed";
 
-    public const string NotifyTeamRemoved = "notify.team-removed";
+    public const string NotifyCavingGroupRemoved = "notify.caving-group-removed";
 
     public const string NotifyPermissionGranted = "notify.permission-granted";
 
@@ -256,29 +256,29 @@ public static class MessageTemplateCatalog
             }),
 
         new(
-            NotifyTeamJoined,
+            NotifyCavingGroupJoined,
             MessageChannel.Email,
-            "Someone was added to a team.",
-            [AppName, DisplayName, ActorName, "teamName", SiteUrl, UnsubscribeUrl],
+            "Someone was added to a caving group.",
+            [AppName, DisplayName, ActorName, "cavingGroupName", SiteUrl, UnsubscribeUrl],
             new Dictionary<string, MessageTemplateText>
             {
                 ["en"] = new(
-                    "You were added to {teamName}",
+                    "You were added to {cavingGroupName}",
                     """
                     Hello {displayName},
 
-                    {actorName} added you to the team {teamName} on {appName}.
+                    {actorName} added you to the caving group {cavingGroupName} on {appName}.
 
                     {siteUrl}
 
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Ați fost adăugat în {teamName}",
+                    "Ați fost adăugat în {cavingGroupName}",
                     """
                     Bună ziua {displayName},
 
-                    {actorName} v-a adăugat în echipa {teamName} pe {appName}.
+                    {actorName} v-a adăugat în grupul {cavingGroupName} pe {appName}.
 
                     {siteUrl}
 
@@ -287,31 +287,31 @@ public static class MessageTemplateCatalog
             }),
 
         new(
-            NotifyTeamRoleChanged,
+            NotifyCavingGroupRoleChanged,
             MessageChannel.Email,
-            "Someone's role within a team was changed.",
-            [AppName, DisplayName, ActorName, "teamName", SiteUrl, UnsubscribeUrl],
+            "Someone's role within a caving group was changed.",
+            [AppName, DisplayName, ActorName, "cavingGroupName", SiteUrl, UnsubscribeUrl],
             new Dictionary<string, MessageTemplateText>
             {
                 ["en"] = new(
-                    "Your role in {teamName} changed",
+                    "Your role in {cavingGroupName} changed",
                     """
                     Hello {displayName},
 
-                    {actorName} changed your role in the team {teamName}. You can see what you can
-                    now do from the team's page:
+                    {actorName} changed your role in the caving group {cavingGroupName}. You can see what you can
+                    now do from the caving group's page:
 
                     {siteUrl}
 
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Rolul dumneavoastră în {teamName} s-a schimbat",
+                    "Rolul dumneavoastră în {cavingGroupName} s-a schimbat",
                     """
                     Bună ziua {displayName},
 
-                    {actorName} v-a schimbat rolul în echipa {teamName}. Puteți vedea ce puteți face
-                    acum din pagina echipei:
+                    {actorName} v-a schimbat rolul în grupul {cavingGroupName}. Puteți vedea ce puteți face
+                    acum din pagina grupului:
 
                     {siteUrl}
 
@@ -320,29 +320,29 @@ public static class MessageTemplateCatalog
             }),
 
         new(
-            NotifyTeamRemoved,
+            NotifyCavingGroupRemoved,
             MessageChannel.Email,
-            "Someone was removed from a team.",
-            [AppName, DisplayName, ActorName, "teamName", SiteUrl, UnsubscribeUrl],
+            "Someone was removed from a caving group.",
+            [AppName, DisplayName, ActorName, "cavingGroupName", SiteUrl, UnsubscribeUrl],
             new Dictionary<string, MessageTemplateText>
             {
                 ["en"] = new(
-                    "You were removed from {teamName}",
+                    "You were removed from {cavingGroupName}",
                     """
                     Hello {displayName},
 
-                    {actorName} removed you from the team {teamName} on {appName}. You may no longer
-                    have access to what that team could see.
+                    {actorName} removed you from the caving group {cavingGroupName} on {appName}. You may no longer
+                    have access to what that caving group could see.
 
                     {unsubscribeUrl}
                     """),
                 ["ro"] = new(
-                    "Ați fost eliminat din {teamName}",
+                    "Ați fost eliminat din {cavingGroupName}",
                     """
                     Bună ziua {displayName},
 
-                    {actorName} v-a eliminat din echipa {teamName} pe {appName}. Este posibil să nu
-                    mai aveți acces la ce vedea acea echipă.
+                    {actorName} v-a eliminat din grupul {cavingGroupName} pe {appName}. Este posibil să nu
+                    mai aveți acces la ce mai vedea acel grup.
 
                     {unsubscribeUrl}
                     """),
@@ -351,7 +351,7 @@ public static class MessageTemplateCatalog
         new(
             NotifyPermissionGranted,
             MessageChannel.Email,
-            "Someone was given access to a record — directly, or through a team they belong to.",
+            "Someone was given access to a record — directly, or through a caving group they belong to.",
             [AppName, DisplayName, ActorName, "objectName", "url", UnsubscribeUrl],
             new Dictionary<string, MessageTemplateText>
             {

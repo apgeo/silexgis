@@ -498,36 +498,36 @@ test('saved views: save, share anonymously, delete', async ({ page, browser, con
   await expect(viewLink).not.toBeVisible({ timeout: 15_000 });
 });
 
-test('teams and per-object permission grants', async ({ page }) => {
-  const teamName = `E2E Team ${Date.now()}`;
+test('caving groups and per-object permission grants', async ({ page }) => {
+  const cavingGroupName = `E2E Caving Group ${Date.now()}`;
   await login(page);
 
-  // Create a team (the admin holds Manager rights) and see ourselves as owner.
-  await page.goto('/teams');
-  await page.getByRole('button', { name: /New team/ }).click();
-  await page.getByLabel('Name', { exact: true }).fill(teamName);
+  // Create a caving group (the admin holds Manager rights) and see ourselves as owner.
+  await page.goto('/caving-groups');
+  await page.getByRole('button', { name: /New caving group/ }).click();
+  await page.getByLabel('Name', { exact: true }).fill(cavingGroupName);
   await page.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
-  const teamRow = page.getByRole('row', { name: new RegExp(teamName) });
-  await expect(teamRow).toBeVisible();
-  await teamRow.getByRole('button', { name: 'Manage' }).click();
+  const cavingGroupRow = page.getByRole('row', { name: new RegExp(cavingGroupName) });
+  await expect(cavingGroupRow).toBeVisible();
+  await cavingGroupRow.getByRole('button', { name: 'Manage' }).click();
   await expect(page.getByText('Owner')).toBeVisible({ timeout: 15_000 });
   await page.keyboard.press('Escape');
 
-  // Grant the team Read on a cave through the permissions modal.
+  // Grant the caving group Read on a cave through the permissions modal.
   await page.goto('/caves');
   await page.getByText('Peștera Demo Mare').click();
   await page.getByRole('button', { name: /Permissions/ }).click();
   const modal = page.getByRole('dialog');
   await modal.locator('.ant-select').first().click();
-  await page.locator('.ant-select-item-option', { hasText: 'Team' }).click();
+  await page.locator('.ant-select-item-option', { hasText: 'Caving group' }).click();
   await modal.locator('.ant-select').nth(1).click();
   // Typed, not scrolled to: the dropdown virtualises, and every earlier run leaves its
-  // team behind, so the newest one is far below the rendered window.
-  await page.keyboard.type(teamName);
-  await page.locator('.ant-select-item-option', { hasText: teamName }).click();
+  // caving group behind, so the newest one is far below the rendered window.
+  await page.keyboard.type(cavingGroupName);
+  await page.locator('.ant-select-item-option', { hasText: cavingGroupName }).click();
   await modal.getByRole('button', { name: /Add/ }).click();
-  await expect(modal.getByText(teamName)).toBeVisible();
+  await expect(modal.getByText(cavingGroupName)).toBeVisible();
   await modal.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
 
@@ -535,8 +535,8 @@ test('teams and per-object permission grants', async ({ page }) => {
   // previously aborted runs too (they accumulate on the shared demo cave and make a
   // bare "delete" click ambiguous).
   await page.getByRole('button', { name: /Permissions/ }).click();
-  await expect(modal.getByText(teamName)).toBeVisible({ timeout: 15_000 });
-  const e2eGrantRows = modal.getByRole('row', { name: /E2E Team/ });
+  await expect(modal.getByText(cavingGroupName)).toBeVisible({ timeout: 15_000 });
+  const e2eGrantRows = modal.getByRole('row', { name: /E2E Caving Group/ });
   while ((await e2eGrantRows.count()) > 0) {
     await e2eGrantRows.first().getByRole('button', { name: 'delete' }).click();
   }

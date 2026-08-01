@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import {
   useAcl,
   useReplaceAcl,
-  useTeams,
+  useCavingGroups,
   useUserSearch,
   type AclEntry,
   type EntityType,
@@ -17,7 +17,7 @@ const allPermissions = ['read', 'write', 'delete', 'share', 'managePermissions',
 type PermissionFlag = (typeof allPermissions)[number];
 
 interface DraftEntry {
-  subjectKind: 'user' | 'team';
+  subjectKind: 'user' | 'cavingGroup';
   subjectId: string;
   subjectName: string | null;
   permissions: Set<PermissionFlag>;
@@ -39,7 +39,7 @@ function parseFlags(permissions: string): Set<PermissionFlag> {
 }
 
 /**
- * Explicit-grant editor for one object: rows of user/team subjects with permission
+ * Explicit-grant editor for one object: rows of user/caving-group subjects with permission
  * checkboxes, saved as a full replace. Requires ManagePermissions server-side.
  */
 export default function PermissionsModal({ entityType, entityId, open, onClose }: PermissionsModalProps) {
@@ -47,9 +47,9 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
   const { message } = App.useApp();
   const { data: acl, isError } = useAcl(entityType, entityId, open);
   const replaceAcl = useReplaceAcl(entityType, entityId);
-  const { data: teams } = useTeams();
+  const { data: cavingGroups } = useCavingGroups();
   const [entries, setEntries] = useState<DraftEntry[]>([]);
-  const [subjectKind, setSubjectKind] = useState<'user' | 'team'>('user');
+  const [subjectKind, setSubjectKind] = useState<'user' | 'cavingGroup'>('user');
   const [subjectId, setSubjectId] = useState<string>();
   const [userQuery, setUserQuery] = useState('');
   const debouncedUserQuery = useDebouncedValue(userQuery);
@@ -70,8 +70,8 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
     if (!subjectId || entries.some((e) => e.subjectId === subjectId && e.subjectKind === subjectKind)) {
       return;
     }
-    const name = subjectKind === 'team'
-      ? teams?.find((x) => x.id === subjectId)?.name ?? null
+    const name = subjectKind === 'cavingGroup'
+      ? cavingGroups?.find((x) => x.id === subjectId)?.name ?? null
       : users?.find((x) => x.id === subjectId)?.label ?? null;
     setEntries([...entries, {
       subjectKind,
@@ -132,28 +132,28 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
             <Select
               value={subjectKind}
               style={{ width: 110 }}
-              onChange={(kind: 'user' | 'team') => {
+              onChange={(kind: 'user' | 'cavingGroup') => {
                 setSubjectKind(kind);
                 setSubjectId(undefined);
               }}
               options={[
                 { value: 'user', label: t('permissions.user') },
-                { value: 'team', label: t('permissions.team') },
+                { value: 'cavingGroup', label: t('permissions.cavingGroup') },
               ]}
             />
-            {subjectKind === 'team' ? (
+            {subjectKind === 'cavingGroup' ? (
               <Select
                 style={{ flex: 1 }}
-                // Teams arrive in full, so this filters client-side — unlike the user
+                // CavingGroups arrive in full, so this filters client-side — unlike the user
                 // picker beside it, which searches the server. Named explicitly because
                 // the option values are ids: filtering the default value prop would
                 // match nothing a person could type.
                 showSearch
                 optionFilterProp="label"
-                placeholder={t('permissions.pickTeam')}
+                placeholder={t('permissions.pickCavingGroup')}
                 value={subjectId}
                 onChange={setSubjectId}
-                options={teams?.map((team) => ({ value: team.id, label: team.name }))}
+                options={cavingGroups?.map((group) => ({ value: group.id, label: group.name }))}
               />
             ) : (
               <Select

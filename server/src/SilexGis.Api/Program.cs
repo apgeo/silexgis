@@ -31,7 +31,7 @@ using SilexGis.Api.Features.FeatureShares;
 using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.Tags;
 using SilexGis.Api.Features.Taxonomies;
-using SilexGis.Api.Features.Teams;
+using SilexGis.Api.Features.CavingGroups;
 using SilexGis.Api.Features.TripLogs;
 using SilexGis.Api.Features.Users;
 using SilexGis.Domain;
@@ -184,7 +184,7 @@ try
     api.MapAuditEndpoints();
     api.MapHistoryEndpoints();
     api.MapObjectAclEndpoints();
-    api.MapTeamEndpoints();
+    api.MapCavingGroupEndpoints();
     api.MapUserEndpoints();
     api.MapMapViewEndpoints();
     api.MapAdminSettingsEndpoints();

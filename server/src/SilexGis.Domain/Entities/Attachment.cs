@@ -10,7 +10,7 @@ namespace SilexGis.Domain.Entities;
 public enum AttachedEntityType : short
 {
     TripLog = 3,
-    Team = 4,
+    CavingGroup = 4,
     Geofile = 5,
     GeoreferencedMap = 6,
     MapView = 7,
@@ -41,7 +41,7 @@ public static class AttachedEntityTypes
     public static string ClrName(AttachedEntityType type) => type switch
     {
         AttachedEntityType.TripLog => nameof(AttachedEntityType.TripLog),
-        AttachedEntityType.Team => nameof(AttachedEntityType.Team),
+        AttachedEntityType.CavingGroup => nameof(AttachedEntityType.CavingGroup),
         AttachedEntityType.Geofile => nameof(AttachedEntityType.Geofile),
         AttachedEntityType.GeoreferencedMap => nameof(AttachedEntityType.GeoreferencedMap),
         AttachedEntityType.MapView => nameof(AttachedEntityType.MapView),

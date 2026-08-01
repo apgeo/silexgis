@@ -8,8 +8,8 @@ namespace SilexGis.Domain.Entities;
 /// </summary>
 public enum NotificationCategory : short
 {
-    /// <summary>Added to or removed from a team, or the member's team role changed.</summary>
-    TeamMembership = 0,
+    /// <summary>Added to or removed from a caving group, or the member's caving group role changed.</summary>
+    CavingGroupMembership = 0,
 
     /// <summary>Someone granted the user access to an object, or changed a grant they hold.</summary>
     PermissionGranted = 1,
@@ -48,7 +48,7 @@ public static class NotificationCategories
     /// </summary>
     public static bool DefaultEnabled(NotificationCategory category) => category switch
     {
-        NotificationCategory.TeamMembership => true,
+        NotificationCategory.CavingGroupMembership => true,
         NotificationCategory.PermissionGranted => true,
         NotificationCategory.TripParticipation => true,
         NotificationCategory.JobCompleted => true,

@@ -135,12 +135,12 @@ public static class ObjectAclEndpoints
             return denied;
         }
 
-        // Subjects must exist (users or teams respectively).
+        // Subjects must exist (users or caving groups respectively).
         foreach (var entry in request.Entries)
         {
             var exists = entry.SubjectKind == AclSubjectKind.User
                 ? (await ProfileDirectory.ExistingIdsAsync(db, [entry.SubjectId], ct)).Count > 0
-                : await db.Teams.AnyAsync(t => t.Id == entry.SubjectId, ct);
+                : await db.CavingGroups.AnyAsync(t => t.Id == entry.SubjectId, ct);
             if (!exists)
             {
                 return ApiProblems.BadRequest("acl.subject_unknown", "A grant subject does not exist.");
@@ -217,8 +217,8 @@ public static class ObjectAclEndpoints
     }
 
     /// <summary>
-    /// Tells the people who just gained access to something. A grant to a team reaches each of its
-    /// members, since a team grant is how most people actually receive access.
+    /// Tells the people who just gained access to something. A grant to a caving group reaches each of its
+    /// members, since a caving group grant is how most people actually receive access.
     /// </summary>
     /// <remarks>
     /// Naming the record is safe here and nowhere near the location rules: a grant confers Read on
@@ -242,17 +242,17 @@ public static class ObjectAclEndpoints
             .Where(e => e.SubjectKind == AclSubjectKind.User)
             .Select(e => e.SubjectId));
 
-        var teamIds = granted.Where(e => e.SubjectKind == AclSubjectKind.Team).Select(e => e.SubjectId).ToList();
-        if (teamIds.Count > 0)
+        var cavingGroupIds = granted.Where(e => e.SubjectKind == AclSubjectKind.CavingGroup).Select(e => e.SubjectId).ToList();
+        if (cavingGroupIds.Count > 0)
         {
-            var members = await db.TeamMembers.AsNoTracking()
-                .Where(m => teamIds.Contains(m.TeamId))
+            var members = await db.CavingGroupMembers.AsNoTracking()
+                .Where(m => cavingGroupIds.Contains(m.CavingGroupId))
                 .Select(m => m.UserId)
                 .ToListAsync(ct);
             recipients.UnionWith(members);
         }
 
-        // Granting yourself access, or being in a team you just granted, is not news.
+        // Granting yourself access, or being in a caving group you just granted, is not news.
         recipients.Remove(user.UserId);
         if (recipients.Count == 0)
         {
@@ -342,8 +342,8 @@ public static class ObjectAclEndpoints
     /// <summary>
     /// Parses the route's target vocabulary, case-insensitively (the JSON contract writes
     /// these names camelCase, and a client that read one out of a payload must be able to
-    /// put it back in a URL). A parsed <c>null</c> type means the feature world; teams and
-    /// stored files are deliberately absent — team access comes from membership, and a
+    /// put it back in a URL). A parsed <c>null</c> type means the feature world; caving groups and
+    /// stored files are deliberately absent — caving group access comes from membership, and a
     /// file's access follows the objects it is attached to.
     /// </summary>
     private static bool TryParseTarget(string entityType, out AttachedEntityType? type)
@@ -397,12 +397,12 @@ public static class ObjectAclEndpoints
         var rows = await GrantsOf(db, target).ToListAsync(ct);
 
         var userIds = rows.Where(x => x.SubjectKind == AclSubjectKind.User).Select(x => x.SubjectId).ToList();
-        var teamIds = rows.Where(x => x.SubjectKind == AclSubjectKind.Team).Select(x => x.SubjectId).ToList();
+        var cavingGroupIds = rows.Where(x => x.SubjectKind == AclSubjectKind.CavingGroup).Select(x => x.SubjectId).ToList();
         // Resolved rather than projected: the label a grantee may be shown under is a rule with
         // one home, and it is never their address.
         var userNames = await ProfileDirectory.ResolveLabelsAsync(db, user, userIds, ct);
-        var teamNames = await db.Teams.AsNoTracking()
-            .Where(t => teamIds.Contains(t.Id))
+        var cavingGroupNames = await db.CavingGroups.AsNoTracking()
+            .Where(t => cavingGroupIds.Contains(t.Id))
             .ToDictionaryAsync(t => t.Id, t => t.Name, ct);
 
         return [.. rows.Select(a => new AclEntryDto(
@@ -410,7 +410,7 @@ public static class ObjectAclEndpoints
             a.SubjectId,
             a.SubjectKind == AclSubjectKind.User
                 ? userNames.GetValueOrDefault(a.SubjectId)
-                : teamNames.GetValueOrDefault(a.SubjectId),
+                : cavingGroupNames.GetValueOrDefault(a.SubjectId),
             a.Permissions))];
     }
 

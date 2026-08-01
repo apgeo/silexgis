@@ -182,7 +182,7 @@ export default function FeatureEditModal({
         </Form.Item>
         <Form.Item name="visibility" label={t('features.visibility')} rules={[{ required: true }]}>
           <Select
-            options={(['private', 'team', 'authenticated', 'public'] as const).map((v) => ({
+            options={(['private', 'cavingGroup', 'authenticated', 'public'] as const).map((v) => ({
               value: v,
               label: t(`caves.visibilityValues.${v}`),
             }))}

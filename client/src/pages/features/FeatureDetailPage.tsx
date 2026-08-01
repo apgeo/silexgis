@@ -134,7 +134,7 @@ export default function FeatureDetailPage() {
           description: values.description,
           properties: values.properties as never,
           locationProtected: values.locationProtected,
-          teamId: feature.teamId,
+          cavingGroupId: feature.cavingGroupId,
           visibility: values.visibility,
         },
       });

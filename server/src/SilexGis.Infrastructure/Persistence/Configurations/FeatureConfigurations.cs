@@ -57,7 +57,7 @@ public sealed class FeatureConfiguration : IEntityTypeConfiguration<Feature>
 
         builder.HasOne<FeatureType>().WithMany().HasForeignKey(x => x.FeatureTypeId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<Team>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.CavingGroupId).OnDelete(DeleteBehavior.SetNull);
 
         // Two indexes over one column need distinct model names or EF collapses them; the
         // database names are pinned because the naming convention would suffix-dedupe them.
@@ -71,7 +71,7 @@ public sealed class FeatureConfiguration : IEntityTypeConfiguration<Feature>
         builder.HasIndex(x => x.Category);
         builder.HasIndex(x => x.Name);
         builder.HasIndex(x => x.OwnerUserId);
-        builder.HasIndex(x => x.TeamId);
+        builder.HasIndex(x => x.CavingGroupId);
         builder.HasIndex(x => x.DeletedAt).HasFilter("deleted_at IS NULL");
 
         // Accent-insensitive full-text search over the supertype payload (shadow property so

@@ -38,7 +38,7 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
         description: null,
         config: onCapture() as never,
         isHome,
-        teamId: null,
+        cavingGroupId: null,
         visibility: 'private',
       });
       setName('');

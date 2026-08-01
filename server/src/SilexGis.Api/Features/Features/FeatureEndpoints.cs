@@ -216,9 +216,9 @@ public static class FeatureEndpoints
                 "Caves, entrances and centerlines are created through their typed endpoints.");
         }
 
-        if (request.TeamId is not null && !user.IsAdmin && !user.IsMemberOf(request.TeamId.Value))
+        if (request.CavingGroupId is not null && !user.IsAdmin && !user.IsMemberOf(request.CavingGroupId.Value))
         {
-            return ApiProblems.Forbidden("feature.team_membership_required");
+            return ApiProblems.Forbidden("feature.caving_group_membership_required");
         }
 
         Geometry? geom = null;
@@ -253,7 +253,7 @@ public static class FeatureEndpoints
             Properties = RawProperties(request.Properties),
             LocationProtected = request.LocationProtected,
             OwnerUserId = user.UserId,
-            TeamId = request.TeamId,
+            CavingGroupId = request.CavingGroupId,
             Visibility = request.Visibility,
         };
 
@@ -323,9 +323,9 @@ public static class FeatureEndpoints
             return ApiProblems.BadRequest("feature.type_required", "Unknown feature type.");
         }
 
-        if (request.TeamId is not null && !user.IsAdmin && !user.IsMemberOf(request.TeamId.Value))
+        if (request.CavingGroupId is not null && !user.IsAdmin && !user.IsMemberOf(request.CavingGroupId.Value))
         {
-            return ApiProblems.Forbidden("feature.team_membership_required");
+            return ApiProblems.Forbidden("feature.caving_group_membership_required");
         }
 
         Geometry? geom = null;
@@ -360,7 +360,7 @@ public static class FeatureEndpoints
         feature.Category = featureType.Category;
         feature.Description = request.Description;
         feature.Properties = RawProperties(request.Properties);
-        feature.TeamId = request.TeamId;
+        feature.CavingGroupId = request.CavingGroupId;
         feature.Visibility = request.Visibility;
 
         // A caller without exact view was shown obfuscated (snapped or omitted)

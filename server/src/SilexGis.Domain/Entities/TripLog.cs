@@ -46,14 +46,14 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
 
     public string? LocationText { get; set; }
 
-    /// <summary>Free-text organizing club/organization (external clubs need not be a <see cref="Team"/>).</summary>
+    /// <summary>Free-text organizing club/organization (external clubs need not be a <see cref="CavingGroup"/>).</summary>
     public string? OrganizingClub { get; set; }
 
     public Geometry? Geom { get; set; }
 
     public Guid OwnerUserId { get; set; }
 
-    public Guid? TeamId { get; set; }
+    public Guid? CavingGroupId { get; set; }
 
     public Visibility Visibility { get; set; } = Visibility.Private;
 

@@ -10,11 +10,11 @@ public enum ProfileViewerRelation
     /// <summary>No signed-in user.</summary>
     Anonymous,
 
-    /// <summary>Signed in, shares no team with the subject.</summary>
+    /// <summary>Signed in, shares no caving group with the subject.</summary>
     Authenticated,
 
-    /// <summary>Signed in and shares at least one team with the subject.</summary>
-    SharesTeam,
+    /// <summary>Signed in and shares at least one caving group with the subject.</summary>
+    SharesCavingGroup,
 
     /// <summary>The subject reading their own profile.</summary>
     Self,
@@ -47,12 +47,12 @@ public static class ProfileProtection
     public const string AnonymousLabelPrefix = "user-";
 
     /// <summary>
-    /// How the viewer relates to <paramref name="subjectUserId"/>. <paramref name="subjectTeamIds"/>
-    /// are the teams the subject belongs to. Self is checked first, so a user always sees their
+    /// How the viewer relates to <paramref name="subjectUserId"/>. <paramref name="subjectCavingGroupIds"/>
+    /// are the caving groups the subject belongs to. Self is checked first, so a user always sees their
     /// own profile in full.
     /// </summary>
     public static ProfileViewerRelation Relate(
-        UserContext? viewer, Guid subjectUserId, IReadOnlySet<Guid> subjectTeamIds)
+        UserContext? viewer, Guid subjectUserId, IReadOnlySet<Guid> subjectCavingGroupIds)
     {
         if (viewer is null)
         {
@@ -64,11 +64,11 @@ public static class ProfileProtection
             return ProfileViewerRelation.Self;
         }
 
-        foreach (var teamId in viewer.Teams.Keys)
+        foreach (var cavingGroupId in viewer.CavingGroups.Keys)
         {
-            if (subjectTeamIds.Contains(teamId))
+            if (subjectCavingGroupIds.Contains(cavingGroupId))
             {
-                return ProfileViewerRelation.SharesTeam;
+                return ProfileViewerRelation.SharesCavingGroup;
             }
         }
 
@@ -82,7 +82,7 @@ public static class ProfileProtection
         // Load-bearing and unconditional: because ProfileVisibility has no Public level, no
         // setting value can expose personal data to a caller who is not signed in.
         ProfileViewerRelation.Anonymous => false,
-        ProfileViewerRelation.SharesTeam => setting >= ProfileVisibility.Team,
+        ProfileViewerRelation.SharesCavingGroup => setting >= ProfileVisibility.CavingGroup,
         ProfileViewerRelation.Authenticated => setting >= ProfileVisibility.Authenticated,
         _ => false,
     };

@@ -250,7 +250,7 @@ public static class TripLogEndpoints
         trip.LocationText = request.LocationText;
         trip.OrganizingClub = request.OrganizingClub;
         trip.Geom = request.Geom?.ToGeometryOrNull();
-        trip.TeamId = request.TeamId;
+        trip.CavingGroupId = request.CavingGroupId;
         trip.Visibility = request.Visibility;
     }
 
@@ -383,9 +383,9 @@ public static class TripLogEndpoints
             return ApiProblems.BadRequest("trip_log.geometry_invalid", "Geometry is malformed or invalid.");
         }
 
-        if (request.TeamId is not null && !user.IsAdmin && !user.IsMemberOf(request.TeamId.Value))
+        if (request.CavingGroupId is not null && !user.IsAdmin && !user.IsMemberOf(request.CavingGroupId.Value))
         {
-            return ApiProblems.Forbidden("trip_log.team_membership_required");
+            return ApiProblems.Forbidden("trip_log.caving_group_membership_required");
         }
 
         // A cave is a feature row, so existence and readability are one filtered count; an id
@@ -477,7 +477,7 @@ public static class TripLogEndpoints
             [.. participants.Where(x => x.TripLogId == trip.Id && x.Kind == TripParticipantKind.Proposer)
                 .Select(x => new TripParticipantDto(x.UserId, x.NameText, x.DisplayName ?? x.NameText))],
             trip.OwnerUserId,
-            trip.TeamId,
+            trip.CavingGroupId,
             trip.Visibility,
             trip.CreatedAt,
             trip.UpdatedAt))];

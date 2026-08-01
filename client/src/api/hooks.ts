@@ -62,8 +62,8 @@ export const queryKeys = {
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
   taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
   tags: (search: string) => ['tags', search] as const,
-  teams: ['teams'] as const,
-  teamMembers: (teamId: string) => ['teams', teamId, 'members'] as const,
+  cavingGroups: ['cavingGroups'] as const,
+  cavingGroupMembers: (cavingGroupId: string) => ['teams', cavingGroupId, 'members'] as const,
   acl: (entityType: string, entityId: string) => ['acl', entityType, entityId] as const,
   history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
   mfa: ['mfa'] as const,
@@ -1292,56 +1292,56 @@ export function useDeleteTagging() {
   });
 }
 
-export type TeamInfo = components['schemas']['TeamDto'];
-export type TeamMemberInfo = components['schemas']['TeamMemberDto'];
+export type CavingGroupInfo = components['schemas']['CavingGroupDto'];
+export type CavingGroupMemberInfo = components['schemas']['CavingGroupMemberDto'];
 export type AclEntry = components['schemas']['AclEntryDto'];
 export type AclEntryWrite = components['schemas']['AclEntryWrite'];
 
-export function useTeams() {
+export function useCavingGroups() {
   return useQuery({
-    queryKey: queryKeys.teams,
-    queryFn: () => unwrap(api.GET('/api/v1/teams')),
+    queryKey: queryKeys.cavingGroups,
+    queryFn: () => unwrap(api.GET('/api/v1/caving-groups')),
     staleTime: 60_000,
   });
 }
 
-export function useTeamMembers(teamId: string | undefined) {
+export function useCavingGroupMembers(cavingGroupId: string | undefined) {
   return useQuery({
-    queryKey: queryKeys.teamMembers(teamId ?? ''),
-    queryFn: () => unwrap(api.GET('/api/v1/teams/{id}/members', { params: { path: { id: teamId! } } })),
-    enabled: !!teamId,
+    queryKey: queryKeys.cavingGroupMembers(cavingGroupId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caving-groups/{id}/members', { params: { path: { id: cavingGroupId! } } })),
+    enabled: !!cavingGroupId,
   });
 }
 
-function useInvalidateTeams() {
+function useInvalidateCavingGroups() {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: ['teams'] });
+  return () => void queryClient.invalidateQueries({ queryKey: ['cavingGroups'] });
 }
 
-export function useCreateTeam() {
-  const invalidate = useInvalidateTeams();
+export function useCreateCavingGroup() {
+  const invalidate = useInvalidateCavingGroups();
   return useMutation({
-    mutationFn: (body: { name: string; description: string | null; website: string | null }) =>
-      unwrap(api.POST('/api/v1/teams', { body })),
+    mutationFn: (body: { name: string; type: CavingGroupInfo['type']; description: string | null; website: string | null }) =>
+      unwrap(api.POST('/api/v1/caving-groups', { body })),
     onSuccess: () => invalidate(),
   });
 }
 
-export function useUpsertTeamMember(teamId: string) {
-  const invalidate = useInvalidateTeams();
+export function useUpsertCavingGroupMember(cavingGroupId: string) {
+  const invalidate = useInvalidateCavingGroups();
   return useMutation({
-    mutationFn: (body: { userId: string; role: TeamMemberInfo['role'] }) =>
-      unwrap(api.POST('/api/v1/teams/{id}/members', { params: { path: { id: teamId } }, body })),
+    mutationFn: (body: { userId: string; role: CavingGroupMemberInfo['role'] }) =>
+      unwrap(api.POST('/api/v1/caving-groups/{id}/members', { params: { path: { id: cavingGroupId } }, body })),
     onSuccess: () => invalidate(),
   });
 }
 
-export function useRemoveTeamMember(teamId: string) {
-  const invalidate = useInvalidateTeams();
+export function useRemoveCavingGroupMember(cavingGroupId: string) {
+  const invalidate = useInvalidateCavingGroups();
   return useMutation({
     mutationFn: async (userId: string) => {
-      const { error, response } = await api.DELETE('/api/v1/teams/{id}/members/{userId}', {
-        params: { path: { id: teamId, userId } },
+      const { error, response } = await api.DELETE('/api/v1/caving-groups/{id}/members/{userId}', {
+        params: { path: { id: cavingGroupId, userId } },
       });
       if (error !== undefined) {
         throw new Error(`API error ${response.status}`);

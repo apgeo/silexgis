@@ -21,7 +21,7 @@ public readonly record struct AttachmentTarget(AttachedEntityType? EntityType, G
 
 /// <summary>
 /// Wire vocabulary of polymorphic target types: "feature" (any feature id, whatever its
-/// kind) plus the camelCase non-feature entity names ("tripLog", "team", "geofile",
+/// kind) plus the camelCase non-feature entity names ("tripLog", "cavingGroup", "geofile",
 /// "georeferencedMap", "mapView", "storedFile"). Parsed case-insensitively so
 /// query-string values behave like the camelCase JSON enum convention.
 /// </summary>
@@ -170,7 +170,7 @@ public static class FileAccessRules
             case AttachedEntityType.TripLog:
                 return await CanEntityAsync(db, user, db.TripLogs, entityId, ObjectPermission.Read, ct);
 
-            case AttachedEntityType.Team:
+            case AttachedEntityType.CavingGroup:
                 return user.IsMemberOf(entityId);
 
             case AttachedEntityType.Geofile:
@@ -202,7 +202,7 @@ public static class FileAccessRules
             case AttachedEntityType.TripLog:
                 return await CanEntityAsync(db, user, db.TripLogs, entityId, ObjectPermission.Write, ct);
 
-            case AttachedEntityType.Team:
+            case AttachedEntityType.CavingGroup:
                 return user.IsMemberOf(entityId) || user.IsAdmin;
 
             case AttachedEntityType.Geofile:

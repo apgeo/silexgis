@@ -30,13 +30,13 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
 
     private HttpClient owner = null!;      // Editor, owns everything created here
     private HttpClient outsider = null!;   // Editor, unrelated user
-    private HttpClient teammate = null!;   // Editor, plain member of the team
+    private HttpClient groupMate = null!;   // Editor, plain member of the caving group
     private HttpClient viewer = null!;     // Viewer role
     private string suffix = null!;
     private Guid ownerId;
     private Guid outsiderId;
-    private Guid teammateId;
-    private Guid teamId;
+    private Guid groupMateId;
+    private Guid cavingGroupId;
     private long caveTypeId;
     private long entranceTypeId;
     private long karstAreaTypeId;
@@ -49,18 +49,18 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
         suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"owner-{suffix}@t.local");
         outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"out-{suffix}@t.local");
-        teammateId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"mate-{suffix}@t.local");
+        groupMateId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"mate-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"view-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-            var team = new Team { Name = $"Team {suffix}", Slug = $"team-{suffix}" };
-            db.Teams.Add(team);
-            db.TeamMembers.Add(new TeamMember { TeamId = team.Id, UserId = ownerId, Role = TeamRole.Owner });
-            db.TeamMembers.Add(new TeamMember { TeamId = team.Id, UserId = teammateId, Role = TeamRole.Member });
+            var cavingGroup = new CavingGroup { Name = $"CavingGroup {suffix}", Slug = $"caving-group-{suffix}" };
+            db.CavingGroups.Add(cavingGroup);
+            db.CavingGroupMembers.Add(new CavingGroupMember { CavingGroupId = cavingGroup.Id, UserId = ownerId, Role = CavingGroupRole.Owner });
+            db.CavingGroupMembers.Add(new CavingGroupMember { CavingGroupId = cavingGroup.Id, UserId = groupMateId, Role = CavingGroupRole.Member });
             await db.SaveChangesAsync();
-            teamId = team.Id;
+            cavingGroupId = cavingGroup.Id;
             caveTypeId = await db.CaveTypes.Where(t => t.Code == "cave").Select(t => t.Id).SingleAsync();
             entranceTypeId = await db.EntranceTypes.Where(t => t.Code == "natural").Select(t => t.Id).SingleAsync();
             karstAreaTypeId = await db.FeatureTypes.Where(t => t.Code == "karst_area").Select(t => t.Id).SingleAsync();
@@ -68,7 +68,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
 
         owner = await AuthHelper.BearerClientAsync(factory, $"owner-{suffix}@t.local");
         outsider = await AuthHelper.BearerClientAsync(factory, $"out-{suffix}@t.local");
-        teammate = await AuthHelper.BearerClientAsync(factory, $"mate-{suffix}@t.local");
+        groupMate = await AuthHelper.BearerClientAsync(factory, $"mate-{suffix}@t.local");
         viewer = await AuthHelper.BearerClientAsync(factory, $"view-{suffix}@t.local");
     }
 
@@ -103,7 +103,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
 
         var privateCave = await CreateCaveAsync(owner, CaveBody(Named("Private Cave")));
         var authCave = await CreateCaveAsync(owner, CaveBody(Named("Auth Cave"), "authenticated"));
-        var teamCave = await CreateCaveAsync(owner, CaveBody(Named("Team Cave"), "team", teamId: teamId));
+        var cavingGroupCave = await CreateCaveAsync(owner, CaveBody(Named("CavingGroup Cave"), "cavingGroup", cavingGroupId: cavingGroupId));
 
         // The created cave is a feature: the id is the feature id and the kind is carried.
         var created = await GetJsonAsync(owner, $"/api/v1/caves/{authCave}");
@@ -117,8 +117,8 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
         var outsiderIds = await ListCaveIdsAsync(outsider);
         outsiderIds.ShouldContain(authCave);
         outsiderIds.ShouldNotContain(privateCave);
-        outsiderIds.ShouldNotContain(teamCave);
-        (await ListCaveIdsAsync(teammate)).ShouldContain(teamCave);
+        outsiderIds.ShouldNotContain(cavingGroupCave);
+        (await ListCaveIdsAsync(groupMate)).ShouldContain(cavingGroupCave);
         (await ListCaveIdsAsync(owner)).Count.ShouldBe(3);
 
         // ---- unreadable and unknown caves are both a 404, never a 403
@@ -139,24 +139,24 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await outsider.DeleteAsync($"/api/v1/caves/{authCave}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        // ---- a team member writes, but only team admins/owners delete
-        var teamUpdate = await teammate.PutWithIfMatchAsync(
-            $"/api/v1/caves/{teamCave}", CaveBody(Named("Team Cave Updated"), "team", teamId: teamId));
-        teamUpdate.StatusCode.ShouldBe(HttpStatusCode.OK, await teamUpdate.Content.ReadAsStringAsync());
-        (await teamUpdate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("name").GetString()
-            .ShouldBe(Named("Team Cave Updated"));
-        (await teammate.DeleteAsync($"/api/v1/caves/{teamCave}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        // ---- a caving group member writes, but only caving group admins/owners delete
+        var cavingGroupUpdate = await groupMate.PutWithIfMatchAsync(
+            $"/api/v1/caves/{cavingGroupCave}", CaveBody(Named("CavingGroup Cave Updated"), "cavingGroup", cavingGroupId: cavingGroupId));
+        cavingGroupUpdate.StatusCode.ShouldBe(HttpStatusCode.OK, await cavingGroupUpdate.Content.ReadAsStringAsync());
+        (await cavingGroupUpdate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("name").GetString()
+            .ShouldBe(Named("CavingGroup Cave Updated"));
+        (await groupMate.DeleteAsync($"/api/v1/caves/{cavingGroupCave}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        // ---- binding a cave to a team the caller is not in is refused
+        // ---- binding a cave to a caving group the caller is not in is refused
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var foreignTeam = new Team { Name = $"Foreign {suffix}", Slug = $"foreign-{suffix}" };
-        db.Teams.Add(foreignTeam);
+        var foreignCavingGroup = new CavingGroup { Name = $"Foreign {suffix}", Slug = $"foreign-{suffix}" };
+        db.CavingGroups.Add(foreignCavingGroup);
         await db.SaveChangesAsync();
         var foreignBinding = await owner.PostAsJsonAsync(
-            "/api/v1/caves", CaveBody(Named("Foreign Team Cave"), "team", teamId: foreignTeam.Id));
+            "/api/v1/caves", CaveBody(Named("Foreign CavingGroup Cave"), "cavingGroup", cavingGroupId: foreignCavingGroup.Id));
         foreignBinding.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await CodeAsync(foreignBinding)).ShouldBe("cave.team_membership_required");
+        (await CodeAsync(foreignBinding)).ShouldBe("cave.caving_group_membership_required");
     }
 
     [Fact]
@@ -323,15 +323,15 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
         clusterFeatures.Sum(f => f.GetProperty("properties").GetProperty("count").GetInt32())
             .ShouldBeGreaterThanOrEqualTo(1);
 
-        // ---- team members implicitly hold ViewExactLocation on their team's protected caves
-        var teamProtected = await CreateCaveAsync(owner, CaveBody(
-            Named("Team Protected Cave"), "team", teamId: teamId, locationProtected: true,
+        // ---- caving group members implicitly hold ViewExactLocation on their caving group's protected caves
+        var cavingGroupProtected = await CreateCaveAsync(owner, CaveBody(
+            Named("CavingGroup Protected Cave"), "cavingGroup", cavingGroupId: cavingGroupId, locationProtected: true,
             closestAddress: "Club hut, second turn"));
-        await CreateEntranceAsync(owner, teamProtected, 25.61, 45.71, isMain: true);
-        var forTeammate = await GetJsonAsync(teammate, $"/api/v1/caves/{teamProtected}");
-        forTeammate.GetProperty("approximateLocation").GetBoolean().ShouldBeFalse();
-        forTeammate.GetProperty("closestAddress").GetString().ShouldBe("Club hut, second turn");
-        forTeammate.GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldBe(25.61, 1e-9);
+        await CreateEntranceAsync(owner, cavingGroupProtected, 25.61, 45.71, isMain: true);
+        var forGroupMate = await GetJsonAsync(groupMate, $"/api/v1/caves/{cavingGroupProtected}");
+        forGroupMate.GetProperty("approximateLocation").GetBoolean().ShouldBeFalse();
+        forGroupMate.GetProperty("closestAddress").GetString().ShouldBe("Club hut, second turn");
+        forGroupMate.GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldBe(25.61, 1e-9);
     }
 
     [Fact]
@@ -480,7 +480,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
         // The cave list's EF filter and its Dapper twin must select the same feature rows.
         await AssertCaveVisibilityParityAsync(ownerId);
         await AssertCaveVisibilityParityAsync(outsiderId);
-        await AssertCaveVisibilityParityAsync(teammateId);
+        await AssertCaveVisibilityParityAsync(groupMateId);
     }
 
     /// <summary>
@@ -492,9 +492,9 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var teams = await db.TeamMembers.Where(m => m.UserId == userId)
-            .ToDictionaryAsync(m => m.TeamId, m => m.Role);
-        var user = new UserContext(userId, new HashSet<string>(), teams);
+        var cavingGroups = await db.CavingGroupMembers.Where(m => m.UserId == userId)
+            .ToDictionaryAsync(m => m.CavingGroupId, m => m.Role);
+        var user = new UserContext(userId, new HashSet<string>(), cavingGroups);
 
         var efIds = await db.Features
             .Where(f => f.Kind == FeatureKind.Cave)
@@ -523,7 +523,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
     private object CaveBody(
         string name,
         string visibility = "private",
-        Guid? teamId = null,
+        Guid? cavingGroupId = null,
         Guid? parentId = null,
         bool locationProtected = false,
         string? closestAddress = null,
@@ -533,7 +533,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
             name,
             caveTypeId,
             visibility,
-            teamId,
+            cavingGroupId,
             parentId,
             locationProtected,
             closestAddress,
@@ -564,7 +564,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
             properties = (object?)null,
             parents = Array.Empty<object>(),
             locationProtected = false,
-            teamId = (Guid?)null,
+            cavingGroupId = (Guid?)null,
             visibility,
         });
         var payload = await response.Content.ReadAsStringAsync();
@@ -638,7 +638,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
     {
         owner.Dispose();
         outsider.Dispose();
-        teammate.Dispose();
+        groupMate.Dispose();
         viewer.Dispose();
         factory.Dispose();
     }

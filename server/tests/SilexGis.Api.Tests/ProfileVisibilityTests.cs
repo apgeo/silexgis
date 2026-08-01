@@ -15,7 +15,7 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// The per-field profile visibility contract over real HTTP: what a teammate, a stranger and an
+/// The per-field profile visibility contract over real HTTP: what a groupMate, a stranger and an
 /// administrator each see of a member, that the picker cannot be used as an address oracle, and
 /// that no attribution row falls back to somebody's address.
 /// </summary>
@@ -26,13 +26,13 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];
 
     private HttpClient subject = null!;   // publishes some fields
-    private HttpClient teammate = null!;  // shares a team with the subject
-    private HttpClient outsider = null!;  // signed in, no shared team
+    private HttpClient groupMate = null!;  // shares a caving group with the subject
+    private HttpClient outsider = null!;  // signed in, no shared caving group
     private HttpClient admin = null!;
-    private HttpClient manager = null!;   // creates the team
+    private HttpClient manager = null!;   // creates the caving group
     private Guid subjectId;
-    private Guid teammateId;
-    private Guid teamId;
+    private Guid groupMateId;
+    private Guid cavingGroupId;
 
     public ProfileVisibilityTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
@@ -40,23 +40,23 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
     public async Task InitializeAsync()
     {
         subjectId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, SubjectEmail);
-        teammateId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, TeammateEmail);
+        groupMateId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, GroupMateEmail);
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OutsiderEmail);
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, AdminEmail);
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Manager, ManagerEmail);
 
         subject = await AuthHelper.BearerClientAsync(factory, SubjectEmail);
-        teammate = await AuthHelper.BearerClientAsync(factory, TeammateEmail);
+        groupMate = await AuthHelper.BearerClientAsync(factory, GroupMateEmail);
         outsider = await AuthHelper.BearerClientAsync(factory, OutsiderEmail);
         admin = await AuthHelper.BearerClientAsync(factory, AdminEmail);
         manager = await AuthHelper.BearerClientAsync(factory, ManagerEmail);
 
-        await PutSubjectInATeamWithTeammateAsync();
+        await PutSubjectInACavingGroupWithGroupMateAsync();
     }
 
     private string SubjectEmail => $"vis-subj-{suffix}@t.local";
 
-    private string TeammateEmail => $"vis-mate-{suffix}@t.local";
+    private string GroupMateEmail => $"vis-mate-{suffix}@t.local";
 
     private string OutsiderEmail => $"vis-out-{suffix}@t.local";
 
@@ -67,7 +67,7 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task Each_viewer_sees_exactly_what_the_subject_shared_with_them()
     {
-        await PublishAsync(realName: "team", email: "private", phone: "authenticated", address: "team");
+        await PublishAsync(realName: "cavingGroup", email: "private", phone: "authenticated", address: "cavingGroup");
         await subject.PostAsJsonAsync("/api/v1/me/addresses/", new
         {
             label = "Home",
@@ -82,12 +82,12 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
         mine.GetProperty("firstName").GetString().ShouldBe("Ana");
         mine.GetProperty("email").GetString().ShouldBe(SubjectEmail);
 
-        var asTeammate = await MemberAsync(teammate, subjectId);
-        asTeammate.GetProperty("firstName").GetString().ShouldBe("Ana");
-        asTeammate.GetProperty("lastName").GetString().ShouldBe("Pop");
-        asTeammate.GetProperty("phoneNumber").GetString().ShouldNotBeNull();
-        asTeammate.GetProperty("email").ValueKind.ShouldBe(JsonValueKind.Null);
-        asTeammate.GetProperty("addresses").GetArrayLength().ShouldBe(1);
+        var asGroupMate = await MemberAsync(groupMate, subjectId);
+        asGroupMate.GetProperty("firstName").GetString().ShouldBe("Ana");
+        asGroupMate.GetProperty("lastName").GetString().ShouldBe("Pop");
+        asGroupMate.GetProperty("phoneNumber").GetString().ShouldNotBeNull();
+        asGroupMate.GetProperty("email").ValueKind.ShouldBe(JsonValueKind.Null);
+        asGroupMate.GetProperty("addresses").GetArrayLength().ShouldBe(1);
 
         var asOutsider = await MemberAsync(outsider, subjectId);
         asOutsider.GetProperty("phoneNumber").GetString().ShouldNotBeNull();
@@ -203,14 +203,14 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
     {
         // Accounts are created with the address as the user name, so a "display name or user
         // name" fallback would print the address of everyone who never set a display name. The
-        // teammate here has no display name at all.
+        // groupMate here has no display name at all.
 
-        var members = await (await manager.GetAsync($"/api/v1/teams/{teamId}/members")).Content.ReadAsStringAsync();
+        var members = await (await manager.GetAsync($"/api/v1/caving-groups/{cavingGroupId}/members")).Content.ReadAsStringAsync();
 
-        members.ShouldNotContain(TeammateEmail);
+        members.ShouldNotContain(GroupMateEmail);
         members.ShouldNotContain("@t.local");
         var row = JsonDocument.Parse(members).RootElement.EnumerateArray()
-            .Single(m => m.GetProperty("userId").GetGuid() == teammateId);
+            .Single(m => m.GetProperty("userId").GetGuid() == groupMateId);
         row.GetProperty("displayName").GetString().ShouldStartWith("user-");
     }
 
@@ -219,7 +219,7 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
     {
         await PublishAsync();
 
-        var members = await (await manager.GetAsync($"/api/v1/teams/{teamId}/members")).Content.ReadAsStringAsync();
+        var members = await (await manager.GetAsync($"/api/v1/caving-groups/{cavingGroupId}/members")).Content.ReadAsStringAsync();
 
         JsonDocument.Parse(members).RootElement.EnumerateArray()
             .Single(m => m.GetProperty("userId").GetGuid() == subjectId)
@@ -253,29 +253,29 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
             },
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-    private async Task PutSubjectInATeamWithTeammateAsync()
+    private async Task PutSubjectInACavingGroupWithGroupMateAsync()
     {
         // The slug is derived server-side, so the id comes from the response rather than a lookup.
-        var created = await manager.PostAsJsonAsync("/api/v1/teams", new
+        var created = await manager.PostAsJsonAsync("/api/v1/caving-groups", new
         {
-            name = $"Visibility team {suffix}",
+            name = $"Visibility caving group {suffix}",
             description = (string?)null,
             website = (string?)null,
         });
         created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
-        teamId = JsonDocument.Parse(await created.Content.ReadAsStringAsync()).RootElement.GetProperty("id").GetGuid();
+        cavingGroupId = JsonDocument.Parse(await created.Content.ReadAsStringAsync()).RootElement.GetProperty("id").GetGuid();
 
-        foreach (var userId in new[] { subjectId, teammateId })
+        foreach (var userId in new[] { subjectId, groupMateId })
         {
-            (await manager.PostAsJsonAsync($"/api/v1/teams/{teamId}/members", new { userId, role = "Member" }))
+            (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members", new { userId, role = "Member" }))
                 .StatusCode.ShouldBe(HttpStatusCode.OK);
         }
 
-        // The team memberships must be in the bearer token's context, so re-issue both clients.
+        // The caving group memberships must be in the bearer token's context, so re-issue both clients.
         subject.Dispose();
-        teammate.Dispose();
+        groupMate.Dispose();
         subject = await AuthHelper.BearerClientAsync(factory, SubjectEmail);
-        teammate = await AuthHelper.BearerClientAsync(factory, TeammateEmail);
+        groupMate = await AuthHelper.BearerClientAsync(factory, GroupMateEmail);
     }
 
     private static async Task<JsonElement> MemberAsync(HttpClient client, Guid id)
@@ -305,7 +305,7 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
     public void Dispose()
     {
         subject.Dispose();
-        teammate.Dispose();
+        groupMate.Dispose();
         outsider.Dispose();
         admin.Dispose();
         manager.Dispose();

@@ -115,17 +115,17 @@ public sealed class PerformanceTests : IDisposable
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var connection = db.Database.GetDbConnection();
 
-        // Not the owner and in no team: the visibility fragment is carried by the rows'
+        // Not the owner and in no caving group: the visibility fragment is carried by the rows'
         // Authenticated visibility, and the exact-view fragment's protection-root lookup is
         // evaluated for real on every row the bbox returns — the work these pins are about.
-        var user = new UserContext(strangerId, new HashSet<string>(), new Dictionary<Guid, TeamRole>());
+        var user = new UserContext(strangerId, new HashSet<string>(), new Dictionary<Guid, CavingGroupRole>());
 
-        // The team-id set must reach PostgreSQL as a single uuid[] placeholder. Dapper's
+        // The caving group-id set must reach PostgreSQL as a single uuid[] placeholder. Dapper's
         // default handling of an array expands it into one placeholder per element, which
         // turns the ANY test into a per-row construct (measured 50x slower at this size).
         var (visibilitySql, visibilityParameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
-        visibilitySql.ShouldContain("= ANY(@vis_team_ids)", Case.Sensitive,
-            "the visibility fragment must pass team ids as ONE uuid[] parameter");
+        visibilitySql.ShouldContain("= ANY(@vis_caving_group_ids)", Case.Sensitive,
+            "the visibility fragment must pass caving group ids as ONE uuid[] parameter");
 
         var exactSql = PermissionSql.ExactViewFragment("f");
         AddViewport(visibilityParameters);

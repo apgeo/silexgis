@@ -36,7 +36,7 @@ public enum NotificationOutboxStatus : short
 /// <para>
 /// Deliberately separate from <c>processing_jobs</c>, whose contract is one heavy job at a time
 /// with terminal failures and a startup sweep that re-runs whatever was interrupted. Re-running an
-/// interrupted send means sending it twice, and one grant to a large team is one row per member —
+/// interrupted send means sending it twice, and one grant to a large caving group is one row per member —
 /// the opposite shape. See the queue contract in the data-model spec.
 /// </para>
 /// <para>

@@ -10,7 +10,7 @@
     "geodata": "Geodate",
     "trips": "Jurnale de tură",
     "audit": "Istoric",
-    "teams": "Echipe",
+    "cavingGroups": "Grupuri de speologie",
     "settings": "Setări",
     "messaging": "Mesagerie",
     "templates": "Texte mesaje"
@@ -216,7 +216,7 @@
     },
     "visibilityValues": {
       "private": "Privată",
-      "team": "Echipă",
+      "cavingGroup": "Grup de speologie",
       "authenticated": "Utilizatori autentificați",
       "public": "Publică"
     },
@@ -519,10 +519,16 @@
       "caption": "Legendă"
     }
   },
-  "teams": {
-    "title": "Echipe",
-    "new": "Echipă nouă",
+  "cavingGroups": {
+    "title": "Grupuri de speologie",
+    "new": "Grup nou",
     "name": "Denumire",
+    "type": "Tip",
+    "types": {
+      "cavingClub": "Club de speologie",
+      "group": "Grup",
+      "organization": "Organizație"
+    },
     "members": "Membri",
     "manage": "Administrează",
     "addMember": "Adaugă",
@@ -538,9 +544,9 @@
     "button": "Permisiuni",
     "subject": "Subiect",
     "user": "Utilizator",
-    "team": "Echipă",
+    "cavingGroup": "Grup de speologie",
     "pickUser": "Caută utilizatori…",
-    "pickTeam": "Alege o echipă…",
+    "pickCavingGroup": "Alege un grup…",
     "addGrant": "Adaugă",
     "notManager": "Nu puteți administra permisiunile acestui obiect.",
     "flags": {
@@ -676,11 +682,11 @@
     "visibility": {
       "label": "Cine poate vedea",
       "tooltip": "Vizibil pentru: {{audience}}",
-      "legend": "Pictograma de lângă un câmp stabilește cine îl vede: doar dumneavoastră, cei din echipele dumneavoastră sau orice membru autentificat."
+      "legend": "Pictograma de lângă un câmp stabilește cine îl vede: doar dumneavoastră, cei din grupurile dumneavoastră de speologie sau orice membru autentificat."
     },
     "visibilityValues": {
       "private": "Doar eu",
-      "team": "Echipele mele",
+      "cavingGroup": "Grupurile mele",
       "authenticated": "Membrii autentificați"
     },
     "profile": {
@@ -791,7 +797,7 @@
       "alwaysOn": "Se trimit mereu — acestea vă avertizează despre propriul cont.",
       "noDelivery": "Această instalare nu are un server de e-mail configurat, deci nu se trimite nimic încă. Alegerile sunt salvate și vor fi folosite când va exista unul.",
       "events": {
-        "teamMembership": "Schimbări în echipe",
+        "cavingGroupMembership": "Schimbări în grupurile de speologie",
         "permissionGranted": "Cineva îmi dă acces la ceva",
         "tripParticipation": "Sunt adăugat la o tură",
         "jobCompleted": "Fișierele mele termină de procesat",

@@ -143,7 +143,7 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
             attribution = (string?)null,
             defaultOpacity = 0.8,
             caveFeatureId,
-            teamId = (Guid?)null,
+            cavingGroupId = (Guid?)null,
             visibility = "authenticated",
         });
         var updated = await update.Content.ReadAsStringAsync();

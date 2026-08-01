@@ -12,9 +12,9 @@ import {
   type CaveWrite,
 } from '../../api/hooks.ts';
 
-type CaveFormValues = Omit<CaveWrite, 'teamId'>;
+type CaveFormValues = Omit<CaveWrite, 'cavingGroupId'>;
 
-/** Create/edit form, sectioned to mirror the cave sheet. Team binding arrives with teams UI. */
+/** Create/edit form, sectioned to mirror the cave sheet. CavingGroup binding arrives with teams UI. */
 export default function CaveFormPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -42,7 +42,7 @@ export default function CaveFormPage() {
       locationProtected: values.locationProtected ?? false,
       explorationStatus: values.explorationStatus ?? 'unknown',
       visibility: values.visibility ?? 'private',
-      teamId: cave?.teamId ?? null,
+      cavingGroupId: cave?.cavingGroupId ?? null,
       // Not editable here yet: round-trip the typed-properties document and keep the cave
       // under its current primary parent (the write DTO addresses containment by parent id).
       properties: cave?.properties ?? null,

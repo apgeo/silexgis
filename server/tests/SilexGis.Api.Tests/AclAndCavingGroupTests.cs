@@ -18,23 +18,23 @@ namespace SilexGis.Api.Tests;
 /// <summary>
 /// The explicit-grant layer end-to-end over the object-ACL target vocabulary: grants on
 /// features (one route name for every kind) unlock read/write/exact-location for users
-/// and via teams, mapView grants are manageable and effective, ManagePermissions gates
-/// the ACL endpoints, newly granted people are notified, and teams have their own
+/// and via caving groups, mapView grants are manageable and effective, ManagePermissions gates
+/// the ACL endpoints, newly granted people are notified, and caving groups have their own
 /// lifecycle rules.
 /// </summary>
 [Collection(PostgresCollection.Name)]
-public sealed class AclAndTeamTests : IAsyncLifetime, IDisposable
+public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
 {
     private readonly SilexGisApiFactory factory;
 
     private HttpClient owner = null!;    // Editor, creates the objects
     private HttpClient grantee = null!;  // Editor, receives ACL grants
-    private HttpClient manager = null!;  // Manager role, creates teams
+    private HttpClient manager = null!;  // Manager role, creates caving groups
     private Guid granteeId;
     private long caveTypeId;
     private long entranceTypeId;
 
-    public AclAndTeamTests(PostgresFixture postgres) =>
+    public AclAndCavingGroupTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
     public async Task InitializeAsync()
@@ -100,36 +100,36 @@ public sealed class AclAndTeamTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
-    public async Task Team_grants_apply_to_all_members_notify_them_once_and_parity_holds()
+    public async Task CavingGroup_grants_apply_to_all_members_notify_them_once_and_parity_holds()
     {
-        // The manager creates a team and adds the grantee as a plain member.
-        var teamId = await CreateTeamAsync();
-        (await manager.PostAsJsonAsync($"/api/v1/teams/{teamId}/members", new
+        // The manager creates a caving group and adds the grantee as a plain member.
+        var cavingGroupId = await CreateCavingGroupAsync();
+        (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members", new
         {
             userId = granteeId,
             role = "member",
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // A private cave (NOT team-bound) with a team ACL grant becomes readable to members.
-        var caveId = await CreateCaveAsync("Team ACL Cave", "private");
+        // A private cave (NOT caving group-bound) with a caving group ACL grant becomes readable to members.
+        var caveId = await CreateCaveAsync("CavingGroup ACL Cave", "private");
         (await grantee.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        await ReplaceAclAsync(owner, "feature", caveId, [(AclSubjectKind.Team, teamId, ObjectPermission.Read)]);
+        await ReplaceAclAsync(owner, "feature", caveId, [(AclSubjectKind.CavingGroup, cavingGroupId, ObjectPermission.Read)]);
         (await grantee.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await manager.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.OK); // team owner too
+        (await manager.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.OK); // caving group owner too
 
-        // A team grant notifies each member — and only once: re-saving the same ACL is
+        // A caving group grant notifies each member — and only once: re-saving the same ACL is
         // not news and must not queue another message.
         (await CountPermissionNotificationsAsync(granteeId)).ShouldBe(1);
-        await ReplaceAclAsync(owner, "feature", caveId, [(AclSubjectKind.Team, teamId, ObjectPermission.Read)]);
+        await ReplaceAclAsync(owner, "feature", caveId, [(AclSubjectKind.CavingGroup, cavingGroupId, ObjectPermission.Read)]);
         (await CountPermissionNotificationsAsync(granteeId)).ShouldBe(1);
 
-        // EF ↔ SQL parity of the feature filter including the team-ACL branch, scoped to
+        // EF ↔ SQL parity of the feature filter including the caving group-ACL branch, scoped to
         // this test's cave (the full caller matrix lives in the parity suite).
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var teams = await db.TeamMembers.Where(m => m.UserId == granteeId)
-            .ToDictionaryAsync(m => m.TeamId, m => m.Role);
-        var user = new UserContext(granteeId, new HashSet<string>(), teams);
+        var cavingGroups = await db.CavingGroupMembers.Where(m => m.UserId == granteeId)
+            .ToDictionaryAsync(m => m.CavingGroupId, m => m.Role);
+        var user = new UserContext(granteeId, new HashSet<string>(), cavingGroups);
 
         var efIds = await db.Features.VisibleTo(user, db.ObjectAcls)
             .Where(f => f.Id == caveId).Select(f => f.Id).ToListAsync();
@@ -144,26 +144,26 @@ public sealed class AclAndTeamTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
-    public async Task A_team_bound_row_is_readable_by_its_members_whatever_the_visibility()
+    public async Task A_caving_group_bound_row_is_readable_by_its_members_whatever_the_visibility()
     {
-        // Binding a row to a team is its own grant: members read it even when the
+        // Binding a row to a caving group is its own grant: members read it even when the
         // visibility says private. The single-row check and the list filter must agree —
         // if they disagree, a member can open the cave but everything that hangs off it
         // (attachments, tags, history, files) answers 404 for the same caller.
-        var teamId = await CreateTeamAsync();
-        (await manager.PostAsJsonAsync($"/api/v1/teams/{teamId}/members", new
+        var cavingGroupId = await CreateCavingGroupAsync();
+        (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members", new
         {
             userId = granteeId,
             role = "member",
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // Created by the team's own manager: binding a row to a team requires membership.
+        // Created by the caving group's own manager: binding a row to a caving group requires membership.
         var response = await manager.PostAsJsonAsync("/api/v1/caves", new
         {
-            name = $"Team Bound Cave {Guid.NewGuid():N}"[..40],
+            name = $"CavingGroup Bound Cave {Guid.NewGuid():N}"[..40],
             caveTypeId,
             visibility = "private",
-            teamId,
+            cavingGroupId,
             locationProtected = false,
             explorationStatus = "Unknown",
             isShowCave = false,
@@ -181,19 +181,19 @@ public sealed class AclAndTeamTests : IAsyncLifetime, IDisposable
             .StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // A non-member still sees nothing at all — the arm keys on membership, not on
-        // the row merely carrying a team id.
+        // the row merely carrying a caving group id.
         var strangerEmail = $"acl-stranger-{Guid.NewGuid():N}"[..20] + "@t.local";
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, strangerEmail);
         using var stranger = await AuthHelper.BearerClientAsync(factory, strangerEmail);
         (await stranger.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await ListCaveIdsAsync(stranger)).ShouldNotContain(caveId);
 
-        // EF <-> SQL parity for the team arm specifically.
+        // EF <-> SQL parity for the caving group arm specifically.
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var teams = await db.TeamMembers.Where(m => m.UserId == granteeId)
-            .ToDictionaryAsync(m => m.TeamId, m => m.Role);
-        var user = new UserContext(granteeId, new HashSet<string>(), teams);
+        var cavingGroups = await db.CavingGroupMembers.Where(m => m.UserId == granteeId)
+            .ToDictionaryAsync(m => m.CavingGroupId, m => m.Role);
+        var user = new UserContext(granteeId, new HashSet<string>(), cavingGroups);
         var efIds = await db.Features.VisibleTo(user, db.ObjectAcls)
             .Where(f => f.Id == caveId).Select(f => f.Id).ToListAsync();
         var (fragment, parameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
@@ -243,7 +243,7 @@ public sealed class AclAndTeamTests : IAsyncLifetime, IDisposable
             description = (string?)null,
             config = new { },
             isHome = false,
-            teamId = (Guid?)null,
+            cavingGroupId = (Guid?)null,
             visibility = "private",
         });
         createResponse.StatusCode.ShouldBe(HttpStatusCode.Created, await createResponse.Content.ReadAsStringAsync());
@@ -307,10 +307,10 @@ public sealed class AclAndTeamTests : IAsyncLifetime, IDisposable
             entries = Array.Empty<object>(),
         })).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
-        // Editors cannot create teams (Manager+ only).
-        (await owner.PostAsJsonAsync("/api/v1/teams/", new
+        // Editors cannot create caving groups (Manager+ only).
+        (await owner.PostAsJsonAsync("/api/v1/caving-groups/", new
         {
-            name = "Editor Team Attempt",
+            name = "Editor CavingGroup Attempt",
             description = (string?)null,
             website = (string?)null,
         })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
@@ -318,11 +318,11 @@ public sealed class AclAndTeamTests : IAsyncLifetime, IDisposable
 
     // ---- helpers ----
 
-    private async Task<Guid> CreateTeamAsync()
+    private async Task<Guid> CreateCavingGroupAsync()
     {
-        var response = await manager.PostAsJsonAsync("/api/v1/teams/", new
+        var response = await manager.PostAsJsonAsync("/api/v1/caving-groups/", new
         {
-            name = $"ACL Grant Team {Guid.NewGuid():N}"[..30],
+            name = $"ACL Grant CavingGroup {Guid.NewGuid():N}"[..30],
             description = (string?)null,
             website = (string?)null,
         });
@@ -374,7 +374,7 @@ public sealed class AclAndTeamTests : IAsyncLifetime, IDisposable
         description = (string?)null,
         config = new { },
         isHome = false,
-        teamId = (Guid?)null,
+        cavingGroupId = (Guid?)null,
         visibility = "private",
     };
 
@@ -396,7 +396,7 @@ public sealed class AclAndTeamTests : IAsyncLifetime, IDisposable
         {
             entries = entries.Select(e => new
             {
-                subjectKind = e.Kind == AclSubjectKind.User ? "user" : "team",
+                subjectKind = e.Kind == AclSubjectKind.User ? "user" : "cavingGroup",
                 subjectId = e.SubjectId,
                 permissions = e.Permissions.ToString().Replace(" ", string.Empty),
             }).ToArray(),

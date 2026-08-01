@@ -270,7 +270,7 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
     description: feature.description,
     properties: feature.properties,
     locationProtected: feature.locationProtected,
-    teamId: feature.teamId,
+    cavingGroupId: feature.cavingGroupId,
     visibility: feature.visibility,
   });
 
@@ -285,7 +285,7 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
           description: values.description,
           properties: values.properties as never,
           locationProtected: values.locationProtected,
-          teamId: feature.teamId,
+          cavingGroupId: feature.cavingGroupId,
           visibility: values.visibility,
         },
       });

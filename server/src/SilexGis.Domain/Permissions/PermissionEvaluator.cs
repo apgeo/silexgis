@@ -2,11 +2,11 @@
 namespace SilexGis.Domain.Permissions;
 
 /// <summary>
-/// Effective-permission algorithm: global roles, ownership, visibility, team roles and
+/// Effective-permission algorithm: global roles, ownership, visibility, caving group roles and
 /// explicit ACL grants. The evaluator stays pure — callers that want the ACL layer load
 /// the applicable grants first (IPermissionService does this) and pass their OR-ed
 /// flags in <c>aclGranted</c>; most-permissive layer wins.
-/// Team defaults: member → Read+Write; team admin/owner → +Delete+Share+Manage.
+/// CavingGroup defaults: member → Read+Write; caving group admin/owner → +Delete+Share+Manage.
 /// </summary>
 public static class PermissionEvaluator
 {
@@ -33,9 +33,9 @@ public static class PermissionEvaluator
             return true;
         }
 
-        if (entity.TeamId is { } teamId && user.IsMemberOf(teamId))
+        if (entity.CavingGroupId is { } cavingGroupId && user.IsMemberOf(cavingGroupId))
         {
-            var granted = user.IsTeamAdmin(teamId)
+            var granted = user.IsCavingGroupAdmin(cavingGroupId)
                 ? ObjectPermission.Read | ObjectPermission.Write | ObjectPermission.Delete
                     | ObjectPermission.Share | ObjectPermission.ManagePermissions
                     | ObjectPermission.ViewExactLocation
@@ -53,7 +53,7 @@ public static class PermissionEvaluator
         entity.Visibility switch
         {
             Visibility.Public or Visibility.Authenticated => true,
-            Visibility.Team => entity.TeamId is { } teamId && user.IsMemberOf(teamId),
+            Visibility.CavingGroup => entity.CavingGroupId is { } cavingGroupId && user.IsMemberOf(cavingGroupId),
             _ => false,
         };
 }

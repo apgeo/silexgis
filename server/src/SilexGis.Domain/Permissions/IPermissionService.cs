@@ -3,7 +3,7 @@ namespace SilexGis.Domain.Permissions;
 
 /// <summary>
 /// The full effective-permission check: the pure <see cref="PermissionEvaluator"/>
-/// layers (roles/ownership/visibility/team) plus explicit object_acl grants loaded
+/// layers (roles/ownership/visibility/caving group) plus explicit object_acl grants loaded
 /// from storage. Endpoint guards call this; pure-computation paths that already know
 /// the applicable grants call the evaluator directly.
 /// </summary>

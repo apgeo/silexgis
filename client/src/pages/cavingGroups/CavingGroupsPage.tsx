@@ -18,23 +18,23 @@ import {
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
-  useCreateTeam,
+  useCreateCavingGroup,
   useMe,
-  useRemoveTeamMember,
-  useTeamMembers,
-  useTeams,
-  useUpsertTeamMember,
+  useRemoveCavingGroupMember,
+  useCavingGroupMembers,
+  useCavingGroups,
+  useUpsertCavingGroupMember,
   useUserSearch,
-  type TeamInfo,
+  type CavingGroupInfo,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 
-function MemberDrawer({ team, onClose }: { team: TeamInfo; onClose: () => void }) {
+function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () => void }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: members } = useTeamMembers(team.id);
-  const upsert = useUpsertTeamMember(team.id);
-  const remove = useRemoveTeamMember(team.id);
+  const { data: members } = useCavingGroupMembers(group.id);
+  const upsert = useUpsertCavingGroupMember(group.id);
+  const remove = useRemoveCavingGroupMember(group.id);
   const [userQuery, setUserQuery] = useState('');
   const debounced = useDebouncedValue(userQuery);
   const { data: users } = useUserSearch(debounced);
@@ -59,7 +59,7 @@ function MemberDrawer({ team, onClose }: { team: TeamInfo; onClose: () => void }
   };
 
   return (
-    <Drawer title={team.name} open onClose={onClose} width={420}>
+    <Drawer title={group.name} open onClose={onClose} width={420}>
       <Flex gap={8} style={{ marginBottom: 12 }}>
         <Select
           style={{ flex: 1 }}
@@ -77,7 +77,7 @@ function MemberDrawer({ team, onClose }: { team: TeamInfo; onClose: () => void }
           notFoundContent={null}
         />
         <Button icon={<PlusOutlined />} onClick={() => void add()} disabled={!selectedUser}>
-          {t('teams.addMember')}
+          {t('cavingGroups.addMember')}
         </Button>
       </Flex>
       <List
@@ -98,12 +98,12 @@ function MemberDrawer({ team, onClose }: { team: TeamInfo; onClose: () => void }
                 }
                 options={(['member', 'admin', 'owner'] as const).map((role) => ({
                   value: role,
-                  label: t(`teams.roles.${role}`),
+                  label: t(`cavingGroups.roles.${role}`),
                 }))}
               />,
               <Popconfirm
                 key="remove"
-                title={t('teams.removeConfirm')}
+                title={t('cavingGroups.removeConfirm')}
                 onConfirm={() =>
                   remove.mutateAsync(member.userId).catch(() => message.error(t('common.saveFailed')))
                 }
@@ -120,24 +120,30 @@ function MemberDrawer({ team, onClose }: { team: TeamInfo; onClose: () => void }
   );
 }
 
-/** Teams directory: browse for everyone, create for managers, manage members inline. */
-export default function TeamsPage() {
+/** CavingGroups directory: browse for everyone, create for managers, manage members inline. */
+export default function CavingGroupsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: teams, isFetching } = useTeams();
+  const { data: cavingGroups, isFetching } = useCavingGroups();
   const { data: me } = useMe();
-  const createTeam = useCreateTeam();
+  const createCavingGroup = useCreateCavingGroup();
   const [creating, setCreating] = useState(false);
-  const [managing, setManaging] = useState<TeamInfo | null>(null);
-  const [form] = Form.useForm<{ name: string; description?: string; website?: string }>();
+  const [managing, setManaging] = useState<CavingGroupInfo | null>(null);
+  const [form] = Form.useForm<{
+    name: string;
+    type: CavingGroupInfo['type'];
+    description?: string;
+    website?: string;
+  }>();
 
   const canCreate = me?.roles.some((r) => ['Admin', 'Manager'].includes(r)) ?? false;
 
   const onCreate = async () => {
     const values = await form.validateFields();
     try {
-      await createTeam.mutateAsync({
+      await createCavingGroup.mutateAsync({
         name: values.name,
+        type: values.type,
         description: values.description ?? null,
         website: values.website ?? null,
       });
@@ -153,27 +159,33 @@ export default function TeamsPage() {
     <div style={{ padding: 24, maxWidth: 900 }}>
       <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
-          {t('teams.title')}
+          {t('cavingGroups.title')}
         </Typography.Title>
         {canCreate && (
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-            {t('teams.new')}
+            {t('cavingGroups.new')}
           </Button>
         )}
       </Flex>
 
-      <Table<TeamInfo>
+      <Table<CavingGroupInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="middle"
-        loading={isFetching && !teams}
-        dataSource={teams}
+        loading={isFetching && !cavingGroups}
+        dataSource={cavingGroups}
         pagination={false}
         columns={[
-          { title: t('teams.name'), dataIndex: 'name' },
+          { title: t('cavingGroups.name'), dataIndex: 'name' },
+          {
+            title: t('cavingGroups.type'),
+            dataIndex: 'type',
+            width: 150,
+            render: (type: CavingGroupInfo['type']) => t(`cavingGroups.types.${type}`),
+          },
           { title: t('features.description'), dataIndex: 'description', ellipsis: true },
           {
-            title: t('teams.members'),
+            title: t('cavingGroups.members'),
             dataIndex: 'memberCount',
             width: 110,
             align: 'right',
@@ -183,9 +195,9 @@ export default function TeamsPage() {
             title: '',
             key: 'actions',
             width: 140,
-            render: (_, team) => (
-              <Button size="small" onClick={() => setManaging(team)}>
-                {t('teams.manage')}
+            render: (_, group) => (
+              <Button size="small" onClick={() => setManaging(group)}>
+                {t('cavingGroups.manage')}
               </Button>
             ),
           },
@@ -193,16 +205,24 @@ export default function TeamsPage() {
       />
 
       <Modal
-        title={t('teams.new')}
+        title={t('cavingGroups.new')}
         open={creating}
         onCancel={() => setCreating(false)}
         onOk={() => void onCreate()}
-        confirmLoading={createTeam.isPending}
+        confirmLoading={createCavingGroup.isPending}
         destroyOnHidden
       >
-        <Form form={form} layout="vertical">
-          <Form.Item name="name" label={t('teams.name')} rules={[{ required: true }]}>
+        <Form form={form} layout="vertical" initialValues={{ type: 'cavingClub' }}>
+          <Form.Item name="name" label={t('cavingGroups.name')} rules={[{ required: true }]}>
             <Input maxLength={120} />
+          </Form.Item>
+          <Form.Item name="type" label={t('cavingGroups.type')} rules={[{ required: true }]}>
+            <Select
+              options={(['cavingClub', 'group', 'organization'] as const).map((type) => ({
+                value: type,
+                label: t(`cavingGroups.types.${type}`),
+              }))}
+            />
           </Form.Item>
           <Form.Item name="description" label={t('features.description')}>
             <Input.TextArea rows={2} />
@@ -213,7 +233,7 @@ export default function TeamsPage() {
         </Form>
       </Modal>
 
-      {managing && <MemberDrawer team={managing} onClose={() => setManaging(null)} />}
+      {managing && <MemberDrawer group={managing} onClose={() => setManaging(null)} />}
     </div>
   );
 }

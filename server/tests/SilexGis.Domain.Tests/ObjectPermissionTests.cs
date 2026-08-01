@@ -34,7 +34,7 @@ public class ObjectPermissionTests
     {
         // Stored values of the RLS-ready visibility column, must never change.
         ((short)Visibility.Private).ShouldBe((short)0);
-        ((short)Visibility.Team).ShouldBe((short)1);
+        ((short)Visibility.CavingGroup).ShouldBe((short)1);
         ((short)Visibility.Authenticated).ShouldBe((short)2);
         ((short)Visibility.Public).ShouldBe((short)3);
     }

@@ -242,7 +242,7 @@ public static class MapEndpoints
                 {
                     AttachedEntityType.TripLog => readableTripIds.Contains(l.EntityId!.Value),
                     AttachedEntityType.Geofile => readableGeofileIds.Contains(l.EntityId!.Value),
-                    AttachedEntityType.Team => user.IsMemberOf(l.EntityId!.Value),
+                    AttachedEntityType.CavingGroup => user.IsMemberOf(l.EntityId!.Value),
                     _ => false,
                 });
             if (!visible)

@@ -85,7 +85,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         var response = await me.PutAsJsonAsync("/api/v1/me", ProfileBody(
             firstName: "Ana", lastName: "Pop", displayName: "Ana P", bio: "Caver since 2010.",
             phoneNumber: "+40 700 111 222", cavingClub: "Silex Braşov", locale: "ro",
-            realName: "team", email: "authenticated"));
+            realName: "cavingGroup", email: "authenticated"));
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 
         var profile = await GetMeAsync(me);
@@ -95,7 +95,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         profile.GetProperty("phoneNumber").GetString().ShouldBe("+40 700 111 222");
         profile.GetProperty("cavingClub").GetString().ShouldBe("Silex Braşov");
         profile.GetProperty("locale").GetString().ShouldBe("ro");
-        profile.GetProperty("visibility").GetProperty("realName").GetString().ShouldBe("team");
+        profile.GetProperty("visibility").GetProperty("realName").GetString().ShouldBe("cavingGroup");
         profile.GetProperty("visibility").GetProperty("email").GetString().ShouldBe("authenticated");
     }
 
@@ -303,7 +303,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         {
             emailEnabled = false,
             digest = "daily",
-            categories = new[] { new { category = "teamMembership", enabled = false } },
+            categories = new[] { new { category = "cavingGroupMembership", enabled = false } },
         });
         saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
 
@@ -311,7 +311,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         after.GetProperty("emailEnabled").GetBoolean().ShouldBeFalse();
         after.GetProperty("digest").GetString().ShouldBe("daily");
         after.GetProperty("categories").EnumerateArray()
-            .Single(c => c.GetProperty("category").GetString() == "teamMembership")
+            .Single(c => c.GetProperty("category").GetString() == "cavingGroupMembership")
             .GetProperty("enabled").GetBoolean().ShouldBeFalse();
 
         // One save writes the whole set, so there is no half-stored state to reason about later.

@@ -19,7 +19,7 @@ public sealed record GeofileDto(
     GeoJsonGeometry? Bbox,
     JsonElement? Style,
     Guid OwnerUserId,
-    Guid? TeamId,
+    Guid? CavingGroupId,
     Visibility Visibility,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
@@ -36,7 +36,7 @@ public sealed record GeofileUpdateRequest(
     string Name,
     string? Description,
     JsonElement? Style,
-    Guid? TeamId,
+    Guid? CavingGroupId,
     Visibility Visibility);
 
 internal static class GeofileMapping
@@ -54,7 +54,7 @@ internal static class GeofileMapping
         g.Bbox is null ? null : GeoJsonGeometry.From(g.Bbox),
         g.Style is null ? null : JsonSerializer.Deserialize<JsonElement>(g.Style),
         g.OwnerUserId,
-        g.TeamId,
+        g.CavingGroupId,
         g.Visibility,
         g.CreatedAt,
         g.UpdatedAt);

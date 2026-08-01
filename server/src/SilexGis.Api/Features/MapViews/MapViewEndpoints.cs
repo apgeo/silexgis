@@ -19,7 +19,7 @@ public sealed record MapViewDto(
     Guid? ShareToken,
     bool IsHome,
     Guid OwnerUserId,
-    Guid? TeamId,
+    Guid? CavingGroupId,
     Visibility Visibility,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
@@ -32,7 +32,7 @@ public sealed record MapViewWriteRequest(
     string? Description,
     JsonElement Config,
     bool IsHome,
-    Guid? TeamId,
+    Guid? CavingGroupId,
     Visibility Visibility);
 
 public sealed class MapViewWriteRequestValidator : AbstractValidator<MapViewWriteRequest>
@@ -105,9 +105,9 @@ public static class MapViewEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (request.TeamId is not null && !user.IsAdmin && !user.IsMemberOf(request.TeamId.Value))
+        if (request.CavingGroupId is not null && !user.IsAdmin && !user.IsMemberOf(request.CavingGroupId.Value))
         {
-            return ApiProblems.Forbidden("map_view.team_membership_required");
+            return ApiProblems.Forbidden("map_view.caving_group_membership_required");
         }
 
         var view = new MapView { Name = request.Name, OwnerUserId = user.UserId };
@@ -252,7 +252,7 @@ public static class MapViewEndpoints
         view.Description = request.Description;
         view.Config = request.Config.GetRawText();
         view.IsHome = request.IsHome;
-        view.TeamId = request.TeamId;
+        view.CavingGroupId = request.CavingGroupId;
         view.Visibility = request.Visibility;
     }
 
@@ -268,5 +268,5 @@ public static class MapViewEndpoints
     private static MapViewDto ToDto(MapView x) => new(
         x.Id, x.Name, x.Description,
         JsonSerializer.Deserialize<JsonElement>(x.Config),
-        x.ShareToken, x.IsHome, x.OwnerUserId, x.TeamId, x.Visibility, x.CreatedAt, x.UpdatedAt);
+        x.ShareToken, x.IsHome, x.OwnerUserId, x.CavingGroupId, x.Visibility, x.CreatedAt, x.UpdatedAt);
 }

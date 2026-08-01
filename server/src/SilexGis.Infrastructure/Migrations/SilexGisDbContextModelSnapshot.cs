@@ -947,6 +947,106 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("cave_types", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.CavingGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid?>("LogoFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("logo_file_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("slug");
+
+                    b.Property<short>("Type")
+                        .HasColumnType("smallint")
+                        .HasColumnName("type");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Website")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("website");
+
+                    b.HasKey("Id")
+                        .HasName("pk_caving_groups");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_caving_groups_name");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_caving_groups_slug");
+
+                    b.ToTable("caving_groups", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.CavingGroupMember", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<short>("Role")
+                        .HasColumnType("smallint")
+                        .HasColumnName("role");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_caving_group_members");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_caving_group_members_user_id");
+
+                    b.HasIndex("CavingGroupId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_caving_group_members_caving_group_id_user_id");
+
+                    b.ToTable("caving_group_members", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.Centerline", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1078,6 +1178,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("category");
 
+                    b.Property<Guid?>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -1136,10 +1240,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnName("search_vector")
                         .HasComputedColumnSql("to_tsvector('simple', immutable_unaccent(coalesce(name, '') || ' ' || coalesce(description, '')))", true);
 
-                    b.Property<Guid?>("TeamId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("team_id");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -1156,6 +1256,9 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("Category")
                         .HasDatabaseName("ix_features_category");
+
+                    b.HasIndex("CavingGroupId")
+                        .HasDatabaseName("ix_features_caving_group_id");
 
                     b.HasIndex("DeletedAt")
                         .HasDatabaseName("ix_features_deleted_at")
@@ -1177,9 +1280,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_features_search_vector");
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
-
-                    b.HasIndex("TeamId")
-                        .HasDatabaseName("ix_features_team_id");
 
                     b.HasIndex(new[] { "Geom" }, "ix_features_geom")
                         .HasDatabaseName("ix_features_geom");
@@ -1473,6 +1573,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("geometry(Polygon, 4326)")
                         .HasColumnName("bbox");
 
+                    b.Property<Guid?>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -1520,10 +1624,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("style");
 
-                    b.Property<Guid?>("TeamId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("team_id");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -1535,14 +1635,14 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_geofiles");
 
+                    b.HasIndex("CavingGroupId")
+                        .HasDatabaseName("ix_geofiles_caving_group_id");
+
                     b.HasIndex("FileId")
                         .HasDatabaseName("ix_geofiles_file_id");
 
                     b.HasIndex("OwnerUserId")
                         .HasDatabaseName("ix_geofiles_owner_user_id");
-
-                    b.HasIndex("TeamId")
-                        .HasDatabaseName("ix_geofiles_team_id");
 
                     b.ToTable("geofiles", (string)null);
                 });
@@ -1608,6 +1708,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("cave_feature_id");
 
+                    b.Property<Guid?>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -1656,10 +1760,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("status");
 
-                    b.Property<Guid?>("TeamId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("team_id");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -1679,14 +1779,14 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("CaveFeatureId")
                         .HasDatabaseName("ix_georeferenced_maps_cave_feature_id");
 
+                    b.HasIndex("CavingGroupId")
+                        .HasDatabaseName("ix_georeferenced_maps_caving_group_id");
+
                     b.HasIndex("FileId")
                         .HasDatabaseName("ix_georeferenced_maps_file_id");
 
                     b.HasIndex("OwnerUserId")
                         .HasDatabaseName("ix_georeferenced_maps_owner_user_id");
-
-                    b.HasIndex("TeamId")
-                        .HasDatabaseName("ix_georeferenced_maps_team_id");
 
                     b.ToTable("georeferenced_maps", (string)null);
                 });
@@ -1917,6 +2017,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<Guid?>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
+
                     b.Property<string>("Config")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1950,10 +2054,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("share_token");
 
-                    b.Property<Guid?>("TeamId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("team_id");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -1965,6 +2065,9 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_map_views");
 
+                    b.HasIndex("CavingGroupId")
+                        .HasDatabaseName("ix_map_views_caving_group_id");
+
                     b.HasIndex("OwnerUserId")
                         .HasDatabaseName("ix_map_views_owner_user_id");
 
@@ -1972,9 +2075,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_map_views_share_token")
                         .HasFilter("share_token IS NOT NULL");
-
-                    b.HasIndex("TeamId")
-                        .HasDatabaseName("ix_map_views_team_id");
 
                     b.ToTable("map_views", (string)null);
                 });
@@ -2527,107 +2627,15 @@ namespace SilexGis.Infrastructure.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SilexGis.Domain.Entities.Team", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)")
-                        .HasColumnName("description");
-
-                    b.Property<Guid?>("LogoFileId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("logo_file_id");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("name");
-
-                    b.Property<string>("Slug")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("slug");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<string>("Website")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("website");
-
-                    b.HasKey("Id")
-                        .HasName("pk_teams");
-
-                    b.HasIndex("Name")
-                        .IsUnique()
-                        .HasDatabaseName("ix_teams_name");
-
-                    b.HasIndex("Slug")
-                        .IsUnique()
-                        .HasDatabaseName("ix_teams_slug");
-
-                    b.ToTable("teams", (string)null);
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.TeamMember", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<short>("Role")
-                        .HasColumnType("smallint")
-                        .HasColumnName("role");
-
-                    b.Property<Guid>("TeamId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("team_id");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_team_members");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_team_members_user_id");
-
-                    b.HasIndex("TeamId", "UserId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_team_members_team_id_user_id");
-
-                    b.ToTable("team_members", (string)null);
-                });
-
             modelBuilder.Entity("SilexGis.Domain.Entities.TripLog", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<Guid?>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -2667,10 +2675,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("results");
 
-                    b.Property<Guid?>("TeamId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("team_id");
-
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -2705,6 +2709,9 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_trip_logs");
 
+                    b.HasIndex("CavingGroupId")
+                        .HasDatabaseName("ix_trip_logs_caving_group_id");
+
                     b.HasIndex("Geom")
                         .HasDatabaseName("ix_trip_logs_geom");
 
@@ -2712,9 +2719,6 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("OwnerUserId")
                         .HasDatabaseName("ix_trip_logs_owner_user_id");
-
-                    b.HasIndex("TeamId")
-                        .HasDatabaseName("ix_trip_logs_team_id");
 
                     b.HasIndex("TripDate")
                         .HasDatabaseName("ix_trip_logs_trip_date");
@@ -3308,6 +3312,23 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Navigation("Feature");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.CavingGroupMember", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_caving_group_members_caving_groups_caving_group_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_caving_group_members_users_user_id");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.Centerline", b =>
                 {
                     b.HasOne("SilexGis.Domain.Entities.Cave", null)
@@ -3336,6 +3357,12 @@ namespace SilexGis.Infrastructure.Migrations
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Feature", b =>
                 {
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_features_caving_groups_caving_group_id");
+
                     b.HasOne("SilexGis.Domain.Entities.FeatureType", null)
                         .WithMany()
                         .HasForeignKey("FeatureTypeId")
@@ -3348,12 +3375,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_features_users_owner_user_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.Team", null)
-                        .WithMany()
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_features_teams_team_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.FeatureAncestor", b =>
@@ -3433,6 +3454,12 @@ namespace SilexGis.Infrastructure.Migrations
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Geofile", b =>
                 {
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_geofiles_caving_groups_caving_group_id");
+
                     b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
                         .WithMany()
                         .HasForeignKey("FileId")
@@ -3446,12 +3473,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_geofiles_users_owner_user_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.Team", null)
-                        .WithMany()
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_geofiles_teams_team_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.GeofileFeature", b =>
@@ -3472,6 +3493,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_georeferenced_maps_caves_cave_feature_id");
 
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_georeferenced_maps_caving_groups_caving_group_id");
+
                     b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
                         .WithMany()
                         .HasForeignKey("FileId")
@@ -3485,12 +3512,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_georeferenced_maps_users_owner_user_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.Team", null)
-                        .WithMany()
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_georeferenced_maps_teams_team_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.HierarchyMembership", b =>
@@ -3518,18 +3539,18 @@ namespace SilexGis.Infrastructure.Migrations
 
             modelBuilder.Entity("SilexGis.Domain.Entities.MapView", b =>
                 {
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_map_views_caving_groups_caving_group_id");
+
                     b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
                         .WithMany()
                         .HasForeignKey("OwnerUserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_map_views_users_owner_user_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.Team", null)
-                        .WithMany()
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_map_views_teams_team_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.NotificationOutboxEntry", b =>
@@ -3605,37 +3626,20 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_taggings_tags_tag_id");
                 });
 
-            modelBuilder.Entity("SilexGis.Domain.Entities.TeamMember", b =>
-                {
-                    b.HasOne("SilexGis.Domain.Entities.Team", null)
-                        .WithMany()
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_team_members_teams_team_id");
-
-                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_team_members_users_user_id");
-                });
-
             modelBuilder.Entity("SilexGis.Domain.Entities.TripLog", b =>
                 {
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_trip_logs_caving_groups_caving_group_id");
+
                     b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
                         .WithMany()
                         .HasForeignKey("OwnerUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_trip_logs_users_owner_user_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.Team", null)
-                        .WithMany()
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_trip_logs_teams_team_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripLogCave", b =>

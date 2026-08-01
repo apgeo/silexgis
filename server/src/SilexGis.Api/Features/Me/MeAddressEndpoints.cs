@@ -14,7 +14,7 @@ namespace SilexGis.Api.Features.Me;
 /// <remarks>
 /// <para>
 /// Ownership is the whole authorization rule, so there is no permission service and no
-/// visibility filter here: an address is not a content object — it has no owner/team/visibility
+/// visibility filter here: an address is not a content object — it has no owner/caving group/visibility
 /// trio and no ACL. Who else may see it is governed by the address visibility setting on the
 /// profile, applied wherever profiles are emitted.
 /// </para>

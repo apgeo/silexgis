@@ -29,7 +29,7 @@ describe('FieldVisibilityToggle', () => {
     // There is deliberately no "anyone on the internet": personal data is never anonymous-
     // readable, so offering the option would be a promise the server refuses to keep.
     expect(screen.getByText('Only me')).toBeInTheDocument();
-    expect(screen.getByText('My teams')).toBeInTheDocument();
+    expect(screen.getByText('My caving groups')).toBeInTheDocument();
     expect(screen.getByText('Signed-in members')).toBeInTheDocument();
     expect(screen.queryByText(/anyone|public/i)).toBeNull();
   });
@@ -41,10 +41,10 @@ describe('FieldVisibilityToggle', () => {
     });
 
     fireEvent.click(screen.getByLabelText('Who can see this'));
-    fireEvent.click(screen.getByText('My teams'));
+    fireEvent.click(screen.getByText('My caving groups'));
 
     // Riding in the same form is what makes privacy save with the field it governs, rather
     // than being a second thing to remember to save.
-    expect(latest).toEqual({ visibility: { phone: 'team' } });
+    expect(latest).toEqual({ visibility: { phone: 'cavingGroup' } });
   });
 });

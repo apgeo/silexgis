@@ -123,7 +123,7 @@ export default function RasterMapsTab() {
           attribution: values.attribution ?? null,
           defaultOpacity: values.defaultOpacity,
           caveFeatureId: values.caveFeatureId ?? null,
-          teamId: editing.teamId,
+          cavingGroupId: editing.cavingGroupId,
           visibility: values.visibility,
         },
       });
@@ -275,7 +275,7 @@ export default function RasterMapsTab() {
           </Form.Item>
           <Form.Item name="visibility" label={t('features.visibility')} rules={[{ required: true }]}>
             <Select
-              options={(['private', 'team', 'authenticated', 'public'] as const).map((v) => ({
+              options={(['private', 'cavingGroup', 'authenticated', 'public'] as const).map((v) => ({
                 value: v,
                 label: t(`caves.visibilityValues.${v}`),
               }))}

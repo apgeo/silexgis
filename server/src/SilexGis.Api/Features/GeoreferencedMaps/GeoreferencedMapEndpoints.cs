@@ -30,7 +30,7 @@ public sealed record GeoreferencedMapDto(
     /// <summary>Feature id of the linked cave, when this raster is one cave's map.</summary>
     Guid? CaveFeatureId,
     Guid OwnerUserId,
-    Guid? TeamId,
+    Guid? CavingGroupId,
     Visibility Visibility,
     /// <summary>Signed COG URL once Ready — feed it to ol/source/GeoTIFF as-is.</summary>
     string? CogUrl,
@@ -46,7 +46,7 @@ public sealed record GeoreferencedMapUpdateRequest(
     string? Attribution,
     decimal DefaultOpacity,
     Guid? CaveFeatureId,
-    Guid? TeamId,
+    Guid? CavingGroupId,
     Visibility Visibility);
 
 public sealed class GeoreferencedMapUpdateRequestValidator : AbstractValidator<GeoreferencedMapUpdateRequest>
@@ -257,9 +257,9 @@ public static class GeoreferencedMapEndpoints
             return stale;
         }
 
-        if (request.TeamId is not null && !user.IsAdmin && !user.IsMemberOf(request.TeamId.Value))
+        if (request.CavingGroupId is not null && !user.IsAdmin && !user.IsMemberOf(request.CavingGroupId.Value))
         {
-            return ApiProblems.Forbidden("georeferenced_map.team_membership_required");
+            return ApiProblems.Forbidden("georeferenced_map.caving_group_membership_required");
         }
 
         // Only a *changed* link is re-validated: a full-replace PUT that leaves the stored
@@ -281,7 +281,7 @@ public static class GeoreferencedMapEndpoints
         map.Attribution = request.Attribution;
         map.DefaultOpacity = request.DefaultOpacity;
         map.CaveFeatureId = request.CaveFeatureId;
-        map.TeamId = request.TeamId;
+        map.CavingGroupId = request.CavingGroupId;
         map.Visibility = request.Visibility;
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(map.ToDto(tokens));
@@ -345,7 +345,7 @@ public static class GeoreferencedMapEndpoints
         m.DefaultOpacity,
         m.CaveFeatureId,
         m.OwnerUserId,
-        m.TeamId,
+        m.CavingGroupId,
         m.Visibility,
         m.Status == RasterStatus.Ready
             ? $"/api/v1/files/{m.FileId}/content?token={Uri.EscapeDataString(tokens.CreateToken(m.FileId))}"

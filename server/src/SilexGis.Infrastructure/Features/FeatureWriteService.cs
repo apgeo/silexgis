@@ -184,7 +184,7 @@ public sealed class FeatureWriteService(
     }
 
     /// <summary>
-    /// Re-copies the cave's access columns (owner/team/visibility) onto its delegated
+    /// Re-copies the cave's access columns (owner/caving group/visibility) onto its delegated
     /// children (entrances, centerlines). Call whenever a cave's trio changes.
     /// Delegated children have no independent access control — today's semantics are
     /// "an entrance is visible exactly when its cave is", and until the planned ruleset
@@ -213,7 +213,7 @@ public sealed class FeatureWriteService(
             }
 
             child.OwnerUserId = cave.OwnerUserId;
-            child.TeamId = cave.TeamId;
+            child.CavingGroupId = cave.CavingGroupId;
             child.Visibility = cave.Visibility;
         }
     }
@@ -494,7 +494,7 @@ public sealed class FeatureWriteService(
         var cave = await FeatureByIdAsync(caveFeatureId, ct)
             ?? throw new FeatureWriteException("cave.not_found", [$"cave feature {caveFeatureId} does not exist"]);
         child.OwnerUserId = cave.OwnerUserId;
-        child.TeamId = cave.TeamId;
+        child.CavingGroupId = cave.CavingGroupId;
         child.Visibility = cave.Visibility;
     }
 

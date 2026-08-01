@@ -115,7 +115,7 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable
         description = (string?)null,
         config = new { configVersion = 1, zoom = 12, center = new[] { 25.4, 45.5 } },
         isHome,
-        teamId = (Guid?)null,
+        cavingGroupId = (Guid?)null,
         visibility = "private",
     };
 

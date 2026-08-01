@@ -18,7 +18,7 @@ public sealed record AccountDataExportPayload(Guid ExportId);
 /// <remarks>
 /// <para>
 /// Personal data only: the profile and its visibility choices, addresses, notification and
-/// interface preferences, team memberships, and an inventory of the content the user owns —
+/// interface preferences, caving group memberships, and an inventory of the content the user owns —
 /// identifiers, names and dates, never geometry.
 /// </para>
 /// <para>
@@ -87,9 +87,9 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
             .Where(p => p.UserId == userId)
             .ToListAsync(ct);
 
-        var teams = await db.TeamMembers.AsNoTracking()
+        var cavingGroups = await db.CavingGroupMembers.AsNoTracking()
             .Where(m => m.UserId == userId)
-            .Join(db.Teams.AsNoTracking(), m => m.TeamId, t => t.Id, (m, t) => new { t.Id, t.Name, m.Role, m.CreatedAt })
+            .Join(db.CavingGroups.AsNoTracking(), m => m.CavingGroupId, t => t.Id, (m, t) => new { t.Id, t.Name, m.Role, m.CreatedAt })
             .ToListAsync(ct);
 
         using var buffer = new MemoryStream();
@@ -144,7 +144,7 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
                 Interface = JsonSerializer.Deserialize<JsonElement>(user.UiPreferences),
             }, ct);
 
-            await WriteEntryAsync(archive, "teams.json", teams.Select(t => new
+            await WriteEntryAsync(archive, "caving-groups.json", cavingGroups.Select(t => new
             {
                 t.Id,
                 t.Name,
@@ -210,7 +210,7 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
               visibility.json   who you chose to show each profile field to
               addresses.json    your saved addresses, with coordinates where you set one
               preferences.json  notification and interface settings
-              teams.json        the teams you belong to
+              caving-groups.json  the caving groups you belong to
               content.json      what you have authored: identifiers, names and dates
 
             The records you authored are not reproduced here in full. Use the export options on

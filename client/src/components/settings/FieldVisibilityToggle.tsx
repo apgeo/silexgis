@@ -7,11 +7,11 @@ import type { FieldVisibility } from '../../api/hooks.ts';
 
 const ICONS: Record<FieldVisibility, ReactNode> = {
   private: <LockOutlined />,
-  team: <TeamOutlined />,
+  cavingGroup: <TeamOutlined />,
   authenticated: <GlobalOutlined />,
 };
 
-const VISIBILITY_VALUES: FieldVisibility[] = ['private', 'team', 'authenticated'];
+const VISIBILITY_VALUES: FieldVisibility[] = ['private', 'cavingGroup', 'authenticated'];
 
 interface Props {
   value?: FieldVisibility;

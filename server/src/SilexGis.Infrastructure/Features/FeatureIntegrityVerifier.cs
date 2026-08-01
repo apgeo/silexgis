@@ -131,7 +131,7 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
         // Delegated trio copies: an entrance/centerline must carry exactly its cave's
         // access columns (a drift here changes who can see an entrance — security).
         var featureAccess = await db.Features.IgnoreQueryFilters()
-            .Select(f => new { f.Id, f.OwnerUserId, f.TeamId, f.Visibility })
+            .Select(f => new { f.Id, f.OwnerUserId, f.CavingGroupId, f.Visibility })
             .ToDictionaryAsync(f => f.Id, ct);
         // Live rows only: a soft-deleted child's stale trio is invisible and gets
         // recopied by the sync when its cave next changes.
@@ -143,7 +143,7 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
         {
             if (featureAccess.TryGetValue(child.Id, out var c)
                 && featureAccess.TryGetValue(child.CaveFeatureId, out var cave)
-                && (c.OwnerUserId != cave.OwnerUserId || c.TeamId != cave.TeamId || c.Visibility != cave.Visibility))
+                && (c.OwnerUserId != cave.OwnerUserId || c.CavingGroupId != cave.CavingGroupId || c.Visibility != cave.Visibility))
             {
                 problems.Add(new IntegrityProblem("delegated_trio", child.Id,
                     "access columns diverge from the owning cave's"));
@@ -234,7 +234,7 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
         }
 
         await CheckAsync(AttachedEntityType.TripLog, db.TripLogs.Select(x => x.Id));
-        await CheckAsync(AttachedEntityType.Team, db.Teams.Select(x => x.Id));
+        await CheckAsync(AttachedEntityType.CavingGroup, db.CavingGroups.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.Geofile, db.Geofiles.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.GeoreferencedMap, db.GeoreferencedMaps.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.MapView, db.MapViews.Select(x => x.Id));

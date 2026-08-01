@@ -38,7 +38,7 @@ public class Geofile : IProtectedEntity, ITimestamped, IAuditable
 
     public Guid OwnerUserId { get; set; }
 
-    public Guid? TeamId { get; set; }
+    public Guid? CavingGroupId { get; set; }
 
     public Visibility Visibility { get; set; } = Visibility.Private;
 

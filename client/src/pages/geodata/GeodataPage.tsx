@@ -107,7 +107,7 @@ export default function GeodataPage() {
           name: values.name,
           description: values.description ?? null,
           style: editing.style ?? null,
-          teamId: editing.teamId,
+          cavingGroupId: editing.cavingGroupId,
           visibility: values.visibility,
         },
       });
@@ -287,7 +287,7 @@ export default function GeodataPage() {
           </Form.Item>
           <Form.Item name="visibility" label={t('features.visibility')} rules={[{ required: true }]}>
             <Select
-              options={(['private', 'team', 'authenticated', 'public'] as const).map((v) => ({
+              options={(['private', 'cavingGroup', 'authenticated', 'public'] as const).map((v) => ({
                 value: v,
                 label: t(`caves.visibilityValues.${v}`),
               }))}

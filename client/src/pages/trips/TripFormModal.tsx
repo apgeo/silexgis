@@ -82,7 +82,7 @@ function NameListField({ name, addLabel, placeholder }: { name: string; addLabel
 
 /**
  * Trip editor. Participants and proposers are free-text names in the form; registered-user
- * links (for both) come with the teams/members UX later — existing user links on a trip are
+ * links (for both) come with the caving-groups/members UX later — existing user links on a trip are
  * preserved on update. Attachments, incl. the completed report document, are managed on the
  * trip detail page (the entity must exist before files can be attached).
  */
@@ -191,7 +191,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           .filter((p) => p.nameText.trim().length > 0)
           .map((p) => ({ userId: null, nameText: p.nameText.trim() })),
       ],
-      teamId: trip?.teamId ?? null,
+      cavingGroupId: trip?.cavingGroupId ?? null,
       visibility: values.visibility,
     };
 
@@ -233,7 +233,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           </Form.Item>
           <Form.Item name="visibility" label={t('features.visibility')} rules={[{ required: true }]} style={{ flex: 1 }}>
             <Select
-              options={(['private', 'team', 'authenticated', 'public'] as const).map((v) => ({
+              options={(['private', 'cavingGroup', 'authenticated', 'public'] as const).map((v) => ({
                 value: v,
                 label: t(`caves.visibilityValues.${v}`),
               }))}

@@ -30,7 +30,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];
 
-    private HttpClient manager = null!;   // creates teams, does the granting
+    private HttpClient manager = null!;   // creates caving groups, does the granting
     private HttpClient recipient = null!;
     private Guid managerId;
     private Guid recipientId;
@@ -63,31 +63,31 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     private string RecipientEmail => $"notif-rcp-{suffix}@t.local";
 
     [Fact]
-    public async Task Adding_someone_to_a_team_queues_a_notification_without_sending_inside_the_request()
+    public async Task Adding_someone_to_a_caving_group_queues_a_notification_without_sending_inside_the_request()
     {
         factory.Messages.Clear();
 
-        await AddToTeamAsync();
+        await AddToCavingGroupAsync();
 
         // Nothing goes out on the request path — that is the point of queuing it.
         MineSent().ShouldBeEmpty();
         var queued = await RowsAsync();
         queued.Count.ShouldBe(1);
         queued[0].Status.ShouldBe(NotificationOutboxStatus.Pending);
-        queued[0].Category.ShouldBe(NotificationCategory.TeamMembership);
+        queued[0].Category.ShouldBe(NotificationCategory.CavingGroupMembership);
 
         (await DrainAsync()).ShouldBe(1);
 
         var message = factory.Messages.LastTo(RecipientEmail);
         message.Channel.ShouldBe("email");
-        message.Body.ShouldContain($"Notif team {suffix}");
+        message.Body.ShouldContain($"Notif caving group {suffix}");
         (await RowsAsync())[0].Status.ShouldBe(NotificationOutboxStatus.Sent);
     }
 
     [Fact]
     public async Task A_second_drain_sends_nothing_more()
     {
-        await AddToTeamAsync();
+        await AddToCavingGroupAsync();
         factory.Messages.Clear();
 
         await DrainAsync();
@@ -102,13 +102,13 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task Nobody_is_told_about_their_own_action()
     {
-        var teamId = await CreateTeamAsync();
-        (await manager.PostAsJsonAsync($"/api/v1/teams/{teamId}/members",
+        var cavingGroupId = await CreateCavingGroupAsync();
+        (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members",
             new { userId = recipientId, role = "Member" })).StatusCode.ShouldBe(HttpStatusCode.OK);
         var afterJoining = (await RowsAsync()).Count;
 
         // Leaving of your own accord: you already know, and mailing you about it is noise.
-        (await recipient.DeleteAsync($"/api/v1/teams/{teamId}/members/{recipientId}"))
+        (await recipient.DeleteAsync($"/api/v1/caving-groups/{cavingGroupId}/members/{recipientId}"))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         (await RowsAsync()).Count.ShouldBe(afterJoining);
@@ -117,8 +117,8 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task A_switched_off_category_is_suppressed_rather_than_sent()
     {
-        await SetPreferencesAsync(emailEnabled: true, digest: "immediate", off: "teamMembership");
-        await AddToTeamAsync();
+        await SetPreferencesAsync(emailEnabled: true, digest: "immediate", off: "cavingGroupMembership");
+        await AddToCavingGroupAsync();
         factory.Messages.Clear();
 
         await DrainAsync();
@@ -131,7 +131,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     public async Task The_master_switch_suppresses_everything_ordinary()
     {
         await SetPreferencesAsync(emailEnabled: false, digest: "immediate");
-        await AddToTeamAsync();
+        await AddToCavingGroupAsync();
         factory.Messages.Clear();
 
         await DrainAsync();
@@ -165,8 +165,8 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     public async Task A_daily_digest_holds_events_back_and_then_sends_one_message_for_all_of_them()
     {
         await SetPreferencesAsync(emailEnabled: true, digest: "daily");
-        await AddToTeamAsync();
-        await AddToTeamAsync("second");
+        await AddToCavingGroupAsync();
+        await AddToCavingGroupAsync("second");
         factory.Messages.Clear();
 
         // The immediate pass routes them into the digest and sends nothing.
@@ -183,15 +183,15 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         // One message, both events in it — and the same rows, so nothing can arrive twice.
         MineSent().Count.ShouldBe(1);
         var digest = factory.Messages.LastTo(RecipientEmail);
-        digest.Body.ShouldContain($"Notif team {suffix}");
-        digest.Body.ShouldContain($"Notif team {suffix} second");
+        digest.Body.ShouldContain($"Notif caving group {suffix}");
+        digest.Body.ShouldContain($"Notif caving group {suffix} second");
         (await RowsAsync()).ShouldAllBe(r => r.Status == NotificationOutboxStatus.Sent);
     }
 
     [Fact]
     public async Task A_failed_send_backs_off_and_then_succeeds()
     {
-        await AddToTeamAsync();
+        await AddToCavingGroupAsync();
         factory.Messages.Clear();
 
         try
@@ -221,12 +221,12 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task A_row_naming_a_template_that_does_not_exist_dies_without_taking_the_batch_with_it()
     {
-        await AddToTeamAsync();
+        await AddToCavingGroupAsync();
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             NotificationQueue.Enqueue(
-                db, recipientId, NotificationCategory.TeamMembership, "notify.does-not-exist",
+                db, recipientId, NotificationCategory.CavingGroupMembership, "notify.does-not-exist",
                 new Dictionary<string, string>());
             await db.SaveChangesAsync();
         }
@@ -245,7 +245,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task An_installation_with_no_mail_server_settles_the_row_instead_of_retrying_forever()
     {
-        await AddToTeamAsync();
+        await AddToCavingGroupAsync();
         factory.Messages.Clear();
 
         try
@@ -266,7 +266,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task The_opt_out_link_in_a_message_switches_that_category_off_without_signing_in()
     {
-        await AddToTeamAsync();
+        await AddToCavingGroupAsync();
         factory.Messages.Clear();
         await DrainAsync();
 
@@ -286,7 +286,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         var prefs = JsonDocument.Parse(
             await (await recipient.GetAsync("/api/v1/me/notifications/")).Content.ReadAsStringAsync()).RootElement;
         prefs.GetProperty("categories").EnumerateArray()
-            .Single(c => c.GetProperty("category").GetString() == "teamMembership")
+            .Single(c => c.GetProperty("category").GetString() == "cavingGroupMembership")
             .GetProperty("enabled").GetBoolean().ShouldBeFalse();
     }
 
@@ -319,11 +319,11 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         factory.Messages.LastTo(RecipientEmail).Body.ShouldNotContain("unsubscribe");
     }
 
-    private async Task<Guid> CreateTeamAsync(string? tag = null)
+    private async Task<Guid> CreateCavingGroupAsync(string? tag = null)
     {
-        var created = await manager.PostAsJsonAsync("/api/v1/teams", new
+        var created = await manager.PostAsJsonAsync("/api/v1/caving-groups", new
         {
-            name = tag is null ? $"Notif team {suffix}" : $"Notif team {suffix} {tag}",
+            name = tag is null ? $"Notif caving group {suffix}" : $"Notif caving group {suffix} {tag}",
             description = (string?)null,
             website = (string?)null,
         });
@@ -331,10 +331,10 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(await created.Content.ReadAsStringAsync()).RootElement.GetProperty("id").GetGuid();
     }
 
-    private async Task AddToTeamAsync(string? tag = null)
+    private async Task AddToCavingGroupAsync(string? tag = null)
     {
-        var teamId = await CreateTeamAsync(tag);
-        var added = await manager.PostAsJsonAsync($"/api/v1/teams/{teamId}/members",
+        var cavingGroupId = await CreateCavingGroupAsync(tag);
+        var added = await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members",
             new { userId = recipientId, role = "Member" });
         added.StatusCode.ShouldBe(HttpStatusCode.OK, await added.Content.ReadAsStringAsync());
     }

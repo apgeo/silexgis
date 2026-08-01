@@ -2,13 +2,13 @@
 namespace SilexGis.Domain.Permissions;
 
 /// <summary>
-/// The caller's identity, global roles and team memberships, resolved once per request.
+/// The caller's identity, global roles and caving group memberships, resolved once per request.
 /// Pure data — the permission evaluator and visibility filters consume it.
 /// </summary>
 public sealed record UserContext(
     Guid UserId,
     IReadOnlySet<string> Roles,
-    IReadOnlyDictionary<Guid, TeamRole> Teams)
+    IReadOnlyDictionary<Guid, CavingGroupRole> CavingGroups)
 {
     public bool IsAdmin => Roles.Contains(GlobalRoles.Admin);
 
@@ -16,12 +16,12 @@ public sealed record UserContext(
     public bool CanCreateContent =>
         Roles.Contains(GlobalRoles.Editor) || Roles.Contains(GlobalRoles.Manager) || IsAdmin;
 
-    public IReadOnlyList<Guid> TeamIds => [.. Teams.Keys];
+    public IReadOnlyList<Guid> CavingGroupIds => [.. CavingGroups.Keys];
 
-    public bool IsMemberOf(Guid teamId) => Teams.ContainsKey(teamId);
+    public bool IsMemberOf(Guid cavingGroupId) => CavingGroups.ContainsKey(cavingGroupId);
 
-    public bool IsTeamAdmin(Guid teamId) =>
-        Teams.TryGetValue(teamId, out var role) && role is TeamRole.Admin or TeamRole.Owner;
+    public bool IsCavingGroupAdmin(Guid cavingGroupId) =>
+        CavingGroups.TryGetValue(cavingGroupId, out var role) && role is CavingGroupRole.Admin or CavingGroupRole.Owner;
 }
 
 /// <summary>Resolves the current request's <see cref="UserContext"/> (null when anonymous).</summary>

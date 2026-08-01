@@ -76,26 +76,26 @@ public sealed class PersistenceTests : IDisposable
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
 
-        var team = new Team { Name = $"Test Team {Guid.NewGuid():N}", Slug = $"test-{Guid.NewGuid():N}" };
-        db.Teams.Add(team);
+        var cavingGroup = new CavingGroup { Name = $"Test CavingGroup {Guid.NewGuid():N}", Slug = $"test-{Guid.NewGuid():N}" };
+        db.CavingGroups.Add(cavingGroup);
         await db.SaveChangesAsync();
 
-        team.Id.ShouldNotBe(Guid.Empty);
-        team.Id.ToString()[14].ShouldBe('7'); // uuid version nibble — must stay v7
-        team.CreatedAt.ShouldBeGreaterThan(DateTimeOffset.UnixEpoch);
-        team.UpdatedAt.ShouldBe(team.CreatedAt);
+        cavingGroup.Id.ShouldNotBe(Guid.Empty);
+        cavingGroup.Id.ToString()[14].ShouldBe('7'); // uuid version nibble — must stay v7
+        cavingGroup.CreatedAt.ShouldBeGreaterThan(DateTimeOffset.UnixEpoch);
+        cavingGroup.UpdatedAt.ShouldBe(cavingGroup.CreatedAt);
 
         var audit = await db.AuditEntries
-            .Where(a => a.EntityType == nameof(Team) && a.EntityId == team.Id.ToString())
+            .Where(a => a.EntityType == nameof(CavingGroup) && a.EntityId == cavingGroup.Id.ToString())
             .ToListAsync();
         audit.ShouldContain(a => a.Action == AuditActions.Created);
 
-        team.Description = "updated";
+        cavingGroup.Description = "updated";
         await db.SaveChangesAsync();
-        team.UpdatedAt.ShouldBeGreaterThan(team.CreatedAt);
+        cavingGroup.UpdatedAt.ShouldBeGreaterThan(cavingGroup.CreatedAt);
 
         var updateAudit = await db.AuditEntries
-            .Where(a => a.EntityType == nameof(Team) && a.EntityId == team.Id.ToString() && a.Action == AuditActions.Updated)
+            .Where(a => a.EntityType == nameof(CavingGroup) && a.EntityId == cavingGroup.Id.ToString() && a.Action == AuditActions.Updated)
             .SingleAsync();
         updateAudit.Changes.ShouldNotBeNull();
         updateAudit.Changes.ShouldContain("Description");

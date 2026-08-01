@@ -5120,14 +5120,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/teams": {
+    "/api/v1/caving-groups": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** All teams with member counts. */
+        /** All caving groups with member counts. */
         get: {
             parameters: {
                 query?: never;
@@ -5143,13 +5143,13 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TeamDto"][];
+                        "application/json": components["schemas"]["CavingGroupDto"][];
                     };
                 };
             };
         };
         put?: never;
-        /** Creates a team (Manager role and above); the caller becomes team owner. */
+        /** Creates a caving group (Manager role and above); the caller becomes caving group owner. */
         post: {
             parameters: {
                 query?: never;
@@ -5159,7 +5159,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["TeamWriteRequest"];
+                    "application/json": components["schemas"]["CavingGroupWriteRequest"];
                 };
             };
             responses: {
@@ -5169,7 +5169,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TeamDto"];
+                        "application/json": components["schemas"]["CavingGroupDto"];
                     };
                 };
             };
@@ -5180,14 +5180,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/teams/{id}": {
+    "/api/v1/caving-groups/{id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Single team. */
+        /** Single caving group. */
         get: {
             parameters: {
                 query?: never;
@@ -5205,12 +5205,12 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TeamDto"];
+                        "application/json": components["schemas"]["CavingGroupDto"];
                     };
                 };
             };
         };
-        /** Updates team metadata (team admin/owner). */
+        /** Updates caving group metadata (caving group admin/owner). */
         put: {
             parameters: {
                 query?: never;
@@ -5222,7 +5222,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["TeamWriteRequest"];
+                    "application/json": components["schemas"]["CavingGroupWriteRequest"];
                 };
             };
             responses: {
@@ -5232,13 +5232,13 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TeamDto"];
+                        "application/json": components["schemas"]["CavingGroupDto"];
                     };
                 };
             };
         };
         post?: never;
-        /** Deletes a team (team owner or Admin); objects keep owner-based access. */
+        /** Deletes a caving group (caving group owner or Admin); objects keep owner-based access. */
         delete: {
             parameters: {
                 query?: never;
@@ -5264,14 +5264,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/teams/{id}/members": {
+    "/api/v1/caving-groups/{id}/members": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Team members with roles. */
+        /** CavingGroup members with roles. */
         get: {
             parameters: {
                 query?: never;
@@ -5289,13 +5289,13 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TeamMemberDto"][];
+                        "application/json": components["schemas"]["CavingGroupMemberDto"][];
                     };
                 };
             };
         };
         put?: never;
-        /** Adds a member or changes their role (team admin/owner). */
+        /** Adds a member or changes their role (caving group admin/owner). */
         post: {
             parameters: {
                 query?: never;
@@ -5307,7 +5307,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["TeamMemberWriteRequest"];
+                    "application/json": components["schemas"]["CavingGroupMemberWriteRequest"];
                 };
             };
             responses: {
@@ -5317,7 +5317,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TeamMemberDto"];
+                        "application/json": components["schemas"]["CavingGroupMemberDto"];
                     };
                 };
             };
@@ -5328,7 +5328,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/teams/{id}/members/{userId}": {
+    "/api/v1/caving-groups/{id}/members/{userId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -5338,7 +5338,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Removes a member (team admin/owner; owners cannot be removed). */
+        /** Removes a member (caving group admin/owner; owners cannot be removed). */
         delete: {
             parameters: {
                 query?: never;
@@ -5908,7 +5908,7 @@ export interface components {
             entries: components["schemas"]["AclEntryWrite"][];
         };
         /** @enum {unknown} */
-        AclSubjectKind: "user" | "team";
+        AclSubjectKind: "user" | "cavingGroup";
         AdminSettingsDto: {
             mail: components["schemas"]["MailSettingsDto"];
             sms: components["schemas"]["SmsSettingsDto"];
@@ -6039,7 +6039,7 @@ export interface components {
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */
-            teamId: null | string;
+            cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
             /** Format: date-time */
             createdAt: string;
@@ -6162,8 +6162,40 @@ export interface components {
             /** Format: uuid */
             parentId: null | string;
             /** Format: uuid */
-            teamId: null | string;
+            cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
+        };
+        CavingGroupDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            type: components["schemas"]["CavingGroupType"];
+            description: null | string;
+            website: null | string;
+            /** Format: int32 */
+            memberCount: number;
+        };
+        CavingGroupMemberDto: {
+            /** Format: uuid */
+            userId: string;
+            displayName: null | string;
+            role: components["schemas"]["CavingGroupRole"];
+        };
+        CavingGroupMemberWriteRequest: {
+            /** Format: uuid */
+            userId: string;
+            role: components["schemas"]["CavingGroupRole"];
+        };
+        /** @enum {unknown} */
+        CavingGroupRole: "member" | "admin" | "owner";
+        /** @enum {unknown} */
+        CavingGroupType: "cavingClub" | "group" | "organization";
+        CavingGroupWriteRequest: {
+            name: string;
+            type: components["schemas"]["CavingGroupType"];
+            description: null | string;
+            website: null | string;
         };
         CenterlineDto: {
             /** Format: uuid */
@@ -6391,7 +6423,7 @@ export interface components {
             parents: null | components["schemas"]["ParentEdgeRequest"][];
             locationProtected: boolean;
             /** Format: uuid */
-            teamId: null | string;
+            cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
         FeatureDto: {
@@ -6411,7 +6443,7 @@ export interface components {
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */
-            teamId: null | string;
+            cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
             /** Format: date-time */
             createdAt: string;
@@ -6529,7 +6561,7 @@ export interface components {
             properties: null | components["schemas"]["JsonElement"];
             locationProtected: boolean;
             /** Format: uuid */
-            teamId: null | string;
+            cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
         FileDto: {
@@ -6600,7 +6632,7 @@ export interface components {
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */
-            teamId: null | string;
+            cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
             /** Format: date-time */
             createdAt: string;
@@ -6624,7 +6656,7 @@ export interface components {
             description: null | string;
             style: null | components["schemas"]["JsonElement"];
             /** Format: uuid */
-            teamId: null | string;
+            cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
         GeoJsonGeometry: {
@@ -6660,7 +6692,7 @@ export interface components {
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */
-            teamId: null | string;
+            cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
             cogUrl: null | string;
             /** Format: date-time */
@@ -6682,7 +6714,7 @@ export interface components {
             /** Format: uuid */
             caveFeatureId: null | string;
             /** Format: uuid */
-            teamId: null | string;
+            cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
         HistoryEventDto: {
@@ -6791,7 +6823,7 @@ export interface components {
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */
-            teamId: null | string;
+            cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
             /** Format: date-time */
             createdAt: string;
@@ -6804,7 +6836,7 @@ export interface components {
             config: components["schemas"]["JsonElement"];
             isHome: boolean;
             /** Format: uuid */
-            teamId: null | string;
+            cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
         MeDto: {
@@ -6920,7 +6952,7 @@ export interface components {
             methods: components["schemas"]["MfaMethodDto"][];
         };
         /** @enum {unknown} */
-        NotificationCategory: "teamMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts";
+        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts";
         NotificationCategoryDto: {
             category: components["schemas"]["NotificationCategory"];
             enabled: boolean;
@@ -7069,7 +7101,7 @@ export interface components {
         /** @enum {unknown} */
         ProcessingJobStatus: "queued" | "running" | "succeeded" | "failed";
         /** @enum {unknown} */
-        ProfileVisibility: "private" | "team" | "authenticated";
+        ProfileVisibility: "private" | "cavingGroup" | "authenticated";
         ProfileVisibilityDto: {
             realName: components["schemas"]["ProfileVisibility"];
             bio: components["schemas"]["ProfileVisibility"];
@@ -7316,34 +7348,6 @@ export interface components {
             /** Format: int32 */
             sortOrder: number;
         };
-        TeamDto: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            slug: string;
-            description: null | string;
-            website: null | string;
-            /** Format: int32 */
-            memberCount: number;
-        };
-        TeamMemberDto: {
-            /** Format: uuid */
-            userId: string;
-            displayName: null | string;
-            role: components["schemas"]["TeamRole"];
-        };
-        TeamMemberWriteRequest: {
-            /** Format: uuid */
-            userId: string;
-            role: components["schemas"]["TeamRole"];
-        };
-        /** @enum {unknown} */
-        TeamRole: "member" | "admin" | "owner";
-        TeamWriteRequest: {
-            name: string;
-            description: null | string;
-            website: null | string;
-        };
         TestMessageRequest: {
             recipient: string;
         };
@@ -7376,7 +7380,7 @@ export interface components {
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */
-            teamId: null | string;
+            cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
             /** Format: date-time */
             createdAt: string;
@@ -7404,7 +7408,7 @@ export interface components {
             participants: components["schemas"]["TripParticipantWrite"][];
             proposers: null | components["schemas"]["TripParticipantWrite"][];
             /** Format: uuid */
-            teamId: null | string;
+            cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
         TripParticipantDto: {
@@ -7473,7 +7477,7 @@ export interface components {
             email: null | string;
         };
         /** @enum {unknown} */
-        Visibility: "private" | "team" | "authenticated" | "public";
+        Visibility: "private" | "cavingGroup" | "authenticated" | "public";
     };
     responses: never;
     parameters: never;
