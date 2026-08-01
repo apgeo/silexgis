@@ -78,6 +78,8 @@ public sealed class FeatureWriteService(SilexGisDbContext db, IFeatureProperties
     /// <summary>
     /// Creates an entrance under its cave. The structural cave FK and the primary
     /// containment edge are the same fact — this is the only place both are written.
+    /// The entrance's access columns are a copy of the cave's (delegated trio, see
+    /// <see cref="SyncDelegatedAccessAsync"/>).
     /// </summary>
     public async Task<Feature> CreateEntranceAsync(
         Feature feature, CaveEntrance entrance, CancellationToken ct = default)
@@ -90,6 +92,7 @@ public sealed class FeatureWriteService(SilexGisDbContext db, IFeatureProperties
         }
 
         entrance.Id = feature.Id;
+        await CopyCaveAccessAsync(feature, entrance.CaveFeatureId, ct);
         db.Features.Add(feature);
         db.CaveEntrances.Add(entrance);
         db.Entry(entrance).Property("Kind").CurrentValue = FeatureKind.CaveEntrance;
@@ -119,6 +122,7 @@ public sealed class FeatureWriteService(SilexGisDbContext db, IFeatureProperties
             await ClearDefaultCenterlineAsync(centerline.CaveFeatureId, exceptId: feature.Id, ct);
         }
 
+        await CopyCaveAccessAsync(feature, centerline.CaveFeatureId, ct);
         db.Features.Add(feature);
         db.Centerlines.Add(centerline);
         db.Entry(centerline).Property("Kind").CurrentValue = FeatureKind.Centerline;
@@ -176,6 +180,41 @@ public sealed class FeatureWriteService(SilexGisDbContext db, IFeatureProperties
         var centerline = await db.Centerlines.FirstAsync(c => c.Id == centerlineFeatureId, ct);
         await ClearDefaultCenterlineAsync(centerline.CaveFeatureId, exceptId: centerlineFeatureId, ct);
         centerline.IsDefault = true;
+    }
+
+    /// <summary>
+    /// Re-copies the cave's access columns (owner/team/visibility) onto its delegated
+    /// children (entrances, centerlines). Call whenever a cave's trio changes.
+    /// Delegated children have no independent access control — today's semantics are
+    /// "an entrance is visible exactly when its cave is", and until the planned ruleset
+    /// permission system brings read-time cascade over the ancestor arrays, that rule
+    /// is materialized as this verifier-checked copy so the hot map path needs no join.
+    /// </summary>
+    public async Task SyncDelegatedAccessAsync(Guid caveFeatureId, CancellationToken ct = default)
+    {
+        var cave = await FeatureByIdAsync(caveFeatureId, ct)
+            ?? throw new FeatureWriteException("cave.not_found", [$"cave feature {caveFeatureId} does not exist"]);
+
+        var childIds = new List<Guid>();
+        childIds.AddRange(await db.CaveEntrances.IgnoreQueryFilters()
+            .Where(e => e.CaveFeatureId == caveFeatureId).Select(e => e.Id).ToListAsync(ct));
+        childIds.AddRange(await db.Centerlines.IgnoreQueryFilters()
+            .Where(c => c.CaveFeatureId == caveFeatureId).Select(c => c.Id).ToListAsync(ct));
+        childIds.AddRange(db.CaveEntrances.Local.Where(e => e.CaveFeatureId == caveFeatureId).Select(e => e.Id));
+        childIds.AddRange(db.Centerlines.Local.Where(c => c.CaveFeatureId == caveFeatureId).Select(c => c.Id));
+
+        foreach (var id in childIds.Distinct().Where(id => id != caveFeatureId))
+        {
+            var child = await FeatureByIdAsync(id, ct);
+            if (child is null)
+            {
+                continue;
+            }
+
+            child.OwnerUserId = cave.OwnerUserId;
+            child.TeamId = cave.TeamId;
+            child.Visibility = cave.Visibility;
+        }
     }
 
     /// <summary>
@@ -376,6 +415,18 @@ public sealed class FeatureWriteService(SilexGisDbContext db, IFeatureProperties
         {
             other.IsDefault = false;
         }
+    }
+
+    // Delegated children carry their cave's access columns; whatever the caller set on
+    // the new feature is overwritten — an entrance cannot be more (or less) visible
+    // than its cave.
+    private async Task CopyCaveAccessAsync(Feature child, Guid caveFeatureId, CancellationToken ct)
+    {
+        var cave = await FeatureByIdAsync(caveFeatureId, ct)
+            ?? throw new FeatureWriteException("cave.not_found", [$"cave feature {caveFeatureId} does not exist"]);
+        child.OwnerUserId = cave.OwnerUserId;
+        child.TeamId = cave.TeamId;
+        child.Visibility = cave.Visibility;
     }
 
     private async Task<FeatureType> RequireFeatureTypeAsync(Feature feature, CancellationToken ct)

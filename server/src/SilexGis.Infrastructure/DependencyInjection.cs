@@ -53,6 +53,11 @@ public static class DependencyInjection
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
 
+        services.AddScoped<Permissions.AclPermissionService>();
+        services.AddScoped<Domain.Permissions.IPermissionService>(
+            sp => sp.GetRequiredService<Permissions.AclPermissionService>());
+        services.AddScoped<Permissions.FeatureProtection>();
+
         return services;
     }
 

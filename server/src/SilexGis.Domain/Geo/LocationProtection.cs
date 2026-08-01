@@ -32,6 +32,26 @@ public static class LocationProtection
         roots.All(r => CanViewExactLocation(user, r.Root, r.AclGranted));
 
     /// <summary>
+    /// The full row rule, mirrored bit-identically by the SQL exact-view fragment:
+    /// admin and the row's own owner always see their row exactly (a foreign protected
+    /// area above someone's own cave must not lock the owner out); everyone else needs
+    /// ViewExactLocation on EVERY protected root above the row (most-restrictive veto —
+    /// under the DAG a feature can sit beneath two protected areas).
+    /// </summary>
+    public static bool CanViewExactLocation(
+        UserContext? user, Feature row, IReadOnlyCollection<ProtectionRootGrant> protectedRoots)
+    {
+        if (user is null)
+        {
+            return protectedRoots.Count == 0 && !row.LocationProtected;
+        }
+
+        return user.IsAdmin
+            || row.OwnerUserId == user.UserId
+            || CanViewExactLocation(user, protectedRoots);
+    }
+
+    /// <summary>
     /// A locating link on a record with exact coordinates discloses the protected
     /// target's location by proximity — "protected feature X is here". The link must be
     /// hidden wherever the caller may not view the target's exact location, even when

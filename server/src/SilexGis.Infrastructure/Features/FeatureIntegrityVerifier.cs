@@ -124,6 +124,26 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
             }
         }
 
+        // Delegated trio copies: an entrance/centerline must carry exactly its cave's
+        // access columns (a drift here changes who can see an entrance — security).
+        var featureAccess = await db.Features.IgnoreQueryFilters()
+            .Select(f => new { f.Id, f.OwnerUserId, f.TeamId, f.Visibility })
+            .ToDictionaryAsync(f => f.Id, ct);
+        var delegated = (await db.CaveEntrances.IgnoreQueryFilters()
+                .Select(e => new { e.Id, e.CaveFeatureId }).ToListAsync(ct))
+            .Concat(await db.Centerlines.IgnoreQueryFilters()
+                .Select(c => new { c.Id, c.CaveFeatureId }).ToListAsync(ct));
+        foreach (var child in delegated)
+        {
+            if (featureAccess.TryGetValue(child.Id, out var c)
+                && featureAccess.TryGetValue(child.CaveFeatureId, out var cave)
+                && (c.OwnerUserId != cave.OwnerUserId || c.TeamId != cave.TeamId || c.Visibility != cave.Visibility))
+            {
+                problems.Add(new IntegrityProblem("delegated_trio", child.Id,
+                    "access columns diverge from the owning cave's"));
+            }
+        }
+
         // FK-less polymorphic pairs: report orphans (the pair has no FK by design; each
         // owning slice cleans up transactionally — this is the promised safety net).
         problems.AddRange(await PairOrphansAsync(ct));
