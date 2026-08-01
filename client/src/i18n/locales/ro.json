@@ -54,6 +54,8 @@
     "or": "sau",
     "signInWith": "Autentificare cu {{provider}}",
     "externalFailed": "Autentificarea externă nu a fost finalizată. Încercați din nou sau folosiți parola.",
+    "serverUnreachable": "Serverul nu poate fi contactat",
+    "serverUnreachableHint": "Autentificarea nu a putut fi inițiată. Verificați dacă serverul funcționează, apoi încercați din nou.",
     "mfaMethod": "Trimiteți codul prin",
     "mfaMethod_authenticator": "Aplicație de autentificare",
     "mfaMethod_email": "E-mail",

@@ -54,6 +54,8 @@
     "or": "or",
     "signInWith": "Sign in with {{provider}}",
     "externalFailed": "External sign-in did not complete. Please try again or use your password.",
+    "serverUnreachable": "Cannot reach the server",
+    "serverUnreachableHint": "Sign-in could not be started. Check that the server is running, then try again.",
     "mfaMethod": "Send the code by",
     "mfaMethod_authenticator": "Authenticator",
     "mfaMethod_email": "Email",
