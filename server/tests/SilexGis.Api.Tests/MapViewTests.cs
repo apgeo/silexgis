@@ -5,6 +5,7 @@ using System.Text.Json;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 
 namespace SilexGis.Api.Tests;
 
@@ -28,7 +29,9 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"mv-own-{suffix}@t.local");
-        outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"mv-out-{suffix}@t.local");
+        // A regular user: Editors hold domain-wide map-view rights now, so the private-view
+        // invisibility below needs a caller with nothing but grants.
+        outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"mv-out-{suffix}@t.local");
         owner = await AuthHelper.BearerClientAsync(factory, $"mv-own-{suffix}@t.local");
         outsider = await AuthHelper.BearerClientAsync(factory, $"mv-out-{suffix}@t.local");
     }
@@ -90,7 +93,7 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable
         (await outsider.PutAsJsonAsync($"/api/v1/map-views/{viewId}", ViewBody("Renamed by grantee", isHome: false)))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
-        await ReplaceViewAclAsync(owner, viewId, [(outsiderId, ObjectPermission.Read)]);
+        await ReplaceViewAclAsync(owner, viewId, [(outsiderId, AccessAction.Read)]);
 
         (await ViewIdsAsync(outsider)).ShouldContain(viewId);
         // Read is not Write: the view now exists for the grantee, so refusal is 403, not 404.
@@ -99,7 +102,7 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable
 
         // Write closes the gap; revoking everything takes the view away again.
         await ReplaceViewAclAsync(
-            owner, viewId, [(outsiderId, ObjectPermission.Read | ObjectPermission.Write)]);
+            owner, viewId, [(outsiderId, AccessAction.Read | AccessAction.Write)]);
         (await outsider.PutAsJsonAsync($"/api/v1/map-views/{viewId}", ViewBody("Renamed by grantee", isHome: false)))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -138,7 +141,7 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable
 
     /// <summary>Replaces the grants on a saved view (the "mapView" ACL target).</summary>
     private static async Task ReplaceViewAclAsync(
-        HttpClient client, Guid viewId, (Guid SubjectId, ObjectPermission Permissions)[] entries)
+        HttpClient client, Guid viewId, (Guid SubjectId, AccessAction Permissions)[] entries)
     {
         var response = await client.PutAsJsonAsync($"/api/v1/objects/mapView/{viewId}/acl", new
         {

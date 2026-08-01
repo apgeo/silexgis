@@ -123,6 +123,22 @@ namespace SilexGis.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "feature_sets",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    slug = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_feature_sets", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "feature_types",
                 columns: table => new
                 {
@@ -268,6 +284,24 @@ namespace SilexGis.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_open_iddict_scopes", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "permission_groups",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    slug = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    is_protected = table.Column<bool>(type: "boolean", nullable: false),
+                    is_seeded = table.Column<bool>(type: "boolean", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_permission_groups", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -421,6 +455,29 @@ namespace SilexGis.Infrastructure.Migrations
                         column: x => x.application_id,
                         principalTable: "OpenIddictApplications",
                         principalColumn: "id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "permission_group_members",
+                columns: table => new
+                {
+                    id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    permission_group_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    member_kind = table.Column<short>(type: "smallint", nullable: false),
+                    member_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_permission_group_members", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_permission_group_members_permission_groups_permission_group",
+                        column: x => x.permission_group_id,
+                        principalTable: "permission_groups",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -882,6 +939,59 @@ namespace SilexGis.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "access_entries",
+                columns: table => new
+                {
+                    id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    permission_group_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    subject_kind = table.Column<short>(type: "smallint", nullable: true),
+                    subject_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    effect = table.Column<short>(type: "smallint", nullable: false),
+                    domain = table.Column<short>(type: "smallint", nullable: false),
+                    actions = table.Column<int>(type: "integer", nullable: false),
+                    scope_kind = table.Column<short>(type: "smallint", nullable: false),
+                    scope_feature_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    scope_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    feature_kind = table.Column<short>(type: "smallint", nullable: true),
+                    feature_type_id = table.Column<long>(type: "bigint", nullable: true),
+                    granted_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_access_entries", x => x.id);
+                    table.CheckConstraint("ck_access_entries_narrowing", "(feature_kind IS NULL AND feature_type_id IS NULL) OR (domain = 0 AND scope_kind IN (0, 1) AND (feature_kind IS NULL OR feature_type_id IS NULL))");
+                    table.CheckConstraint("ck_access_entries_one_home", "(permission_group_id IS NOT NULL AND subject_kind IS NULL AND subject_id IS NULL) OR (permission_group_id IS NULL AND subject_kind IS NOT NULL AND subject_id IS NOT NULL)");
+                    table.CheckConstraint("ck_access_entries_scope_anchor", "(scope_kind IN (0, 1) AND scope_feature_id IS NULL AND scope_id IS NULL) OR (scope_kind IN (2, 4) AND scope_feature_id IS NULL AND scope_id IS NOT NULL) OR (scope_kind = 3 AND scope_feature_id IS NOT NULL AND scope_id IS NULL) OR (scope_kind = 5 AND ((domain = 0 AND scope_feature_id IS NOT NULL AND scope_id IS NULL) OR (domain <> 0 AND scope_feature_id IS NULL AND scope_id IS NOT NULL)))");
+                    table.ForeignKey(
+                        name: "fk_access_entries_feature_types_feature_type_id",
+                        column: x => x.feature_type_id,
+                        principalTable: "feature_types",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_access_entries_features_scope_feature_id",
+                        column: x => x.scope_feature_id,
+                        principalTable: "features",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_access_entries_permission_groups_permission_group_id",
+                        column: x => x.permission_group_id,
+                        principalTable: "permission_groups",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_access_entries_users_granted_by",
+                        column: x => x.granted_by,
+                        principalTable: "users",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "caves",
                 columns: table => new
                 {
@@ -1038,6 +1148,30 @@ namespace SilexGis.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "feature_set_members",
+                columns: table => new
+                {
+                    feature_set_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    feature_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_feature_set_members", x => new { x.feature_set_id, x.feature_id });
+                    table.ForeignKey(
+                        name: "fk_feature_set_members_feature_sets_feature_set_id",
+                        column: x => x.feature_set_id,
+                        principalTable: "feature_sets",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_feature_set_members_features_feature_id",
+                        column: x => x.feature_id,
+                        principalTable: "features",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "feature_shares",
                 columns: table => new
                 {
@@ -1102,40 +1236,6 @@ namespace SilexGis.Infrastructure.Migrations
                         principalTable: "hierarchies",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "object_acl",
-                columns: table => new
-                {
-                    id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    feature_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    entity_type = table.Column<short>(type: "smallint", nullable: true),
-                    entity_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    subject_kind = table.Column<short>(type: "smallint", nullable: false),
-                    subject_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    permissions = table.Column<int>(type: "integer", nullable: false),
-                    granted_by = table.Column<Guid>(type: "uuid", nullable: true),
-                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_object_acl", x => x.id);
-                    table.CheckConstraint("ck_object_acl_one_target", "(feature_id IS NOT NULL AND entity_type IS NULL AND entity_id IS NULL) OR (feature_id IS NULL AND entity_type IS NOT NULL AND entity_id IS NOT NULL)");
-                    table.ForeignKey(
-                        name: "fk_object_acl_features_feature_id",
-                        column: x => x.feature_id,
-                        principalTable: "features",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "fk_object_acl_users_granted_by",
-                        column: x => x.granted_by,
-                        principalTable: "users",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -1493,6 +1593,31 @@ namespace SilexGis.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "ix_access_entries_feature_type_id",
+                table: "access_entries",
+                column: "feature_type_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_access_entries_granted_by",
+                table: "access_entries",
+                column: "granted_by");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_access_entries_permission_group_id",
+                table: "access_entries",
+                column: "permission_group_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_access_entries_scope_feature_id",
+                table: "access_entries",
+                column: "scope_feature_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_access_entries_subject_kind_subject_id",
+                table: "access_entries",
+                columns: new[] { "subject_kind", "subject_id" });
+
+            migrationBuilder.CreateIndex(
                 name: "ix_account_data_exports_user_id_created_at",
                 table: "account_data_exports",
                 columns: new[] { "user_id", "created_at" });
@@ -1674,6 +1799,23 @@ namespace SilexGis.Infrastructure.Migrations
                 name: "ix_feature_links_to_id",
                 table: "feature_links",
                 column: "to_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_feature_set_members_feature_id",
+                table: "feature_set_members",
+                column: "feature_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_feature_sets_name",
+                table: "feature_sets",
+                column: "name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_feature_sets_slug",
+                table: "feature_sets",
+                column: "slug",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_feature_shares_created_by",
@@ -1906,30 +2048,6 @@ namespace SilexGis.Infrastructure.Migrations
                 columns: new[] { "user_id", "status" });
 
             migrationBuilder.CreateIndex(
-                name: "ix_object_acl_entity_type_entity_id_subject_kind_subject_id",
-                table: "object_acl",
-                columns: new[] { "entity_type", "entity_id", "subject_kind", "subject_id" },
-                unique: true,
-                filter: "entity_type IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_object_acl_feature_id_subject_kind_subject_id",
-                table: "object_acl",
-                columns: new[] { "feature_id", "subject_kind", "subject_id" },
-                unique: true,
-                filter: "feature_id IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_object_acl_granted_by",
-                table: "object_acl",
-                column: "granted_by");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_object_acl_subject_kind_subject_id",
-                table: "object_acl",
-                columns: new[] { "subject_kind", "subject_id" });
-
-            migrationBuilder.CreateIndex(
                 name: "ix_open_iddict_applications_client_id",
                 table: "OpenIddictApplications",
                 column: "client_id",
@@ -1960,6 +2078,29 @@ namespace SilexGis.Infrastructure.Migrations
                 name: "ix_open_iddict_tokens_reference_id",
                 table: "OpenIddictTokens",
                 column: "reference_id",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_permission_group_members_member_kind_member_id",
+                table: "permission_group_members",
+                columns: new[] { "member_kind", "member_id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_permission_group_members_permission_group_id_member_kind_me",
+                table: "permission_group_members",
+                columns: new[] { "permission_group_id", "member_kind", "member_id" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_permission_groups_name",
+                table: "permission_groups",
+                column: "name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_permission_groups_slug",
+                table: "permission_groups",
+                column: "slug",
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -2147,6 +2288,9 @@ namespace SilexGis.Infrastructure.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "access_entries");
+
+            migrationBuilder.DropTable(
                 name: "account_data_exports");
 
             migrationBuilder.DropTable(
@@ -2177,6 +2321,9 @@ namespace SilexGis.Infrastructure.Migrations
                 name: "feature_links");
 
             migrationBuilder.DropTable(
+                name: "feature_set_members");
+
+            migrationBuilder.DropTable(
                 name: "feature_shares");
 
             migrationBuilder.DropTable(
@@ -2201,13 +2348,13 @@ namespace SilexGis.Infrastructure.Migrations
                 name: "notification_outbox");
 
             migrationBuilder.DropTable(
-                name: "object_acl");
-
-            migrationBuilder.DropTable(
                 name: "OpenIddictScopes");
 
             migrationBuilder.DropTable(
                 name: "OpenIddictTokens");
+
+            migrationBuilder.DropTable(
+                name: "permission_group_members");
 
             migrationBuilder.DropTable(
                 name: "processing_jobs");
@@ -2252,6 +2399,9 @@ namespace SilexGis.Infrastructure.Migrations
                 name: "link_kinds");
 
             migrationBuilder.DropTable(
+                name: "feature_sets");
+
+            migrationBuilder.DropTable(
                 name: "geofiles");
 
             migrationBuilder.DropTable(
@@ -2259,6 +2409,9 @@ namespace SilexGis.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "OpenIddictAuthorizations");
+
+            migrationBuilder.DropTable(
+                name: "permission_groups");
 
             migrationBuilder.DropTable(
                 name: "tags");

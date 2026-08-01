@@ -10,8 +10,10 @@ namespace SilexGis.Domain.Entities;
 /// who never sign in. Anything that needs the users of a group derives them from the accounts
 /// among its cavers, which is why a member without an account contributes nothing to access.
 /// <see cref="Role"/> is roster metadata for display — no authorization reads it.
+/// Roster rows are audited: membership moves whatever rights flow through the group's
+/// permission-group memberships, so a roster write is a grant edit in effect.
 /// </remarks>
-public class CavingGroupMembership : ITimestamped
+public class CavingGroupMembership : ITimestamped, IAuditable
 {
     public long Id { get; set; }
 
@@ -24,6 +26,8 @@ public class CavingGroupMembership : ITimestamped
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
+
+    public string AuditId => Id.ToString();
 }
 
 /// <summary>

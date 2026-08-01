@@ -7,6 +7,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -23,7 +25,8 @@ public sealed class FeatureLinkTests : IAsyncLifetime, IDisposable
     private readonly SilexGisApiFactory factory;
 
     private HttpClient owner = null!;    // Editor
-    private HttpClient outsider = null!; // Editor, unrelated
+    private HttpClient outsider = null!; // Viewer (regular user), unrelated — Editors read everything now
+    private Guid ownerId;
     private Guid outsiderId;
     private long sinkholeTypeId;
     private long caveTypeId;
@@ -34,8 +37,8 @@ public sealed class FeatureLinkTests : IAsyncLifetime, IDisposable
     public async Task InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"flown-{suffix}@t.local");
-        outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"flout-{suffix}@t.local");
+        ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"flown-{suffix}@t.local");
+        outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"flout-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -78,10 +81,14 @@ public sealed class FeatureLinkTests : IAsyncLifetime, IDisposable
         await PutLinksExpectingAsync(owner, featureA, "feature.link_target_not_found",
             new { toId = Guid.NewGuid(), linkKindCode = "related", note = (string?)null });
 
-        // A target the caller cannot read is reported exactly like a missing one.
-        var outsiderPrivate = await CreateFeatureAsync(outsider, $"Foreign priv {marker}", "private", 25.64, 45.54);
+        // A target the caller cannot read is reported exactly like a missing one. Editors
+        // read every content row now, so an object-scope deny is what puts the target out
+        // of this caller's sight.
+        var unreadable = await CreateFeatureAsync(owner, $"Unreadable target {marker}", "private", 25.64, 45.54);
+        await DenyReadAsync(ownerId, unreadable);
+        (await owner.GetAsync($"/api/v1/features/{unreadable}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         await PutLinksExpectingAsync(owner, featureA, "feature.link_target_not_found",
-            new { toId = outsiderPrivate, linkKindCode = "related", note = (string?)null });
+            new { toId = unreadable, linkKindCode = "related", note = (string?)null });
 
         // A valid replace; the row serves from both endpoints, direction preserved.
         var put = await owner.PutAsJsonAsync($"/api/v1/features/{featureA}/links",
@@ -202,6 +209,24 @@ public sealed class FeatureLinkTests : IAsyncLifetime, IDisposable
         var response = await client.PutAsJsonAsync($"/api/v1/features/{featureId}/links", new { links });
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await response.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>().ShouldBe(code);
+    }
+
+    /// <summary>Takes one feature out of one user's sight, whatever their role grants.</summary>
+    private async Task DenyReadAsync(Guid subjectId, Guid featureId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = subjectId,
+            Effect = AccessEffect.Deny,
+            Domain = AccessDomain.Features,
+            Actions = AccessAction.Read,
+            ScopeKind = AccessScopeKind.Object,
+            ScopeFeatureId = featureId,
+        });
+        await db.SaveChangesAsync();
     }
 
     private static async Task GrantAsync(HttpClient granter, Guid featureId, Guid subjectId, string permissions)

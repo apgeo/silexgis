@@ -11,7 +11,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
-using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Access;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -46,12 +46,12 @@ public static class FeatureShareEndpoints
         Guid id,
         FeatureShareCreateRequest request,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -62,10 +62,10 @@ public static class FeatureShareEndpoints
             return ApiProblems.NotFound("feature.not_found");
         }
 
-        if (!await permissions.CanAsync(user, feature, ObjectPermission.Share, ct))
+        if (!(await access.DecideAsync(ctx, AccessAction.Share, feature, ct)).Allowed)
         {
             // Existence of a feature the caller cannot read is not disclosed.
-            return await permissions.CanAsync(user, feature, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("feature.not_found");
         }
@@ -80,7 +80,7 @@ public static class FeatureShareEndpoints
             TokenHash = HashToken(token),
             Mode = request.Mode,
             IncludeSubtree = request.IncludeSubtree,
-            CreatedBy = user.UserId,
+            CreatedBy = ctx.UserId,
         };
         db.FeatureShares.Add(share);
         await db.SaveChangesAsync(ct);
@@ -93,12 +93,12 @@ public static class FeatureShareEndpoints
     private static async Task<Results<Ok<List<FeatureShareDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         Guid id,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -109,9 +109,9 @@ public static class FeatureShareEndpoints
             return ApiProblems.NotFound("feature.not_found");
         }
 
-        if (!await permissions.CanAsync(user, feature, ObjectPermission.Share, ct))
+        if (!(await access.DecideAsync(ctx, AccessAction.Share, feature, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, feature, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("feature.not_found");
         }
@@ -129,12 +129,12 @@ public static class FeatureShareEndpoints
         Guid id,
         Guid shareId,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -145,9 +145,9 @@ public static class FeatureShareEndpoints
             return ApiProblems.NotFound("feature.not_found");
         }
 
-        if (!await permissions.CanAsync(user, feature, ObjectPermission.Share, ct))
+        if (!(await access.DecideAsync(ctx, AccessAction.Share, feature, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, feature, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("feature.not_found");
         }
@@ -173,7 +173,7 @@ public static class FeatureShareEndpoints
         string token,
         SilexGisDbContext db,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
     {
@@ -202,10 +202,10 @@ public static class FeatureShareEndpoints
             return ApiProblems.NotFound("share.not_found");
         }
 
-        UserContext? viewer = null;
+        AccessContext? viewer = null;
         if (share.Mode == FeatureShareMode.RequiresLogin)
         {
-            viewer = await userAccessor.GetAsync(ct);
+            viewer = await accessAccessor.GetAsync(ct);
             if (viewer is null)
             {
                 return TypedResults.Problem(
@@ -215,7 +215,7 @@ public static class FeatureShareEndpoints
 
             // A requires-login share is only a resolvable address: the caller's own
             // permissions gate the read, exactly as on the regular feature routes.
-            if (!await db.Features.VisibleTo(viewer, db.ObjectAcls).AnyAsync(f => f.Id == feature.Id, ct))
+            if (!await db.Features.VisibleTo(viewer, db.Features, db.FeatureSetMembers).AnyAsync(f => f.Id == feature.Id, ct))
             {
                 return ApiProblems.NotFound("share.not_found");
             }
@@ -269,13 +269,13 @@ public static class FeatureShareEndpoints
     /// hides everything hanging below it.
     /// </summary>
     private static async Task<List<SubtreeRow>> LoadPrimarySubtreeAsync(
-        SilexGisDbContext db, UserContext? viewer, Guid rootId, CancellationToken ct)
+        SilexGisDbContext db, AccessContext? viewer, Guid rootId, CancellationToken ct)
     {
         var candidates = db.Features.AsNoTracking()
             .Where(f => f.Id != rootId && f.AncestorIds.Contains(rootId));
         if (viewer is not null)
         {
-            candidates = candidates.VisibleTo(viewer, db.ObjectAcls);
+            candidates = candidates.VisibleTo(viewer, db.Features, db.FeatureSetMembers);
         }
 
         var rows = await candidates

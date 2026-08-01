@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
@@ -115,12 +116,12 @@ public static class MapEndpoints
         string bbox,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -186,12 +187,13 @@ public static class MapEndpoints
         // One readability pass per target world and one exact-view pass over every feature
         // the photos transitively touch.
         var readableFeatureIds = await ReadableIdsAsync(
-            db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls).Select(f => f.Id), attachedFeatureIds, ct);
+            db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers).Select(f => f.Id),
+            attachedFeatureIds, ct);
         var readableTripIds = await ReadableIdsAsync(
-            db.TripLogs.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.TripLog).Select(t => t.Id),
+            db.TripLogs.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs).Select(t => t.Id),
             tripIds, ct);
         var readableGeofileIds = await ReadableIdsAsync(
-            db.Geofiles.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Geofile).Select(g => g.Id),
+            db.Geofiles.AsNoTracking().VisibleTo(ctx, AccessDomain.Geofiles).Select(g => g.Id),
             geofileIds, ct);
 
         var protectionTargets = attachedFeatureIds
@@ -199,7 +201,7 @@ public static class MapEndpoints
             .Concat(tripCaves.Select(x => x.CaveId))
             .Distinct()
             .ToList();
-        var exactViewIds = await protection.ExactViewIdsAsync(user, protectionTargets, ct);
+        var exactViewIds = await protection.ExactViewIdsAsync(ctx, protectionTargets, ct);
 
         var linksByFile = links.GroupBy(l => l.FileId).ToDictionary(g => g.Key, g => g.ToList());
         var features = new List<GeoFeature>();
@@ -242,7 +244,7 @@ public static class MapEndpoints
                 {
                     AttachedEntityType.TripLog => readableTripIds.Contains(l.EntityId!.Value),
                     AttachedEntityType.Geofile => readableGeofileIds.Contains(l.EntityId!.Value),
-                    AttachedEntityType.CavingGroup => user.IsMemberOf(l.EntityId!.Value),
+                    AttachedEntityType.CavingGroup => FileAccessRules.CanReadCavingGroupTarget(ctx, l.EntityId!.Value),
                     _ => false,
                 });
             if (!visible)
@@ -298,13 +300,13 @@ public static class MapEndpoints
         int? detailZoom,
         int? maxPaths,
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
         IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -325,22 +327,23 @@ public static class MapEndpoints
 
         // The protection rule is evaluated in Domain, over the centerline features whose
         // bounding box meets the viewport — an index-only lookup, so nothing large is read
-        // to decide it. Rows the caller may not view exactly are excluded from the geometry
-        // query entirely, before any geometry is produced.
-        var idsInView = await CenterlineMapSql.CenterlineIdsInViewAsync(db, user, box, ct);
-        var exactViewIds = await protection.ExactViewIdsAsync(user, idsInView, ct);
-        var withheldIds = idsInView.Where(id => !exactViewIds.Contains(id)).ToList();
+        // to decide it. Only the rows that PASSED are eligible for the geometry query, so
+        // nothing else has geometry produced for it: a row created or newly protected
+        // between these statements is simply absent, rather than served unchecked.
+        var idsInView = await CenterlineMapSql.CenterlineIdsInViewAsync(db, ctx, box, ct);
+        var exactViewIds = await protection.ExactViewIdsAsync(ctx, idsInView, ct);
+        var eligibleIds = idsInView.Where(exactViewIds.Contains).ToList();
 
         var rows = await CenterlineMapSql.QueryAsync(
             db,
-            user,
+            ctx,
             box,
             detail: effectiveZoom >= effectiveDetailZoom,
             maxPaths: effectiveMaxPaths,
             gateActive: effectiveZoom < options.CenterlineGateZoom,
             gatePaths: options.CenterlineGatePaths,
             simplifyToleranceDegrees: options.SimplifyToleranceDegrees(effectiveZoom),
-            withheldCenterlineIds: withheldIds,
+            exactViewCenterlineIds: eligibleIds,
             ct);
 
         var features = new List<GeoFeature>();
@@ -383,11 +386,11 @@ public static class MapEndpoints
         DateOnly? from,
         DateOnly? to,
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -399,7 +402,7 @@ public static class MapEndpoints
 
         var polygon = box.ToPolygon();
         var query = db.TripLogs.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls, AttachedEntityType.TripLog)
+            .VisibleTo(ctx, AccessDomain.TripLogs)
             .Where(x => x.Geom != null && x.Geom.Intersects(polygon));
 
         if (from is not null)
@@ -427,19 +430,19 @@ public static class MapEndpoints
         Guid id,
         string bbox,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        // Rows inherit the geofile's ACL; an unreadable geofile is not disclosed.
+        // Rows inherit the geofile's access; an unreadable geofile is not disclosed.
         var geofile = await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(g => g.Id == id, ct);
-        if (geofile is null || !await permissions.CanAsync(user, geofile, ObjectPermission.Read, ct))
+        if (geofile is null || !(await access.DecideAsync(ctx, AccessAction.Read, geofile, ct)).Allowed)
         {
             return ApiProblems.NotFound("geofile.not_found");
         }
@@ -483,13 +486,13 @@ public static class MapEndpoints
         string? category,
         string? tag,
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
-        IOptions<AccessOptions> access,
+        IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -520,7 +523,7 @@ public static class MapEndpoints
 
         var polygon = box.ToPolygon();
         var query = db.Features.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls)
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => kindFilter.Contains(f.Kind) && f.Geom != null && f.Geom!.Intersects(polygon));
 
         if (featureTypeId is not null)
@@ -562,9 +565,9 @@ public static class MapEndpoints
         // Only protected rows need the per-row exact-view evaluation; unprotected rows are
         // exact by definition (no protected root exists to veto).
         var exactViewIds = await protection.ExactViewIdsAsync(
-            user, rows.Where(r => r.IsProtectedEffective).Select(r => r.Id).ToList(), ct);
+            ctx, rows.Where(r => r.IsProtectedEffective).Select(r => r.Id).ToList(), ct);
 
-        var gridMeters = access.Value.LocationGridMeters;
+        var gridMeters = accessOptions.Value.LocationGridMeters;
         var features = new List<GeoFeature>(rows.Count);
         foreach (var row in rows)
         {
@@ -605,13 +608,13 @@ public static class MapEndpoints
         int? zoom,
         string? tag,
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
-        IOptions<AccessOptions> access,
+        IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -623,14 +626,14 @@ public static class MapEndpoints
 
         var effectiveZoom = Math.Clamp(zoom ?? 14, 0, 24);
         return effectiveZoom < ClusterMaxZoom
-            ? TypedResults.Ok(await MapSql.ClustersAsync(db, user, box, effectiveZoom, access.Value.LocationGridMeters, tag, ct))
-            : TypedResults.Ok(await PointsAsync(db, protection, user, box, access.Value.LocationGridMeters, tag, ct));
+            ? TypedResults.Ok(await MapSql.ClustersAsync(db, ctx, box, effectiveZoom, accessOptions.Value.LocationGridMeters, tag, ct))
+            : TypedResults.Ok(await PointsAsync(db, protection, ctx, box, accessOptions.Value.LocationGridMeters, tag, ct));
     }
 
     private static async Task<FeatureCollection> PointsAsync(
         SilexGisDbContext db,
         FeatureProtection protection,
-        UserContext user,
+        AccessContext ctx,
         Bbox box,
         double gridMeters,
         string? tag,
@@ -638,10 +641,11 @@ public static class MapEndpoints
     {
         var polygon = box.ToPolygon();
 
-        // Entrance features carry a copy of their cave's access trio, so visibility is
-        // row-local — no cave join. The subtype row only contributes entrance attributes.
+        // The entrance's own row decides nothing alone anymore: visibility cascades at
+        // read time over the ancestor chain, so a private entrance row under a readable
+        // cave is served — the filter's inheritance arm does that work.
         var query = db.Features.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls)
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => f.Kind == FeatureKind.CaveEntrance && f.Geom!.Intersects(polygon));
 
         if (!string.IsNullOrWhiteSpace(tag))
@@ -669,13 +673,13 @@ public static class MapEndpoints
         }
 
         var exactViewIds = await protection.ExactViewIdsAsync(
-            user, rows.Where(r => r.IsProtectedEffective).Select(r => r.Id).ToList(), ct);
+            ctx, rows.Where(r => r.IsProtectedEffective).Select(r => r.Id).ToList(), ct);
 
-        // Cave names resolve through the visibility filter: an entrance readable through its
-        // own ACL grant must not disclose the name of a cave the caller cannot read.
+        // Cave names resolve through the visibility filter: an entrance readable through
+        // its own grant must not disclose the name of a cave the caller cannot read.
         var caveIds = rows.Select(r => r.CaveId).Distinct().ToList();
         var caveNames = await db.Features.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls)
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => caveIds.Contains(f.Id))
             .Select(f => new { f.Id, f.Name })
             .ToDictionaryAsync(f => f.Id, f => f.Name, ct);

@@ -8,8 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -28,7 +28,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
     private readonly SilexGisApiFactory factory;
 
     private HttpClient owner = null!;    // Editor, creates the objects
-    private HttpClient grantee = null!;  // Editor, receives ACL grants
+    private HttpClient grantee = null!;  // Viewer (regular user), receives grants — Editors read everything now
     private HttpClient manager = null!;  // Manager role, creates caving groups
     private Guid granteeId;
     private long caveTypeId;
@@ -41,7 +41,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"acl-own-{suffix}@t.local");
-        granteeId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"acl-grant-{suffix}@t.local");
+        granteeId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"acl-grant-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Manager, $"acl-mgr-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
@@ -70,7 +70,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
         // Read grant → detail + list + effective-permissions open up; writes still 403.
-        await ReplaceAclAsync(owner, "feature", caveId, [(AclSubjectKind.User, granteeId, ObjectPermission.Read)]);
+        await ReplaceAclAsync(owner, "feature", caveId, [(AccessSubjectKind.User, granteeId, AccessAction.Read)]);
         (await grantee.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await ListCaveIdsAsync(grantee)).ShouldContain(caveId);
         // Flags enums serialize as a comma-joined string; assert loosely on the raw body.
@@ -83,15 +83,15 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
 
         // Read+Write grant → update succeeds; ACL management still locked.
         await ReplaceAclAsync(owner, "feature", caveId,
-            [(AclSubjectKind.User, granteeId, ObjectPermission.Read | ObjectPermission.Write)]);
+            [(AccessSubjectKind.User, granteeId, AccessAction.Read | AccessAction.Write)]);
         (await grantee.PutWithIfMatchAsync($"/api/v1/caves/{caveId}", CaveBody("ACL Cave renamed", "private")))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
         (await grantee.GetAsync($"/api/v1/objects/feature/{caveId}/acl")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         // ManagePermissions grant → the grantee can now administer the ACL.
         await ReplaceAclAsync(owner, "feature", caveId,
-            [(AclSubjectKind.User, granteeId,
-              ObjectPermission.Read | ObjectPermission.Write | ObjectPermission.ManagePermissions)]);
+            [(AccessSubjectKind.User, granteeId,
+              AccessAction.Read | AccessAction.Write | AccessAction.ManagePermissions)]);
         (await grantee.GetAsync($"/api/v1/objects/feature/{caveId}/acl")).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Revoke everything → back to invisible.
@@ -113,25 +113,25 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
         // A private cave (NOT caving group-bound) with a caving group ACL grant becomes readable to members.
         var caveId = await CreateCaveAsync("CavingGroup ACL Cave", "private");
         (await grantee.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        await ReplaceAclAsync(owner, "feature", caveId, [(AclSubjectKind.CavingGroup, cavingGroupId, ObjectPermission.Read)]);
+        await ReplaceAclAsync(owner, "feature", caveId, [(AccessSubjectKind.CavingGroup, cavingGroupId, AccessAction.Read)]);
         (await grantee.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await manager.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.OK); // caving group owner too
 
         // A caving group grant notifies each member — and only once: re-saving the same ACL is
         // not news and must not queue another message.
         (await CountPermissionNotificationsAsync(granteeId)).ShouldBe(1);
-        await ReplaceAclAsync(owner, "feature", caveId, [(AclSubjectKind.CavingGroup, cavingGroupId, ObjectPermission.Read)]);
+        await ReplaceAclAsync(owner, "feature", caveId, [(AccessSubjectKind.CavingGroup, cavingGroupId, AccessAction.Read)]);
         (await CountPermissionNotificationsAsync(granteeId)).ShouldBe(1);
 
-        // EF ↔ SQL parity of the feature filter including the caving group-ACL branch, scoped to
-        // this test's cave (the full caller matrix lives in the parity suite).
+        // EF ↔ SQL parity of the feature filter including the caving group-subject branch,
+        // scoped to this test's cave (the full caller matrix lives in the parity suite).
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var user = await RosterHelper.ContextOfAsync(db, granteeId);
+        var ctx = await RosterHelper.AccessContextOfAsync(db, granteeId);
 
-        var efIds = await db.Features.VisibleTo(user, db.ObjectAcls)
+        var efIds = await db.Features.VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => f.Id == caveId).Select(f => f.Id).ToListAsync();
-        var (fragment, parameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
+        var (fragment, parameters) = AccessSql.FeatureVisibleToFragment(ctx, "f");
         parameters.Add("scope_id", caveId);
         var sqlIds = (await db.Database.GetDbConnection().QueryAsync<Guid>(
                 $"SELECT f.id FROM features f WHERE f.deleted_at IS NULL AND f.id = @scope_id AND {fragment}",
@@ -178,10 +178,10 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
         (await grantee.GetAsync($"/api/v1/taggings?entityType=feature&entityId={caveId}"))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // A non-member still sees nothing at all — the arm keys on membership, not on
-        // the row merely carrying a caving group id.
+        // A non-member regular user still sees nothing at all — the arm keys on
+        // membership, not on the row merely carrying a caving group id.
         var strangerEmail = $"acl-stranger-{Guid.NewGuid():N}"[..20] + "@t.local";
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, strangerEmail);
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, strangerEmail);
         using var stranger = await AuthHelper.BearerClientAsync(factory, strangerEmail);
         (await stranger.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await ListCaveIdsAsync(stranger)).ShouldNotContain(caveId);
@@ -189,10 +189,10 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
         // EF <-> SQL parity for the caving group arm specifically.
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var user = await RosterHelper.ContextOfAsync(db, granteeId);
-        var efIds = await db.Features.VisibleTo(user, db.ObjectAcls)
+        var ctx = await RosterHelper.AccessContextOfAsync(db, granteeId);
+        var efIds = await db.Features.VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => f.Id == caveId).Select(f => f.Id).ToListAsync();
-        var (fragment, parameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
+        var (fragment, parameters) = AccessSql.FeatureVisibleToFragment(ctx, "f");
         parameters.Add("scope_id", caveId);
         var sqlIds = (await db.Database.GetDbConnection().QueryAsync<Guid>(
                 $"SELECT f.id FROM features f WHERE f.deleted_at IS NULL AND f.id = @scope_id AND {fragment}",
@@ -224,7 +224,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
 
         // With a ViewExactLocation (+Read) grant on the cave feature: exact coordinates.
         await ReplaceAclAsync(owner, "feature", caveId,
-            [(AclSubjectKind.User, granteeId, ObjectPermission.Read | ObjectPermission.ViewExactLocation)]);
+            [(AccessSubjectKind.User, granteeId, AccessAction.Read | AccessAction.ViewExactLocation)]);
         var entrancesAfter = await grantee.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/entrances");
         entrancesAfter[0].GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldBe(exactLon, 1e-9);
         entrancesAfter[0].GetProperty("approximateLocation").GetBoolean().ShouldBeFalse();
@@ -251,7 +251,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
         (await grantee.GetAsync($"/api/v1/objects/mapView/{viewId}/acl")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
         // Read grant → the view appears in the grantee's list; writes still locked.
-        await ReplaceAclAsync(owner, "mapView", viewId, [(AclSubjectKind.User, granteeId, ObjectPermission.Read)]);
+        await ReplaceAclAsync(owner, "mapView", viewId, [(AccessSubjectKind.User, granteeId, AccessAction.Read)]);
         (await ListMapViewIdsAsync(grantee)).ShouldContain(viewId);
         var effectiveRaw = await (await grantee.GetAsync($"/api/v1/objects/mapView/{viewId}/effective-permissions"))
             .Content.ReadAsStringAsync();
@@ -261,7 +261,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
 
         // Read+Write grant → the grantee can edit the view.
         await ReplaceAclAsync(owner, "mapView", viewId,
-            [(AclSubjectKind.User, granteeId, ObjectPermission.Read | ObjectPermission.Write)]);
+            [(AccessSubjectKind.User, granteeId, AccessAction.Read | AccessAction.Write)]);
         (await grantee.PutAsJsonAsync($"/api/v1/map-views/{viewId}", MapViewBody("Renamed by grantee")))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -386,13 +386,13 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
         HttpClient client,
         string entityType,
         Guid id,
-        (AclSubjectKind Kind, Guid SubjectId, ObjectPermission Permissions)[] entries)
+        (AccessSubjectKind Kind, Guid SubjectId, AccessAction Permissions)[] entries)
     {
         var response = await client.PutAsJsonAsync($"/api/v1/objects/{entityType}/{id}/acl", new
         {
             entries = entries.Select(e => new
             {
-                subjectKind = e.Kind == AclSubjectKind.User ? "user" : "cavingGroup",
+                subjectKind = e.Kind == AccessSubjectKind.User ? "user" : "cavingGroup",
                 subjectId = e.SubjectId,
                 permissions = e.Permissions.ToString().Replace(" ", string.Empty),
             }).ToArray(),

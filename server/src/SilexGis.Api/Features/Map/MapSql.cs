@@ -3,9 +3,9 @@ using Dapper;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -21,7 +21,7 @@ public static class MapSql
 {
     public static async Task<FeatureCollection> ClustersAsync(
         SilexGisDbContext db,
-        UserContext user,
+        AccessContext ctx,
         Bbox box,
         int zoom,
         double protectionGridMeters,
@@ -32,8 +32,7 @@ public static class MapSql
         var clusterCellDegrees = 360d / Math.Pow(2, zoom) / 4d;
         var protectionCellDegrees = LocationProtection.CellDegrees(protectionGridMeters);
 
-        var (visibilitySql, parameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
-        var exactSql = PermissionSql.ExactViewFragment("f");
+        var (visibilitySql, exactSql, parameters) = AccessSql.FeatureLayerFragments(ctx, "f");
         parameters.Add("west", box.West);
         parameters.Add("south", box.South);
         parameters.Add("east", box.East);

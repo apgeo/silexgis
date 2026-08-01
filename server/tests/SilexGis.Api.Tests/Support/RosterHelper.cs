@@ -64,4 +64,9 @@ public static class RosterHelper
     public static async Task<UserContext> ContextOfAsync(
         SilexGisDbContext db, Guid userId, params string[] roles) =>
         new(userId, new HashSet<string>(roles), await MembershipsOfAsync(db, userId));
+
+    /// <summary>The account's access context, resolved exactly as a request resolves it.</summary>
+    public static Task<SilexGis.Domain.Access.AccessContext> AccessContextOfAsync(
+        SilexGisDbContext db, Guid userId) =>
+        SilexGis.Infrastructure.Permissions.AccessContextResolver.ResolveAsync(db, userId);
 }

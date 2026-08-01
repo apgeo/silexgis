@@ -72,6 +72,10 @@ public static class IdentitySeeder
 
         _ = await userManager.AddToRoleAsync(admin, GlobalRoles.Admin);
 
+        // The bootstrap account is what keeps the installation administrable: it joins
+        // the protected Full Administrators group, whose membership is the grant.
+        await PermissionGroupSeeder.EnsureRoleMembershipsAsync(db, admin.Id, GlobalRoles.Admin);
+
         CaverDirectory.CreateForNewAccount(db, admin.Id, admin.DisplayName, admin.UserName, admin.Email);
         await db.SaveChangesAsync();
     }

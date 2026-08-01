@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Persistence;
@@ -28,7 +29,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
 
     private HttpClient owner = null!;    // Editor, owns everything seeded here — always exact
     private HttpClient editor = null!;   // Editor granted Read+Write, but NOT ViewExactLocation
-    private HttpClient outsider = null!; // Editor, unrelated
+    private HttpClient outsider = null!; // Viewer (regular user), unrelated — Editors read everything now
     private Guid editorId;
     private long caveTypeId;
     private long entranceTypeId;
@@ -47,7 +48,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"hown-{suffix}@t.local");
         editorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"hedit-{suffix}@t.local");
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"hout-{suffix}@t.local");
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"hout-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -146,7 +147,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
     {
         var caveId = await CreateCaveAsync(owner, protectedLocation: true, closestAddress: SecretAddress);
         var entranceId = await CreateEntranceAsync(owner, caveId, ExactLon, ExactLat);
-        await GrantAsync(caveId, editorId, ObjectPermission.Read | ObjectPermission.Write);
+        await GrantAsync(caveId, editorId, AccessAction.Read | AccessAction.Write);
 
         await UpdateCaveAsync(
             owner, caveId, name: "Protected cave", protectedLocation: true,
@@ -182,7 +183,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
         HasChange(caveEdit, "ClosestAddress").ShouldBeFalse();
 
         // ---- granting ViewExactLocation lifts the redaction retroactively.
-        await GrantAsync(caveId, editorId, ObjectPermission.ViewExactLocation);
+        await GrantAsync(caveId, editorId, AccessAction.ViewExactLocation);
         var (grantedBody, _) = await HistoryAsync(editor, "feature", caveId);
         grantedBody.ShouldContain("POINT");
         grantedBody.ShouldContain("Secreta");
@@ -477,26 +478,32 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
         return root.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
-    /// <summary>Grants (ORs in) permissions on a feature; one ACL row per subject per target.</summary>
-    private async Task GrantAsync(Guid featureId, Guid userId, ObjectPermission permissions)
+    /// <summary>Grants (ORs in) actions on a feature; one direct object-scope allow entry
+    /// per subject per target — the same shape the ACL endpoint writes.</summary>
+    private async Task GrantAsync(Guid featureId, Guid userId, AccessAction actions)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var acl = await db.ObjectAcls.FirstOrDefaultAsync(a =>
-            a.FeatureId == featureId && a.SubjectKind == AclSubjectKind.User && a.SubjectId == userId);
-        if (acl is null)
+        var entry = await db.AccessEntries.FirstOrDefaultAsync(e =>
+            e.SubjectKind == AccessSubjectKind.User && e.SubjectId == userId
+            && e.Domain == AccessDomain.Features && e.ScopeKind == AccessScopeKind.Object
+            && e.ScopeFeatureId == featureId && e.Effect == AccessEffect.Allow);
+        if (entry is null)
         {
-            db.ObjectAcls.Add(new ObjectAcl
+            db.AccessEntries.Add(new AccessEntry
             {
-                FeatureId = featureId,
-                SubjectKind = AclSubjectKind.User,
+                SubjectKind = AccessSubjectKind.User,
                 SubjectId = userId,
-                Permissions = permissions,
+                Effect = AccessEffect.Allow,
+                Domain = AccessDomain.Features,
+                Actions = actions,
+                ScopeKind = AccessScopeKind.Object,
+                ScopeFeatureId = featureId,
             });
         }
         else
         {
-            acl.Permissions |= permissions;
+            entry.Actions |= actions;
         }
 
         await db.SaveChangesAsync();

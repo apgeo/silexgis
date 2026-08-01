@@ -2,8 +2,8 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Dashboard;
@@ -35,18 +35,18 @@ public static class DashboardEndpoints
 
     private static async Task<Results<Ok<DashboardSummaryDto>, UnauthorizedHttpResult>> GetSummaryAsync(
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        var features = db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls);
-        var trips = db.TripLogs.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.TripLog);
-        var geofiles = db.Geofiles.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Geofile);
+        var features = db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers);
+        var trips = db.TripLogs.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs);
+        var geofiles = db.Geofiles.AsNoTracking().VisibleTo(ctx, AccessDomain.Geofiles);
 
         // Every feature kind lives in one table, so the per-kind figures are one grouped scan
         // rather than a count query per kind.

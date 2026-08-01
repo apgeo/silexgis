@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
+using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
@@ -13,12 +15,12 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Features.Permissions;
 
 public sealed record AclEntryDto(
-    AclSubjectKind SubjectKind,
+    AccessSubjectKind SubjectKind,
     Guid SubjectId,
     string? SubjectName,
-    ObjectPermission Permissions);
+    AccessAction Permissions);
 
-public sealed record AclEntryWrite(AclSubjectKind SubjectKind, Guid SubjectId, ObjectPermission Permissions);
+public sealed record AclEntryWrite(AccessSubjectKind SubjectKind, Guid SubjectId, AccessAction Permissions);
 
 public sealed record AclReplaceRequest(IReadOnlyList<AclEntryWrite> Entries);
 
@@ -32,7 +34,7 @@ public sealed class AclReplaceRequestValidator : AbstractValidator<AclReplaceReq
             entry.RuleFor(x => x.SubjectId).NotEmpty();
             entry.RuleFor(x => x.SubjectKind).IsInEnum();
             entry.RuleFor(x => x.Permissions)
-                .Must(p => p != ObjectPermission.None)
+                .Must(p => p != AccessAction.None)
                 .WithMessage("A grant needs at least one permission.");
         });
         RuleFor(x => x.Entries)
@@ -42,13 +44,15 @@ public sealed class AclReplaceRequestValidator : AbstractValidator<AclReplaceReq
 }
 
 /// <summary>
-/// Per-object ACL management (the explicit-grant layer) and the caller's effective
-/// permissions. Reading/replacing grants requires ManagePermissions on the object.
+/// Per-object grant management and the caller's effective permissions, stored as
+/// DIRECT access entries at object scope (allow effect) — the one-off-grant shape of
+/// the unified access-entry model. This surface deliberately reads and replaces ONLY
+/// the rows it can represent: direct + object-scoped + allow. Denies and wider-scoped
+/// direct entries live in the same table but belong to the richer permissions surface
+/// and survive a full-replace here untouched.
 ///
-/// A grant targets EITHER a feature — any physical feature, of any kind, addressed by the
-/// single route name "feature" and stored against the real feature FK — OR one of the
-/// non-feature entities that carry their own access control, stored against the
-/// polymorphic (type, id) pair. The two shapes are mutually exclusive per row.
+/// Grant writes are bounded by the no-amplification rule: a caller may hand out only
+/// (action) bits they themselves effectively hold on the object.
 /// </summary>
 public static class ObjectAclEndpoints
 {
@@ -64,10 +68,10 @@ public static class ObjectAclEndpoints
         var objects = api.MapGroup("/objects/{entityType}/{id:guid}").WithTags("Permissions");
 
         objects.MapGet("/acl", GetAclAsync)
-            .WithSummary("ACL entries of one object (ManagePermissions).")
+            .WithSummary("Direct object-scope grant entries of one object (ManagePermissions).")
             .WithDescription(TargetVocabulary);
         objects.MapPut("/acl", ReplaceAclAsync).WithValidation<AclReplaceRequest>()
-            .WithSummary("Replaces the object's ACL entries (ManagePermissions).")
+            .WithSummary("Replaces the object's direct grant entries (ManagePermissions).")
             .WithDescription(TargetVocabulary);
         objects.MapGet("/effective-permissions", EffectiveAsync)
             .WithSummary("The caller's own effective permissions on the object.")
@@ -84,23 +88,25 @@ public static class ObjectAclEndpoints
         string entityType,
         Guid id,
         SilexGisDbContext db,
-        IPermissionService permissions,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
+        var ctx = await accessAccessor.GetAsync(ct);
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        if (ctx is null || user is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        var (target, problem) = await ResolveAsync(db, user, entityType, id, ct);
+        var (target, problem) = await ResolveAsync(db, ctx, entityType, id, ct);
         if (problem is not null)
         {
             return problem;
         }
 
-        if (await GuardManageAsync(permissions, user, target!.Value, ct) is { } denied)
+        if (await GuardManageAsync(access, ctx, target!.Value, ct) is { } denied)
         {
             return denied;
         }
@@ -113,24 +119,26 @@ public static class ObjectAclEndpoints
         Guid id,
         AclReplaceRequest request,
         SilexGisDbContext db,
-        IPermissionService permissions,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
+        var ctx = await accessAccessor.GetAsync(ct);
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        if (ctx is null || user is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        var (resolved, problem) = await ResolveAsync(db, user, entityType, id, ct);
+        var (resolved, problem) = await ResolveAsync(db, ctx, entityType, id, ct);
         if (problem is not null)
         {
             return problem;
         }
 
         var target = resolved!.Value;
-        if (await GuardManageAsync(permissions, user, target, ct) is { } denied)
+        if (await GuardManageAsync(access, ctx, target, ct) is { } denied)
         {
             return denied;
         }
@@ -138,7 +146,7 @@ public static class ObjectAclEndpoints
         // Subjects must exist (users or caving groups respectively).
         foreach (var entry in request.Entries)
         {
-            var exists = entry.SubjectKind == AclSubjectKind.User
+            var exists = entry.SubjectKind == AccessSubjectKind.User
                 ? (await ProfileDirectory.ExistingIdsAsync(db, [entry.SubjectId], ct)).Count > 0
                 : await db.CavingGroups.AnyAsync(t => t.Id == entry.SubjectId, ct);
             if (!exists)
@@ -147,18 +155,39 @@ public static class ObjectAclEndpoints
             }
         }
 
+        // Every entry must be one the model can evaluate faithfully, and no amplification:
+        // only action bits the caller effectively holds on this very object can be handed
+        // out. Both are decided before anything is written.
+        var targetFacts = await access.FactsOfAsync(target.Entity, ct);
+        foreach (var entry in request.Entries)
+        {
+            var proposed = NewEntry(target, entry, ctx.UserId).ToSnapshot();
+            if (AccessEntryRules.Validate(proposed) is { } invalid)
+            {
+                return ApiProblems.BadRequest(invalid,
+                    "That combination of actions cannot apply to a single object.");
+            }
+
+            if (AccessEntryRules.ExceededActions(ctx, proposed, targetFacts) != AccessAction.None)
+            {
+                return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
+            }
+        }
+
         // Who already had a grant, read before the replace wipes it: a full-replace save that
         // leaves an existing grant untouched is not news, and mailing everyone on every ACL edit
         // would train people to ignore the message that matters.
-        var alreadyGranted = await GrantsOf(db, target)
+        var current = await GrantsOf(db, target).ToListAsync(ct);
+        var alreadyGranted = current
             .Select(a => new { a.SubjectKind, a.SubjectId })
-            .ToListAsync(ct);
+            .ToList();
 
-        // Full replace: the ACL is small per object; diffing buys nothing.
-        await GrantsOf(db, target).ExecuteDeleteAsync(ct);
+        // Full replace of the representable rows; tracked removal so deletions land in
+        // the audit trail like every other permission-moving write.
+        db.AccessEntries.RemoveRange(current);
         foreach (var entry in request.Entries)
         {
-            db.ObjectAcls.Add(NewGrant(target, entry, user.UserId));
+            db.AccessEntries.Add(NewEntry(target, entry, ctx.UserId));
         }
 
         var newlyGranted = request.Entries
@@ -170,28 +199,28 @@ public static class ObjectAclEndpoints
         return TypedResults.Ok(await LoadEntriesAsync(db, user, target, ct));
     }
 
-    private static async Task<Results<Ok<ObjectPermission>, UnauthorizedHttpResult, ProblemHttpResult>> EffectiveAsync(
+    private static async Task<Results<Ok<AccessAction>, UnauthorizedHttpResult, ProblemHttpResult>> EffectiveAsync(
         string entityType,
         Guid id,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        var (target, problem) = await ResolveAsync(db, user, entityType, id, ct);
+        var (target, problem) = await ResolveAsync(db, ctx, entityType, id, ct);
         if (problem is not null)
         {
             return problem;
         }
 
-        var effective = await permissions.EffectiveAsync(user, target!.Value.Entity, ct);
-        if (!effective.HasFlag(ObjectPermission.Read))
+        var effective = await access.EffectiveAsync(ctx, target!.Value.Entity, ct);
+        if (!effective.HasFlag(AccessAction.Read))
         {
             return ApiProblems.NotFound("acl.entity_not_found");
         }
@@ -204,14 +233,14 @@ public static class ObjectAclEndpoints
     /// only when they can read it and 404 otherwise. Null means the caller may proceed.
     /// </summary>
     private static async Task<ProblemHttpResult?> GuardManageAsync(
-        IPermissionService permissions, UserContext user, AclTarget target, CancellationToken ct)
+        IAccessService access, AccessContext ctx, AclTarget target, CancellationToken ct)
     {
-        if (await permissions.CanAsync(user, target.Entity, ObjectPermission.ManagePermissions, ct))
+        if ((await access.DecideAsync(ctx, AccessAction.ManagePermissions, target.Entity, ct)).Allowed)
         {
             return null;
         }
 
-        return await permissions.CanAsync(user, target.Entity, ObjectPermission.Read, ct)
+        return (await access.DecideAsync(ctx, AccessAction.Read, target.Entity, ct)).Allowed
             ? ApiProblems.Forbidden("acl.forbidden")
             : ApiProblems.NotFound("acl.entity_not_found");
     }
@@ -239,10 +268,10 @@ public static class ObjectAclEndpoints
         }
 
         var recipients = new HashSet<Guid>(granted
-            .Where(e => e.SubjectKind == AclSubjectKind.User)
+            .Where(e => e.SubjectKind == AccessSubjectKind.User)
             .Select(e => e.SubjectId));
 
-        var cavingGroupIds = granted.Where(e => e.SubjectKind == AclSubjectKind.CavingGroup).Select(e => e.SubjectId).ToList();
+        var cavingGroupIds = granted.Where(e => e.SubjectKind == AccessSubjectKind.CavingGroup).Select(e => e.SubjectId).ToList();
         if (cavingGroupIds.Count > 0)
         {
             // Only the members who hold an account: a grant reaches people who can sign in to
@@ -312,7 +341,7 @@ public static class ObjectAclEndpoints
     /// resolve at all).
     /// </summary>
     private static async Task<(AclTarget? Target, ProblemHttpResult? Problem)> ResolveAsync(
-        SilexGisDbContext db, UserContext user, string entityType, Guid id, CancellationToken ct)
+        SilexGisDbContext db, AccessContext ctx, string entityType, Guid id, CancellationToken ct)
     {
         if (!TryParseTarget(entityType, out var parsedType))
         {
@@ -323,7 +352,7 @@ public static class ObjectAclEndpoints
         {
             null => await db.Features.AsNoTracking()
                 .Where(f => f.Id == id)
-                .VisibleTo(user, db.ObjectAcls)
+                .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
                 .FirstOrDefaultAsync(ct),
             AttachedEntityType.TripLog => await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
             AttachedEntityType.Geofile => await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
@@ -370,33 +399,45 @@ public static class ObjectAclEndpoints
         }
     }
 
-    /// <summary>The grant rows of one target: features by their FK, everything else by the pair.</summary>
-    private static IQueryable<ObjectAcl> GrantsOf(SilexGisDbContext db, AclTarget target)
+    /// <summary>
+    /// The rows this surface owns: DIRECT entries, allow effect, scoped to exactly this
+    /// object. Denies and wider scopes are deliberately excluded — they belong to the
+    /// richer permissions surface and must survive a full-replace here.
+    /// </summary>
+    private static IQueryable<AccessEntry> GrantsOf(SilexGisDbContext db, AclTarget target)
     {
         var id = target.Entity.Id;
-        return target.EntityType is { } type
-            ? db.ObjectAcls.AsNoTracking().Where(a => a.EntityType == type && a.EntityId == id)
-            : db.ObjectAcls.AsNoTracking().Where(a => a.FeatureId == id);
+        var domain = AccessDomains.Of(target.Entity);
+        var query = db.AccessEntries.Where(e =>
+            e.SubjectKind != null
+            && e.Effect == AccessEffect.Allow
+            && e.Domain == domain
+            && e.ScopeKind == AccessScopeKind.Object);
+        return target.EntityType is null
+            ? query.Where(e => e.ScopeFeatureId == id)
+            : query.Where(e => e.ScopeId == id);
     }
 
-    private static ObjectAcl NewGrant(AclTarget target, AclEntryWrite entry, Guid grantedBy) => new()
+    private static AccessEntry NewEntry(AclTarget target, AclEntryWrite entry, Guid grantedBy) => new()
     {
-        FeatureId = target.EntityType is null ? target.Entity.Id : null,
-        EntityType = target.EntityType,
-        EntityId = target.EntityType is null ? null : target.Entity.Id,
         SubjectKind = entry.SubjectKind,
         SubjectId = entry.SubjectId,
-        Permissions = entry.Permissions,
+        Effect = AccessEffect.Allow,
+        Domain = AccessDomains.Of(target.Entity),
+        Actions = entry.Permissions,
+        ScopeKind = AccessScopeKind.Object,
+        ScopeFeatureId = target.EntityType is null ? target.Entity.Id : null,
+        ScopeId = target.EntityType is null ? null : target.Entity.Id,
         GrantedBy = grantedBy,
     };
 
     private static async Task<List<AclEntryDto>> LoadEntriesAsync(
         SilexGisDbContext db, UserContext user, AclTarget target, CancellationToken ct)
     {
-        var rows = await GrantsOf(db, target).ToListAsync(ct);
+        var rows = await GrantsOf(db, target).AsNoTracking().ToListAsync(ct);
 
-        var userIds = rows.Where(x => x.SubjectKind == AclSubjectKind.User).Select(x => x.SubjectId).ToList();
-        var cavingGroupIds = rows.Where(x => x.SubjectKind == AclSubjectKind.CavingGroup).Select(x => x.SubjectId).ToList();
+        var userIds = rows.Where(x => x.SubjectKind == AccessSubjectKind.User).Select(x => x.SubjectId!.Value).ToList();
+        var cavingGroupIds = rows.Where(x => x.SubjectKind == AccessSubjectKind.CavingGroup).Select(x => x.SubjectId!.Value).ToList();
         // Resolved rather than projected: the label a grantee may be shown under is a rule with
         // one home, and it is never their address.
         var userNames = await ProfileDirectory.ResolveLabelsAsync(db, user, userIds, ct);
@@ -404,18 +445,22 @@ public static class ObjectAclEndpoints
             .Where(t => cavingGroupIds.Contains(t.Id))
             .ToDictionaryAsync(t => t.Id, t => t.Name, ct);
 
-        return [.. rows.Select(a => new AclEntryDto(
-            a.SubjectKind,
-            a.SubjectId,
-            a.SubjectKind == AclSubjectKind.User
-                ? userNames.GetValueOrDefault(a.SubjectId)
-                : cavingGroupNames.GetValueOrDefault(a.SubjectId),
-            a.Permissions))];
+        // One DTO row per subject with the OR of its action bits — the shape one subject's
+        // grant always had on this surface.
+        return [.. rows
+            .GroupBy(a => (Kind: a.SubjectKind!.Value, Id: a.SubjectId!.Value))
+            .Select(g => new AclEntryDto(
+                g.Key.Kind,
+                g.Key.Id,
+                g.Key.Kind == AccessSubjectKind.User
+                    ? userNames.GetValueOrDefault(g.Key.Id)
+                    : cavingGroupNames.GetValueOrDefault(g.Key.Id),
+                g.Aggregate(AccessAction.None, (acc, e) => acc | e.Actions)))];
     }
 
     /// <summary>
-    /// One resolved ACL target. <see cref="EntityType"/> is null for features — the shape
-    /// that keys grants by the feature FK — and set for the polymorphic-pair entities.
+    /// One resolved target. <see cref="EntityType"/> is null for features — the shape
+    /// that anchors entries by scope_feature_id — and set for the scope_id entities.
     /// </summary>
     private readonly record struct AclTarget(IProtectedEntity Entity, AttachedEntityType? EntityType);
 }

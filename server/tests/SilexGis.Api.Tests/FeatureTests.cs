@@ -23,8 +23,8 @@ public sealed class FeatureTests : IAsyncLifetime, IDisposable
     private readonly SilexGisApiFactory factory;
 
     private HttpClient owner = null!;    // Editor
-    private HttpClient outsider = null!; // Editor, unrelated
-    private HttpClient viewer = null!;   // Viewer role
+    private HttpClient outsider = null!; // Viewer (regular user), unrelated — Editors read everything now
+    private HttpClient viewer = null!;   // Viewer role, for the create gate
     private long sinkholeTypeId;
     private long fractureTypeId;
     private long caveTypeId;
@@ -37,7 +37,7 @@ public sealed class FeatureTests : IAsyncLifetime, IDisposable
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"ftown-{suffix}@t.local");
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"ftout-{suffix}@t.local");
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ftout-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ftview-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())

@@ -3,8 +3,8 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -35,18 +35,18 @@ public static class HierarchyEndpoints
     private static async Task<Results<Ok<List<FeatureParentDto>>, ProblemHttpResult>> GetParentsAsync(
         Guid id,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var feature = await db.Features.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (feature is null || !await permissions.CanAsync(user, feature, ObjectPermission.Read, ct))
+        if (feature is null || !(await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed)
         {
             return ApiProblems.NotFound("feature.not_found");
         }
 
-        return TypedResults.Ok(await ParentsViewAsync(db, user!, id, ct));
+        return TypedResults.Ok(await ParentsViewAsync(db, ctx!, id, ct));
     }
 
     private static async Task<Results<Ok<List<FeatureParentDto>>, UnauthorizedHttpResult, ProblemHttpResult>> SetParentsAsync(
@@ -55,21 +55,21 @@ public static class HierarchyEndpoints
         HttpContext http,
         SilexGisDbContext db,
         FeatureWriteService writeService,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var feature = await db.Features.FirstOrDefaultAsync(f => f.Id == id, ct);
         if (feature is null)
         {
             return ApiProblems.NotFound("feature.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, feature, ObjectPermission.Write, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Write, feature, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, feature, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("feature.not_found");
         }
@@ -82,7 +82,7 @@ public static class HierarchyEndpoints
         var parentIds = request.Parents.Select(p => p.ParentId).Distinct().ToArray();
         if (parentIds.Length > 0)
         {
-            var visibleParents = await db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls)
+            var visibleParents = await db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers)
                 .Where(f => parentIds.Contains(f.Id)).Select(f => f.Id).ToListAsync(ct);
             if (visibleParents.Count != parentIds.Length)
             {
@@ -96,7 +96,7 @@ public static class HierarchyEndpoints
         // caller cannot evaluate. Both the current ancestry (the feature's own exact
         // view) and every requested parent's ancestry must be exactly viewable.
         var involved = parentIds.Append(feature.Id).ToList();
-        var exactViewable = await protection.ExactViewIdsAsync(user, involved, ct);
+        var exactViewable = await protection.ExactViewIdsAsync(ctx, involved, ct);
         if (!exactViewable.Contains(feature.Id) || parentIds.Any(p => !exactViewable.Contains(p)))
         {
             return ApiProblems.Forbidden();
@@ -113,22 +113,22 @@ public static class HierarchyEndpoints
         }
 
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(await ParentsViewAsync(db, user, id, ct));
+        return TypedResults.Ok(await ParentsViewAsync(db, ctx, id, ct));
     }
 
     private static async Task<Results<Ok<PagedResult<FeatureChildDto>>, ProblemHttpResult>> GetChildrenAsync(
         Guid id,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
         int? page,
         int? pageSize,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var feature = await db.Features.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (feature is null || !await permissions.CanAsync(user, feature, ObjectPermission.Read, ct))
+        if (feature is null || !(await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed)
         {
             return ApiProblems.NotFound("feature.not_found");
         }
@@ -136,7 +136,7 @@ public static class HierarchyEndpoints
         var query = db.FeatureHierarchyEdges.AsNoTracking()
             .Where(e => e.ParentId == id)
             .Join(
-                db.Features.AsNoTracking().VisibleTo(user!, db.ObjectAcls),
+                db.Features.AsNoTracking().VisibleTo(ctx!, db.Features, db.FeatureSetMembers),
                 e => e.ChildId,
                 f => f.Id,
                 (e, f) => new { f.Id, f.Kind, f.Name, f.IsProtectedEffective, e.IsPrimary });
@@ -149,7 +149,7 @@ public static class HierarchyEndpoints
             .ToListAsync(ct);
         if (protectedCenterlineIds.Count > 0)
         {
-            var exactCenterlines = await protection.ExactViewIdsAsync(user, protectedCenterlineIds, ct);
+            var exactCenterlines = await protection.ExactViewIdsAsync(ctx, protectedCenterlineIds, ct);
             var withheld = protectedCenterlineIds.Where(x => !exactCenterlines.Contains(x)).ToArray();
             if (withheld.Length > 0)
             {
@@ -168,12 +168,12 @@ public static class HierarchyEndpoints
 
     /// <summary>The feature's parent edges joined with readable parent rows (primary edge first).</summary>
     private static async Task<List<FeatureParentDto>> ParentsViewAsync(
-        SilexGisDbContext db, UserContext user, Guid id, CancellationToken ct)
+        SilexGisDbContext db, AccessContext ctx, Guid id, CancellationToken ct)
     {
         var rows = await db.FeatureHierarchyEdges.AsNoTracking()
             .Where(e => e.ChildId == id)
             .Join(
-                db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls),
+                db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers),
                 e => e.ParentId,
                 f => f.Id,
                 (e, f) => new { f.Id, f.Name, e.IsPrimary })

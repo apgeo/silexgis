@@ -5,8 +5,8 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -79,20 +79,20 @@ public static class SurveyModelEndpoints
         Guid caveId,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var cave = await CaveFeatureAsync(db, caveId, ct);
-        if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
+        if (cave is null || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed)
         {
             return ApiProblems.NotFound("cave.not_found");
         }
 
         // The cave stays readable, but its 3D models ARE its location.
-        if (await WithheldAsync(protection, user, caveId, ct))
+        if (await WithheldAsync(protection, ctx, caveId, ct))
         {
             return TypedResults.Ok(new List<SurveyModelDto>());
         }
@@ -110,23 +110,23 @@ public static class SurveyModelEndpoints
         SilexGisDbContext db,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
         var cave = await CaveFeatureAsync(db, caveId, ct);
-        if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
+        if (cave is null || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed)
         {
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        if (!await permissions.CanAsync(user, cave, ObjectPermission.Write, ct))
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, cave, ct)).Allowed)
         {
             return ApiProblems.Forbidden();
         }
@@ -162,7 +162,7 @@ public static class SurveyModelEndpoints
             MimeType = "application/octet-stream",
             SizeBytes = file.Length,
             Sha256 = sha256,
-            UploadedBy = user.UserId,
+            UploadedBy = ctx.UserId,
             Kind = FileKind.Survey,
         };
         stored.VersionGroupId = stored.Id; // head of its own version chain
@@ -187,16 +187,16 @@ public static class SurveyModelEndpoints
         HttpContext http,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var (model, cave) = await FindWithCaveAsync(db, id, ct);
         if (model is null || cave is null
-            || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct)
-            || await WithheldAsync(protection, user, cave.Id, ct))
+            || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed
+            || await WithheldAsync(protection, ctx, cave.Id, ct))
         {
             return ApiProblems.NotFound("survey_model.not_found");
         }
@@ -211,22 +211,22 @@ public static class SurveyModelEndpoints
         HttpContext http,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.Id == id, ct);
         var cave = model is null ? null : await CaveFeatureAsync(db, model.CaveFeatureId, ct);
         if (model is null || cave is null
-            || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct)
-            || await WithheldAsync(protection, user, cave.Id, ct))
+            || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed
+            || await WithheldAsync(protection, ctx, cave.Id, ct))
         {
             return ApiProblems.NotFound("survey_model.not_found");
         }
 
-        if (!await permissions.CanAsync(user, cave, ObjectPermission.Write, ct))
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, cave, ct)).Allowed)
         {
             return ApiProblems.Forbidden();
         }
@@ -247,22 +247,22 @@ public static class SurveyModelEndpoints
         Guid id,
         HttpContext http,
         SilexGisDbContext db,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.Id == id, ct);
         var cave = model is null ? null : await CaveFeatureAsync(db, model.CaveFeatureId, ct);
         if (model is null || cave is null
-            || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct)
-            || await WithheldAsync(protection, user, cave.Id, ct))
+            || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed
+            || await WithheldAsync(protection, ctx, cave.Id, ct))
         {
             return ApiProblems.NotFound("survey_model.not_found");
         }
 
-        if (!await permissions.CanAsync(user, cave, ObjectPermission.Write, ct))
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, cave, ct)).Allowed)
         {
             return ApiProblems.Forbidden();
         }
@@ -294,8 +294,8 @@ public static class SurveyModelEndpoints
     /// survey models entirely, files and metadata alike.
     /// </summary>
     private static async Task<bool> WithheldAsync(
-        FeatureProtection protection, UserContext? user, Guid caveFeatureId, CancellationToken ct) =>
-        !(await protection.ExactViewIdsAsync(user, [caveFeatureId], ct)).Contains(caveFeatureId);
+        FeatureProtection protection, AccessContext? ctx, Guid caveFeatureId, CancellationToken ct) =>
+        !(await protection.ExactViewIdsAsync(ctx, [caveFeatureId], ct)).Contains(caveFeatureId);
 
     private static SurveyModelDto ToDto(this SurveyModel m, IFileAccessTokenService tokens) => new(
         m.Id,

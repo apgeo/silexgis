@@ -3,8 +3,8 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using NpgsqlTypes;
 using SilexGis.Api.Common;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -61,12 +61,12 @@ public static class SearchEndpoints
         string q,
         string? kind,
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -100,7 +100,7 @@ public static class SearchEndpoints
         // pickers) must narrow the query rather than sift the answer: twenty matching
         // dolines would otherwise push every cave out of the result and leave the picker
         // looking empty while a matching cave exists.
-        var candidates = db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls);
+        var candidates = db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers);
         if (kindFilter is { } wanted)
         {
             candidates = candidates.Where(f => f.Kind == wanted);
@@ -130,7 +130,7 @@ public static class SearchEndpoints
         var centerlineIds = hits.Where(h => h.Kind == FeatureKind.Centerline).Select(h => h.Id).ToList();
         if (centerlineIds.Count > 0)
         {
-            var exact = await protection.ExactViewIdsAsync(user, centerlineIds, ct);
+            var exact = await protection.ExactViewIdsAsync(ctx, centerlineIds, ct);
             hits = hits.Where(h => h.Kind != FeatureKind.Centerline || exact.Contains(h.Id)).ToList();
         }
 
@@ -146,7 +146,7 @@ public static class SearchEndpoints
         // Trip logs are not features and keep their own query: they have no search_vector,
         // only free text to match.
         var trips = await db.TripLogs.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls, AttachedEntityType.TripLog)
+            .VisibleTo(ctx, AccessDomain.TripLogs)
             .Where(x => EF.Functions.ILike(EF.Functions.Unaccent(x.Title), EF.Functions.Unaccent(pattern))
                 || (x.Description != null && EF.Functions.ILike(EF.Functions.Unaccent(x.Description), EF.Functions.Unaccent(pattern))))
             .OrderByDescending(x => x.TripDate)

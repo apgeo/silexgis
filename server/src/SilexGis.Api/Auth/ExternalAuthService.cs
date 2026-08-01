@@ -97,6 +97,8 @@ public sealed class ExternalAuthService(
         }
 
         await userManager.AddToRoleAsync(user, authOptions.Value.DefaultRole);
+        // The role by itself grants nothing now — see the registration path.
+        await PermissionGroupSeeder.EnsureRoleMembershipsAsync(db, user.Id, authOptions.Value.DefaultRole);
         CaverDirectory.CreateForNewAccount(db, user.Id, user.DisplayName, user.UserName, user.Email);
         await db.SaveChangesAsync();
 

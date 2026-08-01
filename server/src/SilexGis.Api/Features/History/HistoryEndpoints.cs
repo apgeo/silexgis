@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
@@ -61,6 +62,8 @@ public static class HistoryEndpoints
 
     private static async Task<Results<Ok<PagedResult<HistoryEventDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         FeatureProtection protection,
         string? entityType,
@@ -69,8 +72,9 @@ public static class HistoryEndpoints
         int? pageSize,
         CancellationToken ct)
     {
+        var ctx = await accessAccessor.GetAsync(ct);
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        if (ctx is null || user is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -78,7 +82,7 @@ public static class HistoryEndpoints
         // Existence of an entity the caller cannot read is never disclosed (404, not 403/400).
         var query = entityType is null || entityId is null
             ? null
-            : await TimelineAsync(db, user, entityType, entityId.Value, ct);
+            : await TimelineAsync(db, access, ctx, entityType, entityId.Value, ct);
         if (query is null)
         {
             return ApiProblems.NotFound("history.entity_not_found");
@@ -117,7 +121,7 @@ public static class HistoryEndpoints
             CollectReferencedFeatureIds(changes, involved);
         }
 
-        var hidden = await protection.RedactedLinkTargetIdsAsync(user, involved, ct);
+        var hidden = await protection.RedactedLinkTargetIdsAsync(ctx, involved, ct);
 
         var items = parsed.Select(r =>
         {
@@ -139,20 +143,20 @@ public static class HistoryEndpoints
     /// the entity (indistinguishable from "does not exist" by design).
     /// </summary>
     private static async Task<IQueryable<AuditEntry>?> TimelineAsync(
-        SilexGisDbContext db, UserContext user, string entityType, Guid entityId, CancellationToken ct)
+        SilexGisDbContext db, IAccessService access, AccessContext ctx, string entityType, Guid entityId, CancellationToken ct)
     {
         var rows = db.AuditEntries.AsNoTracking()
             .Where(a => a.Action == AuditActions.Created
                 || a.Action == AuditActions.Updated
                 || a.Action == AuditActions.Deleted)
             // Permission-grant history stays on the admin audit page, not the public timeline.
-            .Where(a => a.EntityType != nameof(ObjectAcl));
+            .Where(a => a.EntityType != nameof(AccessEntry));
 
         // Every physical feature is addressed uniformly: the kind lives in the rows, not in the
         // query parameter ("Feature:Cave", "Feature:Generic", …).
         if (string.Equals(entityType, FeatureAudit.RootName, StringComparison.OrdinalIgnoreCase))
         {
-            if (!await db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls).AnyAsync(f => f.Id == entityId, ct))
+            if (!await db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers).AnyAsync(f => f.Id == entityId, ct))
             {
                 return null;
             }
@@ -164,7 +168,7 @@ public static class HistoryEndpoints
             // timeline exists to show — while descendants the caller may not read contribute
             // nothing, so a private child cannot leak through its parent's timeline.
             var scope = await db.Features.AsNoTracking().IgnoreQueryFilters()
-                .VisibleTo(user, db.ObjectAcls)
+                .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
                 .Where(f => db.FeatureAncestors.Any(a => a.AncestorId == entityId && a.FeatureId == f.Id))
                 .Select(f => f.Id)
                 .ToListAsync(ct);
@@ -180,7 +184,7 @@ public static class HistoryEndpoints
         }
 
         if (!Enum.TryParse<AttachedEntityType>(entityType, ignoreCase: true, out var type)
-            || !await FileAccessRules.CanReadEntityAsync(db, user, type, entityId, ct))
+            || !await FileAccessRules.CanReadEntityAsync(db, access, ctx, type, entityId, ct))
         {
             return null;
         }

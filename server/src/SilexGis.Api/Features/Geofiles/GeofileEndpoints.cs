@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Jobs;
@@ -52,17 +53,19 @@ public static class GeofileEndpoints
         SilexGisDbContext db,
         IFileStore fileStore,
         IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!user.CanCreateContent)
+        if (!CreateRules.MayCreate(ctx, AccessDomain.Geofiles))
         {
-            return ApiProblems.Forbidden("geofile.create_requires_editor");
+            return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
         if (file.Length == 0)
@@ -126,19 +129,19 @@ public static class GeofileEndpoints
 
     private static async Task<Results<Ok<PagedResult<GeofileDto>>, UnauthorizedHttpResult>> ListAsync(
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         int? page,
         int? pageSize,
         string? search,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        var query = db.Geofiles.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Geofile);
+        var query = db.Geofiles.AsNoTracking().VisibleTo(ctx, AccessDomain.Geofiles);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -154,22 +157,22 @@ public static class GeofileEndpoints
     private static async Task<Results<Ok<GeofileDto>, ProblemHttpResult>> GetAsync(
         Guid id,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var (geofile, problem) = await LoadReadableAsync(id, db, permissions, userAccessor, ct);
+        var (geofile, problem) = await LoadReadableAsync(id, db, access, accessAccessor, ct);
         return problem is not null ? problem : TypedResults.Ok(geofile!.ToDto());
     }
 
     private static async Task<Results<Ok<GeofileStatusDto>, ProblemHttpResult>> GetStatusAsync(
         Guid id,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var (geofile, problem) = await LoadReadableAsync(id, db, permissions, userAccessor, ct);
+        var (geofile, problem) = await LoadReadableAsync(id, db, access, accessAccessor, ct);
         return problem is not null ? problem : TypedResults.Ok(geofile!.ToStatusDto());
     }
 
@@ -178,20 +181,20 @@ public static class GeofileEndpoints
         GeofileUpdateRequest request,
         HttpContext http,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var geofile = await db.Geofiles.FirstOrDefaultAsync(g => g.Id == id, ct);
         if (geofile is null)
         {
             return ApiProblems.NotFound("geofile.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, geofile, ObjectPermission.Write, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Write, geofile, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, geofile, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, geofile, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("geofile.not_found");
         }
@@ -201,9 +204,10 @@ public static class GeofileEndpoints
             return stale;
         }
 
-        if (request.CavingGroupId is not null && !user.IsAdmin && !user.IsMemberOf(request.CavingGroupId.Value))
+        if (request.CavingGroupId is not null
+            && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.Geofiles, request.CavingGroupId.Value))
         {
-            return ApiProblems.Forbidden("geofile.caving_group_membership_required");
+            return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
 
         geofile.Name = request.Name;
@@ -219,20 +223,20 @@ public static class GeofileEndpoints
         Guid id,
         SilexGisDbContext db,
         IFileStore fileStore,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var geofile = await db.Geofiles.FirstOrDefaultAsync(g => g.Id == id, ct);
         if (geofile is null)
         {
             return ApiProblems.NotFound("geofile.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, geofile, ObjectPermission.Delete, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Delete, geofile, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, geofile, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, geofile, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("geofile.not_found");
         }
@@ -265,11 +269,11 @@ public static class GeofileEndpoints
 
     /// <summary>Read-gated fetch; unreadable and missing geofiles are both 404.</summary>
     private static async Task<(Geofile? Geofile, ProblemHttpResult? Problem)> LoadReadableAsync(
-        Guid id, SilexGisDbContext db, IPermissionService permissions, IUserContextAccessor userAccessor, CancellationToken ct)
+        Guid id, SilexGisDbContext db, IAccessService access, IAccessContextAccessor accessAccessor, CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var geofile = await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(g => g.Id == id, ct);
-        if (geofile is null || !await permissions.CanAsync(user, geofile, ObjectPermission.Read, ct))
+        if (geofile is null || !(await access.DecideAsync(ctx, AccessAction.Read, geofile, ct)).Allowed)
         {
             return (null, ApiProblems.NotFound("geofile.not_found"));
         }

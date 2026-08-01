@@ -8,50 +8,63 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
-using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Access;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// EF ↔ SQL parity of the two security twins over the feature supertype: the read
-/// visibility filter (<c>Features.VisibleTo</c> vs
-/// <c>PermissionSql.FeatureVisibleToFragment</c>) and the exact-location rule
-/// (<c>FeatureProtection.ExactViewIdsAsync</c> vs <c>PermissionSql.ExactViewFragment</c>),
-/// each evaluated for five caller contexts — owner, groupMate, stranger, ACL-Read grantee
-/// and ViewExactLocation grantee — over one seeded matrix of visibilities, caving group
-/// bindings, ACL grants and a protected containment chain. The twins may never diverge:
-/// a mismatch is a security bug, not a flake.
+/// Parity of the THREE synchronized forms of the access rule over the feature
+/// supertype: the pure evaluator (<c>AccessEvaluator.Decide</c>), the EF filter
+/// (<c>Features.VisibleTo</c>) and the Dapper fragment
+/// (<c>AccessSql.FeatureVisibleToFragment</c>) — plus the exact-location pair
+/// (<c>FeatureProtection.ExactViewIdsAsync</c> vs <c>AccessSql.ExactViewFragment</c>).
+/// Evaluated for nine caller archetypes over one seeded matrix covering every band of
+/// the walk: object allow over subtree deny, feature-set deny, deny-own∧kind, the
+/// caving-group starter ruleset, read-time visibility inheritance, and a VEL deny on
+/// one of two protected roots. The forms may never diverge: a mismatch is a security
+/// bug, not a flake.
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class FilterParityTests : IAsyncLifetime, IDisposable
 {
     private readonly SilexGisApiFactory factory;
 
-    private HttpClient owner = null!;   // Editor, owns every seeded feature
-    private HttpClient manager = null!; // Manager, creates the caving group
+    private HttpClient owner = null!;      // Editor, owns most of the matrix
+    private HttpClient manager = null!;    // Manager, creates the caving group
+    private HttpClient selfDenied = null!; // Editor with a deny-own∧kind entry on themselves
     private Guid ownerId;
-    private Guid groupMateId;
-    private Guid strangerId;
-    private Guid aclReaderId;
-    private Guid velGranteeId;
+    private Guid groupMateId;      // Viewer; member of the caving group (starter ruleset)
+    private Guid strangerId;       // Viewer; nothing but All Users and the built-ins
+    private Guid entryReaderId;    // Viewer; direct object-scope Read grant
+    private Guid velGranteeId;     // Viewer; direct Read+VEL grants on two roots
+    private Guid subtreeDeniedId;  // Viewer; subtree deny + object allow inside it
+    private Guid setDeniedId;      // Viewer; feature-set deny
+    private Guid selfDeniedId;     // Editor; deny Read own∧cave
+    private Guid velDeniedId;      // Viewer; global VEL allow + object VEL deny on one root
     private long caveTypeId;
     private long entranceTypeId;
     private long karstAreaTypeId;
 
-    // The seeded matrix (all owned by the owner).
-    private Guid cavePrivate;      // private, no grants
-    private Guid caveAuth;         // authenticated
-    private Guid caveCavingGroup;         // caving group visibility, bound to the caving group
-    private Guid caveAclOnly;      // private + ACL Read grant to aclReader
-    private Guid areaProt;         // protected karst area + ACL Read|VEL grant to velGrantee
-    private Guid caveChain;        // protected cave INSIDE areaProt (two protected roots)
+    // The seeded matrix (owned by the owner unless said otherwise).
+    private Guid cavingGroupId;
+    private Guid cavePrivate;         // private, no grants
+    private Guid caveAuth;            // authenticated — also the feature-set member
+    private Guid entranceAuth;        // its entrance: PRIVATE own row, readable only by inheritance (D1d)
+    private Guid caveCavingGroup;     // caving-group visibility, bound to the group
+    private Guid caveEntryOnly;       // private + direct object-scope Read entry for entryReader
+    private Guid areaProt;            // protected karst area
+    private Guid caveChain;           // protected cave INSIDE areaProt (two protected roots)
     private Guid entranceChain;
-    private Guid caveProt;         // protected cave, no parent + ACL Read|VEL grant to velGrantee
+    private Guid caveProt;            // protected cave, no parent
     private Guid entranceProt;
-    private Guid caveCavingGroupProt;     // protected cave, caving group visibility (members implicitly hold VEL)
+    private Guid caveCavingGroupProt; // protected cave, group visibility (VEL via the starter ruleset)
     private Guid entranceCavingGroupProt;
+    private Guid caveDenyOwn;         // authenticated, owned by selfDenied — their deny-own∧cave target
+    private Guid entranceDenyOwn;
+    private Guid featureSetId;
     private Guid[] candidateIds = [];
 
     public FilterParityTests(PostgresFixture postgres) =>
@@ -61,10 +74,14 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-own-{suffix}@t.local");
-        groupMateId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-group-mate-{suffix}@t.local");
-        strangerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-str-{suffix}@t.local");
-        aclReaderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-read-{suffix}@t.local");
-        velGranteeId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-vel-{suffix}@t.local");
+        selfDeniedId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-self-{suffix}@t.local");
+        groupMateId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"par-group-mate-{suffix}@t.local");
+        strangerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"par-str-{suffix}@t.local");
+        entryReaderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"par-read-{suffix}@t.local");
+        velGranteeId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"par-vel-{suffix}@t.local");
+        subtreeDeniedId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"par-sub-{suffix}@t.local");
+        setDeniedId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"par-set-{suffix}@t.local");
+        velDeniedId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"par-veld-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Manager, $"par-mgr-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
@@ -77,81 +94,151 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
 
         owner = await AuthHelper.BearerClientAsync(factory, $"par-own-{suffix}@t.local");
         manager = await AuthHelper.BearerClientAsync(factory, $"par-mgr-{suffix}@t.local");
+        selfDenied = await AuthHelper.BearerClientAsync(factory, $"par-self-{suffix}@t.local");
 
-        // A caving group with the owner (so caving group-bound rows can be created) and the groupMate.
-        var cavingGroupId = await CreateCavingGroupAsync();
+        // A caving group with the owner (so group-bound rows can be created) and the
+        // groupMate. Creating it seeds the "«name» — members" starter ruleset, which is
+        // where the groupMate's rights — VEL included — come from now.
+        cavingGroupId = await CreateCavingGroupAsync();
         await AddMemberAsync(cavingGroupId, ownerId);
         await AddMemberAsync(cavingGroupId, groupMateId);
 
-        cavePrivate = await CreateCaveAsync("Par Private", "private");
-        caveAuth = await CreateCaveAsync("Par Auth", "authenticated");
-        caveCavingGroup = await CreateCaveAsync("Par CavingGroup", "cavingGroup", cavingGroupId: cavingGroupId);
-        caveAclOnly = await CreateCaveAsync("Par AclOnly", "private");
+        cavePrivate = await CreateCaveAsync(owner, "Par Private", "private");
+        caveAuth = await CreateCaveAsync(owner, "Par Auth", "authenticated");
+        entranceAuth = await AddEntranceAsync(owner, caveAuth);
+        caveCavingGroup = await CreateCaveAsync(owner, "Par CavingGroup", "cavingGroup", cavingGroupId: cavingGroupId);
+        caveEntryOnly = await CreateCaveAsync(owner, "Par EntryOnly", "private");
         areaProt = await CreateProtectedAreaAsync("Par Area");
-        caveChain = await CreateCaveAsync("Par Chain", "authenticated", locationProtected: true, parentId: areaProt);
-        entranceChain = await AddEntranceAsync(caveChain);
-        caveProt = await CreateCaveAsync("Par Prot", "authenticated", locationProtected: true);
-        entranceProt = await AddEntranceAsync(caveProt);
-        caveCavingGroupProt = await CreateCaveAsync("Par CavingGroupProt", "cavingGroup", locationProtected: true, cavingGroupId: cavingGroupId);
-        entranceCavingGroupProt = await AddEntranceAsync(caveCavingGroupProt);
+        caveChain = await CreateCaveAsync(owner, "Par Chain", "authenticated", locationProtected: true, parentId: areaProt);
+        entranceChain = await AddEntranceAsync(owner, caveChain);
+        caveProt = await CreateCaveAsync(owner, "Par Prot", "authenticated", locationProtected: true);
+        entranceProt = await AddEntranceAsync(owner, caveProt);
+        caveCavingGroupProt = await CreateCaveAsync(owner, "Par CavingGroupProt", "cavingGroup", locationProtected: true, cavingGroupId: cavingGroupId);
+        entranceCavingGroupProt = await AddEntranceAsync(owner, caveCavingGroupProt);
+        caveDenyOwn = await CreateCaveAsync(selfDenied, "Par DenyOwn", "authenticated");
+        entranceDenyOwn = await AddEntranceAsync(selfDenied, caveDenyOwn);
 
-        await ReplaceFeatureAclAsync(caveAclOnly, [(aclReaderId, ObjectPermission.Read)]);
+        // Direct object-scope grants ride the per-object surface (the one-off-grant
+        // shape of the entry model).
+        await ReplaceFeatureAclAsync(caveEntryOnly, [(entryReaderId, AccessAction.Read)]);
         await ReplaceFeatureAclAsync(areaProt,
-            [(velGranteeId, ObjectPermission.Read | ObjectPermission.ViewExactLocation)]);
+            [(velGranteeId, AccessAction.Read | AccessAction.ViewExactLocation)]);
         await ReplaceFeatureAclAsync(caveProt,
-            [(velGranteeId, ObjectPermission.Read | ObjectPermission.ViewExactLocation)]);
+            [(velGranteeId, AccessAction.Read | AccessAction.ViewExactLocation)]);
+
+        // Denies, subtree/set scopes and the narrowed conjunction have no write surface
+        // in this batch — they are rules, seeded straight into storage.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+            var set = new FeatureSet { Name = $"Par Set {suffix}", Slug = $"par-set-{suffix}" };
+            featureSetId = set.Id;
+            db.FeatureSets.Add(set);
+            db.FeatureSetMembers.Add(new FeatureSetMember { FeatureSetId = set.Id, FeatureId = caveAuth });
+
+            // subtreeDenied: "deny the whole protected area, but allow this one cave" —
+            // the walk's signature case (object allow inside a denied subtree).
+            db.AccessEntries.Add(Direct(subtreeDeniedId, AccessEffect.Deny, AccessAction.Read,
+                AccessScopeKind.Subtree, scopeFeatureId: areaProt));
+            db.AccessEntries.Add(Direct(subtreeDeniedId, AccessEffect.Allow, AccessAction.Read,
+                AccessScopeKind.Object, scopeFeatureId: caveChain));
+
+            // setDenied: a collection-level deny through set membership.
+            db.AccessEntries.Add(Direct(setDeniedId, AccessEffect.Deny, AccessAction.Read,
+                AccessScopeKind.FeatureSet, scopeId: set.Id));
+
+            // selfDenied: deny Read on their OWN caves only (own∧kind conjunction).
+            db.AccessEntries.Add(Direct(selfDeniedId, AccessEffect.Deny, AccessAction.Read,
+                AccessScopeKind.Own, kind: FeatureKind.Cave));
+
+            // velDenied: global VEL, vetoed on one root by an object-level deny.
+            db.AccessEntries.Add(Direct(velDeniedId, AccessEffect.Allow, AccessAction.ViewExactLocation,
+                AccessScopeKind.All));
+            db.AccessEntries.Add(Direct(velDeniedId, AccessEffect.Deny, AccessAction.ViewExactLocation,
+                AccessScopeKind.Object, scopeFeatureId: areaProt));
+
+            await db.SaveChangesAsync();
+        }
 
         candidateIds =
         [
-            cavePrivate, caveAuth, caveCavingGroup, caveAclOnly, areaProt, caveChain,
-            entranceChain, caveProt, entranceProt, caveCavingGroupProt, entranceCavingGroupProt,
+            cavePrivate, caveAuth, entranceAuth, caveCavingGroup, caveEntryOnly, areaProt,
+            caveChain, entranceChain, caveProt, entranceProt, caveCavingGroupProt,
+            entranceCavingGroupProt, caveDenyOwn, entranceDenyOwn,
         ];
     }
 
     [Fact]
-    public async Task Read_visibility_filter_agrees_between_ef_and_sql_for_every_caller()
+    public async Task Read_filter_agrees_between_evaluator_ef_and_sql_for_every_caller()
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var connection = db.Database.GetDbConnection();
+        var facts = await FactsForAsync(db, candidateIds);
         var visible = new Dictionary<string, List<Guid>>();
 
-        foreach (var (name, user) in await CallersAsync(db))
+        foreach (var (name, ctx) in await CallersAsync(db))
         {
-            var efIds = await db.Features.VisibleTo(user, db.ObjectAcls)
+            var efIds = await db.Features.VisibleTo(ctx, db.Features, db.FeatureSetMembers)
                 .Where(f => candidateIds.Contains(f.Id))
                 .Select(f => f.Id).OrderBy(id => id).ToListAsync();
 
-            var (fragment, parameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
-            parameters.Add("candidate_ids", PermissionSql.UuidArray(candidateIds));
+            var (fragment, parameters) = AccessSql.FeatureVisibleToFragment(ctx, "f");
+            parameters.Add("candidate_ids", AccessSql.UuidArray(candidateIds));
             var sqlIds = (await connection.QueryAsync<Guid>(
                     $"SELECT f.id FROM features f WHERE f.deleted_at IS NULL" +
                     $" AND f.id = ANY(@candidate_ids) AND {fragment}",
                     parameters))
                 .OrderBy(id => id).ToList();
 
-            sqlIds.ShouldBe(efIds, $"visibility parity broke for caller '{name}'");
+            var evaluatorIds = candidateIds
+                .Where(id => AccessEvaluator.Decide(ctx, AccessDomain.Features, AccessAction.Read, facts[id]).Allowed)
+                .OrderBy(id => id).ToList();
+
+            sqlIds.ShouldBe(efIds, $"EF↔SQL visibility parity broke for caller '{name}'");
+            evaluatorIds.ShouldBe(efIds, $"evaluator↔EF visibility parity broke for caller '{name}'");
             visible[name] = efIds;
         }
 
-        // Anchors keeping the parity meaningful (both sides agreeing on nonsense would
-        // still be parity): each layer of the filter admits and denies as specified.
+        // Anchors keeping the parity meaningful (three forms agreeing on nonsense would
+        // still be parity): each band of the walk admits and denies as specified.
         visible["owner"].ShouldBe(candidateIds.OrderBy(id => id).ToList());
         visible["groupMate"].ShouldContain(caveCavingGroup);
         visible["groupMate"].ShouldContain(caveCavingGroupProt);
         visible["groupMate"].ShouldNotContain(cavePrivate);
-        visible["groupMate"].ShouldNotContain(caveAclOnly);
+        visible["groupMate"].ShouldNotContain(caveEntryOnly);
+        // The D1d cascade: a private entrance row under an authenticated cave is read
+        // through its ancestor chain — for everyone authenticated, not just members.
         visible["stranger"].ShouldContain(caveAuth);
+        visible["stranger"].ShouldContain(entranceAuth);
         visible["stranger"].ShouldNotContain(cavePrivate);
         visible["stranger"].ShouldNotContain(caveCavingGroup);
-        visible["stranger"].ShouldNotContain(caveAclOnly);
-        visible["acl-reader"].ShouldContain(caveAclOnly);
-        visible["acl-reader"].ShouldNotContain(cavePrivate);
+        visible["stranger"].ShouldNotContain(caveEntryOnly);
+        visible["entry-reader"].ShouldContain(caveEntryOnly);
+        visible["entry-reader"].ShouldNotContain(cavePrivate);
         visible["vel-grantee"].ShouldNotContain(cavePrivate);
+        // Object allow inside a denied subtree: the cave decides at Object level, its
+        // entrance falls to the subtree deny — and the deny beats the visibility
+        // built-in that would otherwise admit both.
+        visible["subtree-denied"].ShouldContain(caveChain);
+        visible["subtree-denied"].ShouldNotContain(entranceChain);
+        visible["subtree-denied"].ShouldNotContain(areaProt);
+        visible["subtree-denied"].ShouldContain(caveAuth);
+        // Set deny at the Collection level hides an otherwise authenticated cave, but
+        // not its entrance (the set contains only the cave; the entrance inherits
+        // readability from the cave's visibility, which no entry touched for it).
+        visible["set-denied"].ShouldNotContain(caveAuth);
+        visible["set-denied"].ShouldContain(caveProt);
+        // deny own∧cave: their own cave vanishes (deny beats ownership), their
+        // entrance — another kind — stays via the Editors allow.
+        visible["self-denied"].ShouldNotContain(caveDenyOwn);
+        visible["self-denied"].ShouldContain(entranceDenyOwn);
+        visible["self-denied"].ShouldContain(caveAuth);
     }
 
     [Fact]
-    public async Task Exact_view_rule_agrees_between_ef_and_sql_for_every_caller()
+    public async Task Exact_view_rule_agrees_between_domain_and_sql_for_every_caller()
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -159,18 +246,16 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         var connection = db.Database.GetDbConnection();
         var exact = new Dictionary<string, List<Guid>>();
 
-        foreach (var (name, user) in await CallersAsync(db))
+        foreach (var (name, ctx) in await CallersAsync(db))
         {
-            var domainIds = (await protection.ExactViewIdsAsync(user, candidateIds))
+            var domainIds = (await protection.ExactViewIdsAsync(ctx, candidateIds))
                 .OrderBy(id => id).ToList();
 
-            // The exact-view fragment consumes the same parameter set as the visibility
-            // fragment; only the SQL text differs.
-            var (_, parameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
-            parameters.Add("candidate_ids", PermissionSql.UuidArray(candidateIds));
+            var (fragment, parameters) = AccessSql.ExactViewFragment(ctx, "f");
+            parameters.Add("candidate_ids", AccessSql.UuidArray(candidateIds));
             var sqlIds = (await connection.QueryAsync<Guid>(
                     $"SELECT f.id FROM features f WHERE f.deleted_at IS NULL" +
-                    $" AND f.id = ANY(@candidate_ids) AND {PermissionSql.ExactViewFragment("f")}",
+                    $" AND f.id = ANY(@candidate_ids) AND {fragment}",
                     parameters))
                 .OrderBy(id => id).ToList();
 
@@ -178,10 +263,11 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
             exact[name] = domainIds;
         }
 
-        // Anchors: the row owner always sees exactly; caving group members implicitly hold
-        // ViewExactLocation on caving group-bound roots; an explicit grant opens exactly the
-        // granted root's subtree — and a chain under TWO protected roots stays closed
-        // until every root is granted; strangers get nothing protected.
+        // Anchors: the row owner always sees exactly; club members hold VEL on
+        // group-bound roots through the seeded starter ruleset (editable content now,
+        // not a hardcoded arm); a grant opens exactly the granted root's subtree — and
+        // a chain under TWO protected roots stays closed until every root is granted;
+        // strangers get nothing protected.
         exact["owner"].ShouldBe(candidateIds.OrderBy(id => id).ToList());
         exact["groupMate"].ShouldContain(caveCavingGroupProt);
         exact["groupMate"].ShouldContain(entranceCavingGroupProt);
@@ -195,23 +281,51 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         exact["stranger"].ShouldNotContain(entranceProt);
         exact["stranger"].ShouldNotContain(caveCavingGroupProt);
         exact["stranger"].ShouldNotContain(entranceCavingGroupProt);
-        exact["acl-reader"].ShouldNotContain(caveProt);
-        exact["acl-reader"].ShouldNotContain(entranceProt);
+        exact["entry-reader"].ShouldNotContain(caveProt);
+        exact["entry-reader"].ShouldNotContain(entranceProt);
         exact["vel-grantee"].ShouldContain(areaProt);
         exact["vel-grantee"].ShouldContain(caveProt);
         exact["vel-grantee"].ShouldContain(entranceProt);
         // The grant on the outer area root alone never opens the inner protected cave.
         exact["vel-grantee"].ShouldNotContain(caveChain);
         exact["vel-grantee"].ShouldNotContain(entranceChain);
+        // A VEL deny on ONE of two protected roots vetoes the whole chain under it,
+        // while the globally allowed VEL still opens the single-root cave.
+        exact["vel-denied"].ShouldContain(caveProt);
+        exact["vel-denied"].ShouldContain(entranceProt);
+        exact["vel-denied"].ShouldNotContain(areaProt);
+        exact["vel-denied"].ShouldNotContain(caveChain);
+        exact["vel-denied"].ShouldNotContain(entranceChain);
     }
 
     // ---- seeding helpers ----
+
+    private static AccessEntry Direct(
+        Guid userId,
+        AccessEffect effect,
+        AccessAction actions,
+        AccessScopeKind scope,
+        Guid? scopeFeatureId = null,
+        Guid? scopeId = null,
+        FeatureKind? kind = null) => new()
+    {
+        SubjectKind = AccessSubjectKind.User,
+        SubjectId = userId,
+        Effect = effect,
+        Domain = AccessDomain.Features,
+        Actions = actions,
+        ScopeKind = scope,
+        ScopeFeatureId = scopeFeatureId,
+        ScopeId = scopeId,
+        FeatureKind = kind,
+    };
 
     private async Task<Guid> CreateCavingGroupAsync()
     {
         var response = await manager.PostAsJsonAsync("/api/v1/caving-groups/", new
         {
             name = $"Parity CavingGroup {Guid.NewGuid():N}"[..30],
+            type = "cavingClub",
             description = (string?)null,
             website = (string?)null,
         });
@@ -219,9 +333,9 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
 
-    private async Task AddMemberAsync(Guid cavingGroupId, Guid userId)
+    private async Task AddMemberAsync(Guid groupId, Guid userId)
     {
-        (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members", new
+        (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{groupId}/members", new
         {
             caverId = await RosterHelper.CaverIdForAsync(factory, userId),
             role = "member",
@@ -229,13 +343,14 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
     }
 
     private async Task<Guid> CreateCaveAsync(
+        HttpClient author,
         string name,
         string visibility,
         bool locationProtected = false,
         Guid? parentId = null,
         Guid? cavingGroupId = null)
     {
-        var response = await owner.PostAsJsonAsync("/api/v1/caves", new
+        var response = await author.PostAsJsonAsync("/api/v1/caves", new
         {
             name = $"{name} {Guid.NewGuid():N}"[..40],
             caveTypeId,
@@ -278,9 +393,9 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> AddEntranceAsync(Guid caveId)
+    private async Task<Guid> AddEntranceAsync(HttpClient author, Guid caveId)
     {
-        var response = await owner.PostAsJsonAsync($"/api/v1/caves/{caveId}/entrances", new
+        var response = await author.PostAsJsonAsync($"/api/v1/caves/{caveId}/entrances", new
         {
             entranceTypeId,
             isMain = true,
@@ -292,7 +407,7 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    private async Task ReplaceFeatureAclAsync(Guid featureId, (Guid UserId, ObjectPermission Permissions)[] entries)
+    private async Task ReplaceFeatureAclAsync(Guid featureId, (Guid UserId, AccessAction Actions)[] entries)
     {
         var response = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/acl", new
         {
@@ -300,25 +415,64 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
             {
                 subjectKind = "user",
                 subjectId = e.UserId,
-                permissions = e.Permissions.ToString().Replace(" ", string.Empty),
+                permissions = e.Actions.ToString().Replace(" ", string.Empty),
             }).ToArray(),
         });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
-    /// <summary>The five caller contexts, with caving group memberships loaded from the database.</summary>
-    private async Task<(string Name, UserContext User)[]> CallersAsync(SilexGisDbContext db)
+    /// <summary>The caller archetypes, resolved exactly as requests resolve them.</summary>
+    private async Task<(string Name, AccessContext Ctx)[]> CallersAsync(SilexGisDbContext db)
     {
-        Task<UserContext> ContextOf(Guid userId) => RosterHelper.ContextOfAsync(db, userId);
+        Task<AccessContext> ContextOf(Guid userId) => RosterHelper.AccessContextOfAsync(db, userId);
 
         return
         [
             ("owner", await ContextOf(ownerId)),
             ("groupMate", await ContextOf(groupMateId)),
             ("stranger", await ContextOf(strangerId)),
-            ("acl-reader", await ContextOf(aclReaderId)),
+            ("entry-reader", await ContextOf(entryReaderId)),
             ("vel-grantee", await ContextOf(velGranteeId)),
+            ("subtree-denied", await ContextOf(subtreeDeniedId)),
+            ("set-denied", await ContextOf(setDeniedId)),
+            ("self-denied", await ContextOf(selfDeniedId)),
+            ("vel-denied", await ContextOf(velDeniedId)),
         ];
+    }
+
+    /// <summary>The evaluated facts of every candidate row, straight from storage — the
+    /// pure evaluator's leg of the parity.</summary>
+    private static async Task<Dictionary<Guid, AccessTargetFacts>> FactsForAsync(
+        SilexGisDbContext db, Guid[] ids)
+    {
+        var rows = await db.Features.AsNoTracking()
+            .Where(f => ids.Contains(f.Id))
+            .Select(f => new { f.Id, f.OwnerUserId, f.CavingGroupId, f.Kind, f.FeatureTypeId, f.AncestorIds })
+            .ToListAsync();
+        var chainIds = rows.SelectMany(r => r.AncestorIds).Distinct().ToArray();
+        var trios = await db.Features.AsNoTracking()
+            .Where(f => chainIds.Contains(f.Id))
+            .Select(f => new { f.Id, f.Visibility, f.CavingGroupId })
+            .ToDictionaryAsync(x => x.Id);
+        var sets = (await db.FeatureSetMembers.AsNoTracking()
+                .Where(m => ids.Contains(m.FeatureId)).ToListAsync())
+            .ToLookup(m => m.FeatureId, m => m.FeatureSetId);
+
+        return rows.ToDictionary(r => r.Id, r => new AccessTargetFacts
+        {
+            ObjectId = r.Id,
+            OwnerUserId = r.OwnerUserId,
+            CavingGroupId = r.CavingGroupId,
+            AncestorIds = r.AncestorIds,
+            FeatureKind = r.Kind,
+            FeatureTypeId = r.FeatureTypeId,
+            FeatureSetIds = [.. sets[r.Id]],
+            VisibilityChain =
+            [
+                .. r.AncestorIds.Where(trios.ContainsKey)
+                    .Select(a => new VisibilityFact(trios[a].Visibility, trios[a].CavingGroupId)),
+            ],
+        });
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

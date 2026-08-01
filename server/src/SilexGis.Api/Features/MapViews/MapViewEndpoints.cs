@@ -5,8 +5,8 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.MapViews;
@@ -77,17 +77,17 @@ public static class MapViewEndpoints
 
     private static async Task<Results<Ok<List<MapViewDto>>, UnauthorizedHttpResult>> ListAsync(
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
         var views = await db.MapViews.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls, AttachedEntityType.MapView)
+            .VisibleTo(ctx, AccessDomain.MapViews)
             .OrderByDescending(x => x.IsHome).ThenBy(x => x.Name)
             .ToListAsync(ct);
         return TypedResults.Ok(views.Select(ToDto).ToList());
@@ -96,26 +96,27 @@ public static class MapViewEndpoints
     private static async Task<Results<Created<MapViewDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
         MapViewWriteRequest request,
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (request.CavingGroupId is not null && !user.IsAdmin && !user.IsMemberOf(request.CavingGroupId.Value))
+        if (request.CavingGroupId is not null
+            && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.MapViews, request.CavingGroupId.Value))
         {
-            return ApiProblems.Forbidden("map_view.caving_group_membership_required");
+            return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
 
-        var view = new MapView { Name = request.Name, OwnerUserId = user.UserId };
+        var view = new MapView { Name = request.Name, OwnerUserId = ctx.UserId };
         Apply(view, request);
         db.MapViews.Add(view);
         if (request.IsHome)
         {
-            await ClearOtherHomesAsync(db, user.UserId, view.Id, ct);
+            await ClearOtherHomesAsync(db, ctx.UserId, view.Id, ct);
         }
 
         await db.SaveChangesAsync(ct);
@@ -126,28 +127,37 @@ public static class MapViewEndpoints
         Guid id,
         MapViewWriteRequest request,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var view = await db.MapViews.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (view is null)
         {
             return ApiProblems.NotFound("map_view.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, view, ObjectPermission.Write, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Write, view, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, view, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, view, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("map_view.not_found");
+        }
+
+        // Re-binding on update moves rights exactly as binding on create does; Write on
+        // the row is not consent to hand it to a club.
+        if (request.CavingGroupId is { } requested
+            && requested != view.CavingGroupId
+            && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.MapViews, requested))
+        {
+            return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
 
         Apply(view, request);
         if (request.IsHome)
         {
-            await ClearOtherHomesAsync(db, user.UserId, view.Id, ct);
+            await ClearOtherHomesAsync(db, ctx.UserId, view.Id, ct);
         }
 
         await db.SaveChangesAsync(ct);
@@ -157,18 +167,18 @@ public static class MapViewEndpoints
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var view = await db.MapViews.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (view is null)
         {
             return ApiProblems.NotFound("map_view.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, view, ObjectPermission.Delete, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Delete, view, ct)).Allowed)
         {
             return ApiProblems.NotFound("map_view.not_found");
         }
@@ -181,20 +191,20 @@ public static class MapViewEndpoints
     private static async Task<Results<Ok<MapViewDto>, UnauthorizedHttpResult, ProblemHttpResult>> ShareAsync(
         Guid id,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var view = await db.MapViews.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (view is null)
         {
             return ApiProblems.NotFound("map_view.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, view, ObjectPermission.Share, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Share, view, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, view, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, view, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("map_view.not_found");
         }
@@ -208,18 +218,18 @@ public static class MapViewEndpoints
     private static async Task<Results<NoContent, ProblemHttpResult>> UnshareAsync(
         Guid id,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var view = await db.MapViews.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (view is null)
         {
             return ApiProblems.NotFound("map_view.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, view, ObjectPermission.Share, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Share, view, ct)).Allowed)
         {
             return ApiProblems.NotFound("map_view.not_found");
         }

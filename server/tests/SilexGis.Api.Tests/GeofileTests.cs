@@ -29,7 +29,7 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable
     private readonly string filesRoot;
 
     private HttpClient editor = null!;
-    private HttpClient outsider = null!; // Editor, unrelated user
+    private HttpClient outsider = null!; // Viewer (regular user), unrelated — Editors read everything now
     private HttpClient viewer = null!;
     private Guid editorId;
 
@@ -53,7 +53,7 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable
     {
         tag = Guid.NewGuid().ToString("N")[..8];
         editorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"gf-editor-{tag}@t.local");
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"gf-out-{tag}@t.local");
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"gf-out-{tag}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"gf-view-{tag}@t.local");
         editor = await AuthHelper.BearerClientAsync(factory, $"gf-editor-{tag}@t.local");
         outsider = await AuthHelper.BearerClientAsync(factory, $"gf-out-{tag}@t.local");

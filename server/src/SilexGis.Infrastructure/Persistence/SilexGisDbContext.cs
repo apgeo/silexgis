@@ -72,7 +72,15 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<Tagging> Taggings => Set<Tagging>();
 
-    public DbSet<ObjectAcl> ObjectAcls => Set<ObjectAcl>();
+    public DbSet<PermissionGroup> PermissionGroups => Set<PermissionGroup>();
+
+    public DbSet<PermissionGroupMember> PermissionGroupMembers => Set<PermissionGroupMember>();
+
+    public DbSet<AccessEntry> AccessEntries => Set<AccessEntry>();
+
+    public DbSet<FeatureSet> FeatureSets => Set<FeatureSet>();
+
+    public DbSet<FeatureSetMember> FeatureSetMembers => Set<FeatureSetMember>();
 
     public DbSet<MapView> MapViews => Set<MapView>();
 

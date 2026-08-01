@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Features;
@@ -17,8 +18,7 @@ namespace SilexGis.Api.Features.Caves;
 /// Typed cave facade over the feature aggregate: a cave is a feature row (identity, name,
 /// description, access control, protection, main-entrance point cache) plus the cave
 /// subtype row (speleological attributes). Aggregate invariants — hierarchy edges,
-/// derived protection, delegated access of entrance/centerline children, subtree soft
-/// delete — go through the feature write service.
+/// derived protection, subtree soft delete — go through the feature write service.
 /// </summary>
 public static class CaveEndpoints
 {
@@ -45,8 +45,8 @@ public static class CaveEndpoints
     private static async Task<Results<Ok<PagedResult<CaveListItemDto>>, UnauthorizedHttpResult>> ListAsync(
         SilexGisDbContext db,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
-        IOptions<AccessOptions> access,
+        IAccessContextAccessor accessAccessor,
+        IOptions<AccessOptions> accessOptions,
         int? page,
         int? pageSize,
         string? sort,
@@ -58,8 +58,8 @@ public static class CaveEndpoints
         string? tag,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -67,7 +67,7 @@ public static class CaveEndpoints
         var query = db.Features.AsNoTracking()
             .Include(f => f.Cave)
             .Where(f => f.Kind == FeatureKind.Cave)
-            .VisibleTo(user, db.ObjectAcls);
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers);
 
         if (!string.IsNullOrWhiteSpace(tag))
         {
@@ -113,8 +113,8 @@ public static class CaveEndpoints
         var rows = await query.Skip((p - 1) * size).Take(size).ToListAsync(ct);
 
         // Exact view is decided per row against every protected root above it.
-        var exactIds = await protection.ExactViewIdsAsync(user, [.. rows.Select(f => f.Id)], ct);
-        var grid = access.Value.LocationGridMeters;
+        var exactIds = await protection.ExactViewIdsAsync(ctx, [.. rows.Select(f => f.Id)], ct);
+        var grid = accessOptions.Value.LocationGridMeters;
         var items = rows.Select(f => f.ToListItem(exactIds.Contains(f.Id), grid)).ToList();
         return TypedResults.Ok(new PagedResult<CaveListItemDto>(items, p, size, total));
     }
@@ -123,38 +123,38 @@ public static class CaveEndpoints
         Guid id,
         HttpContext http,
         SilexGisDbContext db,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
-        IOptions<AccessOptions> access,
+        IAccessContextAccessor accessAccessor,
+        IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var feature = await CaveFeatureAsync(db.Features.AsNoTracking(), id, ct);
-        if (feature is null || !await permissions.CanAsync(user, feature, ObjectPermission.Read, ct))
+        if (feature is null || !(await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed)
         {
             // Existence of a cave the caller cannot read is not disclosed.
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        var exact = (await protection.ExactViewIdsAsync(user, [feature.Id], ct)).Contains(feature.Id);
-        var parents = await ParentsAsync(db, user!, feature.Id, ct);
+        var exact = (await protection.ExactViewIdsAsync(ctx, [feature.Id], ct)).Contains(feature.Id);
+        var parents = await ParentsAsync(db, ctx!, feature.Id, ct);
         await Concurrency.EmitETagAsync(http, db, VersionedTable.Features, feature.Id, ct);
-        return TypedResults.Ok(feature.ToDto(exact, access.Value.LocationGridMeters, parents));
+        return TypedResults.Ok(feature.ToDto(exact, accessOptions.Value.LocationGridMeters, parents));
     }
 
     private static async Task<Results<Ok<CaveSummaryDto>, ProblemHttpResult>> GetSummaryAsync(
         Guid id,
         SilexGisDbContext db,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
-        IOptions<AccessOptions> access,
+        IAccessContextAccessor accessAccessor,
+        IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var feature = await CaveFeatureAsync(db.Features.AsNoTracking(), id, ct);
-        if (feature is null || !await permissions.CanAsync(user, feature, ObjectPermission.Read, ct))
+        if (feature is null || !(await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed)
         {
             return ApiProblems.NotFound("cave.not_found");
         }
@@ -164,7 +164,7 @@ public static class CaveEndpoints
         var attachmentCount = await db.Attachments.CountAsync(a => a.FeatureId == id, ct);
 
         // Trip links are visibility-filtered — two callers may legitimately see different counts.
-        var visibleTrips = db.TripLogs.AsNoTracking().VisibleTo(user!, db.ObjectAcls, AttachedEntityType.TripLog);
+        var visibleTrips = db.TripLogs.AsNoTracking().VisibleTo(ctx!, AccessDomain.TripLogs);
         var tripLogCount = await db.TripLogCaves.CountAsync(
             l => l.CaveId == id && visibleTrips.Any(t => t.Id == l.TripLogId), ct);
 
@@ -172,21 +172,21 @@ public static class CaveEndpoints
             .Include(e => e.Feature)
             .FirstOrDefaultAsync(e => e.CaveFeatureId == id && e.IsMain, ct);
 
-        var exactIds = await protection.ExactViewIdsAsync(user, main is null ? [id] : [id, main.Id], ct);
+        var exactIds = await protection.ExactViewIdsAsync(ctx, main is null ? [id] : [id, main.Id], ct);
         var mainDto = main is null
             ? null
             : new CaveMainEntranceDto(
                 main.Id,
                 main.Feature.Name,
-                CaveMapping.MapGeom(main.Feature.Geom, exactIds.Contains(main.Id), access.Value.LocationGridMeters),
+                CaveMapping.MapGeom(main.Feature.Geom, exactIds.Contains(main.Id), accessOptions.Value.LocationGridMeters),
                 ApproximateLocation: !exactIds.Contains(main.Id));
 
-        var effective = await permissions.EffectiveAsync(user, feature, ct);
+        var effective = await access.EffectiveAsync(ctx, feature, ct);
         var caps = new CavePermissionsDto(
-            CanWrite: effective.HasFlag(ObjectPermission.Write),
-            CanDelete: effective.HasFlag(ObjectPermission.Delete),
-            CanShare: effective.HasFlag(ObjectPermission.Share),
-            CanManagePermissions: effective.HasFlag(ObjectPermission.ManagePermissions),
+            CanWrite: effective.HasFlag(AccessAction.Write),
+            CanDelete: effective.HasFlag(AccessAction.Delete),
+            CanShare: effective.HasFlag(AccessAction.Share),
+            CanManagePermissions: effective.HasFlag(AccessAction.ManagePermissions),
             // The real multi-root decision, not the row-local ACL flag: an ancestor's
             // protection vetoes exact view even when the row itself grants it.
             CanViewExactLocation: exactIds.Contains(id));
@@ -200,37 +200,44 @@ public static class CaveEndpoints
         CaveWriteRequest request,
         SilexGisDbContext db,
         FeatureWriteService writer,
+        IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
-        IOptions<AccessOptions> access,
+        IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
     {
+        var ctx = await accessAccessor.GetAsync(ct);
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        if (ctx is null || user is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!user.CanCreateContent)
+        if (!await CavingGroupBindingAllowedAsync(db, ctx, request.CavingGroupId, ct))
         {
-            return ApiProblems.Forbidden("cave.create_requires_editor");
-        }
-
-        if (!await CavingGroupBindingAllowedAsync(db, user, request.CavingGroupId, ct))
-        {
-            return ApiProblems.Forbidden("cave.caving_group_membership_required");
+            return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
 
         IReadOnlyList<ParentSpec> parents = [];
+        var parentFacts = await CreateContext.ParentCreateFactsAsync(
+            db, ctx, request.ParentId, request.CavingGroupId, FeatureKind.Cave, ct);
         if (request.ParentId is { } parentId)
         {
             // The parent must exist and be readable by the caller — a body reference must
             // never confirm the existence of rows the caller cannot see.
-            if (!await db.Features.VisibleTo(user, db.ObjectAcls).AnyAsync(f => f.Id == parentId, ct))
+            if (parentFacts is null)
             {
                 return ApiProblems.BadRequest("cave.parent_not_found");
             }
 
             parents = [new ParentSpec(parentId, IsPrimary: true)];
+        }
+
+        // Creation is decided by the walk against that target context, so a Create deny
+        // bites and a subtree- or club-scoped Create reaches exactly where it should.
+        if (!CreateRules.MayCreate(ctx, AccessDomain.Features, parentFacts
+            ?? AccessTargetFacts.ForCreate(null, [], request.CavingGroupId, FeatureKind.Cave)))
+        {
+            return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
         var feature = new Feature
@@ -258,11 +265,11 @@ public static class CaveEndpoints
         }
 
         await db.SaveChangesAsync(ct);
-        var parentDtos = await ParentsAsync(db, user, feature.Id, ct);
+        var parentDtos = await ParentsAsync(db, ctx, feature.Id, ct);
         // The creator owns the row, so the mapping is exact by construction.
         return TypedResults.Created(
             $"/api/v1/caves/{feature.Id}",
-            feature.ToDto(exact: true, access.Value.LocationGridMeters, parentDtos));
+            feature.ToDto(exact: true, accessOptions.Value.LocationGridMeters, parentDtos));
     }
 
     private static async Task<Results<Ok<CaveDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -270,23 +277,23 @@ public static class CaveEndpoints
         CaveWriteRequest request,
         HttpContext http,
         SilexGisDbContext db,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
         FeatureWriteService writer,
-        IUserContextAccessor userAccessor,
-        IOptions<AccessOptions> access,
+        IAccessContextAccessor accessAccessor,
+        IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var feature = await CaveFeatureAsync(db.Features, id, ct);
         if (feature is null)
         {
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, feature, ObjectPermission.Write, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Write, feature, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, feature, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("cave.not_found");
         }
@@ -296,9 +303,9 @@ public static class CaveEndpoints
             return stale;
         }
 
-        if (request.CavingGroupId != feature.CavingGroupId && !await CavingGroupBindingAllowedAsync(db, user, request.CavingGroupId, ct))
+        if (request.CavingGroupId != feature.CavingGroupId && !await CavingGroupBindingAllowedAsync(db, ctx, request.CavingGroupId, ct))
         {
-            return ApiProblems.Forbidden("cave.caving_group_membership_required");
+            return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
 
         var cave = feature.Cave!;
@@ -307,9 +314,8 @@ public static class CaveEndpoints
         // obfuscated values (null address/registry/notes), so ignore any change they
         // submit to those fields — a full-replace PUT would otherwise write the
         // obfuscated echo back over the real data.
-        var exact = (await protection.ExactViewIdsAsync(user, [feature.Id], ct)).Contains(feature.Id);
+        var exact = (await protection.ExactViewIdsAsync(ctx, [feature.Id], ct)).Contains(feature.Id);
         var preserved = (cave.ClosestAddress, cave.LandRegistryNumber, cave.LocationNotes);
-        var accessChanged = feature.CavingGroupId != request.CavingGroupId || feature.Visibility != request.Visibility;
 
         request.Apply(feature, cave);
 
@@ -332,12 +338,6 @@ public static class CaveEndpoints
             {
                 await writer.ValidatePropertiesAsync(feature, ct);
             }
-
-            if (accessChanged)
-            {
-                // Entrance/centerline children carry a copy of the cave's owner/caving group/visibility.
-                await writer.SyncDelegatedAccessAsync(feature.Id, ct);
-            }
         }
         catch (FeatureWriteException ex)
         {
@@ -346,20 +346,20 @@ public static class CaveEndpoints
 
         await db.SaveChangesAsync(ct);
         await Concurrency.EmitETagAsync(http, db, VersionedTable.Features, feature.Id, ct);
-        var parents = await ParentsAsync(db, user, feature.Id, ct);
-        return TypedResults.Ok(feature.ToDto(exact, access.Value.LocationGridMeters, parents));
+        var parents = await ParentsAsync(db, ctx, feature.Id, ct);
+        return TypedResults.Ok(feature.ToDto(exact, accessOptions.Value.LocationGridMeters, parents));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         HttpContext http,
         SilexGisDbContext db,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureWriteService writer,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var feature = await db.Features.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == id && f.Kind == FeatureKind.Cave, ct);
         if (feature is null)
@@ -367,9 +367,9 @@ public static class CaveEndpoints
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, feature, ObjectPermission.Delete, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Delete, feature, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, feature, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("cave.not_found");
         }
@@ -391,12 +391,12 @@ public static class CaveEndpoints
 
     /// <summary>Breadcrumb data: the containment parents the caller may see, primary edge first.</summary>
     private static async Task<IReadOnlyList<CaveParentDto>> ParentsAsync(
-        SilexGisDbContext db, UserContext user, Guid featureId, CancellationToken ct)
+        SilexGisDbContext db, AccessContext ctx, Guid featureId, CancellationToken ct)
     {
         var rows = await db.FeatureHierarchyEdges.AsNoTracking()
             .Where(e => e.ChildId == featureId)
             .Join(
-                db.Features.VisibleTo(user, db.ObjectAcls),
+                db.Features.VisibleTo(ctx, db.Features, db.FeatureSetMembers),
                 e => e.ParentId,
                 f => f.Id,
                 (e, f) => new { f.Id, f.Name, e.IsPrimary })
@@ -408,14 +408,14 @@ public static class CaveEndpoints
     }
 
     private static async Task<bool> CavingGroupBindingAllowedAsync(
-        SilexGisDbContext db, UserContext user, Guid? cavingGroupId, CancellationToken ct)
+        SilexGisDbContext db, AccessContext ctx, Guid? cavingGroupId, CancellationToken ct)
     {
-        if (cavingGroupId is null || user.IsAdmin)
+        if (cavingGroupId is null || ctx.IsFullAdmin)
         {
             return cavingGroupId is null || await db.CavingGroups.AnyAsync(t => t.Id == cavingGroupId, ct);
         }
 
-        return user.IsMemberOf(cavingGroupId.Value);
+        return CavingGroupBindingRules.MayBind(ctx, AccessDomain.Features, cavingGroupId.Value);
     }
 
     private static IQueryable<Feature> ApplySort(IQueryable<Feature> query, string? sort) =>

@@ -4,10 +4,12 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Notifications;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.CavingGroups;
@@ -143,6 +145,11 @@ public static class CavingGroupEndpoints
             CaverId = creator.Id,
             Role = CavingGroupRole.Owner,
         });
+
+        // The group's default permission list: the "«name» — members" starter ruleset
+        // (members read/write/create club content and see club caves' exact locations)
+        // and the creator's "«name» — managers" group — all ordinary, editable data.
+        await CavingGroupPermissionSeeder.SeedForNewGroupAsync(db, cavingGroup, user.UserId, ct);
         await db.SaveChangesAsync(ct);
 
         return TypedResults.Created($"/api/v1/caving-groups/{cavingGroup.Id}",
@@ -182,6 +189,7 @@ public static class CavingGroupEndpoints
         Guid id,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        FullAdminGuard fullAdminGuard,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -201,10 +209,48 @@ public static class CavingGroupEndpoints
             return ApiProblems.Forbidden("caving_group.requires_owner");
         }
 
+        // A DENY anchored on this group would be silently cancelled by deleting it —
+        // that must stay an explicit act on the entry itself, never a delete side
+        // effect. Allow entries anchored here only ever narrow when removed, so they
+        // (and trustee rows naming the group) go with it, tracked and audited.
+        var anchoredDenies = await db.AccessEntries.AnyAsync(e =>
+            e.Effect == AccessEffect.Deny
+            && ((e.ScopeKind == AccessScopeKind.CavingGroup && e.ScopeId == id)
+                || (e.Domain == AccessDomain.CavingGroups
+                    && e.ScopeKind == AccessScopeKind.Object && e.ScopeId == id)), ct);
+        if (anchoredDenies)
+        {
+            return ApiProblems.Conflict("caving_group.deny_entries_exist",
+                "Deny entries are anchored on this caving group; remove them first.");
+        }
+
+        var anchoredEntries = await db.AccessEntries.Where(e =>
+                (e.ScopeKind == AccessScopeKind.CavingGroup && e.ScopeId == id)
+                || (e.Domain == AccessDomain.CavingGroups
+                    && e.ScopeKind == AccessScopeKind.Object && e.ScopeId == id)
+                || (e.SubjectKind == AccessSubjectKind.CavingGroup && e.SubjectId == id))
+            .ToListAsync(ct);
+        var trusteeRows = await db.PermissionGroupMembers
+            .Where(m => m.MemberKind == AccessSubjectKind.CavingGroup && m.MemberId == id)
+            .ToListAsync(ct);
+
         // Objects bound to the caving group fall back to owner/visibility access (caving_group_id set null
-        // by the FKs configured on protected tables); memberships cascade.
+        // by the FKs configured on protected tables); memberships cascade. The whole removal commits
+        // only if a live Full Administrator remains reachable — this group could have been the last
+        // path into that protected permission group.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        db.AccessEntries.RemoveRange(anchoredEntries);
+        db.PermissionGroupMembers.RemoveRange(trusteeRows);
         db.CavingGroups.Remove(cavingGroup);
         await db.SaveChangesAsync(ct);
+        if (!await fullAdminGuard.AnyLiveFullAdminAsync(ct))
+        {
+            await transaction.RollbackAsync(ct);
+            return ApiProblems.Conflict(FullAdminGuard.LastFullAdminCode,
+                "Deleting this caving group would leave no signed-in-capable Full Administrator.");
+        }
+
+        await transaction.CommitAsync(ct);
         return TypedResults.NoContent();
     }
 
@@ -320,6 +366,7 @@ public static class CavingGroupEndpoints
         Guid caverId,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        FullAdminGuard fullAdminGuard,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -369,7 +416,18 @@ public static class CavingGroupEndpoints
                 });
         }
 
+        // Leaving a group can sever someone's only path into Full Administrators; the
+        // installation must never end up without a live one.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.SaveChangesAsync(ct);
+        if (!await fullAdminGuard.AnyLiveFullAdminAsync(ct))
+        {
+            await transaction.RollbackAsync(ct);
+            return ApiProblems.Conflict(FullAdminGuard.LastFullAdminCode,
+                "Removing this member would leave no signed-in-capable Full Administrator.");
+        }
+
+        await transaction.CommitAsync(ct);
         return TypedResults.NoContent();
     }
 }

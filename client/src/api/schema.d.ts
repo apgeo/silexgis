@@ -5014,7 +5014,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * ACL entries of one object (ManagePermissions).
+         * Direct object-scope grant entries of one object (ManagePermissions).
          * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView' (case-insensitive).
          */
         get: {
@@ -5041,7 +5041,7 @@ export interface paths {
             };
         };
         /**
-         * Replaces the object's ACL entries (ManagePermissions).
+         * Replaces the object's direct grant entries (ManagePermissions).
          * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView' (case-insensitive).
          */
         put: {
@@ -5107,7 +5107,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["ObjectPermission"];
+                        "application/json": components["schemas"]["AccessAction"];
                     };
                 };
             };
@@ -6142,26 +6142,27 @@ export interface components {
             license: string;
             sourceUrl: string;
         };
+        AccessAction: string;
+        /** @enum {unknown} */
+        AccessSubjectKind: "user" | "cavingGroup";
         /** @enum {unknown} */
         AccountExportStatus: "queued" | "running" | "ready" | "failed";
         AclEntryDto: {
-            subjectKind: components["schemas"]["AclSubjectKind"];
+            subjectKind: components["schemas"]["AccessSubjectKind"];
             /** Format: uuid */
             subjectId: string;
             subjectName: null | string;
-            permissions: components["schemas"]["ObjectPermission"];
+            permissions: components["schemas"]["AccessAction"];
         };
         AclEntryWrite: {
-            subjectKind: components["schemas"]["AclSubjectKind"];
+            subjectKind: components["schemas"]["AccessSubjectKind"];
             /** Format: uuid */
             subjectId: string;
-            permissions: components["schemas"]["ObjectPermission"];
+            permissions: components["schemas"]["AccessAction"];
         };
         AclReplaceRequest: {
             entries: components["schemas"]["AclEntryWrite"][];
         };
-        /** @enum {unknown} */
-        AclSubjectKind: "user" | "cavingGroup";
         AdminSettingsDto: {
             mail: components["schemas"]["MailSettingsDto"];
             sms: components["schemas"]["SmsSettingsDto"];
@@ -7264,7 +7265,6 @@ export interface components {
             digest: components["schemas"]["NotificationDigest"];
             categories: components["schemas"]["NotificationCategoryWrite"][];
         };
-        ObjectPermission: string;
         PagedResultOfAuditEntryDto: {
             items: components["schemas"]["AuditEntryDto"][];
             /** Format: int32 */

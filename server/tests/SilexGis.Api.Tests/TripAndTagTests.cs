@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Persistence;
 
@@ -30,7 +31,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
     private readonly SilexGisApiFactory factory;
 
     private HttpClient owner = null!;    // Editor
-    private HttpClient outsider = null!; // Editor, unrelated
+    private HttpClient outsider = null!; // Viewer (regular user), unrelated — Editors read everything now
     private HttpClient viewer = null!;   // Viewer role
     private HttpClient admin = null!;
     private Guid outsiderId;
@@ -46,7 +47,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tt-own-{suffix}@t.local");
-        outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tt-out-{suffix}@t.local");
+        outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"tt-out-{suffix}@t.local");
         outsiderCaverId = await RosterHelper.CaverIdForAsync(factory, outsiderId);
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"tt-view-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"tt-adm-{suffix}@t.local");
@@ -312,7 +313,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
 
         // The outsider can Write the trip but not view the cave's exact location, so they see
         // the cave link redacted (empty caveIds).
-        await GrantTripAsync(tripId, outsiderId, ObjectPermission.Read | ObjectPermission.Write);
+        await GrantTripAsync(tripId, outsiderId, AccessAction.Read | AccessAction.Write);
         (await outsider.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{tripId}"))
             .GetProperty("caveIds").GetArrayLength().ShouldBe(0);
 
@@ -498,17 +499,21 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    private async Task GrantTripAsync(Guid tripId, Guid userId, ObjectPermission permissions)
+    private async Task GrantTripAsync(Guid tripId, Guid userId, AccessAction actions)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        db.ObjectAcls.Add(new ObjectAcl
+        db.AccessEntries.Add(new AccessEntry
         {
-            EntityType = AttachedEntityType.TripLog,
-            EntityId = tripId,
-            SubjectKind = AclSubjectKind.User,
+            SubjectKind = AccessSubjectKind.User,
             SubjectId = userId,
-            Permissions = permissions,
+            Effect = AccessEffect.Allow,
+            Domain = AccessDomain.TripLogs,
+            Actions = actions,
+            ScopeKind = AccessScopeKind.Object,
+            // Non-feature domains anchor object scope in ScopeId (ScopeFeatureId is
+            // reserved for the feature-domain FK).
+            ScopeId = tripId,
         });
         await db.SaveChangesAsync();
     }

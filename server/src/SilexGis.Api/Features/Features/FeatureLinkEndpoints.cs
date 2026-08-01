@@ -3,8 +3,8 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -33,19 +33,19 @@ public static class FeatureLinkEndpoints
     private static async Task<Results<Ok<List<FeatureLinkDto>>, ProblemHttpResult>> GetLinksAsync(
         Guid id,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var feature = await db.Features.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (feature is null || !await permissions.CanAsync(user, feature, ObjectPermission.Read, ct))
+        if (feature is null || !(await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed)
         {
             return ApiProblems.NotFound("feature.not_found");
         }
 
-        return TypedResults.Ok(await LinksViewAsync(db, protection, user, id, ct));
+        return TypedResults.Ok(await LinksViewAsync(db, protection, ctx, id, ct));
     }
 
     private static async Task<Results<Ok<List<FeatureLinkDto>>, UnauthorizedHttpResult, ProblemHttpResult>> SetLinksAsync(
@@ -53,21 +53,21 @@ public static class FeatureLinkEndpoints
         SetLinksRequest request,
         HttpContext http,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var feature = await db.Features.FirstOrDefaultAsync(f => f.Id == id, ct);
         if (feature is null)
         {
             return ApiProblems.NotFound("feature.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, feature, ObjectPermission.Write, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Write, feature, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, feature, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("feature.not_found");
         }
@@ -101,7 +101,7 @@ public static class FeatureLinkEndpoints
         var targetIds = request.Links.Select(l => l.ToId).Distinct().ToArray();
         if (targetIds.Length > 0)
         {
-            var visibleTargets = await db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls)
+            var visibleTargets = await db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers)
                 .Where(f => targetIds.Contains(f.Id)).Select(f => f.Id).ToListAsync(ct);
             if (visibleTargets.Count != targetIds.Length)
             {
@@ -117,7 +117,7 @@ public static class FeatureLinkEndpoints
         // protected endpoints omitted; a full replace from that view must not silently
         // sever them. Such stored rows are preserved verbatim and out of reach.
         var endpointIds = stored.Select(l => l.ToId).Concat(targetIds).Append(id).Distinct().ToList();
-        var redacted = await protection.RedactedLinkTargetIdsAsync(user, endpointIds, ct);
+        var redacted = await protection.RedactedLinkTargetIdsAsync(ctx, endpointIds, ct);
         bool HiddenFromCaller(FeatureLink link) =>
             kindsById[link.LinkKindId].Locating
             && (redacted.Contains(link.ToId) || redacted.Contains(id));
@@ -148,7 +148,7 @@ public static class FeatureLinkEndpoints
         }
 
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(await LinksViewAsync(db, protection, user, id, ct));
+        return TypedResults.Ok(await LinksViewAsync(db, protection, ctx, id, ct));
     }
 
     /// <summary>
@@ -158,7 +158,7 @@ public static class FeatureLinkEndpoints
     /// protected one).
     /// </summary>
     private static async Task<List<FeatureLinkDto>> LinksViewAsync(
-        SilexGisDbContext db, FeatureProtection protection, UserContext? user, Guid id, CancellationToken ct)
+        SilexGisDbContext db, FeatureProtection protection, AccessContext? ctx, Guid id, CancellationToken ct)
     {
         var links = await db.FeatureLinks.AsNoTracking()
             .Where(l => l.FromId == id || l.ToId == id)
@@ -170,9 +170,9 @@ public static class FeatureLinkEndpoints
 
         var kindsById = await LinkKindsOfAsync(db, links.Select(l => l.LinkKindId), ct);
         var otherIds = links.Select(l => l.FromId == id ? l.ToId : l.FromId).Distinct().ToArray();
-        var readableOthers = (await db.Features.AsNoTracking().VisibleTo(user!, db.ObjectAcls)
+        var readableOthers = (await db.Features.AsNoTracking().VisibleTo(ctx!, db.Features, db.FeatureSetMembers)
             .Where(f => otherIds.Contains(f.Id)).Select(f => f.Id).ToListAsync(ct)).ToHashSet();
-        var redacted = await protection.RedactedLinkTargetIdsAsync(user, [.. otherIds, id], ct);
+        var redacted = await protection.RedactedLinkTargetIdsAsync(ctx, [.. otherIds, id], ct);
 
         return links
             .Where(l => readableOthers.Contains(l.FromId == id ? l.ToId : l.FromId))

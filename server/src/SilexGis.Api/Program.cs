@@ -36,6 +36,7 @@ using SilexGis.Api.Features.CavingGroups;
 using SilexGis.Api.Features.TripLogs;
 using SilexGis.Api.Features.Users;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure;
@@ -94,6 +95,7 @@ try
     builder.Services.AddOptions<MapOptions>()
         .BindConfiguration(MapOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
+    builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
     // Credential-guessing protection: per-IP fixed window on the auth surface.
     // Limit is configurable for installations behind shared NATs.
     var authPermitLimit = builder.Configuration.GetValue("Auth:RateLimitPerMinute", 60);
@@ -111,8 +113,8 @@ try
                 }));
     });
 
-    // AclPermissionService / IPermissionService / FeatureProtection are registered by
-    // AddSilexGisPersistence — they live in Infrastructure since the supertype cutover.
+    // AccessService / IAccessService / FeatureProtection / FullAdminGuard are registered
+    // by AddSilexGisPersistence — they live in Infrastructure since the supertype cutover.
     builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
     var app = builder.Build();
@@ -199,6 +201,8 @@ try
         await db.Database.MigrateAsync();
         await TaxonomySeeder.SeedAsync(db);
         await MapLayerSeeder.SeedAsync(db);
+        // Permission groups must exist before the bootstrap admin joins Full Administrators.
+        await PermissionGroupSeeder.SeedAsync(db);
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
     }
 

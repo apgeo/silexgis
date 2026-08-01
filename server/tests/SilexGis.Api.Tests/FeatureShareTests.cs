@@ -27,7 +27,7 @@ public sealed class FeatureShareTests : IAsyncLifetime, IDisposable
     private readonly SilexGisApiFactory factory;
 
     private HttpClient owner = null!;    // Editor
-    private HttpClient outsider = null!; // Editor, unrelated
+    private HttpClient outsider = null!; // Viewer (regular user), unrelated — Editors read everything now
     private long sinkholeTypeId;
     private long caveTypeId;
     private long entranceTypeId;
@@ -39,7 +39,7 @@ public sealed class FeatureShareTests : IAsyncLifetime, IDisposable
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"fsown-{suffix}@t.local");
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"fsout-{suffix}@t.local");
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"fsout-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
         {

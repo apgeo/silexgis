@@ -6,9 +6,9 @@ using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -91,16 +91,16 @@ public static class EntranceEndpoints
     private static async Task<Results<Ok<List<EntranceDto>>, ProblemHttpResult>> ListAsync(
         Guid caveId,
         SilexGisDbContext db,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
-        IOptions<AccessOptions> access,
+        IAccessContextAccessor accessAccessor,
+        IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var cave = await db.Features.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == caveId && f.Kind == FeatureKind.Cave, ct);
-        if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
+        if (cave is null || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed)
         {
             return ApiProblems.NotFound("cave.not_found");
         }
@@ -114,9 +114,9 @@ public static class EntranceEndpoints
             .OrderByDescending(e => e.IsMain).ThenBy(e => e.Feature.CreatedAt)
             .ToListAsync(ct);
 
-        var exact = await protection.ExactViewIdsAsync(user, [.. rows.Select(e => e.Id)], ct);
+        var exact = await protection.ExactViewIdsAsync(ctx, [.. rows.Select(e => e.Id)], ct);
         return TypedResults.Ok(rows
-            .Select(e => ToDto(e.Feature, e, exact.Contains(e.Id), access.Value.LocationGridMeters))
+            .Select(e => ToDto(e.Feature, e, exact.Contains(e.Id), accessOptions.Value.LocationGridMeters))
             .ToList());
     }
 
@@ -125,19 +125,19 @@ public static class EntranceEndpoints
         EntranceWriteRequest request,
         SilexGisDbContext db,
         FeatureWriteService writer,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
-        IOptions<AccessOptions> access,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var cave = await db.Features.FirstOrDefaultAsync(f => f.Id == caveId && f.Kind == FeatureKind.Cave, ct);
-        if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
+        if (cave is null || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed)
         {
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        if (!await permissions.CanAsync(user, cave, ObjectPermission.Write, ct))
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, cave, ct)).Allowed)
         {
             return ApiProblems.Forbidden();
         }
@@ -163,8 +163,9 @@ public static class EntranceEndpoints
 
         try
         {
-            // Owner, caving group and visibility are copied from the cave by the write service: an
-            // entrance is never more (or less) visible than the cave it belongs to.
+            // Owner and caving-group binding default from the cave in the write service, and
+            // read visibility cascades from it: an entrance is never more (or less) visible
+            // than the cave it belongs to.
             await writer.CreateEntranceAsync(feature, entrance, ct);
             if (entrance.IsMain)
             {
@@ -182,7 +183,7 @@ public static class EntranceEndpoints
         // the coordinates are theirs, so echoing them back discloses nothing.
         return TypedResults.Created(
             $"/api/v1/cave-entrances/{feature.Id}",
-            ToDto(feature, entrance, exact: true, access.Value.LocationGridMeters));
+            ToDto(feature, entrance, exact: true, accessOptions.Value.LocationGridMeters));
     }
 
     private static async Task<Results<Ok<EntranceDto>, ProblemHttpResult>> UpdateAsync(
@@ -191,23 +192,23 @@ public static class EntranceEndpoints
         HttpContext http,
         SilexGisDbContext db,
         FeatureWriteService writer,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
-        IOptions<AccessOptions> access,
+        IAccessContextAccessor accessAccessor,
+        IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var entrance = await db.CaveEntrances.Include(e => e.Feature).FirstOrDefaultAsync(e => e.Id == id, ct);
         var cave = entrance is null
             ? null
             : await db.Features.FirstOrDefaultAsync(f => f.Id == entrance.CaveFeatureId, ct);
-        if (entrance is null || cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
+        if (entrance is null || cave is null || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed)
         {
             return ApiProblems.NotFound("entrance.not_found");
         }
 
-        if (!await permissions.CanAsync(user, cave, ObjectPermission.Write, ct))
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, cave, ct)).Allowed)
         {
             return ApiProblems.Forbidden();
         }
@@ -219,7 +220,7 @@ public static class EntranceEndpoints
             return stale;
         }
 
-        var canViewExact = (await protection.ExactViewIdsAsync(user, [entrance.Id], ct)).Contains(entrance.Id);
+        var canViewExact = (await protection.ExactViewIdsAsync(ctx, [entrance.Id], ct)).Contains(entrance.Id);
         var feature = entrance.Feature;
         feature.Name = request.Name;
         feature.Description = request.Description;
@@ -251,7 +252,7 @@ public static class EntranceEndpoints
 
         // Mask the response to the caller's own view (mirrors the list rule): after the guard
         // restored the precise stored values, returning them exact would leak them.
-        return TypedResults.Ok(ToDto(feature, entrance, canViewExact, access.Value.LocationGridMeters));
+        return TypedResults.Ok(ToDto(feature, entrance, canViewExact, accessOptions.Value.LocationGridMeters));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
@@ -259,11 +260,11 @@ public static class EntranceEndpoints
         HttpContext http,
         SilexGisDbContext db,
         FeatureWriteService writer,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
 
         // Deliberately untracked: the soft delete stamps the rows in the database, and a
         // tracked copy still carrying the pre-delete state would make the cave mirror below
@@ -272,12 +273,12 @@ public static class EntranceEndpoints
         var cave = entrance is null
             ? null
             : await db.Features.FirstOrDefaultAsync(f => f.Id == entrance.CaveFeatureId, ct);
-        if (entrance is null || cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
+        if (entrance is null || cave is null || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed)
         {
             return ApiProblems.NotFound("entrance.not_found");
         }
 
-        if (!await permissions.CanAsync(user, cave, ObjectPermission.Write, ct))
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, cave, ct)).Allowed)
         {
             return ApiProblems.Forbidden();
         }

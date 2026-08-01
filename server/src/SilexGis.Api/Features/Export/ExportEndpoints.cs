@@ -6,9 +6,9 @@ using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -78,12 +78,12 @@ public static class ExportEndpoints
         SilexGisDbContext db,
         IVectorIO vectorIO,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -96,7 +96,7 @@ public static class ExportEndpoints
         // Same filter surface as the caves list; only caves with a main-entrance geometry
         // can be exported as vector rows.
         var query = db.Features.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls)
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => f.Kind == FeatureKind.Cave && f.Geom != null && f.Cave != null);
 
         if (caveTypeId is not null)
@@ -139,7 +139,7 @@ public static class ExportEndpoints
             .ToListAsync(ct);
 
         var gridMeters = access.Value.LocationGridMeters;
-        var exactIds = await protection.ExactViewIdsAsync(user, [.. rows.Select(r => r.Id)], ct);
+        var exactIds = await protection.ExactViewIdsAsync(ctx, [.. rows.Select(r => r.Id)], ct);
 
         var features = new List<VectorFeature>(rows.Count);
         foreach (var row in rows)
@@ -190,12 +190,12 @@ public static class ExportEndpoints
         SilexGisDbContext db,
         IVectorIO vectorIO,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -217,7 +217,7 @@ public static class ExportEndpoints
         }
 
         var query = db.Features.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls)
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => f.Geom != null);
 
         if (kindFilter is not null)
@@ -255,7 +255,7 @@ public static class ExportEndpoints
             .ToListAsync(ct);
 
         var gridMeters = access.Value.LocationGridMeters;
-        var exactIds = await protection.ExactViewIdsAsync(user, [.. rows.Select(r => r.Id)], ct);
+        var exactIds = await protection.ExactViewIdsAsync(ctx, [.. rows.Select(r => r.Id)], ct);
 
         var features = new List<VectorFeature>(rows.Count);
         foreach (var row in rows)
@@ -314,12 +314,12 @@ public static class ExportEndpoints
         string format,
         SilexGisDbContext db,
         IVectorIO vectorIO,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -330,7 +330,7 @@ public static class ExportEndpoints
         }
 
         var geofile = await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(g => g.Id == id, ct);
-        if (geofile is null || !await permissions.CanAsync(user, geofile, ObjectPermission.Read, ct))
+        if (geofile is null || !(await access.DecideAsync(ctx, AccessAction.Read, geofile, ct)).Allowed)
         {
             return ApiProblems.NotFound("geofile.not_found");
         }

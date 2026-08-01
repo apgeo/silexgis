@@ -3,7 +3,7 @@ using Dapper;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Access;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -51,9 +51,9 @@ public static class CenterlineMapSql
     /// rule can be evaluated (in Domain, where it lives) before any geometry is produced.
     /// </summary>
     public static async Task<IReadOnlyList<Guid>> CenterlineIdsInViewAsync(
-        SilexGisDbContext db, UserContext user, Bbox box, CancellationToken ct)
+        SilexGisDbContext db, AccessContext ctx, Bbox box, CancellationToken ct)
     {
-        var (visibilitySql, parameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
+        var (visibilitySql, parameters) = AccessSql.FeatureVisibleToFragment(ctx, "f");
         parameters.Add("west", box.West);
         parameters.Add("south", box.South);
         parameters.Add("east", box.East);
@@ -75,17 +75,17 @@ public static class CenterlineMapSql
 
     public static async Task<IReadOnlyList<CenterlineMapRow>> QueryAsync(
         SilexGisDbContext db,
-        UserContext user,
+        AccessContext ctx,
         Bbox box,
         bool detail,
         int maxPaths,
         bool gateActive,
         int gatePaths,
         double simplifyToleranceDegrees,
-        IReadOnlyCollection<Guid> withheldCenterlineIds,
+        IReadOnlyCollection<Guid> exactViewCenterlineIds,
         CancellationToken ct)
     {
-        var (visibilitySql, parameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
+        var (visibilitySql, parameters) = AccessSql.FeatureVisibleToFragment(ctx, "f");
         parameters.Add("west", box.West);
         parameters.Add("south", box.South);
         parameters.Add("east", box.East);
@@ -95,12 +95,17 @@ public static class CenterlineMapSql
         parameters.Add("gate_active", gateActive);
         parameters.Add("gate_paths", gatePaths);
         parameters.Add("tolerance", simplifyToleranceDegrees);
-        // Centerlines failing the caller's exact-view check (evaluated in Domain over the
-        // feature's protected roots, before this query runs) are excluded here rather than
-        // filtered afterwards, so their geometry is never even produced. They are also not
-        // counted anywhere in the response: a centerline traces the cave's exact position,
-        // so its existence is not disclosed.
-        parameters.Add("withheld_ids", PermissionSql.UuidArray([.. withheldCenterlineIds]));
+        // Only centerlines that PASSED the caller's exact-view check (evaluated in Domain
+        // over each feature's protected roots, before this query runs) are eligible, so
+        // their geometry is never even produced for anyone else. They are also not counted
+        // anywhere in the response: a centerline traces the cave's exact position, so its
+        // existence is not disclosed.
+        //
+        // An allow-list, deliberately: this query runs after the id and protection reads,
+        // in its own statement. A row created — or newly protected — in between is absent
+        // from the allow-list and is simply not served, whereas a deny-list would serve it
+        // at full survey precision without ever having checked it.
+        parameters.Add("exact_ids", AccessSql.UuidArray([.. exactViewCenterlineIds]));
 
         // ST_ClipByBox2D is 2D-only, hence the ST_Force2D first; it is also the reason the
         // skeleton is stored flat. The clip box is the viewport, so a stroke whose line leaves
@@ -133,7 +138,7 @@ public static class CenterlineMapSql
                 JOIN centerlines c ON c.id = f.id
                 WHERE f.deleted_at IS NULL
                   AND f.geom && ST_MakeEnvelope(@west, @south, @east, @north, 4326)
-                  AND NOT (f.id = ANY(@withheld_ids))
+                  AND f.id = ANY(@exact_ids)
                   AND {visibilitySql}
             ),
             counted AS MATERIALIZED (

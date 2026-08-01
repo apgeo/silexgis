@@ -36,6 +36,11 @@ public static class AuthHelper
         // produces, and membership (which hangs off the person) would have nothing to attach to.
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         CaverDirectory.CreateForNewAccount(db, user.Id, user.DisplayName, user.UserName, user.Email);
+
+        // Roles carry their capabilities through the seeded permission groups now; an
+        // account minted after startup seeding joins the same groups the seed-time
+        // mapping would have put it in (Admin → Full Administrators, Editor → Editors…).
+        await PermissionGroupSeeder.EnsureRoleMembershipsAsync(db, user.Id, role);
         await db.SaveChangesAsync();
 
         return user.Id;

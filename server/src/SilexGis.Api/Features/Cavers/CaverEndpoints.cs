@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Profiles;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Cavers;
@@ -211,7 +213,8 @@ public static class CaverEndpoints
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
-        Guid id, SilexGisDbContext db, IUserContextAccessor userAccessor, CancellationToken ct)
+        Guid id, SilexGisDbContext db, IUserContextAccessor userAccessor, FullAdminGuard fullAdminGuard,
+        CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
         if (user is null)
@@ -239,8 +242,19 @@ public static class CaverEndpoints
                 "This person is named on trips. Merge their duplicate entry instead of deleting it.");
         }
 
+        // Deleting the person cascades their memberships, which can sever an account's
+        // only path into Full Administrators.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         db.Cavers.Remove(caver);
         await db.SaveChangesAsync(ct);
+        if (!await fullAdminGuard.AnyLiveFullAdminAsync(ct))
+        {
+            await transaction.RollbackAsync(ct);
+            return ApiProblems.Conflict(FullAdminGuard.LastFullAdminCode,
+                "Deleting this person would leave no signed-in-capable Full Administrator.");
+        }
+
+        await transaction.CommitAsync(ct);
         return TypedResults.NoContent();
     }
 
@@ -249,10 +263,13 @@ public static class CaverEndpoints
         CaverAccountLinkRequest request,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
+        FullAdminGuard fullAdminGuard,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -280,6 +297,23 @@ public static class CaverEndpoints
                 "caver.account_already_linked", "That account already belongs to someone in the roster.");
         }
 
+        // Overwriting a live link would strip the current holder of everything this
+        // person's memberships carry — a permission edit disguised as a correction.
+        // Detaching first makes that its own explicit, audited, guarded act.
+        if (caver.UserId is { } linked && linked != request.UserId)
+        {
+            return ApiProblems.Conflict(
+                "caver.account_linked", "This person already has an account. Detach it first.");
+        }
+
+        // A membership is a grant path, so attaching an account to a person whose caving
+        // groups reach Full Administrators hands over the escape hatch. Reserved to
+        // people who already hold it — otherwise roster-keeping would be a route to it.
+        if (!ctx.IsFullAdmin && await fullAdminGuard.CaverReachesFullAdministratorsAsync(id, ct))
+        {
+            return ApiProblems.Forbidden(FullAdminGuard.GrantsFullAdminCode);
+        }
+
         caver.UserId = request.UserId;
         await db.SaveChangesAsync(ct);
 
@@ -288,7 +322,8 @@ public static class CaverEndpoints
     }
 
     private static async Task<Results<Ok<CaverDto>, UnauthorizedHttpResult, ProblemHttpResult>> UnlinkAccountAsync(
-        Guid id, SilexGisDbContext db, IUserContextAccessor userAccessor, CancellationToken ct)
+        Guid id, SilexGisDbContext db, IUserContextAccessor userAccessor, FullAdminGuard fullAdminGuard,
+        CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
         if (user is null)
@@ -307,8 +342,19 @@ public static class CaverEndpoints
             return ApiProblems.NotFound("caver.not_found");
         }
 
+        // Unlinking moves rights: the account loses everything that flowed through this
+        // person's memberships — including, possibly, its Full Administrators reach.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         caver.UserId = null;
         await db.SaveChangesAsync(ct);
+        if (!await fullAdminGuard.AnyLiveFullAdminAsync(ct))
+        {
+            await transaction.RollbackAsync(ct);
+            return ApiProblems.Conflict(FullAdminGuard.LastFullAdminCode,
+                "Unlinking this account would leave no signed-in-capable Full Administrator.");
+        }
+
+        await transaction.CommitAsync(ct);
 
         var projected = await ProjectAsync(db, user, [caver], ct);
         return TypedResults.Ok(projected[0]);
@@ -319,10 +365,13 @@ public static class CaverEndpoints
         CaverMergeRequest request,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
+        FullAdminGuard fullAdminGuard,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -335,6 +384,15 @@ public static class CaverEndpoints
         if (request.SourceCaverId == id)
         {
             return ApiProblems.BadRequest("caver.merge_self", "A person cannot be merged into themselves.");
+        }
+
+        // A merge repoints memberships onto the survivor, so folding in a person whose
+        // caving groups reach Full Administrators would hand the survivor's account the
+        // escape hatch — the same grant the account-link guard reserves.
+        if (!ctx.IsFullAdmin
+            && await fullAdminGuard.CaverReachesFullAdministratorsAsync(request.SourceCaverId, ct))
+        {
+            return ApiProblems.Forbidden(FullAdminGuard.GrantsFullAdminCode);
         }
 
         var target = await db.Cavers.FirstOrDefaultAsync(c => c.Id == id, ct);
@@ -397,12 +455,24 @@ public static class CaverEndpoints
             ? target.Notes
             : string.IsNullOrWhiteSpace(target.Notes) ? source.Notes : $"{target.Notes}\n{source.Notes}";
 
+        // Merging repoints memberships and can move the account link — both carry
+        // inherited rights, so the whole fold must not orphan Full Administrators.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
         // Cleared first: the account link is unique, and both rows exist until the save.
         source.UserId = null;
         await db.SaveChangesAsync(ct);
 
         db.Cavers.Remove(source);
         await db.SaveChangesAsync(ct);
+        if (!await fullAdminGuard.AnyLiveFullAdminAsync(ct))
+        {
+            await transaction.RollbackAsync(ct);
+            return ApiProblems.Conflict(FullAdminGuard.LastFullAdminCode,
+                "This merge would leave no signed-in-capable Full Administrator.");
+        }
+
+        await transaction.CommitAsync(ct);
 
         var projected = await ProjectAsync(db, user, [target], ct);
         return TypedResults.Ok(projected[0]);

@@ -8,9 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -29,8 +29,8 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
     private readonly SilexGisApiFactory factory;
 
     private HttpClient owner = null!;      // Editor, owns everything created here
-    private HttpClient outsider = null!;   // Editor, unrelated user
-    private HttpClient groupMate = null!;   // Editor, plain member of the caving group
+    private HttpClient outsider = null!;   // Viewer (regular user), unrelated — Editors read everything now
+    private HttpClient groupMate = null!;   // Viewer, plain member of the caving group (rights via the member ruleset)
     private HttpClient viewer = null!;     // Viewer role
     private string suffix = null!;
     private Guid ownerId;
@@ -48,19 +48,39 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
     {
         suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"owner-{suffix}@t.local");
-        outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"out-{suffix}@t.local");
-        groupMateId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"mate-{suffix}@t.local");
+        // Regular users on purpose: Editors hold domain-wide content rights now, so the
+        // visibility-filtering and membership assertions need callers whose access comes
+        // only from visibility, membership or explicit grants.
+        outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"out-{suffix}@t.local");
+        groupMateId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"mate-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"view-{suffix}@t.local");
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Manager, $"mgr-{suffix}@t.local");
+
+        // The caving group is created through the API so its seeded member ruleset
+        // exists — membership rights flow from that ruleset now, not from the role.
+        using (var manager = await AuthHelper.BearerClientAsync(factory, $"mgr-{suffix}@t.local"))
+        {
+            var created = await manager.PostAsJsonAsync("/api/v1/caving-groups/", new
+            {
+                name = $"CavingGroup {suffix}",
+                description = (string?)null,
+                website = (string?)null,
+            });
+            created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+            cavingGroupId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+            foreach (var memberId in new[] { ownerId, groupMateId })
+            {
+                (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members", new
+                {
+                    caverId = await RosterHelper.CaverIdForAsync(factory, memberId),
+                    role = "member",
+                })).StatusCode.ShouldBe(HttpStatusCode.OK);
+            }
+        }
 
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-            var cavingGroup = new CavingGroup { Name = $"CavingGroup {suffix}", Slug = $"caving-group-{suffix}" };
-            db.CavingGroups.Add(cavingGroup);
-            await db.SaveChangesAsync();
-            await RosterHelper.AddMemberAsync(db, cavingGroup.Id, ownerId, CavingGroupRole.Owner);
-            await RosterHelper.AddMemberAsync(db, cavingGroup.Id, groupMateId);
-            cavingGroupId = cavingGroup.Id;
             caveTypeId = await db.CaveTypes.Where(t => t.Code == "cave").Select(t => t.Id).SingleAsync();
             entranceTypeId = await db.EntranceTypes.Where(t => t.Code == "natural").Select(t => t.Id).SingleAsync();
             karstAreaTypeId = await db.FeatureTypes.Where(t => t.Code == "karst_area").Select(t => t.Id).SingleAsync();
@@ -86,7 +106,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
         // ---- create: viewer forbidden, validation enforced, editor allowed
         var viewerCreate = await viewer.PostAsJsonAsync("/api/v1/caves", CaveBody("Viewer Cave"));
         viewerCreate.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await CodeAsync(viewerCreate)).ShouldBe("cave.create_requires_editor");
+        (await CodeAsync(viewerCreate)).ShouldBe(CreateRules.ForbiddenCode);
 
         var noName = await owner.PostAsJsonAsync("/api/v1/caves", CaveBody(string.Empty));
         noName.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -139,7 +159,9 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await outsider.DeleteAsync($"/api/v1/caves/{authCave}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        // ---- a caving group member writes, but only caving group admins/owners delete
+        // ---- a caving group member writes through the seeded member ruleset, but the
+        // ruleset carries no Delete: removing the row stays with its owner (group roles
+        // themselves grant nothing over content).
         var cavingGroupUpdate = await groupMate.PutWithIfMatchAsync(
             $"/api/v1/caves/{cavingGroupCave}", CaveBody(Named("CavingGroup Cave Updated"), "cavingGroup", cavingGroupId: cavingGroupId));
         cavingGroupUpdate.StatusCode.ShouldBe(HttpStatusCode.OK, await cavingGroupUpdate.Content.ReadAsStringAsync());
@@ -156,7 +178,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
         var foreignBinding = await owner.PostAsJsonAsync(
             "/api/v1/caves", CaveBody(Named("Foreign CavingGroup Cave"), "cavingGroup", cavingGroupId: foreignCavingGroup.Id));
         foreignBinding.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await CodeAsync(foreignBinding)).ShouldBe("cave.caving_group_membership_required");
+        (await CodeAsync(foreignBinding)).ShouldBe(CavingGroupBindingRules.ForbiddenCode);
     }
 
     [Fact]
@@ -178,8 +200,29 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
         (await GetJsonAsync(outsider, $"/api/v1/caves/{caveId}"))
             .GetProperty("parents").GetArrayLength().ShouldBe(0);
 
-        // A parent the caller cannot read is reported exactly like a missing one.
-        var badParent = await outsider.PostAsJsonAsync(
+        // A parent the caller cannot read is reported exactly like a missing one. The
+        // prober must hold Create yet not see the area — Editors read everything now,
+        // so an object-scope deny on the area is what takes it out of their sight.
+        var proberEmail = $"prober-{suffix}@t.local";
+        var proberId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, proberEmail);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.AccessEntries.Add(new AccessEntry
+            {
+                SubjectKind = AccessSubjectKind.User,
+                SubjectId = proberId,
+                Effect = AccessEffect.Deny,
+                Domain = AccessDomain.Features,
+                Actions = AccessAction.Read,
+                ScopeKind = AccessScopeKind.Object,
+                ScopeFeatureId = area,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using var prober = await AuthHelper.BearerClientAsync(factory, proberEmail);
+        var badParent = await prober.PostAsJsonAsync(
             "/api/v1/caves", CaveBody(Named("Sneaky Cave"), "private", parentId: area));
         badParent.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await CodeAsync(badParent)).ShouldBe("cave.parent_not_found");
@@ -323,7 +366,8 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
         clusterFeatures.Sum(f => f.GetProperty("properties").GetProperty("count").GetInt32())
             .ShouldBeGreaterThanOrEqualTo(1);
 
-        // ---- caving group members implicitly hold ViewExactLocation on their caving group's protected caves
+        // ---- caving group members hold ViewExactLocation on their group's bound content
+        // through the seeded member ruleset
         var cavingGroupProtected = await CreateCaveAsync(owner, CaveBody(
             Named("CavingGroup Protected Cave"), "cavingGroup", cavingGroupId: cavingGroupId, locationProtected: true,
             closestAddress: "Club hut, second turn"));
@@ -350,7 +394,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
         var entranceId = entrance.GetProperty("id").GetGuid();
 
         // Read+Write, deliberately WITHOUT ViewExactLocation.
-        await ReplaceAclAsync(owner, caveId, ObjectPermission.Read | ObjectPermission.Write);
+        await ReplaceAclAsync(owner, caveId, AccessAction.Read | AccessAction.Write);
 
         // The grantee only ever sees the obfuscated projection…
         var seenByGrantee = await GetJsonAsync(outsider, $"/api/v1/caves/{caveId}");
@@ -492,16 +536,16 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var user = await RosterHelper.ContextOfAsync(db, userId);
+        var ctx = await RosterHelper.AccessContextOfAsync(db, userId);
 
         var efIds = await db.Features
             .Where(f => f.Kind == FeatureKind.Cave)
-            .VisibleTo(user, db.ObjectAcls)
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Select(f => f.Id)
             .OrderBy(id => id)
             .ToListAsync();
 
-        var (fragment, parameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
+        var (fragment, parameters) = AccessSql.FeatureVisibleToFragment(ctx, "f");
         var sql = $"SELECT f.id FROM features f WHERE f.kind = {(short)FeatureKind.Cave} "
             + $"AND f.deleted_at IS NULL AND {fragment}";
         var sqlIds = (await db.Database.GetDbConnection().QueryAsync<Guid>(sql, parameters))
@@ -590,7 +634,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>Replaces the outsider's grants on a feature (any kind shares the "feature" target name).</summary>
-    private async Task ReplaceAclAsync(HttpClient client, Guid featureId, ObjectPermission permissions)
+    private async Task ReplaceAclAsync(HttpClient client, Guid featureId, AccessAction permissions)
     {
         var response = await client.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/acl", new
         {

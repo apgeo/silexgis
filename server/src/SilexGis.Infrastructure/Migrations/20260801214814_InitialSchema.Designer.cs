@@ -15,7 +15,7 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    [Migration("20260801173504_InitialSchema")]
+    [Migration("20260801214814_InitialSchema")]
     partial class InitialSchema
     {
         /// <inheritdoc />
@@ -424,6 +424,99 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_open_iddict_tokens_application_id_status_subject_type");
 
                     b.ToTable("OpenIddictTokens", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.AccessEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Actions")
+                        .HasColumnType("integer")
+                        .HasColumnName("actions");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<short>("Domain")
+                        .HasColumnType("smallint")
+                        .HasColumnName("domain");
+
+                    b.Property<short>("Effect")
+                        .HasColumnType("smallint")
+                        .HasColumnName("effect");
+
+                    b.Property<short?>("FeatureKind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("feature_kind");
+
+                    b.Property<long?>("FeatureTypeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("feature_type_id");
+
+                    b.Property<Guid?>("GrantedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("granted_by");
+
+                    b.Property<Guid?>("PermissionGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("permission_group_id");
+
+                    b.Property<Guid?>("ScopeFeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("scope_feature_id");
+
+                    b.Property<Guid?>("ScopeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("scope_id");
+
+                    b.Property<short>("ScopeKind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("scope_kind");
+
+                    b.Property<Guid?>("SubjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("subject_id");
+
+                    b.Property<short?>("SubjectKind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("subject_kind");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_access_entries");
+
+                    b.HasIndex("FeatureTypeId")
+                        .HasDatabaseName("ix_access_entries_feature_type_id");
+
+                    b.HasIndex("GrantedBy")
+                        .HasDatabaseName("ix_access_entries_granted_by");
+
+                    b.HasIndex("PermissionGroupId")
+                        .HasDatabaseName("ix_access_entries_permission_group_id");
+
+                    b.HasIndex("ScopeFeatureId")
+                        .HasDatabaseName("ix_access_entries_scope_feature_id");
+
+                    b.HasIndex("SubjectKind", "SubjectId")
+                        .HasDatabaseName("ix_access_entries_subject_kind_subject_id");
+
+                    b.ToTable("access_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_access_entries_narrowing", "(feature_kind IS NULL AND feature_type_id IS NULL) OR (domain = 0 AND scope_kind IN (0, 1) AND (feature_kind IS NULL OR feature_type_id IS NULL))");
+
+                            t.HasCheckConstraint("ck_access_entries_one_home", "(permission_group_id IS NOT NULL AND subject_kind IS NULL AND subject_id IS NULL) OR (permission_group_id IS NULL AND subject_kind IS NOT NULL AND subject_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_access_entries_scope_anchor", "(scope_kind IN (0, 1) AND scope_feature_id IS NULL AND scope_id IS NULL) OR (scope_kind IN (2, 4) AND scope_feature_id IS NULL AND scope_id IS NOT NULL) OR (scope_kind = 3 AND scope_feature_id IS NOT NULL AND scope_id IS NULL) OR (scope_kind = 5 AND ((domain = 0 AND scope_feature_id IS NOT NULL AND scope_id IS NULL) OR (domain <> 0 AND scope_feature_id IS NULL AND scope_id IS NOT NULL)))");
+                        });
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.AccountDataExport", b =>
@@ -1479,6 +1572,70 @@ namespace SilexGis.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.FeatureSet", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("slug");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_feature_sets");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_feature_sets_name");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_feature_sets_slug");
+
+                    b.ToTable("feature_sets", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.FeatureSetMember", b =>
+                {
+                    b.Property<Guid>("FeatureSetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("feature_set_id");
+
+                    b.Property<Guid>("FeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("feature_id");
+
+                    b.HasKey("FeatureSetId", "FeatureId")
+                        .HasName("pk_feature_set_members");
+
+                    b.HasIndex("FeatureId")
+                        .HasDatabaseName("ix_feature_set_members_feature_id");
+
+                    b.ToTable("feature_set_members", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.FeatureShare", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2254,7 +2411,60 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("notification_outbox", (string)null);
                 });
 
-            modelBuilder.Entity("SilexGis.Domain.Entities.ObjectAcl", b =>
+            modelBuilder.Entity("SilexGis.Domain.Entities.PermissionGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsProtected")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_protected");
+
+                    b.Property<bool>("IsSeeded")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_seeded");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("slug");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_permission_groups");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_permission_groups_name");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_permission_groups_slug");
+
+                    b.ToTable("permission_groups", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.PermissionGroupMember", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -2267,61 +2477,33 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<Guid?>("EntityId")
+                    b.Property<Guid>("MemberId")
                         .HasColumnType("uuid")
-                        .HasColumnName("entity_id");
+                        .HasColumnName("member_id");
 
-                    b.Property<short?>("EntityType")
+                    b.Property<short>("MemberKind")
                         .HasColumnType("smallint")
-                        .HasColumnName("entity_type");
+                        .HasColumnName("member_kind");
 
-                    b.Property<Guid?>("FeatureId")
+                    b.Property<Guid>("PermissionGroupId")
                         .HasColumnType("uuid")
-                        .HasColumnName("feature_id");
-
-                    b.Property<Guid?>("GrantedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("granted_by");
-
-                    b.Property<int>("Permissions")
-                        .HasColumnType("integer")
-                        .HasColumnName("permissions");
-
-                    b.Property<Guid>("SubjectId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("subject_id");
-
-                    b.Property<short>("SubjectKind")
-                        .HasColumnType("smallint")
-                        .HasColumnName("subject_kind");
+                        .HasColumnName("permission_group_id");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id")
-                        .HasName("pk_object_acl");
+                        .HasName("pk_permission_group_members");
 
-                    b.HasIndex("GrantedBy")
-                        .HasDatabaseName("ix_object_acl_granted_by");
+                    b.HasIndex("MemberKind", "MemberId")
+                        .HasDatabaseName("ix_permission_group_members_member_kind_member_id");
 
-                    b.HasIndex("SubjectKind", "SubjectId")
-                        .HasDatabaseName("ix_object_acl_subject_kind_subject_id");
-
-                    b.HasIndex("FeatureId", "SubjectKind", "SubjectId")
+                    b.HasIndex("PermissionGroupId", "MemberKind", "MemberId")
                         .IsUnique()
-                        .HasDatabaseName("ix_object_acl_feature_id_subject_kind_subject_id")
-                        .HasFilter("feature_id IS NOT NULL");
+                        .HasDatabaseName("ix_permission_group_members_permission_group_id_member_kind_me");
 
-                    b.HasIndex("EntityType", "EntityId", "SubjectKind", "SubjectId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_object_acl_entity_type_entity_id_subject_kind_subject_id")
-                        .HasFilter("entity_type IS NOT NULL");
-
-                    b.ToTable("object_acl", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_object_acl_one_target", "(feature_id IS NOT NULL AND entity_type IS NULL AND entity_id IS NULL) OR (feature_id IS NULL AND entity_type IS NOT NULL AND entity_id IS NOT NULL)");
-                        });
+                    b.ToTable("permission_group_members", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.ProcessingJob", b =>
@@ -3281,6 +3463,33 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Navigation("Authorization");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.AccessEntry", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.FeatureType", null)
+                        .WithMany()
+                        .HasForeignKey("FeatureTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_access_entries_feature_types_feature_type_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("GrantedBy")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_access_entries_users_granted_by");
+
+                    b.HasOne("SilexGis.Domain.Entities.PermissionGroup", null)
+                        .WithMany()
+                        .HasForeignKey("PermissionGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_access_entries_permission_groups_permission_group_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeFeatureId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_access_entries_features_scope_feature_id");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.AccountDataExport", b =>
                 {
                     b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
@@ -3498,6 +3707,23 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_feature_links_features_to_id");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.FeatureSetMember", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
+                        .WithMany()
+                        .HasForeignKey("FeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_feature_set_members_features_feature_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.FeatureSet", null)
+                        .WithMany()
+                        .HasForeignKey("FeatureSetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_feature_set_members_feature_sets_feature_set_id");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.FeatureShare", b =>
                 {
                     b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
@@ -3626,19 +3852,14 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_notification_outbox_users_user_id");
                 });
 
-            modelBuilder.Entity("SilexGis.Domain.Entities.ObjectAcl", b =>
+            modelBuilder.Entity("SilexGis.Domain.Entities.PermissionGroupMember", b =>
                 {
-                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
+                    b.HasOne("SilexGis.Domain.Entities.PermissionGroup", null)
                         .WithMany()
-                        .HasForeignKey("FeatureId")
+                        .HasForeignKey("PermissionGroupId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .HasConstraintName("fk_object_acl_features_feature_id");
-
-                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
-                        .WithMany()
-                        .HasForeignKey("GrantedBy")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_object_acl_users_granted_by");
+                        .IsRequired()
+                        .HasConstraintName("fk_permission_group_members_permission_groups_permission_group");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.StoredFile", b =>

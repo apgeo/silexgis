@@ -5,9 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
@@ -48,7 +48,7 @@ public sealed class CenterlineUpdateRequestValidator : AbstractValidator<Centerl
 /// <summary>
 /// Cave centerlines: the surveyed line work of a cave, uploaded as GeoJSON/GPX/KML
 /// (extraction from survey models is a future processing job). A centerline is a feature —
-/// a child of its cave, carrying the cave's access columns — so it is readable exactly when
+/// a child of its cave, whose visibility cascades down to it — so it is readable exactly when
 /// its cave is. Because a centerline traces the cave's exact position, it is location data:
 /// under location protection every read path withholds it entirely (extended geometry cannot
 /// be snapped to a grid the way a point can) from callers without the exact-location
@@ -86,28 +86,28 @@ public static class CenterlineEndpoints
     private static async Task<Results<Ok<List<CenterlineDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         Guid caveId,
         SilexGisDbContext db,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
         var cave = await db.Features.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == caveId && f.Kind == FeatureKind.Cave, ct);
-        if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
+        if (cave is null || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed)
         {
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        // Centerlines carry their cave's access columns, so the row-local filter is the whole
-        // read rule — no join back to the cave.
+        // The cave's visibility cascades to its centerlines at read time, so the row-local
+        // filter is the whole read rule — no join back to the cave.
         var rows = await db.Features.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls)
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => f.Kind == FeatureKind.Centerline && f.Centerline!.CaveFeatureId == caveId)
             .Include(f => f.Centerline)
             .OrderBy(f => f.CreatedAt)
@@ -115,7 +115,7 @@ public static class CenterlineEndpoints
 
         // The cave stays readable, but its centerlines trace its exact position: whoever may
         // not see that sees no centerlines at all, and is told nothing about how many exist.
-        var exact = await protection.ExactViewIdsAsync(user, [.. rows.Select(f => f.Id)], ct);
+        var exact = await protection.ExactViewIdsAsync(ctx, [.. rows.Select(f => f.Id)], ct);
         return TypedResults.Ok(rows
             .Where(f => exact.Contains(f.Id))
             .Select(f => ToDto(f, f.Centerline!))
@@ -128,24 +128,24 @@ public static class CenterlineEndpoints
         SilexGisDbContext db,
         IVectorIO vectorIO,
         FeatureWriteService writes,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
         var caveFeature = await db.Features.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == caveId && f.Kind == FeatureKind.Cave, ct);
-        if (caveFeature is null || !await permissions.CanAsync(user, caveFeature, ObjectPermission.Read, ct))
+        if (caveFeature is null || !(await access.DecideAsync(ctx, AccessAction.Read, caveFeature, ct)).Allowed)
         {
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        if (!await permissions.CanAsync(user, caveFeature, ObjectPermission.Write, ct))
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, caveFeature, ct)).Allowed)
         {
             return ApiProblems.Forbidden();
         }
@@ -209,8 +209,8 @@ public static class CenterlineEndpoints
         var name = Path.GetFileNameWithoutExtension(file.FileName);
         var feature = new Feature
         {
-            // Owner/caving group/visibility are copied from the cave by the write service: a centerline
-            // has no access control of its own.
+            // Owner and caving-group binding default from the cave in the write service, and
+            // read visibility cascades from the cave: a centerline has no access control of its own.
             Name = name.Length > MaxNameLength ? name[..MaxNameLength] : name,
             Geom = geom,
         };
@@ -241,24 +241,24 @@ public static class CenterlineEndpoints
         CenterlineUpdateRequest request,
         SilexGisDbContext db,
         FeatureWriteService writes,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        var found = await ResolveAsync(db, permissions, protection, user, id, ct);
+        var found = await ResolveAsync(db, access, protection, ctx, id, ct);
         if (found is null)
         {
             return ApiProblems.NotFound("centerline.not_found");
         }
 
-        if (!await permissions.CanAsync(user, found.CaveFeature, ObjectPermission.Write, ct))
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, found.CaveFeature, ct)).Allowed)
         {
             return ApiProblems.Forbidden();
         }
@@ -296,24 +296,24 @@ public static class CenterlineEndpoints
         Guid id,
         SilexGisDbContext db,
         FeatureWriteService writes,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        var found = await ResolveAsync(db, permissions, protection, user, id, ct);
+        var found = await ResolveAsync(db, access, protection, ctx, id, ct);
         if (found is null)
         {
             return ApiProblems.NotFound("centerline.not_found");
         }
 
-        if (!await permissions.CanAsync(user, found.CaveFeature, ObjectPermission.Write, ct))
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, found.CaveFeature, ct)).Allowed)
         {
             return ApiProblems.Forbidden();
         }
@@ -350,9 +350,9 @@ public static class CenterlineEndpoints
     /// </summary>
     private static async Task<CenterlineContext?> ResolveAsync(
         SilexGisDbContext db,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
-        UserContext user,
+        AccessContext ctx,
         Guid id,
         CancellationToken ct)
     {
@@ -360,12 +360,12 @@ public static class CenterlineEndpoints
             .Include(c => c.Feature)
             .FirstOrDefaultAsync(c => c.Id == id, ct);
         if (centerline is null
-            || !await permissions.CanAsync(user, centerline.Feature, ObjectPermission.Read, ct))
+            || !(await access.DecideAsync(ctx, AccessAction.Read, centerline.Feature, ct)).Allowed)
         {
             return null;
         }
 
-        var exact = await protection.ExactViewIdsAsync(user, [id], ct);
+        var exact = await protection.ExactViewIdsAsync(ctx, [id], ct);
         if (!exact.Contains(id))
         {
             return null;

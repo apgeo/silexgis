@@ -10,6 +10,7 @@ using OSGeo.OSR;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Persistence;
 
@@ -158,7 +159,7 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
         // An explicit ViewExactLocation grant on the cave is exactly what the omission
         // waits for: with it, the raster becomes readable and listable again.
         await ReplaceFeatureAclAsync(
-            owner, caveFeatureId, [(outsiderId, ObjectPermission.Read | ObjectPermission.ViewExactLocation)]);
+            owner, caveFeatureId, [(outsiderId, AccessAction.Read | AccessAction.ViewExactLocation)]);
 
         (await outsider.GetAsync($"/api/v1/georeferenced-maps/{id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await MapIdsOfCaveAsync(outsider, caveFeatureId)).ShouldContain(id);
@@ -277,7 +278,7 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
 
     /// <summary>Replaces the grants on a feature (the one ACL route name of the feature world).</summary>
     private static async Task ReplaceFeatureAclAsync(
-        HttpClient client, Guid featureId, (Guid SubjectId, ObjectPermission Permissions)[] entries)
+        HttpClient client, Guid featureId, (Guid SubjectId, AccessAction Permissions)[] entries)
     {
         var response = await client.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/acl", new
         {

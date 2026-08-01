@@ -79,8 +79,9 @@ public sealed class FeatureWriteService(
     /// <summary>
     /// Creates an entrance under its cave. The structural cave FK and the primary
     /// containment edge are the same fact — this is the only place both are written.
-    /// The entrance's access columns are a copy of the cave's (delegated trio, see
-    /// <see cref="SyncDelegatedAccessAsync"/>).
+    /// Owner and caving-group binding default from the cave (a creation-time default,
+    /// editable afterwards — never re-synced); visibility starts Private because
+    /// read-time inheritance over the ancestor chain is what shows the child.
     /// </summary>
     public async Task<Feature> CreateEntranceAsync(
         Feature feature, CaveEntrance entrance, CancellationToken ct = default)
@@ -93,7 +94,7 @@ public sealed class FeatureWriteService(
         }
 
         entrance.Id = feature.Id;
-        await CopyCaveAccessAsync(feature, entrance.CaveFeatureId, ct);
+        await InheritCaveBindingAsync(feature, entrance.CaveFeatureId, ct);
         db.Features.Add(feature);
         db.CaveEntrances.Add(entrance);
         db.Entry(entrance).Property("Kind").CurrentValue = FeatureKind.CaveEntrance;
@@ -123,7 +124,7 @@ public sealed class FeatureWriteService(
             await ClearDefaultCenterlineAsync(centerline.CaveFeatureId, exceptId: feature.Id, ct);
         }
 
-        await CopyCaveAccessAsync(feature, centerline.CaveFeatureId, ct);
+        await InheritCaveBindingAsync(feature, centerline.CaveFeatureId, ct);
         db.Features.Add(feature);
         db.Centerlines.Add(centerline);
         db.Entry(centerline).Property("Kind").CurrentValue = FeatureKind.Centerline;
@@ -181,41 +182,6 @@ public sealed class FeatureWriteService(
         var centerline = await db.Centerlines.FirstAsync(c => c.Id == centerlineFeatureId, ct);
         await ClearDefaultCenterlineAsync(centerline.CaveFeatureId, exceptId: centerlineFeatureId, ct);
         centerline.IsDefault = true;
-    }
-
-    /// <summary>
-    /// Re-copies the cave's access columns (owner/caving group/visibility) onto its delegated
-    /// children (entrances, centerlines). Call whenever a cave's trio changes.
-    /// Delegated children have no independent access control — today's semantics are
-    /// "an entrance is visible exactly when its cave is", and until the planned ruleset
-    /// permission system brings read-time cascade over the ancestor arrays, that rule
-    /// is materialized as this verifier-checked copy so the hot map path needs no join.
-    /// </summary>
-    public async Task SyncDelegatedAccessAsync(Guid caveFeatureId, CancellationToken ct = default)
-    {
-        var cave = await FeatureByIdAsync(caveFeatureId, ct)
-            ?? throw new FeatureWriteException("cave.not_found", [$"cave feature {caveFeatureId} does not exist"]);
-
-        var childIds = new List<Guid>();
-        childIds.AddRange(await db.CaveEntrances.IgnoreQueryFilters()
-            .Where(e => e.CaveFeatureId == caveFeatureId).Select(e => e.Id).ToListAsync(ct));
-        childIds.AddRange(await db.Centerlines.IgnoreQueryFilters()
-            .Where(c => c.CaveFeatureId == caveFeatureId).Select(c => c.Id).ToListAsync(ct));
-        childIds.AddRange(db.CaveEntrances.Local.Where(e => e.CaveFeatureId == caveFeatureId).Select(e => e.Id));
-        childIds.AddRange(db.Centerlines.Local.Where(c => c.CaveFeatureId == caveFeatureId).Select(c => c.Id));
-
-        foreach (var id in childIds.Distinct().Where(id => id != caveFeatureId))
-        {
-            var child = await FeatureByIdAsync(id, ct);
-            if (child is null)
-            {
-                continue;
-            }
-
-            child.OwnerUserId = cave.OwnerUserId;
-            child.CavingGroupId = cave.CavingGroupId;
-            child.Visibility = cave.Visibility;
-        }
     }
 
     /// <summary>
@@ -486,16 +452,19 @@ public sealed class FeatureWriteService(
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.IsDefault, false), ct);
     }
 
-    // Delegated children carry their cave's access columns; whatever the caller set on
-    // the new feature is overwritten — an entrance cannot be more (or less) visible
-    // than its cave.
-    private async Task CopyCaveAccessAsync(Feature child, Guid caveFeatureId, CancellationToken ct)
+    // A new entrance/centerline defaults its owner and caving-group binding from the
+    // cave so nobody's reach shrinks (group-scoped rules match the binding, and the
+    // cave's owner keeps the ownership arm on delegated children). This is a
+    // creation-time default only — the columns are the child's own afterwards, and
+    // visibility starts Private because the read-time cascade over the ancestor chain
+    // is what makes a child visible exactly when its cave is.
+    private async Task InheritCaveBindingAsync(Feature child, Guid caveFeatureId, CancellationToken ct)
     {
         var cave = await FeatureByIdAsync(caveFeatureId, ct)
             ?? throw new FeatureWriteException("cave.not_found", [$"cave feature {caveFeatureId} does not exist"]);
         child.OwnerUserId = cave.OwnerUserId;
         child.CavingGroupId = cave.CavingGroupId;
-        child.Visibility = cave.Visibility;
+        child.Visibility = Visibility.Private;
     }
 
     private async Task<FeatureType> RequireFeatureTypeAsync(Feature feature, CancellationToken ct)

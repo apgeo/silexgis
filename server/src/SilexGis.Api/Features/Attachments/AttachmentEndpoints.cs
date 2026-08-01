@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Api.Features.Files;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Attachments;
@@ -88,11 +88,12 @@ public static class AttachmentEndpoints
         Guid entityId,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -102,7 +103,7 @@ public static class AttachmentEndpoints
             return ApiProblems.BadRequest("attachment.entity_type_unknown", $"Unknown entity type '{entityType}'.");
         }
 
-        if (!await FileAccessRules.CanReadTargetAsync(db, user, new AttachmentTarget(parsedType, entityId), ct))
+        if (!await FileAccessRules.CanReadTargetAsync(db, access, ctx, new AttachmentTarget(parsedType, entityId), ct))
         {
             // The target is invisible to the caller — so are its attachments.
             return ApiProblems.NotFound("attachment.entity_not_found");
@@ -124,11 +125,12 @@ public static class AttachmentEndpoints
         AttachmentCreateRequest request,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -139,15 +141,15 @@ public static class AttachmentEndpoints
         }
 
         var target = new AttachmentTarget(parsedType, request.EntityId);
-        if (!await FileAccessRules.CanWriteTargetAsync(db, user, target, ct))
+        if (!await FileAccessRules.CanWriteTargetAsync(db, access, ctx, target, ct))
         {
-            return await FileAccessRules.CanReadTargetAsync(db, user, target, ct)
+            return await FileAccessRules.CanReadTargetAsync(db, access, ctx, target, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("attachment.entity_not_found");
         }
 
         var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == request.FileId, ct);
-        if (file is null || !await FileAccessRules.CanAccessAsync(db, user, file, ct))
+        if (file is null || !await FileAccessRules.CanAccessAsync(db, access, ctx, file, ct))
         {
             return ApiProblems.BadRequest("attachment.file_not_found", "The file does not exist.");
         }
@@ -161,7 +163,7 @@ public static class AttachmentEndpoints
             Role = request.Role,
             Caption = request.Caption,
             SortOrder = request.SortOrder,
-            AddedBy = user.UserId,
+            AddedBy = ctx.UserId,
         };
         db.Attachments.Add(attachment);
         await db.SaveChangesAsync(ct);
@@ -174,11 +176,12 @@ public static class AttachmentEndpoints
         AttachmentUpdateRequest request,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -189,9 +192,9 @@ public static class AttachmentEndpoints
             return ApiProblems.NotFound("attachment.not_found");
         }
 
-        if (!await FileAccessRules.CanWriteTargetAsync(db, user, TargetOf(attachment), ct))
+        if (!await FileAccessRules.CanWriteTargetAsync(db, access, ctx, TargetOf(attachment), ct))
         {
-            return await FileAccessRules.CanReadTargetAsync(db, user, TargetOf(attachment), ct)
+            return await FileAccessRules.CanReadTargetAsync(db, access, ctx, TargetOf(attachment), ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("attachment.not_found");
         }
@@ -208,11 +211,12 @@ public static class AttachmentEndpoints
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
         Guid id,
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -223,9 +227,9 @@ public static class AttachmentEndpoints
             return ApiProblems.NotFound("attachment.not_found");
         }
 
-        if (!await FileAccessRules.CanWriteTargetAsync(db, user, TargetOf(attachment), ct))
+        if (!await FileAccessRules.CanWriteTargetAsync(db, access, ctx, TargetOf(attachment), ct))
         {
-            return await FileAccessRules.CanReadTargetAsync(db, user, TargetOf(attachment), ct)
+            return await FileAccessRules.CanReadTargetAsync(db, access, ctx, TargetOf(attachment), ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("attachment.not_found");
         }

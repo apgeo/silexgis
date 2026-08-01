@@ -207,6 +207,12 @@ public static class AuthEndpoints
 
         await userManager.AddToRoleAsync(user, options.Value.DefaultRole);
 
+        // The role by itself grants nothing now — capabilities live in permission groups.
+        // Joining the groups the configured default maps onto keeps that setting meaning
+        // what it says; the default (Viewer) maps onto none, so a new account starts with
+        // the implicit All Users membership and the built-ins.
+        await PermissionGroupSeeder.EnsureRoleMembershipsAsync(db, user.Id, options.Value.DefaultRole, ct);
+
         CaverDirectory.CreateForNewAccount(db, user.Id, user.DisplayName, user.UserName, user.Email);
         await db.SaveChangesAsync(ct);
 

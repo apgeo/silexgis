@@ -3,8 +3,8 @@ using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Tags;
@@ -55,12 +55,12 @@ public static class TagEndpoints
 
     private static async Task<Results<Ok<List<TagDto>>, UnauthorizedHttpResult>> ListTagsAsync(
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         string? search,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -82,11 +82,12 @@ public static class TagEndpoints
         string entityType,
         Guid entityId,
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -96,7 +97,7 @@ public static class TagEndpoints
             return ApiProblems.BadRequest("tagging.entity_type_unknown", $"Unknown entity type '{entityType}'.");
         }
 
-        if (!await FileAccessRules.CanReadTargetAsync(db, user, new AttachmentTarget(parsedType, entityId), ct))
+        if (!await FileAccessRules.CanReadTargetAsync(db, access, ctx, new AttachmentTarget(parsedType, entityId), ct))
         {
             return ApiProblems.NotFound("tagging.entity_not_found");
         }
@@ -114,11 +115,12 @@ public static class TagEndpoints
     private static async Task<Results<Created<TaggingDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
         TaggingCreateRequest request,
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -129,9 +131,9 @@ public static class TagEndpoints
         }
 
         var target = new AttachmentTarget(parsedType, request.EntityId);
-        if (!await FileAccessRules.CanWriteTargetAsync(db, user, target, ct))
+        if (!await FileAccessRules.CanWriteTargetAsync(db, access, ctx, target, ct))
         {
-            return await FileAccessRules.CanReadTargetAsync(db, user, target, ct)
+            return await FileAccessRules.CanReadTargetAsync(db, access, ctx, target, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("tagging.entity_not_found");
         }
@@ -167,7 +169,7 @@ public static class TagEndpoints
             FeatureId = parsedType is null ? request.EntityId : null,
             EntityType = parsedType,
             EntityId = parsedType is null ? null : request.EntityId,
-            AddedBy = user.UserId,
+            AddedBy = ctx.UserId,
         };
         db.Taggings.Add(tagging);
         await db.SaveChangesAsync(ct);
@@ -180,11 +182,12 @@ public static class TagEndpoints
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
         long id,
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -195,7 +198,7 @@ public static class TagEndpoints
             return ApiProblems.NotFound("tagging.not_found");
         }
 
-        if (!await FileAccessRules.CanWriteTargetAsync(db, user, TargetOf(tagging), ct))
+        if (!await FileAccessRules.CanWriteTargetAsync(db, access, ctx, TargetOf(tagging), ct))
         {
             return ApiProblems.NotFound("tagging.not_found");
         }

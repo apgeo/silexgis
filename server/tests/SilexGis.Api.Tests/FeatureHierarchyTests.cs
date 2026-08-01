@@ -7,6 +7,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
 
@@ -24,6 +26,7 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable
 
     private HttpClient owner = null!;    // Editor
     private HttpClient outsider = null!; // Editor, unrelated
+    private Guid ownerId;
     private Guid outsiderId;
     private long karstAreaTypeId;
     private long sinkholeTypeId;
@@ -36,7 +39,7 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable
     public async Task InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"fhown-{suffix}@t.local");
+        ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"fhown-{suffix}@t.local");
         outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"fhout-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
@@ -129,10 +132,18 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable
             geometry = Point(25.53, 45.63),
             visibility = "private",
         });
+        // Editors hold domain-wide content reads, so the row is only genuinely out of
+        // this caller's sight once a scoped deny says so — otherwise the "unreadable
+        // parent" case would silently degrade into the "readable parent" one.
+        await DenyReadAsync(ownerId, outsiderPrivate);
+        (await owner.GetAsync($"/api/v1/features/{outsiderPrivate}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         await PutParentsExpectingAsync(owner, child, "feature.parent_not_found",
             new { parentId = outsiderPrivate, isPrimary = true });
 
-        // Children listing is visibility-filtered per caller.
+        // Children listing is access-filtered per caller. Read admission cascades over
+        // containment, so a private row under a readable area is readable through the
+        // area — a child that must be more restricted than its parent says so with a
+        // scoped deny, and the listing has to honor it.
         var privateChild = await CreateFeatureAsync(owner, new
         {
             kind = "generic",
@@ -142,6 +153,7 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable
             visibility = "private",
             parents = new[] { new { parentId = areaA, isPrimary = true } },
         });
+        await DenyReadAsync(outsiderId, privateChild);
 
         var ownerChildren = (await owner.GetFromJsonAsync<JsonObject>($"/api/v1/features/{areaA}/children"))!
             ["items"]!.AsArray().Select(c => c!["id"]!.GetValue<Guid>()).ToList();
@@ -312,6 +324,24 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable
         var response = await client.PutAsJsonAsync($"/api/v1/features/{featureId}/parents", new { parents });
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await response.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>().ShouldBe(code);
+    }
+
+    /// <summary>Takes one feature out of one user's sight, whatever their role grants.</summary>
+    private async Task DenyReadAsync(Guid subjectId, Guid featureId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = subjectId,
+            Effect = AccessEffect.Deny,
+            Domain = AccessDomain.Features,
+            Actions = AccessAction.Read,
+            ScopeKind = AccessScopeKind.Object,
+            ScopeFeatureId = featureId,
+        });
+        await db.SaveChangesAsync();
     }
 
     private static async Task GrantAsync(HttpClient granter, Guid featureId, Guid subjectId, string permissions)

@@ -9,7 +9,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Access;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using Xunit.Abstractions;
@@ -115,19 +115,21 @@ public sealed class PerformanceTests : IDisposable
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var connection = db.Database.GetDbConnection();
 
-        // Not the owner and in no caving group: the visibility fragment is carried by the rows'
-        // Authenticated visibility, and the exact-view fragment's protection-root lookup is
-        // evaluated for real on every row the bbox returns — the work these pins are about.
-        var user = new UserContext(strangerId, new HashSet<string>(), new Dictionary<Guid, CavingGroupRole>());
+        // Not the owner, in no caving group, holding no entries: visibility is carried
+        // entirely by the read-time inheritance arm (the entrance rows are PRIVATE and
+        // admit only through their cave), and the exact-view fragment's protection-root
+        // lookup runs for real on every row the bbox returns — the work these pins are about.
+        var ctx = new AccessContext(strangerId, false, [], []);
 
         // The caving group-id set must reach PostgreSQL as a single uuid[] placeholder. Dapper's
         // default handling of an array expands it into one placeholder per element, which
         // turns the ANY test into a per-row construct (measured 50x slower at this size).
-        var (visibilitySql, visibilityParameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
-        visibilitySql.ShouldContain("= ANY(@vis_caving_group_ids)", Case.Sensitive,
+        // Built as a pair, over one parameter set: this is the shape the entrance layer
+        // itself uses, and the only one that can be spliced into a single statement.
+        var (visibilitySql, exactSql, visibilityParameters) = AccessSql.FeatureLayerFragments(ctx, "f");
+        visibilitySql.ShouldContain("= ANY(@acc_caving_group_ids)", Case.Sensitive,
             "the visibility fragment must pass caving group ids as ONE uuid[] parameter");
 
-        var exactSql = PermissionSql.ExactViewFragment("f");
         AddViewport(visibilityParameters);
 
         // Baseline: the bbox filter alone. Whatever plan this gets is the plan the guarded
@@ -158,7 +160,7 @@ public sealed class PerformanceTests : IDisposable
 
         // The point layer above the cluster zoom asks the same question through
         // ST_Intersects (the operator the EF query produces); it must reach the same index.
-        var (pointsVisibilitySql, pointsVisibilityParameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
+        var (pointsVisibilitySql, pointsVisibilityParameters) = AccessSql.FeatureVisibleToFragment(ctx, "f");
         AddViewport(pointsVisibilityParameters);
         var points = await ExplainAsync(connection, pointsVisibilityParameters, "points (guarded)", $"""
             SELECT count(*)
@@ -180,7 +182,7 @@ public sealed class PerformanceTests : IDisposable
         sampleIds.Length.ShouldBe(50);
 
         var idParameters = new DynamicParameters();
-        idParameters.Add("ids", PermissionSql.UuidArray(sampleIds));
+        idParameters.Add("ids", AccessSql.UuidArray(sampleIds));
         var batch = await ExplainAsync(connection, idParameters, "id batch", """
             SELECT f.id, f.ancestor_ids
             FROM features f
@@ -189,6 +191,32 @@ public sealed class PerformanceTests : IDisposable
         batch.ShouldContain("pk_features", Case.Insensitive,
             "a batched id lookup must ride the primary key, not scan the feature table");
         batch.ShouldNotContain("Seq Scan on features", Case.Insensitive);
+
+        // An entry-holding caller gets the full level-walk CASE instead of the lean
+        // built-ins-only shape; its arms may cost rows, never access paths — the bbox
+        // must keep riding the entrance index with the whole chain in place.
+        var entryCtx = new AccessContext(strangerId, false, [Guid.NewGuid()],
+        [
+            new AccessEntrySnapshot(1, Guid.NewGuid(), null, null, AccessEffect.Deny,
+                AccessDomain.Features, AccessAction.Read, AccessScopeKind.Object, Guid.NewGuid(), null, null, null),
+            new AccessEntrySnapshot(2, Guid.NewGuid(), null, null, AccessEffect.Allow,
+                AccessDomain.Features, AccessAction.Read, AccessScopeKind.Subtree, Guid.NewGuid(), null, null, null),
+            new AccessEntrySnapshot(3, Guid.NewGuid(), null, null, AccessEffect.Allow,
+                AccessDomain.Features, AccessAction.Read, AccessScopeKind.FeatureSet, null, Guid.NewGuid(), null, null),
+            new AccessEntrySnapshot(4, Guid.NewGuid(), null, null, AccessEffect.Allow,
+                AccessDomain.Features, AccessAction.Read, AccessScopeKind.All, null, null, null, null),
+        ]);
+        var (walkSql, walkParameters) = AccessSql.FeatureVisibleToFragment(entryCtx, "f");
+        AddViewport(walkParameters);
+        var walk = await ExplainAsync(connection, walkParameters, "points (guarded, entry-holding)", $"""
+            SELECT count(*)
+            FROM features f
+            WHERE f.kind = 2
+              AND f.deleted_at IS NULL
+              AND ST_Intersects(f.geom, ST_MakeEnvelope(@west, @south, @east, @north, 4326))
+              AND {walkSql}
+            """);
+        AssertRidesEntranceIndex(walk, "points (guarded, entry-holding)");
     }
 
     private static void AssertRidesEntranceIndex(string plan, string label)
@@ -229,9 +257,10 @@ public sealed class PerformanceTests : IDisposable
     /// reproduce every invariant the service maintains, or the integrity verifier (which walks
     /// the whole shared database) would report this data as corrupt:
     /// primary containment edge per entrance, ancestor arrays and closure rows carrying self +
-    /// the cave, effective protection, the cave mirror (entrance count and the cave feature's
-    /// representative point = its main entrance), and the delegated access trio copied onto
-    /// every entrance.
+    /// the cave, effective protection, and the cave mirror (entrance count and the cave
+    /// feature's representative point = its main entrance). Entrance rows are seeded
+    /// PRIVATE under authenticated caves — the shape the read-time visibility cascade
+    /// produces in real data, and the worst case for the inheritance arm these pins guard.
     /// </summary>
     private async Task SeedSyntheticAsync(Guid ownerId)
     {
@@ -303,7 +332,7 @@ public sealed class PerformanceTests : IDisposable
                     false, false,
                     ARRAY[r.entrance_id, r.cave_id],
                     {ownerId},
-                    {(short)Visibility.Authenticated},
+                    {(short)Visibility.Private},
                     now(), now()
                 FROM entrance_rows r
                 RETURNING id
@@ -344,7 +373,8 @@ public sealed class PerformanceTests : IDisposable
         // planner picks pathological plans (measured 50x). Real databases are analyzed.
         await db.Database.ExecuteSqlRawAsync(
             "ANALYZE features; ANALYZE caves; ANALYZE cave_entrances; "
-            + "ANALYZE feature_hierarchy_edges; ANALYZE feature_ancestors; ANALYZE object_acl;");
+            + "ANALYZE feature_hierarchy_edges; ANALYZE feature_ancestors; "
+            + "ANALYZE access_entries; ANALYZE permission_group_members; ANALYZE feature_set_members;");
 
         output.WriteLine(
             $"seeded {CaveCount * EntrancesPerCave} entrance features under {CaveCount} caves "

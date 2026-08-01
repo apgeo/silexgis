@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using NetTopologySuite.Geometries;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Permissions;
 
 namespace SilexGis.Domain.Geo;
 
@@ -13,53 +13,49 @@ namespace SilexGis.Domain.Geo;
 /// can sit beneath two protected areas). Every path that emits protected coordinates
 /// (DTOs, map endpoints, exports) must go through this — never rely on the client to
 /// hide data.
+///
+/// Whether the caller "holds ViewExactLocation on a root" is answered by the access
+/// walk (<see cref="AccessEvaluator"/>) against that root — allow entries reaching the
+/// root at any level, minus denies per precedence. The veto direction is independent of
+/// that grant source: a VEL deny can only further restrict exact view, never widen it
+/// past the protected-roots rule.
 /// </summary>
 public static class LocationProtection
 {
     private const double MetersPerDegreeLat = 111_320d;
 
-    /// <summary>Exact-view check against ONE protection root (callers combine roots with <see cref="CanViewExactLocation(Permissions.UserContext?, System.Collections.Generic.IReadOnlyCollection{ProtectionRootGrant})"/>).</summary>
-    public static bool CanViewExactLocation(
-        UserContext? user, Feature protectionRoot, ObjectPermission aclGranted = ObjectPermission.None) =>
-        !protectionRoot.LocationProtected
-        || PermissionEvaluator.Can(user, protectionRoot, ObjectPermission.ViewExactLocation, aclGranted);
+    /// <summary>One root's veto: an unprotected root never vetoes; a protected one is
+    /// satisfied only by the caller's walk-granted ViewExactLocation on it.</summary>
+    public static bool RootSatisfied(ProtectionRootGrant root) =>
+        !root.Root.LocationProtected || root.ViewExactLocationGranted;
 
     /// <summary>
     /// The multi-root veto: exact view requires ViewExactLocation on every protected
     /// root in the row's ancestry. An empty set means the row is unprotected.
     /// </summary>
-    public static bool CanViewExactLocation(UserContext? user, IReadOnlyCollection<ProtectionRootGrant> roots) =>
-        roots.All(r => CanViewExactLocation(user, r.Root, r.AclGranted));
+    public static bool CanViewExactLocation(IReadOnlyCollection<ProtectionRootGrant> roots) =>
+        roots.All(RootSatisfied);
 
     /// <summary>
     /// The full row rule, mirrored bit-identically by the SQL exact-view fragment:
-    /// admin and the row's own owner always see their row exactly (a foreign protected
-    /// area above someone's own cave must not lock the owner out); everyone else needs
-    /// ViewExactLocation on EVERY protected root above the row (most-restrictive veto —
-    /// under the DAG a feature can sit beneath two protected areas).
+    /// full administrators and the row's own owner always see their row exactly (a
+    /// foreign protected area above someone's own cave must not lock the owner out);
+    /// everyone else needs ViewExactLocation on EVERY protected root above the row
+    /// (most-restrictive veto — under the DAG a feature can sit beneath two protected
+    /// areas).
     /// </summary>
     public static bool CanViewExactLocation(
-        UserContext? user, Feature row, IReadOnlyCollection<ProtectionRootGrant> protectedRoots)
+        AccessContext? ctx, Feature row, IReadOnlyCollection<ProtectionRootGrant> protectedRoots)
     {
-        if (user is null)
+        if (ctx is null)
         {
             return protectedRoots.Count == 0 && !row.LocationProtected;
         }
 
-        return user.IsAdmin
-            || row.OwnerUserId == user.UserId
-            || CanViewExactLocation(user, protectedRoots);
+        return ctx.IsFullAdmin
+            || row.OwnerUserId == ctx.UserId
+            || CanViewExactLocation(protectedRoots);
     }
-
-    /// <summary>
-    /// A locating link on a record with exact coordinates discloses the protected
-    /// target's location by proximity — "protected feature X is here". The link must be
-    /// hidden wherever the caller may not view the target's exact location, even when
-    /// the target record itself is visible to them.
-    /// </summary>
-    public static bool ShouldRedactLocatingLink(
-        UserContext? user, Feature linkedProtected, ObjectPermission aclGranted = ObjectPermission.None) =>
-        !CanViewExactLocation(user, linkedProtected, aclGranted);
 
     /// <summary>Grid cell size in degrees for a protection grid of <paramref name="gridMeters"/>.</summary>
     public static double CellDegrees(double gridMeters) => gridMeters / MetersPerDegreeLat;
@@ -81,5 +77,6 @@ public static class LocationProtection
         Math.Round(value / cell, MidpointRounding.AwayFromZero) * cell;
 }
 
-/// <summary>One protected root above a row plus the caller's ACL flags on that root.</summary>
-public readonly record struct ProtectionRootGrant(Feature Root, ObjectPermission AclGranted);
+/// <summary>One protected root above a row plus whether the access walk grants the
+/// caller ViewExactLocation on it.</summary>
+public readonly record struct ProtectionRootGrant(Feature Root, bool ViewExactLocationGranted);

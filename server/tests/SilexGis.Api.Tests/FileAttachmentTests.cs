@@ -32,8 +32,8 @@ public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
     private readonly string filesRoot;
 
     private HttpClient owner = null!;    // Editor
-    private HttpClient outsider = null!; // Editor, unrelated
-    private HttpClient viewer = null!;   // Viewer role
+    private HttpClient outsider = null!; // Viewer (regular user), unrelated — Editors read everything now
+    private HttpClient viewer = null!;   // Viewer role, for the upload gate
     private HttpClient admin = null!;    // Admin role
     private Guid ownerId;
     private long caveTypeId;
@@ -54,7 +54,7 @@ public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"fa-own-{suffix}@t.local");
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"fa-out-{suffix}@t.local");
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"fa-out-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"fa-view-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"fa-adm-{suffix}@t.local");
 

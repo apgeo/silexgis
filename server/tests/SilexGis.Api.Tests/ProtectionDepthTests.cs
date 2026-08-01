@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
 
@@ -77,7 +78,7 @@ public sealed class ProtectionDepthTests : IAsyncLifetime, IDisposable
         // A ViewExactLocation grant on the OUTER root alone is insufficient — the cave
         // root still vetoes (most-restrictive wins over the whole ancestry).
         await ReplaceFeatureAclAsync(owner, areaId,
-            [(granteeId, ObjectPermission.Read | ObjectPermission.ViewExactLocation)]);
+            [(granteeId, AccessAction.Read | AccessAction.ViewExactLocation)]);
         await AssertEntranceObfuscatedAsync(grantee, caveId);
         (await grantee.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}"))
             .GetProperty("closestAddress").ValueKind.ShouldBe(JsonValueKind.Null);
@@ -85,7 +86,7 @@ public sealed class ProtectionDepthTests : IAsyncLifetime, IDisposable
         // Grants on BOTH protected roots: the entrance point, the cave's precise text
         // fields and the approximate flag all open up.
         await ReplaceFeatureAclAsync(owner, caveId,
-            [(granteeId, ObjectPermission.Read | ObjectPermission.ViewExactLocation)]);
+            [(granteeId, AccessAction.Read | AccessAction.ViewExactLocation)]);
         var entrances = await grantee.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/entrances");
         entrances[0].GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldBe(ExactLon, 1e-9);
         entrances[0].GetProperty("approximateLocation").GetBoolean().ShouldBeFalse();
@@ -240,7 +241,7 @@ public sealed class ProtectionDepthTests : IAsyncLifetime, IDisposable
     }
 
     private static async Task ReplaceFeatureAclAsync(
-        HttpClient client, Guid featureId, (Guid UserId, ObjectPermission Permissions)[] entries)
+        HttpClient client, Guid featureId, (Guid UserId, AccessAction Permissions)[] entries)
     {
         var response = await client.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/acl", new
         {

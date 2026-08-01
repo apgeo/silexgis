@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Jobs;
@@ -93,17 +94,19 @@ public static class GeoreferencedMapEndpoints
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!user.CanCreateContent)
+        if (!CreateRules.MayCreate(ctx, AccessDomain.GeoreferencedMaps))
         {
-            return ApiProblems.Forbidden("georeferenced_map.create_requires_editor");
+            return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
@@ -166,19 +169,19 @@ public static class GeoreferencedMapEndpoints
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         int? page,
         int? pageSize,
         Guid? caveFeatureId,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        var query = db.GeoreferencedMaps.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.GeoreferencedMap);
+        var query = db.GeoreferencedMaps.AsNoTracking().VisibleTo(ctx, AccessDomain.GeoreferencedMaps);
         if (caveFeatureId is not null)
         {
             query = query.Where(m => m.CaveFeatureId == caveFeatureId);
@@ -192,7 +195,7 @@ public static class GeoreferencedMapEndpoints
         // A cave-linked raster IS the cave's location — omit them entirely for callers
         // without exact view on the cave (unlike point features, no partial redaction).
         var exact = await protection.ExactViewIdsAsync(
-            user, [.. rows.Where(m => m.CaveFeatureId is not null).Select(m => m.CaveFeatureId!.Value)], ct);
+            ctx, [.. rows.Where(m => m.CaveFeatureId is not null).Select(m => m.CaveFeatureId!.Value)], ct);
         var items = rows
             .Where(m => m.CaveFeatureId is null || exact.Contains(m.CaveFeatureId.Value))
             .Select(m => m.ToDto(tokens))
@@ -206,21 +209,21 @@ public static class GeoreferencedMapEndpoints
         Guid id,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
-        IPermissionService permissions,
+        IAccessService access,
         FeatureProtection protection,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var map = await db.GeoreferencedMaps.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id, ct);
-        if (map is null || !await permissions.CanAsync(user, map, ObjectPermission.Read, ct))
+        if (map is null || !(await access.DecideAsync(ctx, AccessAction.Read, map, ct)).Allowed)
         {
             return ApiProblems.NotFound("georeferenced_map.not_found");
         }
 
         // The raster's footprint is the linked cave's location, so there is nothing to
         // partially redact — without exact view on that cave the row does not exist.
-        if (await protection.ShouldRedactLinkAsync(user, map.CaveFeatureId, ct))
+        if (await protection.ShouldRedactLinkAsync(ctx, map.CaveFeatureId, ct))
         {
             return ApiProblems.NotFound("georeferenced_map.not_found");
         }
@@ -234,20 +237,20 @@ public static class GeoreferencedMapEndpoints
         HttpContext http,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var map = await db.GeoreferencedMaps.FirstOrDefaultAsync(m => m.Id == id, ct);
         if (map is null)
         {
             return ApiProblems.NotFound("georeferenced_map.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, map, ObjectPermission.Write, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Write, map, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, map, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, map, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("georeferenced_map.not_found");
         }
@@ -257,16 +260,17 @@ public static class GeoreferencedMapEndpoints
             return stale;
         }
 
-        if (request.CavingGroupId is not null && !user.IsAdmin && !user.IsMemberOf(request.CavingGroupId.Value))
+        if (request.CavingGroupId is not null
+            && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.GeoreferencedMaps, request.CavingGroupId.Value))
         {
-            return ApiProblems.Forbidden("georeferenced_map.caving_group_membership_required");
+            return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
 
         // Only a *changed* link is re-validated: a full-replace PUT that leaves the stored
         // link alone must keep working even if the cave has since become unreadable to
         // this caller, otherwise the row would be permanently uneditable.
         if (request.CaveFeatureId is not null && request.CaveFeatureId != map.CaveFeatureId
-            && !await CaveIsLinkableAsync(request.CaveFeatureId.Value, db, permissions, user, ct))
+            && !await CaveIsLinkableAsync(request.CaveFeatureId.Value, db, access, ctx, ct))
         {
             // A cave the caller cannot read is reported as missing: whether one exists
             // must not be disclosed through the link target.
@@ -290,20 +294,20 @@ public static class GeoreferencedMapEndpoints
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var map = await db.GeoreferencedMaps.FirstOrDefaultAsync(m => m.Id == id, ct);
         if (map is null)
         {
             return ApiProblems.NotFound("georeferenced_map.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, map, ObjectPermission.Delete, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Delete, map, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, map, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, map, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("georeferenced_map.not_found");
         }
@@ -321,13 +325,13 @@ public static class GeoreferencedMapEndpoints
     private static async Task<bool> CaveIsLinkableAsync(
         Guid caveFeatureId,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        UserContext user,
+        IAccessService access,
+        AccessContext ctx,
         CancellationToken ct)
     {
         var cave = await db.Features.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == caveFeatureId && f.Kind == FeatureKind.Cave, ct);
-        return cave is not null && await permissions.CanAsync(user, cave, ObjectPermission.Read, ct);
+        return cave is not null && (await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed;
     }
 
     private static GeoreferencedMapDto ToDto(this GeoreferencedMap m, IFileAccessTokenService tokens) => new(

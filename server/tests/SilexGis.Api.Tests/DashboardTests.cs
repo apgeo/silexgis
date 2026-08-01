@@ -26,7 +26,7 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable
     private readonly SilexGisApiFactory factory;
 
     private HttpClient owner = null!;    // Editor
-    private HttpClient outsider = null!; // Editor, unrelated
+    private HttpClient outsider = null!; // Viewer (regular user), unrelated — Editors read everything now
     private long caveTypeId;
     private long entranceTypeId;
     private long featureTypeId;
@@ -38,7 +38,7 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"db-own-{suffix}@t.local");
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"db-out-{suffix}@t.local");
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"db-out-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -156,7 +156,7 @@ public sealed class DashboardTests : IAsyncLifetime, IDisposable
         Activity(ownerAfter).Select(Id).ShouldContain(secretId);
         Activity(ownerAfter).Select(Id).ShouldContain(secretEntranceId);
 
-        // …and an unrelated Editor sees neither the count nor the activity rows. The paired
+        // …and an unrelated regular user sees neither the count nor the activity rows. The paired
         // assertions matter: without the owner's side above, absence here could pass simply
         // because nothing was created.
         var outsiderAfter = await SummaryAsync(outsider);

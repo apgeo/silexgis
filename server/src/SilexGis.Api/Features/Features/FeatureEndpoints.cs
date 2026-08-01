@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Features;
@@ -42,9 +43,9 @@ public static class FeatureEndpoints
 
     private static async Task<Results<Ok<PagedResult<FeatureListItemDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
-        IOptions<AccessOptions> access,
+        IOptions<AccessOptions> accessOptions,
         int? page,
         int? pageSize,
         string? kind,
@@ -55,13 +56,13 @@ public static class FeatureEndpoints
         string? search,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        var query = db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls);
+        var query = db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers);
 
         // Enum query parameters arrive as the camelCase strings the JSON contract uses;
         // parse case-insensitively (route binding's Enum.TryParse would not).
@@ -119,7 +120,7 @@ public static class FeatureEndpoints
             .ToListAsync(ct);
         if (protectedCenterlineIds.Count > 0)
         {
-            var exactCenterlines = await protection.ExactViewIdsAsync(user, protectedCenterlineIds, ct);
+            var exactCenterlines = await protection.ExactViewIdsAsync(ctx, protectedCenterlineIds, ct);
             var withheld = protectedCenterlineIds.Where(x => !exactCenterlines.Contains(x)).ToArray();
             if (withheld.Length > 0)
             {
@@ -133,8 +134,8 @@ public static class FeatureEndpoints
             .Skip((p - 1) * size).Take(size).ToListAsync(ct);
 
         var types = await FeatureTypesOfAsync(db, rows, ct);
-        var exact = await protection.ExactViewIdsAsync(user, rows.Select(f => f.Id).ToList(), ct);
-        var grid = access.Value.LocationGridMeters;
+        var exact = await protection.ExactViewIdsAsync(ctx, rows.Select(f => f.Id).ToList(), ct);
+        var grid = accessOptions.Value.LocationGridMeters;
         var items = rows.Select(f =>
         {
             var type = f.FeatureTypeId is not null && types.TryGetValue(f.FeatureTypeId.Value, out var t) ? t : null;
@@ -148,23 +149,23 @@ public static class FeatureEndpoints
         Guid id,
         HttpContext http,
         SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
-        IOptions<AccessOptions> access,
+        IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var feature = await db.Features.AsNoTracking()
             .Include(f => f.Cave).Include(f => f.Entrance).Include(f => f.Centerline)
             .FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (feature is null || !await permissions.CanAsync(user, feature, ObjectPermission.Read, ct))
+        if (feature is null || !(await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed)
         {
             // Existence of a feature the caller cannot read is not disclosed.
             return ApiProblems.NotFound("feature.not_found");
         }
 
-        var exact = (await protection.ExactViewIdsAsync(user, [feature.Id], ct)).Contains(feature.Id);
+        var exact = (await protection.ExactViewIdsAsync(ctx, [feature.Id], ct)).Contains(feature.Id);
 
         // A protected centerline cannot be served obfuscated (any part of it is exact
         // location data); without exact view the row behaves as if it did not exist.
@@ -176,12 +177,12 @@ public static class FeatureEndpoints
         var featureType = feature.FeatureTypeId is null
             ? null
             : await db.FeatureTypes.AsNoTracking().FirstOrDefaultAsync(t => t.Id == feature.FeatureTypeId, ct);
-        var parents = await PrimaryChainAsync(db, user!, feature, ct);
+        var parents = await PrimaryChainAsync(db, ctx!, feature, ct);
 
         await Concurrency.EmitETagAsync(http, db, VersionedTable.Features, feature.Id, ct);
         var dto = feature.ToDto(
             featureType?.Code, FeatureMapping.DisplayPolicy(feature, featureType), exact,
-            access.Value.LocationGridMeters, parents);
+            accessOptions.Value.LocationGridMeters, parents);
         return TypedResults.Ok(new FeatureEnvelopeDto(
             feature.Kind,
             dto,
@@ -194,19 +195,16 @@ public static class FeatureEndpoints
         FeatureCreateRequest request,
         SilexGisDbContext db,
         FeatureWriteService writeService,
+        IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
-        IOptions<AccessOptions> access,
+        IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
     {
+        var ctx = await accessAccessor.GetAsync(ct);
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        if (ctx is null || user is null)
         {
             return TypedResults.Unauthorized();
-        }
-
-        if (!user.CanCreateContent)
-        {
-            return ApiProblems.Forbidden("feature.create_requires_editor");
         }
 
         if (request.Kind != FeatureKind.Generic)
@@ -216,9 +214,10 @@ public static class FeatureEndpoints
                 "Caves, entrances and centerlines are created through their typed endpoints.");
         }
 
-        if (request.CavingGroupId is not null && !user.IsAdmin && !user.IsMemberOf(request.CavingGroupId.Value))
+        if (request.CavingGroupId is not null
+            && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.Features, request.CavingGroupId.Value))
         {
-            return ApiProblems.Forbidden("feature.caving_group_membership_required");
+            return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
 
         Geometry? geom = null;
@@ -232,16 +231,30 @@ public static class FeatureEndpoints
         }
 
         var parentSpecs = (request.Parents ?? []).Select(x => new ParentSpec(x.ParentId, x.IsPrimary)).ToList();
+        // The primary parent is the create's context: a subtree-scoped Create reaches
+        // through it, and owning it is what lets someone extend their own feature.
+        var primaryParentId = parentSpecs.FirstOrDefault(s => s.IsPrimary).ParentId;
+        var createFacts = await CreateContext.ParentCreateFactsAsync(
+            db, ctx, primaryParentId == Guid.Empty ? null : primaryParentId, request.CavingGroupId,
+            FeatureKind.Generic, ct, request.FeatureTypeId);
         if (parentSpecs.Count > 0)
         {
             var parentIds = parentSpecs.Select(s => s.ParentId).Distinct().ToArray();
-            var visibleParents = await db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls)
+            var visibleParents = await db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers)
                 .Where(f => parentIds.Contains(f.Id)).Select(f => f.Id).ToListAsync(ct);
-            if (visibleParents.Count != parentIds.Length)
+            if (visibleParents.Count != parentIds.Length || createFacts is null)
             {
                 // A parent the caller cannot read is reported exactly like a missing one.
                 return ApiProblems.BadRequest("feature.parent_not_found", "A parent feature does not exist.");
             }
+        }
+
+        // Creation is decided by the walk against that target context, so a Create deny
+        // bites and a subtree- or club-scoped Create reaches exactly where it should.
+        if (!CreateRules.MayCreate(ctx, AccessDomain.Features, createFacts
+            ?? AccessTargetFacts.ForCreate(null, [], request.CavingGroupId, FeatureKind.Generic, request.FeatureTypeId)))
+        {
+            return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
         var feature = new Feature
@@ -269,13 +282,13 @@ public static class FeatureEndpoints
         await db.SaveChangesAsync(ct);
 
         var featureType = await db.FeatureTypes.AsNoTracking().FirstAsync(t => t.Id == request.FeatureTypeId, ct);
-        var parents = await PrimaryChainAsync(db, user, feature, ct);
+        var parents = await PrimaryChainAsync(db, ctx, feature, ct);
         // The creator owns the row, so they always see it exactly.
         return TypedResults.Created(
             $"/api/v1/features/{feature.Id}",
             feature.ToDto(
                 featureType.Code, FeatureMapping.DisplayPolicy(feature, featureType), exact: true,
-                access.Value.LocationGridMeters, parents));
+                accessOptions.Value.LocationGridMeters, parents));
     }
 
     private static async Task<Results<Ok<FeatureDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -284,22 +297,22 @@ public static class FeatureEndpoints
         HttpContext http,
         SilexGisDbContext db,
         FeatureWriteService writeService,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
-        IOptions<AccessOptions> access,
+        IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var feature = await db.Features.FirstOrDefaultAsync(f => f.Id == id, ct);
         if (feature is null)
         {
             return ApiProblems.NotFound("feature.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, feature, ObjectPermission.Write, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Write, feature, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, feature, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("feature.not_found");
         }
@@ -323,9 +336,10 @@ public static class FeatureEndpoints
             return ApiProblems.BadRequest("feature.type_required", "Unknown feature type.");
         }
 
-        if (request.CavingGroupId is not null && !user.IsAdmin && !user.IsMemberOf(request.CavingGroupId.Value))
+        if (request.CavingGroupId is not null
+            && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.Features, request.CavingGroupId.Value))
         {
-            return ApiProblems.Forbidden("feature.caving_group_membership_required");
+            return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
 
         Geometry? geom = null;
@@ -353,7 +367,7 @@ public static class FeatureEndpoints
                 $"Kind '{featureType.Code}' only exists inside a containing feature.");
         }
 
-        var exact = (await protection.ExactViewIdsAsync(user, [feature.Id], ct)).Contains(feature.Id);
+        var exact = (await protection.ExactViewIdsAsync(ctx, [feature.Id], ct)).Contains(feature.Id);
 
         feature.Name = request.Name;
         feature.FeatureTypeId = request.FeatureTypeId;
@@ -395,10 +409,10 @@ public static class FeatureEndpoints
         await db.SaveChangesAsync(ct);
         await Concurrency.EmitETagAsync(http, db, VersionedTable.Features, feature.Id, ct);
 
-        var parents = await PrimaryChainAsync(db, user, feature, ct);
+        var parents = await PrimaryChainAsync(db, ctx, feature, ct);
         return TypedResults.Ok(feature.ToDto(
             featureType.Code, FeatureMapping.DisplayPolicy(feature, featureType), exact,
-            access.Value.LocationGridMeters, parents));
+            accessOptions.Value.LocationGridMeters, parents));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
@@ -406,11 +420,11 @@ public static class FeatureEndpoints
         HttpContext http,
         SilexGisDbContext db,
         FeatureWriteService writeService,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         // No tracking: the soft delete writes directly to the database, and a stale
         // tracked copy would confuse the cave-mirror recount below.
         var feature = await db.Features.AsNoTracking()
@@ -421,9 +435,9 @@ public static class FeatureEndpoints
             return ApiProblems.NotFound("feature.not_found");
         }
 
-        if (user is null || !await permissions.CanAsync(user, feature, ObjectPermission.Delete, ct))
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Delete, feature, ct)).Allowed)
         {
-            return await permissions.CanAsync(user, feature, ObjectPermission.Read, ct)
+            return (await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("feature.not_found");
         }
@@ -465,7 +479,7 @@ public static class FeatureEndpoints
     /// are never disclosed.
     /// </summary>
     internal static async Task<IReadOnlyList<FeatureBreadcrumbDto>> PrimaryChainAsync(
-        SilexGisDbContext db, UserContext user, Feature feature, CancellationToken ct)
+        SilexGisDbContext db, AccessContext ctx, Feature feature, CancellationToken ct)
     {
         var ancestorIds = feature.AncestorIds.Where(a => a != feature.Id).ToArray();
         if (ancestorIds.Length == 0)
@@ -478,7 +492,7 @@ public static class FeatureEndpoints
         var primaryParentOf = await db.FeatureHierarchyEdges.AsNoTracking()
             .Where(e => e.IsPrimary && chainChildIds.Contains(e.ChildId))
             .ToDictionaryAsync(e => e.ChildId, e => e.ParentId, ct);
-        var visibleNames = await db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls)
+        var visibleNames = await db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => ancestorIds.Contains(f.Id))
             .Select(f => new { f.Id, f.Name })
             .ToDictionaryAsync(x => x.Id, x => x.Name, ct);

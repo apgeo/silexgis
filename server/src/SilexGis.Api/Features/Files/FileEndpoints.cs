@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Files;
@@ -75,17 +76,19 @@ public static class FileEndpoints
         IFileAccessTokenService tokens,
         IPhotoGeotagReader geotagReader,
         IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!user.CanCreateContent)
+        if (!CreateRules.MayCreate(ctx, AccessDomain.Files))
         {
-            return ApiProblems.Forbidden("file.upload_requires_editor");
+            return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
         if (ValidateSize(file) is { } sizeProblem)
@@ -120,17 +123,18 @@ public static class FileEndpoints
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         IPhotoGeotagReader geotagReader,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
         var head = await db.StoredFiles.FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (head is null || !await FileAccessRules.CanWriteFileAsync(db, user, head, ct))
+        if (head is null || !await FileAccessRules.CanWriteFileAsync(db, access, ctx, head, ct))
         {
             return ApiProblems.NotFound("file.not_found"); // existence not disclosed to non-writers
         }
@@ -157,7 +161,7 @@ public static class FileEndpoints
             MimeType = mimeType,
             SizeBytes = file.Length,
             Sha256 = sha256,
-            UploadedBy = user.UserId,
+            UploadedBy = ctx.UserId,
             Kind = kind,
             VersionGroupId = head.VersionGroupId,
             VersionNumber = maxVersion + 1,
@@ -207,11 +211,14 @@ public static class FileEndpoints
         Guid id,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
+        var ctx = await accessAccessor.GetAsync(ct);
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        if (ctx is null || user is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -228,12 +235,12 @@ public static class FileEndpoints
             .ToListAsync(ct);
 
         var head = chain[0]; // ordered desc → the head is first
-        if (!await FileAccessRules.CanAccessAsync(db, user, head, ct))
+        if (!await FileAccessRules.CanAccessAsync(db, access, ctx, head, ct))
         {
             return ApiProblems.NotFound("file.not_found"); // existence not disclosed
         }
 
-        if (!await FileAccessRules.CanWriteFileAsync(db, user, head, ct))
+        if (!await FileAccessRules.CanWriteFileAsync(db, access, ctx, head, ct))
         {
             return ApiProblems.Forbidden("file.versions_forbidden"); // old versions are editor-only
         }
@@ -255,11 +262,12 @@ public static class FileEndpoints
         SilexGisDbContext db,
         IFileStore fileStore,
         ThumbnailService thumbnails,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -274,7 +282,7 @@ public static class FileEndpoints
             .Where(f => f.VersionGroupId == file.VersionGroupId)
             .OrderByDescending(f => f.VersionNumber)
             .FirstAsync(ct);
-        if (!await FileAccessRules.CanWriteFileAsync(db, user, head, ct))
+        if (!await FileAccessRules.CanWriteFileAsync(db, access, ctx, head, ct))
         {
             return ApiProblems.NotFound("file.not_found"); // non-writers: existence not disclosed
         }
@@ -332,17 +340,18 @@ public static class FileEndpoints
         Guid id,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
         var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (file is null || !await FileAccessRules.CanAccessAsync(db, user, file, ct))
+        if (file is null || !await FileAccessRules.CanAccessAsync(db, access, ctx, file, ct))
         {
             // Existence of an inaccessible file is not disclosed.
             return ApiProblems.NotFound("file.not_found");
@@ -356,11 +365,12 @@ public static class FileEndpoints
         FileUpdateRequest request,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
-        IUserContextAccessor userAccessor,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -376,7 +386,7 @@ public static class FileEndpoints
             .Where(f => f.VersionGroupId == file.VersionGroupId)
             .OrderByDescending(f => f.VersionNumber)
             .FirstAsync(ct);
-        if (!await FileAccessRules.CanWriteFileAsync(db, user, head, ct))
+        if (!await FileAccessRules.CanWriteFileAsync(db, access, ctx, head, ct))
         {
             return ApiProblems.NotFound("file.not_found"); // existence not disclosed to non-writers
         }
