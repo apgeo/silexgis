@@ -344,11 +344,14 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable
         await db.SaveChangesAsync();
     }
 
-    private static async Task GrantAsync(HttpClient granter, Guid featureId, Guid subjectId, string permissions)
+    private static async Task GrantAsync(HttpClient granter, Guid featureId, Guid subjectId, string actions)
     {
-        var response = await granter.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/acl", new
+        var response = await granter.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/access", new
         {
-            entries = new[] { new { subjectKind = "user", subjectId, permissions } },
+            entries = new[]
+            {
+                new { subjectKind = "user", subjectId, effect = "allow", actions, scopeKind = "object" },
+            },
         });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }

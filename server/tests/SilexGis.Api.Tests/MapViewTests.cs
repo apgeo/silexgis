@@ -93,7 +93,7 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable
         (await outsider.PutAsJsonAsync($"/api/v1/map-views/{viewId}", ViewBody("Renamed by grantee", isHome: false)))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
-        await ReplaceViewAclAsync(owner, viewId, [(outsiderId, AccessAction.Read)]);
+        await ReplaceViewAccessRulesAsync(owner, viewId, [(outsiderId, AccessAction.Read)]);
 
         (await ViewIdsAsync(outsider)).ShouldContain(viewId);
         // Read is not Write: the view now exists for the grantee, so refusal is 403, not 404.
@@ -101,12 +101,12 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         // Write closes the gap; revoking everything takes the view away again.
-        await ReplaceViewAclAsync(
+        await ReplaceViewAccessRulesAsync(
             owner, viewId, [(outsiderId, AccessAction.Read | AccessAction.Write)]);
         (await outsider.PutAsJsonAsync($"/api/v1/map-views/{viewId}", ViewBody("Renamed by grantee", isHome: false)))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        await ReplaceViewAclAsync(owner, viewId, []);
+        await ReplaceViewAccessRulesAsync(owner, viewId, []);
         (await ViewIdsAsync(outsider)).ShouldNotContain(viewId);
         (await outsider.PutAsJsonAsync($"/api/v1/map-views/{viewId}", ViewBody("Renamed again", isHome: false)))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -139,17 +139,19 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable
             .Select(x => x.GetProperty("id").GetGuid())];
     }
 
-    /// <summary>Replaces the grants on a saved view (the "mapView" ACL target).</summary>
-    private static async Task ReplaceViewAclAsync(
-        HttpClient client, Guid viewId, (Guid SubjectId, AccessAction Permissions)[] entries)
+    /// <summary>Replaces the direct access rules on a saved view (the "mapView" target).</summary>
+    private static async Task ReplaceViewAccessRulesAsync(
+        HttpClient client, Guid viewId, (Guid SubjectId, AccessAction Actions)[] entries)
     {
-        var response = await client.PutAsJsonAsync($"/api/v1/objects/mapView/{viewId}/acl", new
+        var response = await client.PutAsJsonAsync($"/api/v1/objects/mapView/{viewId}/access", new
         {
             entries = entries.Select(e => new
             {
                 subjectKind = "user",
                 subjectId = e.SubjectId,
-                permissions = e.Permissions.ToString().Replace(" ", string.Empty),
+                effect = "allow",
+                actions = e.Actions.ToString().Replace(" ", string.Empty),
+                scopeKind = "object",
             }).ToArray(),
         });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());

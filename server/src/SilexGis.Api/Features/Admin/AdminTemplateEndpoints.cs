@@ -2,8 +2,8 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using SilexGis.Api.Common;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Messaging;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Messaging;
 
 namespace SilexGis.Api.Features.Admin;
@@ -43,6 +43,7 @@ public sealed class MessageTemplateWriteRequestValidator : AbstractValidator<Mes
 /// Editing the wording of the messages the application sends.
 /// </summary>
 /// <remarks>
+/// Governed by the MessageTemplates domain: listing needs Read, rewriting or resetting Write.
 /// The list of messages is fixed — one exists only because some code path sends it — but every
 /// one of them can be rewritten per language. Saving is refused when the text uses a placeholder
 /// the message will never be given a value for, because that placeholder would render as nothing
@@ -66,19 +67,19 @@ public static class AdminTemplateEndpoints
     }
 
     private static async Task<Results<Ok<List<MessageTemplateDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         MessageTemplateStore store,
         CancellationToken ct)
     {
-        var caller = await userAccessor.GetAsync(ct);
-        if (caller is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!caller.IsAdmin)
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.MessageTemplates, AccessAction.Read, null).Allowed)
         {
-            return ApiProblems.Forbidden("admin.requires_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         var overrides = (await store.AllOverridesAsync(ct))
@@ -111,19 +112,19 @@ public static class AdminTemplateEndpoints
         string key,
         string locale,
         MessageTemplateWriteRequest request,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         MessageTemplateStore store,
         CancellationToken ct)
     {
-        var caller = await userAccessor.GetAsync(ct);
-        if (caller is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!caller.IsAdmin)
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.MessageTemplates, AccessAction.Write, null).Allowed)
         {
-            return ApiProblems.Forbidden("admin.requires_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         if (MessageTemplateCatalog.Find(key) is not { } definition)
@@ -158,19 +159,19 @@ public static class AdminTemplateEndpoints
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> ResetAsync(
         string key,
         string locale,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         MessageTemplateStore store,
         CancellationToken ct)
     {
-        var caller = await userAccessor.GetAsync(ct);
-        if (caller is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!caller.IsAdmin)
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.MessageTemplates, AccessAction.Write, null).Allowed)
         {
-            return ApiProblems.Forbidden("admin.requires_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         if (MessageTemplateCatalog.Find(key) is null)

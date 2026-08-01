@@ -2,14 +2,15 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Messaging;
-using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Settings;
 
 namespace SilexGis.Api.Features.Admin;
 
 /// <summary>
-/// The administrator's view of mail, SMS and sign-in policy.
+/// The operator's view of mail, SMS and sign-in policy, governed by the Settings domain:
+/// reading the page needs Read, saving a section Write, and sending a test message Execute.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -50,21 +51,21 @@ public static class AdminSettingsEndpoints
     }
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
         CancellationToken ct)
     {
-        var caller = await userAccessor.GetAsync(ct);
-        if (caller is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!caller.IsAdmin)
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Read, null).Allowed)
         {
-            return ApiProblems.Forbidden("admin.requires_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
@@ -72,21 +73,21 @@ public static class AdminSettingsEndpoints
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveMailAsync(
         MailSettingsWriteRequest request,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
         CancellationToken ct)
     {
-        var caller = await userAccessor.GetAsync(ct);
-        if (caller is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!caller.IsAdmin)
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
         {
-            return ApiProblems.Forbidden("admin.requires_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         var current = await settings.GetMailAsync(ct);
@@ -113,21 +114,21 @@ public static class AdminSettingsEndpoints
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveSmsAsync(
         SmsSettingsWriteRequest request,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
         CancellationToken ct)
     {
-        var caller = await userAccessor.GetAsync(ct);
-        if (caller is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!caller.IsAdmin)
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
         {
-            return ApiProblems.Forbidden("admin.requires_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         var current = await settings.GetSmsAsync(ct);
@@ -154,21 +155,21 @@ public static class AdminSettingsEndpoints
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveSecurityAsync(
         SecuritySettingsDto request,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         IAppSettingsService settings,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
         CancellationToken ct)
     {
-        var caller = await userAccessor.GetAsync(ct);
-        if (caller is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!caller.IsAdmin)
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
         {
-            return ApiProblems.Forbidden("admin.requires_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         await settings.SaveAsync(
@@ -195,20 +196,20 @@ public static class AdminSettingsEndpoints
     /// </summary>
     private static async Task<Results<Ok<TestMessageResultDto>, UnauthorizedHttpResult, ProblemHttpResult>> TestMailAsync(
         TestMessageRequest request,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         IEmailSender emailSender,
         IEmailDelivery emailDelivery,
         CancellationToken ct)
     {
-        var caller = await userAccessor.GetAsync(ct);
-        if (caller is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!caller.IsAdmin)
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Execute, null).Allowed)
         {
-            return ApiProblems.Forbidden("admin.requires_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         if (!await emailDelivery.IsConfiguredAsync(ct))
@@ -235,20 +236,20 @@ public static class AdminSettingsEndpoints
 
     private static async Task<Results<Ok<TestMessageResultDto>, UnauthorizedHttpResult, ProblemHttpResult>> TestSmsAsync(
         TestMessageRequest request,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         ISmsSender smsSender,
         ISmsDelivery smsDelivery,
         CancellationToken ct)
     {
-        var caller = await userAccessor.GetAsync(ct);
-        if (caller is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!caller.IsAdmin)
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Execute, null).Allowed)
         {
-            return ApiProblems.Forbidden("admin.requires_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         if (!await smsDelivery.IsConfiguredAsync(ct))

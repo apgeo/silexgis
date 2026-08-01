@@ -210,7 +210,7 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
         (await SearchFindsCenterlineAsync(reader, secretName, centerlineId)).ShouldBeFalse();
         (await SearchFindsCenterlineAsync(owner, secretName, centerlineId)).ShouldBeTrue();
 
-        // An explicit ViewExactLocation ACL grant on the protected root flips them visible.
+        // An explicit ViewExactLocation grant on the protected root flips them visible.
         await GrantExactViewAsync(caveId);
 
         (await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines"))
@@ -580,9 +580,19 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
     /// <summary>Grants the reader Read + ViewExactLocation on one feature, whatever its kind.</summary>
     private async Task GrantExactViewAsync(Guid featureId)
     {
-        var grant = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/acl", new
+        var grant = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/access", new
         {
-            entries = new[] { new { subjectKind = "user", subjectId = readerId, permissions = "read, viewExactLocation" } },
+            entries = new[]
+            {
+                new
+                {
+                    subjectKind = "user",
+                    subjectId = readerId,
+                    effect = "allow",
+                    actions = "read, viewExactLocation",
+                    scopeKind = "object",
+                },
+            },
         });
         grant.StatusCode.ShouldBe(HttpStatusCode.OK, await grant.Content.ReadAsStringAsync());
     }

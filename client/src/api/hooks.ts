@@ -1296,8 +1296,8 @@ export function useDeleteTagging() {
 export type CavingGroupInfo = components['schemas']['CavingGroupDto'];
 export type CavingGroupMemberInfo = components['schemas']['CavingGroupMemberDto'];
 export type CaverInfo = components['schemas']['CaverDto'];
-export type AclEntry = components['schemas']['AclEntryDto'];
-export type AclEntryWrite = components['schemas']['AclEntryWrite'];
+export type AclEntry = components['schemas']['ObjectAccessEntryDto'];
+export type AclEntryWrite = components['schemas']['ObjectAccessEntryWrite'];
 
 export function useCavingGroups() {
   return useQuery({
@@ -1447,7 +1447,7 @@ export function useAcl(entityType: EntityType, entityId: string | undefined, ena
   return useQuery({
     queryKey: queryKeys.acl(entityType, entityId ?? ''),
     queryFn: () =>
-      unwrap(api.GET('/api/v1/objects/{entityType}/{id}/acl', {
+      unwrap(api.GET('/api/v1/objects/{entityType}/{id}/access', {
         params: { path: { entityType, id: entityId! } },
       })),
     enabled: enabled && !!entityId,
@@ -1459,7 +1459,7 @@ export function useReplaceAcl(entityType: EntityType, entityId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (entries: AclEntryWrite[]) =>
-      unwrap(api.PUT('/api/v1/objects/{entityType}/{id}/acl', {
+      unwrap(api.PUT('/api/v1/objects/{entityType}/{id}/access', {
         params: { path: { entityType, id: entityId } },
         body: { entries },
       })),

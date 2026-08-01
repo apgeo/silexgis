@@ -120,10 +120,10 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
 
         // Direct object-scope grants ride the per-object surface (the one-off-grant
         // shape of the entry model).
-        await ReplaceFeatureAclAsync(caveEntryOnly, [(entryReaderId, AccessAction.Read)]);
-        await ReplaceFeatureAclAsync(areaProt,
+        await ReplaceAccessRulesAsync(caveEntryOnly, [(entryReaderId, AccessAction.Read)]);
+        await ReplaceAccessRulesAsync(areaProt,
             [(velGranteeId, AccessAction.Read | AccessAction.ViewExactLocation)]);
-        await ReplaceFeatureAclAsync(caveProt,
+        await ReplaceAccessRulesAsync(caveProt,
             [(velGranteeId, AccessAction.Read | AccessAction.ViewExactLocation)]);
 
         // Denies, subtree/set scopes and the narrowed conjunction have no write surface
@@ -407,15 +407,17 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    private async Task ReplaceFeatureAclAsync(Guid featureId, (Guid UserId, AccessAction Actions)[] entries)
+    private async Task ReplaceAccessRulesAsync(Guid featureId, (Guid UserId, AccessAction Actions)[] entries)
     {
-        var response = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/acl", new
+        var response = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/access", new
         {
             entries = entries.Select(e => new
             {
                 subjectKind = "user",
                 subjectId = e.UserId,
-                permissions = e.Actions.ToString().Replace(" ", string.Empty),
+                effect = "allow",
+                actions = e.Actions.ToString().Replace(" ", string.Empty),
+                scopeKind = "object",
             }).ToArray(),
         });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());

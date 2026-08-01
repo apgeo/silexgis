@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -28,13 +29,14 @@ public static class AuditEndpoints
     {
         api.MapGet("/audit", ListAsync)
             .WithTags("Audit")
-            .WithSummary("Audit trail, filterable by entity (\"Feature\" selects every feature kind); admins only until per-object managers exist.");
+            .WithSummary("Audit trail, filterable by entity (\"Feature\" selects every feature kind); requires Read on the Audit domain.");
         return api;
     }
 
     private static async Task<Results<Ok<PagedResult<AuditEntryDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         string? entityType,
         string? entityId,
         string? action,
@@ -43,16 +45,17 @@ public static class AuditEndpoints
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        // The trail spans every entity including ones the caller couldn't read —
-        // admin-only until the ACL phase introduces per-object managers.
-        if (!user.IsAdmin)
+        // The trail spans every entity including ones the caller couldn't read, so the right to
+        // see it is held over the whole Audit domain rather than derived from any one row.
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Audit, AccessAction.Read, null).Allowed)
         {
-            return ApiProblems.Forbidden("audit.requires_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         var query = db.AuditEntries.AsNoTracking();

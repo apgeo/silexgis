@@ -105,6 +105,11 @@ public static class MapViewEndpoints
             return TypedResults.Unauthorized();
         }
 
+        if (!CreateRules.MayCreate(ctx, AccessDomain.MapViews, request.CavingGroupId))
+        {
+            return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
+        }
+
         if (request.CavingGroupId is not null
             && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.MapViews, request.CavingGroupId.Value))
         {

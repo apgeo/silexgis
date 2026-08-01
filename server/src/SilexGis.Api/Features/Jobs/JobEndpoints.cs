@@ -2,8 +2,8 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Jobs;
@@ -23,33 +23,33 @@ public static class JobEndpoints
     {
         api.MapGet("/jobs/{id:long}", GetAsync)
             .WithTags("Jobs")
-            .WithSummary("Processing job status (requester or admin).");
+            .WithSummary("Processing job status (the requester, or Read on the Jobs domain).");
         api.MapPost("/jobs/photo-geo-backfill", EnqueuePhotoGeoBackfillAsync)
             .WithTags("Jobs")
-            .WithSummary("Enqueues a one-off backfill of EXIF GPS points onto existing photos (admin).");
+            .WithSummary("Enqueues a one-off backfill of EXIF GPS points onto existing photos; requires Execute on the Jobs domain.");
         return api;
     }
 
     private static async Task<Results<Ok<ProcessingJobDto>, UnauthorizedHttpResult, ProblemHttpResult>> EnqueuePhotoGeoBackfillAsync(
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!user.IsAdmin)
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Jobs, AccessAction.Execute, null).Allowed)
         {
-            return ApiProblems.Forbidden("jobs.requires_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         var job = new ProcessingJob
         {
             Kind = ProcessingJobKinds.PhotoGeoBackfill,
-            RequestedBy = user.UserId,
+            RequestedBy = ctx.UserId,
         };
         db.ProcessingJobs.Add(job);
         await db.SaveChangesAsync(ct);
@@ -61,18 +61,21 @@ public static class JobEndpoints
     private static async Task<Results<Ok<ProcessingJobDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
         long id,
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
         var job = await db.ProcessingJobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == id, ct);
-        // Jobs of other users are not disclosed.
-        if (job is null || (!user.IsAdmin && job.RequestedBy != user.UserId))
+        // Jobs of other users are not disclosed: a caller without Read over the domain gets the
+        // same answer for someone else's job as for one that never existed.
+        if (job is null
+            || (!AccessEvaluator.Decide(ctx, AccessDomain.Jobs, AccessAction.Read, null).Allowed
+                && job.RequestedBy != ctx.UserId))
         {
             return ApiProblems.NotFound("job.not_found");
         }

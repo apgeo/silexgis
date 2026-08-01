@@ -52,6 +52,10 @@ public static class PermissionGroupSeeder
                 RulesetEntry(id, AccessDomain.Cavers, AccessAction.Read),
                 // Create keeps the pick-or-create affiliation flow open to everyone.
                 RulesetEntry(id, AccessDomain.CavingGroups, AccessAction.Read | AccessAction.Create),
+                // A saved map view is the caller's own workspace state, not shared
+                // content — everyone could always keep one, and that stays true. It is an
+                // ordinary entry, so an installation that disagrees can remove it.
+                RulesetEntry(id, AccessDomain.MapViews, AccessAction.Create),
             ], ct);
 
         await EnsureGroupAsync(db, created, SeededPermissionGroups.AdministratorsSlug,

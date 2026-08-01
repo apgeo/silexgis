@@ -242,6 +242,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's domain-level rights, for interface gating. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CapabilitiesDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/permission-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The permission groups the caller reaches, directly or through a caving group. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MyPermissionGroupDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications/unsubscribe": {
         parameters: {
             query?: never;
@@ -1294,7 +1366,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Processing job status (requester or admin). */
+        /** Processing job status (the requester, or Read on the Jobs domain). */
         get: {
             parameters: {
                 query?: never;
@@ -1334,7 +1406,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Enqueues a one-off backfill of EXIF GPS points onto existing photos (admin). */
+        /** Enqueues a one-off backfill of EXIF GPS points onto existing photos; requires Execute on the Jobs domain. */
         post: {
             parameters: {
                 query?: never;
@@ -1524,7 +1596,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Audit trail, filterable by entity ("Feature" selects every feature kind); admins only until per-object managers exist. */
+        /** Audit trail, filterable by entity ("Feature" selects every feature kind); requires Read on the Audit domain. */
         get: {
             parameters: {
                 query?: {
@@ -5006,7 +5078,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/objects/{entityType}/{id}/acl": {
+    "/api/v1/objects/{entityType}/{id}/access": {
         parameters: {
             query?: never;
             header?: never;
@@ -5014,7 +5086,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Direct object-scope grant entries of one object (ManagePermissions).
+         * Rules written directly onto this object (ManagePermissions).
          * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView' (case-insensitive).
          */
         get: {
@@ -5035,13 +5107,13 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["AclEntryDto"][];
+                        "application/json": components["schemas"]["ObjectAccessEntryDto"][];
                     };
                 };
             };
         };
         /**
-         * Replaces the object's direct grant entries (ManagePermissions).
+         * Replaces this object's direct rules, bounded by what the caller holds.
          * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView' (case-insensitive).
          */
         put: {
@@ -5056,7 +5128,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["AclReplaceRequest"];
+                    "application/json": components["schemas"]["ObjectAccessReplaceRequest"];
                 };
             };
             responses: {
@@ -5066,7 +5138,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["AclEntryDto"][];
+                        "application/json": components["schemas"]["ObjectAccessEntryDto"][];
                     };
                 };
             };
@@ -5078,7 +5150,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/objects/{entityType}/{id}/effective-permissions": {
+    "/api/v1/objects/{entityType}/{id}/effective-access": {
         parameters: {
             query?: never;
             header?: never;
@@ -5086,12 +5158,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The caller's own effective permissions on the object.
+         * What the caller may do here; ?explain=true names the deciding rule.
          * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView' (case-insensitive).
          */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    explain?: boolean;
+                };
                 header?: never;
                 path: {
                     entityType: string;
@@ -5107,12 +5181,602 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["AccessAction"];
+                        "application/json": components["schemas"]["EffectiveAccessDto"];
                     };
                 };
             };
         };
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permission-groups/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Domains, scopes and the actions valid in each — the rule editor's vocabulary. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccessCatalogDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permission-groups/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The domain-level rights a given user or caving group would hold. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AccessPreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CapabilitiesDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permission-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** All permission groups with member and rule counts. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PermissionGroupDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates a permission group. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PermissionGroupWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PermissionGroupDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permission-groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One permission group. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PermissionGroupDto"];
+                    };
+                };
+            };
+        };
+        /** Renames or re-describes a permission group (protected ones refuse). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PermissionGroupWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PermissionGroupDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes a permission group and its rules (protected ones refuse). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permission-groups/{id}/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The group's rules. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccessEntryDto"][];
+                    };
+                };
+            };
+        };
+        /** Replaces the group's rules, bounded by what the caller holds. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AccessEntryReplaceRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccessEntryDto"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permission-groups/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trustees: users and caving groups. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PermissionGroupMemberDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Adds a trustee. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PermissionGroupMemberWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permission-groups/{id}/members/{memberKind}/{memberId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes a trustee (never the last way into full administration). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    memberKind: components["schemas"]["AccessSubjectKind"];
+                    memberId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/feature-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** All feature sets with their sizes. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureSetDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates a feature set. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FeatureSetWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureSetDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/feature-sets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One feature set. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureSetDto"];
+                    };
+                };
+            };
+        };
+        /** Renames or re-describes a feature set. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FeatureSetWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureSetDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes a feature set, unless a rule still points at it. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/feature-sets/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The features in the set the caller may read. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": string[];
+                    };
+                };
+            };
+        };
+        /** Replaces the set's membership (audited — this moves access). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FeatureSetMemberReplaceRequest"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         post?: never;
         delete?: never;
         options?: never;
@@ -5149,7 +5813,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Creates a caving group (Manager role and above); the caller becomes caving group owner. */
+        /** Creates a caving group; the caller becomes caving group owner. */
         post: {
             parameters: {
                 query?: never;
@@ -5210,7 +5874,7 @@ export interface paths {
                 };
             };
         };
-        /** Updates caving group metadata (caving group admin/owner). */
+        /** Updates caving group metadata. */
         put: {
             parameters: {
                 query?: never;
@@ -5238,7 +5902,7 @@ export interface paths {
             };
         };
         post?: never;
-        /** Deletes a caving group (caving group owner or Admin); objects keep owner-based access. */
+        /** Deletes a caving group; objects keep owner-based access. */
         delete: {
             parameters: {
                 query?: never;
@@ -5295,7 +5959,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Adds a member or changes their role (caving group admin/owner). */
+        /** Adds a member or changes their role. */
         post: {
             parameters: {
                 query?: never;
@@ -5338,7 +6002,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Removes a member (caving group admin/owner; owners cannot be removed). */
+        /** Removes a member; the owner seat needs permission management. */
         delete: {
             parameters: {
                 query?: never;
@@ -6143,26 +6807,79 @@ export interface components {
             sourceUrl: string;
         };
         AccessAction: string;
+        AccessCatalogDomainDto: {
+            domain: components["schemas"]["AccessDomain"];
+            name: string;
+            supportsKindNarrowing: boolean;
+            scopes: components["schemas"]["AccessCatalogScopeDto"][];
+        };
+        AccessCatalogDto: {
+            domains: components["schemas"]["AccessCatalogDomainDto"][];
+            featureSets: components["schemas"]["AccessCatalogFeatureSetDto"][];
+        };
+        AccessCatalogFeatureSetDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        AccessCatalogScopeDto: {
+            scopeKind: components["schemas"]["AccessScopeKind"];
+            requiresAnchor: boolean;
+            actions: components["schemas"]["AccessAction"][];
+        };
+        /** @enum {unknown} */
+        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs";
+        /** @enum {unknown} */
+        AccessEffect: "allow" | "deny";
+        AccessEntryDto: {
+            /** Format: int64 */
+            id: number;
+            effect: components["schemas"]["AccessEffect"];
+            domain: components["schemas"]["AccessDomain"];
+            actions: components["schemas"]["AccessAction"];
+            scopeKind: components["schemas"]["AccessScopeKind"];
+            /** Format: uuid */
+            scopeId: null | string;
+            scopeLabel: null | string;
+            featureKind: null | components["schemas"]["FeatureKind"];
+            /** Format: int64 */
+            featureTypeId: null | number;
+        };
+        AccessEntryReplaceRequest: {
+            entries: components["schemas"]["AccessEntryWrite"][];
+        };
+        AccessEntryWrite: {
+            effect: components["schemas"]["AccessEffect"];
+            domain: components["schemas"]["AccessDomain"];
+            actions: components["schemas"]["AccessAction"];
+            scopeKind: components["schemas"]["AccessScopeKind"];
+            /** Format: uuid */
+            scopeId: null | string;
+            featureKind: null | components["schemas"]["FeatureKind"];
+            /** Format: int64 */
+            featureTypeId: null | number;
+        };
+        AccessExplanationDto: {
+            action: components["schemas"]["AccessAction"];
+            allowed: boolean;
+            source: string;
+            level: null | components["schemas"]["AccessLevel"];
+            ruleName: null | string;
+            redacted: boolean;
+        };
+        /** @enum {unknown} */
+        AccessLevel: "object" | "collection" | "global" | null;
+        AccessPreviewRequest: {
+            subjectKind: components["schemas"]["AccessSubjectKind"];
+            /** Format: uuid */
+            subjectId: string;
+        };
+        /** @enum {unknown} */
+        AccessScopeKind: "all" | "own" | "cavingGroup" | "subtree" | "featureSet" | "object";
         /** @enum {unknown} */
         AccessSubjectKind: "user" | "cavingGroup";
         /** @enum {unknown} */
         AccountExportStatus: "queued" | "running" | "ready" | "failed";
-        AclEntryDto: {
-            subjectKind: components["schemas"]["AccessSubjectKind"];
-            /** Format: uuid */
-            subjectId: string;
-            subjectName: null | string;
-            permissions: components["schemas"]["AccessAction"];
-        };
-        AclEntryWrite: {
-            subjectKind: components["schemas"]["AccessSubjectKind"];
-            /** Format: uuid */
-            subjectId: string;
-            permissions: components["schemas"]["AccessAction"];
-        };
-        AclReplaceRequest: {
-            entries: components["schemas"]["AclEntryWrite"][];
-        };
         AdminSettingsDto: {
             mail: components["schemas"]["MailSettingsDto"];
             sms: components["schemas"]["SmsSettingsDto"];
@@ -6228,6 +6945,11 @@ export interface components {
         };
         AvatarPresetsDto: {
             presets: string[];
+        };
+        CapabilitiesDto: {
+            domains: {
+                [key: string]: components["schemas"]["AccessAction"];
+            };
         };
         CaveDto: {
             /** Format: uuid */
@@ -6564,6 +7286,10 @@ export interface components {
             /** Format: date-time */
             expiresAt: null | string;
         };
+        EffectiveAccessDto: {
+            actions: components["schemas"]["AccessAction"];
+            explain: null | components["schemas"]["AccessExplanationDto"][];
+        };
         EmailChangeRequest: {
             newEmail: string;
         };
@@ -6792,6 +7518,22 @@ export interface components {
             id: string;
             name: null | string;
             isPrimary: boolean;
+        };
+        FeatureSetDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            description: null | string;
+            /** Format: int32 */
+            memberCount: number;
+        };
+        FeatureSetMemberReplaceRequest: {
+            featureIds: string[];
+        };
+        FeatureSetWriteRequest: {
+            name: string;
+            description: null | string;
         };
         FeatureShareCreatedDto: {
             /** Format: uuid */
@@ -7241,6 +7983,13 @@ export interface components {
             preferredMethod: null | components["schemas"]["TwoFactorMethod"];
             methods: components["schemas"]["MfaMethodDto"][];
         };
+        MyPermissionGroupDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            isProtected: boolean;
+        };
         /** @enum {unknown} */
         NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts";
         NotificationCategoryDto: {
@@ -7264,6 +8013,28 @@ export interface components {
             emailEnabled: boolean;
             digest: components["schemas"]["NotificationDigest"];
             categories: components["schemas"]["NotificationCategoryWrite"][];
+        };
+        ObjectAccessEntryDto: {
+            /** Format: int64 */
+            id: number;
+            subjectKind: components["schemas"]["AccessSubjectKind"];
+            /** Format: uuid */
+            subjectId: string;
+            subjectName: null | string;
+            effect: components["schemas"]["AccessEffect"];
+            actions: components["schemas"]["AccessAction"];
+            scopeKind: components["schemas"]["AccessScopeKind"];
+        };
+        ObjectAccessEntryWrite: {
+            subjectKind: components["schemas"]["AccessSubjectKind"];
+            /** Format: uuid */
+            subjectId: string;
+            effect: components["schemas"]["AccessEffect"];
+            actions: components["schemas"]["AccessAction"];
+            scopeKind: components["schemas"]["AccessScopeKind"];
+        };
+        ObjectAccessReplaceRequest: {
+            entries: components["schemas"]["ObjectAccessEntryWrite"][];
         };
         PagedResultOfAuditEntryDto: {
             items: components["schemas"]["AuditEntryDto"][];
@@ -7354,6 +8125,34 @@ export interface components {
         PasswordChangeRequest: {
             currentPassword: string;
             newPassword: string;
+        };
+        PermissionGroupDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            description: null | string;
+            isProtected: boolean;
+            isSeeded: boolean;
+            /** Format: int32 */
+            memberCount: number;
+            /** Format: int32 */
+            entryCount: number;
+        };
+        PermissionGroupMemberDto: {
+            memberKind: components["schemas"]["AccessSubjectKind"];
+            /** Format: uuid */
+            memberId: string;
+            memberName: null | string;
+        };
+        PermissionGroupMemberWriteRequest: {
+            memberKind: components["schemas"]["AccessSubjectKind"];
+            /** Format: uuid */
+            memberId: string;
+        };
+        PermissionGroupWriteRequest: {
+            name: string;
+            description: null | string;
         };
         PhoneChallengeDto: {
             destination: string;

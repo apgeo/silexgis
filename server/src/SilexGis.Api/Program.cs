@@ -22,6 +22,7 @@ using SilexGis.Api.Features.History;
 using SilexGis.Api.Features.Jobs;
 using SilexGis.Api.Features.Map;
 using SilexGis.Api.Features.MapViews;
+using SilexGis.Api.Features.FeatureSets;
 using SilexGis.Api.Features.Permissions;
 using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
@@ -161,6 +162,7 @@ try
     api.MapMeNotificationEndpoints();
     api.MapMePreferenceEndpoints();
     api.MapMeDataExportEndpoints();
+    api.MapMeCapabilityEndpoints();
     api.MapUnsubscribeEndpoints();
     api.MapMfaEndpoints();
     api.MapTaxonomyEndpoints();
@@ -186,7 +188,9 @@ try
     api.MapTagEndpoints();
     api.MapAuditEndpoints();
     api.MapHistoryEndpoints();
-    api.MapObjectAclEndpoints();
+    api.MapObjectAccessEndpoints();
+    api.MapPermissionGroupEndpoints();
+    api.MapFeatureSetEndpoints();
     api.MapCavingGroupEndpoints();
     api.MapCaverEndpoints();
     api.MapUserEndpoints();

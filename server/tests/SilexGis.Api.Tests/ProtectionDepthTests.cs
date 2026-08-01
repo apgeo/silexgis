@@ -77,7 +77,7 @@ public sealed class ProtectionDepthTests : IAsyncLifetime, IDisposable
 
         // A ViewExactLocation grant on the OUTER root alone is insufficient — the cave
         // root still vetoes (most-restrictive wins over the whole ancestry).
-        await ReplaceFeatureAclAsync(owner, areaId,
+        await ReplaceFeatureAccessRulesAsync(owner, areaId,
             [(granteeId, AccessAction.Read | AccessAction.ViewExactLocation)]);
         await AssertEntranceObfuscatedAsync(grantee, caveId);
         (await grantee.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}"))
@@ -85,7 +85,7 @@ public sealed class ProtectionDepthTests : IAsyncLifetime, IDisposable
 
         // Grants on BOTH protected roots: the entrance point, the cave's precise text
         // fields and the approximate flag all open up.
-        await ReplaceFeatureAclAsync(owner, caveId,
+        await ReplaceFeatureAccessRulesAsync(owner, caveId,
             [(granteeId, AccessAction.Read | AccessAction.ViewExactLocation)]);
         var entrances = await grantee.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/entrances");
         entrances[0].GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldBe(ExactLon, 1e-9);
@@ -240,16 +240,18 @@ public sealed class ProtectionDepthTests : IAsyncLifetime, IDisposable
         entrances[0].GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
     }
 
-    private static async Task ReplaceFeatureAclAsync(
-        HttpClient client, Guid featureId, (Guid UserId, AccessAction Permissions)[] entries)
+    private static async Task ReplaceFeatureAccessRulesAsync(
+        HttpClient client, Guid featureId, (Guid UserId, AccessAction Actions)[] entries)
     {
-        var response = await client.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/acl", new
+        var response = await client.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/access", new
         {
             entries = entries.Select(e => new
             {
                 subjectKind = "user",
                 subjectId = e.UserId,
-                permissions = e.Permissions.ToString().Replace(" ", string.Empty),
+                effect = "allow",
+                actions = e.Actions.ToString().Replace(" ", string.Empty),
+                scopeKind = "object",
             }).ToArray(),
         });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());

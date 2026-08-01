@@ -56,6 +56,7 @@ public static class DependencyInjection
         services.AddScoped<Domain.Access.IAccessService, Permissions.AccessService>();
         services.AddScoped<Permissions.FeatureProtection>();
         services.AddScoped<Permissions.FullAdminGuard>();
+        services.AddScoped<Permissions.AccessExplainer>();
 
         return services;
     }

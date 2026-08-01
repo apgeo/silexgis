@@ -13,7 +13,7 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// 3D survey models end-to-end: upload/list/get/update/delete under the cave's ACL, the
+/// 3D survey models end-to-end: upload/list/get/update/delete under the cave's access rules, the
 /// anonymous delivery URL, and the location-protection rule — a model is withheld entirely
 /// unless the caller may view the exact location of every protected feature above its cave,
 /// whether that root is the cave itself or an area containing it.
@@ -146,7 +146,7 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable
         var owned = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/survey-models");
         owned.GetArrayLength().ShouldBe(1);
 
-        // An explicit ViewExactLocation ACL grant on the protected root flips them visible.
+        // An explicit ViewExactLocation grant on the protected root flips them visible.
         await GrantExactViewAsync(caveId);
 
         var granted = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/survey-models");
@@ -236,9 +236,19 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable
     /// <summary>Grants the reader Read + ViewExactLocation on one feature, whatever its kind.</summary>
     private async Task GrantExactViewAsync(Guid featureId)
     {
-        var grant = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/acl", new
+        var grant = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/access", new
         {
-            entries = new[] { new { subjectKind = "user", subjectId = readerId, permissions = "read, viewExactLocation" } },
+            entries = new[]
+            {
+                new
+                {
+                    subjectKind = "user",
+                    subjectId = readerId,
+                    effect = "allow",
+                    actions = "read, viewExactLocation",
+                    scopeKind = "object",
+                },
+            },
         });
         grant.StatusCode.ShouldBe(HttpStatusCode.OK, await grant.Content.ReadAsStringAsync());
     }

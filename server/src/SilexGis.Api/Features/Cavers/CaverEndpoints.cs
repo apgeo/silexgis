@@ -57,9 +57,8 @@ public sealed class CaverMergeRequestValidator : AbstractValidator<CaverMergeReq
 /// account, and are otherwise limited to whoever keeps the roster.
 /// </summary>
 /// <remarks>
-/// Roster-keeping is currently held by administrators and managers. It moves onto the general
-/// permission model when that lands — the checks are deliberately in one helper here so there is
-/// a single place to change.
+/// Roster-keeping is Write over the caver domain, and the checks all run through one helper so
+/// the disclosure rule and the edit rule can never drift apart.
 /// </remarks>
 public static class CaverEndpoints
 {
@@ -86,23 +85,40 @@ public static class CaverEndpoints
     }
 
     /// <summary>
-    /// Who may edit the roster. One place on purpose: this is the check that moves onto the
-    /// general permission model, and everything else here defers to it.
+    /// Who may edit the roster: Write over the caver domain. One place on purpose — every other
+    /// decision here, including how much of a person's contact details are disclosed, defers to it.
     /// </summary>
-    private static bool CanKeepRoster(UserContext user) =>
-        user.IsAdmin || user.Roles.Contains(GlobalRoles.Manager);
+    private static bool CanKeepRoster(AccessContext ctx) => Holds(ctx, AccessAction.Write);
 
-    private static async Task<Results<Ok<List<CaverDto>>, UnauthorizedHttpResult>> ListAsync(
+    /// <summary>
+    /// The domain check for the roster. A rule may be scoped to a single person, so the object
+    /// level is consulted whenever an id is in hand; without one the check is domain-wide.
+    /// </summary>
+    private static bool Holds(AccessContext? ctx, AccessAction action, Guid? caverId = null) =>
+        AccessEvaluator.Decide(
+            ctx,
+            AccessDomain.Cavers,
+            action,
+            caverId is { } id ? new AccessTargetFacts { ObjectId = id } : null).Allowed;
+
+    private static async Task<Results<Ok<List<CaverDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         string? search,
         bool? unlinked,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
+        }
+
+        if (!Holds(ctx, AccessAction.Read))
+        {
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         var query = db.Cavers.AsNoTracking();
@@ -118,16 +134,26 @@ public static class CaverEndpoints
         }
 
         var cavers = await query.OrderBy(c => c.FullName).Take(200).ToListAsync(ct);
-        return TypedResults.Ok(await ProjectAsync(db, user, cavers, ct));
+        return TypedResults.Ok(await ProjectAsync(db, user, ctx, cavers, ct));
     }
 
     private static async Task<Results<Ok<CaverDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
-        Guid id, SilexGisDbContext db, IUserContextAccessor userAccessor, CancellationToken ct)
+        Guid id,
+        SilexGisDbContext db,
+        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
+        }
+
+        if (!Holds(ctx, AccessAction.Read))
+        {
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         var caver = await db.Cavers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
@@ -136,7 +162,7 @@ public static class CaverEndpoints
             return ApiProblems.NotFound("caver.not_found");
         }
 
-        var projected = await ProjectAsync(db, user, [caver], ct);
+        var projected = await ProjectAsync(db, user, ctx, [caver], ct);
         return TypedResults.Ok(projected[0]);
     }
 
@@ -144,17 +170,19 @@ public static class CaverEndpoints
         CaverWriteRequest request,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!CanKeepRoster(user))
+        if (!CreateRules.MayCreate(ctx, AccessDomain.Cavers))
         {
-            return ApiProblems.Forbidden("caver.requires_roster_keeper");
+            return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
         var caver = new Caver
@@ -167,7 +195,7 @@ public static class CaverEndpoints
         db.Cavers.Add(caver);
         await db.SaveChangesAsync(ct);
 
-        var projected = await ProjectAsync(db, user, [caver], ct);
+        var projected = await ProjectAsync(db, user, ctx, [caver], ct);
         return TypedResults.Created($"/api/v1/cavers/{caver.Id}", projected[0]);
     }
 
@@ -176,10 +204,12 @@ public static class CaverEndpoints
         CaverWriteRequest request,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -192,7 +222,8 @@ public static class CaverEndpoints
 
         // Editing your own entry is allowed: it is your name on trips. Everyone else's is
         // roster-keeping.
-        if (!CanKeepRoster(user) && caver.UserId != user.UserId)
+        var canKeepRoster = CanKeepRoster(ctx);
+        if (!canKeepRoster && caver.UserId != ctx.UserId)
         {
             return ApiProblems.Forbidden("caver.requires_roster_keeper");
         }
@@ -200,7 +231,7 @@ public static class CaverEndpoints
         caver.FullName = request.FullName.Trim();
         caver.Email = Trimmed(request.Email);
         caver.Phone = Trimmed(request.Phone);
-        if (CanKeepRoster(user))
+        if (canKeepRoster)
         {
             // Remarks are written about a person, not by them, so the subject cannot rewrite them.
             caver.Notes = Trimmed(request.Notes);
@@ -208,21 +239,21 @@ public static class CaverEndpoints
 
         await db.SaveChangesAsync(ct);
 
-        var projected = await ProjectAsync(db, user, [caver], ct);
+        var projected = await ProjectAsync(db, user, ctx, [caver], ct);
         return TypedResults.Ok(projected[0]);
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
-        Guid id, SilexGisDbContext db, IUserContextAccessor userAccessor, FullAdminGuard fullAdminGuard,
+        Guid id, SilexGisDbContext db, IAccessContextAccessor accessAccessor, FullAdminGuard fullAdminGuard,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!CanKeepRoster(user))
+        if (!Holds(ctx, AccessAction.Delete, id))
         {
             return ApiProblems.Forbidden("caver.requires_roster_keeper");
         }
@@ -274,7 +305,7 @@ public static class CaverEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!CanKeepRoster(user))
+        if (!CanKeepRoster(ctx))
         {
             return ApiProblems.Forbidden("caver.requires_roster_keeper");
         }
@@ -317,21 +348,26 @@ public static class CaverEndpoints
         caver.UserId = request.UserId;
         await db.SaveChangesAsync(ct);
 
-        var projected = await ProjectAsync(db, user, [caver], ct);
+        var projected = await ProjectAsync(db, user, ctx, [caver], ct);
         return TypedResults.Ok(projected[0]);
     }
 
     private static async Task<Results<Ok<CaverDto>, UnauthorizedHttpResult, ProblemHttpResult>> UnlinkAccountAsync(
-        Guid id, SilexGisDbContext db, IUserContextAccessor userAccessor, FullAdminGuard fullAdminGuard,
+        Guid id,
+        SilexGisDbContext db,
+        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
+        FullAdminGuard fullAdminGuard,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!CanKeepRoster(user))
+        if (!CanKeepRoster(ctx))
         {
             return ApiProblems.Forbidden("caver.requires_roster_keeper");
         }
@@ -356,7 +392,7 @@ public static class CaverEndpoints
 
         await transaction.CommitAsync(ct);
 
-        var projected = await ProjectAsync(db, user, [caver], ct);
+        var projected = await ProjectAsync(db, user, ctx, [caver], ct);
         return TypedResults.Ok(projected[0]);
     }
 
@@ -376,7 +412,7 @@ public static class CaverEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!CanKeepRoster(user))
+        if (!CanKeepRoster(ctx))
         {
             return ApiProblems.Forbidden("caver.requires_roster_keeper");
         }
@@ -474,7 +510,7 @@ public static class CaverEndpoints
 
         await transaction.CommitAsync(ct);
 
-        var projected = await ProjectAsync(db, user, [target], ct);
+        var projected = await ProjectAsync(db, user, ctx, [target], ct);
         return TypedResults.Ok(projected[0]);
     }
 
@@ -483,14 +519,18 @@ public static class CaverEndpoints
     /// the roster can never show more than that person's profile would.
     /// </summary>
     private static async Task<List<CaverDto>> ProjectAsync(
-        SilexGisDbContext db, UserContext user, IReadOnlyList<Caver> cavers, CancellationToken ct)
+        SilexGisDbContext db,
+        UserContext user,
+        AccessContext ctx,
+        IReadOnlyList<Caver> cavers,
+        CancellationToken ct)
     {
         if (cavers.Count == 0)
         {
             return [];
         }
 
-        var canKeepRoster = CanKeepRoster(user);
+        var canKeepRoster = CanKeepRoster(ctx);
         var ids = cavers.Select(c => c.Id).ToList();
 
         var memberships = await (

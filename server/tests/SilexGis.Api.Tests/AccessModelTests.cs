@@ -69,6 +69,9 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable
             [
                 AccessDomain.MapLayers, AccessDomain.Tags, AccessDomain.Taxonomies,
                 AccessDomain.Hierarchies, AccessDomain.Cavers, AccessDomain.CavingGroups,
+                // A saved view is the caller's own workspace state, so every account keeps
+                // being able to make one.
+                AccessDomain.MapViews,
             ],
             ignoreOrder: true);
 
@@ -247,31 +250,47 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable
         var caveId = await CreateCaveAsync(owner, $"Amp Cave {suffix}", "private", cavingGroupId: null);
 
         // The owner delegates Read + ManagePermissions — but not ViewExactLocation.
-        (await owner.PutAsJsonAsync($"/api/v1/objects/feature/{caveId}/acl", new
+        (await owner.PutAsJsonAsync($"/api/v1/objects/feature/{caveId}/access", new
         {
             entries = new[]
             {
-                new { subjectKind = "user", subjectId = delegateId, permissions = "Read,ManagePermissions" },
+                new
+                {
+                    subjectKind = "user", subjectId = delegateId, effect = "allow",
+                    actions = "read, managePermissions", scopeKind = "object",
+                },
             },
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // The delegate may pass on what they hold…
-        (await delegated.PutAsJsonAsync($"/api/v1/objects/feature/{caveId}/acl", new
+        (await delegated.PutAsJsonAsync($"/api/v1/objects/feature/{caveId}/access", new
         {
             entries = new object[]
             {
-                new { subjectKind = "user", subjectId = delegateId, permissions = "Read,ManagePermissions" },
-                new { subjectKind = "user", subjectId = granteeId, permissions = "Read" },
+                new
+                {
+                    subjectKind = "user", subjectId = delegateId, effect = "allow",
+                    actions = "read, managePermissions", scopeKind = "object",
+                },
+                new { subjectKind = "user", subjectId = granteeId, effect = "allow", actions = "read", scopeKind = "object" },
             },
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // …but not rights they lack: no amplification.
-        var exceeded = await delegated.PutAsJsonAsync($"/api/v1/objects/feature/{caveId}/acl", new
+        var exceeded = await delegated.PutAsJsonAsync($"/api/v1/objects/feature/{caveId}/access", new
         {
             entries = new object[]
             {
-                new { subjectKind = "user", subjectId = delegateId, permissions = "Read,ManagePermissions" },
-                new { subjectKind = "user", subjectId = granteeId, permissions = "Read,ViewExactLocation" },
+                new
+                {
+                    subjectKind = "user", subjectId = delegateId, effect = "allow",
+                    actions = "read, managePermissions", scopeKind = "object",
+                },
+                new
+                {
+                    subjectKind = "user", subjectId = granteeId, effect = "allow",
+                    actions = "read, viewExactLocation", scopeKind = "object",
+                },
             },
         });
         exceeded.StatusCode.ShouldBe(HttpStatusCode.Forbidden);

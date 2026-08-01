@@ -53,7 +53,7 @@ public static class TagEndpoints
         return api;
     }
 
-    private static async Task<Results<Ok<List<TagDto>>, UnauthorizedHttpResult>> ListTagsAsync(
+    private static async Task<Results<Ok<List<TagDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListTagsAsync(
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         string? search,
@@ -63,6 +63,14 @@ public static class TagEndpoints
         if (ctx is null)
         {
             return TypedResults.Unauthorized();
+        }
+
+        // Every account holds this through the All Users seed, so the catalogue reads as
+        // openly as it always did — but as an entry an installation can tighten, rather
+        // than as an absence of any rule.
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Tags, AccessAction.Read, null).Allowed)
+        {
+            return ApiProblems.Forbidden();
         }
 
         var query = db.Tags.AsNoTracking();
@@ -143,6 +151,14 @@ public static class TagEndpoints
         var tag = await db.Tags.FirstOrDefaultAsync(x => x.Slug == slug, ct);
         if (tag is null)
         {
+            // Applying an existing tag is part of writing the object, which is already
+            // established. Coining a NEW one adds to a vocabulary everybody shares, so
+            // that much is the tag domain's business rather than this object's.
+            if (!CreateRules.MayCreate(ctx, AccessDomain.Tags))
+            {
+                return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
+            }
+
             tag = new Tag { Name = name, Slug = slug };
             db.Tags.Add(tag);
             // Materialize the identity now — the tagging row references it by value.

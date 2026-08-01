@@ -61,7 +61,7 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
         subjectKind: entry.subjectKind,
         subjectId: entry.subjectId,
         subjectName: entry.subjectName ?? null,
-        permissions: parseFlags(entry.permissions),
+        permissions: parseFlags(entry.actions),
       })));
     }
   }, [open, acl]);
@@ -105,7 +105,11 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
         .map((e) => ({
           subjectKind: e.subjectKind,
           subjectId: e.subjectId,
-          permissions: [...e.permissions].join(', ') as AclEntry['permissions'],
+          actions: [...e.permissions].join(', ') as AclEntry['actions'],
+          // This tab edits plain grants on this one object; denies and subtree reach
+          // are the richer permissions surface's business.
+          effect: 'allow' as const,
+          scopeKind: 'object' as const,
         })));
       message.success(t('common.saved'));
       onClose();

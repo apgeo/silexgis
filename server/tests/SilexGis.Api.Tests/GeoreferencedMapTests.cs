@@ -158,14 +158,14 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
 
         // An explicit ViewExactLocation grant on the cave is exactly what the omission
         // waits for: with it, the raster becomes readable and listable again.
-        await ReplaceFeatureAclAsync(
+        await ReplaceFeatureAccessRulesAsync(
             owner, caveFeatureId, [(outsiderId, AccessAction.Read | AccessAction.ViewExactLocation)]);
 
         (await outsider.GetAsync($"/api/v1/georeferenced-maps/{id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await MapIdsOfCaveAsync(outsider, caveFeatureId)).ShouldContain(id);
 
         // Revoking the grant hides it again — the grant is the only thing holding it open.
-        await ReplaceFeatureAclAsync(owner, caveFeatureId, []);
+        await ReplaceFeatureAccessRulesAsync(owner, caveFeatureId, []);
         (await outsider.GetAsync($"/api/v1/georeferenced-maps/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await MapIdsOfCaveAsync(outsider, caveFeatureId)).ShouldNotContain(id);
     }
@@ -276,17 +276,21 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
             .Select(m => m.GetProperty("id").GetGuid())];
     }
 
-    /// <summary>Replaces the grants on a feature (the one ACL route name of the feature world).</summary>
-    private static async Task ReplaceFeatureAclAsync(
-        HttpClient client, Guid featureId, (Guid SubjectId, AccessAction Permissions)[] entries)
+    /// <summary>
+    /// Replaces the direct access rules on a feature (the one route name of the feature world).
+    /// </summary>
+    private static async Task ReplaceFeatureAccessRulesAsync(
+        HttpClient client, Guid featureId, (Guid SubjectId, AccessAction Actions)[] entries)
     {
-        var response = await client.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/acl", new
+        var response = await client.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/access", new
         {
             entries = entries.Select(e => new
             {
                 subjectKind = "user",
                 subjectId = e.SubjectId,
-                permissions = e.Permissions.ToString().Replace(" ", string.Empty),
+                effect = "allow",
+                actions = e.Actions.ToString().Replace(" ", string.Empty),
+                scopeKind = "object",
             }).ToArray(),
         });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());

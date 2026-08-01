@@ -45,10 +45,15 @@ public sealed class CavingGroupMemberWriteRequestValidator : AbstractValidator<C
 }
 
 /// <summary>
-/// CavingGroups: Manager+ creates them (creator becomes caving group owner); caving group owners/admins manage
-/// membership and metadata. CavingGroup lists are visible to all authenticated users — caving groups
-/// are an organizational structure, not protected content.
+/// CavingGroups: whoever holds Create in the caving-group domain makes them (the creator joins as
+/// caving group owner); Write governs metadata and the roster, ManagePermissions the owner seat.
+/// Reads are held domain-wide by every account, so caving groups stay what they are — an
+/// organizational structure, not protected content.
 /// </summary>
+/// <remarks>
+/// The membership role stored on a roster row is organizational metadata only: it labels who runs
+/// the club, and no authorization decision anywhere reads it. Rights come from access entries.
+/// </remarks>
 public static class CavingGroupEndpoints
 {
     public static RouteGroupBuilder MapCavingGroupEndpoints(this RouteGroupBuilder api)
@@ -58,27 +63,32 @@ public static class CavingGroupEndpoints
         cavingGroups.MapGet("/", ListAsync).WithSummary("All caving groups with member counts.");
         cavingGroups.MapGet("/{id:guid}", GetAsync).WithSummary("Single caving group.");
         cavingGroups.MapPost("/", CreateAsync).WithValidation<CavingGroupWriteRequest>()
-            .WithSummary("Creates a caving group (Manager role and above); the caller becomes caving group owner.");
+            .WithSummary("Creates a caving group; the caller becomes caving group owner.");
         cavingGroups.MapPut("/{id:guid}", UpdateAsync).WithValidation<CavingGroupWriteRequest>()
-            .WithSummary("Updates caving group metadata (caving group admin/owner).");
+            .WithSummary("Updates caving group metadata.");
         cavingGroups.MapDelete("/{id:guid}", DeleteAsync)
-            .WithSummary("Deletes a caving group (caving group owner or Admin); objects keep owner-based access.");
+            .WithSummary("Deletes a caving group; objects keep owner-based access.");
         cavingGroups.MapGet("/{id:guid}/members", ListMembersAsync).WithSummary("Roster of the caving group, people with their roles.");
         cavingGroups.MapPost("/{id:guid}/members", UpsertMemberAsync).WithValidation<CavingGroupMemberWriteRequest>()
-            .WithSummary("Adds a member or changes their role (caving group admin/owner).");
+            .WithSummary("Adds a member or changes their role.");
         cavingGroups.MapDelete("/{id:guid}/members/{caverId:guid}", RemoveMemberAsync)
-            .WithSummary("Removes a member (caving group admin/owner; owners cannot be removed).");
+            .WithSummary("Removes a member; the owner seat needs permission management.");
 
         return api;
     }
 
-    private static async Task<Results<Ok<List<CavingGroupDto>>, UnauthorizedHttpResult>> ListAsync(
-        SilexGisDbContext db, IUserContextAccessor userAccessor, CancellationToken ct)
+    private static async Task<Results<Ok<List<CavingGroupDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
+        SilexGisDbContext db, IAccessContextAccessor accessAccessor, CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
+        }
+
+        if (!Holds(ctx, AccessAction.Read))
+        {
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         var cavingGroups = await db.CavingGroups.AsNoTracking()
@@ -90,12 +100,17 @@ public static class CavingGroupEndpoints
     }
 
     private static async Task<Results<Ok<CavingGroupDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
-        Guid id, SilexGisDbContext db, IUserContextAccessor userAccessor, CancellationToken ct)
+        Guid id, SilexGisDbContext db, IAccessContextAccessor accessAccessor, CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
+        }
+
+        if (!Holds(ctx, AccessAction.Read, id))
+        {
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         var cavingGroup = await db.CavingGroups.AsNoTracking()
@@ -110,17 +125,19 @@ public static class CavingGroupEndpoints
         CavingGroupWriteRequest request,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        if (!user.IsAdmin && !user.Roles.Contains(GlobalRoles.Manager))
+        if (!CreateRules.MayCreate(ctx, AccessDomain.CavingGroups))
         {
-            return ApiProblems.Forbidden("caving_group.create_requires_manager");
+            return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
         var slug = Tag.Slugify(request.Name);
@@ -160,19 +177,19 @@ public static class CavingGroupEndpoints
         Guid id,
         CavingGroupWriteRequest request,
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var cavingGroup = await db.CavingGroups.FirstOrDefaultAsync(t => t.Id == id, ct);
         if (cavingGroup is null)
         {
             return ApiProblems.NotFound("caving_group.not_found");
         }
 
-        if (user is null || (!user.IsAdmin && !user.IsCavingGroupAdmin(id)))
+        if (!Holds(ctx, AccessAction.Write, id))
         {
-            return ApiProblems.Forbidden("caving_group.requires_caving_group_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         cavingGroup.Name = request.Name.Trim();
@@ -188,25 +205,20 @@ public static class CavingGroupEndpoints
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
         Guid id,
         SilexGisDbContext db,
-        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         FullAdminGuard fullAdminGuard,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
+        var ctx = await accessAccessor.GetAsync(ct);
         var cavingGroup = await db.CavingGroups.FirstOrDefaultAsync(t => t.Id == id, ct);
         if (cavingGroup is null)
         {
             return ApiProblems.NotFound("caving_group.not_found");
         }
 
-        var isOwner = user is not null && await (
-            from membership in db.CavingGroupMemberships
-            join caver in db.Cavers on membership.CaverId equals caver.Id
-            select new { membership.CavingGroupId, membership.Role, caver.UserId })
-            .AnyAsync(m => m.CavingGroupId == id && m.UserId == user.UserId && m.Role == CavingGroupRole.Owner, ct);
-        if (user is null || (!user.IsAdmin && !isOwner))
+        if (!Holds(ctx, AccessAction.Delete, id))
         {
-            return ApiProblems.Forbidden("caving_group.requires_owner");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         // A DENY anchored on this group would be silently cancelled by deleting it —
@@ -255,12 +267,22 @@ public static class CavingGroupEndpoints
     }
 
     private static async Task<Results<Ok<List<CavingGroupMemberDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListMembersAsync(
-        Guid id, SilexGisDbContext db, IUserContextAccessor userAccessor, CancellationToken ct)
+        Guid id,
+        SilexGisDbContext db,
+        IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
+        }
+
+        if (!Holds(ctx, AccessAction.Read, id))
+        {
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         if (!await db.CavingGroups.AnyAsync(t => t.Id == id, ct))
@@ -291,10 +313,12 @@ public static class CavingGroupEndpoints
         CavingGroupMemberWriteRequest request,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -306,9 +330,9 @@ public static class CavingGroupEndpoints
             return ApiProblems.NotFound("caving_group.not_found");
         }
 
-        if (!user.IsAdmin && !user.IsCavingGroupAdmin(id))
+        if (!Holds(ctx, AccessAction.Write, id))
         {
-            return ApiProblems.Forbidden("caving_group.requires_caving_group_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
         var caver = await db.Cavers.FirstOrDefaultAsync(c => c.Id == request.CaverId, ct);
@@ -327,8 +351,10 @@ public static class CavingGroupEndpoints
         }
         else
         {
-            // Owners can only be demoted by an Admin (a caving group admin cannot dethrone the owner).
-            if (member.Role == CavingGroupRole.Owner && !user.IsAdmin)
+            // The owner seat is the one roster row that is not ordinary metadata: it names who
+            // answers for the group, so moving it takes permission management over the group,
+            // not merely the right to edit the roster.
+            if (member.Role == CavingGroupRole.Owner && !Holds(ctx, AccessAction.ManagePermissions, id))
             {
                 return ApiProblems.Forbidden("caving_group.owner_immutable");
             }
@@ -366,11 +392,13 @@ public static class CavingGroupEndpoints
         Guid caverId,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        IAccessContextAccessor accessAccessor,
         FullAdminGuard fullAdminGuard,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (user is null || ctx is null)
         {
             return TypedResults.Unauthorized();
         }
@@ -384,14 +412,17 @@ public static class CavingGroupEndpoints
 
         var memberUserId = await db.Cavers.Where(c => c.Id == caverId).Select(c => c.UserId).FirstOrDefaultAsync(ct);
 
-        // Members may leave on their own; otherwise caving group admin/owner (or Admin) required.
+        // Members may leave on their own — nobody is held in a club against their will;
+        // removing anyone else is a roster edit.
         var selfRemoval = memberUserId == user.UserId;
-        if (!selfRemoval && !user.IsAdmin && !user.IsCavingGroupAdmin(id))
+        if (!selfRemoval && !Holds(ctx, AccessAction.Write, id))
         {
-            return ApiProblems.Forbidden("caving_group.requires_caving_group_admin");
+            return ApiProblems.Forbidden("access.forbidden");
         }
 
-        if (member.Role == CavingGroupRole.Owner && !user.IsAdmin)
+        // Vacating the owner seat takes permission management over the group, the same as
+        // moving it does — including when the owner is the one leaving.
+        if (member.Role == CavingGroupRole.Owner && !Holds(ctx, AccessAction.ManagePermissions, id))
         {
             return ApiProblems.Forbidden("caving_group.owner_immutable");
         }
@@ -430,4 +461,16 @@ public static class CavingGroupEndpoints
         await transaction.CommitAsync(ct);
         return TypedResults.NoContent();
     }
+
+    /// <summary>
+    /// The domain check for caving groups. A rule may be scoped to a single group, so the object
+    /// level is consulted whenever an id is in hand; without one the check is domain-wide and only
+    /// unnarrowed global rules can answer it.
+    /// </summary>
+    private static bool Holds(AccessContext? ctx, AccessAction action, Guid? cavingGroupId = null) =>
+        AccessEvaluator.Decide(
+            ctx,
+            AccessDomain.CavingGroups,
+            action,
+            cavingGroupId is { } id ? new AccessTargetFacts { ObjectId = id } : null).Allowed;
 }

@@ -394,7 +394,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
         var entranceId = entrance.GetProperty("id").GetGuid();
 
         // Read+Write, deliberately WITHOUT ViewExactLocation.
-        await ReplaceAclAsync(owner, caveId, AccessAction.Read | AccessAction.Write);
+        await ReplaceAccessRulesAsync(owner, caveId, AccessAction.Read | AccessAction.Write);
 
         // The grantee only ever sees the obfuscated projection…
         var seenByGrantee = await GetJsonAsync(outsider, $"/api/v1/caves/{caveId}");
@@ -530,7 +530,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
     /// <summary>
     /// The cave slice's own parity check over the feature supertype: what
     /// <c>VisibleTo</c> returns for cave features and what the SQL fragment selects must
-    /// never diverge (the broader matrix lives with the ACL suite).
+    /// never diverge (the broader matrix lives with the explicit-grant suite).
     /// </summary>
     private async Task AssertCaveVisibilityParityAsync(Guid userId)
     {
@@ -633,10 +633,13 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement.Clone();
     }
 
-    /// <summary>Replaces the outsider's grants on a feature (any kind shares the "feature" target name).</summary>
-    private async Task ReplaceAclAsync(HttpClient client, Guid featureId, AccessAction permissions)
+    /// <summary>
+    /// Replaces the outsider's direct access rules on a feature (any kind shares the
+    /// "feature" target name).
+    /// </summary>
+    private async Task ReplaceAccessRulesAsync(HttpClient client, Guid featureId, AccessAction actions)
     {
-        var response = await client.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/acl", new
+        var response = await client.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/access", new
         {
             entries = new[]
             {
@@ -644,7 +647,9 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
                 {
                     subjectKind = "user",
                     subjectId = outsiderId,
-                    permissions = permissions.ToString().Replace(" ", string.Empty),
+                    effect = "allow",
+                    actions = actions.ToString().Replace(" ", string.Empty),
+                    scopeKind = "object",
                 },
             },
         });

@@ -16,11 +16,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// The explicit-grant layer end-to-end over the object-ACL target vocabulary: grants on
-/// features (one route name for every kind) unlock read/write/exact-location for users
-/// and via caving groups, mapView grants are manageable and effective, ManagePermissions gates
-/// the ACL endpoints, newly granted people are notified, and caving groups have their own
-/// lifecycle rules.
+/// The explicit-grant layer end-to-end over the per-object target vocabulary: direct access
+/// rules on features (one route name for every kind) unlock read/write/exact-location for
+/// users and via caving groups, mapView rules are manageable and effective,
+/// ManagePermissions gates the per-object access endpoints, newly granted people are
+/// notified, and caving groups have their own lifecycle rules.
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
@@ -59,43 +59,42 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task User_grants_unlock_read_write_and_manage_progressively()
     {
-        var caveId = await CreateCaveAsync("ACL Cave", "private");
+        var caveId = await CreateCaveAsync("Granted Cave", "private");
 
         // Baseline: a private cave is invisible to the grantee everywhere — detail, list,
-        // and the ACL/effective endpoints all deny by non-disclosure.
+        // and the access/effective endpoints all deny by non-disclosure.
         (await grantee.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await ListCaveIdsAsync(grantee)).ShouldNotContain(caveId);
-        (await grantee.GetAsync($"/api/v1/objects/feature/{caveId}/acl")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await grantee.GetAsync($"/api/v1/objects/feature/{caveId}/effective-permissions"))
+        (await grantee.GetAsync($"/api/v1/objects/feature/{caveId}/access")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await grantee.GetAsync($"/api/v1/objects/feature/{caveId}/effective-access"))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
-        // Read grant → detail + list + effective-permissions open up; writes still 403.
-        await ReplaceAclAsync(owner, "feature", caveId, [(AccessSubjectKind.User, granteeId, AccessAction.Read)]);
+        // Read grant → detail + list + effective-access open up; writes still 403.
+        await ReplaceAccessRulesAsync(owner, "feature", caveId, [(AccessSubjectKind.User, granteeId, AccessAction.Read)]);
         (await grantee.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await ListCaveIdsAsync(grantee)).ShouldContain(caveId);
-        // Flags enums serialize as a comma-joined string; assert loosely on the raw body.
-        var effectiveRaw = await (await grantee.GetAsync($"/api/v1/objects/feature/{caveId}/effective-permissions"))
-            .Content.ReadAsStringAsync();
-        effectiveRaw.ShouldContain("read");
-        effectiveRaw.ShouldNotContain("write");
-        (await grantee.PutAsJsonAsync($"/api/v1/caves/{caveId}", CaveBody("ACL Cave renamed", "private")))
+        // Flags enums serialize as a comma-joined string; assert loosely on that string.
+        var effectiveActions = await EffectiveActionsAsync(grantee, "feature", caveId);
+        effectiveActions.ShouldContain("read");
+        effectiveActions.ShouldNotContain("write");
+        (await grantee.PutAsJsonAsync($"/api/v1/caves/{caveId}", CaveBody("Granted Cave renamed", "private")))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        // Read+Write grant → update succeeds; ACL management still locked.
-        await ReplaceAclAsync(owner, "feature", caveId,
+        // Read+Write grant → update succeeds; managing the rules still locked.
+        await ReplaceAccessRulesAsync(owner, "feature", caveId,
             [(AccessSubjectKind.User, granteeId, AccessAction.Read | AccessAction.Write)]);
-        (await grantee.PutWithIfMatchAsync($"/api/v1/caves/{caveId}", CaveBody("ACL Cave renamed", "private")))
+        (await grantee.PutWithIfMatchAsync($"/api/v1/caves/{caveId}", CaveBody("Granted Cave renamed", "private")))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await grantee.GetAsync($"/api/v1/objects/feature/{caveId}/acl")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await grantee.GetAsync($"/api/v1/objects/feature/{caveId}/access")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        // ManagePermissions grant → the grantee can now administer the ACL.
-        await ReplaceAclAsync(owner, "feature", caveId,
+        // ManagePermissions grant → the grantee can now administer the rules themselves.
+        await ReplaceAccessRulesAsync(owner, "feature", caveId,
             [(AccessSubjectKind.User, granteeId,
               AccessAction.Read | AccessAction.Write | AccessAction.ManagePermissions)]);
-        (await grantee.GetAsync($"/api/v1/objects/feature/{caveId}/acl")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await grantee.GetAsync($"/api/v1/objects/feature/{caveId}/access")).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Revoke everything → back to invisible.
-        await ReplaceAclAsync(owner, "feature", caveId, []);
+        await ReplaceAccessRulesAsync(owner, "feature", caveId, []);
         (await grantee.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
@@ -110,17 +109,17 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
             role = "member",
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // A private cave (NOT caving group-bound) with a caving group ACL grant becomes readable to members.
-        var caveId = await CreateCaveAsync("CavingGroup ACL Cave", "private");
+        // A private cave (NOT caving group-bound) with a caving group rule becomes readable to members.
+        var caveId = await CreateCaveAsync("CavingGroup Granted Cave", "private");
         (await grantee.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        await ReplaceAclAsync(owner, "feature", caveId, [(AccessSubjectKind.CavingGroup, cavingGroupId, AccessAction.Read)]);
+        await ReplaceAccessRulesAsync(owner, "feature", caveId, [(AccessSubjectKind.CavingGroup, cavingGroupId, AccessAction.Read)]);
         (await grantee.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await manager.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.OK); // caving group owner too
 
-        // A caving group grant notifies each member — and only once: re-saving the same ACL is
-        // not news and must not queue another message.
+        // A caving group grant notifies each member — and only once: re-saving the same rule
+        // is not news and must not queue another message.
         (await CountPermissionNotificationsAsync(granteeId)).ShouldBe(1);
-        await ReplaceAclAsync(owner, "feature", caveId, [(AccessSubjectKind.CavingGroup, cavingGroupId, AccessAction.Read)]);
+        await ReplaceAccessRulesAsync(owner, "feature", caveId, [(AccessSubjectKind.CavingGroup, cavingGroupId, AccessAction.Read)]);
         (await CountPermissionNotificationsAsync(granteeId)).ShouldBe(1);
 
         // EF ↔ SQL parity of the feature filter including the caving group-subject branch,
@@ -223,7 +222,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
         entrancesBefore[0].GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
 
         // With a ViewExactLocation (+Read) grant on the cave feature: exact coordinates.
-        await ReplaceAclAsync(owner, "feature", caveId,
+        await ReplaceAccessRulesAsync(owner, "feature", caveId,
             [(AccessSubjectKind.User, granteeId, AccessAction.Read | AccessAction.ViewExactLocation)]);
         var entrancesAfter = await grantee.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/entrances");
         entrancesAfter[0].GetProperty("geom").GetProperty("coordinates")[0].GetDouble().ShouldBe(exactLon, 1e-9);
@@ -235,7 +234,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
     {
         var createResponse = await owner.PostAsJsonAsync("/api/v1/map-views/", new
         {
-            name = $"ACL View {Guid.NewGuid():N}"[..30],
+            name = $"Granted View {Guid.NewGuid():N}"[..30],
             description = (string?)null,
             config = new { },
             isHome = false,
@@ -245,35 +244,33 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
         createResponse.StatusCode.ShouldBe(HttpStatusCode.Created, await createResponse.Content.ReadAsStringAsync());
         var viewId = (await createResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
 
-        // Baseline: a private view is absent from the grantee's list and its ACL
+        // Baseline: a private view is absent from the grantee's list and its access
         // endpoints deny by non-disclosure.
         (await ListMapViewIdsAsync(grantee)).ShouldNotContain(viewId);
-        (await grantee.GetAsync($"/api/v1/objects/mapView/{viewId}/acl")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await grantee.GetAsync($"/api/v1/objects/mapView/{viewId}/access")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
         // Read grant → the view appears in the grantee's list; writes still locked.
-        await ReplaceAclAsync(owner, "mapView", viewId, [(AccessSubjectKind.User, granteeId, AccessAction.Read)]);
+        await ReplaceAccessRulesAsync(owner, "mapView", viewId, [(AccessSubjectKind.User, granteeId, AccessAction.Read)]);
         (await ListMapViewIdsAsync(grantee)).ShouldContain(viewId);
-        var effectiveRaw = await (await grantee.GetAsync($"/api/v1/objects/mapView/{viewId}/effective-permissions"))
-            .Content.ReadAsStringAsync();
-        effectiveRaw.ShouldContain("read");
+        (await EffectiveActionsAsync(grantee, "mapView", viewId)).ShouldContain("read");
         (await grantee.PutAsJsonAsync($"/api/v1/map-views/{viewId}", MapViewBody("Renamed by grantee")))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         // Read+Write grant → the grantee can edit the view.
-        await ReplaceAclAsync(owner, "mapView", viewId,
+        await ReplaceAccessRulesAsync(owner, "mapView", viewId,
             [(AccessSubjectKind.User, granteeId, AccessAction.Read | AccessAction.Write)]);
         (await grantee.PutAsJsonAsync($"/api/v1/map-views/{viewId}", MapViewBody("Renamed by grantee")))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Revoke → gone from the list, and an edit attempt is "not found", not 403.
-        await ReplaceAclAsync(owner, "mapView", viewId, []);
+        await ReplaceAccessRulesAsync(owner, "mapView", viewId, []);
         (await ListMapViewIdsAsync(grantee)).ShouldNotContain(viewId);
         (await grantee.PutAsJsonAsync($"/api/v1/map-views/{viewId}", MapViewBody("Renamed again")))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
-    public async Task Acl_endpoint_validates_target_vocabulary_and_subjects()
+    public async Task Access_endpoint_validates_target_vocabulary_and_subjects()
     {
         var caveId = await CreateCaveAsync("Validation Cave", "private");
 
@@ -281,35 +278,47 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
         // Anything else — including the retired per-kind names — is rejected with a stable code.
         foreach (var badName in new[] { "cave", "caveEntrance", "surfaceFeature", "banana" })
         {
-            var response = await owner.GetAsync($"/api/v1/objects/{badName}/{caveId}/acl");
+            var response = await owner.GetAsync($"/api/v1/objects/{badName}/{caveId}/access");
             response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, badName);
-            (await response.Content.ReadAsStringAsync()).ShouldContain("acl.entity_type_unknown", customMessage: badName);
+            (await response.Content.ReadAsStringAsync())
+                .ShouldContain("access.entity_type_unknown", customMessage: badName);
         }
 
         // Route names are case-insensitive (clients echo camelCase payload values back into URLs).
-        (await owner.GetAsync($"/api/v1/objects/FEATURE/{caveId}/acl")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.GetAsync($"/api/v1/objects/FEATURE/{caveId}/access")).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // A grant subject that does not exist is refused.
-        var badSubject = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{caveId}/acl", new
+        // A rule subject that does not exist is refused.
+        var badSubject = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{caveId}/access", new
         {
-            entries = new[] { new { subjectKind = "user", subjectId = Guid.NewGuid(), permissions = "read" } },
+            entries = new[]
+            {
+                new
+                {
+                    subjectKind = "user",
+                    subjectId = Guid.NewGuid(),
+                    effect = "allow",
+                    actions = "read",
+                    scopeKind = "object",
+                },
+            },
         });
         badSubject.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await badSubject.Content.ReadAsStringAsync()).ShouldContain("acl.subject_unknown");
+        (await badSubject.Content.ReadAsStringAsync()).ShouldContain("access.subject_unknown");
 
         // An unknown target id is "not found" — never a hint that the id shape was right.
-        (await owner.PutAsJsonAsync($"/api/v1/objects/feature/{Guid.NewGuid()}/acl", new
+        (await owner.PutAsJsonAsync($"/api/v1/objects/feature/{Guid.NewGuid()}/access", new
         {
             entries = Array.Empty<object>(),
         })).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
-        // Editors cannot create caving groups (Manager+ only).
+        // Creating a caving group is open to every account now: the affiliation pickers
+        // create one inline, so the right rides the All Users seed rather than a role.
         (await owner.PostAsJsonAsync("/api/v1/caving-groups/", new
         {
             name = "Editor CavingGroup Attempt",
             description = (string?)null,
             website = (string?)null,
-        })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        })).StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     // ---- helpers ----
@@ -318,7 +327,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
     {
         var response = await manager.PostAsJsonAsync("/api/v1/caving-groups/", new
         {
-            name = $"ACL Grant CavingGroup {Guid.NewGuid():N}"[..30],
+            name = $"Grantee CavingGroup {Guid.NewGuid():N}"[..30],
             description = (string?)null,
             website = (string?)null,
         });
@@ -382,22 +391,37 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
             .CountAsync(n => n.UserId == userId && n.Category == NotificationCategory.PermissionGranted);
     }
 
-    private static async Task ReplaceAclAsync(
+    /// <summary>
+    /// Replaces the rules written directly onto one object: plain allow rules that reach
+    /// this object only, which is exactly what a one-off grant has always meant here.
+    /// </summary>
+    private static async Task ReplaceAccessRulesAsync(
         HttpClient client,
         string entityType,
         Guid id,
-        (AccessSubjectKind Kind, Guid SubjectId, AccessAction Permissions)[] entries)
+        (AccessSubjectKind Kind, Guid SubjectId, AccessAction Actions)[] entries)
     {
-        var response = await client.PutAsJsonAsync($"/api/v1/objects/{entityType}/{id}/acl", new
+        var response = await client.PutAsJsonAsync($"/api/v1/objects/{entityType}/{id}/access", new
         {
             entries = entries.Select(e => new
             {
                 subjectKind = e.Kind == AccessSubjectKind.User ? "user" : "cavingGroup",
                 subjectId = e.SubjectId,
-                permissions = e.Permissions.ToString().Replace(" ", string.Empty),
+                effect = "allow",
+                actions = e.Actions.ToString().Replace(" ", string.Empty),
+                scopeKind = "object",
             }).ToArray(),
         });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>The caller's own actions on one object, as the comma-joined flag string.</summary>
+    private static async Task<string> EffectiveActionsAsync(HttpClient client, string entityType, Guid id)
+    {
+        var response = await client.GetAsync($"/api/v1/objects/{entityType}/{id}/effective-access");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("actions").GetString() ?? string.Empty;
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
