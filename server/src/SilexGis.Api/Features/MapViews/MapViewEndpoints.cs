@@ -87,7 +87,7 @@ public static class MapViewEndpoints
         }
 
         var views = await db.MapViews.AsNoTracking()
-            .VisibleTo(user)
+            .VisibleTo(user, db.ObjectAcls, AttachedEntityType.MapView)
             .OrderByDescending(x => x.IsHome).ThenBy(x => x.Name)
             .ToListAsync(ct);
         return TypedResults.Ok(views.Select(ToDto).ToList());

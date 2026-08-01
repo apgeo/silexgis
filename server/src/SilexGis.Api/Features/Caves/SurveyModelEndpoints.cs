@@ -7,6 +7,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Caves;
@@ -42,8 +43,8 @@ public sealed class SurveyModelUpdateRequestValidator : AbstractValidator<Survey
 /// 3D survey models of a cave (.lox / .3d). They inherit the cave's access control, and
 /// because the files carry absolute georeferenced coordinates they are location data:
 /// for a location-protected cave every read path here withholds the records entirely
-/// from callers without the exact-location permission — same stance as cave-linked
-/// rasters, stricter than the cave-link redaction on features.
+/// from callers without exact-location access — same stance as cave-linked rasters,
+/// stricter than the link redaction applied to features that merely reference a cave.
 /// </summary>
 public static class SurveyModelEndpoints
 {
@@ -79,24 +80,25 @@ public static class SurveyModelEndpoints
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
         IPermissionService permissions,
+        FeatureProtection protection,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        var cave = await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == caveId, ct);
+        var cave = await CaveFeatureAsync(db, caveId, ct);
         if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("cave.not_found");
         }
 
         // The cave stays readable, but its 3D models ARE its location.
-        if (await CaveLinkRedaction.ShouldRedactAsync(db, user, caveId, ct))
+        if (await WithheldAsync(protection, user, caveId, ct))
         {
             return TypedResults.Ok(new List<SurveyModelDto>());
         }
 
         var models = await db.SurveyModels.AsNoTracking()
-            .Where(m => m.CaveId == caveId)
+            .Where(m => m.CaveFeatureId == caveId)
             .OrderBy(m => m.CreatedAt)
             .ToListAsync(ct);
         return TypedResults.Ok(models.Select(m => m.ToDto(tokens)).ToList());
@@ -118,7 +120,7 @@ public static class SurveyModelEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var cave = await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == caveId, ct);
+        var cave = await CaveFeatureAsync(db, caveId, ct);
         if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("cave.not_found");
@@ -167,7 +169,7 @@ public static class SurveyModelEndpoints
 
         var model = new SurveyModel
         {
-            CaveId = caveId,
+            CaveFeatureId = caveId,
             Name = Path.GetFileNameWithoutExtension(file.FileName),
             FileId = stored.Id,
             Format = extension == ".lox" ? SurveyModelFormat.Lox : SurveyModelFormat.Survex3d,
@@ -186,6 +188,7 @@ public static class SurveyModelEndpoints
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
         IPermissionService permissions,
+        FeatureProtection protection,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
@@ -193,7 +196,7 @@ public static class SurveyModelEndpoints
         var (model, cave) = await FindWithCaveAsync(db, id, ct);
         if (model is null || cave is null
             || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct)
-            || await CaveLinkRedaction.ShouldRedactAsync(db, user, cave.Id, ct))
+            || await WithheldAsync(protection, user, cave.Id, ct))
         {
             return ApiProblems.NotFound("survey_model.not_found");
         }
@@ -209,17 +212,16 @@ public static class SurveyModelEndpoints
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
         IPermissionService permissions,
+        FeatureProtection protection,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
         var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.Id == id, ct);
-        var cave = model is null
-            ? null
-            : await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == model.CaveId, ct);
+        var cave = model is null ? null : await CaveFeatureAsync(db, model.CaveFeatureId, ct);
         if (model is null || cave is null
             || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct)
-            || await CaveLinkRedaction.ShouldRedactAsync(db, user, cave.Id, ct))
+            || await WithheldAsync(protection, user, cave.Id, ct))
         {
             return ApiProblems.NotFound("survey_model.not_found");
         }
@@ -246,17 +248,16 @@ public static class SurveyModelEndpoints
         HttpContext http,
         SilexGisDbContext db,
         IPermissionService permissions,
+        FeatureProtection protection,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
         var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.Id == id, ct);
-        var cave = model is null
-            ? null
-            : await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == model.CaveId, ct);
+        var cave = model is null ? null : await CaveFeatureAsync(db, model.CaveFeatureId, ct);
         if (model is null || cave is null
             || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct)
-            || await CaveLinkRedaction.ShouldRedactAsync(db, user, cave.Id, ct))
+            || await WithheldAsync(protection, user, cave.Id, ct))
         {
             return ApiProblems.NotFound("survey_model.not_found");
         }
@@ -277,22 +278,28 @@ public static class SurveyModelEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<(SurveyModel? Model, Cave? Cave)> FindWithCaveAsync(
+    private static async Task<(SurveyModel? Model, Feature? Cave)> FindWithCaveAsync(
         SilexGisDbContext db, Guid id, CancellationToken ct)
     {
         var model = await db.SurveyModels.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id, ct);
-        if (model is null)
-        {
-            return (null, null);
-        }
-
-        var cave = await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == model.CaveId, ct);
-        return (model, cave);
+        return model is null ? (null, null) : (model, await CaveFeatureAsync(db, model.CaveFeatureId, ct));
     }
+
+    private static Task<Feature?> CaveFeatureAsync(SilexGisDbContext db, Guid caveFeatureId, CancellationToken ct) =>
+        db.Features.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == caveFeatureId && f.Kind == FeatureKind.Cave, ct);
+
+    /// <summary>
+    /// True when the cave's exact location is closed to this caller — which closes its
+    /// survey models entirely, files and metadata alike.
+    /// </summary>
+    private static async Task<bool> WithheldAsync(
+        FeatureProtection protection, UserContext? user, Guid caveFeatureId, CancellationToken ct) =>
+        !(await protection.ExactViewIdsAsync(user, [caveFeatureId], ct)).Contains(caveFeatureId);
 
     private static SurveyModelDto ToDto(this SurveyModel m, IFileAccessTokenService tokens) => new(
         m.Id,
-        m.CaveId,
+        m.CaveFeatureId,
         m.Name,
         m.Format,
         m.FileId,

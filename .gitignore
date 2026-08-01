@@ -138,6 +138,9 @@ test-results
 # windows dev helper files
 .bat
 
+# Batch-runner logs and status files
+.batch-runs/
+
 #others
 todo.txt
 .dev_var_notes

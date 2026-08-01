@@ -44,22 +44,41 @@ public sealed class AclReplaceRequestValidator : AbstractValidator<AclReplaceReq
 /// <summary>
 /// Per-object ACL management (the explicit-grant layer) and the caller's effective
 /// permissions. Reading/replacing grants requires ManagePermissions on the object.
+///
+/// A grant targets EITHER a feature — any physical feature, of any kind, addressed by the
+/// single route name "feature" and stored against the real feature FK — OR one of the
+/// non-feature entities that carry their own access control, stored against the
+/// polymorphic (type, id) pair. The two shapes are mutually exclusive per row.
 /// </summary>
 public static class ObjectAclEndpoints
 {
+    /// <summary>
+    /// The one route name of the whole feature world. Caves, entrances, centerlines and
+    /// generic features share it because a grant on a feature is keyed by its id alone —
+    /// the kind adds nothing the route needs and would only invite callers to guess wrong.
+    /// </summary>
+    private const string FeatureTargetName = "feature";
+
     public static RouteGroupBuilder MapObjectAclEndpoints(this RouteGroupBuilder api)
     {
         var objects = api.MapGroup("/objects/{entityType}/{id:guid}").WithTags("Permissions");
 
         objects.MapGet("/acl", GetAclAsync)
-            .WithSummary("ACL entries of one object (ManagePermissions).");
+            .WithSummary("ACL entries of one object (ManagePermissions).")
+            .WithDescription(TargetVocabulary);
         objects.MapPut("/acl", ReplaceAclAsync).WithValidation<AclReplaceRequest>()
-            .WithSummary("Replaces the object's ACL entries (ManagePermissions).");
+            .WithSummary("Replaces the object's ACL entries (ManagePermissions).")
+            .WithDescription(TargetVocabulary);
         objects.MapGet("/effective-permissions", EffectiveAsync)
-            .WithSummary("The caller's own effective permissions on the object.");
+            .WithSummary("The caller's own effective permissions on the object.")
+            .WithDescription(TargetVocabulary);
 
         return api;
     }
+
+    private const string TargetVocabulary =
+        "entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', " +
+        "'georeferencedMap', 'mapView' (case-insensitive).";
 
     private static async Task<Results<Ok<List<AclEntryDto>>, UnauthorizedHttpResult, ProblemHttpResult>> GetAclAsync(
         string entityType,
@@ -75,22 +94,18 @@ public static class ObjectAclEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var (entity, parsedType, problem) = await ResolveAsync(db, entityType, id, ct);
+        var (target, problem) = await ResolveAsync(db, user, entityType, id, ct);
         if (problem is not null)
         {
             return problem;
         }
 
-        if (!await permissions.CanAsync(user, entity!, ObjectPermission.ManagePermissions, ct))
+        if (await GuardManageAsync(permissions, user, target!.Value, ct) is { } denied)
         {
-            // Managing implies knowing the object exists; non-managers get non-disclosure.
-            return await permissions.CanAsync(user, entity!, ObjectPermission.Read, ct)
-                ? ApiProblems.Forbidden("acl.forbidden")
-                : ApiProblems.NotFound("acl.entity_not_found");
+            return denied;
         }
 
-        var entries = await LoadEntriesAsync(db, user, parsedType, id, ct);
-        return TypedResults.Ok(entries);
+        return TypedResults.Ok(await LoadEntriesAsync(db, user, target.Value, ct));
     }
 
     private static async Task<Results<Ok<List<AclEntryDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ReplaceAclAsync(
@@ -108,17 +123,16 @@ public static class ObjectAclEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var (entity, parsedType, problem) = await ResolveAsync(db, entityType, id, ct);
+        var (resolved, problem) = await ResolveAsync(db, user, entityType, id, ct);
         if (problem is not null)
         {
             return problem;
         }
 
-        if (!await permissions.CanAsync(user, entity!, ObjectPermission.ManagePermissions, ct))
+        var target = resolved!.Value;
+        if (await GuardManageAsync(permissions, user, target, ct) is { } denied)
         {
-            return await permissions.CanAsync(user, entity!, ObjectPermission.Read, ct)
-                ? ApiProblems.Forbidden("acl.forbidden")
-                : ApiProblems.NotFound("acl.entity_not_found");
+            return denied;
         }
 
         // Subjects must exist (users or teams respectively).
@@ -136,35 +150,70 @@ public static class ObjectAclEndpoints
         // Who already had a grant, read before the replace wipes it: a full-replace save that
         // leaves an existing grant untouched is not news, and mailing everyone on every ACL edit
         // would train people to ignore the message that matters.
-        var alreadyGranted = await db.ObjectAcls.AsNoTracking()
-            .Where(a => a.EntityType == parsedType && a.EntityId == id)
+        var alreadyGranted = await GrantsOf(db, target)
             .Select(a => new { a.SubjectKind, a.SubjectId })
             .ToListAsync(ct);
 
         // Full replace: the ACL is small per object; diffing buys nothing.
-        await db.ObjectAcls
-            .Where(a => a.EntityType == parsedType && a.EntityId == id)
-            .ExecuteDeleteAsync(ct);
+        await GrantsOf(db, target).ExecuteDeleteAsync(ct);
         foreach (var entry in request.Entries)
         {
-            db.ObjectAcls.Add(new ObjectAcl
-            {
-                EntityType = parsedType,
-                EntityId = id,
-                SubjectKind = entry.SubjectKind,
-                SubjectId = entry.SubjectId,
-                Permissions = entry.Permissions,
-                GrantedBy = user.UserId,
-            });
+            db.ObjectAcls.Add(NewGrant(target, entry, user.UserId));
         }
 
         var newlyGranted = request.Entries
             .Where(e => !alreadyGranted.Any(a => a.SubjectKind == e.SubjectKind && a.SubjectId == e.SubjectId))
             .ToList();
-        await NotifyGranteesAsync(db, user, parsedType, id, newlyGranted, ct);
+        await NotifyGranteesAsync(db, user, target, newlyGranted, ct);
 
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(await LoadEntriesAsync(db, user, parsedType, id, ct));
+        return TypedResults.Ok(await LoadEntriesAsync(db, user, target, ct));
+    }
+
+    private static async Task<Results<Ok<ObjectPermission>, UnauthorizedHttpResult, ProblemHttpResult>> EffectiveAsync(
+        string entityType,
+        Guid id,
+        SilexGisDbContext db,
+        IPermissionService permissions,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var user = await userAccessor.GetAsync(ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var (target, problem) = await ResolveAsync(db, user, entityType, id, ct);
+        if (problem is not null)
+        {
+            return problem;
+        }
+
+        var effective = await permissions.EffectiveAsync(user, target!.Value.Entity, ct);
+        if (!effective.HasFlag(ObjectPermission.Read))
+        {
+            return ApiProblems.NotFound("acl.entity_not_found");
+        }
+
+        return TypedResults.Ok(effective);
+    }
+
+    /// <summary>
+    /// Managing implies knowing the object exists, so a caller who cannot manage gets 403
+    /// only when they can read it and 404 otherwise. Null means the caller may proceed.
+    /// </summary>
+    private static async Task<ProblemHttpResult?> GuardManageAsync(
+        IPermissionService permissions, UserContext user, AclTarget target, CancellationToken ct)
+    {
+        if (await permissions.CanAsync(user, target.Entity, ObjectPermission.ManagePermissions, ct))
+        {
+            return null;
+        }
+
+        return await permissions.CanAsync(user, target.Entity, ObjectPermission.Read, ct)
+            ? ApiProblems.Forbidden("acl.forbidden")
+            : ApiProblems.NotFound("acl.entity_not_found");
     }
 
     /// <summary>
@@ -180,8 +229,7 @@ public static class ObjectAclEndpoints
     private static async Task NotifyGranteesAsync(
         SilexGisDbContext db,
         UserContext user,
-        AttachedEntityType entityType,
-        Guid entityId,
+        AclTarget target,
         IReadOnlyList<AclEntryWrite> granted,
         CancellationToken ct)
     {
@@ -211,9 +259,9 @@ public static class ObjectAclEndpoints
             return;
         }
 
-        var objectName = await NameOfAsync(db, entityType, entityId, ct);
         var actorLabels = await ProfileDirectory.ResolveLabelsAsync(db, user, [user.UserId], ct);
         var actorName = actorLabels.GetValueOrDefault(user.UserId) ?? string.Empty;
+        var objectName = NameOf(target);
 
         foreach (var recipient in recipients)
         {
@@ -226,100 +274,127 @@ public static class ObjectAclEndpoints
                 {
                     ["actorName"] = actorName,
                     ["objectName"] = objectName,
-                    ["url"] = LinkTo(entityType, entityId),
+                    ["url"] = LinkTo(target),
                 });
         }
     }
 
     /// <summary>
-    /// What the record is called. <see cref="IProtectedEntity"/> carries no name, and the field
-    /// differs per type, so the projection is per type rather than shared.
+    /// What the record is called. The name field differs per type and <see cref="IProtectedEntity"/>
+    /// carries none, so the row loaded during resolution answers it.
     /// </summary>
-    private static async Task<string> NameOfAsync(
-        SilexGisDbContext db, AttachedEntityType entityType, Guid id, CancellationToken ct) =>
-        entityType switch
-        {
-            AttachedEntityType.Cave =>
-                await db.Caves.Where(x => x.Id == id).Select(x => x.Name).FirstOrDefaultAsync(ct),
-            AttachedEntityType.SurfaceFeature =>
-                await db.SurfaceFeatures.Where(x => x.Id == id).Select(x => x.Name).FirstOrDefaultAsync(ct),
-            AttachedEntityType.Geofile =>
-                await db.Geofiles.Where(x => x.Id == id).Select(x => x.Name).FirstOrDefaultAsync(ct),
-            AttachedEntityType.TripLog =>
-                await db.TripLogs.Where(x => x.Id == id).Select(x => x.Title).FirstOrDefaultAsync(ct),
-            AttachedEntityType.GeoreferencedMap =>
-                await db.GeoreferencedMaps.Where(x => x.Id == id).Select(x => x.Name).FirstOrDefaultAsync(ct),
-            _ => null,
-        } ?? string.Empty;
-
-    private static string LinkTo(AttachedEntityType entityType, Guid id) => entityType switch
+    private static string NameOf(AclTarget target) => target.Entity switch
     {
-        AttachedEntityType.Cave => $"/caves/{id}",
-        AttachedEntityType.TripLog => $"/trip-logs/{id}",
-        AttachedEntityType.SurfaceFeature => "/features",
+        // A feature's name is optional (a boundary or a system may never have been named);
+        // an unnamed one is identified by its kind plus the head of its id, as lists do.
+        Feature feature => feature.Name is { Length: > 0 } name
+            ? name
+            : $"{feature.Kind} {feature.Id.ToString("N")[..8]}",
+        TripLog trip => trip.Title,
+        Geofile geofile => geofile.Name,
+        GeoreferencedMap map => map.Name,
+        MapView view => view.Name,
+        _ => string.Empty,
+    };
+
+    private static string LinkTo(AclTarget target) => target.EntityType switch
+    {
+        null => $"/features/{target.Entity.Id}",
+        AttachedEntityType.TripLog => $"/trip-logs/{target.Entity.Id}",
         AttachedEntityType.Geofile or AttachedEntityType.GeoreferencedMap => "/geodata",
+        AttachedEntityType.MapView => "/map",
         _ => "/",
     };
 
-    private static async Task<Results<Ok<ObjectPermission>, UnauthorizedHttpResult, ProblemHttpResult>> EffectiveAsync(
-        string entityType,
-        Guid id,
-        SilexGisDbContext db,
-        IPermissionService permissions,
-        IUserContextAccessor userAccessor,
-        CancellationToken ct)
+    /// <summary>
+    /// Loads the entity a (type, id) route pair names, refusing unknown or non-target types.
+    /// Features are read through the shared visibility filter, so one the caller cannot see
+    /// is "not found" here exactly as it is everywhere else (and soft-deleted ones never
+    /// resolve at all).
+    /// </summary>
+    private static async Task<(AclTarget? Target, ProblemHttpResult? Problem)> ResolveAsync(
+        SilexGisDbContext db, UserContext user, string entityType, Guid id, CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
-        if (user is null)
+        if (!TryParseTarget(entityType, out var parsedType))
         {
-            return TypedResults.Unauthorized();
-        }
-
-        var (entity, _, problem) = await ResolveAsync(db, entityType, id, ct);
-        if (problem is not null)
-        {
-            return problem;
-        }
-
-        var effective = await permissions.EffectiveAsync(user, entity!, ct);
-        if (!effective.HasFlag(ObjectPermission.Read))
-        {
-            return ApiProblems.NotFound("acl.entity_not_found");
-        }
-
-        return TypedResults.Ok(effective);
-    }
-
-    /// <summary>Loads the protected entity behind a polymorphic (type, id) reference.</summary>
-    private static async Task<(IProtectedEntity? Entity, AttachedEntityType Type, ProblemHttpResult? Problem)> ResolveAsync(
-        SilexGisDbContext db, string entityType, Guid id, CancellationToken ct)
-    {
-        if (!Enum.TryParse<AttachedEntityType>(entityType, ignoreCase: true, out var parsedType))
-        {
-            return (null, default, ApiProblems.BadRequest("acl.entity_type_unknown", $"Unknown entity type '{entityType}'."));
+            return (null, ApiProblems.BadRequest("acl.entity_type_unknown", $"Unknown entity type '{entityType}'."));
         }
 
         IProtectedEntity? entity = parsedType switch
         {
-            AttachedEntityType.Cave => await db.Caves.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
-            AttachedEntityType.SurfaceFeature => await db.SurfaceFeatures.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
-            AttachedEntityType.Geofile => await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
+            null => await db.Features.AsNoTracking()
+                .Where(f => f.Id == id)
+                .VisibleTo(user, db.ObjectAcls)
+                .FirstOrDefaultAsync(ct),
             AttachedEntityType.TripLog => await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
-            AttachedEntityType.GeoreferencedMap => await db.GeoreferencedMaps.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
-            _ => null, // entrances inherit cave ACL; teams are not ACL targets
+            AttachedEntityType.Geofile => await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
+            AttachedEntityType.GeoreferencedMap =>
+                await db.GeoreferencedMaps.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
+            AttachedEntityType.MapView => await db.MapViews.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
+            _ => null,
         };
 
         return entity is null
-            ? (null, parsedType, ApiProblems.NotFound("acl.entity_not_found"))
-            : (entity, parsedType, null);
+            ? (null, ApiProblems.NotFound("acl.entity_not_found"))
+            : (new AclTarget(entity, parsedType), null);
     }
 
-    private static async Task<List<AclEntryDto>> LoadEntriesAsync(
-        SilexGisDbContext db, UserContext user, AttachedEntityType entityType, Guid entityId, CancellationToken ct)
+    /// <summary>
+    /// Parses the route's target vocabulary, case-insensitively (the JSON contract writes
+    /// these names camelCase, and a client that read one out of a payload must be able to
+    /// put it back in a URL). A parsed <c>null</c> type means the feature world; teams and
+    /// stored files are deliberately absent — team access comes from membership, and a
+    /// file's access follows the objects it is attached to.
+    /// </summary>
+    private static bool TryParseTarget(string entityType, out AttachedEntityType? type)
     {
-        var rows = await db.ObjectAcls.AsNoTracking()
-            .Where(a => a.EntityType == entityType && a.EntityId == entityId)
-            .ToListAsync(ct);
+        switch (entityType.ToLowerInvariant())
+        {
+            case FeatureTargetName:
+                type = null;
+                return true;
+            case "triplog":
+                type = AttachedEntityType.TripLog;
+                return true;
+            case "geofile":
+                type = AttachedEntityType.Geofile;
+                return true;
+            case "georeferencedmap":
+                type = AttachedEntityType.GeoreferencedMap;
+                return true;
+            case "mapview":
+                type = AttachedEntityType.MapView;
+                return true;
+            default:
+                type = null;
+                return false;
+        }
+    }
+
+    /// <summary>The grant rows of one target: features by their FK, everything else by the pair.</summary>
+    private static IQueryable<ObjectAcl> GrantsOf(SilexGisDbContext db, AclTarget target)
+    {
+        var id = target.Entity.Id;
+        return target.EntityType is { } type
+            ? db.ObjectAcls.AsNoTracking().Where(a => a.EntityType == type && a.EntityId == id)
+            : db.ObjectAcls.AsNoTracking().Where(a => a.FeatureId == id);
+    }
+
+    private static ObjectAcl NewGrant(AclTarget target, AclEntryWrite entry, Guid grantedBy) => new()
+    {
+        FeatureId = target.EntityType is null ? target.Entity.Id : null,
+        EntityType = target.EntityType,
+        EntityId = target.EntityType is null ? null : target.Entity.Id,
+        SubjectKind = entry.SubjectKind,
+        SubjectId = entry.SubjectId,
+        Permissions = entry.Permissions,
+        GrantedBy = grantedBy,
+    };
+
+    private static async Task<List<AclEntryDto>> LoadEntriesAsync(
+        SilexGisDbContext db, UserContext user, AclTarget target, CancellationToken ct)
+    {
+        var rows = await GrantsOf(db, target).ToListAsync(ct);
 
         var userIds = rows.Where(x => x.SubjectKind == AclSubjectKind.User).Select(x => x.SubjectId).ToList();
         var teamIds = rows.Where(x => x.SubjectKind == AclSubjectKind.Team).Select(x => x.SubjectId).ToList();
@@ -338,4 +413,10 @@ public static class ObjectAclEndpoints
                 : teamNames.GetValueOrDefault(a.SubjectId),
             a.Permissions))];
     }
+
+    /// <summary>
+    /// One resolved ACL target. <see cref="EntityType"/> is null for features — the shape
+    /// that keys grants by the feature FK — and set for the polymorphic-pair entities.
+    /// </summary>
+    private readonly record struct AclTarget(IProtectedEntity Entity, AttachedEntityType? EntityType);
 }

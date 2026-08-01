@@ -169,13 +169,17 @@ public static class FileEndpoints
 
         // Repoint attachments from the old head to the new one, tracked so the change is audited
         // — entity timelines get a "document updated" event from the Attachment FileId diff.
+        // Selecting by FileId moves feature-targeted rows and polymorphic-pair rows alike; the
+        // target side of each row is untouched.
         var attachments = await db.Attachments.Where(a => a.FileId == head.Id).ToListAsync(ct);
         foreach (var attachment in attachments)
         {
             attachment.FileId = stored.Id;
         }
 
-        // Tags belong to the document, not a specific version — move file taggings to the new head.
+        // Tags belong to the document, not a specific version — move file taggings to the new
+        // head. A file is only ever a polymorphic-pair target (never a feature), so the pair
+        // filter reaches every tagging of this document.
         var taggings = await db.Taggings
             .Where(t => t.EntityType == AttachedEntityType.StoredFile && t.EntityId == head.Id)
             .ToListAsync(ct);

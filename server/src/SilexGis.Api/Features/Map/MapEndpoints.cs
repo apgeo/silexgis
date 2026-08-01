@@ -3,11 +3,13 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Map;
@@ -33,13 +35,14 @@ public sealed record MapConfigDto(
     int ClusterMaxZoom);
 
 /// <summary>
-/// GeoJSON layer endpoints for the map workspace. Always
-/// visibility-filtered; protected cave locations obfuscated server-side.
-/// Below the cluster zoom threshold results are aggregated into cluster features.
+/// GeoJSON layer endpoints for the map workspace. Always visibility-filtered; protected
+/// feature locations obfuscated server-side (points snapped to the protection grid,
+/// extended geometry withheld). Below the cluster zoom threshold the entrance layer
+/// aggregates into cluster features.
 /// </summary>
 public static class MapEndpoints
 {
-    /// <summary>Below this zoom the endpoint returns clusters instead of points.</summary>
+    /// <summary>Below this zoom the entrance endpoint returns clusters instead of points.</summary>
     public const int ClusterMaxZoom = 11;
 
     /// <summary>Safety cap for individual point features per request.</summary>
@@ -50,9 +53,9 @@ public static class MapEndpoints
         api.MapGet("/map/cave-entrances", CaveEntrancesAsync)
             .WithTags("Map")
             .WithSummary("Cave entrances as GeoJSON for the given bbox; clustered at low zoom.");
-        api.MapGet("/map/surface-features", SurfaceFeaturesAsync)
+        api.MapGet("/map/features", FeaturesAsync)
             .WithTags("Map")
-            .WithSummary("Surface features as GeoJSON for the given bbox, optionally filtered by type.");
+            .WithSummary("Features as GeoJSON for the given bbox, filtered by kinds/type/category/tag; protected points snapped, other protected geometry omitted.");
         api.MapGet("/map/geofiles/{id:guid}/features", GeofileFeaturesAsync)
             .WithTags("Map")
             .WithSummary("Imported geofile rows as GeoJSON for the given bbox.");
@@ -67,7 +70,7 @@ public static class MapEndpoints
             .WithSummary("Client-relevant map rendering limits for this installation.");
         api.MapGet("/map/photos", PhotosAsync)
             .WithTags("Map")
-            .WithSummary("Geotagged photos as GeoJSON points for the given bbox; protected-cave photos withheld.");
+            .WithSummary("Geotagged photos as GeoJSON points for the given bbox; photos touching protected features withheld.");
         return api;
     }
 
@@ -97,15 +100,17 @@ public static class MapEndpoints
 
     /// <summary>
     /// Geotagged image files as points. A photo shows only where the caller can read at least
-    /// one entity it is attached to; a photo attached to a protected cave (directly or via one
-    /// of its entrances) is withheld entirely from callers without the exact-location permission —
-    /// the EXIF point itself is the location, so snapping it is not enough.
+    /// one entity it is attached to; it is withheld entirely when anything it is attached to
+    /// reaches a protected feature the caller may not view exactly — directly, through a
+    /// locating link of an attached feature, or through a trip's cave links. The EXIF point
+    /// itself is the location, so snapping it is not enough.
     /// </summary>
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> PhotosAsync(
         string bbox,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
         IUserContextAccessor userAccessor,
+        FeatureProtection protection,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -133,72 +138,61 @@ public static class MapEndpoints
         var fileIds = candidates.Select(c => c.Id).ToList();
         var links = await db.Attachments.AsNoTracking()
             .Where(a => fileIds.Contains(a.FileId))
-            .Select(a => new { a.FileId, a.EntityType, a.EntityId })
+            .Select(a => new { a.FileId, a.FeatureId, a.EntityType, a.EntityId })
             .ToListAsync(ct);
 
-        Guid[] IdsOf(AttachedEntityType type) =>
-            [.. links.Where(l => l.EntityType == type).Select(l => l.EntityId).Distinct()];
+        var attachedFeatureIds = links.Where(l => l.FeatureId != null)
+            .Select(l => l.FeatureId!.Value).Distinct().ToList();
+        var tripIds = links.Where(l => l.EntityType == AttachedEntityType.TripLog)
+            .Select(l => l.EntityId!.Value).Distinct().ToList();
+        var geofileIds = links.Where(l => l.EntityType == AttachedEntityType.Geofile)
+            .Select(l => l.EntityId!.Value).Distinct().ToList();
 
-        // Entrance visibility + protection follow the entrance's cave.
-        var entranceIds = IdsOf(AttachedEntityType.CaveEntrance);
-        var entranceCaves = entranceIds.Length == 0
+        // A locating link between an attached feature and another feature discloses the
+        // other feature's position by proximity — in either direction — so both endpoints
+        // of every locating link join the photo's protection chain (fail-closed).
+        var locatingLinks = attachedFeatureIds.Count == 0
             ? []
-            : await db.CaveEntrances.AsNoTracking()
-                .Where(e => entranceIds.Contains(e.Id))
-                .Select(e => new { e.Id, e.CaveId })
+            : await db.FeatureLinks.AsNoTracking()
+                .Where(l => (attachedFeatureIds.Contains(l.FromId) || attachedFeatureIds.Contains(l.ToId))
+                    && db.LinkKinds.Any(k => k.Id == l.LinkKindId && k.Locating))
+                .Select(l => new { l.FromId, l.ToId })
                 .ToListAsync(ct);
-        var entranceToCave = entranceCaves.ToDictionary(e => e.Id, e => e.CaveId);
+        var linkPartners = new Dictionary<Guid, List<Guid>>();
+        foreach (var link in locatingLinks)
+        {
+            AddPartner(link.FromId, link.ToId);
+            AddPartner(link.ToId, link.FromId);
+        }
 
-        // A trip's cave links and a surface feature's linked cave reveal that cave's location too,
-        // so a photo attached to one is subject to the same protection as a direct cave attachment.
-        var tripIds = IdsOf(AttachedEntityType.TripLog);
-        var tripCaves = tripIds.Length == 0
+        // A trip's cave links reveal those caves' locations too, so a photo attached to a
+        // trip is subject to the same protection as one attached to the cave itself.
+        var tripCaves = tripIds.Count == 0
             ? []
             : await db.TripLogCaves.AsNoTracking()
                 .Where(x => tripIds.Contains(x.TripLogId))
                 .Select(x => new { x.TripLogId, x.CaveId })
                 .ToListAsync(ct);
-        var tripToCaves = tripCaves.GroupBy(x => x.TripLogId).ToDictionary(g => g.Key, g => g.Select(x => x.CaveId).ToList());
+        var tripToCaves = tripCaves.GroupBy(x => x.TripLogId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.CaveId).ToList());
 
-        var featureIds = IdsOf(AttachedEntityType.SurfaceFeature);
-        var featureCaves = featureIds.Length == 0
-            ? []
-            : await db.SurfaceFeatures.AsNoTracking()
-                .Where(f => featureIds.Contains(f.Id) && f.CaveId != null)
-                .Select(f => new { f.Id, CaveId = f.CaveId!.Value })
-                .ToListAsync(ct);
-        var featureToCave = featureCaves.ToDictionary(f => f.Id, f => f.CaveId);
-
-        // Every cave a photo touches (direct, via an entrance, via a trip cave-link, or via a
-        // surface feature's cave) — drives readability and protection.
-        var allCaveIds = IdsOf(AttachedEntityType.Cave)
-            .Concat(entranceCaves.Select(e => e.CaveId))
-            .Concat(tripCaves.Select(x => x.CaveId))
-            .Concat(featureCaves.Select(f => f.CaveId))
-            .Distinct().ToList();
-
-        var readableCaveIds = await ReadableIdsAsync(
-            db.Caves.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Cave).Select(c => c.Id), allCaveIds, ct);
+        // One readability pass per target world and one exact-view pass over every feature
+        // the photos transitively touch.
         var readableFeatureIds = await ReadableIdsAsync(
-            db.SurfaceFeatures.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.SurfaceFeature).Select(f => f.Id),
-            featureIds, ct);
+            db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls).Select(f => f.Id), attachedFeatureIds, ct);
         var readableTripIds = await ReadableIdsAsync(
             db.TripLogs.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.TripLog).Select(t => t.Id),
             tripIds, ct);
         var readableGeofileIds = await ReadableIdsAsync(
             db.Geofiles.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Geofile).Select(g => g.Id),
-            IdsOf(AttachedEntityType.Geofile), ct);
+            geofileIds, ct);
 
-        // Caves whose exact location the caller may not see → any photo touching one is withheld.
-        var exactGrants = await new AclPermissionService(db).CaveExactLocationGrantsAsync(user, ct);
-        var referencedCaves = allCaveIds.Count == 0
-            ? []
-            : await db.Caves.AsNoTracking().Where(c => allCaveIds.Contains(c.Id)).ToListAsync(ct);
-        var hiddenCaveIds = referencedCaves
-            .Where(c => !LocationProtection.CanViewExactLocation(
-                user, c, exactGrants.Contains(c.Id) ? ObjectPermission.ViewExactLocation : ObjectPermission.None))
-            .Select(c => c.Id)
-            .ToHashSet();
+        var protectionTargets = attachedFeatureIds
+            .Concat(locatingLinks.SelectMany(l => new[] { l.FromId, l.ToId }))
+            .Concat(tripCaves.Select(x => x.CaveId))
+            .Distinct()
+            .ToList();
+        var exactViewIds = await protection.ExactViewIdsAsync(user, protectionTargets, ct);
 
         var linksByFile = links.GroupBy(l => l.FileId).ToDictionary(g => g.Key, g => g.ToList());
         var features = new List<GeoFeature>();
@@ -209,36 +203,41 @@ public static class MapEndpoints
                 continue; // no attachment → no context and no visibility path
             }
 
-            var photoCaveIds = fileLinks
-                .Where(l => l.EntityType == AttachedEntityType.Cave).Select(l => l.EntityId)
-                .Concat(fileLinks
-                    .Where(l => l.EntityType == AttachedEntityType.CaveEntrance)
-                    .Select(l => entranceToCave.TryGetValue(l.EntityId, out var caveId) ? caveId : (Guid?)null)
-                    .Where(caveId => caveId is not null)
-                    .Select(caveId => caveId!.Value))
-                .Concat(fileLinks
-                    .Where(l => l.EntityType == AttachedEntityType.TripLog)
-                    .SelectMany(l => tripToCaves.GetValueOrDefault(l.EntityId) ?? []))
-                .Concat(fileLinks
-                    .Where(l => l.EntityType == AttachedEntityType.SurfaceFeature)
-                    .Select(l => featureToCave.TryGetValue(l.EntityId, out var caveId) ? caveId : (Guid?)null)
-                    .Where(caveId => caveId is not null)
-                    .Select(caveId => caveId!.Value));
-            if (photoCaveIds.Any(hiddenCaveIds.Contains))
+            // The photo's protection chain: attached features, their locating-link
+            // partners, and the caves of attached trips. Any chain member the caller may
+            // not view exactly withholds the photo — the point itself is sensitive.
+            var chain = new List<Guid>();
+            foreach (var link in fileLinks)
             {
-                continue; // protected-cave location — the point itself is sensitive
+                if (link.FeatureId is { } featureId)
+                {
+                    chain.Add(featureId);
+                    if (linkPartners.TryGetValue(featureId, out var partners))
+                    {
+                        chain.AddRange(partners);
+                    }
+                }
+                else if (link.EntityType == AttachedEntityType.TripLog
+                    && tripToCaves.TryGetValue(link.EntityId!.Value, out var caveIds))
+                {
+                    chain.AddRange(caveIds);
+                }
             }
 
-            var visible = fileLinks.Any(l => l.EntityType switch
+            if (chain.Any(id => !exactViewIds.Contains(id)))
             {
-                AttachedEntityType.Cave => readableCaveIds.Contains(l.EntityId),
-                AttachedEntityType.CaveEntrance => entranceToCave.TryGetValue(l.EntityId, out var caveId) && readableCaveIds.Contains(caveId),
-                AttachedEntityType.SurfaceFeature => readableFeatureIds.Contains(l.EntityId),
-                AttachedEntityType.TripLog => readableTripIds.Contains(l.EntityId),
-                AttachedEntityType.Geofile => readableGeofileIds.Contains(l.EntityId),
-                AttachedEntityType.Team => user.IsMemberOf(l.EntityId),
-                _ => false,
-            });
+                continue;
+            }
+
+            var visible = fileLinks.Any(l => l.FeatureId is { } fid
+                ? readableFeatureIds.Contains(fid)
+                : l.EntityType switch
+                {
+                    AttachedEntityType.TripLog => readableTripIds.Contains(l.EntityId!.Value),
+                    AttachedEntityType.Geofile => readableGeofileIds.Contains(l.EntityId!.Value),
+                    AttachedEntityType.Team => user.IsMemberOf(l.EntityId!.Value),
+                    _ => false,
+                });
             if (!visible)
             {
                 continue;
@@ -255,6 +254,16 @@ public static class MapEndpoints
         }
 
         return TypedResults.Ok(FeatureCollection.Of(features));
+
+        void AddPartner(Guid featureId, Guid partnerId)
+        {
+            if (!linkPartners.TryGetValue(featureId, out var list))
+            {
+                linkPartners[featureId] = list = [];
+            }
+
+            list.Add(partnerId);
+        }
     }
 
     /// <summary>Intersects a set of candidate ids with a visibility-filtered id query (empty → empty, no round trip).</summary>
@@ -271,8 +280,9 @@ public static class MapEndpoints
     /// A per-request path budget and a low-zoom size gate cap the cost; whatever they exclude is
     /// reported as a count so the client can offer to zoom in.
     /// <para>
-    /// Centerlines inherit their cave's visibility. Lines of location-protected caves are
-    /// omitted entirely and never counted — a centerline IS the cave's exact location.
+    /// Centerlines carry their cave's visibility. Rows whose ancestry the caller may not view
+    /// exactly are omitted entirely and never counted — a centerline IS the cave's exact
+    /// location.
     /// </para>
     /// </summary>
     private static async Task<Results<Ok<CenterlineFeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> CaveCenterlinesAsync(
@@ -282,6 +292,7 @@ public static class MapEndpoints
         int? maxPaths,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        FeatureProtection protection,
         IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
@@ -305,10 +316,13 @@ public static class MapEndpoints
         var effectiveMaxPaths = Math.Clamp(
             maxPaths ?? options.CenterlineMaxPaths, 0, options.CenterlineMaxPathsLimit);
 
-        // The protection rule is evaluated in Domain, over the caves whose centerline bounding
-        // box meets the viewport — an index-only lookup, so nothing large is read to decide it.
-        var caveIdsInView = await CenterlineMapSql.CaveIdsInViewAsync(db, user, box, ct);
-        var protectedCaveIds = await CaveLinkRedaction.RedactedCaveIdsAsync(db, user, caveIdsInView, ct);
+        // The protection rule is evaluated in Domain, over the centerline features whose
+        // bounding box meets the viewport — an index-only lookup, so nothing large is read
+        // to decide it. Rows the caller may not view exactly are excluded from the geometry
+        // query entirely, before any geometry is produced.
+        var idsInView = await CenterlineMapSql.CenterlineIdsInViewAsync(db, user, box, ct);
+        var exactViewIds = await protection.ExactViewIdsAsync(user, idsInView, ct);
+        var withheldIds = idsInView.Where(id => !exactViewIds.Contains(id)).ToList();
 
         var rows = await CenterlineMapSql.QueryAsync(
             db,
@@ -319,7 +333,7 @@ public static class MapEndpoints
             gateActive: effectiveZoom < options.CenterlineGateZoom,
             gatePaths: options.CenterlineGatePaths,
             simplifyToleranceDegrees: options.SimplifyToleranceDegrees(effectiveZoom),
-            withheldCaveIds: protectedCaveIds,
+            withheldCenterlineIds: withheldIds,
             ct);
 
         var features = new List<GeoFeature>();
@@ -445,12 +459,25 @@ public static class MapEndpoints
         return TypedResults.Ok(FeatureCollection.Of(features));
     }
 
-    private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> SurfaceFeaturesAsync(
+    /// <summary>
+    /// The cross-kind feature layer: one bbox query over the feature supertype, serving the
+    /// data-driven kinds (and entrances too when <paramref name="kinds"/> asks) with
+    /// data-level filters. Centerlines are never served here — their multi-megabyte
+    /// geometry has its own budgeted overlay endpoint — and caves' representative points
+    /// ride the dedicated entrance layer. Protected rows obfuscate by geometry class:
+    /// points snap to the protection grid, anything else keeps its properties but loses
+    /// its geometry (extended geometry cannot be safely snapped).
+    /// </summary>
+    private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> FeaturesAsync(
         string bbox,
+        string? kinds,
         long? featureTypeId,
+        string? category,
         string? tag,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        FeatureProtection protection,
+        IOptions<AccessOptions> access,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -464,37 +491,102 @@ public static class MapEndpoints
             return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
         }
 
+        if (!TryParseKinds(kinds, out var kindFilter))
+        {
+            return ApiProblems.BadRequest(
+                "map.invalid_kinds",
+                "kinds accepts a comma-separated subset of 'generic' and 'caveEntrance'.");
+        }
+
+        FeatureCategory? categoryFilter = null;
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            if (!Enum.TryParse<FeatureCategory>(category, ignoreCase: true, out var parsedCategory)
+                || !Enum.IsDefined(parsedCategory))
+            {
+                return ApiProblems.BadRequest("map.invalid_category", $"Unknown category '{category}'.");
+            }
+
+            categoryFilter = parsedCategory;
+        }
+
         var polygon = box.ToPolygon();
-        var query = db.SurfaceFeatures.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls, AttachedEntityType.SurfaceFeature)
-            .Where(f => f.Geom.Intersects(polygon));
+        var query = db.Features.AsNoTracking()
+            .VisibleTo(user, db.ObjectAcls)
+            .Where(f => kindFilter.Contains(f.Kind) && f.Geom != null && f.Geom!.Intersects(polygon));
 
         if (featureTypeId is not null)
         {
             query = query.Where(f => f.FeatureTypeId == featureTypeId);
         }
 
+        if (categoryFilter is not null)
+        {
+            query = query.Where(f => f.Category == categoryFilter);
+        }
+
         if (!string.IsNullOrWhiteSpace(tag))
         {
             query = query.Where(f => db.Taggings.Any(tg =>
-                tg.EntityType == AttachedEntityType.SurfaceFeature && tg.EntityId == f.Id
-                && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
+                tg.FeatureId == f.Id && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
         }
 
-        var rows = await query.Take(MaxPoints).ToListAsync(ct);
-
-        // A cave link next to exact feature coordinates would disclose a protected
-        // cave's location — hide the link where the caller lacks the permission.
-        var redacted = await CaveLinkRedaction.RedactedCaveIdsAsync(
-            db, user, rows.Where(f => f.CaveId is not null).Select(f => f.CaveId!.Value), ct);
-
-        var features = rows.Select(f => GeoFeature.Of(f.Geom, new Dictionary<string, object?>
+        var rows = await query
+            .Select(f => new { f.Id, f.Kind, f.Name, f.Geom, f.FeatureTypeId, f.IsProtectedEffective })
+            .Take(MaxPoints)
+            .ToListAsync(ct);
+        if (rows.Count == 0)
         {
-            ["id"] = f.Id,
-            ["name"] = f.Name,
-            ["featureTypeId"] = f.FeatureTypeId,
-            ["caveId"] = f.CaveId is not null && redacted.Contains(f.CaveId.Value) ? null : f.CaveId,
-        })).ToList();
+            return TypedResults.Ok(FeatureCollection.Of([]));
+        }
+
+        var typeIds = rows.Where(r => r.FeatureTypeId != null)
+            .Select(r => r.FeatureTypeId!.Value).Distinct().ToList();
+        var types = typeIds.Count == 0
+            ? []
+            : await db.FeatureTypes.AsNoTracking()
+                .Where(t => typeIds.Contains(t.Id))
+                .Select(t => new { t.Id, t.Code, t.SymbolFile })
+                .ToListAsync(ct);
+        var typesById = types.ToDictionary(t => t.Id);
+
+        // Only protected rows need the per-row exact-view evaluation; unprotected rows are
+        // exact by definition (no protected root exists to veto).
+        var exactViewIds = await protection.ExactViewIdsAsync(
+            user, rows.Where(r => r.IsProtectedEffective).Select(r => r.Id).ToList(), ct);
+
+        var gridMeters = access.Value.LocationGridMeters;
+        var features = new List<GeoFeature>(rows.Count);
+        foreach (var row in rows)
+        {
+            var type = row.FeatureTypeId is { } tid ? typesById.GetValueOrDefault(tid) : null;
+            var exact = !row.IsProtectedEffective || exactViewIds.Contains(row.Id);
+            var properties = new Dictionary<string, object?>
+            {
+                ["id"] = row.Id,
+                ["name"] = row.Name,
+                ["kind"] = KindName(row.Kind),
+                ["typeCode"] = type?.Code,
+                ["symbol"] = type?.SymbolFile,
+                ["protected"] = row.IsProtectedEffective,
+                ["approximate"] = !exact,
+            };
+
+            if (exact)
+            {
+                features.Add(GeoFeature.Of(row.Geom!, properties));
+            }
+            else if (row.Geom is Point point)
+            {
+                features.Add(GeoFeature.Of(LocationProtection.Snap(point, gridMeters), properties));
+            }
+            else
+            {
+                // Lines, polygons and Multi* cannot be safely snapped — the row stays (it is
+                // readable) but its geometry is withheld. RFC 7946 allows a null geometry.
+                features.Add(new GeoFeature("Feature", null!, properties));
+            }
+        }
 
         return TypedResults.Ok(FeatureCollection.Of(features));
     }
@@ -505,6 +597,7 @@ public static class MapEndpoints
         string? tag,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        FeatureProtection protection,
         IOptions<AccessOptions> access,
         CancellationToken ct)
     {
@@ -522,50 +615,123 @@ public static class MapEndpoints
         var effectiveZoom = Math.Clamp(zoom ?? 14, 0, 24);
         return effectiveZoom < ClusterMaxZoom
             ? TypedResults.Ok(await MapSql.ClustersAsync(db, user, box, effectiveZoom, access.Value.LocationGridMeters, tag, ct))
-            : TypedResults.Ok(await PointsAsync(db, user, box, access.Value.LocationGridMeters, tag, ct));
+            : TypedResults.Ok(await PointsAsync(db, protection, user, box, access.Value.LocationGridMeters, tag, ct));
     }
 
     private static async Task<FeatureCollection> PointsAsync(
-        SilexGisDbContext db, UserContext user, Bbox box, double gridMeters, string? tag, CancellationToken ct)
+        SilexGisDbContext db,
+        FeatureProtection protection,
+        UserContext user,
+        Bbox box,
+        double gridMeters,
+        string? tag,
+        CancellationToken ct)
     {
-        var exactGrants = await new AclPermissionService(db).CaveExactLocationGrantsAsync(user, ct);
         var polygon = box.ToPolygon();
 
-        var caves = db.Caves.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Cave);
+        // Entrance features carry a copy of their cave's access trio, so visibility is
+        // row-local — no cave join. The subtype row only contributes entrance attributes.
+        var query = db.Features.AsNoTracking()
+            .VisibleTo(user, db.ObjectAcls)
+            .Where(f => f.Kind == FeatureKind.CaveEntrance && f.Geom!.Intersects(polygon));
+
         if (!string.IsNullOrWhiteSpace(tag))
         {
-            caves = caves.Where(c => db.Taggings.Any(tg =>
-                tg.EntityType == AttachedEntityType.Cave && tg.EntityId == c.Id
-                && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
+            query = query.Where(f => db.Taggings.Any(tg =>
+                tg.FeatureId == f.Id && db.Tags.Any(t => t.Id == tg.TagId && t.Slug == tag)));
         }
 
-        var rows = await db.CaveEntrances.AsNoTracking()
-            .Where(e => e.Geom.Intersects(polygon))
-            .Join(
-                caves,
-                e => e.CaveId,
-                c => c.Id,
-                (e, c) => new { Entrance = e, Cave = c })
+        var rows = await query
+            .Select(f => new
+            {
+                f.Id,
+                f.Name,
+                f.Geom,
+                f.IsProtectedEffective,
+                CaveId = f.Entrance!.CaveFeatureId,
+                f.Entrance!.IsMain,
+            })
             .Take(MaxPoints)
             .ToListAsync(ct);
+        if (rows.Count == 0)
+        {
+            return FeatureCollection.Of([]);
+        }
+
+        var exactViewIds = await protection.ExactViewIdsAsync(
+            user, rows.Where(r => r.IsProtectedEffective).Select(r => r.Id).ToList(), ct);
+
+        // Cave names resolve through the visibility filter: an entrance readable through its
+        // own ACL grant must not disclose the name of a cave the caller cannot read.
+        var caveIds = rows.Select(r => r.CaveId).Distinct().ToList();
+        var caveNames = await db.Features.AsNoTracking()
+            .VisibleTo(user, db.ObjectAcls)
+            .Where(f => caveIds.Contains(f.Id))
+            .Select(f => new { f.Id, f.Name })
+            .ToDictionaryAsync(f => f.Id, f => f.Name, ct);
 
         var features = rows.Select(row =>
         {
-            var exact = LocationProtection.CanViewExactLocation(
-                user, row.Cave, exactGrants.Contains(row.Cave.Id) ? ObjectPermission.ViewExactLocation : ObjectPermission.None);
-            var geom = exact ? row.Entrance.Geom : LocationProtection.Snap(row.Entrance.Geom, gridMeters);
+            var exact = !row.IsProtectedEffective || exactViewIds.Contains(row.Id);
+            var point = (Point)row.Geom!;
+            var geom = exact ? point : LocationProtection.Snap(point, gridMeters);
+            var caveName = caveNames.GetValueOrDefault(row.CaveId);
             return GeoFeature.Of(geom, new Dictionary<string, object?>
             {
-                ["id"] = row.Entrance.Id,
-                ["caveId"] = row.Cave.Id,
-                ["name"] = row.Entrance.Name ?? row.Cave.Name,
-                ["caveName"] = row.Cave.Name,
-                ["isMain"] = row.Entrance.IsMain,
-                ["protected"] = row.Cave.LocationProtected,
+                ["id"] = row.Id,
+                ["caveId"] = row.CaveId,
+                ["name"] = row.Name ?? caveName,
+                ["caveName"] = caveName,
+                ["isMain"] = row.IsMain,
+                ["protected"] = row.IsProtectedEffective,
                 ["approximate"] = !exact,
             });
         }).ToList();
 
         return FeatureCollection.Of(features);
     }
+
+    /// <summary>
+    /// Parses the cross-kind layer's kind filter. Absent means the data-driven kinds only.
+    /// Centerlines are rejected (their geometry needs the budgeted overlay endpoint) and
+    /// caves are rejected too (their representative point is the main entrance, which the
+    /// entrance layer already serves — accepting them here would duplicate every cave).
+    /// </summary>
+    private static bool TryParseKinds(string? kinds, out FeatureKind[] parsed)
+    {
+        if (string.IsNullOrWhiteSpace(kinds))
+        {
+            parsed = [FeatureKind.Generic];
+            return true;
+        }
+
+        var result = new List<FeatureKind>();
+        foreach (var token in kinds.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!Enum.TryParse<FeatureKind>(token, ignoreCase: true, out var kind)
+                || kind is not (FeatureKind.Generic or FeatureKind.CaveEntrance))
+            {
+                parsed = [];
+                return false;
+            }
+
+            if (!result.Contains(kind))
+            {
+                result.Add(kind);
+            }
+        }
+
+        parsed = [.. result];
+        return parsed.Length > 0;
+    }
+
+    /// <summary>Stable camel-case kind names for map payload properties.</summary>
+    private static string KindName(FeatureKind kind) => kind switch
+    {
+        FeatureKind.Generic => "generic",
+        FeatureKind.Cave => "cave",
+        FeatureKind.CaveEntrance => "caveEntrance",
+        FeatureKind.Centerline => "centerline",
+        _ => kind.ToString(),
+    };
 }

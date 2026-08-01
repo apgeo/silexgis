@@ -26,8 +26,9 @@ using SilexGis.Api.Features.Permissions;
 using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
 using SilexGis.Api.Features.Notifications;
+using SilexGis.Api.Features.Features;
+using SilexGis.Api.Features.FeatureShares;
 using SilexGis.Api.Features.Search;
-using SilexGis.Api.Features.SurfaceFeatures;
 using SilexGis.Api.Features.Tags;
 using SilexGis.Api.Features.Taxonomies;
 using SilexGis.Api.Features.Teams;
@@ -109,8 +110,8 @@ try
                 }));
     });
 
-    builder.Services.AddScoped<AclPermissionService>();
-    builder.Services.AddScoped<IPermissionService>(sp => sp.GetRequiredService<AclPermissionService>());
+    // AclPermissionService / IPermissionService / FeatureProtection are registered by
+    // AddSilexGisPersistence — they live in Infrastructure since the supertype cutover.
     builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
     var app = builder.Build();
@@ -165,7 +166,10 @@ try
     api.MapEntranceEndpoints();
     api.MapSurveyModelEndpoints();
     api.MapCenterlineEndpoints();
-    api.MapSurfaceFeatureEndpoints();
+    api.MapFeatureEndpoints();
+    api.MapFeatureHierarchyEndpoints();
+    api.MapFeatureLinkEndpoints();
+    api.MapFeatureShareEndpoints();
     api.MapMapDataEndpoints();
     api.MapSearchEndpoints();
     api.MapDashboardEndpoints();
@@ -194,13 +198,6 @@ try
         await TaxonomySeeder.SeedAsync(db);
         await MapLayerSeeder.SeedAsync(db);
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
-
-        // Centerlines stored before the map overlay used display skeletons have none yet.
-        var skeletons = await CenterlineSkeletonBackfill.RunAsync(db);
-        if (skeletons > 0)
-        {
-            Log.Information("Built display skeletons for {Count} centerline(s)", skeletons);
-        }
     }
 
     // `dotnet run -- seed-demo`: load the demo dataset and exit.

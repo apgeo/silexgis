@@ -39,7 +39,8 @@ public sealed class FeatureWriteException(string code, IReadOnlyList<string> err
 /// a cycle check or ancestor recompute that missed a pending edge would corrupt the
 /// security-bearing derived state.
 /// </summary>
-public sealed class FeatureWriteService(SilexGisDbContext db, IFeaturePropertiesValidator propertiesValidator)
+public sealed class FeatureWriteService(
+    SilexGisDbContext db, IFeaturePropertiesValidator propertiesValidator, ICurrentUser currentUser)
 {
     // ---------- creation ----------
 
@@ -253,9 +254,23 @@ public sealed class FeatureWriteService(SilexGisDbContext db, IFeatureProperties
     {
         var stamp = DateTimeOffset.UtcNow;
         var subtree = await SubtreeIdsAsync(featureId, ct);
+        var stamped = await db.Features.IgnoreQueryFilters()
+            .Where(f => subtree.Contains(f.Id) && f.DeletedAt == null)
+            .Select(f => new { f.Id, f.Kind })
+            .ToListAsync(ct);
         await db.Features.IgnoreQueryFilters()
             .Where(f => subtree.Contains(f.Id) && f.DeletedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(f => f.DeletedAt, stamp), ct);
+
+        // ExecuteUpdate bypasses the audit interceptor; deletion events are forensics
+        // the timeline must keep, so the rows are written here (caller's SaveChanges).
+        db.Set<AuditEntry>().AddRange(stamped.Select(f => new AuditEntry
+        {
+            UserId = currentUser.UserId,
+            Action = AuditActions.Deleted,
+            EntityType = FeatureAudit.TypeName(f.Kind),
+            EntityId = f.Id.ToString(),
+        }));
         return stamp;
     }
 
@@ -272,9 +287,22 @@ public sealed class FeatureWriteService(SilexGisDbContext db, IFeatureProperties
         }
 
         var subtree = await SubtreeIdsAsync(featureId, ct);
+        var restored = await db.Features.IgnoreQueryFilters()
+            .Where(f => subtree.Contains(f.Id) && f.DeletedAt == stamp)
+            .Select(f => new { f.Id, f.Kind })
+            .ToListAsync(ct);
         await db.Features.IgnoreQueryFilters()
             .Where(f => subtree.Contains(f.Id) && f.DeletedAt == stamp)
             .ExecuteUpdateAsync(s => s.SetProperty(f => f.DeletedAt, (DateTimeOffset?)null), ct);
+
+        db.Set<AuditEntry>().AddRange(restored.Select(f => new AuditEntry
+        {
+            UserId = currentUser.UserId,
+            Action = AuditActions.Updated,
+            EntityType = FeatureAudit.TypeName(f.Kind),
+            EntityId = f.Id.ToString(),
+            Changes = /*lang=json,strict*/ """{"DeletedAt":{"old":"deleted","new":null}}""",
+        }));
     }
 
     /// <summary>
@@ -285,9 +313,27 @@ public sealed class FeatureWriteService(SilexGisDbContext db, IFeatureProperties
     public async Task PurgeAsync(Guid featureId, CancellationToken ct = default)
     {
         var subtree = await SubtreeIdsAsync(featureId, ct);
+        var purged = await db.Features.IgnoreQueryFilters()
+            .Where(f => subtree.Contains(f.Id))
+            .Select(f => new { f.Id, f.Kind, f.Name })
+            .ToListAsync(ct);
         await db.Features.IgnoreQueryFilters()
             .Where(f => subtree.Contains(f.Id))
             .ExecuteDeleteAsync(ct);
+
+        db.Set<AuditEntry>().AddRange(purged.Select(f => new AuditEntry
+        {
+            UserId = currentUser.UserId,
+            Action = AuditActions.Deleted,
+            EntityType = FeatureAudit.TypeName(f.Kind),
+            EntityId = f.Id.ToString(),
+            Changes = System.Text.Json.JsonSerializer.Serialize(
+                new Dictionary<string, Dictionary<string, object?>>
+                {
+                    ["Name"] = new() { ["old"] = f.Name, ["new"] = null },
+                    ["Purged"] = new() { ["old"] = null, ["new"] = true },
+                }),
+        }));
     }
 
     // ---------- derived-state recomputation (the verifier re-checks all of this) ----------

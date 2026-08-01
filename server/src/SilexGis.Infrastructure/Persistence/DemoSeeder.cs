@@ -17,7 +17,7 @@ public static class DemoSeeder
 {
     public static async Task SeedAsync(SilexGisDbContext db, Guid ownerUserId, CancellationToken ct = default)
     {
-        var writer = new FeatureWriteService(db, new JsonSchemaFeaturePropertiesValidator());
+        var writer = new FeatureWriteService(db, new JsonSchemaFeaturePropertiesValidator(), new AnonymousCurrentUser());
 
         // Each section guards itself so re-running tops up data added in later versions.
         var demoCaveId = await db.Caves

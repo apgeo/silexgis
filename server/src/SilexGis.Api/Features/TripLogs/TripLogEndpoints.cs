@@ -7,6 +7,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Notifications;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.TripLogs;
@@ -34,6 +35,7 @@ public static class TripLogEndpoints
     private static async Task<Results<Ok<PagedResult<TripLogDto>>, UnauthorizedHttpResult>> ListAsync(
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        FeatureProtection protection,
         int? page,
         int? pageSize,
         DateOnly? from,
@@ -64,7 +66,7 @@ public static class TripLogEndpoints
         {
             // Filtering trips by a location-protected cave would place the cave through
             // the trips' geometries — behave as if nothing is linked.
-            if (await CaveLinkRedaction.ShouldRedactAsync(db, user, caveId, ct))
+            if (await protection.ShouldRedactLinkAsync(user, caveId, ct))
             {
                 var (emptyPage, emptySize) = Paging.Normalize(page, pageSize);
                 return TypedResults.Ok(new PagedResult<TripLogDto>([], emptyPage, emptySize, 0));
@@ -84,7 +86,7 @@ public static class TripLogEndpoints
         var rows = await query.OrderByDescending(x => x.TripDate).ThenByDescending(x => x.CreatedAt)
             .Skip((p - 1) * size).Take(size).ToListAsync(ct);
 
-        var items = await MapWithChildrenAsync(db, user, rows, ct);
+        var items = await MapWithChildrenAsync(db, protection, user, rows, ct);
         return TypedResults.Ok(new PagedResult<TripLogDto>(items, p, size, total));
     }
 
@@ -94,6 +96,7 @@ public static class TripLogEndpoints
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
+        FeatureProtection protection,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -103,7 +106,7 @@ public static class TripLogEndpoints
             return ApiProblems.NotFound("trip_log.not_found");
         }
 
-        var items = await MapWithChildrenAsync(db, user!, [trip], ct);
+        var items = await MapWithChildrenAsync(db, protection, user!, [trip], ct);
         await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
         return TypedResults.Ok(items[0]);
     }
@@ -111,8 +114,8 @@ public static class TripLogEndpoints
     private static async Task<Results<Created<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
         TripLogWriteRequest request,
         SilexGisDbContext db,
-        IPermissionService permissions,
         IUserContextAccessor userAccessor,
+        FeatureProtection protection,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -126,7 +129,7 @@ public static class TripLogEndpoints
             return ApiProblems.Forbidden("trip_log.create_requires_editor");
         }
 
-        var problem = await ValidateReferencesAsync(db, permissions, user, request, ct);
+        var problem = await ValidateReferencesAsync(db, user, request, ct);
         if (problem is not null)
         {
             return problem;
@@ -136,13 +139,13 @@ public static class TripLogEndpoints
         Apply(trip, request);
         db.TripLogs.Add(trip);
         // No existing children on create, so the reconcile helpers reduce to pure inserts.
-        await ReconcileCaveLinksAsync(db, user, trip.Id, request.CaveIds, ct);
+        await ReconcileCaveLinksAsync(db, protection, user, trip.Id, request.CaveIds, ct);
         var added = await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Participant, request.Participants, ct);
         added.AddRange(await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Proposer, request.Proposers ?? [], ct));
         await NotifyParticipantsAsync(db, user, trip, added, ct);
         await db.SaveChangesAsync(ct);
 
-        var items = await MapWithChildrenAsync(db, user, [trip], ct);
+        var items = await MapWithChildrenAsync(db, protection, user, [trip], ct);
         return TypedResults.Created($"/api/v1/trip-logs/{trip.Id}", items[0]);
     }
 
@@ -153,6 +156,7 @@ public static class TripLogEndpoints
         SilexGisDbContext db,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
+        FeatureProtection protection,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -174,20 +178,20 @@ public static class TripLogEndpoints
             return stale;
         }
 
-        var problem = await ValidateReferencesAsync(db, permissions, user, request, ct);
+        var problem = await ValidateReferencesAsync(db, user, request, ct);
         if (problem is not null)
         {
             return problem;
         }
 
         Apply(trip, request);
-        await ReconcileCaveLinksAsync(db, user, trip.Id, request.CaveIds, ct);
+        await ReconcileCaveLinksAsync(db, protection, user, trip.Id, request.CaveIds, ct);
         var added = await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Participant, request.Participants, ct);
         added.AddRange(await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Proposer, request.Proposers ?? [], ct));
         await NotifyParticipantsAsync(db, user, trip, added, ct);
         await db.SaveChangesAsync(ct);
 
-        var items = await MapWithChildrenAsync(db, user, [trip], ct);
+        var items = await MapWithChildrenAsync(db, protection, user, [trip], ct);
         return TypedResults.Ok(items[0]);
     }
 
@@ -256,10 +260,15 @@ public static class TripLogEndpoints
     // history timeline honest. Also preserves cave links the caller could not see: those were
     // redacted out of the DTO they edited, so a full-replace list would silently drop them.
     private static async Task ReconcileCaveLinksAsync(
-        SilexGisDbContext db, UserContext user, Guid tripId, IReadOnlyList<Guid> requestedCaveIds, CancellationToken ct)
+        SilexGisDbContext db,
+        FeatureProtection protection,
+        UserContext user,
+        Guid tripId,
+        IReadOnlyList<Guid> requestedCaveIds,
+        CancellationToken ct)
     {
         var existing = await db.TripLogCaves.Where(x => x.TripLogId == tripId).ToListAsync(ct);
-        var redacted = await CaveLinkRedaction.RedactedCaveIdsAsync(db, user, existing.Select(x => x.CaveId), ct);
+        var redacted = await protection.RedactedLinkTargetIdsAsync(user, [.. existing.Select(x => x.CaveId)], ct);
         var desired = requestedCaveIds
             .Concat(existing.Where(x => redacted.Contains(x.CaveId)).Select(x => x.CaveId))
             .ToHashSet();
@@ -367,7 +376,7 @@ public static class TripLogEndpoints
 
     /// <summary>Geometry validity, cave visibility, participant-user existence.</summary>
     private static async Task<ProblemHttpResult?> ValidateReferencesAsync(
-        SilexGisDbContext db, IPermissionService permissions, UserContext user, TripLogWriteRequest request, CancellationToken ct)
+        SilexGisDbContext db, UserContext user, TripLogWriteRequest request, CancellationToken ct)
     {
         if (request.Geom is not null && request.Geom.ToGeometryOrNull() is null)
         {
@@ -379,10 +388,17 @@ public static class TripLogEndpoints
             return ApiProblems.Forbidden("trip_log.team_membership_required");
         }
 
-        foreach (var caveId in request.CaveIds.Distinct())
+        // A cave is a feature row, so existence and readability are one filtered count; an id
+        // the caller cannot read is reported exactly like a nonexistent one, so linking cannot
+        // be used to probe for caves.
+        var caveIds = request.CaveIds.Distinct().ToList();
+        if (caveIds.Count > 0)
         {
-            var cave = await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == caveId, ct);
-            if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
+            var readable = await db.Features.AsNoTracking()
+                .Where(f => f.Kind == FeatureKind.Cave && caveIds.Contains(f.Id))
+                .VisibleTo(user, db.ObjectAcls)
+                .CountAsync(ct);
+            if (readable != caveIds.Count)
             {
                 return ApiProblems.BadRequest("trip_log.cave_not_found", "A linked cave does not exist.");
             }
@@ -404,7 +420,11 @@ public static class TripLogEndpoints
 
     /// <summary>Batch-loads caves/participants and applies cave-link redaction.</summary>
     private static async Task<List<TripLogDto>> MapWithChildrenAsync(
-        SilexGisDbContext db, UserContext user, IReadOnlyList<TripLog> trips, CancellationToken ct)
+        SilexGisDbContext db,
+        FeatureProtection protection,
+        UserContext user,
+        IReadOnlyList<TripLog> trips,
+        CancellationToken ct)
     {
         var tripIds = trips.Select(x => x.Id).ToList();
 
@@ -434,8 +454,8 @@ public static class TripLogEndpoints
             .ToList();
 
         // Exact trip geometry + protected-cave link would disclose the cave; hide those links.
-        var redacted = await CaveLinkRedaction.RedactedCaveIdsAsync(
-            db, user, caveLinks.Select(x => x.CaveId), ct);
+        var redacted = await protection.RedactedLinkTargetIdsAsync(
+            user, [.. caveLinks.Select(x => x.CaveId)], ct);
 
         return [.. trips.Select(trip => new TripLogDto(
             trip.Id,

@@ -8,13 +8,18 @@ namespace SilexGis.Api.Common;
 /// <summary>Allow-listed tables for the concurrency-version lookup (never user input).</summary>
 public enum VersionedTable
 {
-    Caves,
-    CaveEntrances,
-    SurfaceFeatures,
+    /// <summary>
+    /// The feature supertype row. Every feature kind — caves, entrances, centerlines and
+    /// generic features — versions here: a subtype edit also touches its feature row, so one
+    /// token covers the whole aggregate and a concurrent edit of any part is detected.
+    /// </summary>
+    Features,
+    TripLogs,
     Geofiles,
     GeoreferencedMaps,
-    TripLogs,
+    MapViews,
     SurveyModels,
+    Files,
 }
 
 /// <summary>
@@ -27,13 +32,13 @@ public static class ConcurrencySql
     private static readonly IReadOnlyDictionary<VersionedTable, string> Tables =
         new Dictionary<VersionedTable, string>
         {
-            [VersionedTable.Caves] = "caves",
-            [VersionedTable.CaveEntrances] = "cave_entrances",
-            [VersionedTable.SurfaceFeatures] = "surface_features",
+            [VersionedTable.Features] = "features",
+            [VersionedTable.TripLogs] = "trip_logs",
             [VersionedTable.Geofiles] = "geofiles",
             [VersionedTable.GeoreferencedMaps] = "georeferenced_maps",
-            [VersionedTable.TripLogs] = "trip_logs",
+            [VersionedTable.MapViews] = "map_views",
             [VersionedTable.SurveyModels] = "survey_models",
+            [VersionedTable.Files] = "files",
         };
 
     /// <summary>Current row version, or null when the row does not exist.</summary>

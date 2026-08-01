@@ -102,33 +102,20 @@ public sealed class GeoJsonGeometryTests
         Geo(type, coordinates).ToGeometryOrNull().ShouldBeNull();
 
     [Fact]
-    public void Kind_matching_follows_the_taxonomy_contract()
+    public void Geometry_class_of_a_parsed_shape_is_exact()
     {
-        var point = Geo("Point", "[1,1]").ToGeometryOrNull()!;
-        var line = Geo("LineString", "[[0,0],[1,1]]").ToGeometryOrNull()!;
-
-        GeoJsonGeometry.MatchesKind(point, GeometryKind.Point).ShouldBeTrue();
-        GeoJsonGeometry.MatchesKind(point, GeometryKind.Line).ShouldBeFalse();
-        GeoJsonGeometry.MatchesKind(line, GeometryKind.Line).ShouldBeTrue();
-        GeoJsonGeometry.MatchesKind(line, GeometryKind.Polygon).ShouldBeFalse();
-        GeoJsonGeometry.MatchesKind(point, GeometryKind.Any).ShouldBeTrue();
-        GeoJsonGeometry.MatchesKind(line, GeometryKind.Any).ShouldBeTrue();
-    }
-
-    [Fact]
-    public void Kind_matching_accepts_multi_variants_of_the_same_kind()
-    {
-        var multiPoint = Geo("MultiPoint", "[[1,1],[2,2]]").ToGeometryOrNull()!;
-        var multiLine = Geo("MultiLineString", "[[[0,0],[1,1]]]").ToGeometryOrNull()!;
-        var multiPolygon = Geo("MultiPolygon", "[[[[0,0],[4,0],[4,4],[0,4],[0,0]]]]").ToGeometryOrNull()!;
-
-        // A multi-part geometry is editable under its single-part feature-type kind.
-        GeoJsonGeometry.MatchesKind(multiPoint, GeometryKind.Point).ShouldBeTrue();
-        GeoJsonGeometry.MatchesKind(multiLine, GeometryKind.Line).ShouldBeTrue();
-        GeoJsonGeometry.MatchesKind(multiPolygon, GeometryKind.Polygon).ShouldBeTrue();
-
-        // But not under a different kind.
-        GeoJsonGeometry.MatchesKind(multiPoint, GeometryKind.Line).ShouldBeFalse();
-        GeoJsonGeometry.MatchesKind(multiPolygon, GeometryKind.Point).ShouldBeFalse();
+        // Multi-part variants are their own class: a kind accepting Polygon does not
+        // implicitly accept MultiPolygon, so the mapping must never collapse them.
+        GeometryClasses.Of(Geo("Point", "[1,1]").ToGeometryOrNull()!).ShouldBe(GeometryClass.Point);
+        GeometryClasses.Of(Geo("MultiPoint", "[[1,1],[2,2]]").ToGeometryOrNull()!)
+            .ShouldBe(GeometryClass.MultiPoint);
+        GeometryClasses.Of(Geo("LineString", "[[0,0],[1,1]]").ToGeometryOrNull()!)
+            .ShouldBe(GeometryClass.LineString);
+        GeometryClasses.Of(Geo("MultiLineString", "[[[0,0],[1,1]]]").ToGeometryOrNull()!)
+            .ShouldBe(GeometryClass.MultiLineString);
+        GeometryClasses.Of(Geo("Polygon", "[[[0,0],[4,0],[4,4],[0,4],[0,0]]]").ToGeometryOrNull()!)
+            .ShouldBe(GeometryClass.Polygon);
+        GeometryClasses.Of(Geo("MultiPolygon", "[[[[0,0],[4,0],[4,4],[0,4],[0,0]]]]").ToGeometryOrNull()!)
+            .ShouldBe(GeometryClass.MultiPolygon);
     }
 }

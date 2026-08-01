@@ -7,6 +7,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.History;
@@ -18,7 +19,7 @@ public sealed record HistoryEventDto(
     string? UserName,
     /// <summary>created | updated | deleted.</summary>
     string Action,
-    /// <summary>CLR type name: "Cave" | "CaveEntrance" | "Attachment" | "Tagging" | …</summary>
+    /// <summary>Audit type name: "Feature:Cave" | "Feature:CaveEntrance" | "Attachment" | "TripLog" | …</summary>
     string EntityType,
     string EntityId,
     /// <summary>Per-property diff/snapshot with noise and protection-redacted props removed.</summary>
@@ -27,23 +28,41 @@ public sealed record HistoryEventDto(
     string[] RedactedProperties);
 
 /// <summary>
-/// Per-entity change history, derived from the audit trail. A parent's timeline includes its
-/// children's events via the audit root columns (an entrance's move shows in its cave's
-/// history). Protection-of-history redaction mirrors the live DTO masking.
+/// Per-entity change history, derived from the audit trail. A feature's timeline covers its
+/// whole containment subtree (an entrance's move shows in its cave's history, a cave's edit in
+/// its karst area's) plus the satellites pointing at it; non-feature entities keep the stamped
+/// parent pointer. Protection-of-history redaction mirrors the live DTO masking.
 /// </summary>
 public static class HistoryEndpoints
 {
+    /// <summary>
+    /// Audit type names of the feature world. Matched as a closed set rather than by prefix:
+    /// FeatureLink/FeatureShare/FeatureType share the leading word without being feature rows,
+    /// and equality keeps the (entity_type, entity_id) index usable.
+    /// </summary>
+    private static readonly string[] FeatureTypeNames =
+        [.. Enum.GetValues<FeatureKind>().Select(FeatureAudit.TypeName)];
+
+    /// <summary>
+    /// Properties whose value is a reference to another feature. A record carrying exact
+    /// coordinates discloses a protected target by proximity, so these ids are redacted
+    /// independently of the row's own protection.
+    /// </summary>
+    private static readonly string[] ReferenceProperties =
+        [nameof(FeatureLink.FromId), nameof(FeatureLink.ToId), nameof(TripLogCave.CaveId)];
+
     public static RouteGroupBuilder MapHistoryEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/history", ListAsync)
             .WithTags("History")
-            .WithSummary("Change history for an entity (incl. its children); protection-redacted, visibility-gated.");
+            .WithSummary("Change history for an entity (features incl. their subtree); protection-redacted, visibility-gated.");
         return api;
     }
 
     private static async Task<Results<Ok<PagedResult<HistoryEventDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        FeatureProtection protection,
         string? entityType,
         Guid? entityId,
         int? page,
@@ -57,23 +76,13 @@ public static class HistoryEndpoints
         }
 
         // Existence of an entity the caller cannot read is never disclosed (404, not 403/400).
-        if (entityId is null || !Enum.TryParse<AttachedEntityType>(entityType, ignoreCase: true, out var type)
-            || !await FileAccessRules.CanReadEntityAsync(db, user, type, entityId.Value, ct))
+        var query = entityType is null || entityId is null
+            ? null
+            : await TimelineAsync(db, user, entityType, entityId.Value, ct);
+        if (query is null)
         {
             return ApiProblems.NotFound("history.entity_not_found");
         }
-
-        var clr = AttachedEntityTypes.ClrName(type);
-        var id = entityId.Value.ToString();
-
-        var query = db.AuditEntries.AsNoTracking()
-            .Where(a => a.Action == AuditActions.Created
-                || a.Action == AuditActions.Updated
-                || a.Action == AuditActions.Deleted)
-            // Permission-grant history stays on the admin audit page, not the public timeline.
-            .Where(a => a.EntityType != nameof(ObjectAcl))
-            .Where(a => (a.EntityType == clr && a.EntityId == id)
-                || (a.RootEntityType == clr && a.RootEntityId == id));
 
         var (p, size) = Paging.Normalize(page, pageSize);
         var total = await query.CountAsync(ct);
@@ -93,25 +102,28 @@ public static class HistoryEndpoints
                 Changes: ParseChanges(r.Changes)))
             .ToList();
 
-        // Protection-of-history: resolve every cave the rows touch, then which are hidden from
-        // this caller. One batched lookup drives both governing-cave and cave-link redaction.
-        var caveIds = new HashSet<Guid>();
+        // Protection-of-history: one batched lookup drives both redaction inputs. A row's own
+        // coordinate fields are governed by the feature the row belongs to, and the feature
+        // references inside its diff by their targets — both are hidden under exactly the same
+        // rule (the caller may not see that feature's exact location), so one set answers both.
+        var involved = new HashSet<Guid>();
         foreach (var (row, _, changes) in parsed)
         {
-            if (GoverningCaveId(row) is { } governing)
+            if (GoverningFeatureId(row) is { } governing)
             {
-                caveIds.Add(governing);
+                involved.Add(governing);
             }
 
-            CollectLinkedCaveIds(changes, caveIds);
+            CollectReferencedFeatureIds(changes, involved);
         }
 
-        var hidden = await CaveLinkRedaction.RedactedCaveIdsAsync(db, user, caveIds, ct);
+        var hidden = await protection.RedactedLinkTargetIdsAsync(user, involved, ct);
 
         var items = parsed.Select(r =>
         {
-            var governingHidden = GoverningCaveId(r.Row) is { } gc && hidden.Contains(gc);
-            var (changes, redacted) = HistoryProtection.Redact(r.Row.EntityType!, r.Changes, governingHidden, hidden.Contains);
+            var governingHidden = GoverningFeatureId(r.Row) is { } governing && hidden.Contains(governing);
+            var (changes, redacted) = HistoryProtection.Redact(
+                r.Row.EntityType!, r.Changes, governingHidden, hidden.Contains);
             return new HistoryEventDto(
                 r.Row.Id, r.Row.At, r.Row.UserId, r.UserName, r.Row.Action,
                 r.Row.EntityType!, r.Row.EntityId!,
@@ -122,32 +134,97 @@ public static class HistoryEndpoints
         return TypedResults.Ok(new PagedResult<HistoryEventDto>(items, p, size, total));
     }
 
+    /// <summary>
+    /// The audit rows making up one entity's timeline, or null when the caller may not read
+    /// the entity (indistinguishable from "does not exist" by design).
+    /// </summary>
+    private static async Task<IQueryable<AuditEntry>?> TimelineAsync(
+        SilexGisDbContext db, UserContext user, string entityType, Guid entityId, CancellationToken ct)
+    {
+        var rows = db.AuditEntries.AsNoTracking()
+            .Where(a => a.Action == AuditActions.Created
+                || a.Action == AuditActions.Updated
+                || a.Action == AuditActions.Deleted)
+            // Permission-grant history stays on the admin audit page, not the public timeline.
+            .Where(a => a.EntityType != nameof(ObjectAcl));
+
+        // Every physical feature is addressed uniformly: the kind lives in the rows, not in the
+        // query parameter ("Feature:Cave", "Feature:Generic", …).
+        if (string.Equals(entityType, FeatureAudit.RootName, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!await db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls).AnyAsync(f => f.Id == entityId, ct))
+            {
+                return null;
+            }
+
+            // Subtree scope resolved from the containment closure at read time instead of from a
+            // pointer stamped when the row was written: it covers any depth, and it follows
+            // re-parenting immediately (a cave moved under another area takes its history along).
+            // Soft-deleted descendants stay in scope — their deletion is precisely the event a
+            // timeline exists to show — while descendants the caller may not read contribute
+            // nothing, so a private child cannot leak through its parent's timeline.
+            var scope = await db.Features.AsNoTracking().IgnoreQueryFilters()
+                .VisibleTo(user, db.ObjectAcls)
+                .Where(f => db.FeatureAncestors.Any(a => a.AncestorId == entityId && a.FeatureId == f.Id))
+                .Select(f => f.Id)
+                .ToListAsync(ct);
+
+            // The trail keys entities as text (it spans mixed key types), so the id set crosses
+            // the boundary as strings — same format the audit interceptor writes.
+            var keys = scope.Select(id => id.ToString()).ToList();
+            return rows.Where(a =>
+                (a.EntityType != null && FeatureTypeNames.Contains(a.EntityType)
+                    && a.EntityId != null && keys.Contains(a.EntityId))
+                || (a.RootEntityType == FeatureAudit.RootName
+                    && a.RootEntityId != null && keys.Contains(a.RootEntityId)));
+        }
+
+        if (!Enum.TryParse<AttachedEntityType>(entityType, ignoreCase: true, out var type)
+            || !await FileAccessRules.CanReadEntityAsync(db, user, type, entityId, ct))
+        {
+            return null;
+        }
+
+        var clr = AttachedEntityTypes.ClrName(type);
+        var key = entityId.ToString();
+        return rows.Where(a => (a.EntityType == clr && a.EntityId == key)
+            || (a.RootEntityType == clr && a.RootEntityId == key));
+    }
+
     private static JsonObject? ParseChanges(string? json) =>
         string.IsNullOrEmpty(json) ? null : JsonNode.Parse(json) as JsonObject;
 
-    // The cave whose protection governs a row's own coordinate fields: the cave itself for a
-    // Cave row, the parent cave for a rooted cave-child row. Null for rows that only reference
-    // a cave (redacted via the cave-link predicate instead).
-    private static Guid? GoverningCaveId(AuditEntry row) => row.EntityType switch
-    {
-        nameof(Cave) => ParseGuid(row.EntityId),
-        nameof(CaveEntrance) or nameof(CaveCenterline) or nameof(SurveyModel) => ParseGuid(row.RootEntityId),
-        _ => null,
-    };
+    // The feature whose protected ancestry governs a row's own coordinate fields: the feature
+    // itself for a feature row, the pointed-at feature for a satellite of one (survey models,
+    // attachments, taggings). Null for rows that merely reference a feature — those go through
+    // the link-target predicate instead. Unresolvable ids stay null and the row is treated as
+    // ungoverned only for its own fields; a missing feature never yields exact view.
+    private static Guid? GoverningFeatureId(AuditEntry row) =>
+        row.EntityType is { } type && FeatureAudit.IsFeatureType(type) ? ParseGuid(row.EntityId)
+        : row.RootEntityType == FeatureAudit.RootName ? ParseGuid(row.RootEntityId)
+        : null;
 
-    // CaveId values referenced inside a row's change set (surface features, trip cave-links).
-    private static void CollectLinkedCaveIds(JsonObject? changes, HashSet<Guid> caveIds)
+    private static void CollectReferencedFeatureIds(JsonObject? changes, HashSet<Guid> ids)
     {
-        if (changes?["CaveId"] is not JsonObject pair)
+        if (changes is null)
         {
             return;
         }
 
-        foreach (var side in new[] { pair["old"], pair["new"] })
+        foreach (var property in ReferenceProperties)
         {
-            if (side is JsonValue v && v.TryGetValue<string>(out var text) && Guid.TryParse(text, out var caveId))
+            if (changes[property] is not JsonObject pair)
             {
-                caveIds.Add(caveId);
+                continue;
+            }
+
+            foreach (var side in new[] { pair["old"], pair["new"] })
+            {
+                if (side is JsonValue value && value.TryGetValue<string>(out var text)
+                    && Guid.TryParse(text, out var id))
+                {
+                    ids.Add(id);
+                }
             }
         }
     }

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using FluentValidation;
 
 namespace SilexGis.Api.Features.Caves;
@@ -29,5 +30,10 @@ public sealed class CaveWriteRequestValidator : AbstractValidator<CaveWriteReque
         RuleFor(x => x.Area).GreaterThanOrEqualTo(0).When(x => x.Area.HasValue);
         RuleFor(x => x.Visibility).IsInEnum();
         RuleFor(x => x.ExplorationStatus).IsInEnum();
+        RuleFor(x => x.Properties)
+            .Must(p => p!.Value.ValueKind == JsonValueKind.Object)
+            .WithMessage("Properties must be a JSON object.")
+            .When(x => x.Properties.HasValue
+                && x.Properties.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined));
     }
 }

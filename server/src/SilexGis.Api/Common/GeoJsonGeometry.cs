@@ -12,6 +12,12 @@ namespace SilexGis.Api.Common;
 /// structure. GeometryCollection is intentionally unsupported (no coordinates array; nothing
 /// produces one for these entities).
 /// </summary>
+/// <remarks>
+/// This type only converts shapes. Whether a given geometry class is allowed for the entity
+/// being written is a data-driven rule (each feature kind opts into its accepted classes,
+/// multi-part variants included) and is enforced once, in the feature write service — never
+/// re-implemented here, where it could drift.
+/// </remarks>
 public sealed record GeoJsonGeometry(string Type, JsonElement Coordinates)
 {
     public static GeoJsonGeometry From(Geometry geometry)
@@ -112,18 +118,4 @@ public sealed record GeoJsonGeometry(string Type, JsonElement Coordinates)
             return [.. e.EnumerateArray()];
         }
     }
-
-    /// <summary>
-    /// True when the geometry class is allowed for the given kind. A Multi* variant matches
-    /// its single-part kind (a multi-part polygon is still polygonal), so imported multi-part
-    /// features remain editable under their typed feature type.
-    /// </summary>
-    public static bool MatchesKind(Geometry geometry, Domain.GeometryKind kind) => kind switch
-    {
-        Domain.GeometryKind.Point => geometry is Point or MultiPoint,
-        Domain.GeometryKind.Line => geometry is LineString or MultiLineString,
-        Domain.GeometryKind.Polygon => geometry is Polygon or MultiPolygon,
-        Domain.GeometryKind.Any => true,
-        _ => false,
-    };
 }

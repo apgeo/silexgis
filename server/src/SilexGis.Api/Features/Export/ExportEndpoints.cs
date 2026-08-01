@@ -3,19 +3,22 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Geodata;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Export;
 
 /// <summary>
-/// Streaming file exports. Every path is visibility-filtered and protected cave
-/// locations leave the server obfuscated — exports are as sensitive as map endpoints.
+/// Streaming file exports. Every path is visibility-filtered and every coordinate leaves the
+/// server through the exact-location check — an export file is as sensitive as a map
+/// endpoint, and unlike a map it is kept.
 /// </summary>
 public static class ExportEndpoints
 {
@@ -24,9 +27,9 @@ public static class ExportEndpoints
         api.MapGet("/export/caves", ExportCavesAsync)
             .WithTags("Export")
             .WithSummary("Caves (main entrance points) as GeoJSON/GPX/KML/CSV/zipped shapefile.");
-        api.MapGet("/export/surface-features", ExportSurfaceFeaturesAsync)
+        api.MapGet("/export/features", ExportFeaturesAsync)
             .WithTags("Export")
-            .WithSummary("Surface features as GeoJSON/GPX/KML/CSV/zipped shapefile.");
+            .WithSummary("Features of any kind as GeoJSON/GPX/KML/CSV/zipped shapefile.");
         api.MapGet("/geofiles/{id:guid}/export", ExportGeofileAsync)
             .WithTags("Export")
             .WithSummary("Imported geofile rows re-exported in the requested format.");
@@ -43,6 +46,29 @@ public static class ExportEndpoints
             ["shapefile"] = (ExportFormat.ShapefileZip, "application/zip", "zip"),
         };
 
+    /// <summary>Flat row for the cave export; the geometry is the feature's main-entrance point cache.</summary>
+    private sealed record CaveExportRow(
+        Guid Id,
+        string? Name,
+        Geometry Geom,
+        string? IdentificationCode,
+        long CaveTypeId,
+        string? Region,
+        decimal? SurveyedLength,
+        decimal? Depth,
+        decimal? Altitude,
+        int EntranceCount);
+
+    /// <summary>Flat row for the generic feature export.</summary>
+    private sealed record FeatureExportRow(
+        Guid Id,
+        FeatureKind Kind,
+        string? Name,
+        string? Description,
+        long? FeatureTypeId,
+        Geometry Geom,
+        string Properties);
+
     private static async Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> ExportCavesAsync(
         string format,
         long? caveTypeId,
@@ -51,7 +77,7 @@ public static class ExportEndpoints
         string? bbox,
         SilexGisDbContext db,
         IVectorIO vectorIO,
-        AclPermissionService permissions,
+        FeatureProtection protection,
         IUserContextAccessor userAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
@@ -67,70 +93,105 @@ public static class ExportEndpoints
             return UnsupportedFormat(format);
         }
 
-        // Same filter surface as the caves list; only caves with a main entrance
-        // geometry can be exported as vector rows.
-        var query = db.Caves.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Cave).Where(c => c.MainGeom != null);
+        // Same filter surface as the caves list; only caves with a main-entrance geometry
+        // can be exported as vector rows.
+        var query = db.Features.AsNoTracking()
+            .VisibleTo(user, db.ObjectAcls)
+            .Where(f => f.Kind == FeatureKind.Cave && f.Geom != null && f.Cave != null);
 
         if (caveTypeId is not null)
         {
-            query = query.Where(c => c.CaveTypeId == caveTypeId);
+            query = query.Where(f => f.Cave!.CaveTypeId == caveTypeId);
         }
 
         if (!string.IsNullOrWhiteSpace(region))
         {
-            query = query.Where(c => c.Region == region);
+            query = query.Where(f => f.Cave!.Region == region);
         }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var pattern = $"%{search}%";
-            query = query.Where(c => EF.Functions.ILike(EF.Functions.Unaccent(c.Name), EF.Functions.Unaccent(pattern)));
+            query = query.Where(f =>
+                f.Name != null && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern)));
         }
 
         if (Bbox.TryParse(bbox, out var box))
         {
             var polygon = box.ToPolygon();
-            query = query.Where(c => c.MainGeom!.Intersects(polygon));
+            query = query.Where(f => f.Geom!.Intersects(polygon));
         }
 
         var caveTypes = await db.CaveTypes.AsNoTracking().ToDictionaryAsync(t => t.Id, t => t.Code, ct);
-        var rows = await query.OrderBy(c => c.Name).ToListAsync(ct);
+        var rows = await query
+            .OrderBy(f => f.Name)
+            .Select(f => new CaveExportRow(
+                f.Id,
+                f.Name,
+                f.Geom!,
+                f.Cave!.IdentificationCode,
+                f.Cave.CaveTypeId,
+                f.Cave.Region,
+                f.Cave.SurveyedLength,
+                f.Cave.Depth,
+                f.Cave.Altitude,
+                f.Cave.EntranceCount))
+            .ToListAsync(ct);
 
         var gridMeters = access.Value.LocationGridMeters;
-        var exactGrants = await permissions.CaveExactLocationGrantsAsync(user, ct);
-        var features = rows.Select(cave =>
+        var exactIds = await protection.ExactViewIdsAsync(user, [.. rows.Select(r => r.Id)], ct);
+
+        var features = new List<VectorFeature>(rows.Count);
+        foreach (var row in rows)
         {
-            var exact = LocationProtection.CanViewExactLocation(
-                user, cave, exactGrants.Contains(cave.Id) ? ObjectPermission.ViewExactLocation : ObjectPermission.None);
-            var geom = exact ? cave.MainGeom! : LocationProtection.Snap(cave.MainGeom!, gridMeters);
-            return new VectorFeature(geom, new Dictionary<string, object?>
+            var exact = exactIds.Contains(row.Id);
+            var geom = row.Geom;
+
+            if (!exact)
             {
-                ["name"] = cave.Name,
-                ["code"] = cave.IdentificationCode,
-                ["cave_type"] = caveTypes.GetValueOrDefault(cave.CaveTypeId),
-                ["region"] = cave.Region,
-                ["surveyed_length_m"] = cave.SurveyedLength is null ? null : (double)cave.SurveyedLength,
-                ["depth_m"] = cave.Depth is null ? null : (double)cave.Depth,
-                ["altitude_m"] = cave.Altitude is null ? null : (double)cave.Altitude,
-                ["entrances"] = cave.EntranceCount,
-                // Approximate flag travels with obfuscated coordinates so consumers
-                // cannot mistake a snapped grid point for a surveyed location.
+                // A cave's geometry is its main-entrance point cache (a POINT by schema
+                // constraint), so the grid snap is the normal path here. Anything that is not a
+                // point cannot be snapped without leaking shape, and an export must never carry
+                // a precise coordinate the caller may not see — so such a row is dropped rather
+                // than degraded.
+                if (geom is not Point point)
+                {
+                    continue;
+                }
+
+                geom = LocationProtection.Snap(point, gridMeters);
+            }
+
+            features.Add(new VectorFeature(geom, new Dictionary<string, object?>
+            {
+                ["name"] = row.Name,
+                ["code"] = row.IdentificationCode,
+                ["cave_type"] = caveTypes.GetValueOrDefault(row.CaveTypeId),
+                ["region"] = row.Region,
+                ["surveyed_length_m"] = row.SurveyedLength is null ? null : (double)row.SurveyedLength,
+                ["depth_m"] = row.Depth is null ? null : (double)row.Depth,
+                ["altitude_m"] = row.Altitude is null ? null : (double)row.Altitude,
+                ["entrances"] = row.EntranceCount,
+                // Approximate flag travels with obfuscated coordinates so consumers cannot
+                // mistake a snapped grid point for a surveyed location.
                 ["approximate"] = exact ? null : "yes",
-            });
-        }).ToList();
+            }));
+        }
 
         return WriteFile(vectorIO, target, "caves", features);
     }
 
-    private static async Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> ExportSurfaceFeaturesAsync(
+    private static async Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> ExportFeaturesAsync(
         string format,
+        string? kind,
         long? featureTypeId,
-        Guid? caveId,
         string? search,
         string? bbox,
         SilexGisDbContext db,
         IVectorIO vectorIO,
+        FeatureProtection protection,
         IUserContextAccessor userAccessor,
+        IOptions<AccessOptions> access,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -144,16 +205,30 @@ public static class ExportEndpoints
             return UnsupportedFormat(format);
         }
 
-        var query = db.SurfaceFeatures.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.SurfaceFeature);
+        FeatureKind? kindFilter = null;
+        if (!string.IsNullOrWhiteSpace(kind))
+        {
+            if (!Enum.TryParse<FeatureKind>(kind, ignoreCase: true, out var parsedKind) || !Enum.IsDefined(parsedKind))
+            {
+                return ApiProblems.BadRequest("export.kind_invalid", $"Unknown feature kind '{kind}'.");
+            }
+
+            kindFilter = parsedKind;
+        }
+
+        var query = db.Features.AsNoTracking()
+            .VisibleTo(user, db.ObjectAcls)
+            .Where(f => f.Geom != null);
+
+        if (kindFilter is not null)
+        {
+            var wanted = kindFilter.Value;
+            query = query.Where(f => f.Kind == wanted);
+        }
 
         if (featureTypeId is not null)
         {
             query = query.Where(f => f.FeatureTypeId == featureTypeId);
-        }
-
-        if (caveId is not null)
-        {
-            query = query.Where(f => f.CaveId == caveId);
         }
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -166,18 +241,49 @@ public static class ExportEndpoints
         if (Bbox.TryParse(bbox, out var box))
         {
             var polygon = box.ToPolygon();
-            query = query.Where(f => f.Geom.Intersects(polygon));
+            query = query.Where(f => f.Geom!.Intersects(polygon));
         }
 
-        var featureTypes = await db.FeatureTypes.AsNoTracking().ToDictionaryAsync(t => t.Id, t => t.Code, ct);
-        var rows = await query.OrderBy(f => f.Name).ToListAsync(ct);
+        var featureTypes = await db.FeatureTypes.AsNoTracking()
+            .Select(t => new { t.Id, t.Code, t.ProtectedDisplay })
+            .ToDictionaryAsync(t => t.Id, t => t, ct);
 
-        var features = rows.Select(row =>
+        var rows = await query
+            .OrderBy(f => f.Name)
+            .Select(f => new FeatureExportRow(
+                f.Id, f.Kind, f.Name, f.Description, f.FeatureTypeId, f.Geom!, f.Properties))
+            .ToListAsync(ct);
+
+        var gridMeters = access.Value.LocationGridMeters;
+        var exactIds = await protection.ExactViewIdsAsync(user, [.. rows.Select(r => r.Id)], ct);
+
+        var features = new List<VectorFeature>(rows.Count);
+        foreach (var row in rows)
         {
+            var type = row.FeatureTypeId is null ? null : featureTypes.GetValueOrDefault(row.FeatureTypeId.Value);
+            var exact = exactIds.Contains(row.Id);
+            var geom = row.Geom;
+
+            if (!exact)
+            {
+                // Kinds configured to disappear under protection are dropped whatever their
+                // geometry; everything else may leave only as a snapped point, because lines,
+                // polygons and multi-part geometries disclose shape and extent however coarse
+                // the grid. Dropping the row is the only safe degradation — an export must
+                // never carry a precise coordinate the caller may not see.
+                if (type?.ProtectedDisplay == ProtectedDisplay.Withhold || geom is not Point point)
+                {
+                    continue;
+                }
+
+                geom = LocationProtection.Snap(point, gridMeters);
+            }
+
             var properties = new Dictionary<string, object?>
             {
                 ["name"] = row.Name,
-                ["feature_type"] = featureTypes.GetValueOrDefault(row.FeatureTypeId),
+                ["kind"] = KindCode(row.Kind),
+                ["feature_type"] = type?.Code,
                 ["desc"] = row.Description,
             };
 
@@ -193,10 +299,14 @@ public static class ExportEndpoints
                 });
             }
 
-            return new VectorFeature(row.Geom, properties);
-        }).ToList();
+            // Assigned after the flattening so a typed property of the same name can never
+            // shadow the protection flag.
+            properties["approximate"] = exact ? null : "yes";
 
-        return WriteFile(vectorIO, target, "surface_features", features);
+            features.Add(new VectorFeature(geom, properties));
+        }
+
+        return WriteFile(vectorIO, target, "features", features);
     }
 
     private static async Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> ExportGeofileAsync(
@@ -247,6 +357,15 @@ public static class ExportEndpoints
         var layerName = string.Concat(geofile.Name.Where(char.IsLetterOrDigit)).ToLowerInvariant();
         return WriteFile(vectorIO, target, layerName.Length == 0 ? "geofile" : layerName, features);
     }
+
+    /// <summary>Stable attribute value naming a row's kind — the export mixes kinds in one layer.</summary>
+    private static string KindCode(FeatureKind kind) => kind switch
+    {
+        FeatureKind.Cave => "cave",
+        FeatureKind.CaveEntrance => "cave_entrance",
+        FeatureKind.Centerline => "centerline",
+        _ => "generic",
+    };
 
     private static Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult> WriteFile(
         IVectorIO vectorIO,

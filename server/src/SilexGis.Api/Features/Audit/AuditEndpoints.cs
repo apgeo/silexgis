@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -21,11 +22,13 @@ public sealed record AuditEntryDto(
 
 public static class AuditEndpoints
 {
+    private static readonly string FeatureKindPrefix = $"{FeatureAudit.RootName}:";
+
     public static RouteGroupBuilder MapAuditEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/audit", ListAsync)
             .WithTags("Audit")
-            .WithSummary("Audit trail, filterable by entity; admins only until per-object managers exist.");
+            .WithSummary("Audit trail, filterable by entity (\"Feature\" selects every feature kind); admins only until per-object managers exist.");
         return api;
     }
 
@@ -55,7 +58,13 @@ public static class AuditEndpoints
         var query = db.AuditEntries.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(entityType))
         {
-            query = query.Where(x => x.EntityType == entityType);
+            // Feature rows are typed by kind ("Feature:Cave", "Feature:Generic", …), so the bare
+            // word selects the whole feature world and a qualified value one kind. The prefix
+            // carries the separator: FeatureLink/FeatureShare/FeatureType are unrelated types
+            // that would otherwise be swept in.
+            query = entityType == FeatureAudit.RootName
+                ? query.Where(x => x.EntityType != null && x.EntityType.StartsWith(FeatureKindPrefix))
+                : query.Where(x => x.EntityType == entityType);
         }
 
         if (!string.IsNullOrWhiteSpace(entityId))

@@ -3,15 +3,17 @@ using Dapper;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Map;
 
 /// <summary>
 /// Dapper spatial SQL for the map slice (raw SQL lives only in *Sql.cs files).
-/// Clustering: grid aggregation over coordinates. Protected cave coordinates enter the
+/// Clustering: grid aggregation over coordinates. Protected entrance coordinates enter the
 /// aggregation already obfuscated with the SAME grid as LocationProtection.Snap (round to
 /// nearest multiple of the cell) so cluster centroids can never leak an exact location.
 /// </summary>
@@ -30,8 +32,8 @@ public static class MapSql
         var clusterCellDegrees = 360d / Math.Pow(2, zoom) / 4d;
         var protectionCellDegrees = LocationProtection.CellDegrees(protectionGridMeters);
 
-        var (visibilitySql, parameters) = PermissionSql.VisibleToFragment(
-            user, "c", SilexGis.Domain.Entities.AttachedEntityType.Cave);
+        var (visibilitySql, parameters) = PermissionSql.FeatureVisibleToFragment(user, "f");
+        var exactSql = PermissionSql.ExactViewFragment("f");
         parameters.Add("west", box.West);
         parameters.Add("south", box.South);
         parameters.Add("east", box.East);
@@ -39,54 +41,41 @@ public static class MapSql
         parameters.Add("cluster_cell", clusterCellDegrees);
         parameters.Add("protection_cell", protectionCellDegrees);
 
-        // Optional tag filter — entity_type 0 = cave (schema-contract value, tested).
+        // Optional tag filter over the entrance feature's own taggings.
         var tagSql = string.Empty;
         if (!string.IsNullOrWhiteSpace(tag))
         {
             tagSql = """
+
                   AND EXISTS (SELECT 1 FROM taggings tg
                               JOIN tags t ON t.id = tg.tag_id
-                              WHERE tg.entity_type = 0 AND tg.entity_id = c.id AND t.slug = @tag)
+                              WHERE tg.feature_id = f.id AND t.slug = @tag)
                 """;
             parameters.Add("tag", tag);
         }
 
-        // Cluster centroid of points == arithmetic mean of coordinates; avg(x)/avg(y)
-        // avoids materializing ST_Collect geometry collections (which dominated cost at
-        // 50k rows). SQL round() rounds half away from zero, exactly matching
+        // Entrance features carry their access trio row-locally, so visibility needs no
+        // join; the exact-view rule resolves protection roots from the row's ancestor
+        // array. Cluster centroid of points == arithmetic mean of coordinates; avg(x)/
+        // avg(y) avoids materializing ST_Collect geometry collections (which dominated
+        // cost at 50k rows). SQL round() rounds half away from zero, exactly matching
         // LocationProtection.Snap (MidpointRounding.AwayFromZero) — keep them identical.
         var sql = $"""
             SELECT avg(g.gx) AS lon, avg(g.gy) AS lat, COUNT(*)::int AS count
             FROM (
                 SELECT
-                    CASE WHEN (NOT c.location_protected
-                               OR @vis_is_admin
-                               OR c.owner_user_id = @vis_user_id
-                               OR (c.team_id IS NOT NULL AND c.team_id = ANY(@vis_team_ids))
-                               OR EXISTS (SELECT 1 FROM object_acl acl
-                                          WHERE acl.entity_type = 0 AND acl.entity_id = c.id
-                                            AND ((acl.subject_kind = 0 AND acl.subject_id = @vis_user_id)
-                                                 OR (acl.subject_kind = 1 AND acl.subject_id = ANY(@vis_team_ids)))
-                                            AND (acl.permissions & 32) <> 0))
-                        THEN ST_X(e.geom)
-                        ELSE round(ST_X(e.geom) / @protection_cell) * @protection_cell
+                    CASE WHEN {exactSql}
+                        THEN ST_X(f.geom)
+                        ELSE round(ST_X(f.geom) / @protection_cell) * @protection_cell
                     END AS gx,
-                    CASE WHEN (NOT c.location_protected
-                               OR @vis_is_admin
-                               OR c.owner_user_id = @vis_user_id
-                               OR (c.team_id IS NOT NULL AND c.team_id = ANY(@vis_team_ids))
-                               OR EXISTS (SELECT 1 FROM object_acl acl
-                                          WHERE acl.entity_type = 0 AND acl.entity_id = c.id
-                                            AND ((acl.subject_kind = 0 AND acl.subject_id = @vis_user_id)
-                                                 OR (acl.subject_kind = 1 AND acl.subject_id = ANY(@vis_team_ids)))
-                                            AND (acl.permissions & 32) <> 0))
-                        THEN ST_Y(e.geom)
-                        ELSE round(ST_Y(e.geom) / @protection_cell) * @protection_cell
+                    CASE WHEN {exactSql}
+                        THEN ST_Y(f.geom)
+                        ELSE round(ST_Y(f.geom) / @protection_cell) * @protection_cell
                     END AS gy
-                FROM cave_entrances e
-                JOIN caves c ON c.id = e.cave_id
-                WHERE c.deleted_at IS NULL
-                  AND e.geom && ST_MakeEnvelope(@west, @south, @east, @north, 4326)
+                FROM features f
+                WHERE f.kind = {(short)FeatureKind.CaveEntrance}
+                  AND f.deleted_at IS NULL
+                  AND f.geom && ST_MakeEnvelope(@west, @south, @east, @north, 4326)
                   AND {visibilitySql}{tagSql}
             ) g
             GROUP BY round(g.gx / @cluster_cell), round(g.gy / @cluster_cell)

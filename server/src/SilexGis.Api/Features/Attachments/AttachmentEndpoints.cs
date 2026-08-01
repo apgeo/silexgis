@@ -10,10 +10,14 @@ using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Attachments;
 
+/// <summary>
+/// <see cref="EntityType"/>/<see cref="EntityId"/> name the attachment's target:
+/// "feature" + a feature id, or a non-feature entity name + its id.
+/// </summary>
 public sealed record AttachmentDto(
     Guid Id,
     Guid FileId,
-    AttachedEntityType EntityType,
+    string EntityType,
     Guid EntityId,
     AttachmentRole Role,
     string? Caption,
@@ -23,7 +27,7 @@ public sealed record AttachmentDto(
 
 public sealed record AttachmentCreateRequest(
     Guid FileId,
-    AttachedEntityType EntityType,
+    string EntityType,
     Guid EntityId,
     AttachmentRole Role,
     string? Caption,
@@ -36,17 +40,20 @@ public sealed class AttachmentCreateRequestValidator : AbstractValidator<Attachm
         RuleFor(x => x.FileId).NotEmpty();
         RuleFor(x => x.EntityId).NotEmpty();
         RuleFor(x => x.Caption).MaximumLength(500);
-        RuleFor(x => x.EntityType).IsInEnum();
+        RuleFor(x => x.EntityType)
+            .Must(value => AttachmentTargets.TryParse(value, out _))
+            .WithMessage("Unknown entity type.");
         // A file is never an attachment target (it is only a tag target). Allowing it would let a
         // file be attached to a file, and the polymorphic access resolver would then recurse
         // file → attachment → file without bound. Tags travel a separate table, so are unaffected.
-        RuleFor(x => x.EntityType).NotEqual(AttachedEntityType.StoredFile)
+        RuleFor(x => x.EntityType)
+            .Must(value => !AttachmentTargets.TryParse(value, out var target) || target != AttachedEntityType.StoredFile)
             .WithMessage("Files cannot be attachment targets.");
         RuleFor(x => x.Role).IsInEnum();
     }
 }
 
-/// <summary>Editable attachment metadata; the file and its target entity are fixed at creation.</summary>
+/// <summary>Editable attachment metadata; the file and its target are fixed at creation.</summary>
 public sealed record AttachmentUpdateRequest(AttachmentRole Role, string? Caption, int SortOrder);
 
 public sealed class AttachmentUpdateRequestValidator : AbstractValidator<AttachmentUpdateRequest>
@@ -65,13 +72,13 @@ public static class AttachmentEndpoints
         var attachments = api.MapGroup("/attachments").WithTags("Attachments");
 
         attachments.MapGet("/", ListAsync)
-            .WithSummary("Attachments of one entity, ordered; requires Read on the entity.");
+            .WithSummary("Attachments of one target, ordered; requires Read on the target.");
         attachments.MapPost("/", CreateAsync).WithValidation<AttachmentCreateRequest>()
-            .WithSummary("Attaches an uploaded file to an entity; requires Write on the entity.");
+            .WithSummary("Attaches an uploaded file to a target; requires Write on the target.");
         attachments.MapPut("/{id:guid}", UpdateAsync).WithValidation<AttachmentUpdateRequest>()
-            .WithSummary("Edits an attachment's role/caption/order; requires Write on the entity.");
+            .WithSummary("Edits an attachment's role/caption/order; requires Write on the target.");
         attachments.MapDelete("/{id:guid}", DeleteAsync)
-            .WithSummary("Detaches a file (the file itself is kept); requires Write on the entity.");
+            .WithSummary("Detaches a file (the file itself is kept); requires Write on the target.");
 
         return api;
     }
@@ -90,21 +97,22 @@ public static class AttachmentEndpoints
             return TypedResults.Unauthorized();
         }
 
-        // Query-string enum binding is case-sensitive; the JSON convention is camelCase —
-        // parse leniently so the wire format matches the body enums.
-        if (!Enum.TryParse<AttachedEntityType>(entityType, ignoreCase: true, out var parsedType))
+        if (!AttachmentTargets.TryParse(entityType, out var parsedType))
         {
             return ApiProblems.BadRequest("attachment.entity_type_unknown", $"Unknown entity type '{entityType}'.");
         }
 
-        if (!await FileAccessRules.CanReadEntityAsync(db, user, parsedType, entityId, ct))
+        if (!await FileAccessRules.CanReadTargetAsync(db, user, new AttachmentTarget(parsedType, entityId), ct))
         {
-            // The entity is invisible to the caller — so are its attachments.
+            // The target is invisible to the caller — so are its attachments.
             return ApiProblems.NotFound("attachment.entity_not_found");
         }
 
-        var rows = await db.Attachments.AsNoTracking()
-            .Where(a => a.EntityType == parsedType && a.EntityId == entityId)
+        var scoped = parsedType is { } pairType
+            ? db.Attachments.AsNoTracking().Where(a => a.EntityType == pairType && a.EntityId == entityId)
+            : db.Attachments.AsNoTracking().Where(a => a.FeatureId == entityId);
+
+        var rows = await scoped
             .Join(db.StoredFiles.AsNoTracking(), a => a.FileId, f => f.Id, (a, f) => new { a, f })
             .OrderBy(x => x.a.SortOrder).ThenBy(x => x.a.CreatedAt)
             .ToListAsync(ct);
@@ -125,9 +133,15 @@ public static class AttachmentEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!await FileAccessRules.CanWriteEntityAsync(db, user, request.EntityType, request.EntityId, ct))
+        if (!AttachmentTargets.TryParse(request.EntityType, out var parsedType))
         {
-            return await FileAccessRules.CanReadEntityAsync(db, user, request.EntityType, request.EntityId, ct)
+            return ApiProblems.BadRequest("attachment.entity_type_unknown", $"Unknown entity type '{request.EntityType}'.");
+        }
+
+        var target = new AttachmentTarget(parsedType, request.EntityId);
+        if (!await FileAccessRules.CanWriteTargetAsync(db, user, target, ct))
+        {
+            return await FileAccessRules.CanReadTargetAsync(db, user, target, ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("attachment.entity_not_found");
         }
@@ -141,8 +155,9 @@ public static class AttachmentEndpoints
         var attachment = new Attachment
         {
             FileId = request.FileId,
-            EntityType = request.EntityType,
-            EntityId = request.EntityId,
+            FeatureId = parsedType is null ? request.EntityId : null,
+            EntityType = parsedType,
+            EntityId = parsedType is null ? null : request.EntityId,
             Role = request.Role,
             Caption = request.Caption,
             SortOrder = request.SortOrder,
@@ -174,9 +189,9 @@ public static class AttachmentEndpoints
             return ApiProblems.NotFound("attachment.not_found");
         }
 
-        if (!await FileAccessRules.CanWriteEntityAsync(db, user, attachment.EntityType, attachment.EntityId, ct))
+        if (!await FileAccessRules.CanWriteTargetAsync(db, user, TargetOf(attachment), ct))
         {
-            return await FileAccessRules.CanReadEntityAsync(db, user, attachment.EntityType, attachment.EntityId, ct)
+            return await FileAccessRules.CanReadTargetAsync(db, user, TargetOf(attachment), ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("attachment.not_found");
         }
@@ -208,9 +223,9 @@ public static class AttachmentEndpoints
             return ApiProblems.NotFound("attachment.not_found");
         }
 
-        if (!await FileAccessRules.CanWriteEntityAsync(db, user, attachment.EntityType, attachment.EntityId, ct))
+        if (!await FileAccessRules.CanWriteTargetAsync(db, user, TargetOf(attachment), ct))
         {
-            return await FileAccessRules.CanReadEntityAsync(db, user, attachment.EntityType, attachment.EntityId, ct)
+            return await FileAccessRules.CanReadTargetAsync(db, user, TargetOf(attachment), ct)
                 ? ApiProblems.Forbidden()
                 : ApiProblems.NotFound("attachment.not_found");
         }
@@ -220,11 +235,15 @@ public static class AttachmentEndpoints
         return TypedResults.NoContent();
     }
 
+    // The row's XOR maps directly: a feature row has a null EntityType, which is exactly
+    // the parsed shape of a feature target.
+    private static AttachmentTarget TargetOf(Attachment a) => new(a.EntityType, a.FeatureId ?? a.EntityId!.Value);
+
     private static AttachmentDto ToDto(this Attachment a, StoredFile file, IFileAccessTokenService tokens) => new(
         a.Id,
         a.FileId,
-        a.EntityType,
-        a.EntityId,
+        AttachmentTargets.NameOf(a.FeatureId, a.EntityType),
+        a.FeatureId ?? a.EntityId!.Value,
         a.Role,
         a.Caption,
         a.SortOrder,

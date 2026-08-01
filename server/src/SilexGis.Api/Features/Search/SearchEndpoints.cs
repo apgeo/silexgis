@@ -1,38 +1,52 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
+using NpgsqlTypes;
 using SilexGis.Api.Common;
-using SilexGis.Api.Features.Caves;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Search;
 
-/// <summary>A surface-feature hit; Center is a representative point for map fly-to.</summary>
-public sealed record SearchFeatureItemDto(Guid Id, string? Name, long FeatureTypeId, GeoJsonPoint Center);
+/// <summary>
+/// One hit from the feature registry, whatever its kind. <paramref name="Kind"/> tells the
+/// client which detail route to open (every feature also resolves under /features/{id});
+/// <paramref name="TypeCode"/> names the data-level kind of generic features and is null for
+/// the kinds the schema types itself.
+/// </summary>
+public sealed record SearchFeatureItemDto(Guid Id, FeatureKind Kind, string? Name, string? TypeCode);
 
-/// <summary>A trip-log hit; Center (when the trip has a geometry) enables map fly-to.</summary>
-public sealed record SearchTripItemDto(Guid Id, string Title, DateOnly TripDate, GeoJsonPoint? Center);
+/// <summary>A trip-log hit.</summary>
+public sealed record SearchTripItemDto(Guid Id, string Title, DateOnly TripDate);
 
 public sealed record SearchResultDto(
-    IReadOnlyList<CaveListItemDto> Caves,
     IReadOnlyList<SearchFeatureItemDto> Features,
     IReadOnlyList<SearchTripItemDto> Trips);
 
 /// <summary>
-/// Unified search over caves and surface features. Accent-insensitive (unaccent) so
-/// "pestera" matches "Peștera". Word matches use the GIN-indexed generated search_vector
-/// columns; substring/code matches fall back to ILIKE.
+/// Unified search over every feature kind — caves, their entrances and centerlines, and the
+/// data-driven kinds — plus trip logs. Accent-insensitive (unaccent) so "pestera" matches
+/// "Peștera". Word matches use the GIN-indexed generated search_vector columns;
+/// substring/code matches fall back to ILIKE.
+///
+/// Results deliberately carry NO coordinates. Search is a navigation aid, so keeping
+/// location out of it means protected features need no second obfuscation code path here —
+/// the detail endpoint the client follows applies the location rules. Listing a protected
+/// feature by name is not a location disclosure: which caves exist has always been public
+/// on this installation, only where they are is guarded.
 /// </summary>
 public static class SearchEndpoints
 {
+    private const int MinimumQueryLength = 2;
+    private const int FeatureLimit = 20;
+    private const int TripLimit = 10;
+
     public static RouteGroupBuilder MapSearchEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/search", SearchAsync)
             .WithTags("Search")
-            .WithSummary("Searches caves by name/toponyms (accent-insensitive).");
+            .WithSummary("Searches features of every kind and trip logs (accent-insensitive).");
         return api;
     }
 
@@ -40,7 +54,6 @@ public static class SearchEndpoints
         string q,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
-        IOptions<AccessOptions> access,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -49,50 +62,61 @@ public static class SearchEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
+        if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < MinimumQueryLength)
         {
-            return ApiProblems.BadRequest("search.query_too_short", "Provide at least 2 characters.");
+            return ApiProblems.BadRequest("search.query_too_short", $"Provide at least {MinimumQueryLength} characters.");
         }
 
         var term = q.Trim();
         var pattern = $"%{term}%";
-        var caves = await db.Caves.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls, AttachedEntityType.Cave)
-            .Where(c =>
-                // Indexed word search (GIN over the generated search_vector)…
-                EF.Property<NpgsqlTypes.NpgsqlTsVector>(c, "SearchVector")
-                    .Matches(EF.Functions.PlainToTsQuery("simple", EF.Functions.Unaccent(term)))
-                // …plus substring fallback for partial words and codes.
-                || EF.Functions.ILike(EF.Functions.Unaccent(c.Name), EF.Functions.Unaccent(pattern))
-                || (c.IdentificationCode != null && EF.Functions.ILike(c.IdentificationCode, pattern)))
-            .OrderBy(c => c.Name)
-            .Take(20)
-            .ToListAsync(ct);
 
-        var features = await db.SurfaceFeatures.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls, AttachedEntityType.SurfaceFeature)
+        // One query over the supertype covers every kind. The supertype vector indexes
+        // name + description; caves additionally carry their own vector on the subtype row
+        // (other toponyms + cadastral code), so both are consulted — ORing them is what
+        // makes a search for a cadastral code find its cave.
+        var hits = await db.Features.AsNoTracking()
+            .VisibleTo(user, db.ObjectAcls)
             .Where(f =>
-                EF.Property<NpgsqlTypes.NpgsqlTsVector>(f, "SearchVector")
+                EF.Property<NpgsqlTsVector>(f, "SearchVector")
                     .Matches(EF.Functions.PlainToTsQuery("simple", EF.Functions.Unaccent(term)))
-                || (f.Name != null && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern))))
+                // Substring fallback for partial words the tsquery would not match.
+                || (f.Name != null && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern)))
+                || (f.Cave != null
+                    && (EF.Property<NpgsqlTsVector>(f.Cave, "SearchVector")
+                            .Matches(EF.Functions.PlainToTsQuery("simple", EF.Functions.Unaccent(term)))
+                        || (f.Cave.IdentificationCode != null
+                            && EF.Functions.ILike(f.Cave.IdentificationCode, pattern)))))
             .OrderBy(f => f.Name)
-            .Take(10)
+            .Take(FeatureLimit)
+            .Select(f => new { f.Id, f.Kind, f.Name, f.FeatureTypeId })
             .ToListAsync(ct);
 
+        var typeIds = hits.Where(h => h.FeatureTypeId != null).Select(h => h.FeatureTypeId!.Value).Distinct().ToList();
+        var typeCodes = new Dictionary<long, string>();
+        if (typeIds.Count > 0)
+        {
+            typeCodes = await db.FeatureTypes.AsNoTracking()
+                .Where(t => typeIds.Contains(t.Id))
+                .ToDictionaryAsync(t => t.Id, t => t.Code, ct);
+        }
+
+        // Trip logs are not features and keep their own query: they have no search_vector,
+        // only free text to match.
         var trips = await db.TripLogs.AsNoTracking()
             .VisibleTo(user, db.ObjectAcls, AttachedEntityType.TripLog)
             .Where(x => EF.Functions.ILike(EF.Functions.Unaccent(x.Title), EF.Functions.Unaccent(pattern))
                 || (x.Description != null && EF.Functions.ILike(EF.Functions.Unaccent(x.Description), EF.Functions.Unaccent(pattern))))
             .OrderByDescending(x => x.TripDate)
-            .Take(10)
+            .Take(TripLimit)
+            .Select(x => new SearchTripItemDto(x.Id, x.Title, x.TripDate))
             .ToListAsync(ct);
 
         return TypedResults.Ok(new SearchResultDto(
-            [.. caves.Select(c => c.ToListItem(user, access.Value.LocationGridMeters))],
-            [.. features.Select(f => new SearchFeatureItemDto(
-                f.Id, f.Name, f.FeatureTypeId, GeoJsonPoint.From((NetTopologySuite.Geometries.Point)f.Geom.Centroid)))],
-            [.. trips.Select(x => new SearchTripItemDto(
-                x.Id, x.Title, x.TripDate,
-                x.Geom is null ? null : GeoJsonPoint.From((NetTopologySuite.Geometries.Point)x.Geom.Centroid)))]));
+            [.. hits.Select(h => new SearchFeatureItemDto(
+                h.Id,
+                h.Kind,
+                h.Name,
+                h.FeatureTypeId is null ? null : typeCodes.GetValueOrDefault(h.FeatureTypeId.Value)))],
+            trips));
     }
 }

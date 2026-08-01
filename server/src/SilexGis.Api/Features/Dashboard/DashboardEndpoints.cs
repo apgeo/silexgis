@@ -11,17 +11,17 @@ namespace SilexGis.Api.Features.Dashboard;
 /// <summary>
 /// Read-only aggregate behind the dashboard page: registry counts + a recent-activity feed,
 /// every part filtered to what the caller may see. Exists as one endpoint because the page
-/// would otherwise need ~7 round-trips (four paged list calls fetching rows only to read
-/// their totals, plus three recent-record calls) to paint above the fold.
+/// would otherwise need several round-trips (paged list calls fetching rows only to read
+/// their totals, plus recent-record calls) to paint above the fold.
 /// </summary>
 public static class DashboardEndpoints
 {
     /// <summary>
     /// Rows in the merged recent-activity feed. Kept small: this is a glanceable block, not a
-    /// list page. Each kind is also read up to this same limit before the merge, and that is a
-    /// requirement rather than a coincidence: a record in the newest N overall is necessarily in
-    /// its own kind's newest N, so reading fewer per kind would let a burst of activity in one
-    /// kind push out rows that are newer than the ones displayed.
+    /// list page. Each source is also read up to this same limit before the merge, and that is
+    /// a requirement rather than a coincidence: a record in the newest N overall is necessarily
+    /// in its own source's newest N, so reading fewer per source would let a burst of activity
+    /// in one of them push out rows that are newer than the ones displayed.
     /// </summary>
     private const int ActivityLimit = 10;
 
@@ -44,31 +44,29 @@ public static class DashboardEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var caves = db.Caves.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Cave);
-        var features = db.SurfaceFeatures.AsNoTracking()
-            .VisibleTo(user, db.ObjectAcls, AttachedEntityType.SurfaceFeature);
+        var features = db.Features.AsNoTracking().VisibleTo(user, db.ObjectAcls);
         var trips = db.TripLogs.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.TripLog);
         var geofiles = db.Geofiles.AsNoTracking().VisibleTo(user, db.ObjectAcls, AttachedEntityType.Geofile);
 
+        // Every feature kind lives in one table, so the per-kind figures are one grouped scan
+        // rather than a count query per kind.
+        var featureCounts = await features
+            .GroupBy(f => f.Kind)
+            .Select(g => new { Kind = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Kind, x => x.Count, ct);
+
         var counts = new DashboardCountsDto(
-            await caves.CountAsync(ct),
-            await features.CountAsync(ct),
+            featureCounts.GetValueOrDefault(FeatureKind.Cave),
+            featureCounts.GetValueOrDefault(FeatureKind.Generic),
             await trips.CountAsync(ct),
             await geofiles.CountAsync(ct));
 
-        // Each kind is trimmed server-side before the merge, so the feed reads at most three
-        // short pages rather than sorting whole tables in memory.
-        var recentCaves = await caves
-            .OrderByDescending(c => c.UpdatedAt)
-            .Take(ActivityLimit)
-            .Select(c => new DashboardActivityItemDto(DashboardActivityKind.Cave, c.Id, c.Name, c.UpdatedAt))
-            .ToListAsync(ct);
-
+        // Each source is trimmed server-side before the merge, so the feed reads two short
+        // pages rather than sorting whole tables in memory.
         var recentFeatures = await features
             .OrderByDescending(f => f.UpdatedAt)
             .Take(ActivityLimit)
-            .Select(f => new DashboardActivityItemDto(
-                DashboardActivityKind.SurfaceFeature, f.Id, f.Name, f.UpdatedAt))
+            .Select(f => new { f.Kind, f.Id, f.Name, f.UpdatedAt })
             .ToListAsync(ct);
 
         var recentTrips = await trips
@@ -77,8 +75,9 @@ public static class DashboardEndpoints
             .Select(t => new DashboardActivityItemDto(DashboardActivityKind.TripLog, t.Id, t.Title, t.UpdatedAt))
             .ToListAsync(ct);
 
-        var recentActivity = recentCaves
-            .Concat(recentFeatures)
+        var recentActivity = recentFeatures
+            .Select(f => new DashboardActivityItemDto(
+                DashboardActivityKinds.Of(f.Kind), f.Id, f.Name, f.UpdatedAt))
             .Concat(recentTrips)
             .OrderByDescending(x => x.UpdatedAt)
             .Take(ActivityLimit)

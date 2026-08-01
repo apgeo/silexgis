@@ -3,11 +3,14 @@ using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Caves;
@@ -56,9 +59,12 @@ public sealed class EntranceWriteRequestValidator : AbstractValidator<EntranceWr
 }
 
 /// <summary>
-/// Entrances inherit the cave's access control: every operation
-/// checks the parent cave. Derived cave fields (entrance_count, main_geom) are maintained
-/// here — the single write path for entrances.
+/// Entrances are features: the feature row carries the name, the description and the
+/// entrance point (a PointZ whose Z mirrors the altitude), the subtype row the
+/// entrance-specific attributes. An entrance is a child of its cave and has no access
+/// control of its own — every operation here is authorized against the cave feature, and
+/// every change to the entrance set goes through the feature write service, which owns the
+/// cave's derived mirror (entrance count and representative point).
 /// </summary>
 public static class EntranceEndpoints
 {
@@ -86,26 +92,31 @@ public static class EntranceEndpoints
         Guid caveId,
         SilexGisDbContext db,
         IPermissionService permissions,
+        FeatureProtection protection,
         IUserContextAccessor userAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        var cave = await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == caveId, ct);
+        var cave = await db.Features.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == caveId && f.Kind == FeatureKind.Cave, ct);
         if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        var exact = !cave.LocationProtected
-            || await permissions.CanAsync(user, cave, ObjectPermission.ViewExactLocation, ct);
-        var entrances = await db.CaveEntrances.AsNoTracking()
-            .Where(e => e.CaveId == caveId)
-            .OrderByDescending(e => e.IsMain).ThenBy(e => e.CreatedAt)
+        // Readability is decided on the cave alone. Re-filtering the entrance rows would be
+        // wrong, not merely redundant: ACL grants are keyed to the row they were made on, so
+        // a caller who reads a private cave through a grant holds none on its entrances.
+        var rows = await db.CaveEntrances.AsNoTracking()
+            .Include(e => e.Feature)
+            .Where(e => e.CaveFeatureId == caveId)
+            .OrderByDescending(e => e.IsMain).ThenBy(e => e.Feature.CreatedAt)
             .ToListAsync(ct);
 
-        return TypedResults.Ok(entrances
-            .Select(e => ToDto(e, exact, access.Value.LocationGridMeters))
+        var exact = await protection.ExactViewIdsAsync(user, [.. rows.Select(e => e.Id)], ct);
+        return TypedResults.Ok(rows
+            .Select(e => ToDto(e.Feature, e, exact.Contains(e.Id), access.Value.LocationGridMeters))
             .ToList());
     }
 
@@ -113,14 +124,15 @@ public static class EntranceEndpoints
         Guid caveId,
         EntranceWriteRequest request,
         SilexGisDbContext db,
+        FeatureWriteService writer,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        var cave = await db.Caves.FirstOrDefaultAsync(c => c.Id == caveId, ct);
-        if (cave is null || user is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
+        var cave = await db.Features.FirstOrDefaultAsync(f => f.Id == caveId && f.Kind == FeatureKind.Cave, ct);
+        if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("cave.not_found");
         }
@@ -130,20 +142,47 @@ public static class EntranceEndpoints
             return ApiProblems.Forbidden();
         }
 
+        // A cave's first entrance is its representative point, so it starts out as the main one.
+        var isFirst = !await db.CaveEntrances.AnyAsync(e => e.CaveFeatureId == caveId, ct);
+        var altitude = AltitudeOf(request);
+        var feature = new Feature
+        {
+            Name = request.Name,
+            Description = request.Description,
+            Geom = ToPoint(request.Geom, altitude),
+        };
         var entrance = new CaveEntrance
         {
-            CaveId = caveId,
+            CaveFeatureId = caveId,
             EntranceTypeId = request.EntranceTypeId,
-            Geom = request.Geom.ToPoint(),
+            IsMain = request.IsMain || isFirst,
+            Altitude = altitude,
+            PositionQuality = request.PositionQuality,
+            SurveyedAt = request.SurveyedAt,
         };
-        Apply(request, entrance);
-        db.CaveEntrances.Add(entrance);
 
-        await RecomputeDerivedAsync(db, cave, ct);
+        try
+        {
+            // Owner, team and visibility are copied from the cave by the write service: an
+            // entrance is never more (or less) visible than the cave it belongs to.
+            await writer.CreateEntranceAsync(feature, entrance, ct);
+            if (entrance.IsMain)
+            {
+                await writer.SetMainEntranceAsync(caveId, feature.Id, ct);
+            }
+        }
+        catch (FeatureWriteException ex)
+        {
+            return ApiProblems.BadRequest(ex.Code, string.Join("; ", ex.Errors));
+        }
+
         await db.SaveChangesAsync(ct);
+
+        // Adding an entrance is unrestricted even for callers without exact-location access:
+        // the coordinates are theirs, so echoing them back discloses nothing.
         return TypedResults.Created(
-            $"/api/v1/cave-entrances/{entrance.Id}",
-            ToDto(entrance, exact: true, access.Value.LocationGridMeters));
+            $"/api/v1/cave-entrances/{feature.Id}",
+            ToDto(feature, entrance, exact: true, access.Value.LocationGridMeters));
     }
 
     private static async Task<Results<Ok<EntranceDto>, ProblemHttpResult>> UpdateAsync(
@@ -151,14 +190,18 @@ public static class EntranceEndpoints
         EntranceWriteRequest request,
         HttpContext http,
         SilexGisDbContext db,
+        FeatureWriteService writer,
         IPermissionService permissions,
+        FeatureProtection protection,
         IUserContextAccessor userAccessor,
         IOptions<AccessOptions> access,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        var entrance = await db.CaveEntrances.FirstOrDefaultAsync(e => e.Id == id, ct);
-        var cave = entrance is null ? null : await db.Caves.FirstOrDefaultAsync(c => c.Id == entrance.CaveId, ct);
+        var entrance = await db.CaveEntrances.Include(e => e.Feature).FirstOrDefaultAsync(e => e.Id == id, ct);
+        var cave = entrance is null
+            ? null
+            : await db.Features.FirstOrDefaultAsync(f => f.Id == entrance.CaveFeatureId, ct);
         if (entrance is null || cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("entrance.not_found");
@@ -169,48 +212,66 @@ public static class EntranceEndpoints
             return ApiProblems.Forbidden();
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.CaveEntrances, entrance.Id, ct) is { } stale)
+        // The feature row is the aggregate's version token — one ETag for name, geometry and
+        // the entrance attributes alike.
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Features, entrance.Id, ct) is { } stale)
         {
             return stale;
         }
 
-        // Write-path protection guard (same rationale as caves): an editor without
-        // exact-location access sees only snapped coordinates and null altitude, so a normal
-        // save must not overwrite the precise stored values with that obfuscated echo.
-        var canViewExact = await permissions.CanAsync(user, cave, ObjectPermission.ViewExactLocation, ct);
-        var preservedGeom = entrance.Geom;
-        var preservedAltitude = entrance.Altitude;
-        var preservedQuality = entrance.PositionQuality;
+        var canViewExact = (await protection.ExactViewIdsAsync(user, [entrance.Id], ct)).Contains(entrance.Id);
+        var feature = entrance.Feature;
+        feature.Name = request.Name;
+        feature.Description = request.Description;
+        entrance.EntranceTypeId = request.EntranceTypeId;
+        entrance.SurveyedAt = request.SurveyedAt;
 
-        Apply(request, entrance);
-        entrance.Geom = request.Geom.ToPoint();
-
-        if (cave.LocationProtected && !canViewExact)
+        // Write-path protection guard: an editor without exact-location access is shown only
+        // snapped coordinates, no altitude and an unknown position quality, so a normal save
+        // must not write that obfuscated echo back over the precise stored values.
+        if (canViewExact)
         {
-            entrance.Geom = preservedGeom;
-            entrance.Altitude = preservedAltitude;
-            entrance.PositionQuality = preservedQuality;
+            entrance.Altitude = AltitudeOf(request);
+            entrance.PositionQuality = request.PositionQuality;
+            feature.Geom = ToPoint(request.Geom, entrance.Altitude);
         }
 
-        await RecomputeDerivedAsync(db, cave, ct);
+        if (request.IsMain && !entrance.IsMain)
+        {
+            // Promotion demotes the previous main entrance and refreshes the cave's mirror.
+            await writer.SetMainEntranceAsync(cave.Id, entrance.Id, ct);
+        }
+        else
+        {
+            entrance.IsMain = request.IsMain;
+            await writer.SyncCaveMirrorAsync(cave.Id, ct);
+        }
+
         await db.SaveChangesAsync(ct);
-        // Mask the response to the caller's own view (mirrors the list/GET rule): after the
-        // guard restored the precise stored values, returning them exact would leak them.
-        var exact = !cave.LocationProtected || canViewExact;
-        return TypedResults.Ok(ToDto(entrance, exact, access.Value.LocationGridMeters));
+
+        // Mask the response to the caller's own view (mirrors the list rule): after the guard
+        // restored the precise stored values, returning them exact would leak them.
+        return TypedResults.Ok(ToDto(feature, entrance, canViewExact, access.Value.LocationGridMeters));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         HttpContext http,
         SilexGisDbContext db,
+        FeatureWriteService writer,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        var entrance = await db.CaveEntrances.FirstOrDefaultAsync(e => e.Id == id, ct);
-        var cave = entrance is null ? null : await db.Caves.FirstOrDefaultAsync(c => c.Id == entrance.CaveId, ct);
+
+        // Deliberately untracked: the soft delete stamps the rows in the database, and a
+        // tracked copy still carrying the pre-delete state would make the cave mirror below
+        // count this entrance as present.
+        var entrance = await db.CaveEntrances.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id, ct);
+        var cave = entrance is null
+            ? null
+            : await db.Features.FirstOrDefaultAsync(f => f.Id == entrance.CaveFeatureId, ct);
         if (entrance is null || cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("entrance.not_found");
@@ -221,67 +282,50 @@ public static class EntranceEndpoints
             return ApiProblems.Forbidden();
         }
 
-        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.CaveEntrances, entrance.Id, ct) is { } stale)
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.Features, entrance.Id, ct) is { } stale)
         {
             return stale;
         }
 
-        db.CaveEntrances.Remove(entrance);
-        await RecomputeDerivedAsync(db, cave, ct);
+        await writer.SoftDeleteAsync(entrance.Id, ct);
+        await writer.SyncCaveMirrorAsync(cave.Id, ct);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }
 
-    private static void Apply(EntranceWriteRequest request, CaveEntrance entrance)
-    {
-        entrance.Name = request.Name;
-        entrance.EntranceTypeId = request.EntranceTypeId;
-        entrance.IsMain = request.IsMain;
-        entrance.Altitude = request.Altitude
-            ?? (request.Geom.Coordinates.Length == 3 ? (decimal)request.Geom.Coordinates[2] : null);
-        entrance.Description = request.Description;
-        entrance.PositionQuality = request.PositionQuality;
-        entrance.SurveyedAt = request.SurveyedAt;
-    }
+    /// <summary>Altitude as given, or lifted from the body's third coordinate.</summary>
+    private static decimal? AltitudeOf(EntranceWriteRequest request) =>
+        request.Altitude
+        ?? (request.Geom.Coordinates.Length == 3 ? (decimal)request.Geom.Coordinates[2] : null);
 
     /// <summary>
-    /// Keeps caves.entrance_count and caves.main_geom in sync, and enforces a single main
-    /// entrance (last one marked wins). Works on tracked state, before SaveChanges.
+    /// The entrance point as stored on the feature row: Z mirrors the altitude whenever one
+    /// is known, so the map payload and the attribute agree without a second lookup.
     /// </summary>
-    private static async Task RecomputeDerivedAsync(SilexGisDbContext db, Cave cave, CancellationToken ct)
+    private static Point ToPoint(GeoJsonPoint geom, decimal? altitude)
     {
-        // Bring all of the cave's entrances into the change tracker (new/removed included).
-        await db.CaveEntrances.Where(e => e.CaveId == cave.Id).LoadAsync(ct);
-        var entrances = db.ChangeTracker.Entries<CaveEntrance>()
-            .Where(e => e.State != EntityState.Deleted && e.Entity.CaveId == cave.Id)
-            .Select(e => e.Entity)
-            .ToList();
-
-        var mains = entrances.Where(e => e.IsMain).ToList();
-        if (mains.Count > 1)
-        {
-            var keep = mains[^1];
-            foreach (var other in mains.Where(m => m != keep))
-            {
-                other.IsMain = false;
-            }
-        }
-
-        if (entrances.Count > 0 && !entrances.Any(e => e.IsMain))
-        {
-            entrances[0].IsMain = true;
-        }
-
-        cave.EntranceCount = entrances.Count;
-        cave.MainGeom = entrances.FirstOrDefault(e => e.IsMain)?.Geom ?? entrances.FirstOrDefault()?.Geom;
+        double x = geom.Coordinates[0];
+        double y = geom.Coordinates[1];
+        Coordinate coordinate = altitude is null ? new Coordinate(x, y) : new CoordinateZ(x, y, (double)altitude.Value);
+        return new Point(coordinate) { SRID = 4326 };
     }
 
-    private static EntranceDto ToDto(CaveEntrance e, bool exact, double gridMeters) => new(
-        e.Id, e.CaveId, e.Name, e.EntranceTypeId, e.IsMain,
-        GeoJsonPoint.From(exact ? e.Geom : LocationProtection.Snap(e.Geom, gridMeters)),
-        exact ? e.Altitude : null,
-        e.Description,
-        exact ? e.PositionQuality : PositionQuality.Unknown,
-        e.SurveyedAt,
-        ApproximateLocation: !exact);
+    // Entrance features always carry a point geometry (enforced by the write service and a
+    // database check constraint), so the cast is total.
+    private static EntranceDto ToDto(Feature feature, CaveEntrance entrance, bool exact, double gridMeters)
+    {
+        var point = (Point)feature.Geom!;
+        return new EntranceDto(
+            feature.Id,
+            entrance.CaveFeatureId,
+            feature.Name,
+            entrance.EntranceTypeId,
+            entrance.IsMain,
+            GeoJsonPoint.From(exact ? point : LocationProtection.Snap(point, gridMeters)),
+            exact ? entrance.Altitude : null,
+            feature.Description,
+            exact ? entrance.PositionQuality : PositionQuality.Unknown,
+            entrance.SurveyedAt,
+            ApproximateLocation: !exact);
+    }
 }

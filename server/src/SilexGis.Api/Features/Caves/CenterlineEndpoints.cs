@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
@@ -7,7 +8,9 @@ using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Geodata;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Caves;
@@ -17,22 +20,47 @@ public sealed record CenterlineDto(
     Guid CaveId,
     Guid? SurveyModelId,
     string Name,
+    string? Description,
     GeoJsonGeometry Geom,
     decimal? LengthM,
+    int PathCount,
+    /// <summary>The cave's current shape — exactly one centerline per cave carries it.</summary>
+    bool IsDefault,
     CenterlineSource Source,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public sealed record CenterlineUpdateRequest(
+    string Name,
+    string? Description,
+    Guid? SurveyModelId,
+    bool IsDefault);
+
+public sealed class CenterlineUpdateRequestValidator : AbstractValidator<CenterlineUpdateRequest>
+{
+    public CenterlineUpdateRequestValidator()
+    {
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(255);
+        RuleFor(x => x.Description).MaximumLength(4000);
+    }
+}
 
 /// <summary>
-/// Cave centerlines: uploaded GeoJSON/GPX line work displayed over surface maps
-/// (extraction from survey files is a future processing job). They inherit the cave's
-/// access control, and because a centerline traces the cave's exact position they are
-/// location data: for a location-protected cave every read path withholds them entirely
-/// from callers without the exact-location permission.
+/// Cave centerlines: the surveyed line work of a cave, uploaded as GeoJSON/GPX/KML
+/// (extraction from survey models is a future processing job). A centerline is a feature —
+/// a child of its cave, carrying the cave's access columns — so it is readable exactly when
+/// its cave is. Because a centerline traces the cave's exact position, it is location data:
+/// under location protection every read path withholds it entirely (extended geometry cannot
+/// be snapped to a grid the way a point can) from callers without the exact-location
+/// permission, and unreadable never means 403 — it means 404.
 /// </summary>
 public static class CenterlineEndpoints
 {
     /// <summary>Centerline uploads are small line files; whole systems stay well under this.</summary>
     private const long MaxUploadBytes = 20L * 1024 * 1024;
+
+    /// <summary>Bound of the feature name column; an over-long upload file name is cut, not rejected.</summary>
+    private const int MaxNameLength = 255;
 
     public static RouteGroupBuilder MapCenterlineEndpoints(this RouteGroupBuilder api)
     {
@@ -43,39 +71,55 @@ public static class CenterlineEndpoints
             .DisableAntiforgery()
             .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxUploadBytes))
             .WithTags("Centerlines")
-            .WithSummary("Uploads a GeoJSON/GPX centerline (Write on the cave).");
-        api.MapDelete("/cave-centerlines/{id:guid}", DeleteAsync)
+            .WithSummary("Uploads a GeoJSON/GPX/KML centerline (Write on the cave).");
+        api.MapPut("/centerlines/{id:guid}", UpdateAsync)
+            .WithValidation<CenterlineUpdateRequest>()
+            .WithTags("Centerlines")
+            .WithSummary("Metadata update, including which centerline is the cave's shape (Write on the cave).");
+        api.MapDelete("/centerlines/{id:guid}", DeleteAsync)
             .WithTags("Centerlines")
             .WithSummary("Deletes the centerline (Write on the cave).");
 
         return api;
     }
 
-    private static async Task<Results<Ok<List<CenterlineDto>>, ProblemHttpResult>> ListAsync(
+    private static async Task<Results<Ok<List<CenterlineDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         Guid caveId,
         SilexGisDbContext db,
         IPermissionService permissions,
+        FeatureProtection protection,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        var cave = await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == caveId, ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var cave = await db.Features.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == caveId && f.Kind == FeatureKind.Cave, ct);
         if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        // The cave stays readable, but its centerlines trace its exact location.
-        if (await CaveLinkRedaction.ShouldRedactAsync(db, user, caveId, ct))
-        {
-            return TypedResults.Ok(new List<CenterlineDto>());
-        }
-
-        var centerlines = await db.CaveCenterlines.AsNoTracking()
-            .Where(c => c.CaveId == caveId)
-            .OrderBy(c => c.CreatedAt)
+        // Centerlines carry their cave's access columns, so the row-local filter is the whole
+        // read rule — no join back to the cave.
+        var rows = await db.Features.AsNoTracking()
+            .VisibleTo(user, db.ObjectAcls)
+            .Where(f => f.Kind == FeatureKind.Centerline && f.Centerline!.CaveFeatureId == caveId)
+            .Include(f => f.Centerline)
+            .OrderBy(f => f.CreatedAt)
             .ToListAsync(ct);
-        return TypedResults.Ok(centerlines.Select(ToDto).ToList());
+
+        // The cave stays readable, but its centerlines trace its exact position: whoever may
+        // not see that sees no centerlines at all, and is told nothing about how many exist.
+        var exact = await protection.ExactViewIdsAsync(user, [.. rows.Select(f => f.Id)], ct);
+        return TypedResults.Ok(rows
+            .Where(f => exact.Contains(f.Id))
+            .Select(f => ToDto(f, f.Centerline!))
+            .ToList());
     }
 
     private static async Task<Results<Created<CenterlineDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
@@ -83,6 +127,7 @@ public static class CenterlineEndpoints
         IFormFile file,
         SilexGisDbContext db,
         IVectorIO vectorIO,
+        FeatureWriteService writes,
         IPermissionService permissions,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
@@ -93,13 +138,14 @@ public static class CenterlineEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var cave = await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == caveId, ct);
-        if (cave is null || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct))
+        var caveFeature = await db.Features.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == caveId && f.Kind == FeatureKind.Cave, ct);
+        if (caveFeature is null || !await permissions.CanAsync(user, caveFeature, ObjectPermission.Read, ct))
         {
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        if (!await permissions.CanAsync(user, cave, ObjectPermission.Write, ct))
+        if (!await permissions.CanAsync(user, caveFeature, ObjectPermission.Write, ct))
         {
             return ApiProblems.Forbidden();
         }
@@ -160,50 +206,174 @@ public static class CenterlineEndpoints
         var storeSkeleton = CenterlineSkeleton.IsWorthStoring(geom, skeleton);
         var pathCount = CenterlineSkeleton.PathCount(geom);
 
-        var centerline = new CaveCenterline
+        var name = Path.GetFileNameWithoutExtension(file.FileName);
+        var feature = new Feature
         {
-            CaveId = caveId,
-            Name = Path.GetFileNameWithoutExtension(file.FileName),
+            // Owner/team/visibility are copied from the cave by the write service: a centerline
+            // has no access control of its own.
+            Name = name.Length > MaxNameLength ? name[..MaxNameLength] : name,
             Geom = geom,
+        };
+        var centerline = new Centerline
+        {
+            CaveFeatureId = caveId,
             Skeleton = storeSkeleton ? skeleton : null,
             PathCount = pathCount,
             SkeletonPathCount = storeSkeleton ? CenterlineSkeleton.PathCount(skeleton) : pathCount,
             LengthM = await CenterlineSql.GeodesicLengthMetersAsync(db, geom, ct),
         };
 
-        db.CaveCenterlines.Add(centerline);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await writes.CreateCenterlineAsync(feature, centerline, ct);
+        }
+        catch (FeatureWriteException ex)
+        {
+            return ApiProblems.BadRequest(ex.Code, string.Join("; ", ex.Errors));
+        }
 
-        return TypedResults.Created($"/api/v1/caves/{caveId}/centerlines", ToDto(centerline));
+        await db.SaveChangesAsync(ct);
+        return TypedResults.Created($"/api/v1/caves/{caveId}/centerlines", ToDto(feature, centerline));
     }
 
-    private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
+    private static async Task<Results<Ok<CenterlineDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
         Guid id,
+        CenterlineUpdateRequest request,
         SilexGisDbContext db,
+        FeatureWriteService writes,
         IPermissionService permissions,
+        FeatureProtection protection,
         IUserContextAccessor userAccessor,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
-        var centerline = await db.CaveCenterlines.FirstOrDefaultAsync(c => c.Id == id, ct);
-        var cave = centerline is null
-            ? null
-            : await db.Caves.AsNoTracking().FirstOrDefaultAsync(c => c.Id == centerline.CaveId, ct);
-        if (centerline is null || cave is null
-            || !await permissions.CanAsync(user, cave, ObjectPermission.Read, ct)
-            || await CaveLinkRedaction.ShouldRedactAsync(db, user, cave.Id, ct))
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var found = await ResolveAsync(db, permissions, protection, user, id, ct);
+        if (found is null)
         {
             return ApiProblems.NotFound("centerline.not_found");
         }
 
-        if (!await permissions.CanAsync(user, cave, ObjectPermission.Write, ct))
+        if (!await permissions.CanAsync(user, found.CaveFeature, ObjectPermission.Write, ct))
         {
             return ApiProblems.Forbidden();
         }
 
-        db.CaveCenterlines.Remove(centerline);
+        if (request.SurveyModelId is Guid surveyModelId
+            && !await db.SurveyModels.AnyAsync(
+                m => m.Id == surveyModelId && m.CaveFeatureId == found.Centerline.CaveFeatureId, ct))
+        {
+            return ApiProblems.BadRequest(
+                "centerline.survey_model_invalid", "The survey model does not belong to this cave.");
+        }
+
+        // The flag is set by promotion, never by clearing: a cave with centerlines has one of
+        // them as its shape, and dropping the last default would leave the map nothing to draw.
+        if (!request.IsDefault && found.Centerline.IsDefault)
+        {
+            return ApiProblems.BadRequest(
+                "centerline.default_required",
+                "Make another centerline the default instead of clearing this one.");
+        }
+
+        found.Feature.Name = request.Name;
+        found.Feature.Description = request.Description;
+        found.Centerline.SurveyModelId = request.SurveyModelId;
+        if (request.IsDefault && !found.Centerline.IsDefault)
+        {
+            await writes.SetDefaultCenterlineAsync(id, ct);
+        }
+
+        await db.SaveChangesAsync(ct);
+        return TypedResults.Ok(ToDto(found.Feature, found.Centerline));
+    }
+
+    private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
+        Guid id,
+        SilexGisDbContext db,
+        FeatureWriteService writes,
+        IPermissionService permissions,
+        FeatureProtection protection,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var user = await userAccessor.GetAsync(ct);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var found = await ResolveAsync(db, permissions, protection, user, id, ct);
+        if (found is null)
+        {
+            return ApiProblems.NotFound("centerline.not_found");
+        }
+
+        if (!await permissions.CanAsync(user, found.CaveFeature, ObjectPermission.Write, ct))
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        if (found.Centerline.IsDefault)
+        {
+            // Deletion is soft, and the one-default-per-cave uniqueness does not know about it:
+            // the flag must come off the departing row — and be committed — before any other row
+            // can take it, or the next upload collides with a row nobody can see.
+            found.Centerline.IsDefault = false;
+            await db.SaveChangesAsync(ct);
+
+            var successor = await db.Centerlines
+                .Where(c => c.CaveFeatureId == found.Centerline.CaveFeatureId && c.Id != id)
+                .OrderBy(c => c.Feature.CreatedAt)
+                .Select(c => c.Id)
+                .FirstOrDefaultAsync(ct);
+            if (successor != Guid.Empty)
+            {
+                await writes.SetDefaultCenterlineAsync(successor, ct);
+            }
+        }
+
+        await writes.SoftDeleteAsync(id, ct);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// Loads a centerline for a write path, tracked, together with its cave's feature row —
+    /// or null when the caller may not see it at all (unreadable, or withheld because it is
+    /// under location protection the caller does not hold). Callers turn null into a 404: a
+    /// 403 would confirm that a hidden cave has a survey.
+    /// </summary>
+    private static async Task<CenterlineContext?> ResolveAsync(
+        SilexGisDbContext db,
+        IPermissionService permissions,
+        FeatureProtection protection,
+        UserContext user,
+        Guid id,
+        CancellationToken ct)
+    {
+        var centerline = await db.Centerlines
+            .Include(c => c.Feature)
+            .FirstOrDefaultAsync(c => c.Id == id, ct);
+        if (centerline is null
+            || !await permissions.CanAsync(user, centerline.Feature, ObjectPermission.Read, ct))
+        {
+            return null;
+        }
+
+        var exact = await protection.ExactViewIdsAsync(user, [id], ct);
+        if (!exact.Contains(id))
+        {
+            return null;
+        }
+
+        var caveFeature = await db.Features.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == centerline.CaveFeatureId, ct);
+        return caveFeature is null ? null : new CenterlineContext(centerline.Feature, centerline, caveFeature);
     }
 
     /// <summary>
@@ -266,13 +436,21 @@ public static class CenterlineEndpoints
         return new LineString(coordinates) { SRID = 4326 };
     }
 
-    private static CenterlineDto ToDto(CaveCenterline c) => new(
-        c.Id,
-        c.CaveId,
-        c.SurveyModelId,
-        c.Name,
-        GeoJsonGeometry.From(c.Geom),
-        c.LengthM,
-        c.Source,
-        c.CreatedAt);
+    // A centerline feature always carries its geometry (database CHECK on the kind).
+    private static CenterlineDto ToDto(Feature feature, Centerline centerline) => new(
+        feature.Id,
+        centerline.CaveFeatureId,
+        centerline.SurveyModelId,
+        feature.Name ?? string.Empty,
+        feature.Description,
+        GeoJsonGeometry.From(feature.Geom!),
+        centerline.LengthM,
+        centerline.PathCount,
+        centerline.IsDefault,
+        centerline.Source,
+        feature.CreatedAt,
+        feature.UpdatedAt);
+
+    /// <summary>A centerline as it is written: both its rows plus the cave that governs access.</summary>
+    private sealed record CenterlineContext(Feature Feature, Centerline Centerline, Feature CaveFeature);
 }
