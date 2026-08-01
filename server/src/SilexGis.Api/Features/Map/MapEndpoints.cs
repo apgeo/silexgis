@@ -46,6 +46,12 @@ public static class MapEndpoints
     public const int ClusterMaxZoom = 11;
 
     /// <summary>Safety cap for individual point features per request.</summary>
+    /// <remarks>
+    /// Every query that applies the cap orders by id first. Without an order the database is
+    /// free to return any rows it likes once the cap bites, and it need not pick the same ones
+    /// twice — so a dense viewport would show a different arbitrary subset on each pan back to
+    /// it, and features would appear to flicker in and out of a map that had not changed.
+    /// </remarks>
     private const int MaxPoints = 5000;
 
     public static RouteGroupBuilder MapMapDataEndpoints(this RouteGroupBuilder api)
@@ -128,6 +134,7 @@ public static class MapEndpoints
         var candidates = await db.StoredFiles.AsNoTracking()
             .Where(f => f.Geom != null && f.Kind == FileKind.Image && f.Geom!.Intersects(polygon))
             .Select(f => new { f.Id, f.Geom, f.OriginalName })
+            .OrderBy(f => f.Id)
             .Take(MaxPoints)
             .ToListAsync(ct);
         if (candidates.Count == 0)
@@ -405,7 +412,7 @@ public static class MapEndpoints
             query = query.Where(x => x.TripDate <= to);
         }
 
-        var rows = await query.Take(MaxPoints).ToListAsync(ct);
+        var rows = await query.OrderBy(x => x.Id).Take(MaxPoints).ToListAsync(ct);
         var features = rows.Select(x => GeoFeature.Of(x.Geom!, new Dictionary<string, object?>
         {
             ["id"] = x.Id,
@@ -445,6 +452,7 @@ public static class MapEndpoints
         var polygon = box.ToPolygon();
         var rows = await db.GeofileFeatures.AsNoTracking()
             .Where(f => f.GeofileId == id && f.Geom.Intersects(polygon))
+            .OrderBy(f => f.Id)
             .Take(MaxPoints)
             .ToListAsync(ct);
 
@@ -533,6 +541,7 @@ public static class MapEndpoints
 
         var rows = await query
             .Select(f => new { f.Id, f.Kind, f.Name, f.Geom, f.FeatureTypeId, f.IsProtectedEffective })
+            .OrderBy(f => f.Id)
             .Take(MaxPoints)
             .ToListAsync(ct);
         if (rows.Count == 0)
@@ -651,6 +660,7 @@ public static class MapEndpoints
                 CaveId = f.Entrance!.CaveFeatureId,
                 f.Entrance!.IsMain,
             })
+            .OrderBy(f => f.Id)
             .Take(MaxPoints)
             .ToListAsync(ct);
         if (rows.Count == 0)

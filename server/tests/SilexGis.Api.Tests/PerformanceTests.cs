@@ -65,6 +65,13 @@ public sealed class PerformanceTests : IDisposable
             ("clusters z7 (country)", "/api/v1/map/cave-entrances?bbox=19.9,43.5,29.1,48.1&zoom=7"),
             ("points z14 (local)", $"/api/v1/map/cave-entrances?bbox={Viewport}&zoom=14"),
             ("features layer z14", $"/api/v1/map/features?bbox={Viewport}&kinds=caveEntrance"),
+            // The only request here whose bbox matches far more rows than the layer will
+            // return: the feature layer does not cluster, so a country-wide view is what
+            // makes the point cap bite, and the cap orders before it truncates. Ordering a
+            // large match set is exactly where the planner could abandon the geometry index
+            // for the primary key, so the capped path needs a measurement of its own.
+            ("features layer (country, capped)",
+                "/api/v1/map/features?bbox=19.9,43.5,29.1,48.1&kinds=caveEntrance"),
             ("caves list p1", "/api/v1/caves?pageSize=50"),
             ("search 'perf'", "/api/v1/search?q=perf"),
         };
