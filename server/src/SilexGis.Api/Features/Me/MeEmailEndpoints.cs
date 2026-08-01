@@ -170,7 +170,7 @@ public static class MeEmailEndpoints
         await signInManager.RefreshSignInAsync(user);
 
         return TypedResults.Ok(MeMapping.ToDto(
-            user, await MeEndpoints.AddressesAsync(db, user.Id, ct), await userManager.GetRolesAsync(user), tokens));
+            user, await MeEndpoints.AddressesAsync(db, user.Id, ct), tokens));
     }
 
     private static async Task<Results<Accepted, UnauthorizedHttpResult, ProblemHttpResult>> ResendAsync(

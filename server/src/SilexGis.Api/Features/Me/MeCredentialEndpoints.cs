@@ -79,7 +79,7 @@ public static class MeCredentialEndpoints
         if (string.Equals(username, user.UserName, StringComparison.Ordinal))
         {
             return TypedResults.Ok(MeMapping.ToDto(
-                user, await MeEndpoints.AddressesAsync(db, user.Id, ct), await userManager.GetRolesAsync(user), tokens));
+                user, await MeEndpoints.AddressesAsync(db, user.Id, ct), tokens));
         }
 
         // Unlike an email address, a user name is a public handle — saying it is taken discloses
@@ -100,7 +100,7 @@ public static class MeCredentialEndpoints
         await signInManager.RefreshSignInAsync(user);
 
         return TypedResults.Ok(MeMapping.ToDto(
-            user, await MeEndpoints.AddressesAsync(db, user.Id, ct), await userManager.GetRolesAsync(user), tokens));
+            user, await MeEndpoints.AddressesAsync(db, user.Id, ct), tokens));
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> ChangePasswordAsync(

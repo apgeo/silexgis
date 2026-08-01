@@ -7,10 +7,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { downloadFile } from '../../api/download.ts';
 import {
+  useCan,
   useDeleteFeature,
   useFeatureTypes,
   useFeatures,
-  useMe,
   useTags,
   type FeatureCategory,
   type FeatureKind,
@@ -36,11 +36,10 @@ export default function FeatureListPage() {
   const { data, isFetching } = useFeatures({ ...params, search: search || undefined });
   const { data: featureTypes } = useFeatureTypes();
   const { data: tags } = useTags('');
-  const { data: me } = useMe();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
   const deleteFeature = useDeleteFeature();
 
-  const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
+  const canEdit = useCan('features', 'write');
   const typeName = (code: string | null) =>
     code === null ? '' : featureTypes?.find((x) => x.code === code)?.name ?? code;
 

@@ -28,7 +28,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
-  useCanCreateContent,
+  useCan,
   useDashboardSummary,
   useMapViews,
   type DashboardActivityItem,
@@ -50,7 +50,12 @@ export default function DashboardPage() {
   const { message } = App.useApp();
   const { data: summary, isLoading, isError, refetch } = useDashboardSummary();
   const { data: views } = useMapViews();
-  const canCreate = useCanCreateContent();
+  // Each quick action follows its own domain: a person who may log trips but not
+  // create features still gets their button.
+  const canCreateFeatures = useCan('features', 'create');
+  const canCreateTrips = useCan('tripLogs', 'create');
+  const canImportGeofiles = useCan('geofiles', 'create');
+  const canCreate = canCreateFeatures || canCreateTrips || canImportGeofiles;
   const landingPage = useUiPrefsStore((s) => s.landingPage);
   const setLandingPage = useUiPrefsStore((s) => s.setLandingPage);
 
@@ -159,19 +164,25 @@ export default function DashboardPage() {
             {canCreate && (
               <Card title={t('dashboard.quickActions')}>
                 <Flex vertical gap={8} align="stretch">
-                  <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/caves/new')}>
-                    {t('caves.newCave')}
-                  </Button>
+                  {canCreateFeatures && (
+                    <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/caves/new')}>
+                      {t('caves.newCave')}
+                    </Button>
+                  )}
                   {/* The trip form is a modal on the list page; the flag opens it on arrival. */}
-                  <Button
-                    icon={<PlusOutlined />}
-                    onClick={() => navigate('/trip-logs', { state: { create: true } })}
-                  >
-                    {t('trips.new')}
-                  </Button>
-                  <Button icon={<UploadOutlined />} onClick={() => navigate('/geodata')}>
-                    {t('dashboard.importFile')}
-                  </Button>
+                  {canCreateTrips && (
+                    <Button
+                      icon={<PlusOutlined />}
+                      onClick={() => navigate('/trip-logs', { state: { create: true } })}
+                    >
+                      {t('trips.new')}
+                    </Button>
+                  )}
+                  {canImportGeofiles && (
+                    <Button icon={<UploadOutlined />} onClick={() => navigate('/geodata')}>
+                      {t('dashboard.importFile')}
+                    </Button>
+                  )}
                 </Flex>
               </Card>
             )}

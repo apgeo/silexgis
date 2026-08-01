@@ -19,9 +19,9 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
+  useCan,
   useCave,
   useDeleteRasterMap,
-  useMe,
   useRasterMaps,
   useSearch,
   useUpdateRasterMap,
@@ -57,7 +57,6 @@ export default function RasterMapsTab() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const { data, isFetching } = useRasterMaps({ page, pageSize }, /* pollWhileProcessing */ true);
-  const { data: me } = useMe();
   const upload = useUploadRasterMap();
   const update = useUpdateRasterMap();
   const remove = useDeleteRasterMap();
@@ -82,7 +81,8 @@ export default function RasterMapsTab() {
     return options;
   }, [searchResults, linkedCave]);
 
-  const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
+  const canEdit = useCan('georeferencedMaps', 'write');
+  const canUpload = useCan('georeferencedMaps', 'create');
 
   const showOnMap = (raster: RasterMapInfo) => {
     setRasterVisible(raster.id, true);
@@ -146,7 +146,7 @@ export default function RasterMapsTab() {
 
   return (
     <>
-      {canEdit && (
+      {canUpload && (
         <Upload.Dragger
           multiple
           accept=".tif,.tiff"

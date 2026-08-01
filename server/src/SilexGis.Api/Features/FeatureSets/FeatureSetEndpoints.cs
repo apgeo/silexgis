@@ -88,7 +88,7 @@ public static class FeatureSetEndpoints
     /// anchor, not a way to enumerate rows somebody cannot otherwise see, so the count
     /// on the set itself and this list can legitimately differ.
     /// </summary>
-    private static async Task<Results<Ok<List<Guid>>, UnauthorizedHttpResult, ProblemHttpResult>> GetMembersAsync(
+    private static async Task<Results<Ok<List<FeatureSetMemberDto>>, UnauthorizedHttpResult, ProblemHttpResult>> GetMembersAsync(
         Guid id, SilexGisDbContext db, IAccessContextAccessor accessAccessor, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -107,12 +107,13 @@ public static class FeatureSetEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        var ids = await db.Features.AsNoTracking()
+        var members = await db.Features.AsNoTracking()
             .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => db.FeatureSetMembers.Any(m => m.FeatureSetId == id && m.FeatureId == f.Id))
-            .Select(f => f.Id)
+            .OrderBy(f => f.Name)
+            .Select(f => new FeatureSetMemberDto(f.Id, f.Name, f.Kind))
             .ToListAsync(ct);
-        return TypedResults.Ok(ids);
+        return TypedResults.Ok(members);
     }
 
     private static async Task<Results<Created<FeatureSetDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(

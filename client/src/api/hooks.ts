@@ -65,7 +65,7 @@ export const queryKeys = {
   cavingGroups: ['cavingGroups'] as const,
   cavers: ['cavers'] as const,
   cavingGroupMembers: (cavingGroupId: string) => ['teams', cavingGroupId, 'members'] as const,
-  acl: (entityType: string, entityId: string) => ['acl', entityType, entityId] as const,
+  objectAccess: (entityType: string, entityId: string) => ['object-access', entityType, entityId] as const,
   history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
   mfa: ['mfa'] as const,
   avatarPresets: ['avatar-presets'] as const,
@@ -77,6 +77,16 @@ export const queryKeys = {
   phone: ['me', 'phone'] as const,
   adminSettings: ['admin', 'settings'] as const,
   messageTemplates: ['admin', 'message-templates'] as const,
+  capabilities: ['me', 'capabilities'] as const,
+  myPermissionGroups: ['me', 'permission-groups'] as const,
+  effectiveAccess: (entityType: string, entityId: string, explain: boolean) =>
+    ['effective-access', entityType, entityId, explain] as const,
+  accessCatalog: ['access-catalog'] as const,
+  permissionGroups: ['permission-groups'] as const,
+  permissionGroupEntries: (id: string) => ['permission-groups', id, 'entries'] as const,
+  permissionGroupMembers: (id: string) => ['permission-groups', id, 'members'] as const,
+  featureSets: ['feature-sets'] as const,
+  featureSetMembers: (id: string) => ['feature-sets', id, 'members'] as const,
 };
 
 async function unwrap<T>(
@@ -325,17 +335,88 @@ export function useMember(id: string) {
   });
 }
 
-/**
- * Global roles that may create registry content, mirroring the "Editor role and above"
- * rule the create endpoints enforce. Client-side gating only hides controls — the server
- * is what actually refuses.
- */
-const CONTENT_AUTHOR_ROLES = ['Admin', 'Manager', 'Editor'];
+// ---- capabilities: what the caller may do, per resource domain ----
 
-/** True when the caller may create caves, features and trips. */
-export function useCanCreateContent() {
-  const { data: me } = useMe();
-  return me?.roles.some((r) => CONTENT_AUTHOR_ROLES.includes(r)) ?? false;
+export type Capabilities = components['schemas']['CapabilitiesDto'];
+export type AccessDomainName = components['schemas']['AccessDomain'];
+export type AccessActionSet = components['schemas']['AccessAction'];
+/** The individual action flags the wire's comma-joined action string is made of. */
+export type AccessActionFlag =
+  | 'read' | 'write' | 'delete' | 'share' | 'managePermissions'
+  | 'viewExactLocation' | 'create' | 'execute';
+
+/** Parses a comma-joined action set ("read, write") into its individual flags. */
+export function parseAccessActions(actions: string | null | undefined): Set<AccessActionFlag> {
+  return new Set(
+    (actions ?? '')
+      .split(',')
+      .map((x) => x.trim())
+      .filter((x): x is AccessActionFlag => x.length > 0 && x !== 'none'),
+  );
+}
+
+/** True when a comma-joined action set carries the flag. */
+export function hasAccessAction(
+  actions: string | null | undefined,
+  flag: AccessActionFlag,
+): boolean {
+  return parseAccessActions(actions).has(flag);
+}
+
+/**
+ * The caller's domain-level rights, for hiding controls the server would refuse anyway.
+ * Purely a hint: every actual decision is re-made server-side on the row in question,
+ * and per-object answers come from `useEffectiveAccess` instead.
+ */
+export function useCapabilities() {
+  return useQuery({
+    queryKey: queryKeys.capabilities,
+    queryFn: () => unwrap(api.GET('/api/v1/me/capabilities')),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Convenience gate over `useCapabilities`: false while loading, so controls appear, never flash away. */
+export function useCan(domain: AccessDomainName, action: AccessActionFlag): boolean {
+  const { data } = useCapabilities();
+  return hasAccessAction(data?.domains[domain], action);
+}
+
+export type MyPermissionGroup = components['schemas']['MyPermissionGroupDto'];
+
+/** The permission groups the caller reaches — where a right of theirs comes from. */
+export function useMyPermissionGroups() {
+  return useQuery({
+    queryKey: queryKeys.myPermissionGroups,
+    queryFn: () => unwrap(api.GET('/api/v1/me/permission-groups')),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export type EffectiveAccess = components['schemas']['EffectiveAccessDto'];
+export type AccessExplanation = components['schemas']['AccessExplanationDto'];
+
+/**
+ * What the caller may do to one object — the per-object refinement of `useCapabilities`.
+ * With `explain` the server also names the rule that decided each action, redacting
+ * anchors the caller may not read.
+ */
+export function useEffectiveAccess(
+  entityType: EntityType,
+  entityId: string | undefined,
+  options: { explain?: boolean; enabled?: boolean } = {},
+) {
+  const explain = options.explain ?? false;
+  return useQuery({
+    queryKey: queryKeys.effectiveAccess(entityType, entityId ?? '', explain),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/objects/{entityType}/{id}/effective-access', {
+        params: { path: { entityType, id: entityId! }, query: { explain } },
+      })),
+    enabled: (options.enabled ?? true) && !!entityId,
+    // A 403/404 is a settled answer here, not worth retrying.
+    retry: false,
+  });
 }
 
 export function useMapLayers() {
@@ -1296,8 +1377,8 @@ export function useDeleteTagging() {
 export type CavingGroupInfo = components['schemas']['CavingGroupDto'];
 export type CavingGroupMemberInfo = components['schemas']['CavingGroupMemberDto'];
 export type CaverInfo = components['schemas']['CaverDto'];
-export type AclEntry = components['schemas']['ObjectAccessEntryDto'];
-export type AclEntryWrite = components['schemas']['ObjectAccessEntryWrite'];
+export type ObjectAccessEntry = components['schemas']['ObjectAccessEntryDto'];
+export type ObjectAccessEntryWrite = components['schemas']['ObjectAccessEntryWrite'];
 
 export function useCavingGroups() {
   return useQuery({
@@ -1443,9 +1524,10 @@ export function useUnlinkCaverAccount(id: string) {
   });
 }
 
-export function useAcl(entityType: EntityType, entityId: string | undefined, enabled: boolean) {
+/** The rules written directly onto one object (server-side: ManagePermissions). */
+export function useObjectAccess(entityType: EntityType, entityId: string | undefined, enabled: boolean) {
   return useQuery({
-    queryKey: queryKeys.acl(entityType, entityId ?? ''),
+    queryKey: queryKeys.objectAccess(entityType, entityId ?? ''),
     queryFn: () =>
       unwrap(api.GET('/api/v1/objects/{entityType}/{id}/access', {
         params: { path: { entityType, id: entityId! } },
@@ -1455,15 +1537,237 @@ export function useAcl(entityType: EntityType, entityId: string | undefined, ena
   });
 }
 
-export function useReplaceAcl(entityType: EntityType, entityId: string) {
+export function useReplaceObjectAccess(entityType: EntityType, entityId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (entries: AclEntryWrite[]) =>
+    mutationFn: (entries: ObjectAccessEntryWrite[]) =>
       unwrap(api.PUT('/api/v1/objects/{entityType}/{id}/access', {
         params: { path: { entityType, id: entityId } },
         body: { entries },
       })),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['acl'] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['object-access'] });
+      // The rules just written decide what everyone may do here, this caller included.
+      void queryClient.invalidateQueries({ queryKey: ['effective-access'] });
+    },
+  });
+}
+
+// ---- the permission model's own surface: rulesets, trustees, feature sets ----
+
+export type PermissionGroup = components['schemas']['PermissionGroupDto'];
+export type PermissionGroupMember = components['schemas']['PermissionGroupMemberDto'];
+export type AccessEntry = components['schemas']['AccessEntryDto'];
+export type AccessEntryWrite = components['schemas']['AccessEntryWrite'];
+export type AccessCatalog = components['schemas']['AccessCatalogDto'];
+export type AccessCatalogDomain = components['schemas']['AccessCatalogDomainDto'];
+export type AccessCatalogScope = components['schemas']['AccessCatalogScopeDto'];
+export type AccessScopeKind = components['schemas']['AccessScopeKind'];
+export type AccessEffect = components['schemas']['AccessEffect'];
+export type AccessSubjectKind = components['schemas']['AccessSubjectKind'];
+export type AccessPreview = components['schemas']['AccessPreviewDto'];
+export type AccessPreviewExplanation = components['schemas']['AccessPreviewExplanationDto'];
+export type FeatureSetInfo = components['schemas']['FeatureSetDto'];
+export type FeatureSetMember = components['schemas']['FeatureSetMemberDto'];
+
+/**
+ * The rule editor's vocabulary: which scopes each domain accepts and the actions valid in
+ * each, generated server-side from the validator so the editor can never drift from it.
+ */
+export function useAccessCatalog(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.accessCatalog,
+    queryFn: () => unwrap(api.GET('/api/v1/permission-groups/catalog')),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function usePermissionGroups(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.permissionGroups,
+    queryFn: () => unwrap(api.GET('/api/v1/permission-groups')),
+    enabled,
+    retry: false,
+  });
+}
+
+/**
+ * Everything the model's admin surface writes moves authorization, so every mutation
+ * refreshes the caller's own capabilities along with the edited resource.
+ */
+function useInvalidatePermissionModel() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['permission-groups'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.capabilities });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.myPermissionGroups });
+    void queryClient.invalidateQueries({ queryKey: ['effective-access'] });
+  };
+}
+
+export function useCreatePermissionGroup() {
+  const invalidate = useInvalidatePermissionModel();
+  return useMutation({
+    mutationFn: (body: { name: string; description: string | null }) =>
+      unwrap(api.POST('/api/v1/permission-groups', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdatePermissionGroup(id: string) {
+  const invalidate = useInvalidatePermissionModel();
+  return useMutation({
+    mutationFn: (body: { name: string; description: string | null }) =>
+      unwrap(api.PUT('/api/v1/permission-groups/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useDeletePermissionGroup() {
+  const invalidate = useInvalidatePermissionModel();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/permission-groups/{id}', { params: { path: { id } } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function usePermissionGroupEntries(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.permissionGroupEntries(id ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/permission-groups/{id}/entries', { params: { path: { id: id! } } })),
+    enabled: !!id,
+    retry: false,
+  });
+}
+
+export function useReplacePermissionGroupEntries(id: string) {
+  const invalidate = useInvalidatePermissionModel();
+  return useMutation({
+    mutationFn: (entries: AccessEntryWrite[]) =>
+      unwrap(api.PUT('/api/v1/permission-groups/{id}/entries', {
+        params: { path: { id } },
+        body: { entries },
+      })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function usePermissionGroupMembers(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.permissionGroupMembers(id ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/permission-groups/{id}/members', { params: { path: { id: id! } } })),
+    enabled: !!id,
+    retry: false,
+  });
+}
+
+export function useAddPermissionGroupMember(id: string) {
+  const invalidate = useInvalidatePermissionModel();
+  return useMutation({
+    mutationFn: (body: { memberKind: AccessSubjectKind; memberId: string }) =>
+      unwrapVoid(api.POST('/api/v1/permission-groups/{id}/members', {
+        params: { path: { id } },
+        body,
+      })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useRemovePermissionGroupMember(id: string) {
+  const invalidate = useInvalidatePermissionModel();
+  return useMutation({
+    mutationFn: ({ memberKind, memberId }: { memberKind: AccessSubjectKind; memberId: string }) =>
+      unwrapVoid(api.DELETE('/api/v1/permission-groups/{id}/members/{memberKind}/{memberId}', {
+        params: { path: { id, memberKind, memberId } },
+      })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * What the model would answer for somebody else — the look an editor takes before saving
+ * a deny. A mutation rather than a query: it is asked deliberately, per subject.
+ */
+export function useAccessPreview() {
+  return useMutation({
+    mutationFn: (body: { subjectKind: AccessSubjectKind; subjectId: string }) =>
+      unwrap(api.POST('/api/v1/permission-groups/preview', { body })),
+  });
+}
+
+export function useFeatureSets(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.featureSets,
+    queryFn: () => unwrap(api.GET('/api/v1/feature-sets')),
+    enabled,
+    retry: false,
+  });
+}
+
+/** Feature-set edits move access (rules hang on sets), so capabilities refresh too. */
+function useInvalidateFeatureSets() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['feature-sets'] });
+    // The rules editor lists sets as scope anchors from the catalog.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.accessCatalog });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.capabilities });
+    void queryClient.invalidateQueries({ queryKey: ['effective-access'] });
+  };
+}
+
+export function useCreateFeatureSet() {
+  const invalidate = useInvalidateFeatureSets();
+  return useMutation({
+    mutationFn: (body: { name: string; description: string | null }) =>
+      unwrap(api.POST('/api/v1/feature-sets', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateFeatureSet(id: string) {
+  const invalidate = useInvalidateFeatureSets();
+  return useMutation({
+    mutationFn: (body: { name: string; description: string | null }) =>
+      unwrap(api.PUT('/api/v1/feature-sets/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useDeleteFeatureSet() {
+  const invalidate = useInvalidateFeatureSets();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/feature-sets/{id}', { params: { path: { id } } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/** The set's features the caller may read — the count on the set itself can be larger. */
+export function useFeatureSetMembers(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.featureSetMembers(id ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/feature-sets/{id}/members', { params: { path: { id: id! } } })),
+    enabled: !!id,
+    retry: false,
+  });
+}
+
+export function useReplaceFeatureSetMembers(id: string) {
+  const invalidate = useInvalidateFeatureSets();
+  return useMutation({
+    mutationFn: (featureIds: string[]) =>
+      unwrapVoid(api.PUT('/api/v1/feature-sets/{id}/members', {
+        params: { path: { id } },
+        body: { featureIds },
+      })),
+    onSuccess: () => invalidate(),
   });
 }
 

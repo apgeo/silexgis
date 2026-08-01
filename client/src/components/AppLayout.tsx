@@ -6,9 +6,11 @@ import {
   EnvironmentOutlined,
   FileTextOutlined,
   GoldOutlined,
+  GroupOutlined,
   HistoryOutlined,
   LogoutOutlined,
   MailOutlined,
+  SafetyCertificateOutlined,
   SettingOutlined,
   TeamOutlined,
   TableOutlined,
@@ -18,7 +20,7 @@ import { useEffect, useState } from 'react';
 import { Avatar, Dropdown, Flex, Layout, Menu, Select, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useMe } from '../api/hooks.ts';
+import { hasAccessAction, useCapabilities, useMe, type AccessDomainName } from '../api/hooks.ts';
 import { useAuth } from '../auth/auth.tsx';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 
@@ -43,13 +45,17 @@ export default function AppLayout() {
   }, [isMobile]);
 
   const { data: me } = useMe();
-  const isAdmin = me?.roles.includes('Admin') ?? false;
+  // Nav visibility follows the caller's domain-level capabilities. There is no
+  // route-level guard on purpose: the server refuses, the nav simply doesn't offer.
+  const { data: capabilities } = useCapabilities();
+  const can = (domain: AccessDomainName) => hasAccessAction(capabilities?.domains[domain], 'read');
 
   // "settings" is listed so an unmatched path does not fall through to highlighting the map.
   // It matches no menu item, so nothing lights up — settings is not a sidebar destination.
   const sections = [
     'dashboard', 'caves', 'features', 'geodata', 'trip-logs', 'caving-groups', 'cavers',
-    'admin/audit', 'admin/messaging', 'admin/message-templates', 'settings',
+    'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
+    'admin/feature-sets', 'settings',
   ] as const;
   const selectedKey = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
 
@@ -133,12 +139,26 @@ export default function AppLayout() {
               { key: 'trip-logs', icon: <CarOutlined />, label: t('nav.trips') },
               { key: 'caving-groups', icon: <TeamOutlined />, label: t('nav.cavingGroups') },
               { key: 'cavers', icon: <UserOutlined />, label: t('nav.cavers') },
-              ...(isAdmin
-                ? [
-                    { key: 'admin/audit', icon: <HistoryOutlined />, label: t('nav.audit') },
-                    { key: 'admin/messaging', icon: <MailOutlined />, label: t('nav.messaging') },
-                    { key: 'admin/message-templates', icon: <FileTextOutlined />, label: t('nav.templates') },
-                  ]
+              // Each admin destination follows its own domain — "admin" is not a rank
+              // any more, just the pages a person's rights happen to include.
+              ...(can('audit')
+                ? [{ key: 'admin/audit', icon: <HistoryOutlined />, label: t('nav.audit') }]
+                : []),
+              ...(can('settings')
+                ? [{ key: 'admin/messaging', icon: <MailOutlined />, label: t('nav.messaging') }]
+                : []),
+              ...(can('messageTemplates')
+                ? [{ key: 'admin/message-templates', icon: <FileTextOutlined />, label: t('nav.templates') }]
+                : []),
+              ...(can('permissionGroups')
+                ? [{
+                    key: 'admin/permission-groups',
+                    icon: <SafetyCertificateOutlined />,
+                    label: t('nav.permissionGroups'),
+                  }]
+                : []),
+              ...(can('featureSets')
+                ? [{ key: 'admin/feature-sets', icon: <GroupOutlined />, label: t('nav.featureSets') }]
                 : []),
             ]}
           />

@@ -30,7 +30,9 @@ const summaryQuery = vi.fn(() => ({ data: summary, isLoading: false, isError: fa
 vi.mock('../../api/hooks.ts', () => ({
   useDashboardSummary: () => summaryQuery(),
   useMapViews: () => ({ data: views }),
-  useCanCreateContent: () => canCreate(),
+  // One switch for all three quick-action domains: these tests exercise the card as a
+  // whole, not the per-domain split.
+  useCan: () => canCreate(),
   // Imported by the feature-navigation helper the activity feed uses; only entrance or
   // centerline rows would actually call it.
   fetchFeature: vi.fn(),

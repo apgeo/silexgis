@@ -12,12 +12,14 @@ import { Alert, App, Breadcrumb, Button, Card, Descriptions, Flex, Popconfirm, S
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  parseAccessActions,
+  useCan,
   useCaveTypes,
   useDeleteFeature,
+  useEffectiveAccess,
   useEntranceTypes,
   useFeature,
   useFeatureTypes,
-  useMe,
   useUpdateFeature,
 } from '../../api/hooks.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
@@ -55,7 +57,6 @@ export default function FeatureDetailPage() {
   const { data: featureTypes } = useFeatureTypes();
   const { data: caveTypes } = useCaveTypes();
   const { data: entranceTypes } = useEntranceTypes();
-  const { data: me } = useMe();
   const updateFeature = useUpdateFeature();
   const deleteFeature = useDeleteFeature();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
@@ -64,7 +65,15 @@ export default function FeatureDetailPage() {
   const [permissionsOpen, setPermissionsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
 
-  const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
+  // Per-object capabilities once the answer arrives; the coarse domain-level check only
+  // bridges the first render (the server enforces regardless).
+  const { data: effective } = useEffectiveAccess('feature', id);
+  const domainFallback = useCan('features', 'write');
+  const held = effective ? parseAccessActions(effective.actions) : null;
+  const canEdit = held ? held.has('write') : domainFallback;
+  const canDelete = held ? held.has('delete') : domainFallback;
+  const canShare = held ? held.has('share') : domainFallback;
+  const canManagePermissions = held ? held.has('managePermissions') : domainFallback;
 
   const feature = envelope?.feature;
   const featureType = feature
@@ -195,26 +204,34 @@ export default function FeatureDetailPage() {
               {t('features.openTypedPage')}
             </Button>
           )}
-          {envelope.kind === 'generic' && canEdit && (
+          {envelope.kind === 'generic' && (
             <>
-              <Button icon={<ShareAltOutlined />} onClick={() => setShareOpen(true)}>
-                {t('shares.button')}
-              </Button>
-              <Button icon={<LockOutlined />} onClick={() => setPermissionsOpen(true)}>
-                {t('permissions.button')}
-              </Button>
-              <Button icon={<EditOutlined />} onClick={() => setEditOpen(true)}>
-                {t('features.edit')}
-              </Button>
-              <Popconfirm
-                title={t('features.deleteConfirm')}
-                onConfirm={() => void onDelete()}
-                okButtonProps={{ danger: true }}
-              >
-                <Button danger icon={<DeleteOutlined />}>
-                  {t('features.delete')}
+              {canShare && (
+                <Button icon={<ShareAltOutlined />} onClick={() => setShareOpen(true)}>
+                  {t('shares.button')}
                 </Button>
-              </Popconfirm>
+              )}
+              {canManagePermissions && (
+                <Button icon={<LockOutlined />} onClick={() => setPermissionsOpen(true)}>
+                  {t('permissions.button')}
+                </Button>
+              )}
+              {canEdit && (
+                <Button icon={<EditOutlined />} onClick={() => setEditOpen(true)}>
+                  {t('features.edit')}
+                </Button>
+              )}
+              {canDelete && (
+                <Popconfirm
+                  title={t('features.deleteConfirm')}
+                  onConfirm={() => void onDelete()}
+                  okButtonProps={{ danger: true }}
+                >
+                  <Button danger icon={<DeleteOutlined />}>
+                    {t('features.delete')}
+                  </Button>
+                </Popconfirm>
+              )}
             </>
           )}
         </Flex>

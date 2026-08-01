@@ -5,7 +5,13 @@ import { App, Alert, Button, Collapse, Flex, Form, Input, Popconfirm, Tabs, Tag,
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
-import { queryKeys, useMe, useMessageTemplates, type MessageTemplate } from '../../api/hooks.ts';
+import {
+  hasAccessAction,
+  queryKeys,
+  useCapabilities,
+  useMessageTemplates,
+  type MessageTemplate,
+} from '../../api/hooks.ts';
 
 interface EditorProps {
   template: MessageTemplate;
@@ -22,11 +28,16 @@ interface EditorProps {
  */
 export default function MessageTemplatesPage() {
   const { t } = useTranslation();
-  const { data: me } = useMe();
-  const isAdmin = me?.roles.includes('Admin') ?? false;
-  const { data: templates, isLoading } = useMessageTemplates(isAdmin);
+  const { data: capabilities } = useCapabilities();
+  const canRead = hasAccessAction(capabilities?.domains.messageTemplates, 'read');
+  const { data: templates, isLoading } = useMessageTemplates(canRead);
 
-  if (!isAdmin) {
+  // While capabilities load, render nothing rather than flashing a refusal at people
+  // who do hold the right; the server enforces regardless.
+  if (!capabilities) {
+    return null;
+  }
+  if (!canRead) {
     return <Alert type="error" showIcon message={t('admin.forbidden')} style={{ margin: 16 }} />;
   }
 

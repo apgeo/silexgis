@@ -36,7 +36,7 @@ public static class PermissionGroupEndpoints
         groups.MapGet("/catalog", CatalogAsync)
             .WithSummary("Domains, scopes and the actions valid in each — the rule editor's vocabulary.");
         groups.MapPost("/preview", PreviewAsync).WithValidation<AccessPreviewRequest>()
-            .WithSummary("The domain-level rights a given user or caving group would hold.");
+            .WithSummary("The domain-level rights a given user or caving group would hold, explained.");
         groups.MapGet("/", ListAsync).WithSummary("All permission groups with member and rule counts.");
         groups.MapGet("/{id:guid}", GetAsync).WithSummary("One permission group.");
         groups.MapPost("/", CreateAsync).WithValidation<PermissionGroupWriteRequest>()
@@ -83,11 +83,14 @@ public static class PermissionGroupEndpoints
 
     /// <summary>
     /// What the model would answer for somebody else — the check an editor runs before
-    /// saving a rule, and the only honest way to show what a deny actually costs.
+    /// saving a rule, and the only honest way to show what a deny actually costs. The
+    /// explanations decide as the subject but name anchors for the caller: it is the
+    /// person looking whose right to read a rule governs what the answer may name.
     /// </summary>
-    private static async Task<Results<Ok<CapabilitiesDto>, UnauthorizedHttpResult, ProblemHttpResult>> PreviewAsync(
+    private static async Task<Results<Ok<AccessPreviewDto>, UnauthorizedHttpResult, ProblemHttpResult>> PreviewAsync(
         AccessPreviewRequest request,
         SilexGisDbContext db,
+        AccessExplainer explainer,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -105,7 +108,20 @@ public static class PermissionGroupEndpoints
         var subject = request.SubjectKind == AccessSubjectKind.User
             ? await AccessContextResolver.ResolveAsync(db, request.SubjectId, ct)
             : await AccessContextResolver.ResolveForCavingGroupAsync(db, request.SubjectId, ct);
-        return TypedResults.Ok(CapabilitiesOf(subject));
+
+        var explained = await explainer.ExplainDomainsAsync(subject, ctx, ct);
+        return TypedResults.Ok(new AccessPreviewDto(
+            CapabilitiesOf(subject).Domains,
+            [
+                .. explained.SelectMany(d => d.Explanations.Select(e => new AccessPreviewExplanationDto(
+                    AccessCatalog.Name(d.Domain),
+                    e.Action,
+                    e.Allowed,
+                    System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(e.Source.ToString()),
+                    e.Level,
+                    e.RuleName,
+                    e.Redacted))),
+            ]));
     }
 
     /// <summary>Domain-level rights, with no row in view — what UI gating needs.</summary>

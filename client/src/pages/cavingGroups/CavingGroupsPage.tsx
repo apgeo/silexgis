@@ -18,9 +18,9 @@ import {
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
+  useCan,
   useCavers,
   useCreateCavingGroup,
-  useMe,
   useRemoveCavingGroupMember,
   useCavingGroupMembers,
   useCavingGroups,
@@ -129,7 +129,6 @@ export default function CavingGroupsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { data: cavingGroups, isFetching } = useCavingGroups();
-  const { data: me } = useMe();
   const createCavingGroup = useCreateCavingGroup();
   const [creating, setCreating] = useState(false);
   const [managing, setManaging] = useState<CavingGroupInfo | null>(null);
@@ -140,7 +139,7 @@ export default function CavingGroupsPage() {
     website?: string;
   }>();
 
-  const canCreate = me?.roles.some((r) => ['Admin', 'Manager'].includes(r)) ?? false;
+  const canCreate = useCan('cavingGroups', 'create');
 
   const onCreate = async () => {
     const values = await form.validateFields();

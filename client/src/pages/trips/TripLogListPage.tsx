@@ -6,7 +6,7 @@ import type { TablePaginationConfig } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  useCanCreateContent,
+  useCan,
   useTripLogs,
   type TripLogInfo,
   type TripLogListParams,
@@ -34,7 +34,7 @@ export default function TripLogListPage() {
     }
   }, [location.pathname, location.state, navigate]);
 
-  const canCreate = useCanCreateContent();
+  const canCreate = useCan('tripLogs', 'create');
 
   const onTableChange = (pagination: TablePaginationConfig) => {
     setParams((p) => ({ ...p, page: pagination.current, pageSize: pagination.pageSize }));

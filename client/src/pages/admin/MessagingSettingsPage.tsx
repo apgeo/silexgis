@@ -20,8 +20,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
 import {
+  hasAccessAction,
   queryKeys,
   useAdminSettings,
+  useCapabilities,
   useMe,
   type AdminSettings,
   type MailSettingsWrite,
@@ -48,12 +50,18 @@ export default function MessagingSettingsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data: me } = useMe();
-  const isAdmin = me?.roles.includes('Admin') ?? false;
-  const { data: settings, isLoading } = useAdminSettings(isAdmin);
+  const { data: capabilities } = useCapabilities();
+  const canRead = hasAccessAction(capabilities?.domains.settings, 'read');
+  const { data: settings, isLoading } = useAdminSettings(canRead);
 
   const onSaved = (next: AdminSettings) => queryClient.setQueryData(queryKeys.adminSettings, next);
 
-  if (!isAdmin) {
+  // While capabilities load, render nothing rather than flashing a refusal at people
+  // who do hold the right; the server enforces regardless.
+  if (!capabilities) {
+    return null;
+  }
+  if (!canRead) {
     return <Alert type="error" showIcon message={t('admin.forbidden')} style={{ margin: 16 }} />;
   }
 

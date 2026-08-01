@@ -53,6 +53,9 @@ public sealed record PermissionGroupMemberWriteRequest(AccessSubjectKind MemberK
 
 public sealed record FeatureSetDto(Guid Id, string Name, string Slug, string? Description, int MemberCount);
 
+/// <summary>A member the caller may read, named so the membership editor can show it.</summary>
+public sealed record FeatureSetMemberDto(Guid Id, string? Name, FeatureKind Kind);
+
 public sealed record FeatureSetWriteRequest(string Name, string? Description);
 
 public sealed record FeatureSetMemberReplaceRequest(IReadOnlyList<Guid> FeatureIds);
@@ -98,6 +101,25 @@ public sealed record EffectiveAccessDto(
 
 /// <summary>Evaluate the model as somebody else would see it, before saving a rule.</summary>
 public sealed record AccessPreviewRequest(AccessSubjectKind SubjectKind, Guid SubjectId);
+
+/// <summary>
+/// The preview's answer: the subject's domain-level rights, plus the server's own
+/// explanation of what decided each one — rendered verbatim by the editor, never
+/// re-derived, so what the preview claims and what the evaluator does cannot drift.
+/// </summary>
+public sealed record AccessPreviewDto(
+    IReadOnlyDictionary<string, AccessAction> Domains,
+    IReadOnlyList<AccessPreviewExplanationDto> Explanations);
+
+/// <summary>One (domain, action) verdict for the previewed subject, with its reason.</summary>
+public sealed record AccessPreviewExplanationDto(
+    string Domain,
+    AccessAction Action,
+    bool Allowed,
+    string Source,
+    AccessLevel? Level,
+    string? RuleName,
+    bool Redacted);
 
 public sealed class AccessEntryWriteValidator : AbstractValidator<AccessEntryWrite>
 {

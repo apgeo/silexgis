@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { downloadFile } from '../../api/download.ts';
 import {
-  useCanCreateContent,
+  useCan,
   useCaveTypes,
   useCaves,
   useTags,
@@ -38,7 +38,7 @@ export default function CaveListPage() {
   const { data: caveTypes } = useCaveTypes();
   const { data: tags } = useTags('');
 
-  const canCreate = useCanCreateContent();
+  const canCreate = useCan('features', 'create');
   const typeName = (id: number) => caveTypes?.find((x) => x.id === id)?.name ?? '';
 
   // Exports honor the current filters (not the current page — the server streams all rows).

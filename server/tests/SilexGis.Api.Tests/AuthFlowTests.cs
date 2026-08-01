@@ -96,10 +96,14 @@ public sealed class AuthFlowTests : IDisposable
             ["code_verifier"] = pkce.Verifier,
         });
 
-        // 4. Bearer token works against the protected API.
+        // 4. Bearer token works against the protected API, and the bootstrap account's
+        // full administration shows through the capabilities route (/me itself carries
+        // identity only — what the caller may do lives in the access model).
         var me = await GetMeAsync(client, tokens.AccessToken);
         me.GetProperty("email").GetString().ShouldBe(AdminEmail);
-        me.GetProperty("roles").EnumerateArray().Select(r => r.GetString()).ShouldContain("Admin");
+        (await GetJsonAsync(client, tokens.AccessToken, "/api/v1/me/capabilities"))
+            .GetProperty("domains").GetProperty("permissionGroups").GetString()!
+            .ShouldContain("managePermissions");
 
         // 5. Refresh grant rotates the pair and the new access token works.
         var refreshed = await ExchangeAsync(client, new Dictionary<string, string>
@@ -187,9 +191,12 @@ public sealed class AuthFlowTests : IDisposable
                 payload.GetProperty("refresh_token").GetString()!);
     }
 
-    private static async Task<JsonElement> GetMeAsync(HttpClient client, string accessToken)
+    private static Task<JsonElement> GetMeAsync(HttpClient client, string accessToken) =>
+        GetJsonAsync(client, accessToken, "/api/v1/me");
+
+    private static async Task<JsonElement> GetJsonAsync(HttpClient client, string accessToken, string url)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/me");
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new("Bearer", accessToken);
         var response = await client.SendAsync(request);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);

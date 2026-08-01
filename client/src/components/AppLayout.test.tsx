@@ -6,9 +6,16 @@ import '../i18n';
 import AppLayout from './AppLayout.tsx';
 
 let mobile = false;
+let capabilities: Record<string, string> | undefined;
 
 vi.mock('../hooks/useIsMobile.ts', () => ({ useIsMobile: () => mobile }));
-vi.mock('../api/hooks.ts', () => ({ useMe: () => ({ data: { roles: [], avatarUrl: null } }) }));
+vi.mock('../api/hooks.ts', () => ({
+  useMe: () => ({ data: { avatarUrl: null } }),
+  useCapabilities: () => ({ data: capabilities ? { domains: capabilities } : undefined }),
+  // The real helper, inlined: the mock replaces the module wholesale.
+  hasAccessAction: (actions: string | undefined, flag: string) =>
+    (actions ?? '').split(',').map((x) => x.trim()).includes(flag),
+}));
 vi.mock('../auth/auth.tsx', () => ({
   useAuth: () => ({ user: { profile: { preferred_username: 'tester' } }, signOut: vi.fn() }),
 }));
@@ -30,6 +37,7 @@ const zeroWidthTrigger = () => document.querySelector('.ant-layout-sider-zero-wi
 
 beforeEach(() => {
   mobile = false;
+  capabilities = undefined;
 });
 
 afterEach(cleanup);
@@ -53,5 +61,30 @@ describe('AppLayout sider', () => {
     expect(sider()).toHaveStyle({ width: '0px' });
     // antd's own edge trigger is what brings it back; without it the nav is unreachable.
     expect(zeroWidthTrigger()).not.toBeNull();
+  });
+});
+
+describe('AppLayout nav gating', () => {
+  it('offers no admin destinations before capabilities arrive', () => {
+    renderShell();
+
+    expect(screen.queryByText('Permission groups')).toBeNull();
+    expect(screen.queryByText('Audit')).toBeNull();
+  });
+
+  it('shows exactly the destinations the capabilities carry', () => {
+    capabilities = {
+      permissionGroups: 'read, write',
+      audit: 'read',
+      // Held but without read — must not surface the page.
+      messageTemplates: 'write',
+    };
+    renderShell();
+
+    expect(screen.getByText('Permission groups')).toBeInTheDocument();
+    expect(screen.getByText('Audit')).toBeInTheDocument();
+    expect(screen.queryByText('Message texts')).toBeNull();
+    expect(screen.queryByText('Messaging')).toBeNull();
+    expect(screen.queryByText('Feature sets')).toBeNull();
   });
 });

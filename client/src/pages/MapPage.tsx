@@ -22,7 +22,7 @@ import { unByKey } from 'ol/Observable';
 import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import { useSearchParams } from 'react-router-dom';
-import { useFeatureTypes, useGeofiles, useMapConfig, useMapLayers, useMapViews, useMe, useRasterMaps } from '../api/hooks.ts';
+import { useCan, useFeatureTypes, useGeofiles, useMapConfig, useMapLayers, useMapViews, useRasterMaps } from '../api/hooks.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
 import FeatureListPanel from '../components/map/FeatureListPanel.tsx';
@@ -94,7 +94,6 @@ export default function MapPage() {
   const { data: layers } = useMapLayers();
   const { data: mapConfig } = useMapConfig();
   const { data: featureTypes } = useFeatureTypes();
-  const { data: me } = useMe();
   const [activeBaseId, setActiveBaseId] = useState<number>();
   const [entrancesVisible, setEntrancesVisible] = useState(true);
   const [tagFilter, setTagFilter] = useState<string | null>(getMapTagFilter());
@@ -128,7 +127,11 @@ export default function MapPage() {
     () => (rasterPage?.items ?? []).filter((r) => r.status === 'ready'),
     [rasterPage],
   );
-  const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
+  // The toolbar mixes drawing new features with modifying existing ones, so either
+  // domain-level right shows it; per-feature answers stay with the server.
+  const mayWriteFeatures = useCan('features', 'write');
+  const mayCreateFeatures = useCan('features', 'create');
+  const canEdit = mayWriteFeatures || mayCreateFeatures;
   const mapChromeHidden = useUiPrefsStore((s) => s.mapChromeHidden);
   const setMapChromeHidden = useUiPrefsStore((s) => s.setMapChromeHidden);
   const centerlineDetailZoom = useUiPrefsStore((s) => s.centerlineDetailZoom);

@@ -39,7 +39,8 @@ public sealed record UserAddressWriteRequest(
 
 /// <summary>
 /// Everything the account holder's own settings pages need, in one response: profile fields,
-/// the visibility choices, the addresses, a ready-to-render avatar URL and the global roles.
+/// the visibility choices, the addresses and a ready-to-render avatar URL. What the caller
+/// may *do* is not here — the capabilities and permission-group routes answer that.
 /// </summary>
 /// <remarks>
 /// Deliberately carries no ETag. The client replays the ETag of a single-resource GET as
@@ -64,7 +65,6 @@ public sealed record MeDto(
     string? AvatarPreset,
     ProfileVisibilityDto Visibility,
     IReadOnlyList<UserAddressDto> Addresses,
-    string[] Roles,
     DateTimeOffset CreatedAt);
 
 /// <summary>
@@ -171,7 +171,6 @@ internal static class MeMapping
     public static MeDto ToDto(
         SilexGisUser user,
         IReadOnlyList<UserAddress> addresses,
-        IEnumerable<string> roles,
         IFileAccessTokenService tokens) =>
         new(
             user.Id,
@@ -197,7 +196,6 @@ internal static class MeMapping
                 user.AddressVisibility,
                 user.AddressPointVisibility),
             [.. addresses.OrderBy(a => a.SortOrder).ThenBy(a => a.CreatedAt).Select(ToDto)],
-            [.. roles],
             user.CreatedAt);
 
     public static UserAddressDto ToDto(UserAddress address) => new(

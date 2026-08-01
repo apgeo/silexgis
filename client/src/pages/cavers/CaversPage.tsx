@@ -17,10 +17,10 @@ import {
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
+  useCan,
   useCavers,
   useCreateCaver,
   useDeleteCaver,
-  useMe,
   useMergeCavers,
   useUpdateCaver,
   type CaverInfo,
@@ -95,7 +95,6 @@ export default function CaversPage() {
   const [search, setSearch] = useState('');
   const debounced = useDebouncedValue(search);
   const { data: cavers, isFetching } = useCavers(debounced || undefined);
-  const { data: me } = useMe();
   const createCaver = useCreateCaver();
   const deleteCaver = useDeleteCaver();
   const [creating, setCreating] = useState(false);
@@ -103,7 +102,9 @@ export default function CaversPage() {
   const [merging, setMerging] = useState<CaverInfo | null>(null);
   const [form] = Form.useForm<CaverForm>();
 
-  const canKeepRoster = me?.roles.some((r) => ['Admin', 'Manager'].includes(r)) ?? false;
+  // Contact fields and roster edits sit behind Cavers · Write (the label level every
+  // account reads is not this page's business to gate).
+  const canKeepRoster = useCan('cavers', 'write');
   const updateCaver = useUpdateCaver(editing?.id ?? '');
 
   const submit = async () => {

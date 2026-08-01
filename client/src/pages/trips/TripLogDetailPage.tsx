@@ -5,10 +5,12 @@ import { App, Button, Card, Descriptions, Flex, Popconfirm, Spin, Tag, Typograph
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  parseAccessActions,
+  useCan,
   useCavingGroups,
   useCave,
   useDeleteTripLog,
-  useMe,
+  useEffectiveAccess,
   useTripLog,
   useUpdateTripLog,
   type TripLogWrite,
@@ -45,9 +47,13 @@ export default function TripLogDetailPage() {
   const { data: trip, isPending } = useTripLog(id);
   const { data: cavingGroups } = useCavingGroups();
   const organizingCavingGroup = cavingGroups?.find((g) => g.id === trip?.organizingCavingGroupId);
-  const { data: me } = useMe();
   const deleteTrip = useDeleteTripLog();
   const updateTrip = useUpdateTripLog();
+  // Per-object capabilities once the answer arrives; the coarse domain-level check only
+  // bridges the first render (the server enforces regardless).
+  const { data: effective } = useEffectiveAccess('tripLog', id);
+  const domainFallback = useCan('tripLogs', 'write');
+  const held = effective ? parseAccessActions(effective.actions) : null;
   const [editing, setEditing] = useState(false);
 
   if (isPending || !trip) {
@@ -58,7 +64,8 @@ export default function TripLogDetailPage() {
     );
   }
 
-  const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
+  const canEdit = held ? held.has('write') : domainFallback;
+  const canDelete = held ? held.has('delete') : domainFallback;
   const dateText = trip.tripDateEnd
     ? `${new Date(trip.tripDate).toLocaleDateString(i18n.resolvedLanguage)} – ${new Date(trip.tripDateEnd).toLocaleDateString(i18n.resolvedLanguage)}`
     : new Date(trip.tripDate).toLocaleDateString(i18n.resolvedLanguage);
@@ -80,16 +87,20 @@ export default function TripLogDetailPage() {
         <Typography.Title level={3} style={{ margin: 0 }}>
           {trip.title}
         </Typography.Title>
-        {canEdit && (
+        {(canEdit || canDelete) && (
           <Flex gap={8}>
-            <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
-              {t('trips.edit')}
-            </Button>
-            <Popconfirm title={t('trips.deleteConfirm')} onConfirm={() => void onDelete()}>
-              <Button danger icon={<DeleteOutlined />}>
-                {t('features.delete')}
+            {canEdit && (
+              <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
+                {t('trips.edit')}
               </Button>
-            </Popconfirm>
+            )}
+            {canDelete && (
+              <Popconfirm title={t('trips.deleteConfirm')} onConfirm={() => void onDelete()}>
+                <Button danger icon={<DeleteOutlined />}>
+                  {t('features.delete')}
+                </Button>
+              </Popconfirm>
+            )}
           </Flex>
         )}
       </Flex>

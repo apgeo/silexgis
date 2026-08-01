@@ -18,6 +18,10 @@ public readonly record struct AccessExplanation(
     string? RuleName,
     bool Redacted);
 
+/// <summary>One domain's explanations, in the shape the ruleset preview renders.</summary>
+public readonly record struct DomainExplanations(
+    AccessDomain Domain, IReadOnlyList<AccessExplanation> Explanations);
+
 /// <summary>
 /// Turns decisions into explanations, naming the rule that won.
 /// </summary>
@@ -39,34 +43,59 @@ public sealed class AccessExplainer(SilexGisDbContext db)
             .ToList();
 
         var anchors = await ReadableAnchorsAsync(ctx, decisions.Select(d => d.Decision), ct);
+        return [.. decisions.Select(d => ToExplanation(d.Action, d.Decision, anchors))];
+    }
+
+    /// <summary>
+    /// Domain-level explanations over the whole catalogue — the ruleset editor's preview.
+    /// Decisions are made as <paramref name="subject"/>; anchor names are resolved for
+    /// <paramref name="viewer"/>, because it is the person looking, not the person asked
+    /// about, whose right to read a rule's anchor governs what the answer may name.
+    /// </summary>
+    public async Task<IReadOnlyList<DomainExplanations>> ExplainDomainsAsync(
+        AccessContext subject, AccessContext viewer, CancellationToken ct = default)
+    {
+        var perDomain = Enum.GetValues<AccessDomain>()
+            .Select(domain => (Domain: domain, Decisions: AccessActions.All
+                .Select(action => (Action: action, Decision: AccessEvaluator.Decide(subject, domain, action, null)))
+                .ToList()))
+            .ToList();
+
+        // One name-resolution pass over every deciding entry, not one per domain.
+        var anchors = await ReadableAnchorsAsync(
+            viewer, perDomain.SelectMany(d => d.Decisions.Select(x => x.Decision)), ct);
 
         return
         [
-            .. decisions.Select(d =>
-            {
-                var deciding = d.Decision.DecidingEntries.FirstOrDefault();
-                if (deciding is null)
-                {
-                    // Ownership, visibility, full administration, or nothing at all —
-                    // none of which names anything the caller cannot already see.
-                    return new AccessExplanation(
-                        d.Action, d.Decision.Allowed, d.Decision.Source, d.Decision.Level, null, false);
-                }
-
-                var key = AnchorKey(deciding);
-                var name = anchors.GetValueOrDefault(key);
-                return new AccessExplanation(
-                    d.Action,
-                    d.Decision.Allowed,
-                    d.Decision.Source,
-                    d.Decision.Level,
-                    name,
-                    // A rule written straight onto this object has no anchor to name, so
-                    // there is nothing withheld; anywhere else, a missing name IS the
-                    // withholding.
-                    Redacted: name is null && key != DirectAnchor);
-            }),
+            .. perDomain.Select(d => new DomainExplanations(
+                d.Domain,
+                [.. d.Decisions.Select(x => ToExplanation(x.Action, x.Decision, anchors))])),
         ];
+    }
+
+    private static AccessExplanation ToExplanation(
+        AccessAction action, AccessDecision decision, Dictionary<string, string> anchors)
+    {
+        var deciding = decision.DecidingEntries.FirstOrDefault();
+        if (deciding is null)
+        {
+            // Ownership, visibility, full administration, or nothing at all —
+            // none of which names anything the caller cannot already see.
+            return new AccessExplanation(action, decision.Allowed, decision.Source, decision.Level, null, false);
+        }
+
+        var key = AnchorKey(deciding);
+        var name = anchors.GetValueOrDefault(key);
+        return new AccessExplanation(
+            action,
+            decision.Allowed,
+            decision.Source,
+            decision.Level,
+            name,
+            // A rule written straight onto this object has no anchor to name, so
+            // there is nothing withheld; anywhere else, a missing name IS the
+            // withholding.
+            Redacted: name is null && key != DirectAnchor);
     }
 
     /// <summary>

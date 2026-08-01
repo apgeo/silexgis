@@ -32,7 +32,7 @@ import {
   useDeleteEntrance,
   useEntranceTypes,
   useEntrances,
-  useMe,
+  useCan,
   useRockTypes,
   useUpdateCave,
   useUpdateEntrance,
@@ -67,14 +67,13 @@ export default function CaveDetailPage() {
   const deleteEntrance = useDeleteEntrance(id ?? '');
   const updateCave = useUpdateCave(id ?? '');
   const updateEntrance = useUpdateEntrance(id ?? '');
-  const { data: me } = useMe();
-  // Per-object capabilities from the summary once loaded; the coarse role check only
-  // bridges the first render (the server enforces regardless).
-  const roleFallback = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
-  const canEdit = summary?.permissions.canWrite ?? roleFallback;
-  const canDelete = summary?.permissions.canDelete ?? roleFallback;
-  const canShare = summary?.permissions.canShare ?? roleFallback;
-  const canManagePermissions = summary?.permissions.canManagePermissions ?? roleFallback;
+  // Per-object capabilities from the summary once loaded; the coarse domain-level
+  // capability only bridges the first render (the server enforces regardless).
+  const domainFallback = useCan('features', 'write');
+  const canEdit = summary?.permissions.canWrite ?? domainFallback;
+  const canDelete = summary?.permissions.canDelete ?? domainFallback;
+  const canShare = summary?.permissions.canShare ?? domainFallback;
+  const canManagePermissions = summary?.permissions.canManagePermissions ?? domainFallback;
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingEntrance, setEditingEntrance] = useState<Entrance | null>(null);

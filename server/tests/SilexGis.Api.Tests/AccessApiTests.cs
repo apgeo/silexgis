@@ -223,6 +223,52 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task Preview_explains_each_verdict_and_names_the_deciding_ruleset()
+    {
+        // A ruleset that denies the viewer trip-log reads: the preview must not only show
+        // the bit missing but say which rule took it — that is the whole point of looking
+        // before saving a deny.
+        var groupId = await CreatePermissionGroupAsync($"Preview Deny {suffix}");
+        (await admin.PostAsJsonAsync($"/api/v1/permission-groups/{groupId}/members", new
+        {
+            memberKind = "user",
+            memberId = viewerId,
+        })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await admin.PutAsJsonAsync($"/api/v1/permission-groups/{groupId}/entries", new
+        {
+            entries = new[]
+            {
+                new { effect = "deny", domain = "tripLogs", actions = "read", scopeKind = "all" },
+            },
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var response = await admin.PostAsJsonAsync("/api/v1/permission-groups/preview", new
+        {
+            subjectKind = "user",
+            subjectId = viewerId,
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var preview = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var explanation = preview.GetProperty("explanations").EnumerateArray().First(e =>
+            e.GetProperty("domain").GetString() == "tripLogs"
+            && e.GetProperty("action").GetString() == "read");
+        explanation.GetProperty("allowed").GetBoolean().ShouldBeFalse();
+        explanation.GetProperty("source").GetString().ShouldBe("entries");
+        explanation.GetProperty("level").GetString().ShouldBe("global");
+        // The admin looking may read permission groups, so the anchor is named, not redacted.
+        explanation.GetProperty("ruleName").GetString().ShouldBe($"Preview Deny {suffix}");
+        explanation.GetProperty("redacted").GetBoolean().ShouldBeFalse();
+
+        // The catalogue reads every account holds explain themselves the same way.
+        var mapLayers = preview.GetProperty("explanations").EnumerateArray().First(e =>
+            e.GetProperty("domain").GetString() == "mapLayers"
+            && e.GetProperty("action").GetString() == "read");
+        mapLayers.GetProperty("allowed").GetBoolean().ShouldBeTrue();
+        mapLayers.GetProperty("source").GetString().ShouldBe("entries");
+    }
+
+    [Fact]
     public async Task Capabilities_describe_the_caller_and_nobody_else()
     {
         var mine = await viewer.GetFromJsonAsync<JsonElement>("/api/v1/me/capabilities");
@@ -259,7 +305,7 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         var members = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/feature-sets/{setId}/members");
-        members.EnumerateArray().Select(x => x.GetGuid()).ShouldContain(caveId);
+        members.EnumerateArray().Select(x => x.GetProperty("id").GetGuid()).ShouldContain(caveId);
 
         // Membership moves access, so it leaves a trail like a rule edit does.
         using (var scope = factory.Services.CreateScope())

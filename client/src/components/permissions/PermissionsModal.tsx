@@ -1,26 +1,35 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { App, Button, Checkbox, Flex, Modal, Select, Table, Tag } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import { DeleteOutlined, PlusOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { App, Alert, Button, Checkbox, Collapse, Flex, Modal, Select, Table, Tag, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
-  useAcl,
-  useReplaceAcl,
   useCavingGroups,
+  useEffectiveAccess,
+  useObjectAccess,
+  useReplaceObjectAccess,
   useUserSearch,
-  type AclEntry,
+  type AccessActionFlag,
   type EntityType,
+  type ObjectAccessEntry,
+  parseAccessActions,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import AccessExplanationList from './AccessExplanationList.tsx';
+import { ACTION_ORDER, joinActions } from './accessDisplay.ts';
 
-const allPermissions = ['read', 'write', 'delete', 'share', 'managePermissions', 'viewExactLocation'] as const;
-type PermissionFlag = (typeof allPermissions)[number];
+// Create is rejected at object scope (nothing is created "into" one row) and valid at
+// subtree scope (create under this feature) — mirroring the server's scope table.
+const objectActions = ACTION_ORDER.filter((flag) => flag !== 'create');
+const subtreeActions = ACTION_ORDER;
 
-interface DraftEntry {
+interface DraftRule {
   subjectKind: 'user' | 'cavingGroup';
   subjectId: string;
   subjectName: string | null;
-  permissions: Set<PermissionFlag>;
+  effect: 'allow' | 'deny';
+  scopeKind: 'object' | 'subtree';
+  actions: Set<AccessActionFlag>;
 }
 
 interface PermissionsModalProps {
@@ -31,43 +40,54 @@ interface PermissionsModalProps {
   onClose: () => void;
 }
 
-/** Parses the server's comma-joined flags string ("read, write") into a set. */
-function parseFlags(permissions: string): Set<PermissionFlag> {
-  return new Set(
-    permissions.split(',').map((x) => x.trim() as PermissionFlag).filter((x) => (allPermissions as readonly string[]).includes(x)),
-  );
-}
-
 /**
- * Explicit-grant editor for one object: rows of user/caving-group subjects with permission
- * checkboxes, saved as a full replace. Requires ManagePermissions server-side.
+ * Direct-rules editor for one object: rows of user/caving-group subjects, each carrying
+ * an effect (allow or an explicit deny), an action set, and — for features, which contain
+ * other things — a reach of this object alone or its whole subtree. Saved as a full
+ * replace; requires ManagePermissions server-side.
+ *
+ * Beside the editor sits the explainer: what the caller may do here and which rule
+ * decided each action, served ready-made by the server and rendered verbatim.
  */
 export default function PermissionsModal({ entityType, entityId, open, onClose }: PermissionsModalProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: acl, isError } = useAcl(entityType, entityId, open);
-  const replaceAcl = useReplaceAcl(entityType, entityId);
+  const { token } = theme.useToken();
+  const { data: rules, isError } = useObjectAccess(entityType, entityId, open);
+  const replaceRules = useReplaceObjectAccess(entityType, entityId);
   const { data: cavingGroups } = useCavingGroups();
-  const [entries, setEntries] = useState<DraftEntry[]>([]);
+  const { data: effective } = useEffectiveAccess(entityType, entityId, { explain: true, enabled: open });
+  const [entries, setEntries] = useState<DraftRule[]>([]);
   const [subjectKind, setSubjectKind] = useState<'user' | 'cavingGroup'>('user');
   const [subjectId, setSubjectId] = useState<string>();
+  const [effect, setEffect] = useState<'allow' | 'deny'>('allow');
+  const [scopeKind, setScopeKind] = useState<'object' | 'subtree'>('object');
   const [userQuery, setUserQuery] = useState('');
   const debouncedUserQuery = useDebouncedValue(userQuery);
   const { data: users } = useUserSearch(debouncedUserQuery);
 
+  // Only the feature world contains other objects, so only it offers subtree reach.
+  const scopedToFeature = entityType === 'feature';
+
   useEffect(() => {
-    if (open && acl) {
-      setEntries(acl.map((entry: AclEntry) => ({
+    if (open && rules) {
+      setEntries(rules.map((entry: ObjectAccessEntry) => ({
         subjectKind: entry.subjectKind,
         subjectId: entry.subjectId,
         subjectName: entry.subjectName ?? null,
-        permissions: parseFlags(entry.actions),
+        effect: entry.effect,
+        scopeKind: entry.scopeKind === 'subtree' ? 'subtree' : 'object',
+        actions: new Set([...parseAccessActions(entry.actions)]),
       })));
     }
-  }, [open, acl]);
+  }, [open, rules]);
 
-  const addEntry = () => {
-    if (!subjectId || entries.some((e) => e.subjectId === subjectId && e.subjectKind === subjectKind)) {
+  const hasDeny = entries.some((entry) => entry.effect === 'deny');
+
+  const addRule = () => {
+    if (!subjectId || entries.some((e) =>
+      e.subjectId === subjectId && e.subjectKind === subjectKind
+      && e.effect === effect && e.scopeKind === scopeKind)) {
       return;
     }
     const name = subjectKind === 'cavingGroup'
@@ -77,39 +97,45 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
       subjectKind,
       subjectId,
       subjectName: name,
-      permissions: new Set<PermissionFlag>(['read']),
+      effect,
+      scopeKind: scopedToFeature ? scopeKind : 'object',
+      actions: new Set<AccessActionFlag>(['read']),
     }]);
     setSubjectId(undefined);
     setUserQuery('');
   };
 
-  const togglePermission = (index: number, flag: PermissionFlag, checked: boolean) => {
+  const toggleAction = (index: number, flag: AccessActionFlag, checked: boolean) => {
     setEntries(entries.map((entry, i) => {
       if (i !== index) {
         return entry;
       }
-      const next = new Set(entry.permissions);
+      const next = new Set(entry.actions);
       if (checked) {
         next.add(flag);
       } else {
         next.delete(flag);
       }
-      return { ...entry, permissions: next };
+      return { ...entry, actions: next };
     }));
   };
 
   const onSave = async () => {
     try {
-      await replaceAcl.mutateAsync(entries
-        .filter((e) => e.permissions.size > 0)
+      await replaceRules.mutateAsync(entries
+        .filter((e) => e.actions.size > 0)
         .map((e) => ({
           subjectKind: e.subjectKind,
           subjectId: e.subjectId,
-          actions: [...e.permissions].join(', ') as AclEntry['actions'],
-          // This tab edits plain grants on this one object; denies and subtree reach
-          // are the richer permissions surface's business.
-          effect: 'allow' as const,
-          scopeKind: 'object' as const,
+          effect: e.effect,
+          actions: joinActions(
+            // A create bit can linger from a subtree row later switched to object reach;
+            // the server would reject the whole save over it.
+            e.scopeKind === 'object'
+              ? new Set([...e.actions].filter((flag) => flag !== 'create'))
+              : e.actions,
+          ),
+          scopeKind: e.scopeKind,
         })));
       message.success(t('common.saved'));
       onClose();
@@ -118,24 +144,40 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
     }
   };
 
+  const explainer = useMemo(() => (effective?.explain ? (
+    <Collapse
+      ghost
+      items={[{
+        key: 'why',
+        label: (
+          <span>
+            <QuestionCircleOutlined /> {t('access.whyTitle')}
+          </span>
+        ),
+        children: <AccessExplanationList explanations={effective.explain} />,
+      }]}
+    />
+  ) : null), [effective, t]);
+
   return (
     <Modal
       title={t('permissions.title')}
       open={open}
       onCancel={onClose}
       onOk={() => void onSave()}
-      confirmLoading={replaceAcl.isPending}
-      width={760}
+      okButtonProps={{ disabled: isError }}
+      confirmLoading={replaceRules.isPending}
+      width={900}
       destroyOnHidden
     >
       {isError ? (
         <Tag color="warning">{t('permissions.notManager')}</Tag>
       ) : (
         <>
-          <Flex gap={8} style={{ marginBottom: 12 }}>
+          <Flex gap={8} style={{ marginBottom: 12 }} wrap>
             <Select
               value={subjectKind}
-              style={{ width: 110 }}
+              style={{ width: 130 }}
               onChange={(kind: 'user' | 'cavingGroup') => {
                 setSubjectKind(kind);
                 setSubjectId(undefined);
@@ -147,7 +189,7 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
             />
             {subjectKind === 'cavingGroup' ? (
               <Select
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 180 }}
                 // CavingGroups arrive in full, so this filters client-side — unlike the user
                 // picker beside it, which searches the server. Named explicitly because
                 // the option values are ids: filtering the default value prop would
@@ -161,7 +203,7 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
               />
             ) : (
               <Select
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 180 }}
                 showSearch
                 filterOption={false}
                 placeholder={t('permissions.pickUser')}
@@ -176,17 +218,50 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
                 notFoundContent={null}
               />
             )}
-            <Button icon={<PlusOutlined />} onClick={addEntry} disabled={!subjectId}>
-              {t('permissions.addGrant')}
+            <Select
+              value={effect}
+              style={{ width: 110 }}
+              onChange={setEffect}
+              options={[
+                { value: 'allow', label: t('access.effects.allow') },
+                { value: 'deny', label: <Tag color="red" style={{ marginInlineEnd: 0 }}>{t('access.effects.deny')}</Tag> },
+              ]}
+            />
+            {scopedToFeature && (
+              <Select
+                value={scopeKind}
+                style={{ width: 210 }}
+                onChange={setScopeKind}
+                options={[
+                  { value: 'object', label: t('permissions.scopeObject') },
+                  { value: 'subtree', label: t('permissions.scopeSubtree') },
+                ]}
+              />
+            )}
+            <Button icon={<PlusOutlined />} onClick={addRule} disabled={!subjectId}>
+              {t('permissions.addRule')}
             </Button>
           </Flex>
 
-          <Table<DraftEntry>
+          {hasDeny && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={t('permissions.denyHint')}
+            />
+          )}
+
+          <Table<DraftRule>
             scroll={{ x: 'max-content' }}
-            rowKey={(entry) => `${entry.subjectKind}:${entry.subjectId}`}
+            rowKey={(entry) => `${entry.subjectKind}:${entry.subjectId}:${entry.effect}:${entry.scopeKind}`}
             size="small"
             pagination={false}
             dataSource={entries}
+            // A deny must be impossible to overlook next to a screen of allows.
+            onRow={(entry) => (entry.effect === 'deny'
+              ? { style: { background: token.colorErrorBg } }
+              : {})}
             columns={[
               {
                 title: t('permissions.subject'),
@@ -198,15 +273,47 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
                   </>
                 ),
               },
-              ...allPermissions.map((flag) => ({
-                title: t(`permissions.flags.${flag}`),
-                key: flag,
+              {
+                title: t('access.effect'),
+                key: 'effect',
                 width: 90,
+                render: (_, entry) => (
+                  <Tag color={entry.effect === 'deny' ? 'red' : 'green'}>
+                    {t(`access.effects.${entry.effect}`)}
+                  </Tag>
+                ),
+              },
+              ...(scopedToFeature
+                ? [{
+                    title: t('permissions.scope'),
+                    key: 'scope',
+                    width: 170,
+                    render: (_: unknown, entry: DraftRule, index: number) => (
+                      <Select
+                        size="small"
+                        value={entry.scopeKind}
+                        style={{ width: 160 }}
+                        onChange={(next: 'object' | 'subtree') =>
+                          setEntries(entries.map((e, i) => (i === index ? { ...e, scopeKind: next } : e)))}
+                        options={[
+                          { value: 'object', label: t('permissions.scopeObject') },
+                          { value: 'subtree', label: t('permissions.scopeSubtree') },
+                        ]}
+                      />
+                    ),
+                  }]
+                : []),
+              // Create only ever applies to subtree reach, which only features offer.
+              ...(scopedToFeature ? subtreeActions : objectActions).map((flag) => ({
+                title: t(`access.actions.${flag}`),
+                key: flag,
+                width: 84,
                 align: 'center' as const,
-                render: (_: unknown, entry: DraftEntry, index: number) => (
+                render: (_: unknown, entry: DraftRule, index: number) => (
                   <Checkbox
-                    checked={entry.permissions.has(flag)}
-                    onChange={(e) => togglePermission(index, flag, e.target.checked)}
+                    checked={entry.actions.has(flag)}
+                    disabled={flag === 'create' && entry.scopeKind === 'object'}
+                    onChange={(e) => toggleAction(index, flag, e.target.checked)}
                   />
                 ),
               })),
@@ -228,6 +335,8 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
           />
         </>
       )}
+
+      {explainer}
     </Modal>
   );
 }

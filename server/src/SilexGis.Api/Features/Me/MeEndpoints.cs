@@ -70,7 +70,7 @@ public static class MeEndpoints
         }
 
         return TypedResults.Ok(MeMapping.ToDto(
-            user, await AddressesAsync(db, user.Id, ct), await userManager.GetRolesAsync(user), tokens));
+            user, await AddressesAsync(db, user.Id, ct), tokens));
     }
 
     private static async Task<Results<Ok<MeDto>, UnauthorizedHttpResult>> UpdateAsync(
@@ -109,7 +109,7 @@ public static class MeEndpoints
         await db.SaveChangesAsync(ct);
 
         return TypedResults.Ok(MeMapping.ToDto(
-            user, await AddressesAsync(db, user.Id, ct), await userManager.GetRolesAsync(user), tokens));
+            user, await AddressesAsync(db, user.Id, ct), tokens));
     }
 
     private static async Task<Results<Ok<MeDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAvatarAsync(
@@ -176,7 +176,7 @@ public static class MeEndpoints
         }
 
         return TypedResults.Ok(MeMapping.ToDto(
-            user, await AddressesAsync(db, user.Id, ct), await userManager.GetRolesAsync(user), tokens));
+            user, await AddressesAsync(db, user.Id, ct), tokens));
     }
 
     private static async Task<Results<Ok<MeDto>, UnauthorizedHttpResult>> SetAvatarPresetAsync(
@@ -199,7 +199,7 @@ public static class MeEndpoints
         await db.SaveChangesAsync(ct);
 
         return TypedResults.Ok(MeMapping.ToDto(
-            user, await AddressesAsync(db, user.Id, ct), await userManager.GetRolesAsync(user), tokens));
+            user, await AddressesAsync(db, user.Id, ct), tokens));
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult>> RemoveAvatarAsync(

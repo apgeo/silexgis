@@ -12,7 +12,7 @@ import {
   useEntrances,
   useFeature,
   useFeatureTypes,
-  useMe,
+  useCan,
   useUpdateFeature,
   type FeatureUpdate,
 } from '../../api/hooks.ts';
@@ -202,7 +202,7 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
   const setSelection = useWorkspaceStore((s) => s.setSelection);
   const { data: envelope, isPending } = useFeature(selection.featureId);
   const { data: featureTypes } = useFeatureTypes();
-  const { data: me } = useMe();
+  const mayWriteFeatures = useCan('features', 'write');
   const updateFeatureM = useUpdateFeature();
   const deleteFeatureM = useDeleteFeature();
   const [editing, setEditing] = useState(false);
@@ -246,9 +246,7 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
     );
   }
 
-  const canEdit =
-    envelope.kind === 'generic' &&
-    (me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false);
+  const canEdit = envelope.kind === 'generic' && mayWriteFeatures;
   // A protected feature the viewer may not see exactly can arrive without geometry.
   // Multi* geometries (imported geodata) collapse to their base shape for display
   // and for constraining the edit modal's type options.

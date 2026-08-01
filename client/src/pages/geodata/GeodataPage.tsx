@@ -28,9 +28,9 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { downloadFile } from '../../api/download.ts';
 import {
+  useCan,
   useDeleteGeofile,
   useGeofiles,
-  useMe,
   useUpdateGeofile,
   useUploadGeofile,
   type GeofileInfo,
@@ -68,7 +68,6 @@ export default function GeodataPage() {
     { page, pageSize, search: search || undefined },
     /* pollWhileImporting */ true,
   );
-  const { data: me } = useMe();
   const upload = useUploadGeofile();
   const update = useUpdateGeofile();
   const remove = useDeleteGeofile();
@@ -76,7 +75,8 @@ export default function GeodataPage() {
   const [editing, setEditing] = useState<GeofileInfo | null>(null);
   const [form] = Form.useForm<EditFormValues>();
 
-  const canEdit = me?.roles.some((r) => ['Admin', 'Manager', 'Editor'].includes(r)) ?? false;
+  const canEdit = useCan('geofiles', 'write');
+  const canUpload = useCan('geofiles', 'create');
 
   const showOnMap = (geofile: GeofileInfo) => {
     setGeofileVisible(geofile.id, true);
@@ -136,7 +136,7 @@ export default function GeodataPage() {
 
   const vectorTab = (
     <>
-      {canEdit && (
+      {canUpload && (
         <Upload.Dragger
           multiple
           accept=".gpx,.kml,.geojson,.json,.zip,.wkt,.wkb"

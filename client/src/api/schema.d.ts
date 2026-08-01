@@ -5239,7 +5239,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** The domain-level rights a given user or caving group would hold. */
+        /** The domain-level rights a given user or caving group would hold, explained. */
         post: {
             parameters: {
                 query?: never;
@@ -5259,7 +5259,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["CapabilitiesDto"];
+                        "application/json": components["schemas"]["AccessPreviewDto"];
                     };
                 };
             };
@@ -5747,7 +5747,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": string[];
+                        "application/json": components["schemas"]["FeatureSetMemberDto"][];
                     };
                 };
             };
@@ -6869,6 +6869,21 @@ export interface components {
         };
         /** @enum {unknown} */
         AccessLevel: "object" | "collection" | "global" | null;
+        AccessPreviewDto: {
+            domains: {
+                [key: string]: components["schemas"]["AccessAction"];
+            };
+            explanations: components["schemas"]["AccessPreviewExplanationDto"][];
+        };
+        AccessPreviewExplanationDto: {
+            domain: string;
+            action: components["schemas"]["AccessAction"];
+            allowed: boolean;
+            source: string;
+            level: null | components["schemas"]["AccessLevel"];
+            ruleName: null | string;
+            redacted: boolean;
+        };
         AccessPreviewRequest: {
             subjectKind: components["schemas"]["AccessSubjectKind"];
             /** Format: uuid */
@@ -7528,6 +7543,12 @@ export interface components {
             /** Format: int32 */
             memberCount: number;
         };
+        FeatureSetMemberDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            kind: components["schemas"]["FeatureKind"];
+        };
         FeatureSetMemberReplaceRequest: {
             featureIds: string[];
         };
@@ -7887,7 +7908,6 @@ export interface components {
             avatarPreset: null | string;
             visibility: components["schemas"]["ProfileVisibilityDto"];
             addresses: components["schemas"]["UserAddressDto"][];
-            roles: string[];
             /** Format: date-time */
             createdAt: string;
         };
