@@ -99,7 +99,11 @@ public sealed class CaveConfiguration : IEntityTypeConfiguration<Cave>
 
         // Composite FK (id, kind) against the features alternate key + the CHECK above:
         // a caves row can only ever sit on a kind=Cave feature.
-        builder.Property<FeatureKind>("Kind").HasConversion<short>().HasDefaultValue(FeatureKind.Cave);
+        // The sentinel says which value means "not set" and so leaves the column to the
+        // database default. Nothing ever assigns this shadow property, so that is the CLR
+        // default — stating it keeps the model from warning that it had to assume as much.
+        builder.Property<FeatureKind>("Kind").HasConversion<short>()
+            .HasDefaultValue(FeatureKind.Cave).HasSentinel(FeatureKind.Generic);
         builder.HasOne(x => x.Feature).WithOne(f => f.Cave)
             .HasForeignKey<Cave>(nameof(Cave.Id), "Kind")
             .HasPrincipalKey<Feature>(nameof(Feature.Id), nameof(Feature.Kind))
@@ -162,7 +166,8 @@ public sealed class CaveEntranceConfiguration : IEntityTypeConfiguration<CaveEnt
         builder.ToTable("cave_entrances", t => t.HasCheckConstraint("ck_cave_entrances_kind", "kind = 2"));
         builder.Property(x => x.Id).ValueGeneratedNever();
 
-        builder.Property<FeatureKind>("Kind").HasConversion<short>().HasDefaultValue(FeatureKind.CaveEntrance);
+        builder.Property<FeatureKind>("Kind").HasConversion<short>()
+            .HasDefaultValue(FeatureKind.CaveEntrance).HasSentinel(FeatureKind.Generic);
         builder.HasOne(x => x.Feature).WithOne(f => f.Entrance)
             .HasForeignKey<CaveEntrance>(nameof(CaveEntrance.Id), "Kind")
             .HasPrincipalKey<Feature>(nameof(Feature.Id), nameof(Feature.Kind))
@@ -189,7 +194,8 @@ public sealed class CenterlineConfiguration : IEntityTypeConfiguration<Centerlin
         builder.ToTable("centerlines", t => t.HasCheckConstraint("ck_centerlines_kind", "kind = 3"));
         builder.Property(x => x.Id).ValueGeneratedNever();
 
-        builder.Property<FeatureKind>("Kind").HasConversion<short>().HasDefaultValue(FeatureKind.Centerline);
+        builder.Property<FeatureKind>("Kind").HasConversion<short>()
+            .HasDefaultValue(FeatureKind.Centerline).HasSentinel(FeatureKind.Generic);
         builder.HasOne(x => x.Feature).WithOne(f => f.Centerline)
             .HasForeignKey<Centerline>(nameof(Centerline.Id), "Kind")
             .HasPrincipalKey<Feature>(nameof(Feature.Id), nameof(Feature.Kind))
