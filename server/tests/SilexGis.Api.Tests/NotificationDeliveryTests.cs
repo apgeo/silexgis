@@ -104,11 +104,13 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     {
         var cavingGroupId = await CreateCavingGroupAsync();
         (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members",
-            new { userId = recipientId, role = "Member" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+            new { caverId = await RosterHelper.CaverIdForAsync(factory, recipientId), role = "Member" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
         var afterJoining = (await RowsAsync()).Count;
 
         // Leaving of your own accord: you already know, and mailing you about it is noise.
-        (await recipient.DeleteAsync($"/api/v1/caving-groups/{cavingGroupId}/members/{recipientId}"))
+        var recipientCaverId = await RosterHelper.CaverIdForAsync(factory, recipientId);
+        (await recipient.DeleteAsync($"/api/v1/caving-groups/{cavingGroupId}/members/{recipientCaverId}"))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         (await RowsAsync()).Count.ShouldBe(afterJoining);
@@ -335,7 +337,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     {
         var cavingGroupId = await CreateCavingGroupAsync(tag);
         var added = await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members",
-            new { userId = recipientId, role = "Member" });
+            new { caverId = await RosterHelper.CaverIdForAsync(factory, recipientId), role = "Member" });
         added.StatusCode.ShouldBe(HttpStatusCode.OK, await added.Content.ReadAsStringAsync());
     }
 

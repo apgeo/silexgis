@@ -63,6 +63,7 @@ export const queryKeys = {
   taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
   tags: (search: string) => ['tags', search] as const,
   cavingGroups: ['cavingGroups'] as const,
+  cavers: ['cavers'] as const,
   cavingGroupMembers: (cavingGroupId: string) => ['teams', cavingGroupId, 'members'] as const,
   acl: (entityType: string, entityId: string) => ['acl', entityType, entityId] as const,
   history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
@@ -1294,6 +1295,7 @@ export function useDeleteTagging() {
 
 export type CavingGroupInfo = components['schemas']['CavingGroupDto'];
 export type CavingGroupMemberInfo = components['schemas']['CavingGroupMemberDto'];
+export type CaverInfo = components['schemas']['CaverDto'];
 export type AclEntry = components['schemas']['AclEntryDto'];
 export type AclEntryWrite = components['schemas']['AclEntryWrite'];
 
@@ -1330,7 +1332,7 @@ export function useCreateCavingGroup() {
 export function useUpsertCavingGroupMember(cavingGroupId: string) {
   const invalidate = useInvalidateCavingGroups();
   return useMutation({
-    mutationFn: (body: { userId: string; role: CavingGroupMemberInfo['role'] }) =>
+    mutationFn: (body: { caverId: string; role: CavingGroupMemberInfo['role'] }) =>
       unwrap(api.POST('/api/v1/caving-groups/{id}/members', { params: { path: { id: cavingGroupId } }, body })),
     onSuccess: () => invalidate(),
   });
@@ -1339,9 +1341,99 @@ export function useUpsertCavingGroupMember(cavingGroupId: string) {
 export function useRemoveCavingGroupMember(cavingGroupId: string) {
   const invalidate = useInvalidateCavingGroups();
   return useMutation({
-    mutationFn: async (userId: string) => {
-      const { error, response } = await api.DELETE('/api/v1/caving-groups/{id}/members/{userId}', {
-        params: { path: { id: cavingGroupId, userId } },
+    mutationFn: async (caverId: string) => {
+      const { error, response } = await api.DELETE('/api/v1/caving-groups/{id}/members/{caverId}', {
+        params: { path: { id: cavingGroupId, caverId } },
+      });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+/** The roster of people, optionally filtered by name; `unlinked` narrows to those with no account. */
+export function useCavers(search?: string, unlinked?: boolean) {
+  return useQuery({
+    queryKey: [...queryKeys.cavers, search ?? '', unlinked ?? false],
+    queryFn: () => unwrap(api.GET('/api/v1/cavers', { params: { query: { search, unlinked } } })),
+    staleTime: 30_000,
+  });
+}
+
+export function useCaver(id: string | undefined) {
+  return useQuery({
+    queryKey: [...queryKeys.cavers, id],
+    queryFn: () => unwrap(api.GET('/api/v1/cavers/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+  });
+}
+
+function useInvalidateCavers() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.cavers });
+    // A roster edit can change how a person is named on trips and group pages too.
+    void queryClient.invalidateQueries({ queryKey: ['cavingGroups'] });
+  };
+}
+
+export function useCreateCaver() {
+  const invalidate = useInvalidateCavers();
+  return useMutation({
+    mutationFn: (body: { fullName: string; email: string | null; phone: string | null; notes: string | null }) =>
+      unwrap(api.POST('/api/v1/cavers', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateCaver(id: string) {
+  const invalidate = useInvalidateCavers();
+  return useMutation({
+    mutationFn: (body: { fullName: string; email: string | null; phone: string | null; notes: string | null }) =>
+      unwrap(api.PUT('/api/v1/cavers/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useDeleteCaver() {
+  const invalidate = useInvalidateCavers();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/cavers/{id}', { params: { path: { id } } });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useMergeCavers(id: string) {
+  const invalidate = useInvalidateCavers();
+  return useMutation({
+    mutationFn: (sourceCaverId: string) =>
+      unwrap(api.POST('/api/v1/cavers/{id}/merge', { params: { path: { id } }, body: { sourceCaverId } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useLinkCaverAccount(id: string) {
+  const invalidate = useInvalidateCavers();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      unwrap(api.POST('/api/v1/cavers/{id}/account-link', { params: { path: { id } }, body: { userId } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUnlinkCaverAccount(id: string) {
+  const invalidate = useInvalidateCavers();
+  return useMutation({
+    mutationFn: async () => {
+      const { error, response } = await api.DELETE('/api/v1/cavers/{id}/account-link', {
+        params: { path: { id } },
       });
       if (error !== undefined) {
         throw new Error(`API error ${response.status}`);

@@ -139,10 +139,7 @@ public static class ProfileDirectory
     private static async Task<Dictionary<Guid, IReadOnlySet<Guid>>> CavingGroupsAsync(
         SilexGisDbContext db, IReadOnlyList<Guid> userIds, CancellationToken ct)
     {
-        var memberships = await db.CavingGroupMembers.AsNoTracking()
-            .Where(m => userIds.Contains(m.UserId))
-            .Select(m => new { m.UserId, m.CavingGroupId })
-            .ToListAsync(ct);
+        var memberships = await db.CavingGroupsOfUsersAsync(userIds, ct);
 
         return memberships
             .GroupBy(m => m.UserId)

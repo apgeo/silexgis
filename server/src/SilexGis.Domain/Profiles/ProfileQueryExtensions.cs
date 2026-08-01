@@ -17,9 +17,12 @@ namespace SilexGis.Domain.Profiles;
 /// which a parity test enforces.
 /// </para>
 /// <para>
-/// <paramref name="members"/> is the caving group-membership set of the same context, so the shared-caving group
-/// check stays one correlated EXISTS in the translated SQL and this layer needs no EF reference —
-/// the same shape as the ACL-aware overload of <c>VisibleTo</c>.
+/// <paramref name="memberships"/> and <paramref name="cavers"/> are the same context's sets, so the
+/// shared-caving-group check stays correlated EXISTS clauses in the translated SQL and this layer
+/// needs no EF reference — the same shape as the ACL-aware overload of <c>VisibleTo</c>. They are
+/// passed separately rather than pre-joined because a subquery over a projection does not
+/// translate; the join happens inside the EXISTS instead. A member without an account cannot
+/// match, since the correlation is on the account id.
 /// </para>
 /// </remarks>
 public static class ProfileQueryExtensions
@@ -28,7 +31,11 @@ public static class ProfileQueryExtensions
     /// Keeps only the users whose <paramref name="field"/> is visible to <paramref name="viewer"/>.
     /// </summary>
     public static IQueryable<T> WhereFieldVisibleTo<T>(
-        this IQueryable<T> users, ProfileField field, UserContext? viewer, IQueryable<CavingGroupMember> members)
+        this IQueryable<T> users,
+        ProfileField field,
+        UserContext? viewer,
+        IQueryable<CavingGroupMembership> memberships,
+        IQueryable<Caver> cavers)
         where T : class, IUserProfile
     {
         if (viewer is null)
@@ -48,37 +55,44 @@ public static class ProfileQueryExtensions
                 u.Id == userId
                 || u.RealNameVisibility == ProfileVisibility.Authenticated
                 || (u.RealNameVisibility == ProfileVisibility.CavingGroup
-                    && members.Any(m => m.UserId == u.Id && cavingGroupIds.Contains(m.CavingGroupId)))),
+                    && memberships.Any(m => cavingGroupIds.Contains(m.CavingGroupId)
+                        && cavers.Any(c => c.Id == m.CaverId && c.UserId == u.Id)))),
             ProfileField.Bio => users.Where(u =>
                 u.Id == userId
                 || u.BioVisibility == ProfileVisibility.Authenticated
                 || (u.BioVisibility == ProfileVisibility.CavingGroup
-                    && members.Any(m => m.UserId == u.Id && cavingGroupIds.Contains(m.CavingGroupId)))),
+                    && memberships.Any(m => cavingGroupIds.Contains(m.CavingGroupId)
+                        && cavers.Any(c => c.Id == m.CaverId && c.UserId == u.Id)))),
             ProfileField.Email => users.Where(u =>
                 u.Id == userId
                 || u.EmailVisibility == ProfileVisibility.Authenticated
                 || (u.EmailVisibility == ProfileVisibility.CavingGroup
-                    && members.Any(m => m.UserId == u.Id && cavingGroupIds.Contains(m.CavingGroupId)))),
+                    && memberships.Any(m => cavingGroupIds.Contains(m.CavingGroupId)
+                        && cavers.Any(c => c.Id == m.CaverId && c.UserId == u.Id)))),
             ProfileField.Phone => users.Where(u =>
                 u.Id == userId
                 || u.PhoneVisibility == ProfileVisibility.Authenticated
                 || (u.PhoneVisibility == ProfileVisibility.CavingGroup
-                    && members.Any(m => m.UserId == u.Id && cavingGroupIds.Contains(m.CavingGroupId)))),
+                    && memberships.Any(m => cavingGroupIds.Contains(m.CavingGroupId)
+                        && cavers.Any(c => c.Id == m.CaverId && c.UserId == u.Id)))),
             ProfileField.CavingClub => users.Where(u =>
                 u.Id == userId
                 || u.CavingClubVisibility == ProfileVisibility.Authenticated
                 || (u.CavingClubVisibility == ProfileVisibility.CavingGroup
-                    && members.Any(m => m.UserId == u.Id && cavingGroupIds.Contains(m.CavingGroupId)))),
+                    && memberships.Any(m => cavingGroupIds.Contains(m.CavingGroupId)
+                        && cavers.Any(c => c.Id == m.CaverId && c.UserId == u.Id)))),
             ProfileField.Address => users.Where(u =>
                 u.Id == userId
                 || u.AddressVisibility == ProfileVisibility.Authenticated
                 || (u.AddressVisibility == ProfileVisibility.CavingGroup
-                    && members.Any(m => m.UserId == u.Id && cavingGroupIds.Contains(m.CavingGroupId)))),
+                    && memberships.Any(m => cavingGroupIds.Contains(m.CavingGroupId)
+                        && cavers.Any(c => c.Id == m.CaverId && c.UserId == u.Id)))),
             ProfileField.AddressPoint => users.Where(u =>
                 u.Id == userId
                 || u.AddressPointVisibility == ProfileVisibility.Authenticated
                 || (u.AddressPointVisibility == ProfileVisibility.CavingGroup
-                    && members.Any(m => m.UserId == u.Id && cavingGroupIds.Contains(m.CavingGroupId)))),
+                    && memberships.Any(m => cavingGroupIds.Contains(m.CavingGroupId)
+                        && cavers.Any(c => c.Id == m.CaverId && c.UserId == u.Id)))),
             // A field added to the enum but not here must hide every row, never show them all.
             _ => users.Where(_ => false),
         };

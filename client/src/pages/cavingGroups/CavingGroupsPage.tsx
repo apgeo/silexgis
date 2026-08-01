@@ -18,13 +18,13 @@ import {
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
+  useCavers,
   useCreateCavingGroup,
   useMe,
   useRemoveCavingGroupMember,
   useCavingGroupMembers,
   useCavingGroups,
   useUpsertCavingGroupMember,
-  useUserSearch,
   type CavingGroupInfo,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
@@ -35,48 +35,49 @@ function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () 
   const { data: members } = useCavingGroupMembers(group.id);
   const upsert = useUpsertCavingGroupMember(group.id);
   const remove = useRemoveCavingGroupMember(group.id);
-  const [userQuery, setUserQuery] = useState('');
-  const debounced = useDebouncedValue(userQuery);
-  const { data: users } = useUserSearch(debounced);
-  const [selectedUser, setSelectedUser] = useState<string>();
+  const [caverQuery, setCaverQuery] = useState('');
+  const debounced = useDebouncedValue(caverQuery);
+  const { data: cavers } = useCavers(debounced || undefined);
+  const [selectedCaver, setSelectedCaver] = useState<string>();
 
+  // A roster lists people, so the picker searches people — including those with no account,
+  // who are exactly the members a club list would otherwise lose.
   const candidates = useMemo(
-    () => (users ?? []).filter((user) => !members?.some((m) => m.userId === user.id)),
-    [users, members],
+    () => (cavers ?? []).filter((caver) => !members?.some((m) => m.caverId === caver.id)),
+    [cavers, members],
   );
 
   const add = async () => {
-    if (!selectedUser) {
+    if (!selectedCaver) {
       return;
     }
     try {
-      await upsert.mutateAsync({ userId: selectedUser, role: 'member' });
-      setSelectedUser(undefined);
-      setUserQuery('');
+      await upsert.mutateAsync({ caverId: selectedCaver, role: 'member' });
+      setSelectedCaver(undefined);
+      setCaverQuery('');
     } catch {
       message.error(t('common.saveFailed'));
     }
   };
 
   return (
-    <Drawer title={group.name} open onClose={onClose} width={420}>
+    <Drawer title={group.name} open onClose={onClose} width={460}>
       <Flex gap={8} style={{ marginBottom: 12 }}>
         <Select
           style={{ flex: 1 }}
           showSearch
           filterOption={false}
-          placeholder={t('permissions.pickUser')}
-          value={selectedUser}
-          onSearch={setUserQuery}
-          onChange={setSelectedUser}
-          options={candidates.map((user) => ({
-            value: user.id,
-            // The address is only present when the person shares it; the label always is.
-            label: user.email ? `${user.label} (${user.email})` : user.label,
+          placeholder={t('cavers.pick')}
+          value={selectedCaver}
+          onSearch={setCaverQuery}
+          onChange={setSelectedCaver}
+          options={candidates.map((caver) => ({
+            value: caver.id,
+            label: caver.name,
           }))}
           notFoundContent={null}
         />
-        <Button icon={<PlusOutlined />} onClick={() => void add()} disabled={!selectedUser}>
+        <Button icon={<PlusOutlined />} onClick={() => void add()} disabled={!selectedCaver}>
           {t('cavingGroups.addMember')}
         </Button>
       </Flex>
@@ -92,7 +93,7 @@ function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () 
                 value={member.role}
                 style={{ width: 110 }}
                 onChange={(role) =>
-                  upsert.mutateAsync({ userId: member.userId, role }).catch(() =>
+                  upsert.mutateAsync({ caverId: member.caverId, role }).catch(() =>
                     message.error(t('common.saveFailed')),
                   )
                 }
@@ -105,14 +106,17 @@ function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () 
                 key="remove"
                 title={t('cavingGroups.removeConfirm')}
                 onConfirm={() =>
-                  remove.mutateAsync(member.userId).catch(() => message.error(t('common.saveFailed')))
+                  remove.mutateAsync(member.caverId).catch(() => message.error(t('common.saveFailed')))
                 }
               >
                 <Button size="small" type="text" danger icon={<DeleteOutlined />} />
               </Popconfirm>,
             ]}
           >
-            {member.displayName}
+            <Flex gap={8} align="center">
+              {member.name}
+              {!member.userId && <Tag>{t('cavers.noAccount')}</Tag>}
+            </Flex>
           </List.Item>
         )}
       />

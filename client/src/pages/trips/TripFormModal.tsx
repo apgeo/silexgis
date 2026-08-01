@@ -5,6 +5,7 @@ import { App, Button, DatePicker, Flex, Form, Input, Modal, Select, TimePicker }
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {
+  useCavingGroups,
   useSearch,
   useCreateTripLog,
   useUpdateTripLog,
@@ -27,13 +28,13 @@ interface FormValues {
   entryTime?: Dayjs | null;
   exitTime?: Dayjs | null;
   locationText?: string;
-  organizingClub?: string;
+  organizingCavingGroupId?: string;
   description?: string;
   results?: string;
   weather?: string;
   caveIds: string[];
-  participants: { nameText: string }[];
-  proposers: { nameText: string }[];
+  participants: { caverId?: string; name: string }[];
+  proposers: { caverId?: string; name: string }[];
   visibility: TripLogInfo['visibility'];
 }
 
@@ -48,11 +49,26 @@ const TRIP_TYPES: TripType[] = [
   'other',
 ];
 
+// An untouched row still points at its person; a typed one carries a name for the server to add
+// to the roster. Blank rows are dropped rather than creating someone with no name.
+const toParticipants = (rows: { caverId?: string; name: string }[]) =>
+  rows
+    .filter((row) => row.caverId != null || row.name.trim().length > 0)
+    .map((row) =>
+      row.caverId != null
+        ? { caverId: row.caverId, newCaverName: null }
+        : { caverId: null, newCaverName: row.name.trim() },
+    );
+
 // Server times are wall-clock "HH:mm:ss"; parse via an ISO instant so no dayjs parse plugin is needed.
 const parseTime = (value: string | null | undefined): Dayjs | null =>
   value ? dayjs(`1970-01-01T${value}`) : null;
 
-/** A Form.List of free-text names, shared by the participants and proposers fields. */
+/**
+ * A Form.List of people, shared by the participants and proposers fields. A row that came from
+ * the trip keeps the person it refers to; a row typed in names someone new, who is added to the
+ * roster on save so later trips can pick them rather than retype them.
+ */
 function NameListField({ name, addLabel, placeholder }: { name: string; addLabel: string; placeholder: string }) {
   const { t } = useTranslation();
   return (
@@ -62,7 +78,7 @@ function NameListField({ name, addLabel, placeholder }: { name: string; addLabel
           {fields.map((field) => (
             <Flex key={field.key} gap={8}>
               <Form.Item
-                name={[field.name, 'nameText']}
+                name={[field.name, 'name']}
                 noStyle
                 rules={[{ required: true, message: t('trips.participantRequired') }]}
               >
@@ -71,7 +87,7 @@ function NameListField({ name, addLabel, placeholder }: { name: string; addLabel
               <Button icon={<DeleteOutlined />} onClick={() => remove(field.name)} />
             </Flex>
           ))}
-          <Button icon={<PlusOutlined />} onClick={() => add({ nameText: '' })} block>
+          <Button icon={<PlusOutlined />} onClick={() => add({ name: '' })} block>
             {addLabel}
           </Button>
         </Flex>
@@ -94,6 +110,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
   const updateTrip = useUpdateTripLog();
 
   const [caveQuery, setCaveQuery] = useState('');
+  const { data: cavingGroups } = useCavingGroups();
   const debouncedCaveQuery = useDebouncedValue(caveQuery);
   // A trip is logged against caves, and the server's hit budget is shared across kinds —
   // ask for caves so commoner kinds cannot crowd them out of the answer.
@@ -132,17 +149,13 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           entryTime: parseTime(trip.entryTime),
           exitTime: parseTime(trip.exitTime),
           locationText: trip.locationText ?? undefined,
-          organizingClub: trip.organizingClub ?? undefined,
+          organizingCavingGroupId: trip.organizingCavingGroupId ?? undefined,
           description: trip.description ?? undefined,
           results: trip.results ?? undefined,
           weather: trip.weatherConditions ?? undefined,
           caveIds: [...trip.caveIds],
-          participants: trip.participants
-            .filter((p) => p.userId == null)
-            .map((p) => ({ nameText: p.nameText ?? '' })),
-          proposers: trip.proposers
-            .filter((p) => p.userId == null)
-            .map((p) => ({ nameText: p.nameText ?? '' })),
+          participants: trip.participants.map((p) => ({ caverId: p.caverId, name: p.name })),
+          proposers: trip.proposers.map((p) => ({ caverId: p.caverId, name: p.name })),
           visibility: trip.visibility,
         });
       } else {
@@ -173,24 +186,11 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
       results: values.results?.trim() || null,
       weatherConditions: values.weather?.trim() || null,
       locationText: values.locationText?.trim() || null,
-      organizingClub: values.organizingClub?.trim() || null,
+      organizingCavingGroupId: values.organizingCavingGroupId ?? null,
       geom: trip?.geom ?? null,
       caveIds: values.caveIds,
-      participants: [
-        // Keep registered-user participants untouched; free-text ones come from the form.
-        ...(trip?.participants.filter((p) => p.userId != null)
-          .map((p) => ({ userId: p.userId, nameText: null })) ?? []),
-        ...values.participants
-          .filter((p) => p.nameText.trim().length > 0)
-          .map((p) => ({ userId: null, nameText: p.nameText.trim() })),
-      ],
-      proposers: [
-        ...(trip?.proposers.filter((p) => p.userId != null)
-          .map((p) => ({ userId: p.userId, nameText: null })) ?? []),
-        ...values.proposers
-          .filter((p) => p.nameText.trim().length > 0)
-          .map((p) => ({ userId: null, nameText: p.nameText.trim() })),
-      ],
+      participants: toParticipants(values.participants),
+      proposers: toParticipants(values.proposers),
       cavingGroupId: trip?.cavingGroupId ?? null,
       visibility: values.visibility,
     };
@@ -252,8 +252,17 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           <Form.Item name="locationText" label={t('trips.location')} style={{ flex: 1 }}>
             <Input maxLength={300} />
           </Form.Item>
-          <Form.Item name="organizingClub" label={t('trips.organizingClub')} style={{ flex: 1 }}>
-            <Input maxLength={200} />
+          <Form.Item
+            name="organizingCavingGroupId"
+            label={t('trips.organizingCavingGroup')}
+            style={{ flex: 1 }}
+          >
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={(cavingGroups ?? []).map((group) => ({ value: group.id, label: group.name }))}
+            />
           </Form.Item>
         </Flex>
         <Form.Item name="caveIds" label={t('trips.caves')}>

@@ -46,8 +46,8 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
 
     public string? LocationText { get; set; }
 
-    /// <summary>Free-text organizing club/organization (external clubs need not be a <see cref="CavingGroup"/>).</summary>
-    public string? OrganizingClub { get; set; }
+    /// <summary>The caving group that organized the trip, when one did.</summary>
+    public Guid? OrganizingCavingGroupId { get; set; }
 
     public Geometry? Geom { get; set; }
 
@@ -89,11 +89,16 @@ public enum TripParticipantKind : short
 }
 
 /// <summary>
-/// A person tied to a trip — either a registered user or a free-text name for people
-/// without accounts (exactly one of the two is set, DB check constraint). The same
-/// identity model serves both attendees and proposers, distinguished by <see cref="Kind"/>;
-/// one person may appear once as each.
+/// A person tied to a trip, named through the roster. The same identity model serves both
+/// attendees and proposers, distinguished by <see cref="Kind"/>; one person may appear once
+/// as each.
 /// </summary>
+/// <remarks>
+/// Pointing at a caver rather than carrying an account id beside a free-text name is what makes
+/// per-person history work for the majority who never sign in: "which caves has this person been
+/// to" is one join whether or not they have an account. A caver named on a trip cannot be
+/// deleted — the roster offers merging two entries for the same person instead.
+/// </remarks>
 public class TripLogParticipant : IAuditable, IAuditChild
 {
     public long Id { get; set; }
@@ -102,9 +107,7 @@ public class TripLogParticipant : IAuditable, IAuditChild
 
     public TripParticipantKind Kind { get; set; } = TripParticipantKind.Participant;
 
-    public Guid? UserId { get; set; }
-
-    public string? NameText { get; set; }
+    public Guid CaverId { get; set; }
 
     public string AuditId => Id.ToString();
 

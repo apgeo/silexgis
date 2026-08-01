@@ -23,7 +23,7 @@ public sealed record PublicProfile(
     string? LastName,
     string? Email,
     string? PhoneNumber,
-    string? CavingClub,
+    Guid? CavingClubId,
     string? Bio,
     IReadOnlyList<PublicAddress> Addresses);
 

@@ -22,14 +22,35 @@ public sealed class CavingGroupConfiguration : IEntityTypeConfiguration<CavingGr
     }
 }
 
-public sealed class CavingGroupMemberConfiguration : IEntityTypeConfiguration<CavingGroupMember>
+public sealed class CaverConfiguration : IEntityTypeConfiguration<Caver>
 {
-    public void Configure(EntityTypeBuilder<CavingGroupMember> builder)
+    public void Configure(EntityTypeBuilder<Caver> builder)
     {
-        builder.ToTable("caving_group_members");
+        builder.ToTable("cavers");
+        builder.Property(x => x.Id).ValueGeneratedNever(); // uuid v7 generated app-side
+        builder.Property(x => x.FullName).HasMaxLength(200);
+        builder.Property(x => x.Email).HasMaxLength(320);
+        builder.Property(x => x.Phone).HasMaxLength(40);
+
+        // One account at most per person, and severing the account keeps the person: their trips,
+        // credits and roster membership outlive the login.
+        builder.HasIndex(x => x.UserId).IsUnique();
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasIndex(x => x.FullName);
+    }
+}
+
+public sealed class CavingGroupMembershipConfiguration : IEntityTypeConfiguration<CavingGroupMembership>
+{
+    public void Configure(EntityTypeBuilder<CavingGroupMembership> builder)
+    {
+        builder.ToTable("caving_group_memberships");
         builder.Property(x => x.Role).HasConversion<short>();
-        builder.HasIndex(x => new { x.CavingGroupId, x.UserId }).IsUnique();
+        builder.HasIndex(x => new { x.CaverId, x.CavingGroupId }).IsUnique();
+        builder.HasIndex(x => x.CavingGroupId);
+        builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.CavingGroupId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 }

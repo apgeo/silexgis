@@ -9,7 +9,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using SilexGis.Api.Common;
 using SilexGis.Infrastructure.Identity;
+using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests.Support;
 
@@ -28,6 +30,14 @@ public static class AuthHelper
         var user = new SilexGisUser { UserName = email, Email = email, EmailConfirmed = true };
         (await userManager.CreateAsync(user, Password)).Succeeded.ShouldBeTrue($"user create failed for {email}");
         (await userManager.AddToRoleAsync(user, role)).Succeeded.ShouldBeTrue($"role assign failed for {email}");
+
+        // Registration gives every account a roster entry, so accounts made the short way here
+        // must have one too — otherwise tests would exercise a state the application never
+        // produces, and membership (which hangs off the person) would have nothing to attach to.
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        CaverDirectory.CreateForNewAccount(db, user.Id, user.DisplayName, user.UserName, user.Email);
+        await db.SaveChangesAsync();
+
         return user.Id;
     }
 

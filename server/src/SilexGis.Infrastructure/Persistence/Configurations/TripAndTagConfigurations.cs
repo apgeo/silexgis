@@ -17,7 +17,8 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
         builder.Property(x => x.Type).HasConversion<short>();
         builder.Property(x => x.WeatherConditions).HasMaxLength(300);
         builder.Property(x => x.LocationText).HasMaxLength(300);
-        builder.Property(x => x.OrganizingClub).HasMaxLength(200);
+        builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.OrganizingCavingGroupId)
+            .OnDelete(DeleteBehavior.SetNull);
         builder.Property(x => x.Visibility).HasConversion<short>();
         builder.Property(x => x.Geom).HasColumnType("geometry(Geometry, 4326)");
 
@@ -48,14 +49,13 @@ public sealed class TripLogParticipantConfiguration : IEntityTypeConfiguration<T
     {
         builder.ToTable("trip_log_participants");
         builder.Property(x => x.Kind).HasConversion<short>();
-        builder.Property(x => x.NameText).HasMaxLength(200);
         builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        // Restrict, not cascade: removing someone from the roster must not quietly rewrite the
+        // history of the trips they were on. Merging their duplicate entry is the way out.
+        builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => x.TripLogId);
-        // Exactly one of user_id / name_text per row.
-        builder.ToTable(t => t.HasCheckConstraint(
-            "ck_trip_log_participants_one_identity",
-            "(user_id IS NULL) <> (name_text IS NULL)"));
+        builder.HasIndex(x => x.CaverId);
+        builder.HasIndex(x => new { x.TripLogId, x.Kind, x.CaverId }).IsUnique();
     }
 }
 

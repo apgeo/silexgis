@@ -2,8 +2,10 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Infrastructure.Identity;
+using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Auth;
 
@@ -33,7 +35,8 @@ public sealed record ExternalFederationResult(SilexGisUser? User, string? ErrorC
 /// </summary>
 public sealed class ExternalAuthService(
     UserManager<SilexGisUser> userManager,
-    IOptions<AuthOptions> authOptions)
+    IOptions<AuthOptions> authOptions,
+    SilexGisDbContext db)
 {
     public async Task<ExternalFederationResult> FederateAsync(
         string loginProvider, string providerKey, ClaimsPrincipal principal, ExternalProviderOptions provider)
@@ -94,6 +97,9 @@ public sealed class ExternalAuthService(
         }
 
         await userManager.AddToRoleAsync(user, authOptions.Value.DefaultRole);
+        CaverDirectory.CreateForNewAccount(db, user.Id, user.DisplayName, user.UserName, user.Email);
+        await db.SaveChangesAsync();
+
         var addLogin = await userManager.AddLoginAsync(user, login);
         return addLogin.Succeeded
             ? ExternalFederationResult.Success(user)

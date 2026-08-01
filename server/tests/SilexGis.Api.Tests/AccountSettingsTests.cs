@@ -84,7 +84,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
     {
         var response = await me.PutAsJsonAsync("/api/v1/me", ProfileBody(
             firstName: "Ana", lastName: "Pop", displayName: "Ana P", bio: "Caver since 2010.",
-            phoneNumber: "+40 700 111 222", cavingClub: "Silex Braşov", locale: "ro",
+            phoneNumber: "+40 700 111 222", locale: "ro",
             realName: "cavingGroup", email: "authenticated"));
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 
@@ -93,7 +93,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         profile.GetProperty("lastName").GetString().ShouldBe("Pop");
         profile.GetProperty("displayName").GetString().ShouldBe("Ana P");
         profile.GetProperty("phoneNumber").GetString().ShouldBe("+40 700 111 222");
-        profile.GetProperty("cavingClub").GetString().ShouldBe("Silex Braşov");
+
         profile.GetProperty("locale").GetString().ShouldBe("ro");
         profile.GetProperty("visibility").GetProperty("realName").GetString().ShouldBe("cavingGroup");
         profile.GetProperty("visibility").GetProperty("email").GetString().ShouldBe("authenticated");
@@ -369,7 +369,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task Data_export_builds_an_archive_of_personal_data_only()
     {
-        await me.PutAsJsonAsync("/api/v1/me", ProfileBody(firstName: "Ana", cavingClub: "Silex Braşov"));
+        await me.PutAsJsonAsync("/api/v1/me", ProfileBody(firstName: "Ana"));
         await me.PostAsJsonAsync("/api/v1/me/addresses/", NewAddress("Home"));
 
         var requested = await me.PostAsync("/api/v1/me/data-export/", null);
@@ -465,7 +465,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         string? displayName = null,
         string? bio = null,
         string? phoneNumber = null,
-        string? cavingClub = null,
+        Guid? cavingClubId = null,
         string locale = "en",
         string realName = "private",
         string email = "private") => new
@@ -475,7 +475,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
             displayName,
             bio,
             phoneNumber,
-            cavingClub,
+            cavingClubId,
             locale,
             visibility = new
             {

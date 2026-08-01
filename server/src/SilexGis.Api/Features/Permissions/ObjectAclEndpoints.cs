@@ -245,11 +245,10 @@ public static class ObjectAclEndpoints
         var cavingGroupIds = granted.Where(e => e.SubjectKind == AclSubjectKind.CavingGroup).Select(e => e.SubjectId).ToList();
         if (cavingGroupIds.Count > 0)
         {
-            var members = await db.CavingGroupMembers.AsNoTracking()
-                .Where(m => cavingGroupIds.Contains(m.CavingGroupId))
-                .Select(m => m.UserId)
-                .ToListAsync(ct);
-            recipients.UnionWith(members);
+            // Only the members who hold an account: a grant reaches people who can sign in to
+            // use it, and there is nobody to notify for the rest of the roster.
+            var members = await db.UsersOfCavingGroupsAsync(cavingGroupIds, ct);
+            recipients.UnionWith(members.Select(m => m.UserId));
         }
 
         // Granting yourself access, or being in a caving group you just granted, is not news.

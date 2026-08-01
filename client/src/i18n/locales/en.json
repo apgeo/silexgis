@@ -11,6 +11,7 @@
     "trips": "Trip logs",
     "audit": "Audit",
     "cavingGroups": "Caving groups",
+    "cavers": "Cavers",
     "settings": "Settings",
     "messaging": "Messaging",
     "templates": "Message texts"
@@ -456,7 +457,7 @@
     "caves": "Caves",
     "participants": "Participants",
     "participantName": "Participant name",
-    "participantRequired": "Name is required",
+    "participantRequired": "Enter a name",
     "addParticipant": "Add participant",
     "proposers": "Proposed by",
     "proposerName": "Proposer name",
@@ -464,7 +465,8 @@
     "results": "Results / observations",
     "weather": "Weather / conditions",
     "deleteConfirm": "Delete this trip log?",
-    "searchPlaceholder": "Search by title…"
+    "searchPlaceholder": "Search by title…",
+    "organizingCavingGroup": "Organizing caving group"
   },
   "tags": {
     "title": "Tags",
@@ -538,6 +540,25 @@
       "admin": "Admin",
       "owner": "Owner"
     }
+  },
+  "cavers": {
+    "title": "Cavers",
+    "new": "New caver",
+    "edit": "Edit caver",
+    "name": "Name",
+    "email": "Email",
+    "phone": "Phone",
+    "notes": "Notes",
+    "notesHint": "Only people who keep the roster can read these.",
+    "search": "Search by name…",
+    "pick": "Find a caver…",
+    "noAccount": "No account",
+    "cavingGroups": "Caving groups",
+    "merge": "Merge",
+    "mergeInto": "Merge into {{name}}",
+    "mergeHint": "Pick the duplicate entry to fold in. Their trips and caving groups move across, and the duplicate is removed.",
+    "deleteConfirm": "Remove this person from the roster?",
+    "deleteRefused": "This person is named on trips. Merge their duplicate entry instead."
   },
   "permissions": {
     "title": "Permissions",

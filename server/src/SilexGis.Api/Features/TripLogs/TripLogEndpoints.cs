@@ -248,7 +248,7 @@ public static class TripLogEndpoints
         trip.Results = request.Results;
         trip.WeatherConditions = request.WeatherConditions;
         trip.LocationText = request.LocationText;
-        trip.OrganizingClub = request.OrganizingClub;
+        trip.OrganizingCavingGroupId = request.OrganizingCavingGroupId;
         trip.Geom = request.Geom?.ToGeometryOrNull();
         trip.CavingGroupId = request.CavingGroupId;
         trip.Visibility = request.Visibility;
@@ -295,39 +295,71 @@ public static class TripLogEndpoints
         SilexGisDbContext db, Guid tripId, TripParticipantKind kind, IReadOnlyList<TripParticipantWrite> requested, CancellationToken ct)
     {
         var existing = await db.TripLogParticipants.Where(x => x.TripLogId == tripId && x.Kind == kind).ToListAsync(ct);
-        var desired = requested
-            .Select(p => (p.UserId, NameText: p.UserId is null ? p.NameText!.Trim() : null))
+
+        // A name with no roster entry becomes one, so the person can be counted and found again
+        // on later trips. Repeating a name already in the roster reuses it rather than making a
+        // second entry for the same person.
+        var named = requested
+            .Where(p => p.CaverId is null)
+            .Select(p => p.NewCaverName!.Trim())
+            .Where(name => name.Length > 0)
             .ToList();
+
+        var matched = named.Count == 0
+            ? []
+            : await db.Cavers.Where(c => named.Contains(c.FullName)).ToDictionaryAsync(c => c.FullName, c => c.Id, ct);
+
+        var desired = new List<Guid>();
+        foreach (var write in requested)
+        {
+            if (write.CaverId is { } caverId)
+            {
+                desired.Add(caverId);
+                continue;
+            }
+
+            var name = write.NewCaverName!.Trim();
+            if (!matched.TryGetValue(name, out var existingId))
+            {
+                var created = new Caver { FullName = name };
+                db.Cavers.Add(created);
+                matched[name] = created.Id;
+                existingId = created.Id;
+            }
+
+            desired.Add(existingId);
+        }
+
+        desired = [.. desired.Distinct()];
 
         // Keep one existing row per matching desired slot (by user id / guest name); remove the
         // rest and add the desired entries that had no match — so unchanged participants neither
         // churn nor generate spurious history events.
         foreach (var participant in existing)
         {
-            var idx = desired.FindIndex(d => d.UserId == participant.UserId && d.NameText == participant.NameText);
-            if (idx >= 0)
+            if (desired.Remove(participant.CaverId))
             {
-                desired.RemoveAt(idx);
+                continue;
             }
-            else
-            {
-                db.TripLogParticipants.Remove(participant);
-            }
+
+            db.TripLogParticipants.Remove(participant);
         }
 
-        foreach (var (userId, nameText) in desired)
+        foreach (var caverId in desired)
         {
             db.TripLogParticipants.Add(new TripLogParticipant
             {
                 TripLogId = tripId,
                 Kind = kind,
-                UserId = userId,
-                NameText = nameText,
+                CaverId = caverId,
             });
         }
 
-        // Guests are free text with no account, so there is nobody to tell.
-        return [.. desired.Where(d => d.UserId is not null).Select(d => d.UserId!.Value)];
+        // Only the newly listed people who hold an account: there is nobody to tell for the rest.
+        return await db.Cavers
+            .Where(c => desired.Contains(c.Id) && c.UserId != null)
+            .Select(c => c.UserId!.Value)
+            .ToListAsync(ct);
     }
 
     /// <summary>
@@ -404,12 +436,12 @@ public static class TripLogEndpoints
             }
         }
 
-        var userIds = request.Participants.Concat(request.Proposers ?? [])
-            .Where(x => x.UserId is not null).Select(x => x.UserId!.Value).Distinct().ToList();
-        if (userIds.Count > 0)
+        var caverIds = request.Participants.Concat(request.Proposers ?? [])
+            .Where(x => x.CaverId is not null).Select(x => x.CaverId!.Value).Distinct().ToList();
+        if (caverIds.Count > 0)
         {
-            var found = await ProfileDirectory.ExistingIdsAsync(db, userIds, ct);
-            if (found.Count != userIds.Count)
+            var found = await db.Cavers.Where(c => caverIds.Contains(c.Id)).Select(c => c.Id).ToListAsync(ct);
+            if (found.Count != caverIds.Count)
             {
                 return ApiProblems.BadRequest("trip_log.participant_unknown", "A participant user does not exist.");
             }
@@ -432,24 +464,26 @@ public static class TripLogEndpoints
             .Where(x => tripIds.Contains(x.TripLogId))
             .ToListAsync(ct);
 
-        var participantRows = await db.TripLogParticipants.AsNoTracking()
-            .Where(x => tripIds.Contains(x.TripLogId))
-            .Select(x => new { x.TripLogId, x.Kind, x.UserId, x.NameText })
+        var participantRows = await (
+            from participant in db.TripLogParticipants.AsNoTracking()
+            join caver in db.Cavers.AsNoTracking() on participant.CaverId equals caver.Id
+            where tripIds.Contains(participant.TripLogId)
+            select new { participant.TripLogId, participant.Kind, participant.CaverId, caver.UserId })
             .ToListAsync(ct);
 
         // Resolved rather than joined: the label a participant may be shown under is a rule with
-        // one home, and it is never their address. A participant recorded as free text keeps it.
-        var labels = await ProfileDirectory.ResolveLabelsAsync(
-            db, user, participantRows.Where(x => x.UserId is not null).Select(x => x.UserId!.Value), ct);
+        // one home, and it is never their address. People without an account keep their roster name.
+        var labels = await CaverDirectory.ResolveLabelsAsync(
+            db, user, participantRows.Select(x => x.CaverId), ct);
 
         var participants = participantRows
             .Select(x => new
             {
                 x.TripLogId,
                 x.Kind,
+                x.CaverId,
                 x.UserId,
-                x.NameText,
-                DisplayName = x.UserId is { } participant ? labels.GetValueOrDefault(participant) : null,
+                Name = labels.GetValueOrDefault(x.CaverId) ?? string.Empty,
             })
             .ToList();
 
@@ -469,13 +503,13 @@ public static class TripLogEndpoints
             trip.Results,
             trip.WeatherConditions,
             trip.LocationText,
-            trip.OrganizingClub,
+            trip.OrganizingCavingGroupId,
             trip.Geom is null ? null : GeoJsonGeometry.From(trip.Geom),
             [.. caveLinks.Where(x => x.TripLogId == trip.Id && !redacted.Contains(x.CaveId)).Select(x => x.CaveId)],
             [.. participants.Where(x => x.TripLogId == trip.Id && x.Kind == TripParticipantKind.Participant)
-                .Select(x => new TripParticipantDto(x.UserId, x.NameText, x.DisplayName ?? x.NameText))],
+                .Select(x => new TripParticipantDto(x.CaverId, x.Name, x.UserId))],
             [.. participants.Where(x => x.TripLogId == trip.Id && x.Kind == TripParticipantKind.Proposer)
-                .Select(x => new TripParticipantDto(x.UserId, x.NameText, x.DisplayName ?? x.NameText))],
+                .Select(x => new TripParticipantDto(x.CaverId, x.Name, x.UserId))],
             trip.OwnerUserId,
             trip.CavingGroupId,
             trip.Visibility,

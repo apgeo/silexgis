@@ -34,7 +34,7 @@ public class SilexGisUser : IdentityUser<Guid>, ITimestamped, IUserProfile
 
     public string? LastName { get; set; }
 
-    public string? CavingClub { get; set; }
+    public Guid? CavingClubId { get; set; }
 
     public Guid? AvatarFileId { get; set; }
 

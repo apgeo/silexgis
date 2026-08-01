@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Auth;
 using SilexGis.Domain.Messaging;
@@ -183,6 +184,7 @@ public static class AuthEndpoints
         IAppSettingsService settings,
         IMessageDispatcher dispatcher,
         IConfiguration configuration,
+        SilexGisDbContext db,
         CancellationToken ct)
     {
         if (!options.Value.OpenRegistration)
@@ -204,6 +206,9 @@ public static class AuthEndpoints
         }
 
         await userManager.AddToRoleAsync(user, options.Value.DefaultRole);
+
+        CaverDirectory.CreateForNewAccount(db, user.Id, user.DisplayName, user.UserName, user.Email);
+        await db.SaveChangesAsync(ct);
 
         var policy = await settings.GetSecurityAsync(ct);
         var confirmationSent = false;

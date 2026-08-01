@@ -106,7 +106,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
         var cavingGroupId = await CreateCavingGroupAsync();
         (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members", new
         {
-            userId = granteeId,
+            caverId = await RosterHelper.CaverIdForAsync(factory, granteeId),
             role = "member",
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -127,9 +127,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
         // this test's cave (the full caller matrix lives in the parity suite).
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var cavingGroups = await db.CavingGroupMembers.Where(m => m.UserId == granteeId)
-            .ToDictionaryAsync(m => m.CavingGroupId, m => m.Role);
-        var user = new UserContext(granteeId, new HashSet<string>(), cavingGroups);
+        var user = await RosterHelper.ContextOfAsync(db, granteeId);
 
         var efIds = await db.Features.VisibleTo(user, db.ObjectAcls)
             .Where(f => f.Id == caveId).Select(f => f.Id).ToListAsync();
@@ -153,7 +151,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
         var cavingGroupId = await CreateCavingGroupAsync();
         (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members", new
         {
-            userId = granteeId,
+            caverId = await RosterHelper.CaverIdForAsync(factory, granteeId),
             role = "member",
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -191,9 +189,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
         // EF <-> SQL parity for the caving group arm specifically.
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var cavingGroups = await db.CavingGroupMembers.Where(m => m.UserId == granteeId)
-            .ToDictionaryAsync(m => m.CavingGroupId, m => m.Role);
-        var user = new UserContext(granteeId, new HashSet<string>(), cavingGroups);
+        var user = await RosterHelper.ContextOfAsync(db, granteeId);
         var efIds = await db.Features.VisibleTo(user, db.ObjectAcls)
             .Where(f => f.Id == caveId).Select(f => f.Id).ToListAsync();
         var (fragment, parameters) = PermissionSql.FeatureVisibleToFragment(user, "f");

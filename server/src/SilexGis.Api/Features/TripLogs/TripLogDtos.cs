@@ -6,9 +6,15 @@ using SilexGis.Domain.Entities;
 
 namespace SilexGis.Api.Features.TripLogs;
 
-public sealed record TripParticipantDto(Guid? UserId, string? NameText, string? DisplayName);
+/// <summary>A person on a trip: their roster id, the name to show, and their account if any.</summary>
+public sealed record TripParticipantDto(Guid CaverId, string Name, Guid? UserId);
 
-public sealed record TripParticipantWrite(Guid? UserId, string? NameText);
+/// <summary>
+/// Someone to put on a trip: an existing roster entry, or a name to add one for. Naming a person
+/// who is not in the roster yet is how a trip records the people who never sign in — the author
+/// needs no roster-keeping rights for it, only the right to write the trip.
+/// </summary>
+public sealed record TripParticipantWrite(Guid? CaverId, string? NewCaverName);
 
 public sealed record TripLogDto(
     Guid Id,
@@ -22,7 +28,7 @@ public sealed record TripLogDto(
     string? Results,
     string? WeatherConditions,
     string? LocationText,
-    string? OrganizingClub,
+    Guid? OrganizingCavingGroupId,
     GeoJsonGeometry? Geom,
     IReadOnlyList<Guid> CaveIds,
     IReadOnlyList<TripParticipantDto> Participants,
@@ -44,7 +50,7 @@ public sealed record TripLogWriteRequest(
     string? Results,
     string? WeatherConditions,
     string? LocationText,
-    string? OrganizingClub,
+    Guid? OrganizingCavingGroupId,
     GeoJsonGeometry? Geom,
     IReadOnlyList<Guid> CaveIds,
     IReadOnlyList<TripParticipantWrite> Participants,
@@ -62,7 +68,7 @@ public sealed class TripLogWriteRequestValidator : AbstractValidator<TripLogWrit
         RuleFor(x => x.Results).MaximumLength(10000);
         RuleFor(x => x.WeatherConditions).MaximumLength(300);
         RuleFor(x => x.LocationText).MaximumLength(300);
-        RuleFor(x => x.OrganizingClub).MaximumLength(200);
+
         RuleFor(x => x.TripDateEnd)
             .GreaterThanOrEqualTo(x => x.TripDate)
             .When(x => x.TripDateEnd is not null)
@@ -82,9 +88,9 @@ public sealed class TripParticipantValidator : AbstractValidator<TripParticipant
     public TripParticipantValidator()
     {
         RuleFor(p => p)
-            .Must(p => (p.UserId is not null) ^ !string.IsNullOrWhiteSpace(p.NameText))
-            .WithMessage("Each person needs either a user or a name, not both.");
-        RuleFor(p => p.NameText)
+            .Must(p => (p.CaverId is not null) ^ !string.IsNullOrWhiteSpace(p.NewCaverName))
+            .WithMessage("Each person is either an existing caver or a new name, not both.");
+        RuleFor(p => p.NewCaverName)
             .MaximumLength(200)
             .WithMessage("Names are limited to 200 characters.");
     }

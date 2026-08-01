@@ -211,7 +211,7 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
         members.ShouldNotContain("@t.local");
         var row = JsonDocument.Parse(members).RootElement.EnumerateArray()
             .Single(m => m.GetProperty("userId").GetGuid() == groupMateId);
-        row.GetProperty("displayName").GetString().ShouldStartWith("user-");
+        row.GetProperty("name").GetString().ShouldStartWith("user-");
     }
 
     [Fact]
@@ -223,7 +223,7 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
 
         JsonDocument.Parse(members).RootElement.EnumerateArray()
             .Single(m => m.GetProperty("userId").GetGuid() == subjectId)
-            .GetProperty("displayName").GetString().ShouldBe("Ana P");
+            .GetProperty("name").GetString().ShouldBe("Ana P");
     }
 
     private async Task PublishAsync(
@@ -267,7 +267,8 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
 
         foreach (var userId in new[] { subjectId, groupMateId })
         {
-            (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members", new { userId, role = "Member" }))
+            (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members",
+                new { caverId = await RosterHelper.CaverIdForAsync(factory, userId), role = "Member" }))
                 .StatusCode.ShouldBe(HttpStatusCode.OK);
         }
 

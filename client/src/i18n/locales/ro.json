@@ -11,6 +11,7 @@
     "trips": "Jurnale de tură",
     "audit": "Istoric",
     "cavingGroups": "Grupuri de speologie",
+    "cavers": "Speologi",
     "settings": "Setări",
     "messaging": "Mesagerie",
     "templates": "Texte mesaje"
@@ -456,7 +457,7 @@
     "caves": "Peșteri",
     "participants": "Participanți",
     "participantName": "Nume participant",
-    "participantRequired": "Numele este obligatoriu",
+    "participantRequired": "Introduceți un nume",
     "addParticipant": "Adaugă participant",
     "proposers": "Propus de",
     "proposerName": "Nume propunător",
@@ -464,7 +465,8 @@
     "results": "Rezultate / observații",
     "weather": "Vreme / condiții",
     "deleteConfirm": "Ștergeți acest jurnal de tură?",
-    "searchPlaceholder": "Caută după titlu…"
+    "searchPlaceholder": "Caută după titlu…",
+    "organizingCavingGroup": "Grupul organizator"
   },
   "tags": {
     "title": "Etichete",
@@ -538,6 +540,25 @@
       "admin": "Administrator",
       "owner": "Proprietar"
     }
+  },
+  "cavers": {
+    "title": "Speologi",
+    "new": "Speolog nou",
+    "edit": "Editează speologul",
+    "name": "Nume",
+    "email": "Email",
+    "phone": "Telefon",
+    "notes": "Observații",
+    "notesHint": "Vizibile doar celor care administrează lista.",
+    "search": "Caută după nume…",
+    "pick": "Caută un speolog…",
+    "noAccount": "Fără cont",
+    "cavingGroups": "Grupuri de speologie",
+    "merge": "Unifică",
+    "mergeInto": "Unifică în {{name}}",
+    "mergeHint": "Alegeți înregistrarea duplicat. Turele și grupurile sale trec la aceasta, iar duplicatul este eliminat.",
+    "deleteConfirm": "Eliminați această persoană din listă?",
+    "deleteRefused": "Persoana apare în ture. Unificați înregistrarea duplicat în loc."
   },
   "permissions": {
     "title": "Permisiuni",

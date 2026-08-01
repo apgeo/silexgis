@@ -29,7 +29,7 @@ public class ProfileProtectionTests
         public string? LastName { get; init; } = "Pop";
         public string? EmailValue { get; init; } = "ana@example.org";
         public string? PhoneNumberValue { get; init; } = "+40 700 111 222";
-        public string? CavingClub { get; init; } = "Silex Braşov";
+        public Guid? CavingClubId { get; init; } = Guid.CreateVersion7();
         public string? Bio { get; init; } = "Caver since 2010.";
         public Guid? AvatarFileId { get; init; }
         public string? AvatarPreset { get; init; } = "bat";
@@ -155,7 +155,7 @@ public class ProfileProtectionTests
         result.LastName.ShouldBeNull();
         result.Email.ShouldBeNull();
         result.PhoneNumber.ShouldBeNull();
-        result.CavingClub.ShouldBeNull();
+        result.CavingClubId.ShouldBeNull();
         result.Bio.ShouldBeNull();
         result.Addresses.ShouldBeEmpty();
         // The identity handles are never hidden — attribution rows depend on them.

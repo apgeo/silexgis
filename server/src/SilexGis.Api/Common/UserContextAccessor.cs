@@ -38,8 +38,14 @@ public sealed class UserContextAccessor(IHttpContextAccessor httpContextAccessor
             .Select(c => c.Value)
             .ToHashSet(StringComparer.Ordinal);
 
-        var cavingGroups = await db.CavingGroupMembers
-            .Where(m => m.UserId == userId)
+        // Membership is recorded for people, so the caller's groups come through their caver
+        // row. Someone with no roster entry simply belongs to nothing, which is the correct
+        // answer rather than an error: the account still works, it just joins no group.
+        var cavingGroups = await (
+            from membership in db.CavingGroupMemberships
+            join caver in db.Cavers on membership.CaverId equals caver.Id
+            where caver.UserId == userId
+            select membership)
             .ToDictionaryAsync(m => m.CavingGroupId, m => m.Role, ct);
 
         cached = new UserContext(userId, roles, cavingGroups);

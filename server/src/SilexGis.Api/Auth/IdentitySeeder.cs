@@ -2,8 +2,10 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
+using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Infrastructure.Identity;
+using SilexGis.Infrastructure.Persistence;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace SilexGis.Api.Auth;
@@ -21,7 +23,8 @@ public static class IdentitySeeder
         await SeedRolesAsync(services.GetRequiredService<RoleManager<SilexGisRole>>());
         await SeedAdminAsync(
             services.GetRequiredService<UserManager<SilexGisUser>>(),
-            services.GetRequiredService<IOptions<AdminBootstrapOptions>>().Value);
+            services.GetRequiredService<IOptions<AdminBootstrapOptions>>().Value,
+            services.GetRequiredService<SilexGisDbContext>());
         await SeedSpaClientAsync(
             services.GetRequiredService<IOpenIddictApplicationManager>(),
             configuration,
@@ -39,7 +42,8 @@ public static class IdentitySeeder
         }
     }
 
-    private static async Task SeedAdminAsync(UserManager<SilexGisUser> userManager, AdminBootstrapOptions options)
+    private static async Task SeedAdminAsync(
+        UserManager<SilexGisUser> userManager, AdminBootstrapOptions options, SilexGisDbContext db)
     {
         if (string.IsNullOrWhiteSpace(options.Email) || string.IsNullOrWhiteSpace(options.Password))
         {
@@ -67,6 +71,9 @@ public static class IdentitySeeder
         }
 
         _ = await userManager.AddToRoleAsync(admin, GlobalRoles.Admin);
+
+        CaverDirectory.CreateForNewAccount(db, admin.Id, admin.DisplayName, admin.UserName, admin.Email);
+        await db.SaveChangesAsync();
     }
 
     private static async Task SeedSpaClientAsync(

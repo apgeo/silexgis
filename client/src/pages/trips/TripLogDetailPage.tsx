@@ -5,6 +5,7 @@ import { App, Button, Card, Descriptions, Flex, Popconfirm, Spin, Tag, Typograph
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  useCavingGroups,
   useCave,
   useDeleteTripLog,
   useMe,
@@ -42,6 +43,8 @@ export default function TripLogDetailPage() {
   const { message } = App.useApp();
   const { id } = useParams<{ id: string }>();
   const { data: trip, isPending } = useTripLog(id);
+  const { data: cavingGroups } = useCavingGroups();
+  const organizingCavingGroup = cavingGroups?.find((g) => g.id === trip?.organizingCavingGroupId);
   const { data: me } = useMe();
   const deleteTrip = useDeleteTripLog();
   const updateTrip = useUpdateTripLog();
@@ -103,8 +106,10 @@ export default function TripLogDetailPage() {
           {trip.locationText && (
             <Descriptions.Item label={t('trips.location')}>{trip.locationText}</Descriptions.Item>
           )}
-          {trip.organizingClub && (
-            <Descriptions.Item label={t('trips.organizingClub')}>{trip.organizingClub}</Descriptions.Item>
+          {organizingCavingGroup && (
+            <Descriptions.Item label={t('trips.organizingCavingGroup')}>
+              {organizingCavingGroup.name}
+            </Descriptions.Item>
           )}
           {trip.caveIds.length > 0 && (
             <Descriptions.Item label={t('trips.caves')}>
@@ -118,8 +123,8 @@ export default function TripLogDetailPage() {
           {trip.participants.length > 0 && (
             <Descriptions.Item label={t('trips.participants')}>
               <Flex gap={4} wrap>
-                {trip.participants.map((p, index) => (
-                  <Tag key={index}>{p.displayName ?? p.nameText}</Tag>
+                {trip.participants.map((p) => (
+                  <Tag key={p.caverId}>{p.name}</Tag>
                 ))}
               </Flex>
             </Descriptions.Item>
@@ -127,8 +132,8 @@ export default function TripLogDetailPage() {
           {trip.proposers.length > 0 && (
             <Descriptions.Item label={t('trips.proposers')}>
               <Flex gap={4} wrap>
-                {trip.proposers.map((p, index) => (
-                  <Tag key={index}>{p.displayName ?? p.nameText}</Tag>
+                {trip.proposers.map((p) => (
+                  <Tag key={p.caverId}>{p.name}</Tag>
                 ))}
               </Flex>
             </Descriptions.Item>

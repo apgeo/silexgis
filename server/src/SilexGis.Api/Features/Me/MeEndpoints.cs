@@ -93,7 +93,7 @@ public static class MeEndpoints
         user.DisplayName = Trimmed(request.DisplayName);
         user.Bio = Trimmed(request.Bio);
         user.PhoneNumber = Trimmed(request.PhoneNumber);
-        user.CavingClub = Trimmed(request.CavingClub);
+        user.CavingClubId = request.CavingClubId;
         user.Locale = request.Locale;
 
         user.RealNameVisibility = request.Visibility.RealName;

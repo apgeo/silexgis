@@ -48,7 +48,7 @@ export default function AppLayout() {
   // "settings" is listed so an unmatched path does not fall through to highlighting the map.
   // It matches no menu item, so nothing lights up — settings is not a sidebar destination.
   const sections = [
-    'dashboard', 'caves', 'features', 'geodata', 'trip-logs', 'caving-groups',
+    'dashboard', 'caves', 'features', 'geodata', 'trip-logs', 'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'settings',
   ] as const;
   const selectedKey = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
@@ -132,6 +132,7 @@ export default function AppLayout() {
               { key: 'geodata', icon: <DatabaseOutlined />, label: t('nav.geodata') },
               { key: 'trip-logs', icon: <CarOutlined />, label: t('nav.trips') },
               { key: 'caving-groups', icon: <TeamOutlined />, label: t('nav.cavingGroups') },
+              { key: 'cavers', icon: <UserOutlined />, label: t('nav.cavers') },
               ...(isAdmin
                 ? [
                     { key: 'admin/audit', icon: <HistoryOutlined />, label: t('nav.audit') },

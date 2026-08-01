@@ -223,7 +223,7 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
     {
         (await manager.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/members", new
         {
-            userId,
+            caverId = await RosterHelper.CaverIdForAsync(factory, userId),
             role = "member",
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
@@ -309,10 +309,7 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
     /// <summary>The five caller contexts, with caving group memberships loaded from the database.</summary>
     private async Task<(string Name, UserContext User)[]> CallersAsync(SilexGisDbContext db)
     {
-        async Task<UserContext> ContextOf(Guid userId) => new(
-            userId,
-            new HashSet<string>(),
-            await db.CavingGroupMembers.Where(m => m.UserId == userId).ToDictionaryAsync(m => m.CavingGroupId, m => m.Role));
+        Task<UserContext> ContextOf(Guid userId) => RosterHelper.ContextOfAsync(db, userId);
 
         return
         [

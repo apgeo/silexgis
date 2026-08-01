@@ -15,7 +15,10 @@ public sealed class SilexGisUserConfiguration : IEntityTypeConfiguration<SilexGi
         builder.Property(x => x.Locale).HasMaxLength(10);
         builder.Property(x => x.FirstName).HasMaxLength(100);
         builder.Property(x => x.LastName).HasMaxLength(100);
-        builder.Property(x => x.CavingClub).HasMaxLength(200);
+        // The club someone declares on their profile, kept apart from the club rosters:
+        // this is their own statement about themselves, a membership row is the group's.
+        builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.CavingClubId)
+            .OnDelete(DeleteBehavior.SetNull);
         builder.Property(x => x.AvatarPreset).HasMaxLength(40);
         builder.Property(x => x.PendingEmail).HasMaxLength(256);
         builder.Property(x => x.PendingPhoneNumber).HasMaxLength(32);

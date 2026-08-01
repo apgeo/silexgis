@@ -27,7 +27,7 @@ public interface IUserProfile
 
     string? PhoneNumberValue { get; }
 
-    string? CavingClub { get; }
+    Guid? CavingClubId { get; }
 
     string? Bio { get; }
 

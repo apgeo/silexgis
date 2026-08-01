@@ -12,7 +12,9 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 {
     public DbSet<CavingGroup> CavingGroups => Set<CavingGroup>();
 
-    public DbSet<CavingGroupMember> CavingGroupMembers => Set<CavingGroupMember>();
+    public DbSet<CavingGroupMembership> CavingGroupMemberships => Set<CavingGroupMembership>();
+
+    public DbSet<Caver> Cavers => Set<Caver>();
 
     public DbSet<CaveType> CaveTypes => Set<CaveType>();
 

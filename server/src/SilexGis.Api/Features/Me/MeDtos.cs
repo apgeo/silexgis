@@ -58,7 +58,7 @@ public sealed record MeDto(
     string? DisplayName,
     string? Bio,
     string? PhoneNumber,
-    string? CavingClub,
+    Guid? CavingClubId,
     string Locale,
     string? AvatarUrl,
     string? AvatarPreset,
@@ -77,7 +77,7 @@ public sealed record MeUpdateRequest(
     string? DisplayName,
     string? Bio,
     string? PhoneNumber,
-    string? CavingClub,
+    Guid? CavingClubId,
     string Locale,
     ProfileVisibilityDto Visibility);
 
@@ -105,7 +105,6 @@ public sealed class MeUpdateRequestValidator : AbstractValidator<MeUpdateRequest
         RuleFor(x => x.LastName).MaximumLength(100);
         RuleFor(x => x.DisplayName).MaximumLength(100);
         RuleFor(x => x.Bio).MaximumLength(2000);
-        RuleFor(x => x.CavingClub).MaximumLength(200);
 
         // Permissive on purpose: international numbers are written many ways and the server has
         // no way to verify one. This rejects free text, not formatting choices.
@@ -185,7 +184,7 @@ internal static class MeMapping
             user.DisplayName,
             user.Bio,
             user.PhoneNumber,
-            user.CavingClub,
+            user.CavingClubId,
             user.Locale,
             AvatarUrl(user.AvatarFileId, tokens),
             user.AvatarPreset,

@@ -57,9 +57,9 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             var cavingGroup = new CavingGroup { Name = $"CavingGroup {suffix}", Slug = $"caving-group-{suffix}" };
             db.CavingGroups.Add(cavingGroup);
-            db.CavingGroupMembers.Add(new CavingGroupMember { CavingGroupId = cavingGroup.Id, UserId = ownerId, Role = CavingGroupRole.Owner });
-            db.CavingGroupMembers.Add(new CavingGroupMember { CavingGroupId = cavingGroup.Id, UserId = groupMateId, Role = CavingGroupRole.Member });
             await db.SaveChangesAsync();
+            await RosterHelper.AddMemberAsync(db, cavingGroup.Id, ownerId, CavingGroupRole.Owner);
+            await RosterHelper.AddMemberAsync(db, cavingGroup.Id, groupMateId);
             cavingGroupId = cavingGroup.Id;
             caveTypeId = await db.CaveTypes.Where(t => t.Code == "cave").Select(t => t.Id).SingleAsync();
             entranceTypeId = await db.EntranceTypes.Where(t => t.Code == "natural").Select(t => t.Id).SingleAsync();
@@ -492,9 +492,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var cavingGroups = await db.CavingGroupMembers.Where(m => m.UserId == userId)
-            .ToDictionaryAsync(m => m.CavingGroupId, m => m.Role);
-        var user = new UserContext(userId, new HashSet<string>(), cavingGroups);
+        var user = await RosterHelper.ContextOfAsync(db, userId);
 
         var efIds = await db.Features
             .Where(f => f.Kind == FeatureKind.Cave)

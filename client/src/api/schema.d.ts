@@ -5271,7 +5271,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** CavingGroup members with roles. */
+        /** Roster of the caving group, people with their roles. */
         get: {
             parameters: {
                 query?: never;
@@ -5328,7 +5328,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/caving-groups/{id}/members/{userId}": {
+    "/api/v1/caving-groups/{id}/members/{caverId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -5345,7 +5345,7 @@ export interface paths {
                 header?: never;
                 path: {
                     id: string;
-                    userId: string;
+                    caverId: string;
                 };
                 cookie?: never;
             };
@@ -5360,6 +5360,259 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cavers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The roster, filtered by an optional name search. */
+        get: {
+            parameters: {
+                query?: {
+                    search?: string;
+                    unlinked?: boolean;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaverDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Adds a person to the roster. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CaverWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaverDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cavers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One person, with their caving groups. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaverDto"];
+                    };
+                };
+            };
+        };
+        /** Edits a person's roster entry. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CaverWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaverDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Removes a person, refused while trips still name them. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cavers/{id}/account-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Attaches a user account to this person. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CaverAccountLinkRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaverDto"];
+                    };
+                };
+            };
+        };
+        /** Detaches the user account, keeping the person. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaverDto"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cavers/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Folds another entry for the same person into this one. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CaverMergeRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaverDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -6089,6 +6342,37 @@ export interface components {
             canManagePermissions: boolean;
             canViewExactLocation: boolean;
         };
+        CaverAccountLinkRequest: {
+            /** Format: uuid */
+            userId: string;
+        };
+        CaverDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            userId: null | string;
+            email: null | string;
+            phone: null | string;
+            notes: null | string;
+            cavingGroups: components["schemas"]["CaverMembershipDto"][];
+        };
+        CaverMembershipDto: {
+            /** Format: uuid */
+            cavingGroupId: string;
+            name: string;
+            role: components["schemas"]["CavingGroupRole"];
+        };
+        CaverMergeRequest: {
+            /** Format: uuid */
+            sourceCaverId: string;
+        };
+        CaverWriteRequest: {
+            fullName: string;
+            email: null | string;
+            phone: null | string;
+            notes: null | string;
+        };
         CaveSummaryDto: {
             /** Format: uuid */
             id: string;
@@ -6178,13 +6462,15 @@ export interface components {
         };
         CavingGroupMemberDto: {
             /** Format: uuid */
-            userId: string;
-            displayName: null | string;
+            caverId: string;
+            name: string;
+            /** Format: uuid */
+            userId: null | string;
             role: components["schemas"]["CavingGroupRole"];
         };
         CavingGroupMemberWriteRequest: {
             /** Format: uuid */
-            userId: string;
+            caverId: string;
             role: components["schemas"]["CavingGroupRole"];
         };
         /** @enum {unknown} */
@@ -6851,7 +7137,8 @@ export interface components {
             displayName: null | string;
             bio: null | string;
             phoneNumber: null | string;
-            cavingClub: null | string;
+            /** Format: uuid */
+            cavingClubId: null | string;
             locale: string;
             avatarUrl: null | string;
             avatarPreset: null | string;
@@ -6884,7 +7171,8 @@ export interface components {
             lastName: null | string;
             email: null | string;
             phoneNumber: null | string;
-            cavingClub: null | string;
+            /** Format: uuid */
+            cavingClubId: null | string;
             bio: null | string;
             addresses: components["schemas"]["MemberAddressDto"][];
         };
@@ -6915,7 +7203,8 @@ export interface components {
             displayName: null | string;
             bio: null | string;
             phoneNumber: null | string;
-            cavingClub: null | string;
+            /** Format: uuid */
+            cavingClubId: null | string;
             locale: string;
             visibility: components["schemas"]["ProfileVisibilityDto"];
         };
@@ -7372,7 +7661,8 @@ export interface components {
             results: null | string;
             weatherConditions: null | string;
             locationText: null | string;
-            organizingClub: null | string;
+            /** Format: uuid */
+            organizingCavingGroupId: null | string;
             geom: null | components["schemas"]["GeoJsonGeometry"];
             caveIds: string[];
             participants: components["schemas"]["TripParticipantDto"][];
@@ -7402,7 +7692,8 @@ export interface components {
             results: null | string;
             weatherConditions: null | string;
             locationText: null | string;
-            organizingClub: null | string;
+            /** Format: uuid */
+            organizingCavingGroupId: null | string;
             geom: null | components["schemas"]["GeoJsonGeometry"];
             caveIds: string[];
             participants: components["schemas"]["TripParticipantWrite"][];
@@ -7413,14 +7704,15 @@ export interface components {
         };
         TripParticipantDto: {
             /** Format: uuid */
+            caverId: string;
+            name: string;
+            /** Format: uuid */
             userId: null | string;
-            nameText: null | string;
-            displayName: null | string;
         };
         TripParticipantWrite: {
             /** Format: uuid */
-            userId: null | string;
-            nameText: null | string;
+            caverId: null | string;
+            newCaverName: null | string;
         };
         /** @enum {unknown} */
         TripType: "exploration" | "survey" | "maintenance" | "training" | "tourism" | "rescue" | "science" | "other" | null;

@@ -34,6 +34,8 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
     private HttpClient viewer = null!;   // Viewer role
     private HttpClient admin = null!;
     private Guid outsiderId;
+    private Guid outsiderCaverId;
+    private Guid cavingGroupId;
     private long caveTypeId;
     private long entranceTypeId;
 
@@ -45,6 +47,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         var suffix = Guid.NewGuid().ToString("N")[..8];
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tt-own-{suffix}@t.local");
         outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tt-out-{suffix}@t.local");
+        outsiderCaverId = await RosterHelper.CaverIdForAsync(factory, outsiderId);
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"tt-view-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"tt-adm-{suffix}@t.local");
 
@@ -53,6 +56,12 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
             entranceTypeId = await db.EntranceTypes.Select(t => t.Id).FirstAsync();
+
+            // The organizing club is a caving group now, so a trip that names one needs one.
+            var cavingGroup = new CavingGroup { Name = $"Trip Club {suffix}", Slug = $"trip-club-{suffix}" };
+            db.CavingGroups.Add(cavingGroup);
+            await db.SaveChangesAsync();
+            cavingGroupId = cavingGroup.Id;
         }
 
         owner = await AuthHelper.BearerClientAsync(factory, $"tt-own-{suffix}@t.local");
@@ -75,7 +84,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             title = $"Bad {marker}",
             tripDate = "2026-07-01",
             caveIds = Array.Empty<Guid>(),
-            participants = new[] { new { userId = (Guid?)null, nameText = (string?)null } },
+            participants = new[] { new { caverId = (Guid?)null, newCaverName = (string?)null } },
             visibility = "private",
         });
         badParticipant.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -97,8 +106,8 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             caveIds = new[] { caveId },
             participants = new object[]
             {
-                new { userId = outsiderId, nameText = (string?)null },
-                new { userId = (Guid?)null, nameText = "Guest Caver" },
+                new { caverId = (Guid?)outsiderCaverId, newCaverName = (string?)null },
+                new { caverId = (Guid?)null, newCaverName = "Guest Caver" },
             },
             visibility = "authenticated",
         });
@@ -108,9 +117,11 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         trip.GetProperty("caveIds").EnumerateArray().Single().GetGuid().ShouldBe(caveId);
         var participants = trip.GetProperty("participants").EnumerateArray().ToList();
         participants.Count.ShouldBe(2);
-        participants.ShouldContain(p => p.GetProperty("nameText").GetString() == "Guest Caver");
+        // The guest became a roster entry, which is what makes them countable later.
+        participants.ShouldContain(p => p.GetProperty("name").GetString() == "Guest Caver"
+            && p.GetProperty("userId").ValueKind == JsonValueKind.Null);
         participants.ShouldContain(p => p.GetProperty("userId").ValueKind == JsonValueKind.String
-            && p.GetProperty("displayName").GetString() != null);
+            && p.GetProperty("name").GetString() != null);
 
         // The linked id is the cave's feature id — the same id the uniform resolver answers.
         var resolved = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/features/{caveId}");
@@ -132,14 +143,14 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             tripDate = "2026-06-20",
             geom = new { type = "Point", coordinates = new[] { 25.61, 45.55 } },
             caveIds = Array.Empty<Guid>(),
-            participants = new[] { new { userId = (Guid?)null, nameText = "Solo" } },
+            participants = new[] { new { caverId = (Guid?)null, newCaverName = "Solo" } },
             visibility = "authenticated",
         });
         update.StatusCode.ShouldBe(HttpStatusCode.OK, await update.Content.ReadAsStringAsync());
         var updated = await update.Content.ReadFromJsonAsync<JsonElement>();
         updated.GetProperty("caveIds").GetArrayLength().ShouldBe(0);
         updated.GetProperty("participants").EnumerateArray().Single()
-            .GetProperty("nameText").GetString().ShouldBe("Solo");
+            .GetProperty("name").GetString().ShouldBe("Solo");
 
         // Search and the map layer surface the trip.
         var search = await outsider.GetFromJsonAsync<JsonElement>($"/api/v1/search?q=camp {marker}");
@@ -173,13 +184,13 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             results = "200 m of new passage surveyed.",
             weatherConditions = "Cold, low water.",
             locationText = "Piatra Craiului",
-            organizingClub = "Speo Club Codru",
+            organizingCavingGroupId = cavingGroupId,
             caveIds = Array.Empty<Guid>(),
-            participants = new object[] { new { userId = outsiderId, nameText = (string?)null } },
+            participants = new object[] { new { caverId = (Guid?)outsiderCaverId, newCaverName = (string?)null } },
             proposers = new object[]
             {
-                new { userId = outsiderId, nameText = (string?)null },
-                new { userId = (Guid?)null, nameText = "Ana Ionescu" },
+                new { caverId = (Guid?)outsiderCaverId, newCaverName = (string?)null },
+                new { caverId = (Guid?)null, newCaverName = "Ana Ionescu" },
             },
             visibility = "authenticated",
         });
@@ -187,19 +198,19 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         var created = await create.Content.ReadFromJsonAsync<JsonElement>();
         var tripId = created.GetProperty("id").GetGuid();
 
-        static void AssertReportFields(JsonElement t)
+        void AssertReportFields(JsonElement t)
         {
             t.GetProperty("type").GetString().ShouldBe("survey");
             t.GetProperty("entryTime").GetString().ShouldBe("09:30:00");
             t.GetProperty("exitTime").GetString().ShouldBe("16:15:00");
             t.GetProperty("results").GetString().ShouldBe("200 m of new passage surveyed.");
             t.GetProperty("weatherConditions").GetString().ShouldBe("Cold, low water.");
-            t.GetProperty("organizingClub").GetString().ShouldBe("Speo Club Codru");
+            t.GetProperty("organizingCavingGroupId").GetGuid().ShouldBe(cavingGroupId);
             var proposers = t.GetProperty("proposers").EnumerateArray().ToList();
             proposers.Count.ShouldBe(2);
-            proposers.ShouldContain(p => p.GetProperty("nameText").GetString() == "Ana Ionescu");
+            proposers.ShouldContain(p => p.GetProperty("name").GetString() == "Ana Ionescu");
             proposers.ShouldContain(p => p.GetProperty("userId").ValueKind == JsonValueKind.String
-                && p.GetProperty("displayName").GetString() != null);
+                && p.GetProperty("name").GetString() != null);
             // The same registered user is independently a participant (attendance ≠ proposing).
             t.GetProperty("participants").GetArrayLength().ShouldBe(1);
         }
@@ -217,8 +228,8 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             exitTime = (string?)null,
             results = "Survey aborted; water rising.",
             caveIds = Array.Empty<Guid>(),
-            participants = new object[] { new { userId = outsiderId, nameText = (string?)null } },
-            proposers = new object[] { new { userId = (Guid?)null, nameText = "Ana Ionescu" } },
+            participants = new object[] { new { caverId = (Guid?)outsiderCaverId, newCaverName = (string?)null } },
+            proposers = new object[] { new { caverId = (Guid?)null, newCaverName = "Ana Ionescu" } },
             visibility = "authenticated",
         });
         update.StatusCode.ShouldBe(HttpStatusCode.OK, await update.Content.ReadAsStringAsync());
@@ -234,7 +245,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             tripDate = "2026-06-01",
             caveIds = Array.Empty<Guid>(),
             participants = Array.Empty<object>(),
-            proposers = new object[] { new { userId = Guid.NewGuid(), nameText = (string?)null } },
+            proposers = new object[] { new { caverId = (Guid?)Guid.NewGuid(), newCaverName = (string?)null } },
             visibility = "private",
         })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
@@ -243,7 +254,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             tripDate = "2026-06-01",
             caveIds = Array.Empty<Guid>(),
             participants = Array.Empty<object>(),
-            proposers = new object[] { new { userId = outsiderId, nameText = "Also named" } },
+            proposers = new object[] { new { caverId = (Guid?)outsiderCaverId, newCaverName = "Also named" } },
             visibility = "private",
         })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
@@ -331,7 +342,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             title = $"Trip {marker}",
             tripDate = "2026-05-05",
             caveIds = new[] { caveId },
-            participants = new[] { new { userId = (Guid?)null, nameText = "Guest" } },
+            participants = new[] { new { caverId = (Guid?)null, newCaverName = "Guest" } },
             visibility = "authenticated",
         });
         var tripId = (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
@@ -344,7 +355,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
                 title = $"Trip {marker} v{i}",
                 tripDate = "2026-05-05",
                 caveIds = new[] { caveId },
-                participants = new[] { new { userId = (Guid?)null, nameText = "Guest" } },
+                participants = new[] { new { caverId = (Guid?)null, newCaverName = "Guest" } },
                 visibility = "authenticated",
             })).StatusCode.ShouldBe(HttpStatusCode.OK);
         }

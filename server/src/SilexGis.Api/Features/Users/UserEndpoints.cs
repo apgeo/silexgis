@@ -29,7 +29,7 @@ public sealed record MemberDto(
     string? LastName,
     string? Email,
     string? PhoneNumber,
-    string? CavingClub,
+    Guid? CavingClubId,
     string? Bio,
     IReadOnlyList<MemberAddressDto> Addresses);
 
@@ -102,7 +102,7 @@ public static class UserEndpoints
                 && EF.Functions.ILike(EF.Functions.Unaccent(u.DisplayName), EF.Functions.Unaccent(pattern)));
 
         var byEmail = db.Users.AsNoTracking()
-            .WhereFieldVisibleTo(ProfileField.Email, user, db.CavingGroupMembers.AsNoTracking())
+            .WhereFieldVisibleTo(ProfileField.Email, user, db.CavingGroupMemberships, db.Cavers)
             .Where(u => u.Email != null && EF.Functions.ILike(u.Email, pattern));
 
         var matches = await byName.Union(byEmail)
@@ -201,7 +201,7 @@ public static class UserEndpoints
         profile.LastName,
         profile.Email,
         profile.PhoneNumber,
-        profile.CavingClub,
+        profile.CavingClubId,
         profile.Bio,
         [.. profile.Addresses.Select(a => new MemberAddressDto(
             a.Id, a.Label, a.Country, a.City, a.AddressText, a.Longitude, a.Latitude))]);

@@ -139,7 +139,7 @@ public static class ProfileProtection
             realName ? subject.LastName : null,
             CanView(settings.For(ProfileField.Email), relation) ? subject.EmailValue : null,
             CanView(settings.For(ProfileField.Phone), relation) ? subject.PhoneNumberValue : null,
-            CanView(settings.For(ProfileField.CavingClub), relation) ? subject.CavingClub : null,
+            CanView(settings.For(ProfileField.CavingClub), relation) ? subject.CavingClubId : null,
             CanView(settings.For(ProfileField.Bio), relation) ? subject.Bio : null,
             showAddresses
                 ? [.. addresses.OrderBy(a => a.SortOrder).Select(a => ToPublic(a, showPoints))]

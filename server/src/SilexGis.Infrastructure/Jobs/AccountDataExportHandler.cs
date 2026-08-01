@@ -87,10 +87,16 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
             .Where(p => p.UserId == userId)
             .ToListAsync(ct);
 
-        var cavingGroups = await db.CavingGroupMembers.AsNoTracking()
-            .Where(m => m.UserId == userId)
-            .Join(db.CavingGroups.AsNoTracking(), m => m.CavingGroupId, t => t.Id, (m, t) => new { t.Id, t.Name, m.Role, m.CreatedAt })
-            .ToListAsync(ct);
+        // Membership belongs to the person, so it is read through their caver row — which is
+        // also the account's own roster entry, and part of what this export owes them.
+        var caver = await db.Cavers.AsNoTracking().FirstOrDefaultAsync(c => c.UserId == userId, ct);
+
+        var cavingGroups = caver is null
+            ? []
+            : await db.CavingGroupMemberships.AsNoTracking()
+                .Where(m => m.CaverId == caver.Id)
+                .Join(db.CavingGroups.AsNoTracking(), m => m.CavingGroupId, g => g.Id, (m, g) => new { g.Id, g.Name, m.Role, m.CreatedAt })
+                .ToListAsync(ct);
 
         using var buffer = new MemoryStream();
         using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
@@ -106,7 +112,7 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
                 user.DisplayName,
                 user.Bio,
                 user.PhoneNumber,
-                user.CavingClub,
+                user.CavingClubId,
                 user.Locale,
                 user.AvatarPreset,
                 user.CreatedAt,
@@ -144,13 +150,25 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
                 Interface = JsonSerializer.Deserialize<JsonElement>(user.UiPreferences),
             }, ct);
 
-            await WriteEntryAsync(archive, "caving-groups.json", cavingGroups.Select(t => new
+            await WriteEntryAsync(archive, "caving-groups.json", cavingGroups.Select(g => new
             {
-                t.Id,
-                t.Name,
-                Role = t.Role.ToString(),
-                JoinedAt = t.CreatedAt,
+                g.Id,
+                g.Name,
+                Role = g.Role.ToString(),
+                JoinedAt = g.CreatedAt,
             }), ct);
+
+            if (caver is not null)
+            {
+                await WriteEntryAsync(archive, "caver.json", new
+                {
+                    caver.Id,
+                    caver.FullName,
+                    caver.Email,
+                    caver.Phone,
+                    caver.Notes,
+                }, ct);
+            }
 
             await WriteEntryAsync(archive, "content.json", await ContentInventoryAsync(userId, ct), ct);
             await WriteReadmeAsync(archive, ct);
@@ -210,6 +228,7 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
               visibility.json   who you chose to show each profile field to
               addresses.json    your saved addresses, with coordinates where you set one
               preferences.json  notification and interface settings
+              caver.json          your entry in the roster of people
               caving-groups.json  the caving groups you belong to
               content.json      what you have authored: identifiers, names and dates
 
