@@ -33,6 +33,7 @@ const attachment: AttachmentInfo = {
   addedBy: null,
   file: {
     id: 'file-1',
+    documentId: 'doc-1',
     originalName: 'report.pdf',
     mimeType: 'application/pdf',
     sizeBytes: 2048,

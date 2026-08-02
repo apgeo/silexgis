@@ -10,7 +10,7 @@ import {
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import DialogHost from '../DialogHost.tsx';
-import { parsePropertiesSchema } from './propertiesSchema.ts';
+import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
 
 type Visibility = FeatureDetail['visibility'];
 type GeometryClass = FeatureType['acceptedGeometryClasses'][number];

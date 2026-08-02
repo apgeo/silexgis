@@ -24,7 +24,7 @@ import {
 } from '../../api/hooks.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import FeatureEditModal, { type FeatureAttributeValues } from '../../components/features/FeatureEditModal.tsx';
-import { parsePropertiesSchema } from '../../components/features/propertiesSchema.ts';
+import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import HistoryPanel from '../../components/history/HistoryPanel.tsx';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';

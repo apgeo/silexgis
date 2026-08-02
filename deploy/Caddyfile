@@ -5,6 +5,11 @@
 #
 # Both variables are required (compose enforces it): `email` rejects an empty argument, so an
 # unset SILEXGIS_TLS_EMAIL would make Caddy fail to parse this file.
+#
+# Deliberately no request-body limit here. Caddy imposes none unless one is written, and the
+# nginx service behind it already caps bodies above every configured upload limit. A cap set
+# here as well would only add a second place to forget when an installation raises the upload
+# limit — and a body refused at this hop fails with an error the application never sees.
 
 {
 	email {$SILEXGIS_TLS_EMAIL}

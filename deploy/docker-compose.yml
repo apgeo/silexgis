@@ -35,6 +35,10 @@ services:
       SILEXGIS__Notifications__PollSeconds: ${SILEXGIS_NOTIFICATIONS_POLL_SECONDS:-15}
       SILEXGIS__Notifications__DigestHourUtc: ${SILEXGIS_NOTIFICATIONS_DIGEST_HOUR_UTC:-7}
       SILEXGIS__Files__Root: /data/files
+      # Largest accepted upload. The web service's proxy allows 1 GB, so anything up to that
+      # works without touching it; going higher means editing client/nginx.conf and
+      # rebuilding the web image, because that value is baked in at build time.
+      SILEXGIS__Files__MaxUploadBytes: ${SILEXGIS_MAX_UPLOAD_BYTES:-536870912}
       SILEXGIS__Keys__Path: /data/keys
     volumes:
       - silexgis-files:/data/files

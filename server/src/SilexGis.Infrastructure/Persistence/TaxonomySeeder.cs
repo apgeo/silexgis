@@ -40,6 +40,7 @@ public static class TaxonomySeeder
 
         await SeedLinkKindsAsync(db, ct);
         await SeedFeatureTypesAsync(db, ct);
+        await SeedDocumentTypesAsync(db, ct);
 
         await db.SaveChangesAsync(ct);
     }
@@ -83,6 +84,124 @@ public static class TaxonomySeeder
             if (!existing.Contains(code))
             {
                 db.LinkKinds.Add(new LinkKind { Code = code, Name = name, Locating = locating, SortOrder = sort });
+            }
+        }
+    }
+
+    /// <summary>
+    /// The document kinds a club archive starts with, and the metadata schemas they carry.
+    /// Same mechanism as feature kinds: a JSON schema over a jsonb bag, versioned, with the
+    /// document stamping the version it validated against.
+    /// </summary>
+    private static async Task SeedDocumentTypesAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        const string surveyReportSchema =
+            """
+            {"type":"object","properties":{
+              "cave_name":{"type":"string","title":"Cave"},
+              "surveyed_length_m":{"type":"number","title":"Surveyed length (m)","minimum":0},
+              "grade":{"type":"string","title":"Survey grade","enum":["1","2","3","4","5","6","X"]}
+            }}
+            """;
+        const string tripReportSchema =
+            """
+            {"type":"object","properties":{
+              "participants":{"type":"integer","title":"Participants","minimum":1},
+              "duration_hours":{"type":"number","title":"Duration (h)","minimum":0},
+              "objective_reached":{"type":"boolean","title":"Objective reached"}
+            }}
+            """;
+        const string permitSchema =
+            """
+            {"type":"object","properties":{
+              "authority":{"type":"string","title":"Issuing authority"},
+              "reference":{"type":"string","title":"Reference number"}
+            }}
+            """;
+
+        (string Code, string Name, string? Schema)[] items =
+        [
+            ("survey_report", "Survey report", surveyReportSchema),
+            ("trip_report", "Trip report", tripReportSchema),
+            ("map", "Map / plan", null),
+            ("photo", "Photograph", null),
+            ("permit", "Permit / authorization", permitSchema),
+            ("article", "Article / publication", null),
+            ("correspondence", "Correspondence", null),
+            ("other", "Other document", null),
+        ];
+
+        var existing = await db.DocumentTypes.ToDictionaryAsync(x => x.Code, ct);
+        var sort = 0;
+        foreach (var (code, name, schema) in items)
+        {
+            sort += 10;
+            if (existing.TryGetValue(code, out var row))
+            {
+                // Backfill a shipped schema only onto a kind nobody has edited. A null schema
+                // is not proof that none was ever set: emptying the schema box is how an
+                // administrator says this kind has none, and writing the shipped text back
+                // over that on the next restart would silently undo their change — and then
+                // publish the shipped text as the very schema version that was meant to mean
+                // "no schema". Every edit moves the version, so the version is what tells the
+                // two nulls apart.
+                if (row.MetadataSchema is null && row.MetadataSchemaVersion == DocumentType.FirstSchemaVersion)
+                {
+                    row.MetadataSchema = schema;
+                }
+            }
+            else
+            {
+                db.DocumentTypes.Add(new DocumentType
+                {
+                    Code = code,
+                    Name = name,
+                    SortOrder = sort,
+                    MetadataSchema = schema,
+                });
+            }
+        }
+
+        // Identities are assigned by the database, so the history rows that reference them
+        // cannot be built in the same pass.
+        await db.SaveChangesAsync(ct);
+        await PublishUnpublishedSchemasAsync(db, ct);
+    }
+
+    /// <summary>
+    /// Makes sure every document type's current schema exists in the schema history. A
+    /// document stamps the version it was validated against and is re-checked against that
+    /// version's text, so a current schema missing from the history would leave those
+    /// documents measured against a schema nobody can produce.
+    /// </summary>
+    private static async Task PublishUnpublishedSchemasAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var types = await db.DocumentTypes.AsNoTracking()
+            .Where(t => t.MetadataSchema != null)
+            .Select(t => new { t.Id, t.MetadataSchema, t.MetadataSchemaVersion })
+            .ToListAsync(ct);
+        if (types.Count == 0)
+        {
+            return;
+        }
+
+        var typeIds = types.Select(t => t.Id).ToList();
+        var published = await db.DocumentTypeSchemas.AsNoTracking()
+            .Where(s => typeIds.Contains(s.DocumentTypeId))
+            .Select(s => new { s.DocumentTypeId, s.Version })
+            .ToListAsync(ct);
+        var known = published.Select(p => (p.DocumentTypeId, p.Version)).ToHashSet();
+
+        foreach (var type in types)
+        {
+            if (known.Add((type.Id, type.MetadataSchemaVersion)))
+            {
+                db.DocumentTypeSchemas.Add(new DocumentTypeSchema
+                {
+                    DocumentTypeId = type.Id,
+                    Version = type.MetadataSchemaVersion,
+                    Schema = type.MetadataSchema!,
+                });
             }
         }
     }

@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.Json;
 using Json.Schema;
-using SilexGis.Domain.Features;
+using SilexGis.Domain;
 
-namespace SilexGis.Infrastructure.Features;
+namespace SilexGis.Infrastructure.Metadata;
 
 /// <summary>
-/// JSON Schema validation of feature properties (JsonSchema.Net). Fails closed: a
-/// malformed stored schema or malformed properties document reports as an error rather
-/// than passing silently — a write is refused with a diagnosable message instead of
-/// storing data nobody validated.
+/// JSON Schema validation of typed property bags (JsonSchema.Net) — feature properties and
+/// document metadata alike. Fails closed: a malformed stored schema or malformed property
+/// document reports as an error rather than passing silently, so a write is refused with a
+/// diagnosable message instead of storing data nobody validated.
 /// </summary>
-public sealed class JsonSchemaFeaturePropertiesValidator : IFeaturePropertiesValidator
+public sealed class JsonSchemaPropertiesValidator : ITypedPropertiesValidator
 {
     private static readonly EvaluationOptions Options = new() { OutputFormat = OutputFormat.List };
 
@@ -52,6 +52,35 @@ public sealed class JsonSchemaFeaturePropertiesValidator : IFeaturePropertiesVal
                 .ToList();
             return errors.Count > 0 ? errors : ["properties do not conform to the kind's schema"];
         }
+    }
+
+    public IReadOnlyList<string> ValidateSchema(string schemaJson)
+    {
+        JsonSchema schema;
+        try
+        {
+            schema = JsonSchema.FromText(schemaJson);
+        }
+        catch (Exception e) when (e is JsonException or ArgumentException)
+        {
+            return [$"schema: not valid JSON Schema ({e.Message})"];
+        }
+
+        // A schema that parses can still be unusable — a keyword whose value has the wrong
+        // shape only fails when something is evaluated against it. Evaluating the empty
+        // object is the cheapest way to reach that, and its own conformance is irrelevant:
+        // only a schema that cannot be evaluated at all is rejected here.
+        try
+        {
+            using var probe = JsonDocument.Parse("{}");
+            schema.Evaluate(probe.RootElement, Options);
+        }
+        catch (Exception e) when (e is JsonException or ArgumentException or InvalidOperationException)
+        {
+            return [$"schema: cannot be evaluated ({e.Message})"];
+        }
+
+        return [];
     }
 
     private static string Location(EvaluationResults detail)

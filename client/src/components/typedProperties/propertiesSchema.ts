@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Feature types may carry an optional JSON schema describing typed properties
-// (stored as jsonb on the taxonomy). Only a minimal, flat subset is supported:
-// an object schema whose properties are string / number / integer / boolean or
-// a string enum. Anything unrecognized is skipped — the server stores the
-// properties document verbatim either way.
+// Kinds that carry typed data — feature types and document types alike — publish an
+// optional JSON schema describing it, and the values live in a jsonb bag beside it.
+// Reading such a schema into form fields is one piece of knowledge, so it lives here
+// rather than once per kind of thing that has one.
+//
+// Only a minimal, flat subset is supported: an object schema whose properties are
+// string / number / integer / boolean or a string enum. Anything unrecognized is skipped
+// — the server stores the property document verbatim either way, so a value this cannot
+// render is preserved rather than lost.
 
 export interface SchemaField {
   key: string;

@@ -22,6 +22,29 @@ public class Document : IProtectedEntity, ITimestamped, IAuditable
     /// <summary>Human-readable name; defaults to the first upload's file name.</summary>
     public required string Title { get; set; }
 
+    /// <summary>
+    /// Which kind of document this is, naming the row that carries the metadata schema
+    /// <see cref="Metadata"/> is validated against. Null means untyped: the document
+    /// accepts any metadata object, which is what every upload starts as.
+    /// </summary>
+    public long? DocumentTypeId { get; set; }
+
+    /// <summary>
+    /// Typed, user-set metadata for this document's kind, as jsonb. Facts read out of the
+    /// file itself — page count, author, embedded dates, media duration — are columns on
+    /// the file rather than entries here, because those are queried and sorted on.
+    /// </summary>
+    public string Metadata { get; set; } = "{}";
+
+    /// <summary>
+    /// The document type's metadata-schema version this row's <see cref="Metadata"/> was
+    /// last validated against. Null when the type carries no schema, or when the document
+    /// has no type. A row behind its type's current version stays valid as written — it is
+    /// re-checked against the version stamped here, and against the current one only when
+    /// the metadata itself is rewritten.
+    /// </summary>
+    public int? MetadataSchemaVersion { get; set; }
+
     public Guid OwnerUserId { get; set; }
 
     public Guid? CavingGroupId { get; set; }

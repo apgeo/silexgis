@@ -2,8 +2,10 @@
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using Npgsql;
+using SilexGis.Domain;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Documents;
@@ -26,7 +28,15 @@ public sealed record StoredContent(
     long SizeBytes,
     string Sha256,
     FileKind Kind,
-    Point? Geom = null);
+    Point? Geom = null,
+    ContentFacts? Facts = null);
+
+/// <summary>
+/// The editable, document-level facts of a document. A null <see cref="Metadata"/> means
+/// "leave what is stored alone" rather than "clear it" — which is what lets a title be
+/// corrected on a document whose kind has since tightened its schema.
+/// </summary>
+public sealed record DocumentUpdate(string Title, long? DocumentTypeId, string? Metadata);
 
 /// <summary>
 /// The single mutator of a document's derived state: which revision is current, what
@@ -44,12 +54,25 @@ public sealed record StoredContent(
 /// because a demotion that committed without its replacement would leave a document with
 /// no current version at all.
 /// </summary>
-public sealed class DocumentWriteService(SilexGisDbContext db)
+public sealed class DocumentWriteService(SilexGisDbContext db, ITypedPropertiesValidator metadataValidator)
 {
+    /// <summary>A document's metadata does not conform to its kind's schema.</summary>
+    public const string MetadataInvalidCode = "document.metadata_invalid";
+
+    /// <summary>The requested document kind does not exist.</summary>
+    public const string UnknownTypeCode = "document.type_unknown";
+
     private const string NotHeadCode = "file.not_head";
     private const string NotHeadMessage = "A newer version already exists; upload onto the current version.";
     private const string VersionInUseCode = "file.version_in_use";
     private const int TitleMaxLength = 300;
+
+    /// <summary>
+    /// Column widths for the facts a file states about itself. Author and producer share
+    /// one width because they are the same kind of free text out of the same tags.
+    /// </summary>
+    private const int NameFactMaxLength = 255;
+    private const int CodecMaxLength = 64;
 
     /// <summary>Last-resort title when the upload supplied nothing usable to name it by.</summary>
     private const string UntitledTitle = "Untitled";
@@ -97,27 +120,139 @@ public sealed class DocumentWriteService(SilexGisDbContext db)
     {
         ArgumentNullException.ThrowIfNull(content);
 
+        // Facts the file states about itself get columns of their own rather than a place in
+        // the metadata bag, because document lists filter and order on them. A format that
+        // states none of this leaves them null, which is the honest answer.
+        var facts = content.Facts ?? ContentFacts.None;
         var file = new StoredFile
         {
             DocumentVersionId = documentVersionId,
             StoragePath = content.StoragePath,
             OriginalName = content.OriginalName,
-            MimeType = content.MimeType,
+            MimeType = Fit(content.MimeType, FileFormats.MaxMediaTypeLength),
             SizeBytes = content.SizeBytes,
             Sha256 = content.Sha256,
             Kind = content.Kind,
             Geom = content.Geom,
+            Author = Trim(facts.Author, NameFactMaxLength),
+            Producer = Trim(facts.Producer, NameFactMaxLength),
+            ContentCreatedAt = facts.ContentCreatedAt,
+            ContentModifiedAt = facts.ContentModifiedAt,
+            DurationSeconds = facts.DurationSeconds >= 0 ? facts.DurationSeconds : null,
+            Codec = Trim(facts.Codec, CodecMaxLength),
         };
         db.StoredFiles.Add(file);
 
         if (content.Kind == FileKind.Image)
         {
             // An image is one page by definition. Paged formats get their page rows from
-            // text extraction, which is the only thing that knows the real count.
+            // text extraction, which is the only thing that knows the real count — and the
+            // count column is written here alongside the row so the two cannot disagree
+            // about a file whose pages nothing has read yet.
             db.DocumentPages.Add(new DocumentPage { FileId = file.Id, PageNumber = 1 });
+            file.PageCount = 1;
         }
 
         return file;
+    }
+
+    /// <summary>
+    /// Applies the editable document-level fields, validating metadata against the kind's
+    /// schema and stamping the schema version it was checked against. Saves.
+    /// </summary>
+    /// <remarks>
+    /// Which schema a document is measured against is the load-bearing part. Metadata the
+    /// caller actually supplies is measured against the kind's *current* schema, so a
+    /// tightened schema takes effect for everything written from then on. Metadata the
+    /// caller left alone is measured against the version already stamped on the row — the
+    /// text of which is kept precisely so this is possible — because a document that was
+    /// valid when it was written stays valid, and otherwise tightening a schema would lock
+    /// every older document out of even a title correction. Metadata the caller left alone on
+    /// a row carrying no stamp was never measured against anything, because its kind had no
+    /// schema when it was written; that stays true rather than being decided retroactively by
+    /// a schema that arrived later.
+    /// </remarks>
+    /// <exception cref="DocumentWriteException">
+    /// <c>document.not_found</c>, <c>document.type_unknown</c>,
+    /// <c>document.metadata_invalid</c>.
+    /// </exception>
+    public async Task<Document> UpdateAsync(Guid documentId, DocumentUpdate update, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+
+        var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == documentId, ct)
+            ?? throw new DocumentWriteException("document.not_found", "The document no longer exists.");
+
+        DocumentType? type = null;
+        if (update.DocumentTypeId is { } typeId)
+        {
+            type = await db.DocumentTypes.AsNoTracking().FirstOrDefaultAsync(t => t.Id == typeId, ct)
+                ?? throw new DocumentWriteException(UnknownTypeCode, "The requested document type does not exist.");
+        }
+
+        var typeChanged = document.DocumentTypeId != update.DocumentTypeId;
+        var metadata = update.Metadata ?? document.Metadata;
+        var rewritten = update.Metadata is not null || typeChanged;
+
+        document.Title = TitleOf(update.Title, null);
+        document.DocumentTypeId = update.DocumentTypeId;
+        document.Metadata = metadata;
+        document.MetadataSchemaVersion =
+            await ValidateMetadataAsync(document, type, metadata, rewritten, ct);
+
+        await db.SaveChangesAsync(ct);
+        return document;
+    }
+
+    /// <summary>
+    /// The schema version to stamp on the row, having checked the metadata against it.
+    /// Null when there is nothing to check against — the kind publishes no schema, or the
+    /// caller supplied no metadata and the row was never measured against one — so the stamp
+    /// is cleared rather than left pointing at a version that does not describe the row.
+    /// </summary>
+    private async Task<int?> ValidateMetadataAsync(
+        Document document, DocumentType? type, string metadata, bool rewritten, CancellationToken ct)
+    {
+        if (type?.MetadataSchema is null)
+        {
+            return null;
+        }
+
+        var version = type.MetadataSchemaVersion;
+        var schema = type.MetadataSchema;
+        if (!rewritten)
+        {
+            if (document.MetadataSchemaVersion is not { } stamped)
+            {
+                // No stamp at all means this metadata was never measured against anything —
+                // the kind published no schema when it was written, which is how most kinds
+                // ship. Measuring it now, against a schema that arrived afterwards, is the
+                // same lock-out the stamped-version fallback below exists to prevent: a title
+                // correction would be refused for a requirement the document predates. It
+                // stays unmeasured, and the empty stamp keeps saying so, until a caller
+                // actually supplies metadata — which is then measured against the current
+                // schema like any other write.
+                return null;
+            }
+
+            if (stamped != version)
+            {
+                // Fall forward to the current schema only when the stamped version's text is
+                // missing, which means the history lost a row rather than that the document is
+                // stale — failing the write instead would strand the document permanently.
+                var published = await DocumentQueries.TypeSchemaOfVersionAsync(db, type.Id, stamped, ct);
+                if (published is not null)
+                {
+                    version = stamped;
+                    schema = published;
+                }
+            }
+        }
+
+        var errors = metadataValidator.Validate(schema, metadata);
+        return errors.Count == 0
+            ? version
+            : throw new DocumentWriteException(MetadataInvalidCode, string.Join(" ", errors));
     }
 
     /// <summary>
@@ -414,5 +549,34 @@ public sealed class DocumentWriteService(SilexGisDbContext db)
 
         candidate = candidate.Trim();
         return candidate.Length > TitleMaxLength ? candidate[..TitleMaxLength] : candidate;
+    }
+
+    /// <summary>
+    /// Fits a media type into its column. Every path that stores bytes routes through here, and
+    /// several of them pass a value nothing bounds — a request header the client wrote, or the
+    /// declaration a container carries inside itself. An over-long one is not a media type at
+    /// all, so it is recorded as the unknown type rather than as a truncated prefix that would
+    /// read like a real format; either way the upload succeeds instead of failing against the
+    /// column width with the bytes already in the store and no row pointing at them.
+    /// </summary>
+    private static string Fit(string value, int maxLength) =>
+        string.IsNullOrWhiteSpace(value) || value.Length > maxLength
+            ? FileFormats.UnknownMimeType
+            : value;
+
+    /// <summary>
+    /// Fits a value a file stated about itself into its column. These come from the file's own
+    /// bytes, so nothing bounds them: a damaged tag can hold anything, and truncating it keeps
+    /// an unusable value from failing an upload that is otherwise fine.
+    /// </summary>
+    private static string? Trim(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length > maxLength ? trimmed[..maxLength] : trimmed;
     }
 }

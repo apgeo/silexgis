@@ -72,7 +72,10 @@ Caddy obtains and renews the certificate automatically.
 
 **Your own proxy.** Run any reverse proxy (Caddy, nginx, Traefik) in front of the `web`
 service, terminating TLS and forwarding `X-Forwarded-Proto: https`. Set `SILEXGIS_PUBLIC_URL`
-to the `https://` address.
+to the `https://` address. Allow request bodies at least as large as
+`SILEXGIS__Files__MaxUploadBytes` (512 MB by default) — nginx's `client_max_body_size` and
+IIS's `maxAllowedContentLength` both default well below that, and an upload refused at the
+proxy fails with an error the application never sees and cannot explain.
 
 ## Backups
 
@@ -291,8 +294,9 @@ policy**:
    ```bash
    cd client && npm ci && npm run build
    ```
-   Use `deploy/nginx/silexgis.conf` as a template — it serves the static files and proxies
-   `/api`, `/connect`, `/health`, `/openapi` and `/.well-known` to the API.
+   Use `deploy/nginx/silexgis.conf` as a template — it serves the static files, proxies
+   `/api`, `/connect`, `/health`, `/openapi` and `/.well-known` to the API, and sets a
+   `client_max_body_size` above the default upload limit.
 4. **Admin.** If you did not set `SILEXGIS__Admin__Email/Password`, create the first admin
    interactively:
    ```bash
@@ -330,6 +334,7 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Map__CenterlineDetailZoom` | `18` | zoom at which cave centerlines switch from passage outlines to full survey detail |
 | `SILEXGIS__Map__CenterlineMaxPaths` | `25000` | line budget per centerline request; over it, outlines are served instead |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
+| `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB) |
 | `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys (must persist across restarts) |
 | `SILEXGIS__FeatureIntegrity__Interval` | `24:00:00` | how often a background pass re-checks the map data for internal inconsistencies; findings go to the log and the admin jobs list. `00:00:00` turns the schedule off |
 

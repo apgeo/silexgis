@@ -3,7 +3,11 @@ using NetTopologySuite.Geometries;
 
 namespace SilexGis.Domain.Entities;
 
-/// <summary>Broad file categories used for storage layout and later media handling.</summary>
+/// <summary>
+/// Broad file categories used for storage layout and later media handling. Stored as
+/// smallint and append-only: the values are part of the schema contract, so a new member
+/// takes the next free number and nothing is ever renumbered or reused.
+/// </summary>
 public enum FileKind : short
 {
     Image = 0,
@@ -13,6 +17,8 @@ public enum FileKind : short
     Vector = 4,
     Model = 5,
     Other = 6,
+    Audio = 7,
+    Video = 8,
 }
 
 /// <summary>
@@ -56,6 +62,31 @@ public class StoredFile : ITimestamped, IAuditable
 
     /// <summary>Format-specific metadata (EXIF, dimensions, layer info, …) as jsonb.</summary>
     public string Metadata { get; set; } = "{}";
+
+    /// <summary>
+    /// Pages this file holds, once something has counted them. An image is one page by
+    /// definition and gets its count at upload; paged formats are counted by text
+    /// extraction, which is the only thing that reads them.
+    /// </summary>
+    public int? PageCount { get; set; }
+
+    /// <summary>Author embedded in the file's own metadata, not the account that uploaded it.</summary>
+    public string? Author { get; set; }
+
+    /// <summary>Software that produced the file, as the file itself reports it.</summary>
+    public string? Producer { get; set; }
+
+    /// <summary>Creation timestamp embedded in the file, distinct from the upload time.</summary>
+    public DateTimeOffset? ContentCreatedAt { get; set; }
+
+    /// <summary>Last-modified timestamp embedded in the file, distinct from the upload time.</summary>
+    public DateTimeOffset? ContentModifiedAt { get; set; }
+
+    /// <summary>Playing time of an audio or video file, in seconds.</summary>
+    public double? DurationSeconds { get; set; }
+
+    /// <summary>Primary codec of an audio or video file, as the container names it.</summary>
+    public string? Codec { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

@@ -15,14 +15,20 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
 
         builder.Property(x => x.Title).HasMaxLength(300);
         builder.Property(x => x.Visibility).HasConversion<short>();
+        builder.Property(x => x.Metadata).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
 
         // Restrict, like every other owned content table: an account that still owns
         // documents cannot be dropped out from under them.
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.CavingGroupId).OnDelete(DeleteBehavior.SetNull);
+        // Restrict as well: a kind that documents still claim cannot be removed out from
+        // under them, because the metadata they hold is only readable against its schema.
+        builder.HasOne<DocumentType>().WithMany().HasForeignKey(x => x.DocumentTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => x.OwnerUserId);
         builder.HasIndex(x => x.CavingGroupId);
+        builder.HasIndex(x => x.DocumentTypeId);
     }
 }
 

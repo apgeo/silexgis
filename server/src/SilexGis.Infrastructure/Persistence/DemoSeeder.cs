@@ -4,6 +4,7 @@ using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.Metadata;
 
 namespace SilexGis.Infrastructure.Persistence;
 
@@ -17,7 +18,7 @@ public static class DemoSeeder
 {
     public static async Task SeedAsync(SilexGisDbContext db, Guid ownerUserId, CancellationToken ct = default)
     {
-        var writer = new FeatureWriteService(db, new JsonSchemaFeaturePropertiesValidator(), new AnonymousCurrentUser());
+        var writer = new FeatureWriteService(db, new JsonSchemaPropertiesValidator(), new AnonymousCurrentUser());
 
         // Each section guards itself so re-running tops up data added in later versions.
         var demoCaveId = await db.Caves

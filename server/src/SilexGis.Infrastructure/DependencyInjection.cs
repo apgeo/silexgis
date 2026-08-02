@@ -48,11 +48,13 @@ public static class DependencyInjection
                 sp.GetRequiredService<AuditInterceptor>(),
                 sp.GetRequiredService<UserIdTransactionInterceptor>()));
 
-        services.AddSingleton<Domain.Features.IFeaturePropertiesValidator,
-            Features.JsonSchemaFeaturePropertiesValidator>();
+        // One typed-property validator serves every kind-keyed schema in the system
+        // (feature properties, document metadata) — the knowledge has a single home.
+        services.AddSingleton<ITypedPropertiesValidator, Metadata.JsonSchemaPropertiesValidator>();
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
         services.AddScoped<Documents.DocumentWriteService>();
+        services.AddScoped<Documents.DocumentTypeWriteService>();
 
         services.AddScoped<Domain.Access.IAccessService, Permissions.AccessService>();
         services.AddScoped<Permissions.FeatureProtection>();
@@ -116,6 +118,7 @@ public static class DependencyInjection
         services.AddSingleton<IFileStore, LocalFileStore>();
         services.AddSingleton<ThumbnailService>();
         services.AddSingleton<IPhotoGeotagReader, MagickPhotoGeotagReader>();
+        services.AddSingleton<IContentMetadataReader, ContentMetadataReader>();
         services.AddSingleton<IVectorIO, GdalVectorIO>();
         services.AddSingleton<RasterCogService>();
         services.AddScoped<IProcessingJobHandler, GeofileImportHandler>();

@@ -16,7 +16,8 @@
     "messaging": "Messaging",
     "templates": "Message texts",
     "permissionGroups": "Permission groups",
-    "featureSets": "Feature sets"
+    "featureSets": "Feature sets",
+    "documentTypes": "Document kinds"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -345,6 +346,7 @@
     "caption": "Caption",
     "role": "Role",
     "documentDate": "Document date",
+    "tooLarge": "This file is larger than the {{max}} allowed for uploads.",
     "roles": {
       "photoEntrance": "Entrance photo",
       "photoInterior": "Interior photo",
@@ -355,6 +357,13 @@
       "surveyData": "Survey data",
       "other": "Other"
     }
+  },
+  "documents": {
+    "metadata": "Document properties",
+    "title": "Title",
+    "type": "Document kind",
+    "noType": "No kind chosen",
+    "metadataInvalid": "The details do not match what this document kind allows."
   },
   "geodata": {
     "title": "Geodata",
@@ -1035,6 +1044,34 @@
       "smsWeakest": "The weakest of the three: a number can be moved to another SIM by persuading the mobile operator.",
       "codeLifetime": "Code lifetime (minutes)",
       "resendInterval": "Wait between codes (seconds)"
+    },
+    "documentTypes": {
+      "title": "Document kinds",
+      "intro": "The kinds of document this installation recognises, and the details each kind asks for. Rewriting a kind's details never changes documents already filed under it: they keep the version they were checked against and are re-checked only when someone next edits them.",
+      "add": "Add a kind",
+      "edit": "Edit document kind",
+      "editAction": "Edit",
+      "name": "Name",
+      "code": "Code",
+      "codeHint": "Lower-case letters, digits and underscores. Installations exchange documents by this code, so keep it stable.",
+      "description": "Description",
+      "sortOrder": "Sort order",
+      "fields": "Details asked for",
+      "noSchema": "No details",
+      "schema": "Details schema (JSON Schema)",
+      "schemaHint": "Leave empty for a kind that asks for nothing. Only flat text, number, yes/no and choice fields appear on the form.",
+      "schemaVersion": "Schema version",
+      "schemaInvalid": "That is not a usable JSON Schema.",
+      "codeTaken": "Another kind already uses that code.",
+      "preview": "Fields the document form will offer",
+      "noFields": "None — nothing in this schema can be rendered as a field.",
+      "kinds": {
+        "string": "text",
+        "number": "number",
+        "integer": "whole number",
+        "boolean": "yes/no",
+        "enum": "choice"
+      }
     },
     "templates": {
       "title": "Message texts",

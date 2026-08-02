@@ -34,19 +34,23 @@ public static class HistoryProtection
     // (not counted as protection-redacted). The cave feature's Geom is the derived
     // main-entrance cache — location data, removed for everyone as defence in depth (the
     // entrance's own row carries the governed original). AncestorIds/IsProtectedEffective
-    // are write-service bookkeeping.
+    // are write-service bookkeeping. The two schema-version stamps record which version of a
+    // kind's schema a row was validated against — a number the write path moves on its own,
+    // so a reader would see it change without anyone having changed anything.
     private static readonly string[] AlwaysNoise =
         ["CreatedAt", "UpdatedAt", nameof(Feature.AncestorIds), nameof(Feature.IsProtectedEffective),
-         nameof(Feature.PropertiesSchemaVersion)];
+         nameof(Feature.PropertiesSchemaVersion), nameof(Document.MetadataSchemaVersion)];
     private static readonly string[] CaveNoise = [nameof(Cave.EntranceCount), nameof(Feature.Geom)];
 
     // A stored file's created/deleted snapshot carries its EXIF capture point (Geom), the raw
     // metadata jsonb (which may itself hold GPS EXIF tags) and the internal storage path. A file
     // is a polymorphic child with no governing feature resolvable here, and its geotag IS
     // location data — so drop all three for everyone (defence in depth), never emitted in any
-    // timeline.
+    // timeline. The page count joins them as bookkeeping rather than as protection: it is
+    // filled in by whatever reads the file, so it moves without a person having done anything.
     private static readonly string[] FileNoise =
-        [nameof(StoredFile.Geom), nameof(StoredFile.Metadata), nameof(StoredFile.StoragePath)];
+        [nameof(StoredFile.Geom), nameof(StoredFile.Metadata), nameof(StoredFile.StoragePath),
+         nameof(StoredFile.PageCount)];
 
     // Coordinate-bearing fields, mirroring the live DTO masking exactly. Named via nameof so a
     // property rename is a compile error here rather than a silent redaction (location) leak.

@@ -4326,6 +4326,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/files/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Upload limits this installation applies. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FileConfigDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files/{id}": {
         parameters: {
             query?: never;
@@ -4546,6 +4582,172 @@ export interface paths {
             };
         };
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A document's title, kind and typed metadata. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocumentDto"];
+                    };
+                };
+            };
+        };
+        /** Updates a document's title, kind and typed metadata; requires write access. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DocumentUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocumentDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/document-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Document kinds and the metadata schema each one publishes. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocumentTypeDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Adds a document kind. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DocumentTypeRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocumentTypeDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/document-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Updates a document kind; a changed metadata schema publishes a new version. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DocumentTypeRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocumentTypeDto"];
+                    };
+                };
+            };
+        };
         post?: never;
         delete?: never;
         options?: never;
@@ -7301,6 +7503,66 @@ export interface components {
             /** Format: date-time */
             expiresAt: null | string;
         };
+        DocumentDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: int64 */
+            documentTypeId: null | number;
+            documentTypeCode: null | string;
+            metadata: components["schemas"]["JsonElement"];
+            /** Format: int32 */
+            metadataSchemaVersion: null | number;
+            /** Format: uuid */
+            currentFileId: string;
+            /** Format: int32 */
+            currentVersionNumber: number;
+            mimeType: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            kind: components["schemas"]["FileKind"];
+            /** Format: int32 */
+            pageCount: null | number;
+            author: null | string;
+            producer: null | string;
+            /** Format: date-time */
+            contentCreatedAt: null | string;
+            /** Format: date-time */
+            contentModifiedAt: null | string;
+            /** Format: double */
+            durationSeconds: null | number;
+            codec: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        DocumentTypeDto: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            /** Format: int32 */
+            metadataSchemaVersion: number;
+            metadataSchema: null | string;
+        };
+        DocumentTypeRequest: {
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            metadataSchema: null | string;
+        };
+        DocumentUpdateRequest: {
+            title: string;
+            /** Format: int64 */
+            documentTypeId: null | number;
+            metadata: null | components["schemas"]["JsonElement"];
+        };
         EffectiveAccessDto: {
             actions: components["schemas"]["AccessAction"];
             explain: null | components["schemas"]["AccessExplanationDto"][];
@@ -7614,9 +7876,15 @@ export interface components {
             cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
+        FileConfigDto: {
+            /** Format: int64 */
+            maxUploadBytes: number;
+        };
         FileDto: {
             /** Format: uuid */
             id: string;
+            /** Format: uuid */
+            documentId: string;
             originalName: string;
             mimeType: string;
             /** Format: int64 */
@@ -7633,7 +7901,7 @@ export interface components {
             thumbnailUrl: null | string;
         };
         /** @enum {unknown} */
-        FileKind: "image" | "document" | "survey" | "raster" | "vector" | "model" | "other";
+        FileKind: "image" | "document" | "survey" | "raster" | "vector" | "model" | "other" | "audio" | "video";
         FileUpdateRequest: {
             /** Format: date */
             documentDate: null | string;

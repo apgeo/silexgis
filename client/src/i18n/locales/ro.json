@@ -16,7 +16,8 @@
     "messaging": "Mesagerie",
     "templates": "Texte mesaje",
     "permissionGroups": "Grupuri de permisiuni",
-    "featureSets": "Seturi de elemente"
+    "featureSets": "Seturi de elemente",
+    "documentTypes": "Tipuri de documente"
   },
   "dashboard": {
     "title": "Panou de bord",
@@ -345,6 +346,7 @@
     "caption": "Legendă",
     "role": "Rol",
     "documentDate": "Data documentului",
+    "tooLarge": "Acest fișier depășește limita de {{max}} pentru încărcări.",
     "roles": {
       "photoEntrance": "Fotografie intrare",
       "photoInterior": "Fotografie interior",
@@ -355,6 +357,13 @@
       "surveyData": "Date topografice",
       "other": "Altele"
     }
+  },
+  "documents": {
+    "metadata": "Proprietăți document",
+    "title": "Titlu",
+    "type": "Tip de document",
+    "noType": "Niciun tip ales",
+    "metadataInvalid": "Detaliile nu corespund cu ce permite acest tip de document."
   },
   "geodata": {
     "title": "Geodate",
@@ -1035,6 +1044,34 @@
       "smsWeakest": "Cea mai slabă dintre cele trei: un număr poate fi mutat pe altă cartelă convingând operatorul de telefonie.",
       "codeLifetime": "Valabilitatea codului (minute)",
       "resendInterval": "Pauză între coduri (secunde)"
+    },
+    "documentTypes": {
+      "title": "Tipuri de documente",
+      "intro": "Tipurile de document recunoscute de această instalare și detaliile cerute de fiecare tip. Rescrierea detaliilor unui tip nu modifică documentele deja înregistrate: acestea păstrează versiunea cu care au fost verificate și sunt reverificate abia la următoarea editare.",
+      "add": "Adaugă un tip",
+      "edit": "Editare tip de document",
+      "editAction": "Editează",
+      "name": "Denumire",
+      "code": "Cod",
+      "codeHint": "Litere mici, cifre și liniuțe de subliniere. Instalările schimbă documente după acest cod, deci păstrați-l neschimbat.",
+      "description": "Descriere",
+      "sortOrder": "Ordine de sortare",
+      "fields": "Detalii cerute",
+      "noSchema": "Niciun detaliu",
+      "schema": "Schema detaliilor (JSON Schema)",
+      "schemaHint": "Lăsați gol pentru un tip care nu cere nimic. Pe formular apar doar câmpuri simple: text, număr, da/nu și alegere.",
+      "schemaVersion": "Versiune schemă",
+      "schemaInvalid": "Textul nu este o schemă JSON Schema utilizabilă.",
+      "codeTaken": "Acest cod este deja folosit de alt tip.",
+      "preview": "Câmpurile pe care le va oferi formularul documentului",
+      "noFields": "Niciunul — nimic din această schemă nu poate fi afișat ca un câmp.",
+      "kinds": {
+        "string": "text",
+        "number": "număr",
+        "integer": "număr întreg",
+        "boolean": "da/nu",
+        "enum": "alegere"
+      }
     },
     "templates": {
       "title": "Texte mesaje",

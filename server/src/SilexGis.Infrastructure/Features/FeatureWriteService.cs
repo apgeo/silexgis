@@ -40,7 +40,7 @@ public sealed class FeatureWriteException(string code, IReadOnlyList<string> err
 /// security-bearing derived state.
 /// </summary>
 public sealed class FeatureWriteService(
-    SilexGisDbContext db, IFeaturePropertiesValidator propertiesValidator, ICurrentUser currentUser)
+    SilexGisDbContext db, ITypedPropertiesValidator propertiesValidator, ICurrentUser currentUser)
 {
     // ---------- creation ----------
 

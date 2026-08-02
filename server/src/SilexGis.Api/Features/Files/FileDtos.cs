@@ -11,6 +11,7 @@ namespace SilexGis.Api.Features.Files;
 /// </summary>
 public sealed record FileDto(
     Guid Id,
+    Guid DocumentId,
     string OriginalName,
     string MimeType,
     long SizeBytes,
@@ -21,6 +22,13 @@ public sealed record FileDto(
     DateTimeOffset CreatedAt,
     string ContentUrl,
     string? ThumbnailUrl);
+
+/// <summary>
+/// Upload limits this installation applies. Published so a client checks a file before
+/// transferring it rather than after, and so no client build carries a number that could
+/// disagree with the server's.
+/// </summary>
+public sealed record FileConfigDto(long MaxUploadBytes);
 
 /// <summary>One revision of a document (newest first). Superseded ones are editor-only.</summary>
 public sealed record FileVersionDto(
@@ -40,12 +48,15 @@ internal static class FileMapping
     /// <summary>
     /// A file plus the revision it belongs to: version number and document date are
     /// version detail, so they are read from there rather than duplicated per file.
+    /// The document id comes from the same revision — a file id changes with every new
+    /// version, so it is the only identifier that can name the thing being looked at.
     /// </summary>
     public static FileDto ToDto(this StoredFile f, DocumentVersion version, IFileAccessTokenService tokens)
     {
         var token = tokens.CreateToken(f.Id);
         return new FileDto(
             f.Id,
+            version.DocumentId,
             f.OriginalName,
             f.MimeType,
             f.SizeBytes,

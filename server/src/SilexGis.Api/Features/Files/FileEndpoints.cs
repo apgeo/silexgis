@@ -3,9 +3,11 @@ using System.Security.Cryptography;
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Documents;
@@ -35,16 +37,23 @@ public sealed class FileUpdateRequestValidator : AbstractValidator<FileUpdateReq
 
 public static class FileEndpoints
 {
-    /// <summary>Upload cap: photos and survey scans, not raster archives (those go elsewhere).</summary>
-    private const long MaxUploadBytes = 100 * 1024 * 1024;
-
     public static RouteGroupBuilder MapFileEndpoints(this RouteGroupBuilder api)
     {
         var files = api.MapGroup("/files").WithTags("Files");
 
+        // The cap is installation configuration, so the request-size metadata that keeps the
+        // web server from cutting a large upload off before any handler runs has to be built
+        // from the same value. Read here rather than injected: metadata is fixed when the
+        // route is mapped, long before a request exists.
+        var maxRequestBodyBytes = ((IEndpointRouteBuilder)api).ServiceProvider
+            .GetRequiredService<IOptions<FilesOptions>>().Value.MaxRequestBodyBytes;
+
         files.MapPost("/", UploadAsync)
             .DisableAntiforgery() // bearer-token API; no cookie-form surface to forge
+            .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maxRequestBodyBytes))
             .WithSummary("Uploads a file (multipart); attach it to an entity via /attachments.");
+        files.MapGet("/config", ConfigAsync)
+            .WithSummary("Upload limits this installation applies.");
         files.MapGet("/{id:guid}", GetAsync)
             .WithSummary("File metadata with fresh short-lived delivery URLs.");
         files.MapPut("/{id:guid}", UpdateAsync)
@@ -53,6 +62,7 @@ public static class FileEndpoints
 
         files.MapPost("/{id:guid}/versions", UploadVersionAsync)
             .DisableAntiforgery()
+            .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maxRequestBodyBytes))
             .WithSummary("Uploads a new version of a file's document; repoints its attachments to it.");
         files.MapGet("/{id:guid}/versions", ListVersionsAsync)
             .WithSummary("Versions of a file's document (editor-only; superseded versions may hold removed content).");
@@ -70,6 +80,14 @@ public static class FileEndpoints
         return api;
     }
 
+    /// <summary>
+    /// Limits the client needs to know before it starts an upload. Served rather than
+    /// compiled in, so a client build cannot disagree with the server it is talking to and
+    /// let a user watch a large file transfer only to be refused at the end.
+    /// </summary>
+    private static Ok<FileConfigDto> ConfigAsync(IOptions<FilesOptions> options) =>
+        TypedResults.Ok(new FileConfigDto(options.Value.MaxUploadBytes));
+
     private static async Task<Results<Created<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
         IFormFile file,
         SilexGisDbContext db,
@@ -77,8 +95,10 @@ public static class FileEndpoints
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         IPhotoGeotagReader geotagReader,
+        IContentMetadataReader metadataReader,
         IUserContextAccessor userAccessor,
         IAccessContextAccessor accessAccessor,
+        IOptions<FilesOptions> filesOptions,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -93,12 +113,12 @@ public static class FileEndpoints
             return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
-        if (ValidateSize(file) is { } sizeProblem)
+        if (ValidateSize(file, filesOptions.Value.MaxUploadBytes) is { } sizeProblem)
         {
             return sizeProblem;
         }
 
-        var content = await ReadContentAsync(file, fileStore, geotagReader, ct);
+        var content = await ReadContentAsync(file, fileStore, geotagReader, metadataReader, ct);
         var stored = documents.Create(content, content.OriginalName, user.UserId, user.UserId);
         await db.SaveChangesAsync(ct);
 
@@ -113,8 +133,10 @@ public static class FileEndpoints
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         IPhotoGeotagReader geotagReader,
+        IContentMetadataReader metadataReader,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
+        IOptions<FilesOptions> filesOptions,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -129,12 +151,12 @@ public static class FileEndpoints
             return ApiProblems.NotFound("file.not_found"); // existence not disclosed to non-writers
         }
 
-        if (ValidateSize(file) is { } sizeProblem)
+        if (ValidateSize(file, filesOptions.Value.MaxUploadBytes) is { } sizeProblem)
         {
             return sizeProblem;
         }
 
-        var content = await ReadContentAsync(file, fileStore, geotagReader, ct);
+        var content = await ReadContentAsync(file, fileStore, geotagReader, metadataReader, ct);
         try
         {
             var stored = await documents.AddVersionAsync(head.DocumentVersionId, content, ctx.UserId, ct);
@@ -263,10 +285,11 @@ public static class FileEndpoints
         return TypedResults.NoContent();
     }
 
-    private static ProblemHttpResult? ValidateSize(IFormFile file) => file.Length switch
+    private static ProblemHttpResult? ValidateSize(IFormFile file, long maxUploadBytes) => file.Length switch
     {
         0 => ApiProblems.BadRequest("file.empty", "The uploaded file is empty."),
-        > MaxUploadBytes => ApiProblems.BadRequest("file.too_large", $"Files are limited to {MaxUploadBytes / (1024 * 1024)} MB."),
+        var length when length > maxUploadBytes => ApiProblems.BadRequest(
+            "file.too_large", $"Files are limited to {maxUploadBytes / (1024 * 1024)} MB."),
         _ => null,
     };
 
@@ -280,25 +303,34 @@ public static class FileEndpoints
     };
 
     /// <summary>
-    /// Writes the upload to the store and describes it. The geotag is content-derived, so it
-    /// is read from this file's own EXIF rather than carried across from anything.
+    /// Writes the upload to the store and describes it. Both the format and the geotag are
+    /// content-derived: they are read from the bytes that just landed rather than from what
+    /// the upload claimed about itself or carried across from anything.
     /// </summary>
     private static async Task<StoredContent> ReadContentAsync(
-        IFormFile file, IFileStore fileStore, IPhotoGeotagReader geotagReader, CancellationToken ct)
+        IFormFile file,
+        IFileStore fileStore,
+        IPhotoGeotagReader geotagReader,
+        IContentMetadataReader metadataReader,
+        CancellationToken ct)
     {
-        var (storagePath, sha256, mimeType) = await SaveContentAsync(file, fileStore, ct);
-        var kind = KindFromMime(mimeType);
+        var (storagePath, sha256, format) = await SaveContentAsync(file, fileStore, ct);
+        var absolutePath = fileStore.GetAbsolutePath(storagePath);
         return new StoredContent(
             storagePath,
             Path.GetFileName(file.FileName),
-            mimeType,
+            format.MimeType,
             file.Length,
             sha256,
-            kind,
-            kind == FileKind.Image ? geotagReader.TryReadPoint(fileStore.GetAbsolutePath(storagePath)) : null);
+            format.Kind,
+            // Reading EXIF is gated on the sniffed kind, so a photo uploaded under the wrong
+            // media type still has its capture location found — and, more importantly, that
+            // location is then protected like any other, instead of quietly going unread.
+            format.Kind == FileKind.Image ? geotagReader.TryReadPoint(absolutePath) : null,
+            await metadataReader.ReadAsync(absolutePath, format.Kind, ct));
     }
 
-    private static async Task<(string StoragePath, string Sha256, string MimeType)> SaveContentAsync(
+    private static async Task<(string StoragePath, string Sha256, FileFormat Format)> SaveContentAsync(
         IFormFile file, IFileStore fileStore, CancellationToken ct)
     {
         string storagePath;
@@ -313,8 +345,17 @@ public static class FileEndpoints
             sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(saved, ct));
         }
 
-        var mimeType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
-        return (storagePath, sha256, mimeType);
+        // Decided from the stored bytes: the browser's media type and the file name are
+        // whatever the uploader sent, and text extraction later dispatches on the recorded
+        // format — a file filed under the wrong one is handed to a reader that cannot read
+        // it and silently produces nothing.
+        FileFormat format;
+        await using (var saved = await fileStore.OpenReadAsync(storagePath, ct))
+        {
+            format = await ContentSniffer.DetectAsync(saved, file.ContentType, file.FileName, ct);
+        }
+
+        return (storagePath, sha256, format);
     }
 
     private static async Task<Results<Ok<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
@@ -445,13 +486,4 @@ public static class FileEndpoints
 
         return TypedResults.PhysicalFile(path, contentType: "image/webp");
     }
-
-    private static FileKind KindFromMime(string mimeType) => mimeType.ToLowerInvariant() switch
-    {
-        var m when m.StartsWith("image/") => FileKind.Image,
-        "application/pdf" => FileKind.Document,
-        var m when m.StartsWith("text/") => FileKind.Document,
-        var m when m.Contains("word") || m.Contains("opendocument") => FileKind.Document,
-        _ => FileKind.Other,
-    };
 }

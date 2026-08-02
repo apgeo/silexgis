@@ -12,6 +12,9 @@ export type EntranceWrite = components['schemas']['EntranceWriteRequest'];
 export type MapLayerInfo = components['schemas']['MapLayerDto'];
 export type Taxonomy = components['schemas']['TaxonomyDto'];
 export type FeatureType = components['schemas']['FeatureTypeDto'];
+export type DocumentType = components['schemas']['DocumentTypeDto'];
+export type DocumentInfo = components['schemas']['DocumentDto'];
+export type FileConfig = components['schemas']['FileConfigDto'];
 export type EntranceFeatureCollection = components['schemas']['FeatureCollection'];
 export type Me = components['schemas']['MeDto'];
 export type MeUpdate = components['schemas']['MeUpdateRequest'];
@@ -57,6 +60,8 @@ export const queryKeys = {
   geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
   attachments: (entityType: string, entityId: string) => ['attachments', entityType, entityId] as const,
   fileVersions: (fileId: string) => ['file-versions', fileId] as const,
+  fileConfig: ['file-config'] as const,
+  document: (id: string) => ['documents', 'detail', id] as const,
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
@@ -1071,6 +1076,96 @@ export function useHistory(entityType: string, entityId: string | undefined) {
 export function useInvalidateHistory() {
   const queryClient = useQueryClient();
   return () => void queryClient.invalidateQueries({ queryKey: ['history'] });
+}
+
+/**
+ * Upload limits this installation applies. Served rather than compiled in, so a client
+ * build cannot disagree with its server and let someone watch a large file transfer only
+ * to be refused at the end.
+ */
+export function useFileConfig() {
+  return useQuery({
+    queryKey: queryKeys.fileConfig,
+    queryFn: () => unwrap(api.GET('/api/v1/files/config')),
+    staleTime: 60 * 60_000,
+  });
+}
+
+/** The document kinds, each with the metadata schema its documents are described by. */
+export function useDocumentTypes() {
+  return useQuery({
+    queryKey: queryKeys.taxonomy('document-types'),
+    queryFn: () => unwrap(api.GET('/api/v1/document-types')),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** A document kind as it is authored: the schema arrives as raw text, not as a parsed object. */
+export interface DocumentTypeWrite {
+  code: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  metadataSchema: string | null;
+}
+
+export function useCreateDocumentType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: DocumentTypeWrite) => unwrap(api.POST('/api/v1/document-types', { body })),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: queryKeys.taxonomy('document-types') }),
+  });
+}
+
+/**
+ * Saves a document kind. Rewriting the schema publishes a new schema version server-side,
+ * so every document already stored keeps the version it was checked against and is only
+ * re-checked when someone next edits it.
+ */
+export function useUpdateDocumentType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: DocumentTypeWrite & { id: number }) =>
+      unwrap(api.PUT('/api/v1/document-types/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.taxonomy('document-types') });
+      // A schema change alters what every document of the kind may say, so cached
+      // document reads are stale in a way the kind list alone does not express.
+      void queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+}
+
+/** A document: the identity behind a file, with the title and typed metadata that outlive its versions. */
+export function useDocument(id: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.document(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/documents/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id && enabled,
+  });
+}
+
+/**
+ * Updates a document's title, kind and typed metadata. A null `metadata` leaves what is
+ * stored untouched — that is how a title is corrected on a document whose kind has
+ * tightened its schema since the document was written.
+ */
+export function useUpdateDocument() {
+  const invalidateAttachments = useInvalidateAttachments();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: {
+      id: string;
+      title: string;
+      documentTypeId: number | null;
+      metadata: Record<string, unknown> | null;
+    }) => unwrap(api.PUT('/api/v1/documents/{id}', { params: { path: { id } }, body })),
+    onSuccess: (_result, variables) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.document(variables.id) });
+      invalidateAttachments();
+    },
+  });
 }
 
 export function useUploadFile() {

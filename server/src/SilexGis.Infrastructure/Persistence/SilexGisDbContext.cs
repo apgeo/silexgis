@@ -24,6 +24,10 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<FeatureType> FeatureTypes => Set<FeatureType>();
 
+    public DbSet<DocumentType> DocumentTypes => Set<DocumentType>();
+
+    public DbSet<DocumentTypeSchema> DocumentTypeSchemas => Set<DocumentTypeSchema>();
+
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
     public DbSet<Feature> Features => Set<Feature>();

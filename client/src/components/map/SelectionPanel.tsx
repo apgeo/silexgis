@@ -30,7 +30,7 @@ import {
 import HistoryPanel, { type HistoryRestore } from '../history/HistoryPanel.tsx';
 import { applyFeatureRestore } from '../history/historyModel.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
-import { parsePropertiesSchema } from '../features/propertiesSchema.ts';
+import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
 
 export default function SelectionPanel() {
   const { t } = useTranslation();

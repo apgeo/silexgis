@@ -6,12 +6,14 @@ import {
   useAttachments,
   useCreateAttachment,
   useDeleteAttachment,
+  useFileConfig,
   useUploadFile,
   type AttachedEntityType,
   type AttachmentInfo,
   type AttachmentRole,
 } from '../../api/hooks.ts';
 import AttachmentDetails from './AttachmentDetails.tsx';
+import DocumentMetadata from './DocumentMetadata.tsx';
 import FileVersions from './FileVersions.tsx';
 import { formatSize } from './fileFormat.ts';
 
@@ -46,6 +48,7 @@ export default function AttachmentSection({
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { data: attachments } = useAttachments(entityType, entityId);
+  const { data: fileConfig } = useFileConfig();
   const uploadFile = useUploadFile();
   const createAttachment = useCreateAttachment();
   const deleteAttachment = useDeleteAttachment();
@@ -56,6 +59,14 @@ export default function AttachmentSection({
   const documents = (attachments ?? []).filter((a) => a.file.kind !== 'image' && a.id !== report?.id);
 
   const onUpload = async (file: File, roleOverride?: AttachmentRole) => {
+    // Checked before the transfer starts, against the limit the server publishes rather
+    // than a number compiled in here — an installation may raise it, and transferring half
+    // a gigabyte only to be refused at the end is the worst way to find that out.
+    if (fileConfig && file.size > fileConfig.maxUploadBytes) {
+      message.error(t('attachments.tooLarge', { max: formatSize(fileConfig.maxUploadBytes) }));
+      throw new Error('file too large');
+    }
+
     try {
       const stored = await uploadFile.mutateAsync(file);
       await createAttachment.mutateAsync({
@@ -94,7 +105,12 @@ export default function AttachmentSection({
               renderItem={(attachment) => (
                 <List.Item
                   actions={[
-                    ...(canEdit ? [<AttachmentDetails key="details" attachment={attachment} />] : []),
+                    ...(canEdit
+                      ? [
+                          <AttachmentDetails key="details" attachment={attachment} />,
+                          <DocumentMetadata key="document" documentId={attachment.file.documentId} />,
+                        ]
+                      : []),
                     <FileVersions
                       key="versions"
                       fileId={attachment.file.id}
@@ -199,6 +215,7 @@ export default function AttachmentSection({
                     </Typography.Text>
                     <Flex align="center">
                       {canEdit && <AttachmentDetails attachment={attachment} />}
+                      {canEdit && <DocumentMetadata documentId={attachment.file.documentId} />}
                       <FileVersions
                         fileId={attachment.file.id}
                         versionNumber={attachment.file.versionNumber}
@@ -231,7 +248,12 @@ export default function AttachmentSection({
             renderItem={(attachment) => (
               <List.Item
                 actions={[
-                  ...(canEdit ? [<AttachmentDetails key="details" attachment={attachment} />] : []),
+                  ...(canEdit
+                    ? [
+                        <AttachmentDetails key="details" attachment={attachment} />,
+                        <DocumentMetadata key="document" documentId={attachment.file.documentId} />,
+                      ]
+                    : []),
                   <FileVersions
                     key="versions"
                     fileId={attachment.file.id}

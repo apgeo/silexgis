@@ -15,6 +15,7 @@ using SilexGis.Api.Features.Attachments;
 using SilexGis.Api.Features.Audit;
 using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Dashboard;
+using SilexGis.Api.Features.Documents;
 using SilexGis.Api.Features.Export;
 using SilexGis.Api.Features.Files;
 using SilexGis.Api.Features.Geofiles;
@@ -69,6 +70,28 @@ try
             new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase));
         options.SerializerOptions.NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.Strict;
     });
+
+    // A large upload passes three independent ceilings before a handler sees it: the request
+    // body limit, the multipart form limit, and the reverse proxy's own cap. The first two
+    // are set here from the same configured maximum the upload endpoints enforce, because a
+    // body cut off by either never reaches the code that could explain why. The proxy's cap
+    // lives in the deployment configuration and has to be at least as large. The request
+    // body limit stays per-endpoint — raising it globally would let every JSON route accept
+    // half a gigabyte — while the multipart limit is safe to set once, since a body has
+    // already been bounded by the time the form reader runs.
+    var filesOptions = builder.Configuration.GetSection(SilexGis.Infrastructure.Files.FilesOptions.SectionName)
+        .Get<SilexGis.Infrastructure.Files.FilesOptions>() ?? new SilexGis.Infrastructure.Files.FilesOptions();
+    // The multipart ceiling is process-wide, so it has to clear the largest upload any route
+    // accepts — not only the configurable one. Georeferenced rasters accept a fixed 512 MB,
+    // and lowering the configurable limit must not silently cut those off at a size no
+    // message anywhere names. Whichever is larger wins; raise this if a route ever accepts
+    // more than 512 MB on its own.
+    const long largestFixedUploadBytes = 512L * 1024 * 1024;
+    var multipartBodyLengthLimit = Math.Max(
+        filesOptions.MaxRequestBodyBytes,
+        largestFixedUploadBytes + SilexGis.Infrastructure.Files.FilesOptions.MultipartEnvelopeBytes);
+    builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(
+        options => options.MultipartBodyLengthLimit = multipartBodyLengthLimit);
 
     builder.Services.AddProblemDetails();
     builder.Services.AddOpenApi();
@@ -183,6 +206,8 @@ try
     api.MapJobEndpoints();
     api.MapExportEndpoints();
     api.MapFileEndpoints();
+    api.MapDocumentEndpoints();
+    api.MapDocumentTypeEndpoints();
     api.MapAttachmentEndpoints();
     api.MapGeoreferencedMapEndpoints();
     api.MapTripLogEndpoints();

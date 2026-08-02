@@ -10,6 +10,7 @@ import {
   HistoryOutlined,
   LogoutOutlined,
   MailOutlined,
+  ProfileOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
   TeamOutlined,
@@ -55,7 +56,7 @@ export default function AppLayout() {
   const sections = [
     'dashboard', 'caves', 'features', 'geodata', 'trip-logs', 'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
-    'admin/feature-sets', 'settings',
+    'admin/feature-sets', 'admin/document-types', 'settings',
   ] as const;
   const selectedKey = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
 
@@ -159,6 +160,12 @@ export default function AppLayout() {
                 : []),
               ...(can('featureSets')
                 ? [{ key: 'admin/feature-sets', icon: <GroupOutlined />, label: t('nav.featureSets') }]
+                : []),
+              // Gated on write, not read: every account can read the taxonomies, so a read
+              // check would offer this page to everyone. Authoring a kind's schema decides
+              // what every document of that kind may say, which is administration.
+              ...(hasAccessAction(capabilities?.domains.taxonomies, 'write')
+                ? [{ key: 'admin/document-types', icon: <ProfileOutlined />, label: t('nav.documentTypes') }]
                 : []),
             ]}
           />

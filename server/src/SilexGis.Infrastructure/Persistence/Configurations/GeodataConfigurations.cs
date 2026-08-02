@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Identity;
 
@@ -10,16 +11,28 @@ public sealed class StoredFileConfiguration : IEntityTypeConfiguration<StoredFil
 {
     public void Configure(EntityTypeBuilder<StoredFile> builder)
     {
-        builder.ToTable("files");
+        builder.ToTable("files", t =>
+        {
+            t.HasCheckConstraint("ck_files_page_count", "page_count is null or page_count >= 0");
+            t.HasCheckConstraint("ck_files_duration_seconds", "duration_seconds is null or duration_seconds >= 0");
+        });
         builder.Property(x => x.Id).ValueGeneratedNever();
 
         builder.Property(x => x.StoragePath).HasMaxLength(300);
         builder.Property(x => x.OriginalName).HasMaxLength(255);
-        builder.Property(x => x.MimeType).HasMaxLength(127);
+        // Same width the readers bound their values to, so the column and the code that fills
+        // it cannot disagree about what fits.
+        builder.Property(x => x.MimeType).HasMaxLength(FileFormats.MaxMediaTypeLength);
         builder.Property(x => x.Sha256).HasMaxLength(64);
         builder.Property(x => x.Kind).HasConversion<short>();
         builder.Property(x => x.Metadata).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
         builder.Property(x => x.Geom).HasColumnType("geometry(Point, 4326)");
+
+        // Facts read out of the bytes get columns of their own rather than a place in the
+        // jsonb bag, because document lists filter and order on them.
+        builder.Property(x => x.Author).HasMaxLength(255);
+        builder.Property(x => x.Producer).HasMaxLength(255);
+        builder.Property(x => x.Codec).HasMaxLength(64);
 
         // Bytes belong to a document revision; deleting the revision takes them with it.
         builder.HasOne<DocumentVersion>().WithMany().HasForeignKey(x => x.DocumentVersionId)

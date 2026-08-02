@@ -18,7 +18,10 @@ Previous versions:
 - **Map workspace** — OpenLayers map with base layers, cave/feature/geofile overlays,
   geometry editing with snapping and undo, measurement, and search (internal + Nominatim).
 - **Surface features, files & media** — typed symbols and properties, photo galleries,
-  documents, and georeferenced raster (COG) map overlays.
+  documents, audio and video, and georeferenced raster (COG) map overlays. A document has a
+  kind (survey report, permit, trip report, …) and each kind decides which details its
+  documents are asked for, so an archive can be organized the way its club actually files
+  things. Uploads are accepted up to 512 MB by default, and the limit is a setting.
 - **One model for everything on the map** — caves, entrances, centerlines and surface
   features share a single feature model, so any of them can contain another (a karst area
   holding caves, a cave holding its entrances) and be linked to another by a named

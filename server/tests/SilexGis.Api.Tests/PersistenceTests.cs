@@ -5,6 +5,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
 
@@ -68,6 +69,50 @@ public sealed class PersistenceTests : IDisposable
         await TaxonomySeeder.SeedAsync(db);
         (await db.FeatureTypes.CountAsync()).ShouldBe(before);
         (await db.LinkKinds.CountAsync()).ShouldBe(linkKindsBefore);
+    }
+
+    [Fact]
+    public async Task Seeding_backfills_a_schema_nobody_set_and_leaves_one_an_administrator_removed_alone()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var types = scope.ServiceProvider.GetRequiredService<DocumentTypeWriteService>();
+
+        var permit = await db.DocumentTypes.SingleAsync(t => t.Code == "permit");
+        permit.MetadataSchema.ShouldNotBeNull();
+        var shipped = permit.MetadataSchema;
+
+        // The administrator empties the schema box, which is how a kind is told it has none.
+        // Going through the write service rather than writing the columns directly is the
+        // point: this is the state a real edit leaves behind, version move included.
+        await types.UpdateAsync(
+            permit.Id,
+            new DocumentTypeInput(permit.Code, permit.Name, permit.Description, permit.SortOrder, null));
+        permit.MetadataSchema.ShouldBeNull();
+        permit.MetadataSchemaVersion.ShouldBeGreaterThan(DocumentType.FirstSchemaVersion);
+
+        // Restarting the API re-runs the seeder. The removal has to survive it — otherwise the
+        // change is undone silently, and the shipped text is then published as the very
+        // version that was meant to mean "this kind has no schema".
+        await TaxonomySeeder.SeedAsync(db);
+
+        var afterRestart = await db.DocumentTypes.AsNoTracking().SingleAsync(t => t.Id == permit.Id);
+        afterRestart.MetadataSchema.ShouldBeNull();
+        (await db.DocumentTypeSchemas.AsNoTracking()
+            .AnyAsync(s => s.DocumentTypeId == permit.Id && s.Version == afterRestart.MetadataSchemaVersion))
+            .ShouldBeFalse();
+
+        // The positive twin: a kind whose schema was never set — no edit, so still on its
+        // first version — is backfilled, which is what the backfill exists for. Putting the
+        // row back the way it shipped is the same act, so the test also leaves nothing behind.
+        permit.MetadataSchemaVersion = DocumentType.FirstSchemaVersion;
+        await db.SaveChangesAsync();
+
+        await TaxonomySeeder.SeedAsync(db);
+
+        var restored = await db.DocumentTypes.AsNoTracking().SingleAsync(t => t.Id == permit.Id);
+        restored.MetadataSchema.ShouldBe(shipped);
+        restored.MetadataSchemaVersion.ShouldBe(DocumentType.FirstSchemaVersion);
     }
 
     [Fact]
