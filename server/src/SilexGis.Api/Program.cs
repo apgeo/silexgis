@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Serilog;
 using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
@@ -208,6 +209,23 @@ try
         // Permission groups must exist before the bootstrap admin joins Full Administrators.
         await PermissionGroupSeeder.SeedAsync(db);
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
+
+        // Registration joins new accounts to these groups by slug; a slug naming no
+        // group would silently do nothing per signup, so it is called out once here.
+        var configuredDefaults = scope.ServiceProvider
+            .GetRequiredService<IOptions<AuthOptions>>().Value.DefaultPermissionGroupSlugs;
+        if (configuredDefaults.Count > 0)
+        {
+            var known = await db.PermissionGroups
+                .Where(g => configuredDefaults.Contains(g.Slug))
+                .Select(g => g.Slug)
+                .ToListAsync();
+            foreach (var unknown in configuredDefaults.Except(known))
+            {
+                Log.Warning(
+                    "Auth:DefaultPermissionGroups names no existing permission group: {Slug}", unknown);
+            }
+        }
     }
 
     // `dotnet run -- seed-demo`: load the demo dataset and exit.

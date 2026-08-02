@@ -6,8 +6,12 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
+using SilexGis.Domain.Access;
+using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
 
@@ -131,6 +135,51 @@ public sealed class AuthFlowTests : IDisposable
         var login = await client.PostAsJsonAsync(
             "/api/v1/auth/login", new { email, password = "a-long-password-1" });
         login.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Register_joins_the_configured_default_permission_groups()
+    {
+        using var configured = new SilexGisApiFactory(
+            connectionString,
+            new Dictionary<string, string?>
+            {
+                ["Auth:OpenRegistration"] = "true",
+                // One real slug and one typo: a misconfigured name is warned about at
+                // startup and skipped — it must never make registration itself fail.
+                ["Auth:DefaultPermissionGroups"] = "editors, no-such-group",
+            });
+
+        var email = $"defgrp-{Guid.NewGuid():N}@test.local";
+        var register = await configured.CreateClient().PostAsJsonAsync(
+            "/api/v1/auth/register",
+            new { email, password = "a-long-password-1", displayName = "Grouped User" });
+        register.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        using var scope = configured.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var userId = await db.Users.Where(u => u.Email == email).Select(u => u.Id).SingleAsync();
+
+        // The account came out of registration holding the Editors ruleset…
+        var ctx = await RosterHelper.AccessContextOfAsync(db, userId);
+        ctx.IsFullAdmin.ShouldBeFalse();
+        ctx.Entries.ShouldContain(e =>
+            e.Domain == AccessDomain.Features && (e.Actions & AccessAction.Create) != 0);
+
+        // …and no Identity role: permission groups are the only capability carrier.
+        (await db.UserRoles.AnyAsync(r => r.UserId == userId)).ShouldBeFalse();
+
+        // The default default: a plain registration joins nothing beyond the implicit
+        // All Users membership and the built-ins.
+        var plainEmail = $"plain-{Guid.NewGuid():N}@test.local";
+        (await CreateClient().PostAsJsonAsync(
+            "/api/v1/auth/register",
+            new { email = plainEmail, password = "a-long-password-1", displayName = "Plain User" }))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        var plainId = await db.Users.Where(u => u.Email == plainEmail).Select(u => u.Id).SingleAsync();
+        var plain = await RosterHelper.AccessContextOfAsync(db, plainId);
+        plain.Entries.ShouldNotContain(e => e.Domain == AccessDomain.Features);
+        plain.Entries.ShouldContain(e => e.Domain == AccessDomain.MapLayers);
     }
 
     [Fact]

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using SilexGis.Domain;
-
 namespace SilexGis.Api.Auth;
 
 /// <summary>Authentication behavior options.</summary>
@@ -11,8 +9,19 @@ public sealed class AuthOptions
     /// <summary>When false (default), accounts are created by admins only.</summary>
     public bool OpenRegistration { get; set; }
 
-    /// <summary>Global role granted to self-registered users.</summary>
-    public string DefaultRole { get; set; } = GlobalRoles.Viewer;
+    /// <summary>
+    /// Comma-separated permission-group slugs a new account is auto-joined to — at
+    /// self-registration and at auto-provisioning on a first external sign-in. Empty is
+    /// a complete configuration: every account is an implicit member of All Users and
+    /// holds the built-in rules, so nothing has to be configured for signups to work.
+    /// </summary>
+    public string DefaultPermissionGroups { get; set; } = string.Empty;
+
+    /// <summary>The configured slugs, parsed: trimmed, lower-cased, empties dropped.</summary>
+    public IReadOnlyList<string> DefaultPermissionGroupSlugs =>
+        [.. DefaultPermissionGroups
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => s.ToLowerInvariant())];
 
     /// <summary>
     /// Hide the password login form: sign-in is only via configured external providers.

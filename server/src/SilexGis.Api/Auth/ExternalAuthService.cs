@@ -96,9 +96,10 @@ public sealed class ExternalAuthService(
             return ExternalFederationResult.Error("auth.external_create_failed");
         }
 
-        await userManager.AddToRoleAsync(user, authOptions.Value.DefaultRole);
-        // The role by itself grants nothing now — see the registration path.
-        await PermissionGroupSeeder.EnsureRoleMembershipsAsync(db, user.Id, authOptions.Value.DefaultRole);
+        // Auto-provisioned accounts join the same configured default permission groups
+        // as self-registrations — see the registration path.
+        await PermissionGroupSeeder.EnsureMembershipsAsync(
+            db, user.Id, authOptions.Value.DefaultPermissionGroupSlugs);
         CaverDirectory.CreateForNewAccount(db, user.Id, user.DisplayName, user.UserName, user.Email);
         await db.SaveChangesAsync();
 

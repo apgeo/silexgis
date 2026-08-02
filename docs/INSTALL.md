@@ -39,8 +39,9 @@ Edit `.env` before first start and set at least:
 | `SILEXGIS_ADMIN_EMAIL` / `SILEXGIS_ADMIN_PASSWORD` | the first administrator, created on first run |
 | `SILEXGIS_PUBLIC_URL` | the URL users reach the app on (must match exactly — sign-in redirects derive from it) |
 
-The first start creates the database schema, seeds taxonomies and default map layers, and
-creates the admin account. Sign in at `SILEXGIS_PUBLIC_URL` with the admin credentials.
+The first start creates the database schema, seeds taxonomies, default map layers and the
+built-in permission groups, and creates the admin account as a member of **Full
+Administrators**. Sign in at `SILEXGIS_PUBLIC_URL` with the admin credentials.
 
 To load a small demo dataset (2 caves, entrances, features, a geofile and a raster):
 
@@ -230,6 +231,27 @@ depends on it; a failure is reported with the server's own error message.
 **Message wording** is editable per language under **Message texts**. Leave a message alone and
 it follows the product; rewrite it and your version is used until you reset it.
 
+## Accounts and permissions
+
+There are no fixed roles. What an account may do is decided by **permission groups** — named
+rulesets of allow/deny rules, managed under **Administration → Permission groups** — plus a
+per-object *Permissions* tab for one-off grants. The first start seeds a working set:
+
+- **Full Administrators** — membership itself is the grant; the bootstrap admin starts here.
+  The application refuses any change that would leave it without a member who can sign in.
+- **Administrators** — runs the installation (users, settings pages, audit, jobs) but cannot
+  edit permission groups, feature sets or installation secrets.
+- **Editors** and **Reviewers** — create/edit content, and read-past-visibility, respectively.
+- **All Users** — implicit for every account: the map-layer/taxonomy/tag catalogues, the
+  caving-groups and people directories, saving map views, and creating a caving group.
+
+A fresh account is a member of *All Users* only: it can sign in, browse what visibility
+settings and share links admit, keep its own saved views and content, and take part in trips —
+but it cannot create shared content until somebody adds it to a group that allows that (or
+`SILEXGIS__Auth__DefaultPermissionGroups` names groups every new account should join, e.g.
+`editors`). Every group, including the seeded ones except Full Administrators and All Users,
+is editable — rename them, change their rules, or add your own.
+
 ## Sign-in security
 
 Users choose their own second factor under *Settings → Security*: an authenticator app (scan the
@@ -304,7 +326,7 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Notifications__PollSeconds` | `15` | how often queued notifications are sent; **0 switches sending off entirely, and queued messages keep accumulating** |
 | `SILEXGIS__Notifications__DigestHourUtc` | `7` | the hour (UTC) at which daily summaries go out |
 | `SILEXGIS__About__InstanceName` | `SilexGIS` | name used in the messages this installation sends |
-| `SILEXGIS__Access__AllowAnonymousRead` | `false` | let anonymous visitors read public content |
+| `SILEXGIS__Auth__DefaultPermissionGroups` | *(empty)* | comma-separated permission-group slugs (e.g. `editors`) every new account joins at registration or first external sign-in |
 | `SILEXGIS__Map__CenterlineDetailZoom` | `18` | zoom at which cave centerlines switch from passage outlines to full survey detail |
 | `SILEXGIS__Map__CenterlineMaxPaths` | `25000` | line budget per centerline request; over it, outlines are served instead |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |

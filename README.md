@@ -31,9 +31,12 @@ Previous versions:
   public or sign-in-only. A share never reveals a protected location.
 - **Works on a phone** — the map workspace adapts to touch, including full geometry editing by
   finger, and the app installs to a home screen.
-- **Accounts & permissions** — per-user/caving-group/object access control, two-factor sign-in
-  (authenticator app, emailed code or texted code), optional external login (Google/GitHub/OIDC),
-  and location protection for sensitive caves.
+- **Accounts & permissions** — editable permission groups instead of fixed roles: named
+  rulesets of allow/deny rules per resource and scope (everything, own content, a caving
+  group's content, a feature subtree, a named feature set, one object), per-object grants
+  with the same reach, and an explainer that answers "why can this person see that?".
+  Two-factor sign-in (authenticator app, emailed code or texted code), optional external
+  login (Google/GitHub/OIDC), and location protection for sensitive caves.
 - **Email and SMS that an operator controls** — any SMTP server, any SMS gateway that speaks
   HTTP, and the wording of every message editable per language from the admin pages. Configure
   nothing and the app still runs: links and codes go to the server log instead.

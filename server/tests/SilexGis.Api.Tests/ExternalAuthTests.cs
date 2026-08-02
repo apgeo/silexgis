@@ -45,7 +45,9 @@ public sealed class ExternalAuthTests : IDisposable
         first.ErrorCode.ShouldBeNull();
         first.User!.Email.ShouldBe(email);
         first.User.DisplayName.ShouldBe("Ada");
-        (await userManager.IsInRoleAsync(first.User, GlobalRoles.Viewer)).ShouldBeTrue();
+        // No Identity role any more: what an account may do lives in permission groups,
+        // and with no configured registration default the account joins none explicitly.
+        (await userManager.GetRolesAsync(first.User)).ShouldBeEmpty();
 
         // Same external identity → same local account (found by its stored login).
         var again = await service.FederateAsync("google", "sub-1", Principal(email, verified: true), Provider(allowCreate: true));

@@ -114,10 +114,19 @@ public static class PermissionGroupSeeder
     /// <summary>Adds the user to the groups their legacy role maps onto (idempotent).
     /// Test infrastructure that mints role-holding accounts uses this too, so accounts
     /// created after first seed behave like accounts that lived through it.</summary>
-    public static async Task EnsureRoleMembershipsAsync(
-        SilexGisDbContext db, Guid userId, string role, CancellationToken ct = default)
+    public static Task EnsureRoleMembershipsAsync(
+        SilexGisDbContext db, Guid userId, string role, CancellationToken ct = default) =>
+        EnsureMembershipsAsync(db, userId, GroupSlugsForRole(role), ct);
+
+    /// <summary>
+    /// Adds the user to the permission groups named by slug (idempotent, membership rows
+    /// only). Slugs that name no existing group are skipped here — the registration
+    /// default is validated and warned about once at startup, not per signup, and a
+    /// typo in configuration must never make registration itself fail.
+    /// </summary>
+    public static async Task EnsureMembershipsAsync(
+        SilexGisDbContext db, Guid userId, IReadOnlyList<string> slugs, CancellationToken ct = default)
     {
-        var slugs = GroupSlugsForRole(role);
         if (slugs.Count == 0)
         {
             return;
