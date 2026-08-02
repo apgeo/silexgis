@@ -108,7 +108,11 @@ public static class FileEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!CreateRules.MayCreate(ctx, AccessDomain.Files))
+        // An upload creates a document — the identity the bytes hang off — so "who may
+        // upload" is Create in the documents domain rather than a staff-grade right over
+        // the file store. The two are different questions: one is authoring content, the
+        // other is administering the store it lands in.
+        if (!CreateRules.MayCreate(ctx, AccessDomain.Documents))
         {
             return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }

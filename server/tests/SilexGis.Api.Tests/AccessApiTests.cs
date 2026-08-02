@@ -92,6 +92,26 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable
             .First(s => s.GetProperty("scopeKind").GetString() == "featureSet");
         setScope.GetProperty("actions").EnumerateArray()
             .Select(a => a.GetString()).ShouldNotContain("create");
+
+        // Documents are owned content: they carry the trio, so they take every scope
+        // that keys on it, and they contain nothing, so they take neither collection
+        // scope and no kind narrowing.
+        var documents = DomainOf("documents");
+        ScopesOf(documents).ShouldBe(["all", "own", "cavingGroup", "object"], ignoreOrder: true);
+        documents.GetProperty("supportsKindNarrowing").GetBoolean().ShouldBeFalse();
+
+        List<string> ActionsOf(JsonElement domain, string scopeKind) =>
+            [.. domain.GetProperty("scopes").EnumerateArray()
+                .First(s => s.GetProperty("scopeKind").GetString() == scopeKind)
+                .GetProperty("actions").EnumerateArray().Select(a => a.GetString()!)];
+
+        // Uploading a document is a Create right, offered exactly where a prospective
+        // row can be evaluated: domain-wide and against a club binding, never against an
+        // owner column or one existing document.
+        ActionsOf(documents, "all").ShouldContain("create");
+        ActionsOf(documents, "cavingGroup").ShouldContain("create");
+        ActionsOf(documents, "own").ShouldNotContain("create");
+        ActionsOf(documents, "object").ShouldNotContain("create");
     }
 
     [Fact]

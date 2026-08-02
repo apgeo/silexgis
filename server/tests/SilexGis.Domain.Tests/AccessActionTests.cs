@@ -58,5 +58,6 @@ public class AccessActionTests
         ((short)AccessScopeKind.Object).ShouldBe((short)5);
         ((short)AccessDomain.Features).ShouldBe((short)0);
         ((short)AccessDomain.Jobs).ShouldBe((short)18);
+        ((short)AccessDomain.Documents).ShouldBe((short)19);
     }
 }

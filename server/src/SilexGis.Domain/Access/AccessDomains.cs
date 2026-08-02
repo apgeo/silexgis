@@ -13,6 +13,7 @@ public static class AccessDomains
         Geofile => AccessDomain.Geofiles,
         GeoreferencedMap => AccessDomain.GeoreferencedMaps,
         MapView => AccessDomain.MapViews,
+        Document => AccessDomain.Documents,
         _ => throw new ArgumentException($"No access domain for {entity.GetType().Name}.", nameof(entity)),
     };
 }

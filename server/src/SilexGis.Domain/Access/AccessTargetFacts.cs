@@ -46,8 +46,9 @@ public sealed record AccessTargetFacts
     /// </summary>
     public IReadOnlyList<VisibilityFact> VisibilityChain { get; init; } = [];
 
-    /// <summary>Facts of a non-feature protected row (trip log, geofile, raster, view).
-    /// Its visibility chain is just itself — nothing above it to inherit from.</summary>
+    /// <summary>Facts of a non-feature protected row (trip log, geofile, raster, view,
+    /// document). Its visibility chain is just itself — nothing above it to inherit
+    /// from.</summary>
     public static AccessTargetFacts Of(IProtectedEntity entity) => new()
     {
         ObjectId = entity.Id,

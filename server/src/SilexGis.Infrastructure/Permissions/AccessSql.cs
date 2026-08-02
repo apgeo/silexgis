@@ -105,8 +105,11 @@ public static class AccessSql
 
     /// <summary>
     /// Read-visibility fragment for NON-feature protected tables (trips, geofiles,
-    /// rasters, views): the walk without the arms that only exist in the feature world
-    /// (subtree, set, kind/type), visibility consulting the row alone.
+    /// rasters, views, documents): the walk without the arms that only exist in the
+    /// feature world (subtree, set, kind/type), visibility consulting the row alone.
+    /// The aliased table must expose <c>id</c>, <c>owner_user_id</c>,
+    /// <c>caving_group_id</c> and <c>visibility</c>; no soft-delete arm is emitted, so a
+    /// table that soft-deletes must add its own guard the way the feature callers do.
     /// </summary>
     public static (string Sql, DynamicParameters Parameters) VisibleToFragment(
         AccessContext ctx, AccessDomain domain, string alias)

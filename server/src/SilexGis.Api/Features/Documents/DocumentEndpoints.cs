@@ -34,10 +34,11 @@ public sealed class DocumentUpdateRequestValidator : AbstractValidator<DocumentU
 /// belongs to the document rather than to any one revision of it.
 /// </summary>
 /// <remarks>
-/// Access is resolved through the file the document currently serves, which is exactly how
-/// every other path that reaches these bytes resolves it — a document is readable when its
-/// content is, and writable when its content is. That keeps one answer to "may this caller
-/// see this" while the file rules remain the only implementation of it.
+/// A document is content in its own right: rules written against it decide first, then its
+/// owner and its visibility band, and only when none of those has an opinion does the file
+/// it currently serves answer — which is how a document reached by being attached to a cave
+/// or a trip keeps working. Existence is never disclosed to a caller who cannot read: a
+/// refusal reads the same as a document that is not there.
 /// </remarks>
 public static class DocumentEndpoints
 {
@@ -68,13 +69,15 @@ public static class DocumentEndpoints
         }
 
         var subject = await LoadAsync(db, id, ct);
-        if (subject is null || !await FileAccessRules.CanAccessAsync(db, access, ctx, subject.Content.File, ct))
+        if (subject is null
+            || !await DocumentAccessRules.CanReadAsync(db, access, ctx, subject.Document, subject.Content?.File, ct)
+            || subject.Content is null)
         {
-            // Existence of an inaccessible document is not disclosed.
+            // Existence of an unreadable document is not disclosed.
             return ApiProblems.NotFound("document.not_found");
         }
 
-        return TypedResults.Ok(ToDto(subject));
+        return TypedResults.Ok(ToDto(subject, subject.Content));
     }
 
     private static async Task<Results<Ok<DocumentDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -93,9 +96,14 @@ public static class DocumentEndpoints
         }
 
         var subject = await LoadAsync(db, id, ct);
-        if (subject is null || !await FileAccessRules.CanWriteFileAsync(db, access, ctx, subject.Content.File, ct))
+        if (subject is null
+            || !await DocumentAccessRules.CanWriteAsync(db, access, ctx, subject.Document, subject.Content?.File, ct))
         {
-            return ApiProblems.NotFound("document.not_found"); // existence not disclosed to non-writers
+            // A caller who may read but not write learns only that they may not write it;
+            // one who may not read learns nothing at all.
+            return await CanReadAsync(db, access, ctx, subject, ct)
+                ? ApiProblems.Forbidden("document.write_forbidden")
+                : ApiProblems.NotFound("document.not_found");
         }
 
         try
@@ -115,11 +123,16 @@ public static class DocumentEndpoints
         }
 
         var updated = await LoadAsync(db, id, ct);
-        return updated is null ? ApiProblems.NotFound("document.not_found") : TypedResults.Ok(ToDto(updated));
+        return updated?.Content is null
+            ? ApiProblems.NotFound("document.not_found")
+            : TypedResults.Ok(ToDto(updated, updated.Content));
     }
 
-    /// <summary>A document with the revision and file it currently serves, and its kind's code.</summary>
-    private sealed record DocumentSubject(Document Document, DocumentFile Content, string? TypeCode);
+    /// <summary>
+    /// A document with the revision and file it currently serves — null when it serves
+    /// none — and its kind's code.
+    /// </summary>
+    private sealed record DocumentSubject(Document Document, DocumentFile? Content, string? TypeCode);
 
     private static async Task<DocumentSubject?> LoadAsync(SilexGisDbContext db, Guid id, CancellationToken ct)
     {
@@ -129,23 +142,25 @@ public static class DocumentEndpoints
             return null;
         }
 
+        // Loaded whether or not there is content behind it: the document row is what the
+        // access decision is made against, and a document that serves no file is refused
+        // for having nothing to describe, not for being unreadable.
         var content = await DocumentQueries.CurrentFileAsync(db, id, ct);
-        if (content is null)
-        {
-            // A document whose current revision carries no file has nothing to serve and
-            // nothing to resolve access against; it is not shown rather than shown unguarded.
-            return null;
-        }
-
         var typeCode = document.DocumentTypeId is { } typeId
             ? await db.DocumentTypes.AsNoTracking().Where(t => t.Id == typeId).Select(t => t.Code).FirstOrDefaultAsync(ct)
             : null;
         return new DocumentSubject(document, content, typeCode);
     }
 
-    private static DocumentDto ToDto(DocumentSubject subject)
+    private static Task<bool> CanReadAsync(
+        SilexGisDbContext db, IAccessService access, AccessContext ctx, DocumentSubject? subject, CancellationToken ct) =>
+        subject is null
+            ? Task.FromResult(false)
+            : DocumentAccessRules.CanReadAsync(db, access, ctx, subject.Document, subject.Content?.File, ct);
+
+    private static DocumentDto ToDto(DocumentSubject subject, DocumentFile content)
     {
-        var (document, content, typeCode) = subject;
+        var (document, _, typeCode) = subject;
         var file = content.File;
         return new DocumentDto(
             document.Id,

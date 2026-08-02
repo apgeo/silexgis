@@ -7030,7 +7030,7 @@ export interface components {
             actions: components["schemas"]["AccessAction"][];
         };
         /** @enum {unknown} */
-        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs";
+        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents";
         /** @enum {unknown} */
         AccessEffect: "allow" | "deny";
         AccessEntryDto: {

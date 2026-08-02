@@ -106,10 +106,12 @@ public static class AccessQueryExtensions
     }
 
     /// <summary>
-    /// Read filter over non-feature protected rows (trip logs, geofiles, rasters,
-    /// views). Drops the arms that only exist in the feature world — subtree, set,
+    /// Read filter over non-feature protected rows (trip logs, geofiles, rasters, views,
+    /// documents). Drops the arms that only exist in the feature world — subtree, set,
     /// kind/type — and the visibility built-in consults the row alone (nothing above a
-    /// trip log to inherit from).
+    /// trip log to inherit from). Every band left here keys on a column such a row
+    /// actually carries, which is why a domain reaches this overload only when its rows
+    /// carry the owner/caving-group/visibility trio.
     /// </summary>
     public static IQueryable<T> VisibleTo<T>(
         this IQueryable<T> query, AccessContext ctx, AccessDomain domain)

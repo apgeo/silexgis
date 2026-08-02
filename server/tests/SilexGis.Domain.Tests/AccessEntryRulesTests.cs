@@ -86,6 +86,65 @@ public class AccessEntryRulesTests
     }
 
     [Fact]
+    public void Documents_express_the_owned_content_scopes_and_no_others()
+    {
+        // A document row carries the owner/caving-group/visibility trio, so every scope
+        // that keys on one of those columns has a faithful flat form here.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessActions.Everything, AccessScopeKind.All)).ShouldBeNull();
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Read | AccessAction.Write, AccessScopeKind.Own))
+            .ShouldBeNull();
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Read, AccessScopeKind.CavingGroup, scopeId: Anchor))
+            .ShouldBeNull();
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Read | AccessAction.Share, AccessScopeKind.Object,
+            scopeId: Anchor)).ShouldBeNull();
+
+        // A document contains nothing and joins no named set, so the two collection
+        // scopes have no honest answer here — offering them would promise a walk the
+        // flat forms cannot make.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Read, AccessScopeKind.Subtree, scopeFeatureId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Read, AccessScopeKind.FeatureSet, scopeId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+
+        // Kind and type narrowing describe features; there is nothing to narrow here.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Read, AccessScopeKind.All, kind: FeatureKind.Cave))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+
+        // Outside the feature domain the object anchor is scope_id; the feature anchor
+        // column is not a second home for it.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Read, AccessScopeKind.Object, scopeFeatureId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+    }
+
+    [Fact]
+    public void Uploading_a_document_is_a_create_right_and_lands_only_where_it_can_be_keyed()
+    {
+        // "Who may upload a document" is Create in the documents domain. It is
+        // expressible domain-wide and against a club binding — the two shapes with a
+        // prospective row to evaluate — and refused where there is none.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Create, AccessScopeKind.All)).ShouldBeNull();
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Create | AccessAction.Read,
+            AccessScopeKind.CavingGroup, scopeId: Anchor)).ShouldBeNull();
+
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Create, AccessScopeKind.Own))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Create, AccessScopeKind.Object, scopeId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+    }
+
+    [Fact]
     public void Object_scope_is_rejected_in_domains_without_per_object_identity()
     {
         AccessEntryRules.Validate(Entry(

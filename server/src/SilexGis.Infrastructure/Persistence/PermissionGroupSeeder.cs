@@ -14,16 +14,24 @@ namespace SilexGis.Infrastructure.Persistence;
 /// holders are mapped onto them (Admin → Full Administrators; Manager → Editors +
 /// Caving Group Managers; Editor → Editors; Viewer → All Users only), which is how a
 /// pre-redesign database keeps its people's capabilities.
+///
+/// One consequence is worth stating because it is easy to get wrong: adding a resource
+/// domain to the lists below changes what a group is created with, and nothing else. On a
+/// database whose groups already exist the new domain never arrives here, so a right that
+/// moves to a new domain has to be carried over by a data migration — a one-shot act at
+/// the moment the domain appears, when no operator policy about it can exist yet.
 /// </summary>
 public static class PermissionGroupSeeder
 {
-    /// <summary>Content domains: the trio-carrying five plus files and tags — what the
-    /// Editors and Reviewers seeds range over.</summary>
+    /// <summary>Content domains: the trio-carrying rows plus files and tags — what the
+    /// Editors and Reviewers seeds range over. Documents belong here because uploading
+    /// one is a Create right in their own domain, so leaving them out would create these
+    /// groups without the upload they are meant to have.</summary>
     private static readonly AccessDomain[] ContentDomains =
     [
         AccessDomain.Features, AccessDomain.TripLogs, AccessDomain.Geofiles,
         AccessDomain.GeoreferencedMaps, AccessDomain.MapViews, AccessDomain.Files,
-        AccessDomain.Tags,
+        AccessDomain.Documents, AccessDomain.Tags,
     ];
 
     /// <summary>Regular admin runs the installation but cannot rewrite the security

@@ -157,6 +157,7 @@ public static class AccessEntryMapping
                 AccessDomain.GeoreferencedMaps => await db.GeoreferencedMaps.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.MapViews => await db.MapViews.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.Files => await db.StoredFiles.AnyAsync(x => x.Id == scopeId, ct),
+                AccessDomain.Documents => await db.Documents.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.CavingGroups => await db.CavingGroups.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.PermissionGroups => await db.PermissionGroups.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.FeatureSets => await db.FeatureSets.AnyAsync(x => x.Id == scopeId, ct),

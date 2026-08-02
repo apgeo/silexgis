@@ -240,6 +240,7 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
                     AccessDomain.GeoreferencedMaps => db.GeoreferencedMaps.Any(x => x.Id == id),
                     AccessDomain.MapViews => db.MapViews.Any(x => x.Id == id),
                     AccessDomain.Files => db.StoredFiles.Any(x => x.Id == id),
+                    AccessDomain.Documents => db.Documents.Any(x => x.Id == id),
                     AccessDomain.CavingGroups => cavingGroupIds.Contains(id),
                     AccessDomain.PermissionGroups => db.PermissionGroups.Any(x => x.Id == id),
                     AccessDomain.FeatureSets => featureSetIds.Contains(id),

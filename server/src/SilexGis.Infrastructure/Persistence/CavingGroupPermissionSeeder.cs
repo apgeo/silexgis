@@ -18,8 +18,11 @@ namespace SilexGis.Infrastructure.Persistence;
 /// </summary>
 public static class CavingGroupPermissionSeeder
 {
-    /// <summary>The trio-carrying content domains the starter ruleset ranges over.
-    /// Files flow through attachments; tags are not group-bound.</summary>
+    /// <summary>The content domains the starter ruleset ranges over. Files flow through
+    /// attachments; tags are not group-bound. Documents are deliberately absent rather than
+    /// overlooked: this ruleset has never carried the right to add an upload, and nothing
+    /// binds a document to a club yet, so granting it here would be a new right nobody
+    /// asked for.</summary>
     private static readonly AccessDomain[] StarterDomains =
     [
         AccessDomain.Features, AccessDomain.TripLogs, AccessDomain.Geofiles,
