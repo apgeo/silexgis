@@ -157,6 +157,7 @@ public sealed class PerformanceTests : IDisposable
               AND {visibilitySql}
             """);
         AssertRidesEntranceIndex(clusters, "clusters (guarded)");
+        AssertAncestorProbeIsIndexed(clusters, "clusters (guarded)");
 
         // The point layer above the cluster zoom asks the same question through
         // ST_Intersects (the operator the EF query produces); it must reach the same index.
@@ -171,6 +172,7 @@ public sealed class PerformanceTests : IDisposable
               AND {pointsVisibilitySql}
             """);
         AssertRidesEntranceIndex(points, "points (guarded)");
+        AssertAncestorProbeIsIndexed(points, "points (guarded)");
 
         // Batched id lookup: the shape protection and DTO enrichment use after a layer query
         // has produced its rows. The id set is one uuid[] parameter, and 50 ids out of 100k
@@ -217,6 +219,21 @@ public sealed class PerformanceTests : IDisposable
               AND {walkSql}
             """);
         AssertRidesEntranceIndex(walk, "points (guarded, entry-holding)");
+    }
+
+    /// <summary>
+    /// The read-time visibility-inheritance arm (and the exact-view rule beside it) probe
+    /// the ancestor rows once per candidate: <c>EXISTS(… WHERE anc.id = ANY(f.ancestor_ids))</c>.
+    /// That probe must be an index probe — the plan prints its <c>Index Cond</c> — never a
+    /// per-row scan of the feature table. With the probe index-served at 100k rows
+    /// (~6 µs/row measured), `ancestor_ids` itself needs no GIN index: the array is only
+    /// ever the argument of the probe, not the driving side of a lookup.
+    /// </summary>
+    private static void AssertAncestorProbeIsIndexed(string plan, string label)
+    {
+        plan.ShouldContain("Index Cond: (id = ANY (f.ancestor_ids))", Case.Sensitive,
+            $"{label}: the visibility-inheritance EXISTS arm must probe ancestors through an "
+            + "index, not scan for them");
     }
 
     private static void AssertRidesEntranceIndex(string plan, string label)

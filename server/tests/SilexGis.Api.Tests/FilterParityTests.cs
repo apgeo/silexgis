@@ -21,9 +21,10 @@ namespace SilexGis.Api.Tests;
 /// (<c>Features.VisibleTo</c>) and the Dapper fragment
 /// (<c>AccessSql.FeatureVisibleToFragment</c>) — plus the exact-location pair
 /// (<c>FeatureProtection.ExactViewIdsAsync</c> vs <c>AccessSql.ExactViewFragment</c>).
-/// Evaluated for nine caller archetypes over one seeded matrix covering every band of
-/// the walk: object allow over subtree deny, feature-set deny, deny-own∧kind, the
-/// caving-group starter ruleset, read-time visibility inheritance, and a VEL deny on
+/// Evaluated for twelve caller archetypes over one seeded matrix covering every band of
+/// the walk: object allow over subtree deny, feature-set allow and deny, deny-own,
+/// deny-own∧kind, allow-own∧kind (the conjunction that must never widen to all∧kind),
+/// the caving-group starter ruleset, read-time visibility inheritance, and a VEL deny on
 /// one of two protected roots. The forms may never diverge: a mismatch is a security
 /// bug, not a flake.
 /// </summary>
@@ -42,7 +43,10 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
     private Guid velGranteeId;     // Viewer; direct Read+VEL grants on two roots
     private Guid subtreeDeniedId;  // Viewer; subtree deny + object allow inside it
     private Guid setDeniedId;      // Viewer; feature-set deny
+    private Guid setAllowedId;     // Viewer; feature-set allow opening a private member
     private Guid selfDeniedId;     // Editor; deny Read own∧cave
+    private Guid ownDeniedId;      // Editor; deny Read own (unnarrowed)
+    private Guid ownKindAllowedId; // Viewer; allow Read own∧cave — the widening catcher
     private Guid velDeniedId;      // Viewer; global VEL allow + object VEL deny on one root
     private long caveTypeId;
     private long entranceTypeId;
@@ -64,6 +68,8 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
     private Guid entranceCavingGroupProt;
     private Guid caveDenyOwn;         // authenticated, owned by selfDenied — their deny-own∧cave target
     private Guid entranceDenyOwn;
+    private Guid caveOwnDeniedPriv;   // private, owned by ownDenied — deny-own beats ownership
+    private Guid caveOwnKindPriv;     // private, owned by ownKindAllowed — their own∧cave target
     private Guid featureSetId;
     private Guid[] candidateIds = [];
 
@@ -81,6 +87,9 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         velGranteeId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"par-vel-{suffix}@t.local");
         subtreeDeniedId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"par-sub-{suffix}@t.local");
         setDeniedId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"par-set-{suffix}@t.local");
+        setAllowedId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"par-seta-{suffix}@t.local");
+        ownDeniedId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"par-ownd-{suffix}@t.local");
+        ownKindAllowedId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"par-ownk-{suffix}@t.local");
         velDeniedId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"par-veld-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Manager, $"par-mgr-{suffix}@t.local");
 
@@ -117,6 +126,14 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         entranceCavingGroupProt = await AddEntranceAsync(owner, caveCavingGroupProt);
         caveDenyOwn = await CreateCaveAsync(selfDenied, "Par DenyOwn", "authenticated");
         entranceDenyOwn = await AddEntranceAsync(selfDenied, caveDenyOwn);
+        using (var ownDeniedClient = await AuthHelper.BearerClientAsync(factory, $"par-ownd-{suffix}@t.local"))
+        {
+            caveOwnDeniedPriv = await CreateCaveAsync(ownDeniedClient, "Par OwnDenied", "private");
+        }
+
+        // ownKindAllowed is a regular account and cannot author caves; ownership is a row
+        // fact, so the owner authors it and the fact is set directly.
+        caveOwnKindPriv = await CreateCaveAsync(owner, "Par OwnKind", "private");
 
         // Direct object-scope grants ride the per-object surface (the one-off-grant
         // shape of the entry model).
@@ -137,6 +154,14 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
             db.FeatureSets.Add(set);
             db.FeatureSetMembers.Add(new FeatureSetMember { FeatureSetId = set.Id, FeatureId = caveAuth });
 
+            // A second set holding a PRIVATE row: the allow arm has to open something
+            // that nothing else would.
+            var privateSet = new FeatureSet { Name = $"Par Set P {suffix}", Slug = $"par-set-p-{suffix}" };
+            db.FeatureSets.Add(privateSet);
+            db.FeatureSetMembers.Add(new FeatureSetMember { FeatureSetId = privateSet.Id, FeatureId = cavePrivate });
+            db.AccessEntries.Add(Direct(setAllowedId, AccessEffect.Allow, AccessAction.Read,
+                AccessScopeKind.FeatureSet, scopeId: privateSet.Id));
+
             // subtreeDenied: "deny the whole protected area, but allow this one cave" —
             // the walk's signature case (object allow inside a denied subtree).
             db.AccessEntries.Add(Direct(subtreeDeniedId, AccessEffect.Deny, AccessAction.Read,
@@ -152,6 +177,20 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
             db.AccessEntries.Add(Direct(selfDeniedId, AccessEffect.Deny, AccessAction.Read,
                 AccessScopeKind.Own, kind: FeatureKind.Cave));
 
+            // ownDenied: the unnarrowed deny-own — beats the ownership built-in, leaves
+            // everything the Editors allow reaches.
+            db.AccessEntries.Add(Direct(ownDeniedId, AccessEffect.Deny, AccessAction.Read,
+                AccessScopeKind.Own));
+
+            // ownKindAllowed: allow Read own∧cave. The conjunction must ride the scope in
+            // every form — flattened as all∧cave it would open other people's caves.
+            db.AccessEntries.Add(Direct(ownKindAllowedId, AccessEffect.Allow, AccessAction.Read,
+                AccessScopeKind.Own, kind: FeatureKind.Cave));
+
+            // Ownership is the row fact under test; set it without an authoring flow.
+            await db.Features.Where(f => f.Id == caveOwnKindPriv)
+                .ExecuteUpdateAsync(s => s.SetProperty(f => f.OwnerUserId, ownKindAllowedId));
+
             // velDenied: global VEL, vetoed on one root by an object-level deny.
             db.AccessEntries.Add(Direct(velDeniedId, AccessEffect.Allow, AccessAction.ViewExactLocation,
                 AccessScopeKind.All));
@@ -165,7 +204,8 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         [
             cavePrivate, caveAuth, entranceAuth, caveCavingGroup, caveEntryOnly, areaProt,
             caveChain, entranceChain, caveProt, entranceProt, caveCavingGroupProt,
-            entranceCavingGroupProt, caveDenyOwn, entranceDenyOwn,
+            entranceCavingGroupProt, caveDenyOwn, entranceDenyOwn, caveOwnDeniedPriv,
+            caveOwnKindPriv,
         ];
     }
 
@@ -230,11 +270,29 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
         // readability from the cave's visibility, which no entry touched for it).
         visible["set-denied"].ShouldNotContain(caveAuth);
         visible["set-denied"].ShouldContain(caveProt);
+        // Set allow at the Collection level opens a private row that nothing else
+        // admits — and only that row.
+        visible["set-allowed"].ShouldContain(cavePrivate);
+        visible["set-allowed"].ShouldNotContain(caveEntryOnly);
+        visible["set-allowed"].ShouldNotContain(caveOwnKindPriv);
         // deny own∧cave: their own cave vanishes (deny beats ownership), their
         // entrance — another kind — stays via the Editors allow.
         visible["self-denied"].ShouldNotContain(caveDenyOwn);
         visible["self-denied"].ShouldContain(entranceDenyOwn);
         visible["self-denied"].ShouldContain(caveAuth);
+        // The unnarrowed deny-own: their own private cave is gone even though ownership
+        // would admit it, while everything else the Editors allow reaches stays.
+        visible["own-denied"].ShouldNotContain(caveOwnDeniedPriv);
+        visible["own-denied"].ShouldContain(caveAuth);
+        visible["own-denied"].ShouldContain(cavePrivate);
+        // allow own∧cave: their own private cave is admitted, and the conjunction never
+        // widens — somebody else's private cave of the same kind stays hidden in all
+        // three forms (a flattening bug that paired "all" with the kind would show it).
+        visible["own-kind-allowed"].ShouldContain(caveOwnKindPriv);
+        visible["own-kind-allowed"].ShouldNotContain(cavePrivate);
+        visible["own-kind-allowed"].ShouldNotContain(caveOwnDeniedPriv);
+        visible["own-kind-allowed"].ShouldNotContain(caveEntryOnly);
+        visible["own-kind-allowed"].ShouldContain(caveAuth);
     }
 
     [Fact]
@@ -437,7 +495,10 @@ public sealed class FilterParityTests : IAsyncLifetime, IDisposable
             ("vel-grantee", await ContextOf(velGranteeId)),
             ("subtree-denied", await ContextOf(subtreeDeniedId)),
             ("set-denied", await ContextOf(setDeniedId)),
+            ("set-allowed", await ContextOf(setAllowedId)),
             ("self-denied", await ContextOf(selfDeniedId)),
+            ("own-denied", await ContextOf(ownDeniedId)),
+            ("own-kind-allowed", await ContextOf(ownKindAllowedId)),
             ("vel-denied", await ContextOf(velDeniedId)),
         ];
     }

@@ -414,6 +414,211 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable
             .ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task The_guard_counts_only_live_unlocked_reachable_accounts()
+    {
+        // No endpoint deletes or locks a user yet (/users administration is unbuilt), so
+        // the lock/delete arms of the §-style "live membership" rule are pinned against
+        // the guard itself: a locked or deleted account must stop counting, exactly as
+        // the spec words it — live-membership aware, not row-count aware.
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var soleId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"acc-live-{suffix}@t.local");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var guard = scope.ServiceProvider.GetRequiredService<FullAdminGuard>();
+        var fullAdminsId = await db.PermissionGroups
+            .Where(g => g.Slug == SeededPermissionGroups.FullAdministratorsSlug)
+            .Select(g => g.Id).SingleAsync();
+
+        var parked = await db.PermissionGroupMembers
+            .Where(m => m.PermissionGroupId == fullAdminsId && m.MemberKind == AccessSubjectKind.User)
+            .ToListAsync();
+        try
+        {
+            db.PermissionGroupMembers.RemoveRange(parked);
+            db.PermissionGroupMembers.Add(new PermissionGroupMember
+            {
+                PermissionGroupId = fullAdminsId,
+                MemberKind = AccessSubjectKind.User,
+                MemberId = soleId,
+            });
+            await db.SaveChangesAsync();
+            (await guard.AnyLiveFullAdminAsync()).ShouldBeTrue();
+
+            // Locked: the row exists, the person cannot sign in — that is not an admin.
+            var sole = await db.Users.SingleAsync(u => u.Id == soleId);
+            sole.LockoutEnd = DateTimeOffset.UtcNow.AddHours(1);
+            await db.SaveChangesAsync();
+            (await guard.AnyLiveFullAdminAsync()).ShouldBeFalse();
+
+            // An expired lock counts again.
+            sole.LockoutEnd = DateTimeOffset.UtcNow.AddHours(-1);
+            await db.SaveChangesAsync();
+            (await guard.AnyLiveFullAdminAsync()).ShouldBeTrue();
+
+            // Deleted: the membership row dangling behind a vanished account counts for
+            // nothing.
+            db.Users.Remove(sole);
+            await db.SaveChangesAsync();
+            (await guard.AnyLiveFullAdminAsync()).ShouldBeFalse();
+        }
+        finally
+        {
+            await db.PermissionGroupMembers
+                .Where(m => m.PermissionGroupId == fullAdminsId && m.MemberKind == AccessSubjectKind.User)
+                .ExecuteDeleteAsync();
+            foreach (var member in parked)
+            {
+                db.PermissionGroupMembers.Add(new PermissionGroupMember
+                {
+                    PermissionGroupId = member.PermissionGroupId,
+                    MemberKind = member.MemberKind,
+                    MemberId = member.MemberId,
+                });
+            }
+
+            await db.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Removing_the_last_full_administrator_trustee_is_refused()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var soleId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"acc-sole-{suffix}@t.local");
+        using var sole = await AuthHelper.BearerClientAsync(factory, $"acc-sole-{suffix}@t.local");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var fullAdminsId = await db.PermissionGroups
+            .Where(g => g.Slug == SeededPermissionGroups.FullAdministratorsSlug)
+            .Select(g => g.Id).SingleAsync();
+
+        var parked = await db.PermissionGroupMembers
+            .Where(m => m.PermissionGroupId == fullAdminsId && m.MemberKind == AccessSubjectKind.User)
+            .ToListAsync();
+        try
+        {
+            db.PermissionGroupMembers.RemoveRange(parked);
+            db.PermissionGroupMembers.Add(new PermissionGroupMember
+            {
+                PermissionGroupId = fullAdminsId,
+                MemberKind = AccessSubjectKind.User,
+                MemberId = soleId,
+            });
+            await db.SaveChangesAsync();
+
+            // The sole administrator asks to remove their own trustee row: refused with
+            // the lockout code — the installation must never orphan its escape hatch.
+            var severed = await sole.DeleteAsync(
+                $"/api/v1/permission-groups/{fullAdminsId}/members/user/{soleId}");
+            severed.StatusCode.ShouldBe(HttpStatusCode.Conflict, await severed.Content.ReadAsStringAsync());
+            (await severed.Content.ReadAsStringAsync()).ShouldContain(FullAdminGuard.LastFullAdminCode);
+
+            // The refusal rolled back: they are still a full administrator.
+            (await RosterHelper.AccessContextOfAsync(db, soleId)).IsFullAdmin.ShouldBeTrue();
+        }
+        finally
+        {
+            await db.PermissionGroupMembers
+                .Where(m => m.PermissionGroupId == fullAdminsId && m.MemberKind == AccessSubjectKind.User)
+                .ExecuteDeleteAsync();
+            foreach (var member in parked)
+            {
+                db.PermissionGroupMembers.Add(new PermissionGroupMember
+                {
+                    PermissionGroupId = member.PermissionGroupId,
+                    MemberKind = member.MemberKind,
+                    MemberId = member.MemberId,
+                });
+            }
+
+            await db.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Create_scoped_to_a_subtree_reaches_only_that_subtree()
+    {
+        // A Create deny or grant is evaluated against the TARGET context — the
+        // prospective parent's chain — so a subtree-scoped Create opens exactly the area
+        // it names and nothing else. This is the walk deciding creation, not a role.
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"acc-sub-edi-{suffix}@t.local");
+        var creatorId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"acc-sub-cre-{suffix}@t.local");
+        using var editor = await AuthHelper.BearerClientAsync(factory, $"acc-sub-edi-{suffix}@t.local");
+        using var creator = await AuthHelper.BearerClientAsync(factory, $"acc-sub-cre-{suffix}@t.local");
+
+        Guid areaId;
+        long caveTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
+            var karstAreaTypeId = await db.FeatureTypes
+                .Where(t => t.Code == "karst_area").Select(t => t.Id).FirstAsync();
+
+            var created = await editor.PostAsJsonAsync("/api/v1/features", new
+            {
+                kind = "generic",
+                name = $"Create Area {suffix}",
+                featureTypeId = karstAreaTypeId,
+                geometry = new
+                {
+                    type = "Polygon",
+                    coordinates = new[]
+                    {
+                        new[]
+                        {
+                            new[] { 25.10, 45.10 }, new[] { 25.20, 45.10 }, new[] { 25.20, 45.20 },
+                            new[] { 25.10, 45.20 }, new[] { 25.10, 45.10 },
+                        },
+                    },
+                },
+                visibility = "authenticated",
+            });
+            created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+            areaId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+            db.AccessEntries.Add(new AccessEntry
+            {
+                SubjectKind = AccessSubjectKind.User,
+                SubjectId = creatorId,
+                Effect = AccessEffect.Allow,
+                Domain = AccessDomain.Features,
+                Actions = AccessAction.Read | AccessAction.Create,
+                ScopeKind = AccessScopeKind.Subtree,
+                ScopeFeatureId = areaId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Under the area: allowed by the subtree entry.
+        var under = await creator.PostAsJsonAsync("/api/v1/caves", new
+        {
+            name = $"Sub Create {suffix}",
+            caveTypeId,
+            visibility = "private",
+            parentId = areaId,
+            explorationStatus = "Unknown",
+            isShowCave = false,
+        });
+        under.StatusCode.ShouldBe(HttpStatusCode.Created, await under.Content.ReadAsStringAsync());
+
+        // At the root, no entry matches the target context: the default deny stands.
+        var elsewhere = await creator.PostAsJsonAsync("/api/v1/caves", new
+        {
+            name = $"Root Create {suffix}",
+            caveTypeId,
+            visibility = "private",
+            explorationStatus = "Unknown",
+            isShowCave = false,
+        });
+        elsewhere.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await elsewhere.Content.ReadAsStringAsync()).ShouldContain(CreateRules.ForbiddenCode);
+    }
+
     // ---- helpers ----
 
     private static async Task<Guid> CreateCavingGroupAsync(HttpClient client, string name)

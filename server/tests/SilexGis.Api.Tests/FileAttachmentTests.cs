@@ -212,6 +212,61 @@ public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task CavingGroup_attachments_open_to_members_and_close_to_everyone_else()
+    {
+        // The club's documents are not its directory entry: every account can browse the
+        // caving-groups list, but a file attached to the group is for its members — or
+        // for someone a rule names on this very group. Writing takes Write on the group
+        // record; membership alone manages nothing.
+        var created = await owner.PostAsJsonAsync("/api/v1/caving-groups/", new
+        {
+            name = $"Attach Club {Guid.NewGuid():N}"[..30],
+            type = "cavingClub",
+            description = (string?)null,
+            website = (string?)null,
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var groupId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        // The creator (whose per-group manager seed carries Write on this group) enrolls
+        // the member and attaches the club document.
+        (await owner.PostAsJsonAsync($"/api/v1/caving-groups/{groupId}/members", new
+        {
+            caverId = await RosterHelper.CaverIdForAsync(
+                factory,
+                await FindUserIdAsync(viewer)),
+            role = "member",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var file = await UploadAsync(owner, "club-statute.txt", "statute"u8.ToArray(), "text/plain");
+        var fileId = file.GetProperty("id").GetGuid();
+        (await AttachAsync(owner, fileId, "cavingGroup", groupId, role: "document"))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // A member reads the gallery and the file's metadata through the group target.
+        (await viewer.GetAsync($"/api/v1/attachments/?entityType=cavingGroup&entityId={groupId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await viewer.GetAsync($"/api/v1/files/{fileId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // A non-member sees neither — the group being browsable in the directory does
+        // not make its documents readable.
+        (await outsider.GetAsync($"/api/v1/attachments/?entityType=cavingGroup&entityId={groupId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await outsider.GetAsync($"/api/v1/files/{fileId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // Membership reads; it does not manage: the member may not attach.
+        (await AttachAsync(viewer, fileId, "cavingGroup", groupId))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>The authenticated user id behind a bearer client, via /me.</summary>
+    private static async Task<Guid> FindUserIdAsync(HttpClient client)
+    {
+        var me = await client.GetFromJsonAsync<JsonElement>("/api/v1/me");
+        return me.GetProperty("id").GetGuid();
+    }
+
+    [Fact]
     public async Task Soft_deleting_a_feature_hides_its_attachments_from_every_read_path()
     {
         var file = await UploadAsync(owner, "feature-note.txt", "field notes"u8.ToArray(), "text/plain");

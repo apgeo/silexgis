@@ -372,6 +372,17 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         await me.PutAsJsonAsync("/api/v1/me", ProfileBody(firstName: "Ana"));
         await me.PostAsJsonAsync("/api/v1/me/addresses/", NewAddress("Home"));
 
+        // Membership hangs off the person, so the export must carry the roster entry and
+        // the caving groups reached through it — creating one makes that observable.
+        var clubName = $"Export Club {suffix}";
+        (await me.PostAsJsonAsync("/api/v1/caving-groups/", new
+        {
+            name = clubName,
+            type = "cavingClub",
+            description = (string?)null,
+            website = (string?)null,
+        })).StatusCode.ShouldBe(HttpStatusCode.Created);
+
         var requested = await me.PostAsync("/api/v1/me/data-export/", null);
         var exportId = JsonDocument.Parse(await requested.Content.ReadAsStringAsync())
             .RootElement.GetProperty("id").GetGuid();
@@ -399,10 +410,23 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         names.ShouldContain("account.json");
         names.ShouldContain("addresses.json");
         names.ShouldContain("visibility.json");
+        names.ShouldContain("caver.json");
+        names.ShouldContain("caving-groups.json");
 
         var account = await ReadEntryAsync(archive, "account.json");
         account.ShouldContain("Ana");
         account.ShouldContain(MyEmail);
+
+        // The person behind the account, and the memberships that flow through them.
+        var caver = await ReadEntryAsync(archive, "caver.json");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var roster = await db.Cavers.AsNoTracking().SingleAsync(c => c.UserId == myId);
+            caver.ShouldContain(roster.Id.ToString());
+        }
+
+        (await ReadEntryAsync(archive, "caving-groups.json")).ShouldContain(clubName);
     }
 
     [Fact]
