@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
   CarOutlined,
+  CodeSandboxOutlined,
   DashboardOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
@@ -53,7 +54,7 @@ export default function AppLayout() {
   // "settings" is listed so an unmatched path does not fall through to highlighting the map.
   // It matches no menu item, so nothing lights up — settings is not a sidebar destination.
   const sections = [
-    'dashboard', 'caves', 'features', 'geodata', 'trip-logs', 'caving-groups', 'cavers',
+    'map3d', 'dashboard', 'caves', 'features', 'geodata', 'trip-logs', 'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
     'admin/feature-sets', 'settings',
   ] as const;
@@ -132,6 +133,7 @@ export default function AppLayout() {
             }}
             items={[
               { key: 'map', icon: <EnvironmentOutlined />, label: t('nav.map') },
+              { key: 'map3d', icon: <CodeSandboxOutlined />, label: t('nav.map3d') },
               { key: 'dashboard', icon: <DashboardOutlined />, label: t('nav.dashboard') },
               { key: 'caves', icon: <TableOutlined />, label: t('nav.caves') },
               { key: 'features', icon: <GoldOutlined />, label: t('nav.features') },

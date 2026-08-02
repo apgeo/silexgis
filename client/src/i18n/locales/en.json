@@ -4,6 +4,7 @@
   },
   "nav": {
     "map": "Map",
+    "map3d": "3D view",
     "dashboard": "Dashboard",
     "caves": "Caves",
     "features": "Features",
@@ -776,6 +777,12 @@
     "popOut3d": "Open 3D viewer window",
     "viewer3dTitle": "3D viewer",
     "viewer3dEmpty": "Select a cave with a 3D model to display it here."
+  },
+  "scene3d": {
+    "unsupportedTitle": "This browser cannot show the 3D view",
+    "unsupportedHint": "The 3D view needs WebGL 2, which this browser or its graphics driver does not provide. Try an up-to-date browser, or keep using the 2D map.",
+    "openFlatMap": "Open the 2D map",
+    "startFailed": "The 3D view could not be started"
   },
   "caveview": {
     "loadError": "Failed to load the 3D model"

@@ -1,0 +1,50 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Layout glue for the 3D scene surface, plus the two pieces of chrome the engine
+   insists on drawing itself. */
+.scene3d-wrap {
+  position: relative;
+  height: 100%;
+}
+
+.scene3d-canvas {
+  width: 100%;
+  height: 100%;
+  /* Same neutral fill the 2D map uses before its tiles arrive. */
+  background: #e8ecef;
+}
+
+/* The engine appends its own attribution strip and styles it as 10px white text with a shadow,
+   which is unreadable over a light basemap. It is not hidden: the tile licences require the
+   attribution to be shown, and the 2D map shows it too. Restyled instead to match the
+   translucent pill the map uses for on-canvas chrome. */
+.scene3d-canvas .cesium-widget-credits {
+  left: 4px;
+  bottom: 4px;
+  padding: 2px 8px;
+  color: rgba(0, 0, 0, 0.75);
+  font-size: 11px;
+  text-shadow: none;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 8px;
+}
+
+.scene3d-canvas .cesium-widget-credits a {
+  color: inherit;
+}
+
+html[data-theme='dark'] .scene3d-canvas {
+  background: #1f1f1f;
+}
+
+html[data-theme='dark'] .scene3d-canvas .cesium-widget-credits {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.65);
+}
+
+/* The engine's own failure overlay is disabled in favour of the application's alert, so nothing
+   should ever render it. Kept hidden rather than trusted: it is an untranslated English panel
+   with a link to an external site, and it would cover the whole scene if a future engine
+   version raised it by another route. */
+.scene3d-canvas .cesium-widget-errorPanel {
+  display: none;
+}

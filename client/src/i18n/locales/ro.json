@@ -4,6 +4,7 @@
   },
   "nav": {
     "map": "Hartă",
+    "map3d": "Vizualizare 3D",
     "dashboard": "Panou de bord",
     "caves": "Peșteri",
     "features": "Elemente",
@@ -776,6 +777,12 @@
     "popOut3d": "Deschide fereastra 3D",
     "viewer3dTitle": "Vizualizator 3D",
     "viewer3dEmpty": "Selectează o peșteră cu model 3D pentru a-l afișa aici."
+  },
+  "scene3d": {
+    "unsupportedTitle": "Acest browser nu poate afișa vizualizarea 3D",
+    "unsupportedHint": "Vizualizarea 3D are nevoie de WebGL 2, pe care acest browser sau driverul său grafic nu îl oferă. Încearcă un browser actualizat sau folosește în continuare harta 2D.",
+    "openFlatMap": "Deschide harta 2D",
+    "startFailed": "Vizualizarea 3D nu a putut fi pornită"
   },
   "caveview": {
     "loadError": "Modelul 3D nu a putut fi încărcat"
