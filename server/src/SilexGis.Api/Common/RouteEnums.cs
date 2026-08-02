@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Auth;
 
 namespace SilexGis.Api.Common;
@@ -17,4 +18,7 @@ public static class RouteEnums
 {
     public static bool TryParseTwoFactorMethod(string? value, out TwoFactorMethod method) =>
         Enum.TryParse(value, ignoreCase: true, out method) && Enum.IsDefined(method);
+
+    public static bool TryParseSubjectKind(string? value, out AccessSubjectKind kind) =>
+        Enum.TryParse(value, ignoreCase: true, out kind) && Enum.IsDefined(kind);
 }

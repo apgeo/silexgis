@@ -335,6 +335,85 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable
         (await admin.DeleteAsync($"/api/v1/feature-sets/{setId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
+    [Fact]
+    public async Task Set_membership_speaks_only_of_features_the_caller_may_read()
+    {
+        // Set membership moves access, and the ids in a replace resolve through the
+        // caller's own visibility: an unreadable feature is answered as nonexistent
+        // (never an existence oracle), and an unreadable member already in the set
+        // survives a round-trip edit that could not have listed it. The delegated set
+        // keeper here is a regular account — somebody trusted with sets, not with
+        // reading everything.
+        var openCave = await CreateCaveAsync(editor, $"Set Open {suffix}", "authenticated");
+        var hiddenCave = await CreateCaveAsync(editor, $"Set Hidden {suffix}");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var delegated = new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = viewerId,
+            Effect = AccessEffect.Allow,
+            Domain = AccessDomain.FeatureSets,
+            Actions = AccessAction.Read | AccessAction.Create | AccessAction.Write,
+            ScopeKind = AccessScopeKind.All,
+        };
+        db.AccessEntries.Add(delegated);
+        await db.SaveChangesAsync();
+        try
+        {
+            var created = await viewer.PostAsJsonAsync("/api/v1/feature-sets/", new
+            {
+                name = $"Visible Only {suffix}",
+                description = (string?)null,
+            });
+            created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+            var setId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+            // A private cave of somebody else's reads as nonexistent.
+            var probed = await viewer.PutAsJsonAsync($"/api/v1/feature-sets/{setId}/members", new
+            {
+                featureIds = new[] { openCave, hiddenCave },
+            });
+            probed.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await probed.Content.ReadAsStringAsync()).ShouldContain("feature_set.feature_not_found");
+
+            (await viewer.PutAsJsonAsync($"/api/v1/feature-sets/{setId}/members", new
+            {
+                featureIds = new[] { openCave },
+            })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+            // A full administrator adds the hidden member; the keeper's members view
+            // stays filtered to what they may read.
+            (await admin.PutAsJsonAsync($"/api/v1/feature-sets/{setId}/members", new
+            {
+                featureIds = new[] { openCave, hiddenCave },
+            })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+            var mine = await viewer.GetFromJsonAsync<JsonElement>($"/api/v1/feature-sets/{setId}/members");
+            mine.EnumerateArray().Select(m => m.GetProperty("id").GetGuid())
+                .ShouldBe([openCave]);
+
+            // The round-trip edit the keeper CAN express never drops what they cannot
+            // see — dropping a member can cancel a deny that names the set.
+            (await viewer.PutAsJsonAsync($"/api/v1/feature-sets/{setId}/members", new
+            {
+                featureIds = new[] { openCave },
+            })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+            var all = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/feature-sets/{setId}/members");
+            all.EnumerateArray().Select(m => m.GetProperty("id").GetGuid())
+                .ShouldBe([openCave, hiddenCave], ignoreOrder: true);
+
+            (await admin.PutAsJsonAsync($"/api/v1/feature-sets/{setId}/members", new { featureIds = Array.Empty<Guid>() }))
+                .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+            (await admin.DeleteAsync($"/api/v1/feature-sets/{setId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        }
+        finally
+        {
+            db.AccessEntries.Remove(delegated);
+            await db.SaveChangesAsync();
+        }
+    }
+
     // ---- rules written straight onto an object ----
 
     [Fact]
@@ -455,6 +534,70 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task The_escape_hatch_trustee_list_is_full_administrator_business_only()
+    {
+        // Full Administrators holds no entries, so the entry-based no-amplification
+        // bound sees nothing to object to — yet a trustee row there IS everything at
+        // once. A delegated PermissionGroups·Write on that very group must not be a
+        // ladder into it, in either direction.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var groups = await db.PermissionGroups.AsNoTracking()
+            .Where(g => g.Slug == SeededPermissionGroups.FullAdministratorsSlug
+                || g.Slug == SeededPermissionGroups.AllUsersSlug)
+            .ToDictionaryAsync(g => g.Slug, g => g.Id);
+        var fullAdminsId = groups[SeededPermissionGroups.FullAdministratorsSlug];
+
+        var delegated = new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = editorId,
+            Effect = AccessEffect.Allow,
+            Domain = AccessDomain.PermissionGroups,
+            Actions = AccessAction.Read | AccessAction.Write,
+            ScopeKind = AccessScopeKind.Object,
+            ScopeId = fullAdminsId,
+        };
+        db.AccessEntries.Add(delegated);
+        await db.SaveChangesAsync();
+        try
+        {
+            var selfAppointed = await editor.PostAsJsonAsync(
+                $"/api/v1/permission-groups/{fullAdminsId}/members", new
+                {
+                    memberKind = "user",
+                    memberId = editorId,
+                });
+            selfAppointed.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+            (await selfAppointed.Content.ReadAsStringAsync())
+                .ShouldContain(AccessEntryRules.ExceedsOwnRightsCode);
+
+            // Stripping an administrator is a security-model rewrite too.
+            var adminMemberId = await db.PermissionGroupMembers.AsNoTracking()
+                .Where(m => m.PermissionGroupId == fullAdminsId && m.MemberKind == AccessSubjectKind.User)
+                .Select(m => m.MemberId)
+                .FirstAsync();
+            (await editor.DeleteAsync(
+                    $"/api/v1/permission-groups/{fullAdminsId}/members/user/{adminMemberId}"))
+                .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+            // All Users has no membership rows at all — every account is implicit.
+            (await admin.PostAsJsonAsync(
+                    $"/api/v1/permission-groups/{groups[SeededPermissionGroups.AllUsersSlug]}/members", new
+                    {
+                        memberKind = "user",
+                        memberId = editorId,
+                    }))
+                .StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        }
+        finally
+        {
+            db.AccessEntries.Remove(delegated);
+            await db.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
     public async Task A_trustee_may_not_be_handed_rights_the_granter_lacks()
     {
         // A ruleset that grants more than an Editor holds…
@@ -509,7 +652,7 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateCaveAsync(HttpClient author, string name)
+    private async Task<Guid> CreateCaveAsync(HttpClient author, string name, string visibility = "private")
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -519,7 +662,7 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable
         {
             name,
             caveTypeId,
-            visibility = "private",
+            visibility,
             explorationStatus = "Unknown",
             isShowCave = false,
         });

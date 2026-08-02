@@ -213,8 +213,12 @@ public static class FeatureSetEndpoints
             return ApiProblems.Forbidden();
         }
 
+        // Ids are resolved through the caller's own visibility: a feature they may not
+        // read is answered as nonexistent (never an existence oracle), and cannot be
+        // pulled under the set's rules by someone who cannot even see it.
         var requested = request.FeatureIds.Distinct().ToList();
         var known = await db.Features.AsNoTracking()
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => requested.Contains(f.Id))
             .Select(f => f.Id)
             .ToListAsync(ct);
@@ -223,10 +227,20 @@ public static class FeatureSetEndpoints
             return ApiProblems.BadRequest("feature_set.feature_not_found", "A named feature does not exist.");
         }
 
+        // The replace covers the caller's visible subset only. The members route serves
+        // them the same subset, so a round-trip edit that omitted an unreadable member
+        // would otherwise silently drop it — and dropping a member can cancel a deny
+        // that names the set.
         var current = await db.FeatureSetMembers.Where(m => m.FeatureSetId == id).ToListAsync(ct);
         var currentIds = current.Select(m => m.FeatureId).ToHashSet();
+        var visibleCurrentIds = (await db.Features.AsNoTracking()
+                .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+                .Where(f => currentIds.Contains(f.Id))
+                .Select(f => f.Id)
+                .ToListAsync(ct))
+            .ToHashSet();
         var added = requested.Where(f => !currentIds.Contains(f)).ToList();
-        var removed = currentIds.Where(f => !requested.Contains(f)).ToList();
+        var removed = visibleCurrentIds.Where(f => !requested.Contains(f)).ToList();
         if (added.Count == 0 && removed.Count == 0)
         {
             return TypedResults.NoContent();

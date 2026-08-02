@@ -448,7 +448,8 @@ public static class PermissionGroupEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!await db.PermissionGroups.AnyAsync(g => g.Id == id, ct))
+        var group = await db.PermissionGroups.AsNoTracking().FirstOrDefaultAsync(g => g.Id == id, ct);
+        if (group is null)
         {
             return ApiProblems.NotFound(NotFoundCode);
         }
@@ -456,6 +457,22 @@ public static class PermissionGroupEndpoints
         if (!Holds(ctx, AccessAction.Write, id))
         {
             return ApiProblems.Forbidden();
+        }
+
+        // The protected groups are not ordinary trustee surfaces. All Users has no
+        // membership rows at all — every account is an implicit member. And Full
+        // Administrators carries no entries, so the entry-based no-amplification bound
+        // below would wave its trustee list through — yet adding a trustee there hands
+        // out everything at once. Only someone who already holds everything may do that.
+        if (string.Equals(group.Slug, SeededPermissionGroups.AllUsersSlug, StringComparison.Ordinal))
+        {
+            return ApiProblems.Conflict(ProtectedCode, "Every account is an implicit member of this group.");
+        }
+
+        if (string.Equals(group.Slug, SeededPermissionGroups.FullAdministratorsSlug, StringComparison.Ordinal)
+            && !ctx.IsFullAdmin)
+        {
+            return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
         }
 
         var exists = request.MemberKind == AccessSubjectKind.User
@@ -490,7 +507,7 @@ public static class PermissionGroupEndpoints
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> RemoveMemberAsync(
         Guid id,
-        AccessSubjectKind memberKind,
+        string memberKind,
         Guid memberId,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
@@ -503,7 +520,17 @@ public static class PermissionGroupEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!await db.PermissionGroups.AnyAsync(g => g.Id == id, ct))
+        // Taken as a string and parsed case-insensitively: the client echoes the
+        // camelCase wire value ("user", "cavingGroup") back into the URL, which the
+        // default enum route binding would reject as an unhandled 500.
+        if (!RouteEnums.TryParseSubjectKind(memberKind, out var parsedKind))
+        {
+            return ApiProblems.BadRequest(
+                "permission_group.member_kind_unknown", $"Unknown member kind '{memberKind}'.");
+        }
+
+        var group = await db.PermissionGroups.AsNoTracking().FirstOrDefaultAsync(g => g.Id == id, ct);
+        if (group is null)
         {
             return ApiProblems.NotFound(NotFoundCode);
         }
@@ -513,8 +540,17 @@ public static class PermissionGroupEndpoints
             return ApiProblems.Forbidden();
         }
 
+        // The escape hatch's member list cuts both ways: stripping administrators is as
+        // much a security-model rewrite as appointing them, so it too is reserved to
+        // someone who already holds full administration.
+        if (string.Equals(group.Slug, SeededPermissionGroups.FullAdministratorsSlug, StringComparison.Ordinal)
+            && !ctx.IsFullAdmin)
+        {
+            return ApiProblems.Forbidden(AccessEntryRules.ExceedsOwnRightsCode);
+        }
+
         var member = await db.PermissionGroupMembers.FirstOrDefaultAsync(m => m.PermissionGroupId == id
-            && m.MemberKind == memberKind && m.MemberId == memberId, ct);
+            && m.MemberKind == parsedKind && m.MemberId == memberId, ct);
         if (member is null)
         {
             return ApiProblems.NotFound("permission_group.member_not_found");
