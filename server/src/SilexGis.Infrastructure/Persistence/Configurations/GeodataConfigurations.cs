@@ -19,14 +19,14 @@ public sealed class StoredFileConfiguration : IEntityTypeConfiguration<StoredFil
         builder.Property(x => x.Sha256).HasMaxLength(64);
         builder.Property(x => x.Kind).HasConversion<short>();
         builder.Property(x => x.Metadata).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
-        builder.Property(x => x.VersionNumber).HasDefaultValue(1);
         builder.Property(x => x.Geom).HasColumnType("geometry(Point, 4326)");
 
-        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.UploadedBy).OnDelete(DeleteBehavior.SetNull);
+        // Bytes belong to a document revision; deleting the revision takes them with it.
+        builder.HasOne<DocumentVersion>().WithMany().HasForeignKey(x => x.DocumentVersionId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(x => x.Sha256);
-        // One row per (group, number); doubles as the concurrency guard for racing uploads.
-        builder.HasIndex(x => new { x.VersionGroupId, x.VersionNumber }).IsUnique();
+        builder.HasIndex(x => x.DocumentVersionId);
         // Photo-map endpoint filters by bbox on the EXIF point.
         builder.HasIndex(x => x.Geom).HasMethod("gist");
     }

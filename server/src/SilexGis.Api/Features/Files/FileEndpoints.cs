@@ -8,6 +8,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Persistence;
 
@@ -52,11 +53,11 @@ public static class FileEndpoints
 
         files.MapPost("/{id:guid}/versions", UploadVersionAsync)
             .DisableAntiforgery()
-            .WithSummary("Uploads a new version onto a file's head; repoints its attachments to it.");
+            .WithSummary("Uploads a new version of a file's document; repoints its attachments to it.");
         files.MapGet("/{id:guid}/versions", ListVersionsAsync)
-            .WithSummary("Version chain of a file (editor-only; superseded versions may hold removed content).");
+            .WithSummary("Versions of a file's document (editor-only; superseded versions may hold removed content).");
         files.MapDelete("/{id:guid}", DeleteVersionAsync)
-            .WithSummary("Deletes a superseded (non-head) file version.");
+            .WithSummary("Deletes a superseded (non-current) version of a file's document.");
 
         // Content delivery authenticates via the short-lived token in the URL — browsers
         // load these ambiently (img/src, geotiff.js) and cannot send bearer headers.
@@ -72,6 +73,7 @@ public static class FileEndpoints
     private static async Task<Results<Created<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
         IFormFile file,
         SilexGisDbContext db,
+        DocumentWriteService documents,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         IPhotoGeotagReader geotagReader,
@@ -96,30 +98,18 @@ public static class FileEndpoints
             return sizeProblem;
         }
 
-        var (storagePath, sha256, mimeType) = await SaveContentAsync(file, fileStore, ct);
-        var kind = KindFromMime(mimeType);
-        var stored = new StoredFile
-        {
-            StoragePath = storagePath,
-            OriginalName = Path.GetFileName(file.FileName),
-            MimeType = mimeType,
-            SizeBytes = file.Length,
-            Sha256 = sha256,
-            UploadedBy = user.UserId,
-            Kind = kind,
-            Geom = kind == FileKind.Image ? geotagReader.TryReadPoint(fileStore.GetAbsolutePath(storagePath)) : null,
-        };
-        stored.VersionGroupId = stored.Id; // first version in its own chain
-        db.StoredFiles.Add(stored);
+        var content = await ReadContentAsync(file, fileStore, geotagReader, ct);
+        var stored = documents.Create(content, content.OriginalName, user.UserId, user.UserId);
         await db.SaveChangesAsync(ct);
 
-        return TypedResults.Created($"/api/v1/files/{stored.Id}", stored.ToDto(tokens));
+        return TypedResults.Created($"/api/v1/files/{stored.File.Id}", stored.File.ToDto(stored.Version, tokens));
     }
 
     private static async Task<Results<Created<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadVersionAsync(
         Guid id,
         IFormFile file,
         SilexGisDbContext db,
+        DocumentWriteService documents,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         IPhotoGeotagReader geotagReader,
@@ -133,18 +123,10 @@ public static class FileEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var head = await db.StoredFiles.FirstOrDefaultAsync(f => f.Id == id, ct);
+        var head = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
         if (head is null || !await FileAccessRules.CanWriteFileAsync(db, access, ctx, head, ct))
         {
             return ApiProblems.NotFound("file.not_found"); // existence not disclosed to non-writers
-        }
-
-        var maxVersion = await db.StoredFiles
-            .Where(f => f.VersionGroupId == head.VersionGroupId)
-            .MaxAsync(f => f.VersionNumber, ct);
-        if (head.VersionNumber != maxVersion)
-        {
-            return ApiProblems.Conflict("file.not_head", "A newer version already exists; upload onto the current head.");
         }
 
         if (ValidateSize(file) is { } sizeProblem)
@@ -152,59 +134,21 @@ public static class FileEndpoints
             return sizeProblem;
         }
 
-        var (storagePath, sha256, mimeType) = await SaveContentAsync(file, fileStore, ct);
-        var kind = KindFromMime(mimeType);
-        var stored = new StoredFile
-        {
-            StoragePath = storagePath,
-            OriginalName = Path.GetFileName(file.FileName),
-            MimeType = mimeType,
-            SizeBytes = file.Length,
-            Sha256 = sha256,
-            UploadedBy = ctx.UserId,
-            Kind = kind,
-            VersionGroupId = head.VersionGroupId,
-            VersionNumber = maxVersion + 1,
-            DocumentDate = head.DocumentDate, // the document's date carries across versions
-            // Geotag is content-derived, so re-read it from this version's own EXIF.
-            Geom = kind == FileKind.Image ? geotagReader.TryReadPoint(fileStore.GetAbsolutePath(storagePath)) : null,
-        };
-        db.StoredFiles.Add(stored);
-
-        // Repoint attachments from the old head to the new one, tracked so the change is audited
-        // — entity timelines get a "document updated" event from the Attachment FileId diff.
-        // Selecting by FileId moves feature-targeted rows and polymorphic-pair rows alike; the
-        // target side of each row is untouched.
-        var attachments = await db.Attachments.Where(a => a.FileId == head.Id).ToListAsync(ct);
-        foreach (var attachment in attachments)
-        {
-            attachment.FileId = stored.Id;
-        }
-
-        // Tags belong to the document, not a specific version — move file taggings to the new
-        // head. A file is only ever a polymorphic-pair target (never a feature), so the pair
-        // filter reaches every tagging of this document.
-        var taggings = await db.Taggings
-            .Where(t => t.EntityType == AttachedEntityType.StoredFile && t.EntityId == head.Id)
-            .ToListAsync(ct);
-        foreach (var tagging in taggings)
-        {
-            tagging.EntityId = stored.Id;
-        }
-
+        var content = await ReadContentAsync(file, fileStore, geotagReader, ct);
         try
         {
-            await db.SaveChangesAsync(ct);
+            var stored = await documents.AddVersionAsync(head.DocumentVersionId, content, ctx.UserId, ct);
+            return TypedResults.Created($"/api/v1/files/{stored.File.Id}", stored.File.ToDto(stored.Version, tokens));
         }
-        catch (DbUpdateException)
+        catch (DocumentWriteException e)
         {
-            // Two uploads raced onto the same head: both computed the same next version number
-            // and the unique (version_group_id, version_number) index rejected the loser. Surface
-            // it as the same conflict a sequential not-head upload would get.
-            return ApiProblems.Conflict("file.not_head", "A newer version already exists; upload onto the current head.");
+            // Uploads stream straight into the store, so the bytes land before the write path
+            // can decide whether they belong to a version at all. A rejected upload takes them
+            // back out; nothing references them, and leaving them would grow the store by one
+            // dead blob per conflict.
+            await fileStore.DeleteAsync(content.StoragePath, CancellationToken.None);
+            return ToProblem(e);
         }
-
-        return TypedResults.Created($"/api/v1/files/{stored.Id}", stored.ToDto(tokens));
     }
 
     private static async Task<Results<Ok<IReadOnlyList<FileVersionDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListVersionsAsync(
@@ -223,24 +167,40 @@ public static class FileEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (file is null)
+        var subject = await DocumentQueries.FileWithVersionAsync(db, id, ct);
+        if (subject is null)
         {
             return ApiProblems.NotFound("file.not_found");
         }
 
-        var chain = await db.StoredFiles.AsNoTracking()
-            .Where(f => f.VersionGroupId == file.VersionGroupId)
-            .OrderByDescending(f => f.VersionNumber)
-            .ToListAsync(ct);
+        // One row per revision, newest first, each represented by its own oldest file — the
+        // one the upload produced, before anything derived from it.
+        var rows = await (from version in db.DocumentVersions.AsNoTracking()
+                          join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
+                          where version.DocumentId == subject.Version.DocumentId
+                          select new { Version = version, File = file }).ToListAsync(ct);
+        var versions = rows
+            .GroupBy(r => r.Version.Id)
+            .Select(g => new
+            {
+                Version = g.First().Version,
+                File = g.OrderBy(r => r.File.CreatedAt).ThenBy(r => r.File.Id).First().File,
+            })
+            .OrderByDescending(x => x.Version.VersionNumber)
+            .ToList();
 
-        var head = chain[0]; // ordered desc → the head is first
-        if (!await FileAccessRules.CanAccessAsync(db, access, ctx, head, ct))
+        var current = versions.FirstOrDefault(x => x.Version.IsCurrent);
+        if (current is null)
+        {
+            return ApiProblems.NotFound("file.not_found");
+        }
+
+        if (!await FileAccessRules.CanAccessAsync(db, access, ctx, current.File, ct))
         {
             return ApiProblems.NotFound("file.not_found"); // existence not disclosed
         }
 
-        if (!await FileAccessRules.CanWriteFileAsync(db, access, ctx, head, ct))
+        if (!await FileAccessRules.CanWriteFileAsync(db, access, ctx, current.File, ct))
         {
             return ApiProblems.Forbidden("file.versions_forbidden"); // old versions are editor-only
         }
@@ -248,18 +208,22 @@ public static class FileEndpoints
         // Resolved rather than joined: the label an uploader may be shown under is a rule with
         // one home, and it is never their address.
         var labels = await ProfileDirectory.ResolveLabelsAsync(
-            db, user, chain.Where(f => f.UploadedBy is not null).Select(f => f.UploadedBy!.Value), ct);
+            db, user, versions.Where(x => x.Version.UploadedBy is not null).Select(x => x.Version.UploadedBy!.Value), ct);
 
-        IReadOnlyList<FileVersionDto> dtos = [.. chain.Select(f => new FileVersionDto(
-            f.Id, f.VersionNumber, f.OriginalName, f.MimeType, f.SizeBytes,
-            f.UploadedBy, f.UploadedBy is { } uploader ? labels.GetValueOrDefault(uploader) : null, f.CreatedAt,
-            FileMapping.ContentUrl(f.Id, tokens.CreateToken(f.Id)), f.Id == head.Id))];
+        IReadOnlyList<FileVersionDto> dtos = [.. versions.Select(x => new FileVersionDto(
+            x.File.Id, x.Version.VersionNumber, x.File.OriginalName, x.File.MimeType, x.File.SizeBytes,
+            x.Version.UploadedBy,
+            x.Version.UploadedBy is { } uploader ? labels.GetValueOrDefault(uploader) : null,
+            x.Version.CreatedAt,
+            FileMapping.ContentUrl(x.File.Id, tokens.CreateToken(x.File.Id)),
+            x.Version.IsCurrent))];
         return TypedResults.Ok(dtos);
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteVersionAsync(
         Guid id,
         SilexGisDbContext db,
+        DocumentWriteService documents,
         IFileStore fileStore,
         ThumbnailService thumbnails,
         IAccessService access,
@@ -272,40 +236,29 @@ public static class FileEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var file = await db.StoredFiles.FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (file is null)
-        {
-            return ApiProblems.NotFound("file.not_found");
-        }
-
-        var head = await db.StoredFiles.AsNoTracking()
-            .Where(f => f.VersionGroupId == file.VersionGroupId)
-            .OrderByDescending(f => f.VersionNumber)
-            .FirstAsync(ct);
-        if (!await FileAccessRules.CanWriteFileAsync(db, access, ctx, head, ct))
+        var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
+        var head = file is null ? null : await DocumentQueries.CurrentFileOfDocumentAsync(db, id, ct);
+        if (file is null || head is null || !await FileAccessRules.CanWriteFileAsync(db, access, ctx, head, ct))
         {
             return ApiProblems.NotFound("file.not_found"); // non-writers: existence not disclosed
         }
 
-        if (file.Id == head.Id)
+        IReadOnlyList<StoredFile> removed;
+        try
         {
-            return ApiProblems.Conflict("file.head_undeletable", "The current version cannot be deleted; upload a new version instead.");
+            removed = await documents.DeleteVersionAsync(file.DocumentVersionId, ct);
+        }
+        catch (DocumentWriteException e)
+        {
+            return ToProblem(e);
         }
 
-        // A version upload repoints attachments to the new head, so a superseded version normally
-        // has none. If one still points here (e.g. an attachment created directly against an old
-        // id), refuse — the attachments→files FK cascades, so deleting would silently drop it.
-        if (await db.Attachments.AsNoTracking().AnyAsync(a => a.FileId == file.Id, ct))
+        // Purge bytes and cached thumbnails after the rows are gone (best-effort; missing files are fine).
+        foreach (var purged in removed)
         {
-            return ApiProblems.Conflict("file.version_in_use", "This version is still attached to an entity and cannot be deleted.");
+            await fileStore.DeleteAsync(purged.StoragePath, ct);
+            thumbnails.Purge(purged.Id);
         }
-
-        db.StoredFiles.Remove(file);
-        await db.SaveChangesAsync(ct);
-
-        // Purge bytes and cached thumbnails after the row is gone (best-effort; missing files are fine).
-        await fileStore.DeleteAsync(file.StoragePath, ct);
-        thumbnails.Purge(file.Id);
 
         return TypedResults.NoContent();
     }
@@ -316,6 +269,34 @@ public static class FileEndpoints
         > MaxUploadBytes => ApiProblems.BadRequest("file.too_large", $"Files are limited to {MaxUploadBytes / (1024 * 1024)} MB."),
         _ => null,
     };
+
+    /// <summary>A rejected document write, as the Problem Details the caller sees.</summary>
+    private static ProblemHttpResult ToProblem(DocumentWriteException e) => e.Code switch
+    {
+        // The version vanished between the access check and the write: the caller learns
+        // nothing about it beyond what they already knew.
+        "file.not_found" => ApiProblems.NotFound(e.Code),
+        _ => ApiProblems.Conflict(e.Code, e.Message),
+    };
+
+    /// <summary>
+    /// Writes the upload to the store and describes it. The geotag is content-derived, so it
+    /// is read from this file's own EXIF rather than carried across from anything.
+    /// </summary>
+    private static async Task<StoredContent> ReadContentAsync(
+        IFormFile file, IFileStore fileStore, IPhotoGeotagReader geotagReader, CancellationToken ct)
+    {
+        var (storagePath, sha256, mimeType) = await SaveContentAsync(file, fileStore, ct);
+        var kind = KindFromMime(mimeType);
+        return new StoredContent(
+            storagePath,
+            Path.GetFileName(file.FileName),
+            mimeType,
+            file.Length,
+            sha256,
+            kind,
+            kind == FileKind.Image ? geotagReader.TryReadPoint(fileStore.GetAbsolutePath(storagePath)) : null);
+    }
 
     private static async Task<(string StoragePath, string Sha256, string MimeType)> SaveContentAsync(
         IFormFile file, IFileStore fileStore, CancellationToken ct)
@@ -350,14 +331,14 @@ public static class FileEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (file is null || !await FileAccessRules.CanAccessAsync(db, access, ctx, file, ct))
+        var subject = await DocumentQueries.FileWithVersionAsync(db, id, ct);
+        if (subject is null || !await FileAccessRules.CanAccessAsync(db, access, ctx, subject.File, ct))
         {
             // Existence of an inaccessible file is not disclosed.
             return ApiProblems.NotFound("file.not_found");
         }
 
-        return TypedResults.Ok(file.ToDto(tokens));
+        return TypedResults.Ok(subject.File.ToDto(subject.Version, tokens));
     }
 
     private static async Task<Results<Ok<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -375,25 +356,26 @@ public static class FileEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var file = await db.StoredFiles.FirstOrDefaultAsync(f => f.Id == id, ct);
+        var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
         if (file is null)
         {
             return ApiProblems.NotFound("file.not_found");
         }
 
-        // The file-write rule is evaluated against the chain head (the row attachments point at).
-        var head = await db.StoredFiles.AsNoTracking()
-            .Where(f => f.VersionGroupId == file.VersionGroupId)
-            .OrderByDescending(f => f.VersionNumber)
-            .FirstAsync(ct);
-        if (!await FileAccessRules.CanWriteFileAsync(db, access, ctx, head, ct))
+        // The file-write rule is evaluated against the file the document currently serves —
+        // the row attachments point at.
+        var head = await DocumentQueries.CurrentFileOfDocumentAsync(db, id, ct);
+        if (head is null || !await FileAccessRules.CanWriteFileAsync(db, access, ctx, head, ct))
         {
             return ApiProblems.NotFound("file.not_found"); // existence not disclosed to non-writers
         }
 
-        file.DocumentDate = request.DocumentDate;
+        // The date describes the revision, not the bytes: editing it through any of a
+        // revision's files sets it once, for that revision.
+        var version = await db.DocumentVersions.FirstAsync(v => v.Id == file.DocumentVersionId, ct);
+        version.DocumentDate = request.DocumentDate;
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(file.ToDto(tokens));
+        return TypedResults.Ok(file.ToDto(version, tokens));
     }
 
     private static async Task<Results<PhysicalFileHttpResult, ProblemHttpResult>> ContentAsync(

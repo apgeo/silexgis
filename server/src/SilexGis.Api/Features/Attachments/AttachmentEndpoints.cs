@@ -6,6 +6,7 @@ using SilexGis.Api.Common;
 using SilexGis.Api.Features.Files;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Attachments;
@@ -113,12 +114,14 @@ public static class AttachmentEndpoints
             ? db.Attachments.AsNoTracking().Where(a => a.EntityType == pairType && a.EntityId == entityId)
             : db.Attachments.AsNoTracking().Where(a => a.FeatureId == entityId);
 
-        var rows = await scoped
-            .Join(db.StoredFiles.AsNoTracking(), a => a.FileId, f => f.Id, (a, f) => new { a, f })
-            .OrderBy(x => x.a.SortOrder).ThenBy(x => x.a.CreatedAt)
+        var rows = await (from attachment in scoped
+                          join file in db.StoredFiles.AsNoTracking() on attachment.FileId equals file.Id
+                          join version in db.DocumentVersions.AsNoTracking() on file.DocumentVersionId equals version.Id
+                          orderby attachment.SortOrder, attachment.CreatedAt
+                          select new { Attachment = attachment, Content = new DocumentFile(file, version) })
             .ToListAsync(ct);
 
-        return TypedResults.Ok(rows.Select(x => x.a.ToDto(x.f, tokens)).ToList());
+        return TypedResults.Ok(rows.Select(x => x.Attachment.ToDto(x.Content, tokens)).ToList());
     }
 
     private static async Task<Results<Created<AttachmentDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
@@ -148,8 +151,8 @@ public static class AttachmentEndpoints
                 : ApiProblems.NotFound("attachment.entity_not_found");
         }
 
-        var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == request.FileId, ct);
-        if (file is null || !await FileAccessRules.CanAccessAsync(db, access, ctx, file, ct))
+        var content = await DocumentQueries.FileWithVersionAsync(db, request.FileId, ct);
+        if (content is null || !await FileAccessRules.CanAccessAsync(db, access, ctx, content.File, ct))
         {
             return ApiProblems.BadRequest("attachment.file_not_found", "The file does not exist.");
         }
@@ -168,7 +171,7 @@ public static class AttachmentEndpoints
         db.Attachments.Add(attachment);
         await db.SaveChangesAsync(ct);
 
-        return TypedResults.Created($"/api/v1/attachments/{attachment.Id}", attachment.ToDto(file, tokens));
+        return TypedResults.Created($"/api/v1/attachments/{attachment.Id}", attachment.ToDto(content, tokens));
     }
 
     private static async Task<Results<Ok<AttachmentDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -204,8 +207,8 @@ public static class AttachmentEndpoints
         attachment.SortOrder = request.SortOrder;
         await db.SaveChangesAsync(ct);
 
-        var file = await db.StoredFiles.AsNoTracking().FirstAsync(f => f.Id == attachment.FileId, ct);
-        return TypedResults.Ok(attachment.ToDto(file, tokens));
+        var content = await DocumentQueries.FileWithVersionAsync(db, attachment.FileId, ct);
+        return TypedResults.Ok(attachment.ToDto(content!, tokens));
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
@@ -243,7 +246,7 @@ public static class AttachmentEndpoints
     // the parsed shape of a feature target.
     private static AttachmentTarget TargetOf(Attachment a) => new(a.EntityType, a.FeatureId ?? a.EntityId!.Value);
 
-    private static AttachmentDto ToDto(this Attachment a, StoredFile file, IFileAccessTokenService tokens) => new(
+    private static AttachmentDto ToDto(this Attachment a, DocumentFile content, IFileAccessTokenService tokens) => new(
         a.Id,
         a.FileId,
         AttachmentTargets.NameOf(a.FeatureId, a.EntityType),
@@ -252,5 +255,5 @@ public static class AttachmentEndpoints
         a.Caption,
         a.SortOrder,
         a.AddedBy,
-        file.ToDto(tokens));
+        content.File.ToDto(content.Version, tokens));
 }

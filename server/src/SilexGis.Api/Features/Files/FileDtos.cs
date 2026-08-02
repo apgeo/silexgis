@@ -22,7 +22,7 @@ public sealed record FileDto(
     string ContentUrl,
     string? ThumbnailUrl);
 
-/// <summary>One entry in a file's version chain (newest first). Old versions are editor-only.</summary>
+/// <summary>One revision of a document (newest first). Superseded ones are editor-only.</summary>
 public sealed record FileVersionDto(
     Guid Id,
     int VersionNumber,
@@ -37,7 +37,11 @@ public sealed record FileVersionDto(
 
 internal static class FileMapping
 {
-    public static FileDto ToDto(this StoredFile f, IFileAccessTokenService tokens)
+    /// <summary>
+    /// A file plus the revision it belongs to: version number and document date are
+    /// version detail, so they are read from there rather than duplicated per file.
+    /// </summary>
+    public static FileDto ToDto(this StoredFile f, DocumentVersion version, IFileAccessTokenService tokens)
     {
         var token = tokens.CreateToken(f.Id);
         return new FileDto(
@@ -47,8 +51,8 @@ internal static class FileMapping
             f.SizeBytes,
             f.Sha256,
             f.Kind,
-            f.VersionNumber,
-            f.DocumentDate,
+            version.VersionNumber,
+            version.DocumentDate,
             f.CreatedAt,
             ContentUrl(f.Id, token),
             f.Kind == FileKind.Image

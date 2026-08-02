@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
@@ -117,6 +118,7 @@ public static class MeEndpoints
         ClaimsPrincipal principal,
         UserManager<SilexGisUser> userManager,
         SilexGisDbContext db,
+        DocumentWriteService documents,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         CancellationToken ct)
@@ -143,36 +145,35 @@ public static class MeEndpoints
 
         var previousId = user.AvatarFileId;
         var (storagePath, sha256, mimeType) = await SaveAvatarAsync(file, fileStore, ct);
-        var stored = new StoredFile
-        {
-            StoragePath = storagePath,
-            OriginalName = Path.GetFileName(file.FileName),
-            MimeType = mimeType,
-            SizeBytes = file.Length,
-            Sha256 = sha256,
-            UploadedBy = user.Id,
-            Kind = FileKind.Image,
-            // Never read the EXIF capture point of an avatar: for a selfie that point is the
-            // user's home, and stored photo points are published on the map.
-            Geom = null,
-        };
-        stored.VersionGroupId = stored.Id;
-        db.StoredFiles.Add(stored);
+        var stored = documents.Create(
+            new StoredContent(
+                storagePath,
+                Path.GetFileName(file.FileName),
+                mimeType,
+                file.Length,
+                sha256,
+                FileKind.Image,
+                // Never read the EXIF capture point of an avatar: for a selfie that point is
+                // the user's home, and stored photo points are published on the map.
+                Geom: null),
+            Path.GetFileName(file.FileName),
+            user.Id,
+            user.Id).File;
 
         user.AvatarFileId = stored.Id;
         user.AvatarPreset = null;
 
+        // The replaced avatar is nobody's document any more — it goes whole.
         var removable = await RemovableAvatarFileAsync(db, previousId, ct);
-        if (removable is not null)
-        {
-            db.StoredFiles.Remove(removable);
-        }
+        IReadOnlyList<StoredFile> purged = removable is null
+            ? []
+            : await documents.DeleteDocumentOfFileAsync(removable.Id, ct);
 
         await db.SaveChangesAsync(ct);
 
-        if (removable is not null)
+        foreach (var removed in purged)
         {
-            await fileStore.DeleteAsync(removable.StoragePath, ct);
+            await fileStore.DeleteAsync(removed.StoragePath, ct);
         }
 
         return TypedResults.Ok(MeMapping.ToDto(
@@ -184,6 +185,7 @@ public static class MeEndpoints
         ClaimsPrincipal principal,
         UserManager<SilexGisUser> userManager,
         SilexGisDbContext db,
+        DocumentWriteService documents,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         CancellationToken ct)
@@ -194,7 +196,7 @@ public static class MeEndpoints
             return TypedResults.Unauthorized();
         }
 
-        await ClearUploadedAvatarAsync(db, fileStore, user, ct);
+        await ClearUploadedAvatarAsync(db, documents, fileStore, user, ct);
         user.AvatarPreset = request.Preset;
         await db.SaveChangesAsync(ct);
 
@@ -206,6 +208,7 @@ public static class MeEndpoints
         ClaimsPrincipal principal,
         UserManager<SilexGisUser> userManager,
         SilexGisDbContext db,
+        DocumentWriteService documents,
         IFileStore fileStore,
         CancellationToken ct)
     {
@@ -215,7 +218,7 @@ public static class MeEndpoints
             return TypedResults.Unauthorized();
         }
 
-        await ClearUploadedAvatarAsync(db, fileStore, user, ct);
+        await ClearUploadedAvatarAsync(db, documents, fileStore, user, ct);
         user.AvatarPreset = null;
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
@@ -233,7 +236,11 @@ public static class MeEndpoints
     /// gone before its content is: a missing blob behind a live row would 500 on every read.
     /// </summary>
     private static async Task ClearUploadedAvatarAsync(
-        SilexGisDbContext db, IFileStore fileStore, SilexGisUser user, CancellationToken ct)
+        SilexGisDbContext db,
+        DocumentWriteService documents,
+        IFileStore fileStore,
+        SilexGisUser user,
+        CancellationToken ct)
     {
         var removable = await RemovableAvatarFileAsync(db, user.AvatarFileId, ct);
         user.AvatarFileId = null;
@@ -242,9 +249,12 @@ public static class MeEndpoints
             return;
         }
 
-        db.StoredFiles.Remove(removable);
+        var purged = await documents.DeleteDocumentOfFileAsync(removable.Id, ct);
         await db.SaveChangesAsync(ct);
-        await fileStore.DeleteAsync(removable.StoragePath, ct);
+        foreach (var removed in purged)
+        {
+            await fileStore.DeleteAsync(removed.StoragePath, ct);
+        }
     }
 
     /// <summary>

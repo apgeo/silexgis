@@ -3,6 +3,7 @@ using System.Buffers.Text;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
 using SilexGis.Infrastructure.Persistence;
@@ -172,6 +173,47 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
         // flow skipped its "entries first" guard — security-bearing, because a deny
         // whose anchor silently vanished no longer denies anything.
         problems.AddRange(await AccessAnchorOrphansAsync(ct));
+
+        // Document version sequences: the same derived state the document write service
+        // maintains, re-derived here to prove no path bypassed it.
+        problems.AddRange(await DocumentVersionProblemsAsync(ct));
+
+        return problems;
+    }
+
+    /// <summary>
+    /// Every document must have a well-formed version sequence — exactly one current
+    /// version, unique numbers — and every version must carry at least one file. A
+    /// document that lost its current version has nothing to serve; one with no files at
+    /// all is a row nothing can reach.
+    /// </summary>
+    private async Task<List<IntegrityProblem>> DocumentVersionProblemsAsync(CancellationToken ct)
+    {
+        var problems = new List<IntegrityProblem>();
+
+        var versions = await db.DocumentVersions
+            .Select(v => new { v.DocumentId, State = new DocumentVersionRules.VersionState(v.Id, v.VersionNumber, v.IsCurrent) })
+            .ToListAsync(ct);
+        var documentIds = await db.Documents.Select(d => d.Id).ToListAsync(ct);
+        var byDocument = versions.ToLookup(v => v.DocumentId, v => v.State);
+
+        foreach (var documentId in documentIds)
+        {
+            foreach (var problem in DocumentVersionRules.Validate(byDocument[documentId].ToList()))
+            {
+                problems.Add(new IntegrityProblem("document_versions", default, $"document {documentId}: {problem}"));
+            }
+        }
+
+        var fileless = await db.DocumentVersions
+            .Where(v => !db.StoredFiles.Any(f => f.DocumentVersionId == v.Id))
+            .Select(v => new { v.Id, v.DocumentId })
+            .ToListAsync(ct);
+        foreach (var version in fileless)
+        {
+            problems.Add(new IntegrityProblem("document_version_fileless", default,
+                $"document {version.DocumentId}: version {version.Id} carries no file"));
+        }
 
         return problems;
     }

@@ -18,7 +18,7 @@ public enum FileKind : short
 /// <summary>
 /// An uploaded file's metadata; bytes live in the file store (<see cref="IFileStore"/>),
 /// addressed by <see cref="StoragePath"/> relative to the store root. Immutable after
-/// upload — replacing content means uploading a new file.
+/// upload — replacing content means uploading a new version of the document it belongs to.
 /// </summary>
 public class StoredFile : ITimestamped, IAuditable
 {
@@ -36,25 +36,16 @@ public class StoredFile : ITimestamped, IAuditable
     /// <summary>Lower-case hex SHA-256 of the content.</summary>
     public required string Sha256 { get; set; }
 
-    public Guid? UploadedBy { get; set; }
-
     /// <summary>
-    /// Stable document identity across versions: the id of the first version in the chain.
-    /// A file's whole version chain is <c>WHERE version_group_id = @group</c>; the head is the
-    /// row with the highest <see cref="VersionNumber"/>. Content stays immutable per row.
+    /// The document revision these bytes belong to. Every stored file has one: a photo is a
+    /// document with a single version and a single page. Version-detail fields (number,
+    /// uploader, document date, change note) live on the version, not here, so several files
+    /// that make up one revision — the scan and its cloud-optimized rendition, a two-part
+    /// survey — cannot disagree about them.
     /// </summary>
-    public Guid VersionGroupId { get; set; }
-
-    /// <summary>1-based position in the version chain; unique within a group.</summary>
-    public int VersionNumber { get; set; } = 1;
+    public Guid DocumentVersionId { get; set; }
 
     public FileKind Kind { get; set; } = FileKind.Other;
-
-    /// <summary>
-    /// User-set calendar date the document/photo is *from* (distinct from <see cref="CreatedAt"/>,
-    /// the upload time). Prefilled client-side from EXIF where present; copied to new versions.
-    /// </summary>
-    public DateOnly? DocumentDate { get; set; }
 
     /// <summary>
     /// Capture location for a photo, read from EXIF GPS at upload (null when the image carries

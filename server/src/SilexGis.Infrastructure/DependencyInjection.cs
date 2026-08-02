@@ -52,6 +52,7 @@ public static class DependencyInjection
             Features.JsonSchemaFeaturePropertiesValidator>();
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
+        services.AddScoped<Documents.DocumentWriteService>();
 
         services.AddScoped<Domain.Access.IAccessService, Permissions.AccessService>();
         services.AddScoped<Permissions.FeatureProtection>();

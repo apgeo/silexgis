@@ -50,6 +50,12 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<MapLayer> MapLayers => Set<MapLayer>();
 
+    public DbSet<Document> Documents => Set<Document>();
+
+    public DbSet<DocumentVersion> DocumentVersions => Set<DocumentVersion>();
+
+    public DbSet<DocumentPage> DocumentPages => Set<DocumentPage>();
+
     public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
 
     public DbSet<Geofile> Geofiles => Set<Geofile>();

@@ -203,9 +203,13 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
             .Where(v => v.OwnerUserId == userId)
             .Select(v => new { v.Id, v.Name, v.CreatedAt })
             .ToListAsync(ct),
-        Files = await db.StoredFiles.AsNoTracking()
-            .Where(f => f.UploadedBy == userId)
-            .Select(f => new { f.Id, f.OriginalName, f.SizeBytes, f.CreatedAt })
+        // Uploader identity lives on the revision a file belongs to, so the personal-data
+        // export reaches it through that join rather than through the file row.
+        Files = await (from file in db.StoredFiles.AsNoTracking()
+                       join version in db.DocumentVersions.AsNoTracking()
+                           on file.DocumentVersionId equals version.Id
+                       where version.UploadedBy == userId
+                       select new { file.Id, file.OriginalName, file.SizeBytes, file.CreatedAt })
             .ToListAsync(ct),
     };
 

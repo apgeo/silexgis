@@ -8,6 +8,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
@@ -51,6 +52,7 @@ public static class GeofileEndpoints
     private static async Task<Results<Created<GeofileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
         IFormFile file,
         SilexGisDbContext db,
+        DocumentWriteService documents,
         IFileStore fileStore,
         IUserContextAccessor userAccessor,
         IAccessContextAccessor accessAccessor,
@@ -94,27 +96,27 @@ public static class GeofileEndpoints
             sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(saved, ct));
         }
 
-        var storedFile = new StoredFile
-        {
-            StoragePath = storagePath,
-            OriginalName = Path.GetFileName(file.FileName),
-            MimeType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
-            SizeBytes = file.Length,
-            Sha256 = sha256,
-            UploadedBy = user.UserId,
-            Kind = FileKind.Vector,
-        };
-        storedFile.VersionGroupId = storedFile.Id; // head of its own version chain
+        var name = Path.GetFileNameWithoutExtension(file.FileName);
+        var storedFile = documents.Create(
+            new StoredContent(
+                storagePath,
+                Path.GetFileName(file.FileName),
+                string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+                file.Length,
+                sha256,
+                FileKind.Vector),
+            name,
+            user.UserId,
+            user.UserId).File;
 
         var geofile = new Geofile
         {
-            Name = Path.GetFileNameWithoutExtension(file.FileName),
+            Name = name,
             FileId = storedFile.Id,
             Format = format,
             OwnerUserId = user.UserId,
         };
 
-        db.StoredFiles.Add(storedFile);
         db.Geofiles.Add(geofile);
         db.ProcessingJobs.Add(new ProcessingJob
         {
@@ -222,6 +224,7 @@ public static class GeofileEndpoints
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid id,
         SilexGisDbContext db,
+        DocumentWriteService documents,
         IFileStore fileStore,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -241,25 +244,21 @@ public static class GeofileEndpoints
                 : ApiProblems.NotFound("geofile.not_found");
         }
 
-        var storedFile = await db.StoredFiles.FirstOrDefaultAsync(f => f.Id == geofile.FileId, ct);
-
         // Polymorphic attachment rows have no FK to the geofile — clean them up in the
         // same transaction as the entity.
         await db.Attachments
             .Where(a => a.EntityType == AttachedEntityType.Geofile && a.EntityId == geofile.Id)
             .ExecuteDeleteAsync(ct);
 
-        // Imported features cascade with the geofile row; the file row goes explicitly
-        // (uploads are 1:1 with geofiles until the Phase 3 media work).
+        // Imported features cascade with the geofile row; the upload goes explicitly. The
+        // geofile owns its upload outright, so the whole document goes — an imported file has
+        // no life of its own once the geofile it produced is gone.
         db.Geofiles.Remove(geofile);
-        if (storedFile is not null)
-        {
-            db.StoredFiles.Remove(storedFile);
-        }
+        var removed = await documents.DeleteDocumentOfFileAsync(geofile.FileId, ct);
 
         await db.SaveChangesAsync(ct);
 
-        if (storedFile is not null)
+        foreach (var storedFile in removed)
         {
             await fileStore.DeleteAsync(storedFile.StoragePath, CancellationToken.None);
         }

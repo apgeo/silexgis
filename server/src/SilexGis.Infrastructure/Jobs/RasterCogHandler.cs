@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Persistence;
 
@@ -16,9 +17,15 @@ public sealed record RasterCogPayload(Guid GeoreferencedMapId);
 /// Normalizes an uploaded georeferenced raster to a Cloud-Optimized GeoTIFF: the COG
 /// becomes a new stored file the map points at (the original upload is kept — files are
 /// immutable), and the map gets its footprint and Ready status.
+/// <para>
+/// The COG joins the upload's own revision rather than starting a document of its own or
+/// superseding the upload: it is the same content in another encoding, produced by the
+/// server with no author of its own to name.
+/// </para>
 /// </summary>
 public sealed class RasterCogHandler(
     SilexGisDbContext db,
+    DocumentWriteService documents,
     IFileStore fileStore,
     RasterCogService rasterService) : IProcessingJobHandler
 {
@@ -54,18 +61,13 @@ public sealed class RasterCogHandler(
                 sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(saved, ct));
             }
 
-            var cogFile = new StoredFile
-            {
-                StoragePath = storagePath,
-                OriginalName = Path.GetFileNameWithoutExtension(upload.OriginalName) + ".cog.tif",
-                MimeType = "image/tiff",
-                SizeBytes = new FileInfo(fileStore.GetAbsolutePath(storagePath)).Length,
-                Sha256 = sha256,
-                UploadedBy = upload.UploadedBy,
-                Kind = FileKind.Raster,
-            };
-            cogFile.VersionGroupId = cogFile.Id; // head of its own version chain
-            db.StoredFiles.Add(cogFile);
+            var cogFile = documents.AddFile(upload.DocumentVersionId, new StoredContent(
+                storagePath,
+                Path.GetFileNameWithoutExtension(upload.OriginalName) + ".cog.tif",
+                "image/tiff",
+                new FileInfo(fileStore.GetAbsolutePath(storagePath)).Length,
+                sha256,
+                FileKind.Raster));
 
             map.FileId = cogFile.Id;
             map.Bbox = info.Bbox4326;

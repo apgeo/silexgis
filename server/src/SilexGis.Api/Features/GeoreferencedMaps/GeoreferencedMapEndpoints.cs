@@ -9,6 +9,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -91,6 +92,7 @@ public static class GeoreferencedMapEndpoints
     private static async Task<Results<Created<GeoreferencedMapDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
         IFormFile file,
         SilexGisDbContext db,
+        DocumentWriteService documents,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         IUserContextAccessor userAccessor,
@@ -133,26 +135,21 @@ public static class GeoreferencedMapEndpoints
             sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(saved, ct));
         }
 
-        var stored = new StoredFile
-        {
-            StoragePath = storagePath,
-            OriginalName = Path.GetFileName(file.FileName),
-            MimeType = "image/tiff",
-            SizeBytes = file.Length,
-            Sha256 = sha256,
-            UploadedBy = user.UserId,
-            Kind = FileKind.Raster,
-        };
-        stored.VersionGroupId = stored.Id; // head of its own version chain
+        var name = Path.GetFileNameWithoutExtension(file.FileName);
+        var stored = documents.Create(
+            new StoredContent(
+                storagePath, Path.GetFileName(file.FileName), "image/tiff", file.Length, sha256, FileKind.Raster),
+            name,
+            user.UserId,
+            user.UserId).File;
 
         var map = new GeoreferencedMap
         {
-            Name = Path.GetFileNameWithoutExtension(file.FileName),
+            Name = name,
             FileId = stored.Id,
             OwnerUserId = user.UserId,
         };
 
-        db.StoredFiles.Add(stored);
         db.GeoreferencedMaps.Add(map);
         db.ProcessingJobs.Add(new ProcessingJob
         {

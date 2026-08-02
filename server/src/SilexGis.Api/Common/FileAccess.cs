@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Common;
@@ -72,7 +73,7 @@ public static class FileAccessRules
     public static async Task<bool> CanAccessAsync(
         SilexGisDbContext db, IAccessService access, AccessContext ctx, StoredFile file, CancellationToken ct)
     {
-        if (ctx.IsFullAdmin || file.UploadedBy == ctx.UserId)
+        if (ctx.IsFullAdmin || await DocumentQueries.UploaderOfFileAsync(db, file.Id, ct) == ctx.UserId)
         {
             return true;
         }
@@ -97,16 +98,17 @@ public static class FileAccessRules
     }
 
     /// <summary>
-    /// Who may modify a file's version chain (upload a new version, list/delete old versions):
-    /// a full administrator, the head's uploader, or anyone with Write on at least one object
-    /// the head is attached to. A shared document is one document — a new version moves every
-    /// attachment, so Write on any one attached object suffices. Evaluate against the chain
-    /// head, which is the row attachments point at.
+    /// Who may modify a file's document (upload a new version, list/delete superseded ones):
+    /// a full administrator, the uploader of the version being evaluated, or anyone with Write
+    /// on at least one object that version's file is attached to. A shared document is one
+    /// document — a new version moves every attachment, so Write on any one attached object
+    /// suffices. Evaluate against the file the document currently serves, which is the row
+    /// attachments point at.
     /// </summary>
     public static async Task<bool> CanWriteFileAsync(
         SilexGisDbContext db, IAccessService access, AccessContext ctx, StoredFile head, CancellationToken ct)
     {
-        if (ctx.IsFullAdmin || head.UploadedBy == ctx.UserId)
+        if (ctx.IsFullAdmin || await DocumentQueries.UploaderOfFileAsync(db, head.Id, ct) == ctx.UserId)
         {
             return true;
         }
@@ -219,20 +221,11 @@ public static class FileAccessRules
                 return await CanEntityAsync(db, access, ctx, db.MapViews, entityId, AccessAction.Write, ct);
 
             case AttachedEntityType.StoredFile:
-                // Writing a file's tags is governed by the file-write rule, evaluated against the
-                // chain head (the row attachments/taggings point at). Resolve the head in case a
-                // non-head id was passed.
-                var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == entityId, ct);
-                if (file is null)
-                {
-                    return false;
-                }
-
-                var head = await db.StoredFiles.AsNoTracking()
-                    .Where(f => f.VersionGroupId == file.VersionGroupId)
-                    .OrderByDescending(f => f.VersionNumber)
-                    .FirstAsync(ct);
-                return await CanWriteFileAsync(db, access, ctx, head, ct);
+                // Writing a file's tags is governed by the file-write rule, evaluated against
+                // the file the document currently serves (the row attachments/taggings point
+                // at). Resolve it in case a superseded version's id was passed.
+                var head = await DocumentQueries.CurrentFileOfDocumentAsync(db, entityId, ct);
+                return head is not null && await CanWriteFileAsync(db, access, ctx, head, ct);
 
             default:
                 return false;

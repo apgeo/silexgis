@@ -4384,7 +4384,7 @@ export interface paths {
             };
         };
         post?: never;
-        /** Deletes a superseded (non-head) file version. */
+        /** Deletes a superseded (non-current) version of a file's document. */
         delete: {
             parameters: {
                 query?: never;
@@ -4417,7 +4417,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Version chain of a file (editor-only; superseded versions may hold removed content). */
+        /** Versions of a file's document (editor-only; superseded versions may hold removed content). */
         get: {
             parameters: {
                 query?: never;
@@ -4441,7 +4441,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Uploads a new version onto a file's head; repoints its attachments to it. */
+        /** Uploads a new version of a file's document; repoints its attachments to it. */
         post: {
             parameters: {
                 query?: never;

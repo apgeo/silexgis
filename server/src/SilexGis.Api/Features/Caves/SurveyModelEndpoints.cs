@@ -7,6 +7,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -108,6 +109,7 @@ public static class SurveyModelEndpoints
         Guid caveId,
         IFormFile file,
         SilexGisDbContext db,
+        DocumentWriteService documents,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
         IAccessService access,
@@ -155,27 +157,27 @@ public static class SurveyModelEndpoints
             sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(saved, ct));
         }
 
-        var stored = new StoredFile
-        {
-            StoragePath = storagePath,
-            OriginalName = Path.GetFileName(file.FileName),
-            MimeType = "application/octet-stream",
-            SizeBytes = file.Length,
-            Sha256 = sha256,
-            UploadedBy = ctx.UserId,
-            Kind = FileKind.Survey,
-        };
-        stored.VersionGroupId = stored.Id; // head of its own version chain
+        var name = Path.GetFileNameWithoutExtension(file.FileName);
+        var stored = documents.Create(
+            new StoredContent(
+                storagePath,
+                Path.GetFileName(file.FileName),
+                "application/octet-stream",
+                file.Length,
+                sha256,
+                FileKind.Survey),
+            name,
+            ctx.UserId,
+            ctx.UserId).File;
 
         var model = new SurveyModel
         {
             CaveFeatureId = caveId,
-            Name = Path.GetFileNameWithoutExtension(file.FileName),
+            Name = name,
             FileId = stored.Id,
             Format = extension == ".lox" ? SurveyModelFormat.Lox : SurveyModelFormat.Survex3d,
         };
 
-        db.StoredFiles.Add(stored);
         db.SurveyModels.Add(model);
         await db.SaveChangesAsync(ct);
 
