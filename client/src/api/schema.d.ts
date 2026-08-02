@@ -2318,7 +2318,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Profile, settings, addresses and global roles of the authenticated caller. */
+        /** Profile, settings and addresses of the authenticated caller. */
         get: {
             parameters: {
                 query?: never;
@@ -3520,7 +3520,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Creates a cave (Editor role and above); the caller becomes owner. */
+        /** Creates a cave (Create permission in the target context); the caller becomes owner. */
         post: {
             parameters: {
                 query?: never;
@@ -3711,7 +3711,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Creates a generic feature (Editor role and above); the caller becomes owner. */
+        /** Creates a generic feature (Create permission in the target context); the caller becomes owner. */
         post: {
             parameters: {
                 query?: never;
@@ -4864,7 +4864,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Creates a trip log (Editor role and above); the caller becomes owner. */
+        /** Creates a trip log (Create permission on trip logs); the caller becomes owner. */
         post: {
             parameters: {
                 query?: never;
@@ -5557,7 +5557,7 @@ export interface paths {
                 header?: never;
                 path: {
                     id: string;
-                    memberKind: components["schemas"]["AccessSubjectKind"];
+                    memberKind: string;
                     memberId: string;
                 };
                 cookie?: never;

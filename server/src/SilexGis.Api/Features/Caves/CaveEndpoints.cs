@@ -33,7 +33,7 @@ public static class CaveEndpoints
         caves.MapGet("/{id:guid}/summary", GetSummaryAsync)
             .WithSummary("Cave header data: related-record counts, main entrance, caller capabilities.");
         caves.MapPost("/", CreateAsync).WithValidation<CaveWriteRequest>()
-            .WithSummary("Creates a cave (Editor role and above); the caller becomes owner.");
+            .WithSummary("Creates a cave (Create permission in the target context); the caller becomes owner.");
         caves.MapPut("/{id:guid}", UpdateAsync).WithValidation<CaveWriteRequest>()
             .WithSummary("Full update (Write permission).");
         caves.MapDelete("/{id:guid}", DeleteAsync)

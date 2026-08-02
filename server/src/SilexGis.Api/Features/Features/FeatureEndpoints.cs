@@ -32,7 +32,7 @@ public static class FeatureEndpoints
         features.MapGet("/{id:guid}", GetAsync)
             .WithSummary("Resolves any feature id to a typed envelope (common view plus subtype attributes).");
         features.MapPost("/", CreateAsync).WithValidation<FeatureCreateRequest>()
-            .WithSummary("Creates a generic feature (Editor role and above); the caller becomes owner.");
+            .WithSummary("Creates a generic feature (Create permission in the target context); the caller becomes owner.");
         features.MapPut("/{id:guid}", UpdateAsync).WithValidation<FeatureUpdateRequest>()
             .WithSummary("Full update of a generic feature (Write permission, If-Match required).");
         features.MapDelete("/{id:guid}", DeleteAsync)

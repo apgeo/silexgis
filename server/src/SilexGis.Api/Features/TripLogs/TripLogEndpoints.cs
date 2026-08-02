@@ -24,7 +24,7 @@ public static class TripLogEndpoints
         trips.MapGet("/{id:guid}", GetAsync)
             .WithSummary("Single trip log with caves and participants.");
         trips.MapPost("/", CreateAsync).WithValidation<TripLogWriteRequest>()
-            .WithSummary("Creates a trip log (Editor role and above); the caller becomes owner.");
+            .WithSummary("Creates a trip log (Create permission on trip logs); the caller becomes owner.");
         trips.MapPut("/{id:guid}", UpdateAsync).WithValidation<TripLogWriteRequest>()
             .WithSummary("Full update incl. caves/participants replacement (Write permission).");
         trips.MapDelete("/{id:guid}", DeleteAsync)

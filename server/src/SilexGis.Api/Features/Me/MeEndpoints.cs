@@ -32,7 +32,7 @@ public static class MeEndpoints
         var me = api.MapGroup("/me").WithTags("Me");
 
         me.MapGet("/", GetAsync)
-            .WithSummary("Profile, settings, addresses and global roles of the authenticated caller.");
+            .WithSummary("Profile, settings and addresses of the authenticated caller.");
         me.MapPut("/", UpdateAsync)
             .WithValidation<MeUpdateRequest>()
             .WithSummary("Saves the caller's profile fields and per-field visibility choices.");
