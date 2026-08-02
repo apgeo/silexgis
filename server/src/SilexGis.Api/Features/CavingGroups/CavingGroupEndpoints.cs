@@ -351,14 +351,9 @@ public static class CavingGroupEndpoints
         }
         else
         {
-            // The owner seat is the one roster row that is not ordinary metadata: it names who
-            // answers for the group, so moving it takes permission management over the group,
-            // not merely the right to edit the roster.
-            if (member.Role == CavingGroupRole.Owner && !Holds(ctx, AccessAction.ManagePermissions, id))
-            {
-                return ApiProblems.Forbidden("caving_group.owner_immutable");
-            }
-
+            // The role is organizational metadata and nothing more — it labels people in
+            // the roster and never gates anything, so editing it is an ordinary roster
+            // write. Rights over the group flow from access entries alone.
             member.Role = request.Role;
         }
 
@@ -418,13 +413,6 @@ public static class CavingGroupEndpoints
         if (!selfRemoval && !Holds(ctx, AccessAction.Write, id))
         {
             return ApiProblems.Forbidden("access.forbidden");
-        }
-
-        // Vacating the owner seat takes permission management over the group, the same as
-        // moving it does — including when the owner is the one leaving.
-        if (member.Role == CavingGroupRole.Owner && !Holds(ctx, AccessAction.ManagePermissions, id))
-        {
-            return ApiProblems.Forbidden("caving_group.owner_immutable");
         }
 
         db.CavingGroupMemberships.Remove(member);
