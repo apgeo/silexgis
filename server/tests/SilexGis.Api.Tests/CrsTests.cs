@@ -75,6 +75,31 @@ public sealed class CrsTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task An_esri_authority_code_still_resolves_even_though_the_authority_is_lost()
+    {
+        // Survey files name a system as "epsg:31700" or "esri:102008", but the viewer that asks
+        // for a definition passes on only the number — the authority never reaches this endpoint.
+        // 102008 (North America Albers Equal Area Conic) is an ESRI code with no EPSG meaning, so
+        // resolving it proves such a survey keeps the georeferencing it used to get from the
+        // public web service this endpoint replaced.
+        var response = await reader.GetAsync("/api/v1/crs/102008.proj4");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("+proj=aea");
+    }
+
+    [Fact]
+    public async Task An_epsg_code_wins_over_an_esri_code_of_the_same_number()
+    {
+        // The two registers overlap at the low numbers and EPSG is the authoritative one, so an
+        // ambiguous number must resolve the EPSG way.
+        var response = await reader.GetAsync("/api/v1/crs/4326.proj4");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("+proj=longlat");
+    }
+
+    [Fact]
     public async Task A_code_the_database_does_not_know_is_a_clean_not_found()
     {
         var response = await reader.GetAsync("/api/v1/crs/999998.proj4");
