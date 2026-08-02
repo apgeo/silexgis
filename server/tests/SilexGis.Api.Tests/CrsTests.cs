@@ -119,6 +119,16 @@ public sealed class CrsTests : IAsyncLifetime, IDisposable
         options.GeoidOffsetM.ShouldBe(43.5);
     }
 
+    [Fact]
+    public void An_installation_that_configures_nothing_gets_the_documented_default()
+    {
+        // The install guide publishes this number as the value an operator inherits by doing
+        // nothing, and an operator outside Romania decides whether to override it by comparing
+        // their own undulation against it. Changing the default without changing the guide would
+        // leave that comparison being made against a figure the software no longer uses.
+        new Scene3dOptions().GeoidOffsetM.ShouldBe(41.5);
+    }
+
     public Task DisposeAsync() => Task.CompletedTask;
 
     public void Dispose()

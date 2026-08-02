@@ -453,6 +453,122 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task The_overlay_is_flat_unless_altitudes_are_asked_for_and_carries_them_when_they_are()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        using var form = BuildForm("with-altitudes.geojson", SplayedSurvey(26.800, 46.800));
+        (await owner.PostAsync($"/api/v1/caves/{caveId}/centerlines", form))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        const string bbox = "26.79,46.79,26.81,46.81";
+
+        // The 2D map does not ask, and gets exactly what it always got: two ordinates per
+        // position and no altitude reporting anywhere in the payload.
+        var flat = await CenterlineResponseAsync(reader, bbox, zoom: 19);
+        var flatFeature = FeatureOf(flat, caveId);
+        PositionsOf(flatFeature).ShouldAllBe(p => p.GetArrayLength() == 2);
+        flatFeature.GetProperty("properties").TryGetProperty("hasZ", out _).ShouldBeFalse();
+        flat.GetProperty("flatCount").GetInt32().ShouldBe(0);
+
+        // Opting in keeps the survey's altitudes: the fixture climbs 700 m → 704 m across the
+        // traverse, so the values are the surveyed ones rather than a zero fill.
+        var withZ = await CenterlineResponseAsync(reader, bbox, zoom: 19, z: true);
+        var withZFeature = FeatureOf(withZ, caveId);
+        var positions = PositionsOf(withZFeature);
+        positions.ShouldAllBe(p => p.GetArrayLength() == 3);
+        var altitudes = positions.Select(p => p[2].GetDouble()).ToList();
+        altitudes.ShouldAllBe(a => a >= 700 && a <= 704);
+        altitudes.ShouldContain(a => a > 700);
+        withZFeature.GetProperty("properties").GetProperty("hasZ").GetBoolean().ShouldBeTrue();
+        withZ.GetProperty("flatCount").GetInt32().ShouldBe(0);
+
+        // Same request, same components either way: opting in must not change what is drawn.
+        withZFeature.GetProperty("properties").GetProperty("paths").GetInt32()
+            .ShouldBe(flatFeature.GetProperty("properties").GetProperty("paths").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_viewport_that_cuts_the_survey_still_returns_surveyed_altitudes_and_no_nan()
+    {
+        // The 2D clip is a box clip, which invents vertices on the boundary; fed 3D input it
+        // would write NaN into their altitudes and the response would stop being valid JSON.
+        // The altitude-preserving branch takes whole components instead, so every altitude here
+        // is one that was surveyed — and the response has to parse at all, which it only does if
+        // no NaN reached it (GetFromJsonAsync throws otherwise).
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        using var form = BuildForm("cut.geojson", SplayedSurvey(26.900, 46.900));
+        (await owner.PostAsync($"/api/v1/caves/{caveId}/centerlines", form))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // The traverse runs 26.900 → 26.904; this stops short of its far end, so components
+        // cross the viewport edge and the whole-geometry fast path cannot be taken.
+        var cut = await CenterlineResponseAsync(reader, "26.8995,46.8995,26.9025,46.9015", zoom: 19, z: true);
+
+        var feature = FeatureOf(cut, caveId);
+        feature.GetProperty("properties").GetProperty("hasZ").GetBoolean().ShouldBeTrue();
+        // 20 components go in; the last traverse shot lies wholly east of the viewport and is the
+        // only one dropped. Anything else would mean the filter never ran, or that it cut a shot.
+        feature.GetProperty("properties").GetProperty("paths").GetInt32().ShouldBe(19);
+        var altitudes = PositionsOf(feature).Select(p => p[2].GetDouble()).ToList();
+        altitudes.ShouldNotBeEmpty();
+        altitudes.ShouldAllBe(a => double.IsFinite(a) && a >= 700 && a <= 704);
+        cut.GetProperty("flatCount").GetInt32().ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_row_that_can_only_be_served_flat_is_still_served_and_says_so()
+    {
+        // The stored display skeleton is a 2D column, so there is no altitude to give at overview
+        // zooms — nor when a detail request falls back to the skeleton on the path budget. The
+        // row is served anyway (blanking the overlay would be worse) and reports what it carries.
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        using var form = BuildForm("skeletal.geojson", SplayedSurvey(26.950, 46.950));
+        (await owner.PostAsync($"/api/v1/caves/{caveId}/centerlines", form))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        const string bbox = "26.94,46.94,26.96,46.96";
+
+        var overview = await CenterlineResponseAsync(reader, bbox, zoom: 14, z: true);
+        var skeleton = FeatureOf(overview, caveId);
+        skeleton.GetProperty("properties").GetProperty("hasZ").GetBoolean().ShouldBeFalse();
+        PositionsOf(skeleton).ShouldAllBe(p => p.GetArrayLength() == 2);
+        overview.GetProperty("flatCount").GetInt32().ShouldBeGreaterThanOrEqualTo(1);
+        // Reported as flat, not as withheld: the caller can still draw it.
+        overview.GetProperty("withheldCount").GetInt32().ShouldBe(0);
+
+        var degraded = await CenterlineResponseAsync(reader, bbox, zoom: 19, maxPaths: 10, z: true);
+        var fallback = FeatureOf(degraded, caveId);
+        fallback.GetProperty("properties").GetProperty("detail").GetBoolean().ShouldBeFalse();
+        fallback.GetProperty("properties").GetProperty("hasZ").GetBoolean().ShouldBeFalse();
+        degraded.GetProperty("flatCount").GetInt32().ShouldBeGreaterThanOrEqualTo(1);
+    }
+
+    [Fact]
+    public async Task Asking_for_altitudes_does_not_lift_the_exact_location_gate()
+    {
+        // A centerline IS the cave's exact position, so a protected cave must stay absent and
+        // uncounted on the altitude-preserving branch exactly as it is on the flat one — a new
+        // query parameter is the classic way for a protection rule to be routed around.
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: true);
+        using var form = BuildForm("guarded.geojson", SplayedSurvey(26.970, 46.970));
+        (await owner.PostAsync($"/api/v1/caves/{caveId}/centerlines", form))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        const string bbox = "26.96,46.96,26.98,46.98";
+
+        foreach (var zoom in new[] { 8, 14, 19 })
+        {
+            var response = await CenterlineResponseAsync(reader, bbox, zoom, z: true);
+            response.GetProperty("features").EnumerateArray()
+                .ShouldNotContain(f => f.GetProperty("properties").GetProperty("caveId").GetGuid() == caveId);
+            response.GetProperty("withheldCount").GetInt32().ShouldBe(0);
+            response.GetProperty("flatCount").GetInt32().ShouldBe(0);
+        }
+
+        // The grant is what reveals it, on this branch too — and then with its altitudes.
+        await GrantExactViewAsync(caveId);
+        var granted = await CenterlineResponseAsync(reader, bbox, zoom: 19, z: true);
+        FeatureOf(granted, caveId).GetProperty("properties").GetProperty("hasZ").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task Map_config_publishes_the_installations_rendering_limits()
     {
         var config = await reader.GetFromJsonAsync<JsonElement>("/api/v1/map/config");
@@ -469,12 +585,26 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
 
     /// <summary>The whole centerline map response, so the foreign members can be asserted too.</summary>
     private static async Task<JsonElement> CenterlineResponseAsync(
-        HttpClient client, string bbox, int zoom, int? detailZoom = null, int? maxPaths = null)
+        HttpClient client, string bbox, int zoom, int? detailZoom = null, int? maxPaths = null, bool? z = null)
     {
         var query = $"?bbox={bbox}&zoom={zoom}"
             + (detailZoom is null ? string.Empty : $"&detailZoom={detailZoom}")
-            + (maxPaths is null ? string.Empty : $"&maxPaths={maxPaths}");
+            + (maxPaths is null ? string.Empty : $"&maxPaths={maxPaths}")
+            + (z is null ? string.Empty : $"&z={(z.Value ? "true" : "false")}");
         return await client.GetFromJsonAsync<JsonElement>($"/api/v1/map/cave-centerlines{query}");
+    }
+
+    /// <summary>
+    /// Every position of one feature's geometry, whichever line shape PostGIS produced — a
+    /// single surviving component comes back as a LineString, several as a MultiLineString.
+    /// </summary>
+    private static List<JsonElement> PositionsOf(JsonElement feature)
+    {
+        var geometry = feature.GetProperty("geometry");
+        var coordinates = geometry.GetProperty("coordinates");
+        return geometry.GetProperty("type").GetString() == "LineString"
+            ? [.. coordinates.EnumerateArray()]
+            : [.. coordinates.EnumerateArray().SelectMany(line => line.EnumerateArray())];
     }
 
     /// <summary>The single feature belonging to one cave; fails the test when it is missing.</summary>
