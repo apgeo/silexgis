@@ -13,6 +13,7 @@ using SilexGis.Api.Features.About;
 using SilexGis.Api.Features.Admin;
 using SilexGis.Api.Features.Attachments;
 using SilexGis.Api.Features.Audit;
+using SilexGis.Api.Features.Crs;
 using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Dashboard;
 using SilexGis.Api.Features.Export;
@@ -96,6 +97,8 @@ try
         .BindConfiguration(AccessOptions.SectionName);
     builder.Services.AddOptions<MapOptions>()
         .BindConfiguration(MapOptions.SectionName);
+    builder.Services.AddOptions<Scene3dOptions>()
+        .BindConfiguration(Scene3dOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
     // Credential-guessing protection: per-IP fixed window on the auth surface.
@@ -172,6 +175,7 @@ try
     api.MapEntranceEndpoints();
     api.MapSurveyModelEndpoints();
     api.MapCenterlineEndpoints();
+    api.MapCrsEndpoints();
     api.MapFeatureEndpoints();
     api.MapFeatureHierarchyEndpoints();
     api.MapFeatureLinkEndpoints();

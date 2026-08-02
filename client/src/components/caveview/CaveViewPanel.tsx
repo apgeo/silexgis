@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { CAVEVIEW_HOME, loadCaveView, type CaveViewUi } from '../../caveview/loadCaveView.ts';
+import { acquireCrsRewrite, CAVEVIEW_HOME, loadCaveView, type CaveViewUi } from '../../caveview/loadCaveView.ts';
 
 export interface CaveViewPanelProps {
   /** Delivery URL of the survey file (carries its own access token, no auth header). */
@@ -44,6 +44,10 @@ export default function CaveViewPanel({ fileUrl, fileName, height = 480, onEntra
     let ui: CaveViewUi | null = null;
     setStatus('loading');
 
+    // Acquired synchronously, before any await, so a survey that starts parsing the moment the
+    // bundle is ready cannot get its CRS lookup out to the internet ahead of the rewrite.
+    const releaseCrsRewrite = acquireCrsRewrite();
+
     (async () => {
       const cv2 = await loadCaveView();
       const response = await fetch(fileUrl);
@@ -73,6 +77,7 @@ export default function CaveViewPanel({ fileUrl, fileName, height = 480, onEntra
       disposed = true;
       ui?.dispose();
       ui = null;
+      releaseCrsRewrite();
     };
   }, [fileUrl, fileName]);
 

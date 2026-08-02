@@ -50,6 +50,7 @@ public static class DependencyInjection
 
         services.AddSingleton<Domain.Features.IFeaturePropertiesValidator,
             Features.JsonSchemaFeaturePropertiesValidator>();
+        services.AddSingleton<Geodata.ICrsRegistry, Geodata.ProjCrsRegistry>();
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
 
