@@ -64,7 +64,7 @@ public static class ProfileProtection
             return ProfileViewerRelation.Self;
         }
 
-        foreach (var cavingGroupId in viewer.CavingGroups.Keys)
+        foreach (var cavingGroupId in viewer.CavingGroupIds)
         {
             if (subjectCavingGroupIds.Contains(cavingGroupId))
             {

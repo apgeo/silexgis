@@ -21,10 +21,12 @@ public sealed record PublicCaver(
 /// The roster has two tiers. A caver's <b>name</b> is the label every attribution row needs and is
 /// readable by any signed-in caller, exactly as a club's member list has always been. Their
 /// <b>contact details</b> are not: for someone with an account the account holder's own per-field
-/// settings decide, so the roster can never become a way around the choices they made on their
-/// profile; for someone without an account only whoever keeps the roster may read them, since
-/// nobody else consented on their behalf. Roster remarks are always roster-keeper-only — they are
-/// written about a person, not by them.
+/// settings decide — the caller passes in that account's already-projected profile, so the roster
+/// serves exactly what the profile would and can never become a way around the choices made there
+/// (the caver row's own contact columns are not served for a linked person at all). For someone
+/// without an account only whoever keeps the roster may read them, since nobody else consented on
+/// their behalf. Roster remarks are always roster-keeper-only — they are written about a person,
+/// not by them.
 /// </para>
 /// <para>
 /// Nothing here is ever served to an anonymous caller, and administrators get no bypass, matching
@@ -34,40 +36,22 @@ public sealed record PublicCaver(
 public static class CaverProtection
 {
     /// <summary>
-    /// Projects a caver down to what the caller may see. <paramref name="accountSettings"/> is the
-    /// linked account's visibility settings and <paramref name="relation"/> how the caller relates
-    /// to that account — both null/Anonymous for a caver with no account.
+    /// Projects a caver down to what the caller may see. <paramref name="accountProfile"/> is the
+    /// linked account's profile as already projected for this caller (null for a caver with no
+    /// account) — its fields already honour the holder's visibility settings.
     /// </summary>
-    public static PublicCaver Project(
-        Caver caver,
-        bool canKeepRoster,
-        ProfileVisibilitySettings? accountSettings,
-        ProfileViewerRelation relation)
-    {
-        var showContact = caver.UserId is null
-            // Nobody consented for this person, so only the people trusted with the roster see it.
-            ? canKeepRoster
-            : accountSettings is not null
-                && ProfileProtection.CanView(accountSettings.For(ProfileField.Email), relation);
-
-        var showPhone = caver.UserId is null
-            ? canKeepRoster
-            : accountSettings is not null
-                && ProfileProtection.CanView(accountSettings.For(ProfileField.Phone), relation);
-
-        return new PublicCaver(
-            caver.Id,
-            caver.FullName,
-            caver.UserId,
-            showContact ? caver.Email : null,
-            showPhone ? caver.Phone : null,
-            canKeepRoster ? caver.Notes : null);
-    }
+    public static PublicCaver Project(Caver caver, bool canKeepRoster, PublicProfile? accountProfile) => new(
+        caver.Id,
+        Label(caver.FullName, accountProfile?.Label),
+        caver.UserId,
+        caver.UserId is null ? (canKeepRoster ? caver.Email : null) : accountProfile?.Email,
+        caver.UserId is null ? (canKeepRoster ? caver.Phone : null) : accountProfile?.PhoneNumber,
+        canKeepRoster ? caver.Notes : null);
 
     /// <summary>
     /// The roster name for a person, preferring their account's chosen label so one person is not
     /// shown under two different names on the same page.
     /// </summary>
-    public static string Label(Caver caver, string? accountLabel) =>
-        string.IsNullOrWhiteSpace(accountLabel) ? caver.FullName : accountLabel;
+    public static string Label(string fullName, string? accountLabel) =>
+        string.IsNullOrWhiteSpace(accountLabel) ? fullName : accountLabel;
 }

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
-using SilexGis.Domain;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -9,8 +8,10 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace SilexGis.Api.Common;
 
 /// <summary>
-/// Builds the request's <see cref="UserContext"/>: identity + roles from the bearer token,
-/// caving group memberships from the database (once per request, cached in the scoped instance).
+/// Builds the request's <see cref="UserContext"/>: identity from the bearer token,
+/// caving group memberships from the database (once per request, cached in the scoped
+/// instance). Deliberately identity-only — the token's role claims are never read here;
+/// what a caller may do is the access context's business.
 /// </summary>
 public sealed class UserContextAccessor(IHttpContextAccessor httpContextAccessor, SilexGisDbContext db)
     : IUserContextAccessor
@@ -33,22 +34,18 @@ public sealed class UserContextAccessor(IHttpContextAccessor httpContextAccessor
             return null;
         }
 
-        var roles = principal!.Claims
-            .Where(c => c.Type is Claims.Role or ClaimTypes.Role)
-            .Select(c => c.Value)
-            .ToHashSet(StringComparer.Ordinal);
-
         // Membership is recorded for people, so the caller's groups come through their caver
         // row. Someone with no roster entry simply belongs to nothing, which is the correct
         // answer rather than an error: the account still works, it just joins no group.
-        var cavingGroups = await (
+        var cavingGroupIds = await (
             from membership in db.CavingGroupMemberships
             join caver in db.Cavers on membership.CaverId equals caver.Id
             where caver.UserId == userId
-            select membership)
-            .ToDictionaryAsync(m => m.CavingGroupId, m => m.Role, ct);
+            select membership.CavingGroupId)
+            .Distinct()
+            .ToListAsync(ct);
 
-        cached = new UserContext(userId, roles, cavingGroups);
+        cached = new UserContext(userId, cavingGroupIds);
         resolved = true;
         return cached;
     }

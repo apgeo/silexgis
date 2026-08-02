@@ -15,10 +15,7 @@ public class ProfileProtectionTests
     private static readonly Guid OtherCavingGroup = Guid.CreateVersion7();
 
     private static UserContext User(Guid id, params Guid[] cavingGroups) =>
-        new(id, new HashSet<string>(), cavingGroups.ToDictionary(t => t, _ => CavingGroupRole.Member));
-
-    private static UserContext Admin(Guid id) =>
-        new(id, new HashSet<string> { GlobalRoles.Admin }, new Dictionary<Guid, CavingGroupRole>());
+        new(id, cavingGroups);
 
     private sealed class FakeProfile : IUserProfile
     {
@@ -130,13 +127,15 @@ public class ProfileProtectionTests
     }
 
     [Fact]
-    public void Relate_gives_an_admin_no_bypass()
+    public void Relate_knows_only_identity_and_shared_groups()
     {
-        // Contact data is not content: an installation admin reads a member's phone number only
-        // if that member published it. Reversing this is one arm here plus this assertion.
-        ProfileProtection.Relate(Admin(Viewer), Subject, new HashSet<Guid>())
+        // Contact data is not content: there is no privileged relation here at all — the
+        // context carries no role or permission an arm could even key on, so an
+        // installation admin reads a member's phone number only if that member published
+        // it. Reversing this means widening UserContext, adding an arm, and this test.
+        ProfileProtection.Relate(User(Viewer), Subject, new HashSet<Guid>())
             .ShouldBe(ProfileViewerRelation.Authenticated);
-        ProfileProtection.Relate(Admin(Subject), Subject, new HashSet<Guid>())
+        ProfileProtection.Relate(User(Subject), Subject, new HashSet<Guid>())
             .ShouldBe(ProfileViewerRelation.Self);
     }
 

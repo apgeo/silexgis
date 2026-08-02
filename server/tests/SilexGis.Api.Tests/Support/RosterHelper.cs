@@ -52,18 +52,14 @@ public static class RosterHelper
         return caver;
     }
 
-    /// <summary>The caving groups an account belongs to, in the shape <see cref="UserContext"/> wants.</summary>
-    public static Task<Dictionary<Guid, CavingGroupRole>> MembershipsOfAsync(SilexGisDbContext db, Guid userId) =>
-        (from membership in db.CavingGroupMemberships
-         join caver in db.Cavers on membership.CaverId equals caver.Id
-         where caver.UserId == userId
-         select membership)
-        .ToDictionaryAsync(m => m.CavingGroupId, m => m.Role);
-
     /// <summary>A request context for an account, with its real caving-group membership.</summary>
-    public static async Task<UserContext> ContextOfAsync(
-        SilexGisDbContext db, Guid userId, params string[] roles) =>
-        new(userId, new HashSet<string>(roles), await MembershipsOfAsync(db, userId));
+    public static async Task<UserContext> ContextOfAsync(SilexGisDbContext db, Guid userId) =>
+        new(userId, await (
+            from membership in db.CavingGroupMemberships
+            join caver in db.Cavers on membership.CaverId equals caver.Id
+            where caver.UserId == userId
+            select membership.CavingGroupId)
+            .ToListAsync());
 
     /// <summary>The account's access context, resolved exactly as a request resolves it.</summary>
     public static Task<SilexGis.Domain.Access.AccessContext> AccessContextOfAsync(

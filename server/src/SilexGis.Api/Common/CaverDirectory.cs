@@ -45,9 +45,9 @@ public static class CaverDirectory
 
         return cavers.ToDictionary(
             c => c.Id,
-            c => c.UserId is { } userId && accountLabels.TryGetValue(userId, out var label)
-                ? label
-                : c.FullName);
+            c => CaverProtection.Label(
+                c.FullName,
+                c.UserId is { } userId ? accountLabels.GetValueOrDefault(userId) : null));
     }
 
     /// <summary>

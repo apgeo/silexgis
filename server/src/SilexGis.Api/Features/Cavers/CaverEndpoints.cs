@@ -547,16 +547,17 @@ public static class CaverEndpoints
         return [.. cavers.Select(caver =>
         {
             // For an account holder the profile projection has already applied their own
-            // settings, so reading the result is the whole rule — no second interpretation here.
+            // settings; the disclosure rule itself has one home in CaverProtection.
             var profile = caver.UserId is { } userId ? profiles.GetValueOrDefault(userId) : null;
+            var projected = CaverProtection.Project(caver, canKeepRoster, profile);
 
             return new CaverDto(
-                caver.Id,
-                labels.GetValueOrDefault(caver.Id) ?? caver.FullName,
-                caver.UserId,
-                caver.UserId is null ? (canKeepRoster ? caver.Email : null) : profile?.Email,
-                caver.UserId is null ? (canKeepRoster ? caver.Phone : null) : profile?.PhoneNumber,
-                canKeepRoster ? caver.Notes : null,
+                projected.Id,
+                labels.GetValueOrDefault(caver.Id) ?? projected.FullName,
+                projected.UserId,
+                projected.Email,
+                projected.Phone,
+                projected.Notes,
                 [.. memberships
                     .Where(m => m.CaverId == caver.Id)
                     .OrderBy(m => m.Name)
