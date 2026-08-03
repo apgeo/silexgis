@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { centerlinePalette } from '../map/markerPalette.ts';
-import { centerlineLoadState, centerlinePolylines } from './centerlines3d.ts';
+import {
+  CENTERLINE_DEPTH_BANDS,
+  centerlineLoadState,
+  centerlinePolylines,
+  nearestCaveCenterlines,
+} from './centerlines3d.ts';
+import type { Scene3DPolyline } from './scene3dEngine.ts';
 
 /** A response shaped exactly like the centerline overlay's, altitudes included. */
 function collection(features: unknown[], extras: Record<string, unknown> = {}) {
@@ -107,8 +113,10 @@ describe('centerlinePolylines', () => {
       ]),
     );
 
-    expect(wholeCave[1].positions.map((p) => p.height)).toEqual([-60, -100]);
-    expect(lowerHalf[0].positions.map((p) => p.height)).toEqual([-60, -100]);
+    // The last piece drawn is the deepest one either way; the whole-cave payload also carries the
+    // shallower half, which the depth colouring cuts into more pieces than the clipped payload has.
+    expect(wholeCave.at(-1)!.positions.map((p) => p.height)).toEqual([-60, -100]);
+    expect(lowerHalf.at(-1)!.positions.map((p) => p.height)).toEqual([-60, -100]);
   });
 
   it('anchors to the highest point it was sent when the response reports no top', () => {
@@ -298,6 +306,183 @@ describe('centerlinePolylines', () => {
   it('is unbothered by a response that is not one', () => {
     expect(centerlinePolylines(undefined)).toEqual([]);
     expect(centerlinePolylines({})).toEqual([]);
+  });
+});
+
+describe('showing depth in the colour of the line', () => {
+  it('darkens a passage through the bands as it descends', () => {
+    // The survey is drawn over the ground rather than behind it, which is what keeps a whole cave
+    // legible from every angle — and means nothing about where a line sits on screen says how far
+    // down it is. Seen from straight above, a passage four hundred metres down and one ten metres
+    // down are the same ink in the same place unless the colour says otherwise.
+    const polylines = centerlinePolylines(
+      collection([
+        feature(
+          {
+            type: 'LineString',
+            coordinates: [
+              [25.44, 45.53, 700],
+              [25.48, 45.53, 300],
+            ],
+          },
+          { topAltitudeM: 700 },
+        ),
+      ]),
+    );
+
+    expect(polylines.map((line) => line.color)).toEqual([
+      CENTERLINE_DEPTH_BANDS[0].color,
+      CENTERLINE_DEPTH_BANDS[1].color,
+      CENTERLINE_DEPTH_BANDS[2].color,
+      CENTERLINE_DEPTH_BANDS[3].color,
+    ]);
+    // The first band is the colour the flat map draws the same overlay in, so a cave stays
+    // recognisably the same cave in both views.
+    expect(CENTERLINE_DEPTH_BANDS[0].color).toBe(centerlinePalette.line);
+    // Cutting a passage into pieces must not cut what clicking one of them selects: every piece
+    // carries the same payload object, so a click anywhere still answers with the cave.
+    expect(new Set(polylines.map((line) => line.id)).size).toBe(1);
+  });
+
+  it('changes colour where the depth changes, not at whichever station is nearest', () => {
+    // A single long leg dropping through a boundary is cut at the boundary. Drawing it in one
+    // colour would put fifty metres of passage in the wrong band, and cutting it at a station
+    // would put the change wherever the surveyors happened to stop.
+    const polylines = centerlinePolylines(
+      collection([
+        feature(
+          {
+            type: 'LineString',
+            coordinates: [
+              [25.44, 45.53, 700],
+              [25.46, 45.53, 600],
+            ],
+          },
+          { topAltitudeM: 700 },
+        ),
+      ]),
+    );
+
+    expect(polylines).toHaveLength(2);
+    const change = polylines[0].positions[1];
+    expect(change.height).toBe(-50);
+    // Halfway along the leg, because the boundary is halfway down it.
+    expect(change.longitude).toBeCloseTo(25.45, 9);
+    expect(change.latitude).toBeCloseTo(45.53, 9);
+    // Both pieces share that point, so the line stays unbroken across the change.
+    expect(polylines[1].positions[0]).toEqual(change);
+  });
+
+  it('leaves a cave that never leaves its first band as the components it arrived as', () => {
+    // The cue costs nothing where there is nothing to show: the number of drawn components only
+    // grows where a survey actually crosses a boundary.
+    const polylines = centerlinePolylines(
+      collection([
+        feature(
+          {
+            type: 'MultiLineString',
+            coordinates: [
+              [
+                [25.44, 45.53, 700],
+                [25.441, 45.53, 690],
+              ],
+              [
+                [25.441, 45.53, 690],
+                [25.442, 45.531, 670],
+              ],
+            ],
+          },
+          { topAltitudeM: 700 },
+        ),
+      ]),
+    );
+
+    expect(polylines).toHaveLength(2);
+    expect(new Set(polylines.map((line) => line.color))).toEqual(
+      new Set([CENTERLINE_DEPTH_BANDS[0].color]),
+    );
+  });
+
+  it('colours a passage climbing back up by the band it climbs into', () => {
+    const polylines = centerlinePolylines(
+      collection([
+        feature(
+          {
+            type: 'LineString',
+            coordinates: [
+              [25.44, 45.53, 500],
+              [25.46, 45.53, 700],
+            ],
+          },
+          { topAltitudeM: 700 },
+        ),
+      ]),
+    );
+
+    expect(polylines.map((line) => line.color)).toEqual([
+      CENTERLINE_DEPTH_BANDS[2].color,
+      CENTERLINE_DEPTH_BANDS[1].color,
+      CENTERLINE_DEPTH_BANDS[0].color,
+    ]);
+    expect(polylines[0].positions.at(-1)!.height).toBe(-150);
+    expect(polylines[1].positions.at(-1)!.height).toBe(-50);
+  });
+});
+
+describe('nearestCaveCenterlines', () => {
+  const line = (caveId: string, longitude: number): Scene3DPolyline => ({
+    positions: [
+      { longitude, latitude: 45.53, height: 0 },
+      { longitude: longitude + 0.001, latitude: 45.53, height: -20 },
+    ],
+    widthPixels: 2,
+    color: '#7a1f1f',
+    id: { kind: 'centerline', caveId, centerlineId: `${caveId}-1` },
+  });
+
+  it('picks the cave the middle of the view is on', () => {
+    const near = line('cave-near', 25.44);
+    const far = line('cave-far', 26.44);
+
+    expect(nearestCaveCenterlines([far, near], { longitude: 25.45, latitude: 45.53 })).toEqual([
+      near,
+    ]);
+    expect(nearestCaveCenterlines([far, near], { longitude: 26.45, latitude: 45.53 })).toEqual([
+      far,
+    ]);
+  });
+
+  it('keeps every component of the cave it picks', () => {
+    const first = line('cave-near', 25.44);
+    const second = line('cave-near', 25.45);
+    const far = line('cave-far', 26.44);
+
+    expect(nearestCaveCenterlines([first, far, second], { longitude: 25.44, latitude: 45.53 })).toEqual(
+      [first, second],
+    );
+  });
+
+  it('measures nearest on the ground rather than in degrees', () => {
+    // At Carpathian latitudes a degree of longitude is about two thirds of a degree of latitude,
+    // so a cave 0.5 degrees east is nearer than one 0.5 degrees north — and comparing the two raw
+    // would say they were the same distance away.
+    const east = line('cave-east', 25.94);
+    const north: Scene3DPolyline = {
+      ...line('cave-north', 25.44),
+      positions: [
+        { longitude: 25.44, latitude: 46.03, height: 0 },
+        { longitude: 25.441, latitude: 46.03, height: -20 },
+      ],
+      id: { kind: 'centerline', caveId: 'cave-north', centerlineId: 'cave-north-1' },
+    };
+
+    expect(nearestCaveCenterlines([north, east], { longitude: 25.44, latitude: 45.53 })).toEqual([
+      east,
+    ]);
+  });
+
+  it('has nothing to offer when nothing was drawn', () => {
+    expect(nearestCaveCenterlines([], { longitude: 25.44, latitude: 45.53 })).toEqual([]);
   });
 });
 

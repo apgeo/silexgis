@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
-/* Scene beside its detail panel. A fixed-width dock rather than a draggable split: the scene has
-   no controls of its own yet, so there is nothing for a viewer to trade width against. */
+/* Scene beside its detail panel. A fixed-width dock rather than a draggable split: the scene's
+   own controls sit over the scene and fold away when they are not in use, so the dock holds one
+   thing at one width and there is nothing for a viewer to trade width against. */
 .scene3d-page {
   display: flex;
   height: 100%;

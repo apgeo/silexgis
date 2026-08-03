@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -71,7 +71,13 @@ beforeEach(() => {
     detail: false,
     flatCount: 0,
   };
-  useWorkspaceStore.setState({ selection: null });
+  useWorkspaceStore.setState({
+    selection: null,
+    overlayVisible: {},
+    overlayOpacity: {},
+    baseOpacity: {},
+    scene3dSurfaceMode: 'overlay',
+  });
 });
 
 afterEach(() => {
@@ -263,5 +269,151 @@ describe('Scene3DView', () => {
     expect(await screen.findByText('The 3D view could not be started')).toBeInTheDocument();
     expect(await screen.findByText(/different container/)).toBeInTheDocument();
     other.release();
+  });
+});
+
+describe('Scene3DView layer controls', () => {
+  const oneBaseLayer = [
+    {
+      id: 1,
+      name: 'OpenStreetMap',
+      layerKind: 'xyz',
+      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: null,
+      isBase: true,
+      isDefault: true,
+      sortOrder: 0,
+      options: null,
+    },
+  ];
+
+  const aSurvey = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [25.44, 45.53, 700],
+            [25.45, 45.535, 420],
+          ],
+        },
+        properties: { id: 'line-1', caveId: 'cave-1', hasZ: true },
+      },
+    ],
+    withheldCount: 0,
+    detail: true,
+    flatCount: 0,
+  };
+
+  it('offers the layer controls once there is a scene and a catalog to name', async () => {
+    withWebGl2(true);
+    mapLayers = oneBaseLayer;
+    renderView();
+
+    const trigger = await screen.findByTestId('scene3d-layers-trigger');
+    fireEvent.click(trigger);
+
+    expect(await screen.findByTestId('scene3d-layer-panel')).toBeInTheDocument();
+  });
+
+  it('offers them even where the basemap catalog cannot be read', async () => {
+    // The catalog is one section of the panel; the layer switches, the fades and the surface mode
+    // are about the scene. An installation that refuses the catalog to this viewer — or merely
+    // answers slowly — would otherwise leave them with a scene and no way to control it.
+    withWebGl2(true);
+    mapLayers = undefined;
+    renderView();
+
+    const trigger = await screen.findByTestId('scene3d-layers-trigger');
+    fireEvent.click(trigger);
+
+    expect(await screen.findByRole('checkbox', { name: 'Cave centerlines' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Cut it away' })).toBeInTheDocument();
+  });
+
+  it('stops drawing a layer the viewer turned off', async () => {
+    withWebGl2(true);
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+
+    act(() => useWorkspaceStore.getState().setOverlayVisible('centerlines', false));
+
+    const { primitives } = engine.engineState.widgets[0].scene;
+    await waitFor(() => {
+      const collection = primitives.items[0] as InstanceType<typeof engine.PolylineCollection>;
+      expect(collection.show).toBe(false);
+    });
+  });
+
+  it('fades the basemap without touching what is drawn over it', async () => {
+    // Fading the basemap is a legibility control and nothing more: it reveals nothing buried,
+    // which is what the surface mode is for.
+    withWebGl2(true);
+    mapLayers = oneBaseLayer;
+    renderView();
+    await waitFor(() => expect(engine.engineState.providers).toHaveLength(1));
+
+    act(() => useWorkspaceStore.getState().setBaseOpacity(1, 0.35));
+
+    const { imageryLayers } = engine.engineState.widgets[0].scene;
+    await waitFor(() => expect(imageryLayers.layers[0].alpha).toBe(0.35));
+  });
+
+  it('cuts the ground away over the survey when the viewer asks for it', async () => {
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    const { globe } = engine.engineState.widgets[0].scene;
+    await waitFor(() => expect(globe.clippingPolygons?.length).toBe(1));
+
+    act(() => useWorkspaceStore.getState().setScene3dSurfaceMode('cutaway'));
+
+    await waitFor(() => expect(globe.clippingPolygons?.enabled).toBe(true));
+  });
+
+  it('says so when the camera angle has taken the cutaway away', async () => {
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    const { scene } = engine.engineState.widgets[0];
+    await waitFor(() => expect(scene.globe.clippingPolygons?.length).toBe(1));
+    act(() => useWorkspaceStore.getState().setScene3dSurfaceMode('cutaway'));
+
+    // The viewer tilts towards the horizon, where the opening is edge-on and shows almost nothing.
+    act(() => {
+      scene.camera.pitch = (-4 * Math.PI) / 180;
+      scene.render();
+    });
+
+    expect(await screen.findByText(/tilt the view down towards the cave/)).toBeInTheDocument();
+  });
+
+  it('does not tell a viewer under the ground to tilt, which would not help them', async () => {
+    // Going below the surface to look up at a cave is what this view exists for. There is no
+    // ground left between the camera and the cave down there, so the cutaway has nothing to
+    // remove and no angle brings it back — only coming back up does.
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    const { scene } = engine.engineState.widgets[0];
+    await waitFor(() => expect(scene.globe.clippingPolygons?.length).toBe(1));
+    act(() => useWorkspaceStore.getState().setScene3dSurfaceMode('cutaway'));
+
+    act(() => {
+      scene.camera.positionWC = {
+        longitudeDegrees: 25.445,
+        latitudeDegrees: 45.532,
+        height: -300,
+      };
+      scene.render();
+    });
+
+    expect(await screen.findByText(/Rise back above it/)).toBeInTheDocument();
+    expect(screen.queryByText(/tilt the view down towards the cave/)).not.toBeInTheDocument();
   });
 });

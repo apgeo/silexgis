@@ -783,7 +783,18 @@
     "unsupportedHint": "The 3D view needs WebGL 2, which this browser or its graphics driver does not provide. Try an up-to-date browser, or keep using the 2D map.",
     "openFlatMap": "Open the 2D map",
     "startFailed": "The 3D view could not be started",
-    "centerlinesFlat": "{{count}} centerline(s) drawn on the surface — no surveyed depths were available for them."
+    "centerlinesFlat": "{{count}} centerline(s) drawn on the surface — no surveyed depths were available for them.",
+    "surfaceTitle": "Ground over the cave",
+    "surfaceOverlay": "Show the cave through it",
+    "surfaceOverlayHint": "The survey is drawn over the ground and stays visible from every angle. How deep a passage is shows in the colour of the line, not in what hides it.",
+    "surfaceCutaway": "Cut it away",
+    "surfaceCutawayHint": "The ground above the cave is cut away, so the survey is seen down an opening in the surface.",
+    "cutawayUnsupported": "This browser cannot cut the ground away. The cave is shown through it instead.",
+    "cutawayNoCave": "No survey is loaded to cut around. The cave is shown through the ground instead.",
+    "cutawayPaused": "The opening is edge-on from here — tilt the view down towards the cave to look into it.",
+    "cutawayUnderground": "The view is below the surface, where there is no ground left between you and the cave. Rise back above it to look down into the opening.",
+    "depthLegend": "Depth below the top of the cave",
+    "depthLegendBand": "{{meters}} m"
   },
   "caveview": {
     "loadError": "Failed to load the 3D model"

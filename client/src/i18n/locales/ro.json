@@ -783,7 +783,18 @@
     "unsupportedHint": "Vizualizarea 3D are nevoie de WebGL 2, pe care acest browser sau driverul său grafic nu îl oferă. Încearcă un browser actualizat sau folosește în continuare harta 2D.",
     "openFlatMap": "Deschide harta 2D",
     "startFailed": "Vizualizarea 3D nu a putut fi pornită",
-    "centerlinesFlat": "{{count}} poligonale desenate la suprafață — pentru ele nu au fost disponibile adâncimi topografiate."
+    "centerlinesFlat": "{{count}} poligonale desenate la suprafață — pentru ele nu au fost disponibile adâncimi topografiate.",
+    "surfaceTitle": "Terenul de deasupra peșterii",
+    "surfaceOverlay": "Arată peștera prin el",
+    "surfaceOverlayHint": "Poligonația este desenată peste teren și rămâne vizibilă din orice unghi. Cât de adâncă este o galerie se vede din culoarea liniei, nu din ce o acoperă.",
+    "surfaceCutaway": "Decupează-l",
+    "surfaceCutawayHint": "Terenul de deasupra peșterii este decupat, astfel încât poligonația se vede printr-o deschidere în suprafață.",
+    "cutawayUnsupported": "Acest browser nu poate decupa terenul. Peștera este arătată prin el.",
+    "cutawayNoCave": "Nu este încărcată nicio poligonație în jurul căreia să se decupeze. Peștera este arătată prin teren.",
+    "cutawayPaused": "De aici deschiderea se vede din profil — înclină vederea în jos spre peșteră pentru a privi în ea.",
+    "cutawayUnderground": "Vederea este sub suprafață, unde nu mai există teren între tine și peșteră. Urcă înapoi deasupra ei pentru a privi în jos, prin deschidere.",
+    "depthLegend": "Adâncimea sub partea de sus a peșterii",
+    "depthLegendBand": "{{meters}} m"
   },
   "caveview": {
     "loadError": "Modelul 3D nu a putut fi încărcat"

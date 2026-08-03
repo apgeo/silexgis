@@ -3,7 +3,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { useWorkspaceStore } from './workspaceStore.ts';
 
 afterEach(() => {
-  useWorkspaceStore.setState({ overlayOpacity: {}, rasterOpacity: {}, baseOpacity: {} });
+  useWorkspaceStore.setState({
+    overlayOpacity: {},
+    rasterOpacity: {},
+    baseOpacity: {},
+    overlayVisible: {},
+    scene3dSurfaceMode: 'overlay',
+  });
 });
 
 describe('workspaceStore overlay opacity', () => {
@@ -49,5 +55,39 @@ describe('workspaceStore overlay opacity', () => {
     store.resetBaseOpacity({ 2: 0.5 });
 
     expect(useWorkspaceStore.getState().baseOpacity).toEqual({ 2: 0.5 });
+  });
+});
+
+describe('workspaceStore overlay visibility', () => {
+  it('starts with nothing hidden, so a view opens showing everything it has', () => {
+    // Absence means shown: nothing has to enumerate the overlays before a view can be drawn.
+    expect(useWorkspaceStore.getState().overlayVisible).toEqual({});
+  });
+
+  it('records what was hidden, keyed the same way the opacities are', () => {
+    const { setOverlayVisible, setOverlayOpacity } = useWorkspaceStore.getState();
+    setOverlayVisible('centerlines', false);
+    setOverlayVisible('entrances', true);
+    setOverlayOpacity('centerlines', 0.5);
+
+    // One key names one layer across both maps and both settings — a viewer who dims the survey
+    // lines in one view does not meet a second, independent setting in the other.
+    expect(useWorkspaceStore.getState().overlayVisible).toEqual({
+      centerlines: false,
+      entrances: true,
+    });
+    expect(useWorkspaceStore.getState().overlayOpacity).toEqual({ centerlines: 0.5 });
+  });
+});
+
+describe('workspaceStore surface mode', () => {
+  it('starts by drawing the cave over the ground', () => {
+    expect(useWorkspaceStore.getState().scene3dSurfaceMode).toBe('overlay');
+  });
+
+  it('remembers the cutaway a viewer asked for', () => {
+    useWorkspaceStore.getState().setScene3dSurfaceMode('cutaway');
+
+    expect(useWorkspaceStore.getState().scene3dSurfaceMode).toBe('cutaway');
   });
 });

@@ -41,6 +41,15 @@ html[data-theme='dark'] .scene3d-canvas .cesium-widget-credits {
   background: rgba(0, 0, 0, 0.65);
 }
 
+/* The scene's own controls, in the only free corner: the engine's attribution strip is bottom
+   left, the notices below are bottom right, and the middle of the view is where the caves are. */
+.scene3d-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+}
+
 /* Quiet notices about what the server held back, over the bottom-right of the scene. Kept out of
    the way of the attribution strip in the opposite corner, and never covering the middle of the
    view, which is where the caves are. */

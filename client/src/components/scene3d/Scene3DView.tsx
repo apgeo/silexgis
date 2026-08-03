@@ -1,25 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Result, Spin } from 'antd';
+import { LayoutOutlined } from '@ant-design/icons';
+import { Alert, Button, Popover, Result, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useMapConfig, useMapLayers } from '../../api/hooks.ts';
-import { syncBaseImagery } from '../../scene3d/baseImagery3d.ts';
+import { baseImageryLayerId, syncBaseImagery } from '../../scene3d/baseImagery3d.ts';
 import {
   attachCaveData3d,
   limitsFromMapConfig,
+  CAVE_DATA_3D_LAYERS,
   EMPTY_CAVE_DATA_3D_STATE,
   type CaveData3DHandle,
   type CaveData3DState,
 } from '../../scene3d/caveData3d.ts';
 import { geoJsonBounds } from '../../scene3d/geoJson3d.ts';
 import { pickPayload, selectionFromPick } from '../../scene3d/selection3d.ts';
-import type { Scene3DCore } from '../../scene3d/scene3dEngine.ts';
+import type { Scene3DCore, Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
 import type { Scene3DSession } from '../../scene3d/scene3dContext.ts';
 import { supportsWebGl2 } from '../../scene3d/webglSupport.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
+import Scene3DLayerPanel from './Scene3DLayerPanel.tsx';
+import { cutawayPauseMessage } from './surfaceMessages.ts';
 import './Scene3DView.css';
 
 export interface Scene3DViewProps {
@@ -116,6 +120,35 @@ export default function Scene3DView({ height = '100%' }: Scene3DViewProps) {
     engine.requestRender();
   }, [layers, activeBaseId, engineVersion]);
 
+  // ---- what a viewer can turn off, fade and cut into ----
+
+  const baseOpacity = useWorkspaceStore((s) => s.baseOpacity);
+  const setBaseOpacity = useWorkspaceStore((s) => s.setBaseOpacity);
+  const overlayVisible = useWorkspaceStore((s) => s.overlayVisible);
+  const setOverlayVisible = useWorkspaceStore((s) => s.setOverlayVisible);
+  const overlayOpacity = useWorkspaceStore((s) => s.overlayOpacity);
+  const setOverlayOpacity = useWorkspaceStore((s) => s.setOverlayOpacity);
+  const surfaceMode = useWorkspaceStore((s) => s.scene3dSurfaceMode);
+  const setSurfaceMode = useWorkspaceStore((s) => s.setScene3dSurfaceMode);
+  const [surfaceState, setSurfaceState] = useState<Scene3DSurfaceState>();
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine || !layers) {
+      return;
+    }
+    // Every base keeps its own value and only one of them is visible at a time, so this is
+    // applied to all of them rather than to the active one: switching basemap then shows that
+    // layer at the transparency it was left at.
+    for (const layer of layers) {
+      if (layer.isBase) {
+        const id = Number(layer.id);
+        engine.setImageryLayerOpacity(baseImageryLayerId(id), baseOpacity[id] ?? 1);
+      }
+    }
+    engine.requestRender();
+  }, [layers, baseOpacity, activeBaseId, engineVersion]);
+
   // ---- cave data, picking and selection ----
 
   const dataRef = useRef<CaveData3DHandle | null>(null);
@@ -190,6 +223,32 @@ export default function Scene3DView({ height = '100%' }: Scene3DViewProps) {
     }
   }, [mapConfig, engineVersion]);
 
+  // Declared after the loader is attached, and keyed on the same counter, so a scene that is
+  // rebuilt comes back with the settings the viewer had rather than with the defaults.
+  useEffect(() => {
+    const data = dataRef.current;
+    if (!data) {
+      return;
+    }
+    for (const layer of CAVE_DATA_3D_LAYERS) {
+      data.setLayerVisible(layer, overlayVisible[layer] ?? true);
+      data.setLayerOpacity(layer, overlayOpacity[layer] ?? 1);
+    }
+  }, [overlayVisible, overlayOpacity, engineVersion]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) {
+      return;
+    }
+    engine.setSurfaceMode(surfaceMode);
+    // The scene decides for itself whether the cutaway is worth drawing from where the camera is
+    // standing, and changes its mind as the camera moves, so what it is doing is subscribed to
+    // rather than assumed from what was asked for.
+    setSurfaceState(engine.getSurfaceState());
+    return engine.onSurfaceStateChanged(setSurfaceState);
+  }, [surfaceMode, engineVersion]);
+
   if (!webGl2) {
     return (
       <div className="scene3d-wrap" style={{ height }} data-testid="scene3d-unsupported">
@@ -206,9 +265,14 @@ export default function Scene3DView({ height = '100%' }: Scene3DViewProps) {
   // Two things the viewer would otherwise have to guess at: caves the server refused to send at
   // this zoom, and caves it could only send as flat outlines. Both are ordinary answers rather
   // than failures, so they are stated quietly rather than raised as errors.
+  // A cutaway the camera has taken away is the third: the viewer asked for it, the control still
+  // says so, and without a word here the scene would simply look as if the setting had been
+  // ignored. Which word depends on why, because the way out of one reason is not the way out of
+  // the other. The panel explains the reasons a cutaway was never drawn at all.
   const notices = [
     dataState.withheldCount > 0 ? t('map.centerlinesWithheld', { count: dataState.withheldCount }) : undefined,
     dataState.flatCount > 0 ? t('scene3d.centerlinesFlat', { count: dataState.flatCount }) : undefined,
+    surfaceState?.pausedBy ? t(cutawayPauseMessage(surfaceState.pausedBy)) : undefined,
   ].filter((notice): notice is string => notice !== undefined);
 
   return (
@@ -226,6 +290,42 @@ export default function Scene3DView({ height = '100%' }: Scene3DViewProps) {
         data-testid="scene3d-container"
         style={{ display: status === 'error' ? 'none' : undefined }}
       />
+      {/* Gated on the scene alone. Only the basemap section of the panel is about the layer
+          catalog; the layer switches, the fades and the surface mode are about the scene, and an
+          installation whose catalog is unreadable — or merely slow — must not lose the controls
+          this view is driven by along with it. */}
+      {status === 'ready' && (
+        <div className="scene3d-controls">
+          <Popover
+            trigger="click"
+            placement="bottomRight"
+            title={t('map.layersTitle')}
+            content={
+              <Scene3DLayerPanel
+                layers={layers ?? []}
+                activeBaseId={activeBaseId}
+                onBaseChange={setActiveBaseId}
+                baseOpacity={baseOpacity}
+                onBaseOpacityChange={setBaseOpacity}
+                overlayVisible={overlayVisible}
+                onOverlayVisibleChange={setOverlayVisible}
+                overlayOpacity={overlayOpacity}
+                onOverlayOpacityChange={setOverlayOpacity}
+                surfaceMode={surfaceMode}
+                onSurfaceModeChange={setSurfaceMode}
+                surfaceState={surfaceState}
+              />
+            }
+          >
+            <Button
+              size="small"
+              icon={<LayoutOutlined />}
+              aria-label={t('map.layersTitle')}
+              data-testid="scene3d-layers-trigger"
+            />
+          </Popover>
+        </div>
+      )}
       {/* Settles to "idle" once every request of a load has answered, which is the only signal
           from outside that the view has finished filling itself in. */}
       <div

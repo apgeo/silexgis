@@ -658,6 +658,7 @@ describe('vector sources', () => {
 
     for (const change of [
       () => source.replace([item]),
+      () => source.setOpacity(0.4),
       () => source.clear(),
       () => source.setVisible(false),
       () => source.remove(),
@@ -724,6 +725,467 @@ describe('vector sources', () => {
 
     expect(() => source.replace([])).not.toThrow();
     expect(() => source.setVisible(true)).not.toThrow();
+    expect(() => source.setOpacity(0.5)).not.toThrow();
+  });
+
+  it('fades lines by the transparency they asked for rather than flattening them to one value', async () => {
+    const session = acquire();
+    const source = polylines(session);
+    const { primitives } = engine.engineState.widgets[0].scene;
+    const line = (id: string) => ({
+      positions: [
+        { longitude: 25, latitude: 45, height: 0 },
+        { longitude: 25.1, latitude: 45, height: 0 },
+      ],
+      widthPixels: 2,
+      color: '#7a1f1f',
+      id,
+    });
+
+    source.replace([line('a'), line('b')]);
+    source.setOpacity(0.25);
+
+    const collection = primitives.items[0] as InstanceType<typeof engine.PolylineCollection>;
+    for (const drawn of collection.polylines) {
+      expect((drawn.material.uniforms.color as InstanceType<typeof engine.Color>).alpha).toBe(0.25);
+    }
+    session.release();
+  });
+
+  it('keeps a fade when the data behind it is reloaded, because the viewer asked for it', async () => {
+    // The camera settling refetches the whole batch. A fade that came back to full every time the
+    // viewer panned would be a setting that only holds while nothing is happening.
+    const session = acquire();
+    const source = polylines(session);
+    const { primitives } = engine.engineState.widgets[0].scene;
+    const line = (id: string) => ({
+      positions: [
+        { longitude: 25, latitude: 45, height: 0 },
+        { longitude: 25.1, latitude: 45, height: 0 },
+      ],
+      widthPixels: 2,
+      color: '#7a1f1f',
+      id,
+    });
+
+    source.setOpacity(0.5);
+    source.replace([line('a')]);
+
+    const collection = primitives.items[0] as InstanceType<typeof engine.PolylineCollection>;
+    expect((collection.polylines[0].material.uniforms.color as InstanceType<typeof engine.Color>).alpha).toBe(0.5);
+    session.release();
+  });
+
+  it('fades markers through their icon rather than through a second set of images', async () => {
+    const session = acquire();
+    const source = session.engine.createMarkerSource('entrances');
+    const { primitives } = engine.engineState.widgets[0].scene;
+
+    source.replace([
+      {
+        position: { longitude: 25.44, latitude: 45.53, height: 0 },
+        clampToGround: true,
+        image: 'data:image/svg+xml;utf8,<svg/>',
+        id: { kind: 'entrance' },
+      },
+    ]);
+    source.setOpacity(0.3);
+
+    const collection = primitives.items[0] as InstanceType<typeof engine.BillboardCollection>;
+    expect(collection.billboards[0].color.alpha).toBe(0.3);
+    session.release();
+  });
+});
+
+describe('the camera below the ground', () => {
+  /** Stands in for the scene drawing a frame, which is when the camera is looked at. */
+  const drawFrame = () => engine.engineState.widgets[0].scene.render();
+
+  const putCameraAt = (height: number) => {
+    engine.engineState.widgets[0].scene.camera.positionWC = {
+      longitudeDegrees: 25.3,
+      latitudeDegrees: 45.7,
+      height,
+    };
+  };
+
+  it('lets the camera through the surface, because the cave is under it', async () => {
+    acquire();
+
+    expect(
+      engine.engineState.widgets[0].scene.screenSpaceCameraController.enableCollisionDetection,
+    ).toBe(false);
+  });
+
+  it('stops the descent at the floor, which nothing else does once it is let through', async () => {
+    // With the engine's own collision detection off, both its "stop at the ground" behaviour and
+    // its minimum zoom distance are skipped: a viewer who keeps zooming goes through the planet.
+    const session = acquire();
+    putCameraAt(-40000);
+
+    drawFrame();
+
+    expect(session.engine.getCamera().height).toBe(-2000);
+    session.release();
+  });
+
+  it('leaves a camera above the floor exactly where the viewer put it', async () => {
+    const session = acquire();
+    putCameraAt(-500);
+
+    drawFrame();
+
+    expect(session.engine.getCamera().height).toBe(-500);
+    session.release();
+  });
+
+  it('follows the data down but never fences a viewer out of a cave', async () => {
+    const session = acquire();
+
+    session.engine.setCameraFloorHeight(-5000);
+    putCameraAt(-40000);
+    drawFrame();
+    expect(session.engine.getCamera().height).toBe(-5000);
+
+    // A caller that under-reports how deep its data goes must not be able to raise the floor into
+    // the caves that are already drawn.
+    session.engine.setCameraFloorHeight(-10);
+    putCameraAt(-1500);
+    drawFrame();
+    expect(session.engine.getCamera().height).toBe(-1500);
+    session.release();
+  });
+
+  it('takes a descent limit handed back after the scene has gone, rather than throwing', async () => {
+    // The scene is shared and reference counted, so a data loader can be told to let go after the
+    // drawing surface it was reading has already been torn down — which is exactly the order a
+    // page unmount produces. The engine no longer has a scene at that point, and a throw here
+    // escapes into the unmount and takes the rest of the teardown with it.
+    const session = acquire();
+    // A floor different from the standing default, so the call cannot leave through the
+    // no-change guard rather than through the one being tested.
+    session.engine.setCameraFloorHeight(-4000);
+
+    session.release();
+
+    expect(() => session.engine.setCameraFloorHeight(-2000)).not.toThrow();
+    expect(() => session.engine.requestRender()).not.toThrow();
+  });
+
+  it('puts rock under the surface rather than the basemap seen from its back', async () => {
+    acquire();
+    const { globe } = engine.engineState.widgets[0].scene;
+
+    // The engine's default fades the underground colour out at close range, which is exactly the
+    // range a cave is looked at from, leaving coastlines and lake outlines overhead.
+    expect(globe.undergroundColor?.css).toBe('#3a332c');
+    expect(globe.undergroundColorAlphaByDistance?.nearValue).toBe(1);
+    // And the far end is rock too. The pair is measured from the eye to each patch of surface, not
+    // from the camera to the region, so a value that fell away with distance would leave a viewer
+    // underground looking at the basemap from behind — coastlines overhead — everywhere except
+    // the nearest kilometre.
+    expect(globe.undergroundColorAlphaByDistance?.farValue).toBe(1);
+  });
+});
+
+describe('the ground over the cave', () => {
+  const drawFrame = () => engine.engineState.widgets[0].scene.render();
+
+  const footprint = () => ({
+    ring: [
+      { longitude: 25.3, latitude: 45.7, height: 0 },
+      { longitude: 25.4, latitude: 45.7, height: 0 },
+      { longitude: 25.4, latitude: 45.8, height: 0 },
+      { longitude: 25.3, latitude: 45.8, height: 0 },
+    ],
+    floorHeight: -600,
+  });
+
+  /** Points the camera the way a viewer looking into a cave from above would have it. */
+  const lookDownFromAbove = () => {
+    const { camera } = engine.engineState.widgets[0].scene;
+    camera.positionWC = { longitudeDegrees: 25.35, latitudeDegrees: 45.75, height: 3000 };
+    camera.pitch = -Math.PI / 4;
+  };
+
+  it('starts by drawing the cave over the ground, which is legible from everywhere', async () => {
+    const session = acquire();
+
+    expect(session.engine.getSurfaceState().effective).toBe('overlay');
+    expect(engine.engineState.widgets[0].scene.globe.depthTestAgainstTerrain).toBe(false);
+    session.release();
+  });
+
+  it('cuts the ground away over the cave when that is asked for and the camera is over it', async () => {
+    const session = acquire();
+    lookDownFromAbove();
+    session.engine.setCutawayFootprint(footprint());
+
+    session.engine.setSurfaceMode('cutaway');
+
+    const { globe } = engine.engineState.widgets[0].scene;
+    expect(session.engine.getSurfaceState().effective).toBe('cutaway');
+    expect(globe.clippingPolygons?.enabled).toBe(true);
+    expect(globe.clippingPolygons?.length).toBe(1);
+    // The ground in front of the cave has genuinely gone, so what is left is allowed to hide it.
+    expect(globe.depthTestAgainstTerrain).toBe(true);
+    session.release();
+  });
+
+  it('fills the opening rather than leaving the hole it cut', async () => {
+    // Cutting ground away draws nothing in its place: without this the opening is a hard black
+    // void, which reads as a broken renderer rather than as a hole in a hillside.
+    const session = acquire();
+    lookDownFromAbove();
+    session.engine.setCutawayFootprint(footprint());
+    session.engine.setSurfaceMode('cutaway');
+
+    const { primitives } = engine.engineState.widgets[0].scene;
+    const fill = primitives.items.find(
+      (item): item is InstanceType<typeof engine.Primitive> =>
+        item instanceof engine.Primitive,
+    )!;
+    expect(fill.show).toBe(true);
+    // A wall around the opening and a floor under it.
+    expect(fill.geometryInstances).toHaveLength(2);
+    const wall = fill.geometryInstances[0].geometry as InstanceType<typeof engine.WallGeometry>;
+    // The wall is a closed loop: as many points as the ring, plus the first one again.
+    expect(wall.options.positions).toHaveLength(5);
+    expect(wall.options.minimumHeights.every((height) => height === -600)).toBe(true);
+    // Carried just past the ground so no hairline of background shows along the rim.
+    expect(wall.options.maximumHeights.every((height) => height === 2)).toBe(true);
+    // Nothing in the excavation is a thing a viewer can select, and it is built on the spot
+    // rather than by a worker, so a scene that only draws when asked does not have to keep asking.
+    expect(fill.allowPicking).toBe(false);
+    expect(fill.asynchronous).toBe(false);
+    session.release();
+  });
+
+  it('goes back to the overlay when the camera drops too near the horizon', async () => {
+    // The opening is a vertical shaft: from a shallow angle a viewer sees its near wall and
+    // under a third of the cave, whatever shape the outline is. Nothing fixes that but not
+    // being there.
+    const session = acquire();
+    lookDownFromAbove();
+    session.engine.setCutawayFootprint(footprint());
+    session.engine.setSurfaceMode('cutaway');
+    const reported: string[] = [];
+    session.engine.onSurfaceStateChanged((state) => reported.push(state.effective));
+
+    engine.engineState.widgets[0].scene.camera.pitch = (-5 * Math.PI) / 180;
+    drawFrame();
+
+    expect(session.engine.getSurfaceState()).toMatchObject({
+      requested: 'cutaway',
+      effective: 'overlay',
+    });
+    // Said out loud, so the chrome can explain a mode the viewer asked for and is not getting.
+    expect(reported).toEqual(['overlay']);
+    expect(engine.engineState.widgets[0].scene.globe.clippingPolygons?.enabled).toBe(false);
+    session.release();
+  });
+
+  it('asks for a steeper view into a deep narrow shaft than into a broad shallow one', async () => {
+    // The angle a viewer has to be at is a property of the excavation, not a constant. A survey a
+    // few hundred metres across but half a kilometre deep is a shaft: from a third of the way up
+    // it shows a lid of rock and none of the cave, while the overlay at the same angle shows all
+    // of it — so the mode has to hand back long before the ground-level limit a broad opening uses.
+    const session = acquire();
+    const { camera } = engine.engineState.widgets[0].scene;
+    camera.positionWC = { longitudeDegrees: 25.35, latitudeDegrees: 45.75, height: 3000 };
+    camera.pitch = (-30 * Math.PI) / 180;
+
+    // Kilometres across, six hundred metres deep: legible from thirty degrees.
+    session.engine.setCutawayFootprint(footprint());
+    session.engine.setSurfaceMode('cutaway');
+    drawFrame();
+    expect(session.engine.getSurfaceState().effective).toBe('cutaway');
+
+    // A few hundred metres across, the same depth: not legible from thirty degrees.
+    session.engine.setCutawayFootprint({
+      ring: [
+        { longitude: 25.35, latitude: 45.75, height: 0 },
+        { longitude: 25.353, latitude: 45.75, height: 0 },
+        { longitude: 25.353, latitude: 45.752, height: 0 },
+        { longitude: 25.35, latitude: 45.752, height: 0 },
+      ],
+      floorHeight: -600,
+    });
+    drawFrame();
+    expect(session.engine.getSurfaceState().effective).toBe('overlay');
+
+    // Straight down it is legible again, and the mode comes back without being asked for twice.
+    camera.pitch = (-80 * Math.PI) / 180;
+    drawFrame();
+    expect(session.engine.getSurfaceState()).toMatchObject({
+      requested: 'cutaway',
+      effective: 'cutaway',
+    });
+    session.release();
+  });
+
+  it('goes back to the overlay once the camera is under the ground itself', async () => {
+    // From below there is no ground between the viewer and the cave to remove, and the opening
+    // only adds a view of the underside of the surrounding terrain with the basemap on it.
+    const session = acquire();
+    lookDownFromAbove();
+    session.engine.setCutawayFootprint(footprint());
+    session.engine.setSurfaceMode('cutaway');
+
+    engine.engineState.widgets[0].scene.camera.positionWC = {
+      longitudeDegrees: 25.35,
+      latitudeDegrees: 45.75,
+      height: -200,
+    };
+    drawFrame();
+
+    expect(session.engine.getSurfaceState().effective).toBe('overlay');
+    session.release();
+  });
+
+  it('has nothing to cut when no survey has been drawn', async () => {
+    const session = acquire();
+    lookDownFromAbove();
+
+    session.engine.setSurfaceMode('cutaway');
+
+    expect(session.engine.getSurfaceState()).toMatchObject({
+      requested: 'cutaway',
+      effective: 'overlay',
+      hasFootprint: false,
+    });
+    session.release();
+  });
+
+  it('takes the opening away with the survey it belonged to', async () => {
+    const session = acquire();
+    lookDownFromAbove();
+    session.engine.setCutawayFootprint(footprint());
+    session.engine.setSurfaceMode('cutaway');
+    const { scene } = engine.engineState.widgets[0];
+    const cut = scene.globe.clippingPolygons!;
+
+    session.engine.setCutawayFootprint(undefined);
+
+    // Taken off the globe rather than left on it holding nothing, and destroyed on the way out so
+    // the textures a cut needs are not kept for a scene that is no longer cutting anything.
+    expect(scene.globe.clippingPolygons).toBeUndefined();
+    expect(cut.destroyed).toBe(true);
+    expect(scene.primitives.items.some((item) => item instanceof engine.Primitive)).toBe(false);
+    expect(session.engine.getSurfaceState().effective).toBe('overlay');
+    session.release();
+  });
+
+  it('moves the opening to the survey the viewer moved to', async () => {
+    // The outline handed over second has exactly as many points as the first, which is true of
+    // every outline this application produces. An engine only rebuilds what it cuts with when
+    // that count changes, so refilling one collection in place would leave the ground cut where
+    // the first survey was — the second cave would sit under unbroken hillside, with the walls
+    // and floor of its excavation drawn standing on top of the ground.
+    const session = acquire();
+    lookDownFromAbove();
+    session.engine.setCutawayFootprint(footprint());
+    session.engine.setSurfaceMode('cutaway');
+    drawFrame();
+    expect(
+      engine.engineState.widgets[0].scene.globe.clippingPolygons?.packed?.[0].longitudeDegrees,
+    ).toBeCloseTo(25.3, 6);
+
+    const elsewhere = {
+      ring: footprint().ring.map((position) => ({ ...position, longitude: position.longitude + 1 })),
+      floorHeight: -600,
+    };
+    session.engine.setCutawayFootprint(elsewhere);
+    drawFrame();
+
+    const { globe } = engine.engineState.widgets[0].scene;
+    expect(globe.clippingPolygons?.packed?.[0].longitudeDegrees).toBeCloseTo(26.3, 6);
+    // Still cutting, and still cutting exactly one hole.
+    expect(globe.clippingPolygons?.enabled).toBe(true);
+    expect(globe.clippingPolygons?.length).toBe(1);
+    session.release();
+  });
+
+  it('leaves the opening alone when the survey has not moved', async () => {
+    // The outline is recomputed every time the camera comes to rest, and a viewer looking at one
+    // cave gets an equal-but-new outline each time. Rebuilding for those would throw away and
+    // re-upload the excavation and the textures behind the cut for no change at all.
+    const session = acquire();
+    lookDownFromAbove();
+    session.engine.setCutawayFootprint(footprint());
+    session.engine.setSurfaceMode('cutaway');
+    const { scene } = engine.engineState.widgets[0];
+    const cut = scene.globe.clippingPolygons;
+    const fill = scene.primitives.items.find((item) => item instanceof engine.Primitive);
+
+    session.engine.setCutawayFootprint(footprint());
+
+    expect(scene.globe.clippingPolygons).toBe(cut);
+    expect(cut?.destroyed).toBe(false);
+    expect(scene.primitives.items.find((item) => item instanceof engine.Primitive)).toBe(fill);
+    session.release();
+  });
+
+  it('tells a viewer under the ground something they can act on', async () => {
+    // Two unrelated reasons a cutaway is not on screen, and the way out of one is not the way out
+    // of the other: from below the surface no tilt in any direction brings the opening back.
+    const session = acquire();
+    lookDownFromAbove();
+    session.engine.setCutawayFootprint(footprint());
+    session.engine.setSurfaceMode('cutaway');
+    const reported: (string | undefined)[] = [];
+    session.engine.onSurfaceStateChanged((state) => reported.push(state.pausedBy));
+
+    const { camera } = engine.engineState.widgets[0].scene;
+    camera.pitch = (-5 * Math.PI) / 180;
+    drawFrame();
+    expect(session.engine.getSurfaceState().pausedBy).toBe('angle');
+
+    // Under the ground and steeply pitched: nothing about the angle is wrong any more.
+    camera.positionWC = { longitudeDegrees: 25.35, latitudeDegrees: 45.75, height: -200 };
+    camera.pitch = (-80 * Math.PI) / 180;
+    drawFrame();
+    expect(session.engine.getSurfaceState().pausedBy).toBe('belowSurface');
+
+    // A camera that is both under the ground and shallowly pitched has one thing to do about it.
+    camera.pitch = (-5 * Math.PI) / 180;
+    drawFrame();
+    expect(session.engine.getSurfaceState().pausedBy).toBe('belowSurface');
+
+    // Back over the cave, and the reason goes away with the pause.
+    lookDownFromAbove();
+    drawFrame();
+    expect(session.engine.getSurfaceState()).toMatchObject({ effective: 'cutaway' });
+    expect(session.engine.getSurfaceState().pausedBy).toBeUndefined();
+
+    // Every one of those is a change the chrome has to be able to report.
+    expect(reported).toEqual(['angle', 'belowSurface', undefined]);
+    session.release();
+  });
+
+  it('refuses the cutaway on a browser that cannot draw one, and says so', async () => {
+    // Reported rather than silently ignored: a control that quietly does nothing is worse than
+    // one that says why it is unavailable.
+    engine.engineState.webgl2 = false;
+    const session = acquire();
+    lookDownFromAbove();
+    session.engine.setCutawayFootprint(footprint());
+
+    session.engine.setSurfaceMode('cutaway');
+
+    expect(session.engine.getSurfaceState()).toMatchObject({
+      requested: 'cutaway',
+      effective: 'overlay',
+      cutawayAvailable: false,
+    });
+    // Nothing was cut and nothing was drawn into the ground either.
+    expect(engine.engineState.widgets[0].scene.globe.clippingPolygons).toBeUndefined();
+    expect(
+      engine.engineState.widgets[0].scene.primitives.items.some(
+        (item) => item instanceof engine.Primitive,
+      ),
+    ).toBe(false);
+    session.release();
   });
 });
 

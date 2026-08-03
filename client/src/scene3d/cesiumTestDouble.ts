@@ -53,11 +53,18 @@ export const engineState = {
   providers: [] as FakeImageryProviderOptions[],
   /** Pointer handlers the scene built, so a test can drive a click or a move through one. */
   eventHandlers: [] as ScreenSpaceEventHandler[],
+  /**
+   * What the graphics context a new scene gets will admit to. Cleared before building a scene, it
+   * stands in for a browser that draws the view perfectly well but cannot cut a hole in the
+   * ground — which is asked once, when the scene is built, and so cannot be arranged afterwards.
+   */
+  webgl2: true,
   reset() {
     engineState.widgets = [];
     engineState.widgetOptions = [];
     engineState.providers = [];
     engineState.eventHandlers = [];
+    engineState.webgl2 = true;
   },
 };
 
@@ -82,12 +89,30 @@ export const ScreenSpaceEventType = {
   MOUSE_MOVE: 'mouseMove',
 } as const;
 
-export const Color = {
-  /** The real parser normalises to floats; the string is enough to tell two colours apart here. */
-  fromCssColorString(css: string) {
-    return { css };
-  },
-};
+/**
+ * The real parser normalises to floats; the string is enough to tell two colours apart here. The
+ * alpha channel is modelled properly, though, because fading a layer is a behaviour under test:
+ * the scene module multiplies a colour's own transparency by the opacity a viewer set.
+ */
+export class Color {
+  css: string;
+  alpha: number;
+
+  constructor(css: string, alpha = 1) {
+    this.css = css;
+    this.alpha = alpha;
+  }
+
+  withAlpha(alpha: number) {
+    return new Color(this.css, alpha);
+  }
+
+  static readonly WHITE = new Color('#ffffff', 1);
+
+  static fromCssColorString(css: string) {
+    return new Color(css, 1);
+  }
+}
 
 export const Material = {
   ColorType: 'Color',
@@ -159,6 +184,189 @@ export const SceneTransforms = {
 export class PerspectiveFrustum {
   near = 1;
   fovy = Math.PI / 3;
+}
+
+export class NearFarScalar {
+  near: number;
+  nearValue: number;
+  far: number;
+  farValue: number;
+
+  constructor(near: number, nearValue: number, far: number, farValue: number) {
+    this.near = near;
+    this.nearValue = nearValue;
+    this.far = far;
+    this.farValue = farValue;
+  }
+}
+
+// ---- cutting a hole in the ground -------------------------------------------
+//
+// The outline collection and the pieces the excavation inside it is built from. Only their shape
+// is modelled: whether a hole is actually cut is a question for a graphics card, but which
+// outline was handed over, whether the cut is switched on, and what the scene put inside it are
+// all things this application decides and must therefore be checkable here.
+
+export class ClippingPolygon {
+  readonly positions: FakeCartesian3[];
+  constructor(options: { positions: FakeCartesian3[] }) {
+    this.positions = options.positions;
+  }
+}
+
+export class ClippingPolygonCollection {
+  readonly polygons: ClippingPolygon[] = [];
+  enabled: boolean;
+  inverse: boolean;
+  destroyed = false;
+
+  /**
+   * The outline the cut is actually being made against — what the last `update` packed into the
+   * textures the renderer reads, which is not necessarily the outline the collection is holding.
+   */
+  packed: FakeCartesian3[] | undefined = undefined;
+  private packedPositionCount = 0;
+
+  constructor(
+    options: { polygons?: ClippingPolygon[]; enabled?: boolean; inverse?: boolean } = {},
+  ) {
+    this.enabled = options.enabled ?? true;
+    this.inverse = options.inverse ?? false;
+    for (const polygon of options.polygons ?? []) {
+      this.add(polygon);
+    }
+  }
+
+  get length() {
+    return this.polygons.length;
+  }
+
+  add(polygon: ClippingPolygon) {
+    this.polygons.push(polygon);
+    return polygon;
+  }
+
+  removeAll() {
+    this.polygons.length = 0;
+  }
+
+  /**
+   * Repacks the outlines for the renderer, on every drawn frame the cut is switched on for.
+   *
+   * The guard is the real one, and it is the whole reason this method is modelled at all: judging
+   * whether an outline has moved would mean comparing every point of it every frame, so the real
+   * collection compares the TOTAL number of points it is holding instead and does nothing when
+   * that has not changed. Emptying a collection and refilling it with a different outline of the
+   * same length is therefore silently ignored — the cut stays where the first outline put it —
+   * and neither emptying nor refilling resets the count.
+   */
+  update() {
+    const total = this.polygons.reduce((sum, polygon) => sum + polygon.positions.length, 0);
+    if (total === this.packedPositionCount) {
+      return;
+    }
+    this.packedPositionCount = total;
+    this.packed = this.polygons[0]?.positions;
+  }
+
+  destroy() {
+    this.destroyed = true;
+    return undefined;
+  }
+
+  /**
+   * The real check asks the graphics context for floating-point texture support, which is a
+   * WebGL 2 feature — so it reads exactly this flag off the scene, and a test can clear it to
+   * stand in for a browser that cannot cut a hole in the ground.
+   */
+  static isSupported(scene: { context?: { webgl2?: boolean } } | undefined) {
+    return scene?.context?.webgl2 === true;
+  }
+}
+
+export class PolygonHierarchy {
+  positions: FakeCartesian3[];
+  constructor(positions: FakeCartesian3[]) {
+    this.positions = positions;
+  }
+}
+
+export interface FakePolygonOptions {
+  polygonHierarchy: PolygonHierarchy;
+  height: number;
+  vertexFormat: unknown;
+}
+
+export class PolygonGeometry {
+  options: FakePolygonOptions;
+  constructor(options: FakePolygonOptions) {
+    this.options = options;
+  }
+}
+
+export interface FakeWallOptions {
+  positions: FakeCartesian3[];
+  maximumHeights: number[];
+  minimumHeights: number[];
+  vertexFormat: unknown;
+}
+
+export class WallGeometry {
+  options: FakeWallOptions;
+  constructor(options: FakeWallOptions) {
+    this.options = options;
+  }
+}
+
+export class GeometryInstance {
+  geometry: unknown;
+  attributes: { color: unknown };
+  constructor(options: { geometry: unknown; attributes: { color: unknown } }) {
+    this.geometry = options.geometry;
+    this.attributes = options.attributes;
+  }
+}
+
+export const ColorGeometryInstanceAttribute = {
+  fromColor(color: Color) {
+    return { color };
+  },
+};
+
+export class PerInstanceColorAppearance {
+  readonly flat: boolean;
+  readonly translucent: boolean;
+  readonly closed: boolean;
+  static readonly FLAT_VERTEX_FORMAT = { position: true };
+
+  constructor(options: { flat?: boolean; translucent?: boolean; closed?: boolean } = {}) {
+    this.flat = options.flat ?? false;
+    this.translucent = options.translucent ?? true;
+    this.closed = options.closed ?? false;
+  }
+}
+
+export class Primitive {
+  readonly geometryInstances: GeometryInstance[];
+  readonly appearance: PerInstanceColorAppearance | undefined;
+  readonly asynchronous: boolean;
+  readonly allowPicking: boolean;
+  show: boolean;
+  destroyed = false;
+
+  constructor(options: {
+    geometryInstances: GeometryInstance[];
+    appearance?: PerInstanceColorAppearance;
+    asynchronous?: boolean;
+    allowPicking?: boolean;
+    show?: boolean;
+  }) {
+    this.geometryInstances = options.geometryInstances;
+    this.appearance = options.appearance;
+    this.asynchronous = options.asynchronous ?? true;
+    this.allowPicking = options.allowPicking ?? true;
+    this.show = options.show ?? true;
+  }
 }
 
 export class UrlTemplateImageryProvider {
@@ -288,6 +496,8 @@ export interface FakeBillboard {
   heightReference: string;
   verticalOrigin: string;
   disableDepthTestDistance: number;
+  /** Multiplies the icon; its alpha is how a marker batch is faded. */
+  color: Color;
   id: unknown;
 }
 
@@ -367,9 +577,38 @@ class FakeGlobe {
   /** Opposite of what the scene module sets, so the test proves the module set it. */
   depthTestAgainstTerrain = true;
   terrainHeight: number | undefined = 0;
+  /** The engine's own defaults, so a test can see the scene replace them. */
+  undergroundColor: Color | undefined = new Color('#000000', 1);
+  undergroundColorAlphaByDistance: NearFarScalar | undefined = undefined;
+
+  private outlines: ClippingPolygonCollection | undefined = undefined;
+
+  get clippingPolygons() {
+    return this.outlines;
+  }
+
+  /** The globe takes ownership: whatever it was holding is destroyed, as the real one does. */
+  set clippingPolygons(value: ClippingPolygonCollection | undefined) {
+    if (value === this.outlines) {
+      return;
+    }
+    this.outlines?.destroy();
+    this.outlines = value;
+  }
+
   getHeight(_cartographic: unknown) {
     return this.terrainHeight;
   }
+}
+
+/**
+ * The engine's navigation controller. Only the two settings the scene changes are here — and
+ * both start at the engine's own value, so a test that reads them back is reading a decision this
+ * application made rather than a default it happened to agree with.
+ */
+class FakeScreenSpaceCameraController {
+  enableCollisionDetection = true;
+  minimumZoomDistance = 1;
 }
 
 /** One hit test the scene module asked for, so a test can check the tolerance it used. */
@@ -386,6 +625,11 @@ class FakeScene {
   readonly imageryLayers = new FakeImageryLayerCollection();
   readonly primitives = new FakePrimitiveCollection();
   readonly renderError = new FakeEvent();
+  readonly screenSpaceCameraController = new FakeScreenSpaceCameraController();
+  /** Raised before each drawn frame; a test raises it to stand in for the scene drawing one. */
+  readonly preRender = new FakeEvent();
+  /** What the graphics context admits to, fixed when the scene is built, as the real one is. */
+  readonly context = { webgl2: engineState.webgl2 };
   renderRequests = 0;
   pickedPosition: FakeCartesian3 | undefined = undefined;
   /** What the next hit test answers with; the real one returns undefined when it finds nothing. */
@@ -394,6 +638,20 @@ class FakeScene {
 
   requestRender() {
     this.renderRequests += 1;
+  }
+
+  /**
+   * Draws a frame, which is how a test stands in for the viewer's screen refreshing.
+   *
+   * It is a method rather than a bare event so it can do the two things a drawn frame does in the
+   * order the real one does them: raise the pre-render event, then let the ground's outline
+   * collection repack itself — which only happens while the cut is switched on.
+   */
+  render() {
+    this.preRender.raise();
+    if (this.globe.clippingPolygons?.enabled) {
+      this.globe.clippingPolygons.update();
+    }
   }
 
   pickPosition(_windowPosition: Cartesian2) {
@@ -407,7 +665,19 @@ class FakeScene {
 }
 
 export class CesiumWidget {
-  readonly scene = new FakeScene();
+  private liveScene: FakeScene | undefined = new FakeScene();
+
+  /**
+   * The real widget destroys its scene on teardown and its accessor then answers with nothing,
+   * while its published type still promises a scene — so code that reads `widget.scene` after a
+   * teardown does not fail on a destroyed object, it fails on `undefined`. The cast keeps that
+   * exact shape here, because a double that kept the scene alive would let an unguarded call
+   * survive the test suite and throw for the first viewer who navigated away.
+   */
+  get scene(): FakeScene {
+    return this.liveScene as FakeScene;
+  }
+
   readonly canvas = {
     clientWidth: 1200,
     width: 1200,
@@ -436,5 +706,6 @@ export class CesiumWidget {
     }
     this.destroyed = true;
     this.destroyCount += 1;
+    this.liveScene = undefined;
   }
 }

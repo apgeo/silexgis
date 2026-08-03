@@ -18,12 +18,20 @@ vi.mock('../api/hooks.ts', () => ({
   },
 }));
 
-const { attachCaveData3d, CENTERLINE_SOURCE_ID, ENTRANCE_SOURCE_ID } = await import('./caveData3d.ts');
+const {
+  attachCaveData3d,
+  CENTERLINE_SOURCE_ID,
+  ENTRANCE_SOURCE_ID,
+  SURFACE_FEATURE_LINE_SOURCE_ID,
+  SURFACE_FEATURE_SOURCE_ID,
+} = await import('./caveData3d.ts');
 const { setMapTagFilter } = await import('../map/mapFilters.ts');
 type CaveData3DEngine = import('./caveData3d.ts').CaveData3DEngine;
 type Scene3DBounds = import('./scene3dEngine.ts').Scene3DBounds;
 type Scene3DCameraState = import('./scene3dEngine.ts').Scene3DCameraState;
 type Scene3DVectorSource<T> = import('./scene3dEngine.ts').Scene3DVectorSource<T>;
+type Scene3DCutawayFootprint = import('./scene3dEngine.ts').Scene3DCutawayFootprint;
+type Scene3DSurfaceMode = import('./scene3dEngine.ts').Scene3DSurfaceMode;
 
 const calls = {
   centerlines: [] as unknown[][],
@@ -54,6 +62,40 @@ function centerlineCollection(extras: Record<string, unknown> = {}) {
   };
 }
 
+/** Two caves eighty kilometres apart, the way a regional view answers. */
+function twoCaveCollection() {
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [25.44, 45.53, 700],
+            [25.441, 45.53, 690],
+          ],
+        },
+        properties: { id: 'line-1', caveId: 'cave-1', hasZ: true, topAltitudeM: 700 },
+      },
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [26.44, 45.53, 900],
+            [26.441, 45.53, 880],
+          ],
+        },
+        properties: { id: 'line-2', caveId: 'cave-2', hasZ: true, topAltitudeM: 900 },
+      },
+    ],
+    withheldCount: 0,
+    detail: true,
+    flatCount: 0,
+  };
+}
+
 function entranceCollection() {
   return {
     type: 'FeatureCollection',
@@ -77,6 +119,7 @@ const responses = {
 class FakeSource<TItem> implements Scene3DVectorSource<TItem> {
   items: readonly TItem[] = [];
   visible = true;
+  opacity = 1;
   removed = false;
   replaceCount = 0;
 
@@ -89,6 +132,9 @@ class FakeSource<TItem> implements Scene3DVectorSource<TItem> {
   }
   setVisible(visible: boolean) {
     this.visible = visible;
+  }
+  setOpacity(opacity: number) {
+    this.opacity = opacity;
   }
   remove() {
     this.removed = true;
@@ -129,6 +175,34 @@ class FakeEngine implements CaveData3DEngine {
   setCamera() {}
   flyToZoom() {}
   fitBounds() {}
+
+  /** What the loader last told the scene about the ground and how deep a viewer may go. */
+  footprint: Scene3DCutawayFootprint | undefined;
+  footprintCalls = 0;
+  cameraFloor: number | undefined;
+  surfaceMode: Scene3DSurfaceMode = 'overlay';
+
+  setCameraFloorHeight(height: number) {
+    this.cameraFloor = height;
+  }
+  setSurfaceMode(mode: Scene3DSurfaceMode) {
+    this.surfaceMode = mode;
+  }
+  getSurfaceState() {
+    return {
+      requested: this.surfaceMode,
+      effective: this.surfaceMode,
+      cutawayAvailable: true,
+      hasFootprint: this.footprint !== undefined,
+    };
+  }
+  onSurfaceStateChanged() {
+    return () => {};
+  }
+  setCutawayFootprint(footprint: Scene3DCutawayFootprint | undefined) {
+    this.footprint = footprint;
+    this.footprintCalls += 1;
+  }
 
   private source(id: string) {
     const source = new FakeSource<never>();
@@ -332,5 +406,185 @@ describe('attachCaveData3d', () => {
     expect([...engine.sources.values()].every((source) => source.removed)).toBe(true);
     expect(engine.viewListeners.size).toBe(0);
     expect(calls.centerlines).toHaveLength(1);
+  });
+
+  it('hands the ground and the descent limit back when it is detached', async () => {
+    // The scene is shared and outlives this loader, so a hole cut around a survey that is no
+    // longer drawn would stay cut, over ground with nothing under it.
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.footprint).toBeDefined());
+
+    handle.detach();
+
+    expect(engine.footprint).toBeUndefined();
+    expect(engine.cameraFloor).toBe(-2000);
+  });
+});
+
+describe('the ground the survey is under', () => {
+  it('works the opening and the descent limit out from the survey it drew', async () => {
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+
+    await vi.waitFor(() => expect(engine.footprint).toBeDefined());
+
+    // The fixture cave hangs from its own top: the drawn depths run to 10 m below it, so the
+    // excavation floor is under that and the camera may go under the floor.
+    expect(engine.footprint!.ring.length).toBeGreaterThan(3);
+    expect(engine.footprint!.floorHeight).toBe(-210);
+    expect(engine.cameraFloor).toBe(-2000);
+    handle.detach();
+  });
+
+  it('cuts around the cave the view is centred on, not around every cave it holds', async () => {
+    // An opening is sized to the survey it has to reveal, so one drawn around every cave a
+    // regional view happens to hold is not a cutaway of a cave at all: it is an ellipse as wide as
+    // the region, which takes the basemap off the screen from horizon to horizon and leaves a few
+    // threads of survey on a flat floor. And because the angle a viewer has to look from is worked
+    // out from that same outline, an opening that wide also reports that it is legible from
+    // anywhere, so the mode never hands the view back either.
+    responses.centerlines = () => Promise.resolve(twoCaveCollection());
+    const engine = new FakeEngine();
+    engine.bounds = [25.39, 45.49, 25.49, 45.57];
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.footprint).toBeDefined());
+
+    const longitudes = engine.footprint!.ring.map((position) => position.longitude);
+    expect(Math.min(...longitudes)).toBeGreaterThan(25.4);
+    expect(Math.max(...longitudes)).toBeLessThan(25.5);
+    handle.detach();
+  });
+
+  it('follows the viewer to the cave they moved to', async () => {
+    responses.centerlines = () => Promise.resolve(twoCaveCollection());
+    const engine = new FakeEngine();
+    engine.bounds = [25.39, 45.49, 25.49, 45.57];
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.footprint).toBeDefined());
+
+    engine.bounds = [26.39, 45.49, 26.49, 45.57];
+    handle.reload();
+
+    await vi.waitFor(() => {
+      const longitudes = engine.footprint!.ring.map((position) => position.longitude);
+      expect(Math.min(...longitudes)).toBeGreaterThan(26.4);
+    });
+    handle.detach();
+  });
+
+  it('has no opening to offer when the view holds no survey', async () => {
+    const engine = new FakeEngine();
+    responses.centerlines = () =>
+      Promise.resolve({ type: 'FeatureCollection', features: [], withheldCount: 0, detail: false, flatCount: 0 });
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.footprintCalls).toBe(1));
+
+    expect(engine.footprint).toBeUndefined();
+    handle.detach();
+  });
+});
+
+describe('layers a viewer turns off and fades', () => {
+  it('stops fetching a layer that is turned off, because the requests are the cost of it', async () => {
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(calls.centerlines).toHaveLength(1));
+
+    handle.setLayerVisible(CENTERLINE_SOURCE_ID, false);
+    handle.reload();
+    await vi.waitFor(() => expect(calls.entrances).toHaveLength(2));
+
+    expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.visible).toBe(false);
+    expect(calls.centerlines).toHaveLength(1);
+    handle.detach();
+  });
+
+  it('catches up on the view it missed when the layer comes back', async () => {
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(calls.centerlines).toHaveLength(1));
+    handle.setLayerVisible(CENTERLINE_SOURCE_ID, false);
+
+    handle.setLayerVisible(CENTERLINE_SOURCE_ID, true);
+
+    await vi.waitFor(() => expect(calls.centerlines).toHaveLength(2));
+    expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.visible).toBe(true);
+    handle.detach();
+  });
+
+  it('stops explaining a layer nobody is looking at', async () => {
+    // The notices are about what the survey layer could not show. Over a view the viewer emptied
+    // themselves, they would be telling them the wrong thing.
+    const engine = new FakeEngine();
+    responses.centerlines = () => Promise.resolve(centerlineCollection({ withheldCount: 7 }));
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(handle.getState().withheldCount).toBe(7));
+
+    handle.setLayerVisible(CENTERLINE_SOURCE_ID, false);
+
+    expect(handle.getState().withheldCount).toBe(0);
+    handle.detach();
+  });
+
+  it('hands the ground back when the survey layer is turned off, and takes it again when it returns', async () => {
+    // An excavation around a survey nobody is drawing is an opening with nothing in it. Worse, a
+    // layer that is off is not fetched either, so nothing would ever move the opening or take it
+    // away: it would stay cut over the last cave the viewer looked at however far they travelled
+    // from it, while the control still said the cutaway was showing them a cave.
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.footprint).toBeDefined());
+
+    handle.setLayerVisible(CENTERLINE_SOURCE_ID, false);
+
+    expect(engine.footprint).toBeUndefined();
+
+    handle.setLayerVisible(CENTERLINE_SOURCE_ID, true);
+
+    await vi.waitFor(() => expect(engine.footprint).toBeDefined());
+    handle.detach();
+  });
+
+  it('ignores an answer that lands after the layer was turned off', async () => {
+    // Turning the layer off clears the notices on purpose, and no load starts, so a request that
+    // was already in the air would sail past the staleness check and put them back over a view the
+    // viewer has just emptied — where they would stay, because every later load stops before it
+    // publishes anything while the layer is off.
+    let release: ((value: unknown) => void) | undefined;
+    responses.centerlines = () =>
+      new Promise((resolve) => {
+        release = resolve;
+      });
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(calls.centerlines).toHaveLength(1));
+
+    handle.setLayerVisible(CENTERLINE_SOURCE_ID, false);
+    release?.(centerlineCollection({ withheldCount: 7, flatCount: 2 }));
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+
+    expect(handle.getState().withheldCount).toBe(0);
+    expect(handle.getState().flatCount).toBe(0);
+    expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.replaceCount).toBe(0);
+    // And the ground the hide handed back stays handed back.
+    expect(engine.footprint).toBeUndefined();
+    handle.detach();
+  });
+
+  it('fades both halves of a layer that is drawn as two batches', async () => {
+    // A surface feature is a symbol and the outline of the same thing; fading half of one would
+    // be nonsense.
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.size).toBe(4));
+
+    handle.setLayerOpacity(SURFACE_FEATURE_SOURCE_ID, 0.4);
+
+    expect(engine.sources.get(SURFACE_FEATURE_SOURCE_ID)!.opacity).toBe(0.4);
+    expect(engine.sources.get(SURFACE_FEATURE_LINE_SOURCE_ID)!.opacity).toBe(0.4);
+    // And nothing else moved.
+    expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.opacity).toBe(1);
+    handle.detach();
   });
 });

@@ -17,6 +17,42 @@ import type { Scene3DPolyline, Scene3DPosition } from './scene3dEngine.ts';
 const WIDTH_PIXELS = 2;
 
 /**
+ * How far down a passage is, said in colour.
+ *
+ * The scene draws the survey over the ground rather than behind it, which is what keeps a whole
+ * cave legible from every camera angle — and its one honest cost is that occlusion then says
+ * nothing about depth: seen from above, a passage four hundred metres down and one ten metres down
+ * are the same ink at the same place. Colour is the channel that survives that view, so depth is
+ * carried in the colour of the line instead of being left to the geometry.
+ *
+ * The bands run from the survey's own highest point downwards, because that is the only depth this
+ * drawing can state honestly: with no elevation model loaded there is no hillside to measure a
+ * passage against, so how much rock is overhead is unknown, while how far below the top of the
+ * cave a passage lies is exactly what the surveyors recorded. The first band keeps the colour the
+ * flat map draws the same overlay in, so a cave is recognisably the same cave in both views, and
+ * the sequence then turns steadily from warm to cool — an order a viewer reads as descending
+ * without having to be told which end is which, and one that survives being printed in grey.
+ *
+ * The steps are wide near the surface and wide again far below it: most Romanian caves live in the
+ * first two hundred metres, and a ramp with even steps would spend most of its range on depths
+ * almost nothing reaches.
+ */
+export interface CenterlineDepthBand {
+  /** Metres below the survey's highest point at which this band starts. */
+  fromMeters: number;
+  /** CSS colour the lines in this band are drawn in. */
+  color: string;
+}
+
+export const CENTERLINE_DEPTH_BANDS: readonly CenterlineDepthBand[] = [
+  { fromMeters: 0, color: centerlinePalette.line },
+  { fromMeters: 50, color: '#8c2f6b' },
+  { fromMeters: 150, color: '#6b3d9e' },
+  { fromMeters: 300, color: '#2f5bb5' },
+  { fromMeters: 600, color: '#0f7d8c' },
+];
+
+/**
  * A survey's altitudes are heights above the sea-level datum the survey was recorded against —
  * roughly 1100 m for a cave in the Carpathians. The globe positions everything by height above
  * the reference ellipsoid, and with no elevation model loaded its surface is that ellipsoid: a
@@ -58,6 +94,81 @@ function anchorAltitude(
   return Number.isFinite(top) ? top : 0;
 }
 
+/** Which band a drawn height falls in. Drawn heights are metres below the survey's own top. */
+function depthBandIndex(height: number): number {
+  const depth = -height;
+  let index = 0;
+  while (
+    index + 1 < CENTERLINE_DEPTH_BANDS.length &&
+    depth >= CENTERLINE_DEPTH_BANDS[index + 1].fromMeters
+  ) {
+    index += 1;
+  }
+  return index;
+}
+
+/** The point at which a straight leg from `from` to `to` passes through a given height. */
+function crossingAt(
+  from: Scene3DPosition,
+  to: Scene3DPosition,
+  height: number,
+): Scene3DPosition {
+  const span = to.height - from.height;
+  const along = span === 0 ? 0 : Math.min(1, Math.max(0, (height - from.height) / span));
+  return {
+    longitude: from.longitude + (to.longitude - from.longitude) * along,
+    latitude: from.latitude + (to.latitude - from.latitude) * along,
+    height,
+  };
+}
+
+/**
+ * One survey component cut into the pieces that lie in each depth band, in order.
+ *
+ * The cut is made at the exact height the band changes rather than at whichever surveyed station
+ * happens to be nearest it, so the colour changes where the depth does — a single long leg
+ * dropping through three bands is drawn as three pieces, not as one piece in the colour of
+ * whichever end won. Both pieces share the boundary point, so the line stays continuous.
+ *
+ * This does multiply the number of drawn components, but only where a survey actually crosses a
+ * boundary: a shallow cave that never leaves its first band comes out as exactly the components it
+ * went in as, and a flat row with no surveyed depths at all is untouched.
+ */
+function depthBandRuns(
+  positions: readonly Scene3DPosition[],
+): { band: number; positions: Scene3DPosition[] }[] {
+  if (positions.length === 0) {
+    return [];
+  }
+  const runs: { band: number; positions: Scene3DPosition[] }[] = [];
+  let band = depthBandIndex(positions[0].height);
+  let current: Scene3DPosition[] = [positions[0]];
+
+  for (let index = 1; index < positions.length; index += 1) {
+    const from = positions[index - 1];
+    const to = positions[index];
+    const target = depthBandIndex(to.height);
+    // A leg may cross several boundaries; each one is found on the same straight line, so the
+    // original endpoints stay the reference however many pieces come out of it.
+    while (band !== target) {
+      const descending = band < target;
+      // Going down, the boundary crossed is the start of the band below. Coming up, it is the
+      // start of the band being left.
+      const boundary = descending ? band + 1 : band;
+      const point = crossingAt(from, to, -CENTERLINE_DEPTH_BANDS[boundary].fromMeters);
+      current.push(point);
+      runs.push({ band, positions: current });
+      band = descending ? boundary : boundary - 1;
+      current = [point];
+    }
+    current.push(to);
+  }
+  runs.push({ band, positions: current });
+  // A boundary that falls exactly on a station leaves a piece of one point behind it, which draws
+  // nothing and would only cost the renderer a component to discover that.
+  return runs.filter((run) => run.positions.length >= 2);
+}
+
 /**
  * The polylines for one response.
  *
@@ -85,17 +196,99 @@ export function centerlinePolylines(collection: unknown): Scene3DPolyline[] {
     const components = lineStrings(feature);
     const anchor = anchorAltitude(properties, components);
     for (const positions of components) {
-      polylines.push({
-        // A flat row arrives at height zero throughout and its anchor is zero too, so it stays on
-        // the surface and costs nothing here.
-        positions: positions.map((position) => ({ ...position, height: position.height - anchor })),
-        widthPixels: WIDTH_PIXELS,
-        color: centerlinePalette.line,
-        id,
-      });
+      // A flat row arrives at height zero throughout and its anchor is zero too, so it stays on
+      // the surface, in one piece, in the first band's colour.
+      const anchored = positions.map((position) => ({
+        ...position,
+        height: position.height - anchor,
+      }));
+      for (const run of depthBandRuns(anchored)) {
+        polylines.push({
+          positions: run.positions,
+          widthPixels: WIDTH_PIXELS,
+          color: CENTERLINE_DEPTH_BANDS[run.band].color,
+          id,
+        });
+      }
     }
   }
   return polylines;
+}
+
+/** The cave a survey line belongs to, or nothing when the line came from somewhere else. */
+function caveIdOf(polyline: Scene3DPolyline): string | undefined {
+  const id = polyline.id as Partial<CenterlinePick> | null | undefined;
+  return typeof id?.caveId === 'string' ? id.caveId : undefined;
+}
+
+/**
+ * The lines of the one cave the view is centred on, out of everything a response drew.
+ *
+ * The ground can only be cut away around one cave. An opening is sized to the survey it has to
+ * reveal, so an outline drawn around every cave a wide view happens to hold is not a cutaway of a
+ * cave at all — it is an ellipse as wide as the region, which takes the basemap off the screen
+ * from horizon to horizon and replaces it with a flat floor under a few threads of survey. Worse,
+ * the angle a viewer has to look from is worked out from that same outline, so a hole that wide
+ * reports that it is legible from anywhere and never hands the view back.
+ *
+ * The cave nearest the middle of the view is the one the viewer is looking at, so it is the one
+ * the opening belongs to. Every other cave stays drawn, under ground that stays whole.
+ */
+export function nearestCaveCenterlines(
+  polylines: readonly Scene3DPolyline[],
+  center: { longitude: number; latitude: number },
+): Scene3DPolyline[] {
+  const byCave = new Map<string, Scene3DPolyline[]>();
+  for (const polyline of polylines) {
+    const caveId = caveIdOf(polyline);
+    if (!caveId) {
+      continue;
+    }
+    const lines = byCave.get(caveId);
+    if (lines) {
+      lines.push(polyline);
+    } else {
+      byCave.set(caveId, [polyline]);
+    }
+  }
+  if (byCave.size <= 1) {
+    return [...byCave.values()][0] ?? [];
+  }
+
+  // Longitude is narrowed by the latitude so "nearest" means nearest on the ground: at Carpathian
+  // latitudes a degree of longitude is about two thirds of a degree of latitude, and comparing the
+  // two raw would pick a cave to the east over a nearer one to the north.
+  const cosLatitude = Math.max(Math.cos((center.latitude * Math.PI) / 180), 1e-6);
+  let nearest: Scene3DPolyline[] = [];
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (const lines of byCave.values()) {
+    let west = Number.POSITIVE_INFINITY;
+    let east = Number.NEGATIVE_INFINITY;
+    let south = Number.POSITIVE_INFINITY;
+    let north = Number.NEGATIVE_INFINITY;
+    for (const line of lines) {
+      for (const position of line.positions) {
+        west = Math.min(west, position.longitude);
+        east = Math.max(east, position.longitude);
+        south = Math.min(south, position.latitude);
+        north = Math.max(north, position.latitude);
+      }
+    }
+    if (!Number.isFinite(west) || !Number.isFinite(south)) {
+      continue; // A cave with no drawn geometry at all cannot be the one being looked at.
+    }
+    // The middle of the cave rather than its nearest passage, so a sprawling system does not win
+    // the whole region by reaching one arm towards the middle of the screen.
+    const east0 = ((west + east) / 2 - center.longitude) * cosLatitude;
+    const north0 = (south + north) / 2 - center.latitude;
+    const distance = east0 * east0 + north0 * north0;
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearest = lines;
+    }
+  }
+  return nearest;
 }
 
 /** What the last response held back, and how much of it could not be given real depths. */

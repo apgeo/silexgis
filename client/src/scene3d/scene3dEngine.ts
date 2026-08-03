@@ -24,8 +24,8 @@
 //
 // Members are grouped so that an implementation can honestly declare which groups it satisfies.
 // Today's implementation satisfies `Scene3DCore` (lifecycle, imagery, camera, coordinates,
-// picking and vector sources); model loading is declared here and is not implemented yet, so no
-// code claims to provide it.
+// picking, vector sources and the ground surface); model loading is declared here and is not
+// implemented yet, so no code claims to provide it.
 
 /** A position on the globe: degrees, plus metres above the WGS84 ellipsoid. */
 export interface Scene3DPosition {
@@ -148,6 +148,19 @@ export interface Scene3DCamera {
    * already knows it moved and can reload directly, so no event is synthesised for that.
    */
   onViewChanged(listener: () => void): () => void;
+  /**
+   * How deep the camera may descend, in metres above the ellipsoid.
+   *
+   * The camera is allowed below the surface — a cave view that cannot go underground is not a
+   * cave view — and the moment that is allowed, the engine's own "stop at the ground" behaviour
+   * stops applying and nothing at all limits the descent: a viewer who keeps zooming ends up at
+   * the centre of the earth with the whole world behind them. This is that limit, and it is the
+   * caller's to set because only the caller knows how deep the data being shown goes.
+   *
+   * An implementation may lower a floor it is given but must never raise one above its own safe
+   * default, so a caller that guesses badly cannot lock a viewer out of a cave.
+   */
+  setCameraFloorHeight(height: number): void;
 }
 
 // ---- coordinates ------------------------------------------------------------
@@ -235,6 +248,13 @@ export interface Scene3DVectorSource<TItem> {
   replace(items: readonly TItem[]): void;
   clear(): void;
   setVisible(visible: boolean): void;
+  /**
+   * Fades the whole batch, 0..1, 1 being fully opaque. It multiplies whatever transparency the
+   * items carry themselves rather than replacing it, and it survives `replace`: a source faded
+   * to a quarter and then reloaded is still faded to a quarter, because the viewer set that and
+   * the camera moving is not a reason to undo it.
+   */
+  setOpacity(opacity: number): void;
   /** Removes the source from the scene; the handle is unusable afterwards. */
   remove(): void;
 }
@@ -242,6 +262,78 @@ export interface Scene3DVectorSource<TItem> {
 export interface Scene3DVectorSources {
   createMarkerSource(id: string): Scene3DVectorSource<Scene3DMarker>;
   createPolylineSource(id: string): Scene3DVectorSource<Scene3DPolyline>;
+}
+
+// ---- the ground surface -------------------------------------------------------
+
+/**
+ * How the ground is drawn in relation to the cave underneath it.
+ *
+ * `overlay` draws the survey over the ground: the whole cave is legible from every camera angle
+ * and the basemap stays whole. It is the default, and it is honest about what it is — an X-ray
+ * view with no depth cue at all, in which a passage under four hundred metres of rock looks
+ * exactly like one under ten.
+ *
+ * `cutaway` removes the ground over the cave instead, so the survey is seen down a shaft cut into
+ * the surface. That reads as depth, and it costs: the shaft is vertical, so a camera looking along
+ * the ground rather than down into it sees only the shaft's near wall and almost none of the cave.
+ * An implementation is therefore expected to keep drawing the overlay whenever the cutaway would
+ * not show the cave, and to report that through `Scene3DSurfaceState.effective` so the chrome can
+ * say why the viewer is not seeing what they asked for.
+ */
+export type Scene3DSurfaceMode = 'overlay' | 'cutaway';
+
+/** The patch of ground a cutaway is cut out of, and how far down the excavation goes. */
+export interface Scene3DCutawayFootprint {
+  /**
+   * The outline, in order, first point not repeated at the end. Heights are ignored: the cut is
+   * a vertical shaft through the ground wherever the outline encloses, at every altitude.
+   */
+  ring: Scene3DPosition[];
+  /** Metres above the ellipsoid for the bottom of the excavation — below the deepest passage. */
+  floorHeight: number;
+}
+
+/**
+ * Why a cutaway that was asked for, is possible and has ground to cut is still not on screen.
+ *
+ * The two reasons need different words, because they need different actions from the viewer and
+ * the advice for one is wrong for the other. `angle` means the camera is too near the horizon and
+ * is looking at the near wall of the opening rather than into it, which tilting down fixes.
+ * `belowSurface` means the camera is under the ground, where there is no ground left between it
+ * and the cave to remove — no tilt in any direction brings the cutaway back, only climbing above
+ * the surface again.
+ */
+export type Scene3DCutawayPause = 'angle' | 'belowSurface';
+
+export interface Scene3DSurfaceState {
+  /** What was asked for. */
+  requested: Scene3DSurfaceMode;
+  /** What is on screen right now, which is the overlay whenever a cutaway would not show much. */
+  effective: Scene3DSurfaceMode;
+  /** False when this browser or graphics driver cannot cut a hole in the ground at all. */
+  cutawayAvailable: boolean;
+  /** False when nothing has said which patch of ground to cut away. */
+  hasFootprint: boolean;
+  /**
+   * Set only when a cutaway was asked for and could have been drawn, but the camera is somewhere
+   * it would not show the cave. Absent whenever the effective mode is the requested one, and
+   * absent when the cutaway is unavailable or has no ground to cut — those have their own fields
+   * and their own explanations.
+   */
+  pausedBy?: Scene3DCutawayPause;
+}
+
+export interface Scene3DSurface {
+  setSurfaceMode(mode: Scene3DSurfaceMode): void;
+  getSurfaceState(): Scene3DSurfaceState;
+  /**
+   * Reports every change to the surface state, including the ones the camera causes rather than
+   * the viewer. Returns an unsubscribe function.
+   */
+  onSurfaceStateChanged(listener: (state: Scene3DSurfaceState) => void): () => void;
+  /** Sets, or with `undefined` clears, the ground a cutaway is cut out of. */
+  setCutawayFootprint(footprint: Scene3DCutawayFootprint | undefined): void;
 }
 
 // ---- models (declared, not implemented yet) ----------------------------------
@@ -269,6 +361,7 @@ export interface Scene3DEngine
     Scene3DCoordinates,
     Scene3DPicking,
     Scene3DVectorSources,
+    Scene3DSurface,
     Scene3DModels {}
 
 /**
@@ -282,4 +375,5 @@ export type Scene3DCore = Scene3DLifecycle &
   Scene3DCamera &
   Scene3DCoordinates &
   Scene3DPicking &
-  Scene3DVectorSources;
+  Scene3DVectorSources &
+  Scene3DSurface;
