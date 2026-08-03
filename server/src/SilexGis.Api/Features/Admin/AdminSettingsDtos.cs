@@ -72,7 +72,12 @@ public sealed record SecuritySettingsDto(
     int TwoFactorResendIntervalSeconds);
 
 /// <summary>
-/// Everything the messaging admin page needs in one read, including whether each channel is
+/// What the installation gives away about a protected position's surroundings.
+/// </summary>
+public sealed record ProtectionSettingsDto(bool RevealProtectedAssociations);
+
+/// <summary>
+/// Everything the installation-settings page needs in one read, including whether each channel is
 /// actually working — a page that only echoed the saved values could show a fully configured mail
 /// server that has never delivered anything.
 /// </summary>
@@ -80,6 +85,7 @@ public sealed record AdminSettingsDto(
     MailSettingsDto Mail,
     SmsSettingsDto Sms,
     SecuritySettingsDto Security,
+    ProtectionSettingsDto Protection,
     bool MailConfigured,
     bool SmsConfigured);
 
@@ -138,6 +144,13 @@ public sealed class SecuritySettingsDtoValidator : AbstractValidator<SecuritySet
         RuleFor(x => x.TwoFactorResendIntervalSeconds).InclusiveBetween(0, 600);
     }
 }
+
+/// <summary>
+/// Nothing to reject: the section is a single switch, and both of its positions are valid
+/// installation policy. The validator exists so the route is validated like every other one
+/// rather than being the single exception someone later has to explain.
+/// </summary>
+public sealed class ProtectionSettingsDtoValidator : AbstractValidator<ProtectionSettingsDto>;
 
 public sealed class TestMessageRequestValidator : AbstractValidator<TestMessageRequest>
 {

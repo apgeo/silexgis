@@ -145,6 +145,81 @@ public class DocumentAccessWalkTests
     }
 
     [Fact]
+    public void Reach_through_an_attached_object_admits_a_document_no_other_built_in_reaches()
+    {
+        // The archive as it stands: a document uploaded onto somebody else's cave is
+        // neither owned by nor visible to the people who work on that cave, and reach
+        // through the cave is the only thing that has ever opened it.
+        var ctx = Context();
+        var attached = Document() with { ReachedByAttachment = true };
+
+        Allowed(ctx, attached).ShouldBeTrue();
+        Allowed(ctx, attached, AccessAction.Write).ShouldBeTrue();
+
+        // The same document with nothing behind it: private, not theirs, no rule — shut.
+        Allowed(ctx, Document()).ShouldBeFalse();
+        Allowed(ctx, Document(), AccessAction.Write).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void An_entry_settles_a_document_before_reach_is_consulted_in_both_directions()
+    {
+        var target = Document() with { ReachedByAttachment = true };
+        var objectId = target.ObjectId!.Value;
+
+        // A deny naming the document is final even for a caller who could read every cave
+        // it hangs on. Reach that could talk past a deny would make the deny advisory.
+        Allowed(Context(Entry(AccessEffect.Deny, AccessAction.Read, AccessScopeKind.All)), target)
+            .ShouldBeFalse();
+        Allowed(
+            Context(Entry(AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Object, scopeId: objectId)),
+            target).ShouldBeFalse();
+
+        // And an allow does not need reach: the same caller reads the document whether or
+        // not anything is attached to it, which is what makes standalone documents work.
+        var granted = Context(Entry(AccessEffect.Allow, AccessAction.Read, AccessScopeKind.All));
+        Allowed(granted, target).ShouldBeTrue();
+        Allowed(granted, Document()).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Reach_is_the_weakest_reason_and_never_turns_an_allow_into_a_refusal()
+    {
+        var ctx = Context();
+
+        // Ownership and the read audience answer without it, so a caller they admit is
+        // never made to pay for resolving reach…
+        var owned = AccessEvaluator.Decide(
+            ctx, AccessDomain.Documents, AccessAction.Read, Document(owner: CallerId));
+        owned.Source.ShouldBe(AccessDecisionSource.Ownership);
+        AccessEvaluator.AttachmentReachCouldDecide(owned).ShouldBeFalse();
+
+        var published = AccessEvaluator.Decide(
+            ctx, AccessDomain.Documents, AccessAction.Read, Document(visibility: Visibility.Public));
+        published.Source.ShouldBe(AccessDecisionSource.Visibility);
+        AccessEvaluator.AttachmentReachCouldDecide(published).ShouldBeFalse();
+
+        // …nor is a caller an entry already refused, in either effect.
+        var denied = AccessEvaluator.Decide(
+            Context(Entry(AccessEffect.Deny, AccessAction.Read, AccessScopeKind.All)),
+            AccessDomain.Documents,
+            AccessAction.Read,
+            Document(visibility: Visibility.Public));
+        denied.Source.ShouldBe(AccessDecisionSource.Entries);
+        AccessEvaluator.AttachmentReachCouldDecide(denied).ShouldBeFalse();
+
+        // Only a question nothing answered is worth the walk over attached objects — and
+        // when the walk comes back false the answer is the refusal it already was.
+        var open = AccessEvaluator.Decide(ctx, AccessDomain.Documents, AccessAction.Read, Document());
+        open.Source.ShouldBe(AccessDecisionSource.DefaultDeny);
+        AccessEvaluator.AttachmentReachCouldDecide(open).ShouldBeTrue();
+
+        AccessEvaluator.Decide(
+                ctx, AccessDomain.Documents, AccessAction.Read, Document() with { ReachedByAttachment = true })
+            .Source.ShouldBe(AccessDecisionSource.Attachment);
+    }
+
+    [Fact]
     public void Every_scope_the_domain_offers_flattens_into_the_arrays_both_filter_twins_read()
     {
         var objectId = Guid.CreateVersion7();

@@ -39,7 +39,10 @@ Previous versions:
   group's content, a feature subtree, a named feature set, one object), per-object grants
   with the same reach, and an explainer that answers "why can this person see that?".
   Two-factor sign-in (authenticator app, emailed code or texted code), optional external
-  login (Google/GitHub/OIDC), and location protection for sensitive caves.
+  login (Google/GitHub/OIDC), and location protection for sensitive caves — which keeps a
+  protected cave's documents readable while withholding the fact that they point at *that*
+  cave (an administrator can switch that disclosure on), and never hands out a photo whose
+  own capture point would place the cave.
 - **Email and SMS that an operator controls** — any SMTP server, any SMS gateway that speaks
   HTTP, and the wording of every message editable per language from the admin pages. Configure
   nothing and the app still runs: links and codes go to the server log instead.

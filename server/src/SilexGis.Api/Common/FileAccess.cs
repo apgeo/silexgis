@@ -98,6 +98,163 @@ public static class FileAccessRules
     }
 
     /// <summary>
+    /// The same question as <see cref="CanAccessAsync"/>, asked about many files at once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asking one at a time costs a round trip per file and another per object that file
+    /// hangs on, which a listing turns into a query storm — and the answers do not depend on
+    /// each other, so the work is the same work done separately. This resolves each world
+    /// once for the whole batch instead — which of the named features are readable, which of
+    /// the trips, and so on — so the number of queries is set by how many kinds of thing the
+    /// files hang on, not by how many files there are.
+    /// </para>
+    /// <para>
+    /// It must answer identically to the one-at-a-time form, and it does so by asking the
+    /// same questions rather than by reimplementing them — the feature filter is the one the
+    /// single check uses, the walk-governed worlds go through the filter their point check is
+    /// pinned to agree with, and the caving-group rule is called outright, since it needs no
+    /// storage. A test runs both forms over the same mixed fixture and compares.
+    /// </para>
+    /// <para>
+    /// One difference, and it is in this form's favour: two files naming each other send the
+    /// single check recursing until the stack runs out, while this one walks each file once
+    /// and settles. Nothing can author that pair anyway — a file is not an accepted
+    /// attachment target — so the forms agree on every row the system can actually hold, and
+    /// differ only where the other one has no answer to give at all.
+    /// </para>
+    /// </remarks>
+    public static async Task<HashSet<Guid>> ReadableFileIdsAsync(
+        SilexGisDbContext db, AccessContext ctx, IReadOnlyCollection<Guid> fileIds, CancellationToken ct)
+    {
+        var ids = fileIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        if (ctx.IsFullAdmin)
+        {
+            return [.. ids];
+        }
+
+        // A file can name another file as its target, and that one can name a third, so what
+        // is really being asked about is a closure rather than a list. It is collected first,
+        // in whole rounds: every file in it needs the same handful of world lookups, and doing
+        // those once for all of them is the whole point of this form. A file enters the set
+        // once and is never revisited, which is also what lets two files naming each other
+        // settle here instead of recursing until the stack runs out.
+        var closure = new HashSet<Guid>(ids);
+        var links = new List<AttachmentLink>();
+        var frontier = ids;
+        while (frontier.Count > 0)
+        {
+            var round = await db.Attachments.AsNoTracking()
+                .Where(a => frontier.Contains(a.FileId))
+                .Select(a => new AttachmentLink(a.FileId, a.FeatureId, a.EntityType, a.EntityId))
+                .ToListAsync(ct);
+            links.AddRange(round);
+
+            var next = new List<Guid>();
+            foreach (var link in round)
+            {
+                if (link.EntityType == AttachedEntityType.StoredFile && closure.Add(link.EntityId!.Value))
+                {
+                    next.Add(link.EntityId!.Value);
+                }
+            }
+
+            frontier = next;
+        }
+
+        // Uploading covers the whole closure, not just what was asked about: a file the caller
+        // uploaded is a readable step on the way to one that names it.
+        var readable = ctx.UserId is { } userId
+            ? await DocumentQueries.FileIdsUploadedByAsync(db, userId, [.. closure], ct)
+            : [];
+        if (links.Count == 0)
+        {
+            readable.IntersectWith(ids);
+            return readable;
+        }
+
+        var readableFeatureIds = await ReadableIdsAsync(
+            db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers).Select(f => f.Id),
+            [.. links.Where(l => l.FeatureId != null).Select(l => l.FeatureId!.Value)],
+            ct);
+        var readableTripIds = await ReadableIdsAsync(
+            db.TripLogs.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs).Select(t => t.Id),
+            EntityIdsOf(links, AttachedEntityType.TripLog),
+            ct);
+        var readableGeofileIds = await ReadableIdsAsync(
+            db.Geofiles.AsNoTracking().VisibleTo(ctx, AccessDomain.Geofiles).Select(g => g.Id),
+            EntityIdsOf(links, AttachedEntityType.Geofile),
+            ct);
+        var readableMapIds = await ReadableIdsAsync(
+            db.GeoreferencedMaps.AsNoTracking().VisibleTo(ctx, AccessDomain.GeoreferencedMaps).Select(m => m.Id),
+            EntityIdsOf(links, AttachedEntityType.GeoreferencedMap),
+            ct);
+        var readableViewIds = await ReadableIdsAsync(
+            db.MapViews.AsNoTracking().VisibleTo(ctx, AccessDomain.MapViews).Select(v => v.Id),
+            EntityIdsOf(links, AttachedEntityType.MapView),
+            ct);
+
+        // Repeated until nothing new turns up, because one file becoming readable can be the
+        // reason another one is, and the two can appear in either order. The set only grows
+        // and every file can enter it once, so this ends — and it ends on the same answer the
+        // one-at-a-time form reaches by recursing, without any of the recursion.
+        var groups = links.GroupBy(l => l.FileId).ToList();
+        bool grew;
+        do
+        {
+            grew = false;
+            foreach (var group in groups)
+            {
+                if (readable.Contains(group.Key))
+                {
+                    continue;
+                }
+
+                var reachable = group.Any(l => l.FeatureId is { } featureId
+                    ? readableFeatureIds.Contains(featureId)
+                    : l.EntityType switch
+                    {
+                        AttachedEntityType.TripLog => readableTripIds.Contains(l.EntityId!.Value),
+                        AttachedEntityType.CavingGroup => CanReadCavingGroupTarget(ctx, l.EntityId!.Value),
+                        AttachedEntityType.Geofile => readableGeofileIds.Contains(l.EntityId!.Value),
+                        AttachedEntityType.GeoreferencedMap => readableMapIds.Contains(l.EntityId!.Value),
+                        AttachedEntityType.MapView => readableViewIds.Contains(l.EntityId!.Value),
+                        AttachedEntityType.StoredFile => readable.Contains(l.EntityId!.Value),
+                        _ => false,
+                    });
+                if (reachable)
+                {
+                    readable.Add(group.Key);
+                    grew = true;
+                }
+            }
+        }
+        while (grew);
+
+        readable.IntersectWith(ids);
+        return readable;
+
+        static List<Guid> EntityIdsOf(IEnumerable<AttachmentLink> rows, AttachedEntityType wanted) =>
+            [.. rows.Where(r => r.EntityType == wanted).Select(r => r.EntityId!.Value).Distinct()];
+    }
+
+    /// <summary>One attachment row, reduced to what deciding readability needs.</summary>
+    private readonly record struct AttachmentLink(
+        Guid FileId, Guid? FeatureId, AttachedEntityType? EntityType, Guid? EntityId);
+
+    /// <summary>Intersects candidate ids with an already-filtered id query (empty → empty, no round trip).</summary>
+    private static async Task<HashSet<Guid>> ReadableIdsAsync(
+        IQueryable<Guid> visibleIds, IReadOnlyList<Guid> candidates, CancellationToken ct) =>
+        candidates.Count == 0
+            ? []
+            : [.. await visibleIds.Where(id => candidates.Contains(id)).ToListAsync(ct)];
+
+    /// <summary>
     /// Who may modify a file's document (upload a new version, list/delete superseded ones):
     /// a full administrator, the uploader of the version being evaluated, or anyone with Write
     /// on at least one object that version's file is attached to. A shared document is one

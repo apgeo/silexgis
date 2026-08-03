@@ -7,6 +7,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Permissions;
@@ -148,6 +149,7 @@ public static class CaveEndpoints
         SilexGisDbContext db,
         IAccessService access,
         FeatureProtection protection,
+        AssociationDisclosure associations,
         IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
@@ -161,7 +163,31 @@ public static class CaveEndpoints
 
         var centerlineCount = await db.Centerlines.CountAsync(c => c.CaveFeatureId == id, ct);
         var surveyModelCount = await db.SurveyModels.CountAsync(s => s.CaveFeatureId == id, ct);
-        var attachmentCount = await db.Attachments.CountAsync(a => a.FeatureId == id, ct);
+
+        // Counted the same way the list of them is filtered, through both of the rules that
+        // filter it, and for the same reason: a number that disagreed with the list would say
+        // exactly what the list declined to. That is two separate declinings — a rule written
+        // against a document keeps it out for this caller, and a guarded position keeps the
+        // pairing back — and a count honouring one of them would still be an announcement of
+        // the other.
+        var attachmentRows = await (from a in db.Attachments.AsNoTracking()
+                                    where a.FeatureId == id
+                                    join f in db.StoredFiles.AsNoTracking() on a.FileId equals f.Id
+                                    join v in db.DocumentVersions.AsNoTracking() on f.DocumentVersionId equals v.Id
+                                    join d in db.Documents.AsNoTracking() on v.DocumentId equals d.Id
+                                    select new { a.Id, Document = d, HasOwnPosition = f.Geom != null })
+            .ToListAsync(ct);
+
+        // Every row here names this cave, which the caller was authorised for a few lines
+        // above — so reach through the attachment is established and the walk needs no query.
+        var readableRows = attachmentRows
+            .Where(r => DocumentAccessRules.AllowedByOwnRulesOrAttachment(ctx!, r.Document, AccessAction.Read))
+            .ToList();
+        var withheldAttachments = await associations.WithheldIdsAsync(
+            ctx,
+            [.. readableRows.Select(r => new AssociationCandidate(r.Id, new FeatureAssociation(id, r.HasOwnPosition)))],
+            ct);
+        var attachmentCount = readableRows.Count - withheldAttachments.Count;
 
         // Trip links are visibility-filtered — two callers may legitimately see different counts.
         var visibleTrips = db.TripLogs.AsNoTracking().VisibleTo(ctx!, AccessDomain.TripLogs);

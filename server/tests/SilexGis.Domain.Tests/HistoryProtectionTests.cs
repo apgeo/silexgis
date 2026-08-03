@@ -138,6 +138,32 @@ public class HistoryProtectionTests
     }
 
     [Fact]
+    public void Attachment_names_no_document_in_a_protected_features_timeline()
+    {
+        var fileId = Guid.NewGuid().ToString();
+
+        // Hidden: the event stays — something was attached — while which document it was does
+        // not, because that pairing is exactly what the live surfaces decline to disclose.
+        var hidden = HistoryProtection.Redact(
+            "Attachment",
+            Changes(("FileId", null, fileId), ("Caption", null, "Entrance from the north"), ("SortOrder", null, "0")),
+            governingHidden: true,
+            NoLinkHidden);
+        hidden.Redacted.Order().ShouldBe(["Caption", "FileId"]);
+        hidden.Changes!.ContainsKey("FileId").ShouldBeFalse();
+        hidden.Changes.ContainsKey("SortOrder").ShouldBeTrue();
+
+        // And a caller who may place the feature exactly reads the whole row.
+        var shown = HistoryProtection.Redact(
+            "Attachment",
+            Changes(("FileId", null, fileId), ("Caption", null, "Entrance from the north"), ("SortOrder", null, "0")),
+            governingHidden: false,
+            NoLinkHidden);
+        shown.Redacted.ShouldBeEmpty();
+        shown.Changes!.Count.ShouldBe(3);
+    }
+
+    [Fact]
     public void Null_changes_pass_through()
     {
         var result = HistoryProtection.Redact("Feature:Cave", null, governingHidden: true, NoLinkHidden);

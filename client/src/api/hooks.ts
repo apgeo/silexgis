@@ -34,6 +34,7 @@ export type AdminSettings = components['schemas']['AdminSettingsDto'];
 export type MailSettingsWrite = components['schemas']['MailSettingsWriteRequest'];
 export type SmsSettingsWrite = components['schemas']['SmsSettingsWriteRequest'];
 export type SecuritySettings = components['schemas']['SecuritySettingsDto'];
+export type ProtectionSettings = components['schemas']['ProtectionSettingsDto'];
 export type MessageTemplate = components['schemas']['MessageTemplateDto'];
 
 // Query keys live here so invalidation stays precise.

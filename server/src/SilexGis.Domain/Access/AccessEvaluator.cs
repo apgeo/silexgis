@@ -4,12 +4,12 @@ namespace SilexGis.Domain.Access;
 /// <summary>
 /// The effective-access rule, in its authoritative pure form. Three specificity levels
 /// (object → collection → global), deny beats allow within a level, the first level
-/// containing any matching entry decides and the walk stops; built-ins — ownership, and
-/// the read-time visibility cascade over the ancestor chain — apply only when no
-/// explicit entry matched anywhere; beneath everything, deny; above everything, Full
-/// Administrators membership. Membership path never affects weight: whether a rule
-/// reaches the caller directly, via a caving group or via a permission group changes
-/// nothing — only scope specificity and effect matter.
+/// containing any matching entry decides and the walk stops; built-ins — ownership, the
+/// read-time visibility cascade over the ancestor chain, and reach through an attached
+/// object — apply only when no explicit entry matched anywhere; beneath everything, deny;
+/// above everything, Full Administrators membership. Membership path never affects
+/// weight: whether a rule reaches the caller directly, via a caving group or via a
+/// permission group changes nothing — only scope specificity and effect matter.
 ///
 /// This rule exists in three synchronized forms that may never diverge: this evaluator,
 /// the EF expression twin (<c>AccessQueryExtensions.VisibleTo</c>) and the Dapper
@@ -91,8 +91,29 @@ public static class AccessEvaluator
             return new AccessDecision(true, AccessDecisionSource.Visibility, null, []);
         }
 
+        // Attachment reach, last of the built-ins and the weakest reason of the three: a
+        // document is reachable through any one object it is attached to that the caller
+        // already holds this action on. It sits here, and only here, so that rules written
+        // about the document itself settle the question first — a deny an attachment could
+        // talk past would not be a deny — while a document attached to nothing stays
+        // reachable through its own rules, its owner and its audience alone.
+        if (target?.ReachedByAttachment == true)
+        {
+            return new AccessDecision(true, AccessDecisionSource.Attachment, null, []);
+        }
+
         return new AccessDecision(false, AccessDecisionSource.DefaultDeny, null, []);
     }
+
+    /// <summary>
+    /// Whether attachment reach could still change an answer already decided without it.
+    /// It can only when nothing decided at all: an entry — or full administration — is the
+    /// whole answer in both directions, and the other built-ins have already admitted when
+    /// they apply. Resolving reach costs a walk over every attached object in every world,
+    /// so callers ask this first and pay only when the question is genuinely still open.
+    /// </summary>
+    public static bool AttachmentReachCouldDecide(AccessDecision decision) =>
+        decision is { Allowed: false, Source: AccessDecisionSource.DefaultDeny };
 
     /// <summary>
     /// The read-time visibility cascade (the D1d rule): a row is visibility-readable

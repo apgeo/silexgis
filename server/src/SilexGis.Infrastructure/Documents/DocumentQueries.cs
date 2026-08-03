@@ -13,6 +13,20 @@ namespace SilexGis.Infrastructure.Documents;
 public sealed record DocumentFile(StoredFile File, DocumentVersion Version);
 
 /// <summary>
+/// A stored file placed in the document it belongs to: the document row every rule about
+/// it is written against, the revision this particular file sits in, and the file that
+/// document currently serves.
+/// </summary>
+/// <param name="CurrentFile">
+/// The row attachments and taggings point at, and therefore the only row reach through an
+/// attached object can be resolved against — asking about a superseded file instead finds
+/// no attachments at all and would refuse a document the whole club can reach. Null only
+/// while a document has no current revision, which the write path makes unreachable.
+/// </param>
+public sealed record FileSubject(
+    StoredFile File, DocumentVersion Version, Document Document, StoredFile? CurrentFile);
+
+/// <summary>
 /// Reads over the document → version → file structure that several slices need. They live
 /// together so "the file a document currently serves" is spelled the same way everywhere;
 /// writing that walk out by hand is how a read path ends up disagreeing with the write
@@ -20,13 +34,26 @@ public sealed record DocumentFile(StoredFile File, DocumentVersion Version);
 /// </summary>
 public static class DocumentQueries
 {
-    /// <summary>A file and its revision in one round trip; null when the file is gone.</summary>
-    public static Task<DocumentFile?> FileWithVersionAsync(
-        SilexGisDbContext db, Guid fileId, CancellationToken ct = default) =>
-        (from file in db.StoredFiles.AsNoTracking()
-         join version in db.DocumentVersions.AsNoTracking() on file.DocumentVersionId equals version.Id
-         where file.Id == fileId
-         select new DocumentFile(file, version)).FirstOrDefaultAsync(ct);
+    /// <summary>
+    /// Everything a decision about one file needs: the file, its revision, the document
+    /// that owns both, and the file that document currently serves. Two round trips
+    /// whoever asks would otherwise make separately — and separately is how one caller
+    /// ends up deciding against the requested row while another decides against the head.
+    /// </summary>
+    public static async Task<FileSubject?> FileSubjectAsync(
+        SilexGisDbContext db, Guid fileId, CancellationToken ct = default)
+    {
+        var row = await (from file in db.StoredFiles.AsNoTracking()
+                         join version in db.DocumentVersions.AsNoTracking() on file.DocumentVersionId equals version.Id
+                         join document in db.Documents.AsNoTracking() on version.DocumentId equals document.Id
+                         where file.Id == fileId
+                         select new { File = file, Version = version, Document = document })
+            .FirstOrDefaultAsync(ct);
+
+        return row is null
+            ? null
+            : new FileSubject(row.File, row.Version, row.Document, await CurrentFileOfDocumentAsync(db, fileId, ct));
+    }
 
     /// <summary>Who created the revision a file belongs to (null when that account is gone).</summary>
     public static Task<Guid?> UploaderOfFileAsync(
@@ -35,6 +62,22 @@ public static class DocumentQueries
             .Where(f => f.Id == fileId)
             .Join(db.DocumentVersions.AsNoTracking(), f => f.DocumentVersionId, v => v.Id, (f, v) => v.UploadedBy)
             .FirstOrDefaultAsync(ct);
+
+    /// <summary>
+    /// Of the given files, those whose revision the named account created. The batch twin of
+    /// <see cref="UploaderOfFileAsync"/>, kept beside it so the two cannot come to walk
+    /// files to revisions differently.
+    /// </summary>
+    public static async Task<HashSet<Guid>> FileIdsUploadedByAsync(
+        SilexGisDbContext db, Guid uploaderId, IReadOnlyCollection<Guid> fileIds, CancellationToken ct = default) =>
+        fileIds.Count == 0
+            ? []
+            : [.. await db.StoredFiles.AsNoTracking()
+                .Where(f => fileIds.Contains(f.Id))
+                .Join(db.DocumentVersions.AsNoTracking(), f => f.DocumentVersionId, v => v.Id, (f, v) => new { f.Id, v.UploadedBy })
+                .Where(x => x.UploadedBy == uploaderId)
+                .Select(x => x.Id)
+                .ToListAsync(ct)];
 
     /// <summary>The revision a document currently serves.</summary>
     public static Task<DocumentVersion?> CurrentVersionAsync(

@@ -59,6 +59,15 @@ public static class HistoryProtection
     private static readonly string[] EntranceSensitive =
         [nameof(Feature.Geom), nameof(CaveEntrance.Altitude), nameof(CaveEntrance.PositionQuality)];
 
+    // Which document is attached to a feature is the association, and a caller who may not
+    // place that feature is not told it. The live surfaces decide this case by case — an
+    // installation can choose to reveal the plain ones — but an audit row carries neither the
+    // installation's choice nor whether the document behind it has coordinates of its own, so
+    // the timeline names no document at all. Strictly more restrictive than the live answer,
+    // which is the only direction a timeline may differ in.
+    private static readonly string[] AttachmentSensitive =
+        [nameof(Attachment.FileId), nameof(Attachment.Caption)];
+
     private static readonly string FeatureCave = FeatureAudit.TypeName(FeatureKind.Cave);
     private static readonly string FeatureEntrance = FeatureAudit.TypeName(FeatureKind.CaveEntrance);
     private static readonly string FeatureCenterline = FeatureAudit.TypeName(FeatureKind.Centerline);
@@ -138,6 +147,13 @@ public static class HistoryProtection
             // proximity. Either endpoint hidden → the row's ids are removed.
             RemoveHiddenReference(changes, nameof(FeatureLink.FromId), linkTargetHidden, redacted);
             RemoveHiddenReference(changes, nameof(FeatureLink.ToId), linkTargetHidden, redacted);
+        }
+        else if (entityType == nameof(Attachment))
+        {
+            if (governingHidden)
+            {
+                RemoveNamed(changes, AttachmentSensitive, redacted);
+            }
         }
         else if (entityType == nameof(TripLogCave))
         {

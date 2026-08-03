@@ -21,7 +21,9 @@ namespace SilexGis.Api.Tests;
 /// suite drives every one of them in both effects, for thirteen caller archetypes, over
 /// one seeded matrix. Each caller's set is asserted to be the same set in all three forms
 /// AND to be the right set: three forms agreeing on nonsense would still be parity.
-/// A mismatch here is a disclosure, not a flake.
+/// A mismatch here is a disclosure, not a flake. The first two tests run with no
+/// attachment reach at all, which is also what pins that the built-in changes nothing for
+/// a caller whose documents hang on nothing; the third drives the reach band itself.
 ///
 /// Every archetype is a Viewer — a Viewer holds nothing over documents beyond the
 /// built-ins, so a caller that cannot read a row genuinely has no grant reaching it
@@ -57,7 +59,9 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
     private Guid docGroupBound;     // owner, private, bound to the club
     private Guid docOwnAllowed;     // owned by ownAllowed, private
     private Guid docOwnDenied;      // owned by ownDenied, authenticated
+    private Guid docAttached;       // owner, private, unbound — reached only by attachment
     private Guid[] candidateIds = [];
+    private Guid[] reachCandidateIds = [];
 
     public DocumentAccessParityTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
@@ -105,6 +109,7 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
         docGroupBound = Seed(db, "Club bound", ownerId, Visibility.Private, cavingGroupId);
         docOwnAllowed = Seed(db, "Own allowed", ownAllowedId, Visibility.Private);
         docOwnDenied = Seed(db, "Own denied", ownDeniedId, Visibility.Authenticated);
+        docAttached = Seed(db, "Attached only", ownerId, Visibility.Private);
 
         // Every rule is seeded straight into storage: this suite is about the three forms
         // of the evaluation, not about the surface that authors the rules.
@@ -134,6 +139,7 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
             docPrivate, docAuthenticated, docPublic, docGroupVisible, docObjectGranted,
             docObjectDenied, docGroupBound, docOwnAllowed, docOwnDenied,
         ];
+        reachCandidateIds = [.. candidateIds, docAttached];
     }
 
     [Fact]
@@ -142,7 +148,7 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var connection = db.Database.GetDbConnection();
-        var facts = await FactsForAsync(db);
+        var facts = await FactsForAsync(db, candidateIds);
         var visible = new Dictionary<string, List<Guid>>();
 
         foreach (var (name, ctx) in await CallersAsync(db))
@@ -272,6 +278,84 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
         }
     }
 
+    /// <summary>
+    /// The attachment built-in in all three forms. Reach is a fact about the caller and
+    /// the document, resolved from storage before any of the three forms runs, so the test
+    /// hands the same set to each of them: what is being pinned is that the band they put
+    /// it in is the same band — below every entry, beside ownership and the read audience.
+    /// </summary>
+    [Fact]
+    public async Task Attachment_reach_widens_all_three_forms_alike_and_never_outranks_an_entry()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var connection = db.Database.GetDbConnection();
+        var facts = await FactsForAsync(db, reachCandidateIds);
+
+        // One document reachable only this way, and one already denied by an object-scope
+        // entry — so the same set carries both the widening and the thing it must not widen.
+        Guid[] reached = [docAttached, docObjectDenied];
+        var visible = new Dictionary<string, List<Guid>>();
+
+        foreach (var (name, ctx) in await CallersAsync(db))
+        {
+            var efIds = await db.Documents.AsNoTracking()
+                .VisibleTo(ctx, AccessDomain.Documents, reached)
+                .Where(d => reachCandidateIds.Contains(d.Id))
+                .Select(d => d.Id).OrderBy(id => id).ToListAsync();
+
+            var (fragment, parameters) = AccessSql.VisibleToFragment(
+                ctx, AccessDomain.Documents, "d", reached);
+            parameters.Add("candidate_ids", AccessSql.UuidArray(reachCandidateIds));
+            var sqlIds = (await connection.QueryAsync<Guid>(
+                    $"SELECT d.id FROM documents d WHERE d.id = ANY(@candidate_ids) AND {fragment}",
+                    parameters))
+                .OrderBy(id => id).ToList();
+
+            var evaluatorIds = reachCandidateIds
+                .Where(id => AccessEvaluator.Decide(
+                    ctx,
+                    AccessDomain.Documents,
+                    AccessAction.Read,
+                    facts[id] with { ReachedByAttachment = reached.Contains(id) }).Allowed)
+                .OrderBy(id => id).ToList();
+
+            sqlIds.ShouldBe(efIds, $"EF↔SQL attachment-reach parity broke for caller '{name}'");
+            evaluatorIds.ShouldBe(efIds, $"evaluator↔EF attachment-reach parity broke for caller '{name}'");
+            visible[name] = efIds;
+        }
+
+        // Without reach the same caller cannot see it — this is the fixture proving itself.
+        // A caller with no club, no rule and no ownership reads what is published; the
+        // attached document joins that list and the unattached private one does not.
+        var stranger = await RosterHelper.AccessContextOfAsync(db, strangerId);
+        var withoutReach = await db.Documents.AsNoTracking()
+            .VisibleTo(stranger, AccessDomain.Documents)
+            .Where(d => reachCandidateIds.Contains(d.Id))
+            .Select(d => d.Id).ToListAsync();
+        withoutReach.ShouldNotContain(docAttached);
+        visible["stranger"].ShouldContain(docAttached);
+        visible["stranger"].ShouldNotContain(docPrivate);
+        visible["group-mate"].ShouldContain(docAttached);
+        visible["group-mate"].ShouldNotContain(docGroupBound);
+
+        // The document the caller's own object-scope deny names is in the reach set and
+        // stays shut, while the rest of their view — reached document included — is intact.
+        visible["object-denied"].ShouldNotContain(docObjectDenied);
+        visible["object-denied"].ShouldContain(docAttached);
+
+        // A domain-wide deny is not widened either: the one object-scope allow survives it
+        // and reach adds nothing, in both of the callers written that way.
+        visible["object-over-all"].ShouldBe([docObjectGranted]);
+        visible["all-denied"].ShouldBeEmpty();
+
+        // Nothing is lost: a caller granted domain-wide still sees everything, and the
+        // administrator is decided before any of this runs.
+        var everything = reachCandidateIds.OrderBy(id => id).ToList();
+        visible["all-allowed"].ShouldBe(everything);
+        visible["administrator"].ShouldBe(everything);
+    }
+
     // ---- seeding helpers ----
 
     private static Guid Seed(
@@ -337,8 +421,9 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
 
     /// <summary>The evaluated facts of every candidate row, straight from storage — the
     /// pure evaluator's leg of the parity.</summary>
-    private async Task<Dictionary<Guid, AccessTargetFacts>> FactsForAsync(SilexGisDbContext db) =>
-        (await db.Documents.AsNoTracking().Where(d => candidateIds.Contains(d.Id)).ToListAsync())
+    private static async Task<Dictionary<Guid, AccessTargetFacts>> FactsForAsync(
+        SilexGisDbContext db, Guid[] ids) =>
+        (await db.Documents.AsNoTracking().Where(d => ids.Contains(d.Id)).ToListAsync())
             .ToDictionary(d => d.Id, AccessTargetFacts.Of);
 
     public Task DisposeAsync() => Task.CompletedTask;

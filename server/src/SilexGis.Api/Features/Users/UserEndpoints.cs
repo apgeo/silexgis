@@ -194,7 +194,8 @@ public static class UserEndpoints
         // something to show. Delivery still needs a short-lived token, so this is a URL the caller
         // can render rather than a bare file id.
         profile.AvatarFileId is { } fileId
-            ? $"/api/v1/files/{fileId}/thumbnail?size=480&token={Uri.EscapeDataString(tokens.CreateToken(fileId))}"
+            // A rendering is all an avatar is ever shown as, so the token opens no more than one.
+            ? $"/api/v1/files/{fileId}/thumbnail?size=480&token={Uri.EscapeDataString(tokens.CreateToken(fileId, FileDelivery.DerivativesOnly))}"
             : null,
         profile.AvatarPreset,
         profile.FirstName,

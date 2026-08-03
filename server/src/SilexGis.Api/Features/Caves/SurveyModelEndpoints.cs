@@ -307,7 +307,9 @@ public static class SurveyModelEndpoints
         m.FileId,
         m.Description,
         m.SurveyedAt,
-        $"/api/v1/files/{m.FileId}/content?token={Uri.EscapeDataString(tokens.CreateToken(m.FileId))}",
+        // A survey model is only ever useful as its own bytes, and it holds no capture point
+        // of its own to be careful about — the cave's protection is enforced on the way in.
+        $"/api/v1/files/{m.FileId}/content?token={Uri.EscapeDataString(tokens.CreateToken(m.FileId, FileDelivery.Full))}",
         m.CreatedAt,
         m.UpdatedAt);
 }

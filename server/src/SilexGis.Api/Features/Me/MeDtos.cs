@@ -214,5 +214,6 @@ internal static class MeMapping
     public static string? AvatarUrl(Guid? avatarFileId, IFileAccessTokenService tokens) =>
         avatarFileId is null
             ? null
-            : $"/api/v1/files/{avatarFileId}/thumbnail?size=480&token={Uri.EscapeDataString(tokens.CreateToken(avatarFileId.Value))}";
+            // A rendering is all an avatar is ever shown as, so the token opens no more than one.
+            : $"/api/v1/files/{avatarFileId}/thumbnail?size=480&token={Uri.EscapeDataString(tokens.CreateToken(avatarFileId.Value, FileDelivery.DerivativesOnly))}";
 }

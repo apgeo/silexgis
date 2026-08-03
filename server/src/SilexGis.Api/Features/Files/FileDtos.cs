@@ -51,9 +51,18 @@ internal static class FileMapping
     /// The document id comes from the same revision — a file id changes with every new
     /// version, so it is the only identifier that can name the thing being looked at.
     /// </summary>
-    public static FileDto ToDto(this StoredFile f, DocumentVersion version, IFileAccessTokenService tokens)
+    /// <param name="mayHaveOriginal">
+    /// Whether this caller may be handed the stored bytes of a photo that records where it
+    /// was taken. Defaults to no, and the default is the point: a photo's GPS fix is a
+    /// position rather than a fact about one, so a mint site that has not resolved the
+    /// caller's right to place what the photo shows must not hand out the original — while
+    /// everything without a position of its own is unaffected, whatever this says.
+    /// </param>
+    public static FileDto ToDto(
+        this StoredFile f, DocumentVersion version, IFileAccessTokenService tokens, bool mayHaveOriginal = false)
     {
-        var token = tokens.CreateToken(f.Id);
+        var delivery = f.Geom is null || mayHaveOriginal ? FileDelivery.Full : FileDelivery.DerivativesOnly;
+        var token = tokens.CreateToken(f.Id, delivery);
         return new FileDto(
             f.Id,
             version.DocumentId,

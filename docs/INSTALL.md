@@ -327,6 +327,7 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Security__RequireConfirmedEmail` | `false` | refuse sign-in until confirmed (inert with no mail server) |
 | `SILEXGIS__Security__SmsTwoFactorEnabled` | `false` | allow texted codes as a second factor |
 | `SILEXGIS__Security__TwoFactorCodeLifetimeMinutes` | `5` | how long a delivered code stays valid |
+| `SILEXGIS__Protection__RevealProtectedAssociations` | `false` | show a caller without exact-location rights that a document is attached to a position-protected cave. The document itself is served either way; only the pairing is affected, and switching this on never reveals a position — a photo carrying its own capture point stays unpaired regardless |
 | `SILEXGIS__Notifications__PollSeconds` | `15` | how often queued notifications are sent; **0 switches sending off entirely, and queued messages keep accumulating** |
 | `SILEXGIS__Notifications__DigestHourUtc` | `7` | the hour (UTC) at which daily summaries go out |
 | `SILEXGIS__About__InstanceName` | `SilexGIS` | name used in the messages this installation sends |

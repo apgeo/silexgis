@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
-import { MailOutlined, MobileOutlined, SafetyOutlined } from '@ant-design/icons';
+import { EnvironmentOutlined, MailOutlined, MobileOutlined, SafetyOutlined } from '@ant-design/icons';
 import {
   App,
   Alert,
@@ -27,6 +27,7 @@ import {
   useMe,
   type AdminSettings,
   type MailSettingsWrite,
+  type ProtectionSettings,
   type SecuritySettings,
   type SmsSettingsWrite,
 } from '../../api/hooks.ts';
@@ -103,6 +104,15 @@ export default function MessagingSettingsPage() {
                 </span>
               ),
               children: <PolicyForm settings={settings} onSaved={onSaved} />,
+            },
+            {
+              key: 'protection',
+              label: (
+                <span>
+                  <EnvironmentOutlined /> {t('admin.messaging.protectionTab')}
+                </span>
+              ),
+              children: <ProtectionForm settings={settings} onSaved={onSaved} />,
             },
           ]}
         />
@@ -457,6 +467,59 @@ function PolicyForm({ settings, onSaved }: SectionProps) {
       </Form.Item>
       <Form.Item name="twoFactorResendIntervalSeconds" label={t('admin.messaging.resendInterval')}>
         <InputNumber min={0} max={600} />
+      </Form.Item>
+      <Button type="primary" htmlType="submit" loading={saving}>
+        {t('common.save')}
+      </Button>
+    </Form>
+  );
+}
+
+/**
+ * What the installation gives away about a protected cave's surroundings. The documents
+ * themselves are never affected by this — only whether a caller who may not see where the cave
+ * is gets told which documents point at it.
+ */
+function ProtectionForm({ settings, onSaved }: SectionProps) {
+  const { t } = useTranslation();
+  const { message } = App.useApp();
+  const [form] = Form.useForm<ProtectionSettings>();
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    form.setFieldsValue(settings.protection);
+  }, [settings, form]);
+
+  const save = async (values: ProtectionSettings) => {
+    setSaving(true);
+    try {
+      const { data, error } = await api.PUT('/api/v1/admin/settings/protection', { body: values });
+      if (error !== undefined || !data) {
+        message.error(t('common.saveFailed'));
+        return;
+      }
+      onSaved(data);
+      message.success(t('common.saved'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Form form={form} layout="vertical" onFinish={save} requiredMark={false} style={{ maxWidth: 640 }}>
+      <Alert
+        type="info"
+        showIcon
+        message={t('admin.messaging.protectionIntro')}
+        style={{ marginBottom: 16 }}
+      />
+      <Form.Item
+        name="revealProtectedAssociations"
+        label={t('admin.messaging.revealAssociations')}
+        valuePropName="checked"
+        extra={t('admin.messaging.revealAssociationsHint')}
+      >
+        <Switch />
       </Form.Item>
       <Button type="primary" htmlType="submit" loading={saving}>
         {t('common.save')}

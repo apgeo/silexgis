@@ -106,18 +106,19 @@ public static class MapEndpoints
     }
 
     /// <summary>
-    /// Geotagged image files as points. A photo shows only where the caller can read at least
-    /// one entity it is attached to; it is withheld entirely when anything it is attached to
-    /// reaches a protected feature the caller may not view exactly — directly, through a
-    /// locating link of an attached feature, or through a trip's cave links. The EXIF point
-    /// itself is the location, so snapping it is not enough.
+    /// Geotagged image files as points. Two separate conditions, and a photo needs both: it
+    /// shows only where the caller can read at least one entity it is attached to, and only
+    /// where the caller may place everything that photo hangs on. The second is the shared
+    /// rule about a capture point rather than this endpoint's own — the same question decides
+    /// whether the stored bytes, which carry that point too, may be handed over. The point
+    /// itself is the location, so snapping it is not enough; it is shown or it is not.
     /// </summary>
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> PhotosAsync(
         string bbox,
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
         IAccessContextAccessor accessAccessor,
-        FeatureProtection protection,
+        PhotoPositionDisclosure photos,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -132,10 +133,19 @@ public static class MapEndpoints
         }
 
         var polygon = box.ToPolygon();
-        var candidates = await db.StoredFiles.AsNoTracking()
-            .Where(f => f.Geom != null && f.Kind == FileKind.Image && f.Geom!.Intersects(polygon))
-            .Select(f => new { f.Id, f.Geom, f.OriginalName })
-            .OrderBy(f => f.Id)
+
+        // The document each photo belongs to comes along, because a rule written against a
+        // document decides this surface too — it publishes an id, a rendering and a delivery
+        // token, which is the whole of what such a rule is written to hold back.
+        var candidates = await (from file in db.StoredFiles.AsNoTracking()
+                                join version in db.DocumentVersions.AsNoTracking()
+                                    on file.DocumentVersionId equals version.Id
+                                join document in db.Documents.AsNoTracking()
+                                    on version.DocumentId equals document.Id
+                                where file.Geom != null && file.Kind == FileKind.Image
+                                    && file.Geom!.Intersects(polygon)
+                                orderby file.Id
+                                select new { file.Id, file.Geom, file.OriginalName, Document = document })
             .Take(MaxPoints)
             .ToListAsync(ct);
         if (candidates.Count == 0)
@@ -156,36 +166,14 @@ public static class MapEndpoints
         var geofileIds = links.Where(l => l.EntityType == AttachedEntityType.Geofile)
             .Select(l => l.EntityId!.Value).Distinct().ToList();
 
-        // A locating link between an attached feature and another feature discloses the
-        // other feature's position by proximity — in either direction — so both endpoints
-        // of every locating link join the photo's protection chain (fail-closed).
-        var locatingLinks = attachedFeatureIds.Count == 0
-            ? []
-            : await db.FeatureLinks.AsNoTracking()
-                .Where(l => (attachedFeatureIds.Contains(l.FromId) || attachedFeatureIds.Contains(l.ToId))
-                    && db.LinkKinds.Any(k => k.Id == l.LinkKindId && k.Locating))
-                .Select(l => new { l.FromId, l.ToId })
-                .ToListAsync(ct);
-        var linkPartners = new Dictionary<Guid, List<Guid>>();
-        foreach (var link in locatingLinks)
-        {
-            AddPartner(link.FromId, link.ToId);
-            AddPartner(link.ToId, link.FromId);
-        }
+        // Whether a photo's point may be shown at all is not this endpoint's rule to keep —
+        // the same question is asked wherever the bytes that carry that point could be
+        // handed over, and one of those two places working it out for itself is how they
+        // would come to disagree about a photo.
+        var disclosable = await photos.DisclosableIdsAsync(ctx, fileIds, ct);
 
-        // A trip's cave links reveal those caves' locations too, so a photo attached to a
-        // trip is subject to the same protection as one attached to the cave itself.
-        var tripCaves = tripIds.Count == 0
-            ? []
-            : await db.TripLogCaves.AsNoTracking()
-                .Where(x => tripIds.Contains(x.TripLogId))
-                .Select(x => new { x.TripLogId, x.CaveId })
-                .ToListAsync(ct);
-        var tripToCaves = tripCaves.GroupBy(x => x.TripLogId)
-            .ToDictionary(g => g.Key, g => g.Select(x => x.CaveId).ToList());
-
-        // One readability pass per target world and one exact-view pass over every feature
-        // the photos transitively touch.
+        // Readability is separate and stays here: it is about the objects a photo hangs on
+        // being readable at all, not about placing them. One pass per target world.
         var readableFeatureIds = await ReadableIdsAsync(
             db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers).Select(f => f.Id),
             attachedFeatureIds, ct);
@@ -196,13 +184,6 @@ public static class MapEndpoints
             db.Geofiles.AsNoTracking().VisibleTo(ctx, AccessDomain.Geofiles).Select(g => g.Id),
             geofileIds, ct);
 
-        var protectionTargets = attachedFeatureIds
-            .Concat(locatingLinks.SelectMany(l => new[] { l.FromId, l.ToId }))
-            .Concat(tripCaves.Select(x => x.CaveId))
-            .Distinct()
-            .ToList();
-        var exactViewIds = await protection.ExactViewIdsAsync(ctx, protectionTargets, ct);
-
         var linksByFile = links.GroupBy(l => l.FileId).ToDictionary(g => g.Key, g => g.ToList());
         var features = new List<GeoFeature>();
         foreach (var candidate in candidates)
@@ -212,30 +193,9 @@ public static class MapEndpoints
                 continue; // no attachment → no context and no visibility path
             }
 
-            // The photo's protection chain: attached features, their locating-link
-            // partners, and the caves of attached trips. Any chain member the caller may
-            // not view exactly withholds the photo — the point itself is sensitive.
-            var chain = new List<Guid>();
-            foreach (var link in fileLinks)
+            if (!disclosable.Contains(candidate.Id))
             {
-                if (link.FeatureId is { } featureId)
-                {
-                    chain.Add(featureId);
-                    if (linkPartners.TryGetValue(featureId, out var partners))
-                    {
-                        chain.AddRange(partners);
-                    }
-                }
-                else if (link.EntityType == AttachedEntityType.TripLog
-                    && tripToCaves.TryGetValue(link.EntityId!.Value, out var caveIds))
-                {
-                    chain.AddRange(caveIds);
-                }
-            }
-
-            if (chain.Any(id => !exactViewIds.Contains(id)))
-            {
-                continue;
+                continue; // something it hangs on is guarded, and the point itself is the secret
             }
 
             var visible = fileLinks.Any(l => l.FeatureId is { } fid
@@ -252,7 +212,22 @@ public static class MapEndpoints
                 continue;
             }
 
-            var token = tokens.CreateToken(candidate.Id);
+            // Reach through a readable attachment is established by the line above, and it is
+            // the weakest of the reasons a document can be reached: a rule written against the
+            // document itself decides first and a deny among them is final. Asked here so this
+            // map cannot publish what the cave's own document list has already withheld — the
+            // fact resolved a moment ago is the only thing the rule could not fetch, so the
+            // walk costs no query.
+            if (!DocumentAccessRules.AllowedByOwnRulesOrAttachment(ctx, candidate.Document, AccessAction.Read))
+            {
+                continue;
+            }
+
+            // Reaching this line means every feature the photo inherits protection from is
+            // one the caller may already place exactly — the point is being handed over in
+            // the response body — so the bytes that carry the same point are no further
+            // disclosure.
+            var token = tokens.CreateToken(candidate.Id, FileDelivery.Full);
             features.Add(GeoFeature.Of(candidate.Geom!, new Dictionary<string, object?>
             {
                 ["id"] = candidate.Id,
@@ -263,16 +238,6 @@ public static class MapEndpoints
         }
 
         return TypedResults.Ok(FeatureCollection.Of(features));
-
-        void AddPartner(Guid featureId, Guid partnerId)
-        {
-            if (!linkPartners.TryGetValue(featureId, out var list))
-            {
-                linkPartners[featureId] = list = [];
-            }
-
-            list.Add(partnerId);
-        }
     }
 
     /// <summary>Intersects a set of candidate ids with a visibility-filtered id query (empty → empty, no round trip).</summary>

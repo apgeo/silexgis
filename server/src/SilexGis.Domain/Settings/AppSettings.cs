@@ -126,6 +126,21 @@ public sealed record SecuritySettings
     public int TwoFactorResendIntervalSeconds { get; init; } = 60;
 }
 
+/// <summary>How much of a protected position's surroundings an installation gives away.</summary>
+public sealed record ProtectionSettings
+{
+    /// <summary>
+    /// Show a caller without exact-location rights that a document is attached or linked to a
+    /// position-protected feature. Off by default: naming the cave a report is about is a much
+    /// smaller disclosure than where the cave is, but it is still one, and an installation should
+    /// have to choose it rather than inherit it. Switching it on never reveals a position — the
+    /// feature is authorised exactly as always, so following the association still yields the
+    /// protected view — and it never opens the one pairing that would be a position: a document
+    /// stamped with coordinates of its own stays unpaired with a protected feature either way.
+    /// </summary>
+    public bool RevealProtectedAssociations { get; init; }
+}
+
 /// <summary>
 /// Section names under which the settings above are stored, one JSON document each. Keys are a
 /// schema contract — renaming one abandons the operator's saved configuration.
@@ -138,5 +153,7 @@ public static class AppSettingSections
 
     public const string Security = "security";
 
-    public static IReadOnlyList<string> All { get; } = [Mail, Sms, Security];
+    public const string Protection = "protection";
+
+    public static IReadOnlyList<string> All { get; } = [Mail, Sms, Security, Protection];
 }

@@ -6671,7 +6671,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Mail, SMS and sign-in policy, with secrets redacted. */
+        /** Mail, SMS, sign-in policy and protection disclosure, with secrets redacted. */
         get: {
             parameters: {
                 query?: never;
@@ -6799,6 +6799,46 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": components["schemas"]["SecuritySettingsDto"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminSettingsDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/protection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Saves what the installation discloses about a protected feature's associations. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ProtectionSettingsDto"];
                 };
             };
             responses: {
@@ -7101,6 +7141,7 @@ export interface components {
             mail: components["schemas"]["MailSettingsDto"];
             sms: components["schemas"]["SmsSettingsDto"];
             security: components["schemas"]["SecuritySettingsDto"];
+            protection: components["schemas"]["ProtectionSettingsDto"];
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
@@ -8489,6 +8530,9 @@ export interface components {
         };
         /** @enum {unknown} */
         ProtectedDisplay: "snapPoint" | "withhold";
+        ProtectionSettingsDto: {
+            revealProtectedAssociations: boolean;
+        };
         /** @enum {unknown} */
         RasterStatus: "uploaded" | "processing" | "ready" | "failed";
         RegisterRequest: {

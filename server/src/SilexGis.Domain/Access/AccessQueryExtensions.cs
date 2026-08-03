@@ -113,8 +113,18 @@ public static class AccessQueryExtensions
     /// actually carries, which is why a domain reaches this overload only when its rows
     /// carry the owner/caving-group/visibility trio.
     /// </summary>
+    /// <param name="reachedByAttachment">
+    /// Ids the caller reaches through an object the row's content is attached to, resolved
+    /// for Read by whoever builds the list — the flat form of the attachment built-in.
+    /// It rides the same ELSE arm as ownership and visibility, so it widens only what no
+    /// entry decided; passing it in the outer predicate instead would let it override a
+    /// deny. Empty for the domains that have no attachments at all.
+    /// </param>
     public static IQueryable<T> VisibleTo<T>(
-        this IQueryable<T> query, AccessContext ctx, AccessDomain domain)
+        this IQueryable<T> query,
+        AccessContext ctx,
+        AccessDomain domain,
+        IReadOnlyCollection<Guid>? reachedByAttachment = null)
         where T : class, IProtectedEntity
     {
         if (ctx.IsFullAdmin)
@@ -125,6 +135,7 @@ public static class AccessQueryExtensions
         var set = ctx.For(domain, AccessAction.Read);
         var userId = ctx.UserId;
         var cavingGroupIds = ctx.CavingGroupIds.ToArray();
+        Guid[] reached = reachedByAttachment is null ? [] : [.. reachedByAttachment];
 
         if (set.IsEmpty)
         {
@@ -133,7 +144,8 @@ public static class AccessQueryExtensions
                 || e.Visibility >= Visibility.Authenticated
                 || (e.Visibility == Visibility.CavingGroup
                     && e.CavingGroupId != null
-                    && cavingGroupIds.Contains(e.CavingGroupId.Value)));
+                    && cavingGroupIds.Contains(e.CavingGroupId.Value))
+                || reached.Contains(e.Id));
         }
 
         var denyObj = set.DenyObjectIds;
@@ -158,6 +170,7 @@ public static class AccessQueryExtensions
               || e.Visibility >= Visibility.Authenticated
               || (e.Visibility == Visibility.CavingGroup
                   && e.CavingGroupId != null
-                  && cavingGroupIds.Contains(e.CavingGroupId.Value)));
+                  && cavingGroupIds.Contains(e.CavingGroupId.Value))
+              || reached.Contains(e.Id));
     }
 }

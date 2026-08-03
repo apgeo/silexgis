@@ -39,6 +39,13 @@ public enum AccessDecisionSource
 
     /// <summary>Nothing matched and no built-in applied.</summary>
     DefaultDeny = 5,
+
+    /// <summary>Built-in: the caller holds this action on at least one object the row's
+    /// content is attached to. Only reached when no explicit entry matched anywhere and
+    /// neither ownership nor the read audience already admitted — so a deny is never
+    /// widened by an attachment, and a document nobody attached to anything is reachable
+    /// through its own rules alone.</summary>
+    Attachment = 6,
 }
 
 /// <summary>

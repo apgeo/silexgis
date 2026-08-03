@@ -349,7 +349,9 @@ public static class GeoreferencedMapEndpoints
         m.CavingGroupId,
         m.Visibility,
         m.Status == RasterStatus.Ready
-            ? $"/api/v1/files/{m.FileId}/content?token={Uri.EscapeDataString(tokens.CreateToken(m.FileId))}"
+            // A tile reader fetches ranges of the raster itself, so nothing less than the
+            // whole file serves this at all.
+            ? $"/api/v1/files/{m.FileId}/content?token={Uri.EscapeDataString(tokens.CreateToken(m.FileId, FileDelivery.Full))}"
             : null,
         m.CreatedAt,
         m.UpdatedAt);

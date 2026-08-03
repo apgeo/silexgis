@@ -111,18 +111,29 @@ public static class AccessSql
     /// <c>caving_group_id</c> and <c>visibility</c>; no soft-delete arm is emitted, so a
     /// table that soft-deletes must add its own guard the way the feature callers do.
     /// </summary>
+    /// <param name="reachedByAttachment">
+    /// Ids the caller reaches through an object the row's content is attached to, resolved
+    /// for Read by the caller — the flat form of the attachment built-in. It joins the
+    /// same ELSE arm as ownership and visibility so it widens only what no entry decided;
+    /// hoisted out of the CASE it would override a deny. Empty for domains without
+    /// attachments.
+    /// </param>
     public static (string Sql, DynamicParameters Parameters) VisibleToFragment(
-        AccessContext ctx, AccessDomain domain, string alias)
+        AccessContext ctx, AccessDomain domain, string alias, IReadOnlyCollection<Guid>? reachedByAttachment = null)
     {
         RequireAlias(alias);
         var parameters = BaseParameters(ctx);
         var set = ctx.For(domain, AccessAction.Read);
         var prefix = "acc_r";
+        Guid[] reached = reachedByAttachment is null ? [] : [.. reachedByAttachment];
+        parameters.Add($"{prefix}_attachment_reach", UuidArray(reached));
+        var reachArm = $"OR {alias}.id = ANY(@{prefix}_attachment_reach)";
         var visibilityArm = $"""
             OR {alias}.visibility >= {(short)Visibility.Authenticated}
                    OR ({alias}.visibility = {(short)Visibility.CavingGroup}
                        AND {alias}.caving_group_id IS NOT NULL
                        AND {alias}.caving_group_id = ANY(@{CavingGroupIdsParam}))
+                   {reachArm}
             """;
 
         if (set.IsEmpty)

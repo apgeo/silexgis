@@ -9,8 +9,9 @@ using SilexGis.Domain.Settings;
 namespace SilexGis.Api.Features.Admin;
 
 /// <summary>
-/// The operator's view of mail, SMS and sign-in policy, governed by the Settings domain:
-/// reading the page needs Read, saving a section Write, and sending a test message Execute.
+/// The operator's view of mail, SMS, sign-in policy and protection disclosure, governed by the
+/// Settings domain: reading the page needs Read, saving a section Write, and sending a test
+/// message Execute.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -30,7 +31,8 @@ public static class AdminSettingsEndpoints
     {
         var admin = api.MapGroup("/admin/settings").WithTags("Admin");
 
-        admin.MapGet("/", GetAsync).WithSummary("Mail, SMS and sign-in policy, with secrets redacted.");
+        admin.MapGet("/", GetAsync)
+            .WithSummary("Mail, SMS, sign-in policy and protection disclosure, with secrets redacted.");
         admin.MapPut("/mail", SaveMailAsync)
             .WithValidation<MailSettingsWriteRequest>()
             .WithSummary("Saves the mail server settings.");
@@ -40,6 +42,9 @@ public static class AdminSettingsEndpoints
         admin.MapPut("/security", SaveSecurityAsync)
             .WithValidation<SecuritySettingsDto>()
             .WithSummary("Saves the sign-in policy: address confirmation and which second factors are allowed.");
+        admin.MapPut("/protection", SaveProtectionAsync)
+            .WithValidation<ProtectionSettingsDto>()
+            .WithSummary("Saves what the installation discloses about a protected feature's associations.");
         admin.MapPost("/mail/test", TestMailAsync)
             .WithValidation<TestMessageRequest>()
             .WithSummary("Sends a test message to prove the mail server works.");
@@ -189,6 +194,33 @@ public static class AdminSettingsEndpoints
         return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
     }
 
+    private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveProtectionAsync(
+        ProtectionSettingsDto request,
+        IAccessContextAccessor accessAccessor,
+        IAppSettingsService settings,
+        IEmailDelivery emailDelivery,
+        ISmsDelivery smsDelivery,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
+        {
+            return ApiProblems.Forbidden("access.forbidden");
+        }
+
+        await settings.SaveAsync(
+            AppSettingSections.Protection,
+            new ProtectionSettings { RevealProtectedAssociations = request.RevealProtectedAssociations },
+            ct);
+
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+    }
+
     /// <summary>
     /// Sends a plain diagnostic message rather than a catalogued one: this is proving the transport
     /// works, and routing it through a template the operator may have just broken would confuse the
@@ -277,6 +309,7 @@ public static class AdminSettingsEndpoints
         var mail = await settings.GetMailAsync(ct);
         var sms = await settings.GetSmsAsync(ct);
         var security = await settings.GetSecurityAsync(ct);
+        var disclosure = await settings.GetProtectionAsync(ct);
 
         return new AdminSettingsDto(
             new MailSettingsDto(
@@ -309,6 +342,7 @@ public static class AdminSettingsEndpoints
                 security.SmsTwoFactorEnabled,
                 security.TwoFactorCodeLifetimeMinutes,
                 security.TwoFactorResendIntervalSeconds),
+            new ProtectionSettingsDto(disclosure.RevealProtectedAssociations),
             await emailDelivery.IsConfiguredAsync(ct),
             await smsDelivery.IsConfiguredAsync(ct));
     }

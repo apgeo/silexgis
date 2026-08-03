@@ -37,6 +37,7 @@ public sealed class DocumentAccessApiTests : IAsyncLifetime, IDisposable
     private HttpClient anonymous = null!;
     private Guid readerId;
     private Guid editorId;
+    private long caveTypeId;
 
     public DocumentAccessApiTests(PostgresFixture postgres)
     {
@@ -61,6 +62,10 @@ public sealed class DocumentAccessApiTests : IAsyncLifetime, IDisposable
         editor = await AuthHelper.BearerClientAsync(factory, $"da-ed-{suffix}@t.local");
 
         anonymous = factory.CreateClient();
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
     }
 
     [Fact]
@@ -236,7 +241,268 @@ public sealed class DocumentAccessApiTests : IAsyncLifetime, IDisposable
         (await PhotoIdsAsync(owner, bbox)).ShouldNotContain(fileId);
     }
 
+    [Fact]
+    public async Task An_attachment_opens_a_document_only_while_no_rule_has_decided_it()
+    {
+        var fileId = await UploadFileAsync("survey-notes.txt", "notes"u8.ToArray(), "text/plain");
+        var documentId = await DocumentIdOfAsync(fileId);
+
+        // The state a Viewer starts in: no document rights at all, somebody else's private
+        // document, and nothing attached to it. Nothing reaches it.
+        var before = await reader.GetAsync($"/api/v1/documents/{documentId}");
+        before.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await ReadCodeAsync(before)).ShouldBe("document.not_found");
+
+        // Hang it on a cave the same caller can already read. Nothing about the document
+        // changed — the route to it did, which is how the whole existing archive is reached.
+        var caveId = await CreateCaveAsync("Attachment Cave", "authenticated");
+        var attached = await owner.PostAsJsonAsync("/api/v1/attachments/", new
+        {
+            fileId,
+            entityType = "feature",
+            entityId = caveId,
+            role = "document",
+            sortOrder = 0,
+        });
+        attached.StatusCode.ShouldBe(HttpStatusCode.Created, await attached.Content.ReadAsStringAsync());
+        (await reader.GetAsync($"/api/v1/documents/{documentId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // A rule naming the document takes it straight back: reach through an attachment is
+        // the weakest of the reasons to admit a caller and widens only what nothing else
+        // decided. A deny an attachment could talk past would not be a deny.
+        await GrantAsync(readerId, AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Object, documentId);
+        var refused = await reader.GetAsync($"/api/v1/documents/{documentId}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await ReadCodeAsync(refused)).ShouldBe("document.not_found");
+
+        // And the deny reached the document alone — the cave it hangs on is untouched.
+        (await reader.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// The same rule, asked the way a listing asks it. A deny that only worked when a document
+    /// was fetched by name would be no deny at all: the cave page names every document hanging
+    /// on it, hands out a delivery token with each one, and never says which document it is
+    /// showing — so a listing that skipped the document's own rules would publish exactly what
+    /// the deny was written to stop, and to the same caller, one screen earlier.
+    /// </summary>
+    [Fact]
+    public async Task A_rule_naming_a_document_reaches_the_listing_it_appears_in()
+    {
+        var caveId = await CreateCaveAsync("Listing Cave", "authenticated");
+
+        var openId = await UploadFileAsync("open.txt", "open"u8.ToArray(), "text/plain");
+        var deniedId = await UploadFileAsync("denied.txt", "denied"u8.ToArray(), "text/plain");
+        await AttachAsync(openId, caveId);
+        await AttachAsync(deniedId, caveId);
+
+        // A Viewer, holding nothing over documents, reached both the ordinary way: through
+        // the cave they hang on. The seeded editor group reads past all of this by design, so
+        // proving anything is hidden takes a caller who was never given the domain.
+        (await AttachedFileIdsAsync(caveId)).ShouldBe([openId, deniedId], ignoreOrder: true);
+        (await SummaryAttachmentCountAsync(reader, caveId)).ShouldBe(2);
+
+        await GrantAsync(
+            readerId, AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Object,
+            await DocumentIdOfAsync(deniedId));
+
+        // One gone, one still there — the pair is the point. A listing that had simply broken,
+        // or a caller who could never see either, would satisfy half of this and prove nothing.
+        (await AttachedFileIdsAsync(caveId)).ShouldBe([openId]);
+
+        // And the number beside the list moves with it. A count still saying two would be the
+        // whole disclosure the deny was written to prevent — that a second document is here —
+        // delivered by the one surface nobody thinks of as a listing.
+        (await SummaryAttachmentCountAsync(reader, caveId)).ShouldBe(1);
+
+        // The uploader still sees both, so what changed is who is being answered.
+        var ownersView = await owner.GetAsync($"/api/v1/attachments/?entityType=feature&entityId={caveId}");
+        ownersView.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonDocument.Parse(await ownersView.Content.ReadAsStringAsync())
+            .RootElement.GetArrayLength().ShouldBe(2);
+        (await SummaryAttachmentCountAsync(owner, caveId)).ShouldBe(2);
+    }
+
+    /// <summary>
+    /// The same rule, asked where the bytes are. A delivery URL authenticates by signature and
+    /// carries no identity, so whoever mints one has already decided: a rule that bound when a
+    /// document was fetched by name but not when its file was would not bind at all, because
+    /// the file route hands out the very same token.
+    /// </summary>
+    [Fact]
+    public async Task A_rule_naming_a_document_reaches_the_file_route_that_delivers_it()
+    {
+        var caveId = await CreateCaveAsync("Delivery Cave", "authenticated");
+        var fileId = await UploadFileAsync("report.txt", "body"u8.ToArray(), "text/plain");
+        await AttachAsync(fileId, caveId);
+
+        // The positive case first, over this very fixture: a Viewer holding nothing over
+        // documents reaches this one through the cave, and the bytes follow the metadata.
+        var before = await reader.GetAsync($"/api/v1/files/{fileId}");
+        before.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await reader.GetAsync((await ReadJsonAsync(before)).GetProperty("contentUrl").GetString()))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await GrantAsync(
+            readerId, AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Object,
+            await DocumentIdOfAsync(fileId));
+
+        // Re-asked, because only a URL minted after the rule is governed by it — the one
+        // handed out above stays good until it expires, which is the accepted staleness of
+        // every capability URL here. What the deny takes away is the next one.
+        var refused = await reader.GetAsync($"/api/v1/files/{fileId}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await ReadCodeAsync(refused)).ShouldBe("file.not_found");
+
+        // The uploader is unaffected, which is what makes the refusal the rule rather than a
+        // file that quietly stopped existing.
+        var held = await owner.GetAsync($"/api/v1/files/{fileId}");
+        held.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.GetAsync((await ReadJsonAsync(held)).GetProperty("contentUrl").GetString()))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// The map is a delivery surface too: it publishes a file id, a rendering and a full
+    /// delivery token for every photo it draws, so a caller does not even need to have seen
+    /// the id beforehand. A deny that the document list honoured and the map did not would be
+    /// no deny — the same bytes, one screen away.
+    /// </summary>
+    [Fact]
+    public async Task A_denied_document_leaves_the_photo_map_as_well_as_the_file_route()
+    {
+        const double lat = 45.91;
+        const double lon = 25.91;
+        const string bbox = "25.5,45.5,26.1,46.1";
+
+        // An unguarded cave on purpose: this test is about the document rule, and a protected
+        // cave would withhold the point for a different reason and prove nothing about it.
+        var caveId = await CreateCaveAsync("Photo Map Cave", "authenticated");
+        var fileId = await UploadFileAsync("entrance.jpg", MakeGeotaggedJpeg(lat, lon), "image/jpeg");
+        await AttachAsync(fileId, caveId);
+
+        // Fixture proof: the capture point was really read off the bytes, so the map has
+        // something to draw and the assertions below are about the rule.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.StoredFiles.AsNoTracking().FirstAsync(f => f.Id == fileId)).Geom.ShouldNotBeNull();
+        }
+
+        (await PhotoIdsAsync(reader, bbox)).ShouldContain(fileId);
+        (await reader.GetAsync($"/api/v1/files/{fileId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await GrantAsync(
+            readerId, AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Object,
+            await DocumentIdOfAsync(fileId));
+
+        (await PhotoIdsAsync(reader, bbox)).ShouldNotContain(fileId);
+        (await reader.GetAsync($"/api/v1/files/{fileId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // Same bbox, same photo, a caller the rule does not name: still drawn, still served.
+        (await PhotoIdsAsync(owner, bbox)).ShouldContain(fileId);
+        (await owner.GetAsync($"/api/v1/files/{fileId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// The other direction of the same unification: a document hanging on nothing has no
+    /// attachment to be reached through, so a rule naming it is the only thing that can open
+    /// it — and it has to open the bytes too, or sharing a standalone document shares a title.
+    /// </summary>
+    [Fact]
+    public async Task A_rule_alone_opens_a_document_that_hangs_on_nothing()
+    {
+        var fileId = await UploadFileAsync("standalone.txt", "archive"u8.ToArray(), "text/plain");
+        var documentId = await DocumentIdOfAsync(fileId);
+
+        // Nothing to reach it through and no rule about it: a Viewer holds neither.
+        (await reader.GetAsync($"/api/v1/documents/{documentId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.GetAsync($"/api/v1/files/{fileId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        await GrantAsync(readerId, AccessEffect.Allow, AccessAction.Read, AccessScopeKind.Object, documentId);
+
+        (await reader.GetAsync($"/api/v1/documents/{documentId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var served = await reader.GetAsync($"/api/v1/files/{fileId}");
+        served.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await reader.GetAsync((await ReadJsonAsync(served)).GetProperty("contentUrl").GetString()))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// A deny binds in both directions or it is not a deny. Writing a new revision over a
+    /// document is the write that matters most — it is what replaces what the document says.
+    /// </summary>
+    [Fact]
+    public async Task A_write_deny_on_a_document_stops_a_new_revision_being_stacked_on_it()
+    {
+        var fileId = await UploadFileAsync("procedure.txt", "v1"u8.ToArray(), "text/plain");
+        var documentId = await DocumentIdOfAsync(fileId);
+
+        // The seeded editor ruleset carries Write over documents domain-wide, so this caller
+        // can revise somebody else's document — the positive case, on this document.
+        Guid headId;
+        using (var form = BuildForm("procedure.txt", "v2"u8.ToArray(), "text/plain"))
+        {
+            var accepted = await editor.PostAsync($"/api/v1/files/{fileId}/versions", form);
+            var payload = await accepted.Content.ReadAsStringAsync();
+            accepted.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+            headId = JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+        }
+
+        await GrantAsync(editorId, AccessEffect.Deny, AccessAction.Write, AccessScopeKind.Object, documentId);
+
+        // A rule naming the document is more specific than the domain-wide allow, so the same
+        // caller can no longer write over it — through the file route or the document one.
+        using (var form = BuildForm("procedure.txt", "v3"u8.ToArray(), "text/plain"))
+        {
+            var refused = await editor.PostAsync($"/api/v1/files/{headId}/versions", form);
+            refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            (await ReadCodeAsync(refused)).ShouldBe("file.not_found");
+        }
+
+        (await editor.PutAsJsonAsync($"/api/v1/files/{headId}", new { documentDate = "2020-05-01" }))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await editor.DeleteAsync($"/api/v1/files/{fileId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // The owner still revises it, so what changed is who is being answered.
+        using var ownersForm = BuildForm("procedure.txt", "v3"u8.ToArray(), "text/plain");
+        (await owner.PostAsync($"/api/v1/files/{headId}/versions", ownersForm))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
     // ---- helpers ----
+
+    /// <summary>The number the cave page shows beside its documents, for one caller.</summary>
+    private static async Task<int> SummaryAttachmentCountAsync(HttpClient client, Guid caveId)
+    {
+        var response = await client.GetAsync($"/api/v1/caves/{caveId}/summary");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("attachmentCount").GetInt32();
+    }
+
+    /// <summary>The file ids the reader is shown as hanging on a feature.</summary>
+    private async Task<List<Guid>> AttachedFileIdsAsync(Guid featureId)
+    {
+        var response = await reader.GetAsync($"/api/v1/attachments/?entityType=feature&entityId={featureId}");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return [.. JsonDocument.Parse(payload).RootElement.EnumerateArray()
+            .Select(x => x.GetProperty("fileId").GetGuid())];
+    }
+
+    private async Task AttachAsync(Guid fileId, Guid featureId)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/attachments/", new
+        {
+            fileId,
+            entityType = "feature",
+            entityId = featureId,
+            role = "document",
+            sortOrder = 0,
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+    }
 
     /// <summary>
     /// A rule naming one person directly. Written straight into storage: the authoring
@@ -259,6 +525,22 @@ public sealed class DocumentAccessApiTests : IAsyncLifetime, IDisposable
             ScopeId = scopeId,
         });
         await db.SaveChangesAsync();
+    }
+
+    private async Task<Guid> CreateCaveAsync(string name, string visibility)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/caves", new
+        {
+            name = $"{name} {Guid.NewGuid():N}"[..40],
+            caveTypeId,
+            visibility,
+            locationProtected = false,
+            explorationStatus = "Unknown",
+            isShowCave = false,
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
     private async Task<Guid> UploadDocumentAsync(string fileName, byte[] bytes) =>

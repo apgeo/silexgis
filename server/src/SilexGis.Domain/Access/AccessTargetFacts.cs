@@ -46,6 +46,16 @@ public sealed record AccessTargetFacts
     /// </summary>
     public IReadOnlyList<VisibilityFact> VisibilityChain { get; init; } = [];
 
+    /// <summary>
+    /// Whether the caller holds the action being decided on at least one object the row's
+    /// content is attached to — the fact behind the attachment built-in. Resolving it
+    /// needs storage, which the pure rule cannot reach, so whoever asks the question
+    /// supplies the answer for the action they are asking about; a fact resolved for Read
+    /// must never be handed to a Write check. False when nothing resolved it: the built-in
+    /// only ever admits, so an unresolved fact costs an allow it can never disclose.
+    /// </summary>
+    public bool ReachedByAttachment { get; init; }
+
     /// <summary>Facts of a non-feature protected row (trip log, geofile, raster, view,
     /// document). Its visibility chain is just itself — nothing above it to inherit
     /// from.</summary>

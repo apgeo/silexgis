@@ -48,6 +48,9 @@ public sealed class AppSettingsService(
     public ValueTask<SecuritySettings> GetSecurityAsync(CancellationToken ct = default) =>
         GetAsync<SecuritySettings>(AppSettingSections.Security, "Security", ct);
 
+    public ValueTask<ProtectionSettings> GetProtectionAsync(CancellationToken ct = default) =>
+        GetAsync<ProtectionSettings>(AppSettingSections.Protection, "Protection", ct);
+
     public async Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
         where T : class
     {
