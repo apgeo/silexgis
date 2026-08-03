@@ -782,7 +782,8 @@
     "unsupportedTitle": "This browser cannot show the 3D view",
     "unsupportedHint": "The 3D view needs WebGL 2, which this browser or its graphics driver does not provide. Try an up-to-date browser, or keep using the 2D map.",
     "openFlatMap": "Open the 2D map",
-    "startFailed": "The 3D view could not be started"
+    "startFailed": "The 3D view could not be started",
+    "centerlinesFlat": "{{count}} centerline(s) drawn on the surface — no surveyed depths were available for them."
   },
   "caveview": {
     "loadError": "Failed to load the 3D model"

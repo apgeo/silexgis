@@ -35,6 +35,40 @@ test('the 3D view opens on our own basemap and talks to nobody else', async ({ p
   expect(requested.filter((url) => VENDOR_HOST.test(url))).toEqual([]);
 });
 
+test('the 3D view loads the caves in front of it, asking for surveyed depths', async ({ page }) => {
+  await login(page);
+
+  // Both requests have to be watched for before the page is opened: the loader fires as soon as
+  // the scene exists, which can be before the navigation has even settled.
+  const centerlines = page.waitForResponse(
+    (response) => response.url().includes('/api/v1/map/cave-centerlines') && response.ok(),
+  );
+  const entrances = page.waitForResponse(
+    (response) => response.url().includes('/api/v1/map/cave-entrances') && response.ok(),
+  );
+
+  await page.goto('/map3d');
+
+  const centerlineRequest = await centerlines;
+  // Depths are what the flat map cannot show, and this is the only view that asks for them.
+  expect(new URL(centerlineRequest.url()).searchParams.get('z')).toBe('true');
+  // The box and the zoom are derived from the camera, so both have to actually be sent.
+  const query = new URL(centerlineRequest.url()).searchParams;
+  expect(query.get('bbox')!.split(',')).toHaveLength(4);
+  expect(Number(query.get('zoom'))).toBeGreaterThanOrEqual(0);
+
+  await entrances;
+
+  // Every request of the first load has answered; the scene is as full as it is going to get.
+  await expect(page.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false', {
+    timeout: 30_000,
+  });
+  await expect(page.getByText('The 3D view could not be started')).toHaveCount(0);
+
+  // The detail panel is the flat map's own, waiting for something to be picked.
+  await expect(page.getByText('Click a feature on the map to see details.')).toBeVisible();
+});
+
 test('a browser without WebGL 2 is told why, rather than shown a dead canvas', async ({
   browser,
 }) => {

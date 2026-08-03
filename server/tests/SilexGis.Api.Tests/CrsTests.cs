@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Shouldly;
-using SilexGis.Api.Common;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 
@@ -29,7 +26,6 @@ public sealed class CrsTests : IAsyncLifetime, IDisposable
         {
             ["Files:Root"] = filesRoot,
             ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
-            ["Scene3d:GeoidOffsetM"] = "43.5",
         });
     }
 
@@ -132,26 +128,6 @@ public sealed class CrsTests : IAsyncLifetime, IDisposable
     {
         using var anonymous = factory.CreateClient();
         (await anonymous.GetAsync("/api/v1/crs/4326.proj4")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public void The_scene_options_bind_from_configuration()
-    {
-        // Nothing consumes the geoid offset yet, so this is what proves the section name is right
-        // before anything depends on it being right.
-        using var scope = factory.Services.CreateScope();
-        var options = scope.ServiceProvider.GetRequiredService<IOptions<Scene3dOptions>>().Value;
-        options.GeoidOffsetM.ShouldBe(43.5);
-    }
-
-    [Fact]
-    public void An_installation_that_configures_nothing_gets_the_documented_default()
-    {
-        // The install guide publishes this number as the value an operator inherits by doing
-        // nothing, and an operator outside Romania decides whether to override it by comparing
-        // their own undulation against it. Changing the default without changing the guide would
-        // leave that comparison being made against a figure the software no longer uses.
-        new Scene3dOptions().GeoidOffsetM.ShouldBe(41.5);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

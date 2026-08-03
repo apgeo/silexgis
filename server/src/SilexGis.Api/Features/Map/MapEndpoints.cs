@@ -302,7 +302,10 @@ public static class MapEndpoints
     /// so an overview row — including a detail request that fell back to the skeleton on the path
     /// budget — comes back without them. Those rows are still served rather than dropped, each
     /// one carrying <c>hasZ: false</c>, and <c>flatCount</c> totals them for a caller that would
-    /// rather zoom in than draw a cave at sea level.
+    /// rather zoom in than draw a cave at sea level. A row that does carry altitudes also reports
+    /// <c>topAltitudeM</c>, the highest altitude of the whole centerline: the served geometry is
+    /// cut to the viewport, so the payload alone cannot say where the cave meets the ground, and a
+    /// figure read off it would change every time the viewer panned.
     /// </para>
     /// </summary>
     private static async Task<Results<Ok<CenterlineFeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> CaveCenterlinesAsync(
@@ -388,6 +391,14 @@ public static class MapEndpoints
                 // Only when altitudes were asked for. A request that did not ask gets exactly the
                 // payload it got before, down to the property set.
                 properties["hasZ"] = row.HasZ;
+                if (row.HasZ && row.TopZ is { } topZ)
+                {
+                    // The top of the whole survey, which the served geometry cannot be asked for:
+                    // at detail zoom it is cut to the viewport, so its own highest point moves as
+                    // the viewer pans. A caller drawing the survey against a surface needs a
+                    // figure that holds still, and this is the only place one can come from.
+                    properties["topAltitudeM"] = topZ;
+                }
             }
 
             features.Add(new GeoFeature("Feature", geometry, properties));

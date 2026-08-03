@@ -29,9 +29,9 @@ import HistoryPanel from '../../components/history/HistoryPanel.tsx';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
-import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
+import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import HierarchyCard from './HierarchyCard.tsx';
 import LinksCard from './LinksCard.tsx';
 
@@ -147,7 +147,7 @@ export default function FeatureDetailPage() {
           visibility: values.visibility,
         },
       });
-      reloadSurfaceFeatures();
+      surfaceFeaturesChanged();
       setEditOpen(false);
       message.success(t('common.saved'));
     } catch {
@@ -158,7 +158,7 @@ export default function FeatureDetailPage() {
   const onDelete = async () => {
     try {
       await deleteFeature.mutateAsync(feature.id);
-      reloadSurfaceFeatures();
+      surfaceFeaturesChanged();
       message.success(t('common.deleted'));
       navigate('/features');
     } catch {

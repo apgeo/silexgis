@@ -515,6 +515,40 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task The_reported_top_altitude_describes_the_whole_survey_not_the_part_in_view()
+    {
+        // A client drawing a survey against a globe has to know where the cave meets the ground,
+        // and the served geometry cannot be asked: at detail zoom it is cut to the viewport, so
+        // its own highest position changes every time the viewer pans. A figure read off the
+        // payload would therefore slide the whole cave up and down as it was panned across.
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        using var form = BuildForm("anchored.geojson", SplayedSurvey(26.910, 46.910));
+        (await owner.PostAsync($"/api/v1/caves/{caveId}/centerlines", form))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // The traverse climbs 700 m → 704 m across four shots; with all of it in view the reported
+        // top is the top of the survey.
+        var whole = FeatureOf(
+            await CenterlineResponseAsync(reader, "26.90,46.90,26.92,46.92", zoom: 19, z: true), caveId);
+        whole.GetProperty("properties").GetProperty("topAltitudeM").GetDouble().ShouldBe(704, 0.001);
+
+        // The same viewport shape the clipping test uses: it stops short of the traverse's far end,
+        // so the highest station is not in the response at all. The reported top must not follow.
+        var cut = FeatureOf(
+            await CenterlineResponseAsync(reader, "26.9095,46.9095,26.9125,46.9115", zoom: 19, z: true), caveId);
+        PositionsOf(cut).Select(p => p[2].GetDouble()).Max().ShouldBeLessThan(704);
+        cut.GetProperty("properties").GetProperty("topAltitudeM").GetDouble().ShouldBe(704, 0.001);
+
+        // Nothing to anchor against is reported as nothing rather than as a sea-level anchor: a row
+        // served from the flat stored skeleton carries no altitudes at all, and neither does a
+        // request that never asked for them.
+        FeatureOf(await CenterlineResponseAsync(reader, "26.90,46.90,26.92,46.92", zoom: 14, z: true), caveId)
+            .GetProperty("properties").TryGetProperty("topAltitudeM", out _).ShouldBeFalse();
+        FeatureOf(await CenterlineResponseAsync(reader, "26.90,46.90,26.92,46.92", zoom: 19), caveId)
+            .GetProperty("properties").TryGetProperty("topAltitudeM", out _).ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task A_row_that_can_only_be_served_flat_is_still_served_and_says_so()
     {
         // The stored display skeleton is a 2D column, so there is no altitude to give at overview

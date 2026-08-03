@@ -1,0 +1,169 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { App } from 'antd';
+import { MemoryRouter } from 'react-router-dom';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import '../../i18n';
+import { useWorkspaceStore, type WorkspaceSelection } from '../../stores/workspaceStore.ts';
+import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
+import { setActiveViewCamera, type ViewCameraTarget } from '../../workspace/viewCamera.ts';
+import SelectionPanel from './SelectionPanel.tsx';
+
+// What this panel does to the rest of the application, rather than what it renders.
+//
+// The same instance is mounted beside the flat map and beside the 3D scene, so every side effect
+// it has must reach whichever view is on screen. Reaching for the flat map's own modules — its
+// camera, its overlay's refetch — is the defect these tests exist to prevent: that map is a
+// module-level object that exists whether or not it is mounted, so the command is accepted in
+// silence, the button the viewer pressed appears to do nothing, and the write they made goes on
+// being drawn in the view they are actually looking at.
+
+const clusterEntrances = {
+  features: [
+    {
+      geometry: { type: 'Point', coordinates: [25.104, 45.203] },
+      properties: { id: 'entrance-a', caveId: 'cave-1', name: 'Gura Mare', approximate: false },
+    },
+  ],
+};
+
+const cave = {
+  id: 'cave-1',
+  name: 'Peștera de Test',
+  caveTypeId: null,
+  region: null,
+  surveyedLength: null,
+  depth: null,
+  entranceCount: 1,
+  visibility: 'public',
+  approximateLocation: false,
+};
+
+const entrances = [{ id: 'entrance-a', geom: { type: 'Point', coordinates: [25.11, 45.21] } }];
+
+const featureGeometry = { type: 'LineString', coordinates: [[25.1, 45.2], [25.2, 45.3]] };
+
+const featureEnvelope = {
+  kind: 'generic',
+  feature: {
+    id: 'feature-1',
+    name: 'Fracture',
+    featureTypeCode: 'fracture',
+    geometry: featureGeometry,
+    description: null,
+    properties: {},
+    parents: [],
+    locationProtected: false,
+    cavingGroupId: null,
+    visibility: 'public',
+    omittedLocation: false,
+    approximateLocation: false,
+  },
+};
+
+const deleteFeature = vi.fn().mockResolvedValue(undefined);
+const updateFeature = vi.fn().mockResolvedValue(undefined);
+
+vi.mock('../../api/hooks.ts', () => ({
+  useCave: () => ({ data: cave, isPending: false }),
+  useCaveTypes: () => ({ data: [] }),
+  useClusterEntrances: () => ({ data: clusterEntrances, isPending: false }),
+  useEntrances: () => ({ data: entrances }),
+  useFeature: () => ({ data: featureEnvelope, isPending: false }),
+  useFeatureTypes: () => ({
+    data: [{ id: 1, code: 'fracture', name: 'Fracture', propertiesSchema: null }],
+  }),
+  useCan: () => true,
+  useDeleteFeature: () => ({ mutateAsync: deleteFeature, isPending: false }),
+  useUpdateFeature: () => ({ mutateAsync: updateFeature, isPending: false }),
+}));
+
+// Both pull in stacks of their own and neither is what these tests are about.
+vi.mock('../history/HistoryPanel.tsx', () => ({ default: () => null }));
+vi.mock('../features/FeatureEditModal.tsx', () => ({ default: () => null }));
+
+function renderPanel(selection: WorkspaceSelection) {
+  useWorkspaceStore.getState().setSelection(selection);
+  return render(
+    <MemoryRouter>
+      <App>
+        <SelectionPanel />
+      </App>
+    </MemoryRouter>,
+  );
+}
+
+function recorder() {
+  return { flyTo: vi.fn(), fitGeometry: vi.fn() } satisfies ViewCameraTarget;
+}
+
+let camera: ReturnType<typeof recorder>;
+let detachCamera: () => void;
+
+beforeEach(() => {
+  camera = recorder();
+  detachCamera = setActiveViewCamera(camera);
+  deleteFeature.mockClear();
+});
+
+afterEach(() => {
+  detachCamera();
+  cleanup();
+  useWorkspaceStore.getState().setSelection(null);
+});
+
+describe('the shared detail panel', () => {
+  it('moves the camera of the view on screen when a cluster asks to be zoomed into', () => {
+    renderPanel({ kind: 'cluster', lon: 25.1, lat: 45.2, count: 7, zoom: 8 });
+
+    fireEvent.click(screen.getByRole('button', { name: /Zoom here/ }));
+
+    // Two levels in from the zoom the cell was summed at, which is what opens it.
+    expect(camera.flyTo).toHaveBeenCalledWith(25.1, 45.2, 10);
+  });
+
+  it('moves it to a cluster member the viewer picks out of the list', () => {
+    renderPanel({ kind: 'cluster', lon: 25.1, lat: 45.2, count: 7, zoom: 8 });
+
+    fireEvent.click(screen.getByRole('button', { name: /Gura Mare/ }));
+
+    expect(useWorkspaceStore.getState().selection).toEqual({
+      kind: 'entrance',
+      entranceId: 'entrance-a',
+      caveId: 'cave-1',
+    });
+    expect(camera.flyTo).toHaveBeenCalledWith(25.104, 45.203, 15);
+  });
+
+  it('moves it to a cave entrance', async () => {
+    renderPanel({ kind: 'entrance', entranceId: 'entrance-a', caveId: 'cave-1' });
+
+    fireEvent.click(await screen.findByRole('button', { name: /Zoom to/ }));
+
+    expect(camera.flyTo).toHaveBeenCalledWith(25.11, 45.21, 16);
+  });
+
+  it('frames a feature geometry in it rather than in a map that may not be showing', () => {
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Zoom to/ }));
+
+    expect(camera.fitGeometry).toHaveBeenCalledWith(featureGeometry);
+  });
+
+  it('announces a delete so every view drawing that feature stops drawing it', async () => {
+    const heard = vi.fn();
+    const stopListening = onSurfaceFeaturesChanged(heard);
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Delete/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(deleteFeature).toHaveBeenCalledWith('feature-1'));
+    // Not "the map's overlay refetched": a view the writer never heard of has to hear about it,
+    // or a deleted feature stays on screen and stays clickable.
+    await waitFor(() => expect(heard).toHaveBeenCalledTimes(1));
+    expect(useWorkspaceStore.getState().selection).toBeNull();
+    stopListening();
+  });
+});

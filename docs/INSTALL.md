@@ -329,7 +329,6 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Auth__DefaultPermissionGroups` | *(empty)* | comma-separated permission-group slugs (e.g. `editors`) every new account joins at registration or first external sign-in |
 | `SILEXGIS__Map__CenterlineDetailZoom` | `18` | zoom at which cave centerlines switch from passage outlines to full survey detail |
 | `SILEXGIS__Map__CenterlineMaxPaths` | `25000` | line budget per centerline request; over it, outlines are served instead |
-| `SILEXGIS__Scene3d__GeoidOffsetM` | `41.5` | metres between the geoid your altitudes are measured from and the WGS84 ellipsoid a globe positions points on. The default suits Romania (measured values run 39 to 45 m); elsewhere, look up the local EGM2008 undulation. `0` disables the correction |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys (must persist across restarts) |
 | `SILEXGIS__FeatureIntegrity__Interval` | `24:00:00` | how often a background pass re-checks the map data for internal inconsistencies; findings go to the log and the admin jobs list. `00:00:00` turns the schedule off |

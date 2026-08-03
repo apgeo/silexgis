@@ -23,9 +23,9 @@
 //     putting it in the engine contract would move product policy behind the seam.
 //
 // Members are grouped so that an implementation can honestly declare which groups it satisfies.
-// Today's implementation satisfies `Scene3DCore` (lifecycle, imagery, camera, coordinates);
-// picking, vector sources and model loading are declared here and are not implemented yet, so no
-// code claims to provide them.
+// Today's implementation satisfies `Scene3DCore` (lifecycle, imagery, camera, coordinates,
+// picking and vector sources); model loading is declared here and is not implemented yet, so no
+// code claims to provide it.
 
 /** A position on the globe: degrees, plus metres above the WGS84 ellipsoid. */
 export interface Scene3DPosition {
@@ -129,6 +129,25 @@ export interface Scene3DCamera {
    * caller rounds and sends to an endpoint that only speaks in zoom levels.
    */
   getPseudoZoom(): number;
+  /**
+   * The longitude/latitude box a data loader should request for the current view, or undefined
+   * when the camera is not looking at the globe at all.
+   *
+   * This is deliberately "what to ask the server for" rather than "exactly what is on screen":
+   * a camera pointed near the horizon technically sees ground all the way to the limb, and
+   * requesting that box at a close-up zoom would ask for a country's worth of survey geometry.
+   * The box is therefore sized from the ground the middle of the screen is showing.
+   */
+  getVisibleBounds(): Scene3DBounds | undefined;
+  /**
+   * Fires once the camera has finished moving, which is when a bbox-driven loader should refetch.
+   * Returns an unsubscribe function. It is the counterpart of the 2D map's move-end event and
+   * carries no payload for the same reason: the listener reads the camera it wants to read.
+   *
+   * It reports user navigation and animated flights. A caller that jumps the camera itself
+   * already knows it moved and can reload directly, so no event is synthesised for that.
+   */
+  onViewChanged(listener: () => void): () => void;
 }
 
 // ---- coordinates ------------------------------------------------------------
@@ -140,12 +159,15 @@ export interface Scene3DCoordinates {
   screenToPosition(screen: Scene3DScreenPosition): Scene3DPosition | undefined;
 }
 
-// ---- picking (declared, not implemented yet) ---------------------------------
+// ---- picking ----------------------------------------------------------------
 
 /**
  * What a click or hover found. `id` is the payload the caller attached to the item when it was
  * added to a source, handed back by reference and untouched by the engine; `position` is where the
  * ray met the ground, present when nothing was hit or when the hit sits on the surface.
+ *
+ * A click that found only ground reports `id: undefined` with a position; a click that found
+ * nothing at all — the sky above the horizon — reports `null` instead of a pick.
  */
 export interface Scene3DPick {
   id: unknown;
@@ -162,8 +184,19 @@ export interface Scene3DPicking {
   onHover(listener: (pick: Scene3DPick | null) => void): () => void;
 }
 
-// ---- vector sources (declared, not implemented yet) --------------------------
+// ---- vector sources ----------------------------------------------------------
 
+/**
+ * A screen-aligned icon on the globe. There is deliberately no colour, outline or label field:
+ * a marker is an image, and everything a caller wants to vary about how one looks — fill, ring,
+ * a count printed inside a bubble — is decided by producing a different image URL. That keeps the
+ * styling vocabulary out of the engine contract, where a second implementation would have to
+ * reproduce it exactly, and in engine-free code that can be unit-tested character by character.
+ *
+ * Implementations must make markers hittable even when the ground in front of them is nearer to
+ * the camera than they are: a marker standing in a valley is drawn but, without that, cannot be
+ * clicked, which reads as an unresponsive map rather than as a depth problem.
+ */
 export interface Scene3DMarker {
   position: Scene3DPosition;
   /** Drops the marker onto the terrain surface, ignoring `position.height`. */
@@ -175,6 +208,12 @@ export interface Scene3DMarker {
   id: unknown;
 }
 
+/**
+ * A line through a list of positions, drawn as straight segments between them. Straight is the
+ * only option on purpose: the positions are survey legs of a few metres each, and bending them
+ * along a constant compass bearing — which is what a mapping library does by default — would
+ * subdivide every one of tens of thousands of legs into vertices that describe nothing.
+ */
 export interface Scene3DPolyline {
   positions: Scene3DPosition[];
   widthPixels: number;
@@ -184,7 +223,14 @@ export interface Scene3DPolyline {
   id: unknown;
 }
 
-/** A named, replaceable batch of like items — one GPU batch, not one object per item. */
+/**
+ * A named, replaceable batch of like items — one GPU batch, not one object per item.
+ *
+ * Every method here changes what should be on screen, so every one of them also asks the scene to
+ * draw a frame. That is the implementation's job rather than the caller's: the scene draws only on
+ * demand, and a source that left the redraw to whoever mutated it would work perfectly whenever
+ * the camera happened to be moving and appear to do nothing whenever it was not.
+ */
 export interface Scene3DVectorSource<TItem> {
   replace(items: readonly TItem[]): void;
   clear(): void;
@@ -228,7 +274,12 @@ export interface Scene3DEngine
 /**
  * The part of the contract that is implemented. It is a separate name rather than a set of
  * optional members so the compiler keeps telling the truth about what a caller can rely on: code
- * written against `Scene3DCore` compiles against the real scene, and code that reaches for picking
- * or model loading fails to compile until those groups are built.
+ * written against `Scene3DCore` compiles against the real scene, and code that reaches for model
+ * loading fails to compile until that group is built.
  */
-export type Scene3DCore = Scene3DLifecycle & Scene3DImagery & Scene3DCamera & Scene3DCoordinates;
+export type Scene3DCore = Scene3DLifecycle &
+  Scene3DImagery &
+  Scene3DCamera &
+  Scene3DCoordinates &
+  Scene3DPicking &
+  Scene3DVectorSources;

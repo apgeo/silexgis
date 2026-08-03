@@ -15,6 +15,8 @@ namespace SilexGis.Api.Features.Map;
 /// in which case it still reports why so the client can say how much is not being shown.
 /// <see cref="HasZ"/> reports what the served geometry actually carries — a caller that asked
 /// for altitudes can be handed a flat representation (see the query), and must be told.
+/// <see cref="TopZ"/> describes the whole centerline rather than the part being served, which is
+/// why it cannot be read off the payload.
 /// </summary>
 public sealed record CenterlineMapRow(
     Guid Id,
@@ -26,6 +28,7 @@ public sealed record CenterlineMapRow(
     bool Included,
     bool Withheld,
     bool HasZ,
+    double? TopZ,
     string? GeoJson);
 
 /// <summary>
@@ -185,7 +188,22 @@ public static class CenterlineMapSql
                            ELSE COALESCE(
                                c.skeleton,
                                CASE WHEN @with_z THEN f.geom ELSE ST_Force2D(f.geom) END)
-                       END AS overview_g
+                       END AS overview_g,
+                       -- The highest altitude in the WHOLE centerline, not in the part being
+                       -- served. A caller drawing a survey against a globe has to know where the
+                       -- cave meets the ground, and the payload cannot tell it: at detail zoom the
+                       -- geometry is cut to the viewport, so the highest point within it changes
+                       -- as the viewer pans and anchoring to that would slide the whole survey up
+                       -- and down. The guards keep this free: it is asked only of rows that will
+                       -- carry altitudes at all, so a row served from the flat stored skeleton
+                       -- never pulls the survey geometry out of storage to answer it, and a gated
+                       -- row — which is served no geometry — is not asked either.
+                       CASE
+                           WHEN @with_z
+                                AND NOT (@gate_active AND COALESCE(c.skeleton_path_count, c.path_count) > @gate_paths)
+                                AND (@detail OR c.skeleton IS NULL)
+                               THEN ST_ZMax(f.geom)
+                       END AS top_z
                 FROM features f
                 JOIN centerlines c ON c.id = f.id
                 WHERE f.deleted_at IS NULL
@@ -202,7 +220,7 @@ public static class CenterlineMapSql
             -- alternative — dropping it — would blank an overlay that had been perfectly usable
             -- one zoom level out, which is worse than showing less of it.
             chosen AS MATERIALIZED (
-                SELECT id, cave_id, name, length_m, gated,
+                SELECT id, cave_id, name, length_m, gated, top_z,
                        COALESCE(detail_paths > 0 AND detail_paths <= @max_paths, false) AS detail,
                        CASE WHEN detail_paths > 0 AND detail_paths <= @max_paths THEN detail_g
                             -- An empty clip at detail zoom means the cave is off-screen; falling
@@ -213,7 +231,7 @@ public static class CenterlineMapSql
                 FROM counted
             ),
             sized AS MATERIALIZED (
-                SELECT id, cave_id, name, length_m, gated, detail, g,
+                SELECT id, cave_id, name, length_m, gated, detail, g, top_z,
                        CASE WHEN g IS NULL THEN 0 ELSE ST_NumGeometries(g) END AS paths,
                        -- Asked of the geometry itself rather than inferred from which branch
                        -- produced it: an uploaded 2D survey is stored with a zero Z ordinate,
@@ -236,6 +254,7 @@ public static class CenterlineMapSql
                    (NOT gated AND paths > 0 AND running <= @max_paths) AS "Included",
                    (gated OR (paths > 0 AND running > @max_paths)) AS "Withheld",
                    has_z AS "HasZ",
+                   top_z AS "TopZ",
                    CASE WHEN NOT gated AND paths > 0 AND running <= @max_paths
                         THEN ST_AsGeoJSON(ST_Simplify(g, @tolerance), 15)
                    END AS "GeoJson"

@@ -782,7 +782,8 @@
     "unsupportedTitle": "Acest browser nu poate afișa vizualizarea 3D",
     "unsupportedHint": "Vizualizarea 3D are nevoie de WebGL 2, pe care acest browser sau driverul său grafic nu îl oferă. Încearcă un browser actualizat sau folosește în continuare harta 2D.",
     "openFlatMap": "Deschide harta 2D",
-    "startFailed": "Vizualizarea 3D nu a putut fi pornită"
+    "startFailed": "Vizualizarea 3D nu a putut fi pornită",
+    "centerlinesFlat": "{{count}} poligonale desenate la suprafață — pentru ele nu au fost disponibile adâncimi topografiate."
   },
   "caveview": {
     "loadError": "Modelul 3D nu a putut fi încărcat"

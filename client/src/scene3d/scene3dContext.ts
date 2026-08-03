@@ -1,29 +1,43 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import 'cesium/Source/Widgets/CesiumWidget/CesiumWidget.css';
 import {
+  BillboardCollection,
   Cartesian2,
   Cartesian3,
   Cartographic,
   CesiumWidget,
+  Color,
   Credit,
   Ellipsoid,
+  HeightReference,
   type ImageryLayer,
   Ion,
+  Material,
   Math as CesiumMath,
   PerspectiveFrustum,
+  PolylineCollection,
   Rectangle,
   SceneTransforms,
+  ScreenSpaceEventHandler,
+  ScreenSpaceEventType,
   UrlTemplateImageryProvider,
+  VerticalOrigin,
 } from 'cesium';
-import { cameraHeightForZoom, pseudoZoom } from './pseudoZoom.ts';
+import { coarsePointer } from '../map/pointer.ts';
+import { cameraGroundSampleDistance, cameraHeightForZoom, zoomForGroundSampleDistance } from './pseudoZoom.ts';
+import { viewportBounds } from './viewBounds3d.ts';
 import type {
   Scene3DBounds,
   Scene3DCameraOptions,
   Scene3DCameraState,
   Scene3DCore,
   Scene3DImageryOptions,
+  Scene3DMarker,
+  Scene3DPick,
+  Scene3DPolyline,
   Scene3DPosition,
   Scene3DScreenPosition,
+  Scene3DVectorSource,
 } from './scene3dEngine.ts';
 
 // This is the ONLY module in the application allowed to import the 3D engine library, and the
@@ -71,11 +85,42 @@ const DEFAULT_FOVY_RADIANS = Math.PI / 3;
 /** A point box gets this zoom instead of an unframeable rectangle — the 2D map's `fit` maximum. */
 const POINT_FIT_ZOOM = 17;
 
+/**
+ * How far from the pixel a hit test may reach, in pixels, by pointer type. The same figures the
+ * flat map uses: a finger lands nowhere near as precisely as a cursor, and a marker is only a few
+ * pixels of ink. Measured on this renderer, a wider tolerance is free — the hit test costs the
+ * same at one pixel as at twenty-four — and it never returned a different object than the exact
+ * test did, only an object where the exact test found nothing.
+ */
+const MOUSE_PICK_TOLERANCE_PIXELS = 6;
+const TOUCH_PICK_TOLERANCE_PIXELS = 12;
+
+/**
+ * Markers are kept hittable no matter what is drawn in front of them. A marker on the far side of
+ * a ridge is drawn — the cave data is deliberately not hidden by terrain — but without this the
+ * hit test still consults the depth of the ridge and reports nothing, so the marker looks present
+ * and simply refuses to be clicked. Measured: a marker in a valley had terrain forty metres nearer
+ * the camera at its own pixel, and this is what makes it pickable again.
+ */
+const MARKER_PICKABLE_AT_ANY_DEPTH = Number.POSITIVE_INFINITY;
+
 class CesiumScene3D implements Scene3DCore {
   private readonly widget: CesiumWidget;
   private readonly imageryById = new Map<string, ImageryLayer>();
   private readonly renderErrorListeners = new Set<(message: string) => void>();
   private readonly removeRenderErrorHandler: () => void;
+
+  /** Every batch currently in the scene, so a source built twice under one id cannot orphan one. */
+  private readonly vectorSourceIds = new Map<string, Scene3DVectorSource<never>>();
+
+  private readonly viewChangedListeners = new Set<() => void>();
+  private removeMoveEndHandler: (() => void) | undefined;
+
+  private readonly clickListeners = new Set<(pick: Scene3DPick | null) => void>();
+  private readonly hoverListeners = new Set<(pick: Scene3DPick | null) => void>();
+  private inputHandler: ScreenSpaceEventHandler | undefined;
+  private hoverFrame: number | undefined;
+  private hoverPosition: Cartesian2 | undefined;
 
   constructor(container: HTMLElement) {
     this.widget = new CesiumWidget(container, {
@@ -142,9 +187,23 @@ class CesiumScene3D implements Scene3DCore {
     if (this.widget.isDestroyed()) {
       return; // The library replaces every method with a thrower once destroyed.
     }
+    if (this.hoverFrame !== undefined) {
+      window.cancelAnimationFrame(this.hoverFrame);
+      this.hoverFrame = undefined;
+    }
+    this.inputHandler?.destroy();
+    this.inputHandler = undefined;
+    this.clickListeners.clear();
+    this.hoverListeners.clear();
+    this.removeMoveEndHandler?.();
+    this.removeMoveEndHandler = undefined;
+    this.viewChangedListeners.clear();
     this.removeRenderErrorHandler();
     this.renderErrorListeners.clear();
     this.imageryById.clear();
+    // The widget takes every batch down with the scene; the map only exists so a source built
+    // twice under one id can be found, and it must not outlive the scene it named.
+    this.vectorSourceIds.clear();
     this.widget.destroy();
   }
 
@@ -301,26 +360,56 @@ class CesiumScene3D implements Scene3DCore {
 
   getPseudoZoom(): number {
     const camera = this.getCamera();
-    // Height above the ground being looked at, not above the ellipsoid: on a smooth globe they
-    // are the same number, but with terrain loaded a camera 500 m over a 1500 m ridge is showing
-    // the ground detail of 500 m, not of 2000 m.
-    const groundHeight =
-      this.widget.scene.globe.getHeight(
-        Cartographic.fromDegrees(camera.longitude, camera.latitude),
-      ) ?? 0;
-    return pseudoZoom({
-      heightMeters: camera.height - groundHeight,
-      latitudeDegrees: camera.latitude,
-      fieldOfViewRadians: this.fieldOfViewRadians(),
-      viewportHeightPixels: this.viewportHeightPixels(),
+    return zoomForGroundSampleDistance(this.groundSampleDistance(camera), camera.latitude);
+  }
+
+  getVisibleBounds(): Scene3DBounds | undefined {
+    const width = this.viewportWidthPixels();
+    const height = this.viewportHeightPixels();
+    const camera = this.getCamera();
+    // The ground under the middle of the screen, which is what the view is about. Falling back to
+    // the point directly beneath the camera keeps a tilted view that has the horizon in its centre
+    // asking about somewhere real rather than about nothing.
+    const center = this.screenToPosition({ x: width / 2, y: height / 2 });
+    return viewportBounds({
+      centerLongitude: center?.longitude ?? camera.longitude,
+      centerLatitude: center?.latitude ?? camera.latitude,
+      // The same figure the zoom is derived from, deliberately: the box and the zoom sent with it
+      // have to describe one view, and a box scaled off the true distance to a tilted camera's
+      // aim point would cover more ground than the zoom it is paired with claims to.
+      metersPerPixel: this.groundSampleDistance(camera),
+      viewportWidthPixels: width,
+      viewportHeightPixels: height,
     });
+  }
+
+  onViewChanged(listener: () => void): () => void {
+    if (this.widget.isDestroyed()) {
+      return () => {};
+    }
+    // Fanned out from one engine subscription, the same way render errors are: the scene's own
+    // event then has exactly one listener, which is removed with the scene rather than left
+    // holding a closure over application state after the drawing surface is gone.
+    if (!this.removeMoveEndHandler) {
+      const onMoveEnd = () => {
+        for (const viewListener of [...this.viewChangedListeners]) {
+          viewListener();
+        }
+      };
+      const { moveEnd } = this.widget.scene.camera;
+      moveEnd.addEventListener(onMoveEnd);
+      this.removeMoveEndHandler = () => moveEnd.removeEventListener(onMoveEnd);
+    }
+    this.viewChangedListeners.add(listener);
+    return () => {
+      this.viewChangedListeners.delete(listener);
+    };
   }
 
   // ---- coordinates ----
 
   positionToScreen(position: Scene3DPosition): Scene3DScreenPosition | undefined {
-    const world = Cartesian3.fromDegrees(position.longitude, position.latitude, position.height);
-    const screen = SceneTransforms.worldToWindowCoordinates(this.widget.scene, world);
+    const screen = SceneTransforms.worldToWindowCoordinates(this.widget.scene, toCartesian(position));
     return screen ? { x: screen.x, y: screen.y } : undefined;
   }
 
@@ -348,7 +437,244 @@ class CesiumScene3D implements Scene3DCore {
     };
   }
 
+  // ---- picking ----
+
+  onClick(listener: (pick: Scene3DPick | null) => void): () => void {
+    this.ensureInputHandler();
+    this.clickListeners.add(listener);
+    return () => {
+      this.clickListeners.delete(listener);
+    };
+  }
+
+  onHover(listener: (pick: Scene3DPick | null) => void): () => void {
+    this.ensureInputHandler();
+    this.hoverListeners.add(listener);
+    return () => {
+      this.hoverListeners.delete(listener);
+    };
+  }
+
+  // ---- vector sources ----
+
+  createPolylineSource(id: string): Scene3DVectorSource<Scene3DPolyline> {
+    // A collection of lines drawn straight between the positions given, which is what a survey
+    // leg is. The alternative shape a mapping library offers — a line following a constant compass
+    // bearing — would subdivide every metre-scale shot into vertices describing a curve that is
+    // not there, on geometry already counted in the tens of thousands of components.
+    const collection = new PolylineCollection();
+    this.widget.scene.primitives.add(collection);
+    return this.registerVectorSource<Scene3DPolyline>(
+      id,
+      () => collection.removeAll(),
+      (items) => {
+        for (const item of items) {
+          collection.add({
+            positions: item.positions.map(toCartesian),
+            width: item.widthPixels,
+            // One material object per line, not one shared between them: clearing the collection
+            // destroys each line's material, so a shared instance would be destroyed once per
+            // line and every line after the first would fail. Lines carrying the same colour are
+            // still drawn in one batch — the renderer groups them by the material's value, not by
+            // its identity — so this costs objects, not draw calls.
+            material: Material.fromType(Material.ColorType, {
+              color: Color.fromCssColorString(item.color),
+            }),
+            id: item.id,
+          });
+        }
+      },
+      (visible) => {
+        collection.show = visible;
+      },
+      () => this.widget.scene.primitives.remove(collection),
+    );
+  }
+
+  createMarkerSource(id: string): Scene3DVectorSource<Scene3DMarker> {
+    // The scene is handed over so the collection can resolve markers that sit on the terrain.
+    const collection = new BillboardCollection({ scene: this.widget.scene });
+    this.widget.scene.primitives.add(collection);
+    return this.registerVectorSource<Scene3DMarker>(
+      id,
+      () => collection.removeAll(),
+      (items) => {
+        for (const item of items) {
+          collection.add({
+            position: toCartesian(item.position),
+            image: item.image,
+            scale: item.scale ?? 1,
+            heightReference: item.clampToGround
+              ? HeightReference.CLAMP_TO_GROUND
+              : HeightReference.NONE,
+            // The icons are symbols centred on the thing they mark, the way the flat map draws
+            // them, rather than pins standing on it.
+            verticalOrigin: VerticalOrigin.CENTER,
+            disableDepthTestDistance: MARKER_PICKABLE_AT_ANY_DEPTH,
+            id: item.id,
+          });
+        }
+      },
+      (visible) => {
+        collection.show = visible;
+      },
+      () => this.widget.scene.primitives.remove(collection),
+    );
+  }
+
   // ---- internals ----
+
+  /**
+   * Wraps one batch in the contract's handle. Every mutating path asks for a frame here rather
+   * than at the call site: the scene draws only when asked, so a batch that left the redraw to
+   * its caller would appear to work whenever the camera happened to be moving and to do nothing
+   * whenever it was not — which is the same symptom as the data never arriving.
+   */
+  private registerVectorSource<TItem>(
+    id: string,
+    clearItems: () => void,
+    addItems: (items: readonly TItem[]) => void,
+    setShow: (visible: boolean) => void,
+    removeFromScene: () => void,
+  ): Scene3DVectorSource<TItem> {
+    // Creating a source under an id already in the scene replaces it. A view that remounts without
+    // tearing down would otherwise leave the previous batch drawing forever, with nothing holding
+    // a handle to it.
+    this.vectorSourceIds.get(id)?.remove();
+
+    let removed = false;
+    const alive = () => !removed && !this.widget.isDestroyed();
+
+    const handle: Scene3DVectorSource<TItem> = {
+      replace: (items) => {
+        if (!alive()) return;
+        clearItems();
+        addItems(items);
+        this.requestRender();
+      },
+      clear: () => {
+        if (!alive()) return;
+        clearItems();
+        this.requestRender();
+      },
+      setVisible: (visible) => {
+        if (!alive()) return;
+        setShow(visible);
+        this.requestRender();
+      },
+      remove: () => {
+        if (removed) return;
+        removed = true;
+        this.vectorSourceIds.delete(id);
+        if (this.widget.isDestroyed()) return;
+        removeFromScene();
+        this.requestRender();
+      },
+    };
+    this.vectorSourceIds.set(id, handle as Scene3DVectorSource<never>);
+    return handle;
+  }
+
+  /** Builds the pointer handler the first time anything subscribes, and not before. */
+  private ensureInputHandler(): void {
+    if (this.inputHandler || this.widget.isDestroyed()) {
+      return;
+    }
+    const handler = new ScreenSpaceEventHandler(this.widget.canvas);
+
+    handler.setInputAction((event: { position: Cartesian2 }) => {
+      // A click is worth a depth read: knowing where on the ground it landed is what lets a
+      // caller act on empty ground rather than only on the things drawn over it.
+      const pick = this.pickAt(event.position, true);
+      for (const listener of [...this.clickListeners]) {
+        listener(pick);
+      }
+    }, ScreenSpaceEventType.LEFT_CLICK);
+
+    handler.setInputAction((event: { endPosition: Cartesian2 }) => {
+      this.scheduleHoverPick(event.endPosition);
+    }, ScreenSpaceEventType.MOUSE_MOVE);
+
+    this.inputHandler = handler;
+  }
+
+  /**
+   * Hit tests at most once per drawn frame, against the latest place the pointer has been.
+   *
+   * A pointer emits moves far faster than the scene draws, and a hit test costs a render pass of
+   * its own — measured at up to fifty milliseconds under a camera below ground, which is several
+   * frames' entire budget. Testing the newest position once per frame and discarding the
+   * positions in between answers the only question hover asks: what is under the pointer now.
+   *
+   * On a touch device it answers nothing at all, so it is not asked. Hover describes what a
+   * pointer is resting on, and a finger rests on nothing: the engine synthesises pointer moves
+   * from a one-finger drag, so without the guard every frame of every pan on a phone would buy an
+   * extra render pass to compute something the device cannot show. The pointer type is read here
+   * rather than remembered, matching the hit-test tolerance, so a tablet that gains a mouse gets
+   * hover from its next movement.
+   */
+  private scheduleHoverPick(windowPosition: Cartesian2): void {
+    if (this.hoverListeners.size === 0) {
+      return; // Nobody is listening; a click-only caller must not pay for hit tests it ignores.
+    }
+    if (coarsePointer()) {
+      return;
+    }
+    this.hoverPosition = new Cartesian2(windowPosition.x, windowPosition.y);
+    if (this.hoverFrame !== undefined) {
+      return;
+    }
+    this.hoverFrame = window.requestAnimationFrame(() => {
+      this.hoverFrame = undefined;
+      const position = this.hoverPosition;
+      if (!position || this.widget.isDestroyed()) {
+        return;
+      }
+      // No depth read on hover: what is under the pointer is the whole question, and the ground
+      // beneath it would cost a second pass per frame to answer something nobody asked.
+      const pick = this.pickAt(position, false);
+      for (const listener of [...this.hoverListeners]) {
+        listener(pick);
+      }
+    });
+  }
+
+  private pickAt(windowPosition: Cartesian2, includeGround: boolean): Scene3DPick | null {
+    const { scene } = this.widget;
+    const tolerance = coarsePointer() ? TOUCH_PICK_TOLERANCE_PIXELS : MOUSE_PICK_TOLERANCE_PIXELS;
+    const picked = scene.pick(windowPosition, tolerance, tolerance) as
+      | { id?: unknown }
+      | undefined;
+    const id = picked?.id;
+    const ground = includeGround
+      ? this.screenToPosition({ x: windowPosition.x, y: windowPosition.y })
+      : undefined;
+    if (id !== undefined && id !== null) {
+      return ground ? { id, position: ground } : { id };
+    }
+    // The hit test never reports the globe itself, so "did this land on the ground?" is a
+    // separate question and only the depth read can answer it.
+    return ground ? { id: undefined, position: ground } : null;
+  }
+
+  /**
+   * Ground metres one pixel covers at the point the camera is aimed at. Height above the ground
+   * being looked at, not above the ellipsoid: on a smooth globe they are the same number, but with
+   * terrain loaded a camera 500 m over a 1500 m ridge is showing the ground detail of 500 m, not
+   * of 2000 m.
+   */
+  private groundSampleDistance(camera: Scene3DCameraState): number {
+    const groundHeight =
+      this.widget.scene.globe.getHeight(
+        Cartographic.fromDegrees(camera.longitude, camera.latitude),
+      ) ?? 0;
+    return cameraGroundSampleDistance({
+      heightMeters: camera.height - groundHeight,
+      latitudeDegrees: camera.latitude,
+      fieldOfViewRadians: this.fieldOfViewRadians(),
+      viewportHeightPixels: this.viewportHeightPixels(),
+    });
+  }
 
   private fieldOfViewRadians(): number {
     const { frustum } = this.widget.scene.camera;
@@ -363,6 +689,16 @@ class CesiumScene3D implements Scene3DCore {
     const { canvas } = this.widget;
     return canvas.clientHeight || canvas.height || 1;
   }
+
+  private viewportWidthPixels(): number {
+    const { canvas } = this.widget;
+    return canvas.clientWidth || canvas.width || 1;
+  }
+}
+
+/** A contract position as the engine's own world coordinate. */
+function toCartesian(position: Scene3DPosition): Cartesian3 {
+  return Cartesian3.fromDegrees(position.longitude, position.latitude, position.height);
 }
 
 /** A compass bearing folded into [0, 360). */

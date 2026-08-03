@@ -26,7 +26,6 @@ import {
   useFeatureTypes,
 } from '../../api/hooks.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
-import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
 import {
   MapEditController,
   type DrawShape,
@@ -36,6 +35,7 @@ import {
 } from '../../map/mapEdit.ts';
 import { coarsePointer } from '../../map/pointer.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
+import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 import CaveAddModal from './CaveAddModal.tsx';
 import FeaturePalette, { FeatureSymbol } from './FeaturePalette.tsx';
@@ -160,7 +160,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
         });
       }
       controller.reset();
-      reloadSurfaceFeatures();
+      surfaceFeaturesChanged();
       message.success(t('common.saved'));
     } catch {
       message.error(t('common.saveFailed'));
@@ -171,7 +171,7 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
 
   const discard = () => {
     controller.reset();
-    reloadSurfaceFeatures();
+    surfaceFeaturesChanged();
   };
 
   const pendingGeometryType = (pendingFeature?.getGeometry()?.getType() ?? 'Point') as DrawShape;

@@ -51,16 +51,49 @@ export const engineState = {
   widgets: [] as CesiumWidget[],
   widgetOptions: [] as FakeWidgetOptions[],
   providers: [] as FakeImageryProviderOptions[],
+  /** Pointer handlers the scene built, so a test can drive a click or a move through one. */
+  eventHandlers: [] as ScreenSpaceEventHandler[],
   reset() {
     engineState.widgets = [];
     engineState.widgetOptions = [];
     engineState.providers = [];
+    engineState.eventHandlers = [];
   },
 };
 
 export const CesiumMath = {
   toDegrees: (radians: number) => (radians * 180) / Math.PI,
   toRadians: (degrees: number) => (degrees * Math.PI) / 180,
+};
+
+export const HeightReference = {
+  NONE: 'none',
+  CLAMP_TO_GROUND: 'clampToGround',
+} as const;
+
+export const VerticalOrigin = {
+  CENTER: 'center',
+  BOTTOM: 'bottom',
+  TOP: 'top',
+} as const;
+
+export const ScreenSpaceEventType = {
+  LEFT_CLICK: 'leftClick',
+  MOUSE_MOVE: 'mouseMove',
+} as const;
+
+export const Color = {
+  /** The real parser normalises to floats; the string is enough to tell two colours apart here. */
+  fromCssColorString(css: string) {
+    return { css };
+  },
+};
+
+export const Material = {
+  ColorType: 'Color',
+  fromType(type: string, uniforms: Record<string, unknown>) {
+    return { type, uniforms, destroyed: false, destroy() { this.destroyed = true; } };
+  },
 };
 
 // The library exports its own maths helpers under the name `Math`. Exported as an alias rather
@@ -192,6 +225,8 @@ class FakeCamera {
   /** Destinations that were not point positions — how `fitBounds` becomes observable. */
   readonly framed: unknown[] = [];
   flightCount = 0;
+  /** Raised once the camera has come to rest; a test raises it to stand in for navigating. */
+  readonly moveEnd = new FakeEvent();
 
   setView(options: FakeViewOptions) {
     this.apply(options);
@@ -221,6 +256,113 @@ class FakeCamera {
   }
 }
 
+/** A line as the collection stores it — whatever the scene module handed to `add`. */
+export interface FakePolyline {
+  positions: FakeCartesian3[];
+  width: number;
+  material: { type: string; uniforms: Record<string, unknown> };
+  id: unknown;
+}
+
+export class PolylineCollection {
+  readonly polylines: FakePolyline[] = [];
+  show = true;
+  /** Set when the scene takes the collection out of the primitives list. */
+  destroyed = false;
+
+  add(options: FakePolyline): FakePolyline {
+    this.polylines.push(options);
+    return options;
+  }
+
+  removeAll() {
+    this.polylines.length = 0;
+  }
+}
+
+/** A marker as the collection stores it. */
+export interface FakeBillboard {
+  position: FakeCartesian3;
+  image: string;
+  scale: number;
+  heightReference: string;
+  verticalOrigin: string;
+  disableDepthTestDistance: number;
+  id: unknown;
+}
+
+export class BillboardCollection {
+  readonly billboards: FakeBillboard[] = [];
+  readonly scene: unknown;
+  show = true;
+  destroyed = false;
+
+  // The real collection needs the scene to resolve markers that sit on the terrain, so a test can
+  // see that it was given one.
+  constructor(options: { scene: unknown }) {
+    this.scene = options.scene;
+  }
+
+  add(options: FakeBillboard): FakeBillboard {
+    this.billboards.push(options);
+    return options;
+  }
+
+  removeAll() {
+    this.billboards.length = 0;
+  }
+}
+
+class FakePrimitiveCollection {
+  readonly items: unknown[] = [];
+
+  add<T>(primitive: T): T {
+    this.items.push(primitive);
+    return primitive;
+  }
+
+  /** Removing a primitive destroys it, the way the real collection does. */
+  remove(primitive: unknown): boolean {
+    const index = this.items.indexOf(primitive);
+    if (index < 0) {
+      return false;
+    }
+    this.items.splice(index, 1);
+    (primitive as { destroyed?: boolean }).destroyed = true;
+    return true;
+  }
+}
+
+/** A pointer handler: a registry of actions a test raises by hand, since jsdom has no canvas. */
+export class ScreenSpaceEventHandler {
+  readonly canvas: unknown;
+  readonly actions = new Map<string, (event: unknown) => void>();
+  destroyed = false;
+
+  constructor(canvas: unknown) {
+    this.canvas = canvas;
+    engineState.eventHandlers.push(this);
+  }
+
+  setInputAction(action: (event: unknown) => void, type: string) {
+    this.actions.set(type, action);
+  }
+
+  removeInputAction(type: string) {
+    this.actions.delete(type);
+  }
+
+  /** How a test delivers a pointer event the way the real handler would. */
+  raise(type: string, event: unknown) {
+    this.actions.get(type)?.(event);
+  }
+
+  destroy() {
+    this.destroyed = true;
+    this.actions.clear();
+  }
+}
+
 class FakeGlobe {
   /** Opposite of what the scene module sets, so the test proves the module set it. */
   depthTestAgainstTerrain = true;
@@ -230,13 +372,25 @@ class FakeGlobe {
   }
 }
 
+/** One hit test the scene module asked for, so a test can check the tolerance it used. */
+export interface FakePickCall {
+  x: number;
+  y: number;
+  width: number | undefined;
+  height: number | undefined;
+}
+
 class FakeScene {
   readonly globe = new FakeGlobe();
   readonly camera = new FakeCamera();
   readonly imageryLayers = new FakeImageryLayerCollection();
+  readonly primitives = new FakePrimitiveCollection();
   readonly renderError = new FakeEvent();
   renderRequests = 0;
   pickedPosition: FakeCartesian3 | undefined = undefined;
+  /** What the next hit test answers with; the real one returns undefined when it finds nothing. */
+  pickResult: { id?: unknown } | undefined = undefined;
+  readonly pickCalls: FakePickCall[] = [];
 
   requestRender() {
     this.renderRequests += 1;
@@ -245,11 +399,21 @@ class FakeScene {
   pickPosition(_windowPosition: Cartesian2) {
     return this.pickedPosition;
   }
+
+  pick(windowPosition: Cartesian2, width?: number, height?: number) {
+    this.pickCalls.push({ x: windowPosition.x, y: windowPosition.y, width, height });
+    return this.pickResult;
+  }
 }
 
 export class CesiumWidget {
   readonly scene = new FakeScene();
-  readonly canvas = { clientHeight: 800, height: 800 } as unknown as HTMLCanvasElement;
+  readonly canvas = {
+    clientWidth: 1200,
+    width: 1200,
+    clientHeight: 800,
+    height: 800,
+  } as unknown as HTMLCanvasElement;
   readonly container: Element;
   destroyCount = 0;
   private destroyed = false;

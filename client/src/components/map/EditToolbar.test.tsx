@@ -36,8 +36,6 @@ vi.mock('../../api/hooks.ts', () => ({
   updateFeature: vi.fn(),
 }));
 
-vi.mock('../../map/featureLayer.ts', () => ({ reloadSurfaceFeatures: vi.fn() }));
-
 // The toolbar's own layout is what is under test; the dialogs it hosts pull in the whole
 // cave/feature form stack and render nothing while closed.
 vi.mock('./CaveAddModal.tsx', () => ({ default: () => null }));

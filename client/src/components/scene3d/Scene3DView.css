@@ -41,6 +41,34 @@ html[data-theme='dark'] .scene3d-canvas .cesium-widget-credits {
   background: rgba(0, 0, 0, 0.65);
 }
 
+/* Quiet notices about what the server held back, over the bottom-right of the scene. Kept out of
+   the way of the attribution strip in the opposite corner, and never covering the middle of the
+   view, which is where the caves are. */
+.scene3d-data-state {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  max-width: min(60%, 420px);
+  pointer-events: none;
+}
+
+.scene3d-notice {
+  padding: 2px 8px;
+  color: rgba(0, 0, 0, 0.75);
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 8px;
+}
+
+html[data-theme='dark'] .scene3d-notice {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.65);
+}
+
 /* The engine's own failure overlay is disabled in favour of the application's alert, so nothing
    should ever render it. Kept hidden rather than trusted: it is an untranslated English panel
    with a link to an external site, and it would cover the whole scene if a future engine

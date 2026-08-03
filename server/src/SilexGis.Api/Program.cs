@@ -97,8 +97,6 @@ try
         .BindConfiguration(AccessOptions.SectionName);
     builder.Services.AddOptions<MapOptions>()
         .BindConfiguration(MapOptions.SectionName);
-    builder.Services.AddOptions<Scene3dOptions>()
-        .BindConfiguration(Scene3dOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
     // Credential-guessing protection: per-IP fixed window on the auth surface.

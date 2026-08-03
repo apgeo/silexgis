@@ -8,6 +8,7 @@ import VectorSource from 'ol/source/Vector';
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
 import { fetchEntranceFeatures } from '../api/hooks.ts';
 import { getMapTagFilter } from './mapFilters.ts';
+import { entrancePalette as palette } from './markerPalette.ts';
 
 export const ENTRANCE_LAYER_ID = 'entrances';
 
@@ -77,13 +78,6 @@ export function attachEntranceLoader(map: Map): () => void {
     activeReload = undefined;
   };
 }
-
-const palette = {
-  point: '#146262',
-  approximate: '#d46b08',
-  cluster: '#0f4c4c',
-  stroke: '#ffffff',
-};
 
 function entranceStyle(feature: FeatureLike): Style {
   const props = feature.getProperties();

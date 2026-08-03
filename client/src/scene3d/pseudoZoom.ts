@@ -28,6 +28,15 @@ export const EQUATORIAL_METERS_PER_PIXEL_AT_ZOOM_0 = 156543.03392804097;
 /** Highest zoom the map endpoints accept; they clamp to 0..24, so producing more is pointless. */
 export const MAX_MAP_ZOOM = 24;
 
+/**
+ * Where the tile pyramid's square world stops. Mercator is undefined at the poles, and every
+ * latitude-dependent figure derived from it has to be clamped here or it runs away to infinity.
+ */
+export const MERCATOR_MAX_LATITUDE = 85.0511287798066;
+
+/** Ground metres in one degree of latitude on the sphere the tile pyramid is defined over. */
+export const METERS_PER_DEGREE_LATITUDE = (EQUATORIAL_METERS_PER_PIXEL_AT_ZOOM_0 * 256) / 360;
+
 export interface CameraView {
   /** Camera height above the ground it is looking at, in metres. Must be > 0. */
   heightMeters: number;
@@ -111,10 +120,9 @@ function toRadians(degrees: number): number {
   return (degrees * Math.PI) / 180;
 }
 
-// Mercator is undefined at the poles and cos() would drive the ground sample distance to zero
-// (and the zoom to infinity) as it approached them. The tile pyramid's own extent stops at
-// ±85.0511°, so clamping there keeps every derived figure finite without changing any answer
-// inside the area a map covers.
-function clampLatitude(latitudeDegrees: number): number {
-  return Math.min(85.0511287798066, Math.max(-85.0511287798066, latitudeDegrees));
+// cos() would drive the ground sample distance to zero (and the zoom to infinity) as the latitude
+// approached a pole. Clamping to the pyramid's own extent keeps every derived figure finite
+// without changing any answer inside the area a map covers.
+export function clampLatitude(latitudeDegrees: number): number {
+  return Math.min(MERCATOR_MAX_LATITUDE, Math.max(-MERCATOR_MAX_LATITUDE, latitudeDegrees));
 }

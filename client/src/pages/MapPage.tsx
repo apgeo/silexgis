@@ -46,7 +46,6 @@ import {
   SURFACE_FEATURE_LAYER_ID,
   attachSurfaceFeatureLoader,
   createSurfaceFeatureLayer,
-  reloadSurfaceFeatures,
   setFeatureTypeSymbols,
   setSelectedSurfaceFeature,
 } from '../map/featureLayer.ts';
@@ -56,6 +55,8 @@ import { PHOTO_LAYER_ID, attachPhotoLoader, createPhotoLayer, setPhotosEnabled }
 import { attachPhotoPopup } from '../map/photoPopup.ts';
 import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
+import { surfaceFeaturesChanged } from '../workspace/surfaceFeatureRefresh.ts';
+import { setActiveViewCamera } from '../workspace/viewCamera.ts';
 import { subscribe } from '../workspace/workspaceBus.ts';
 import { RASTER_LAYER_PREFIX, syncRasterLayers } from '../map/rasterLayers.ts';
 import { setRasterSwipeActive, setRasterSwipeFraction } from '../map/rasterSwipe.ts';
@@ -64,6 +65,7 @@ import { attachUrlHash, hasMapHash } from '../map/urlHash.ts';
 import {
   applyPendingOverlayOrder,
   findOverlayLayer,
+  fitGeoJsonGeometry,
   flyTo,
   getOverlayGroup,
   getWorkspaceMap,
@@ -179,7 +181,12 @@ export default function MapPage() {
     const moveKey = map.on('movestart', () => setContextTarget(null));
     const controller = new MapEditController(map);
     setEditController(controller);
+    // While this page is on screen it owns the camera the shared detail panel drives. The panel is
+    // also mounted beside the 3D scene, which has a camera of its own, so it asks for whichever
+    // view is showing rather than reaching for this map directly.
+    const detachCamera = setActiveViewCamera({ flyTo, fitGeometry: fitGeoJsonGeometry });
     return () => {
+      detachCamera();
       controller.dispose();
       setEditController(null);
       detachLoader();
@@ -558,7 +565,7 @@ export default function MapPage() {
     setTagFilter(ui.tagFilter);
     setMapTagFilter(ui.tagFilter);
     reloadEntrances();
-    reloadSurfaceFeatures();
+    surfaceFeaturesChanged();
   };
 
   // Dock contents, hosted either by a resizable pane (desktop) or a drawer (phone).
@@ -585,7 +592,7 @@ export default function MapPage() {
         setTagFilter(slug);
         setMapTagFilter(slug);
         reloadEntrances();
-        reloadSurfaceFeatures();
+        surfaceFeaturesChanged();
       }}
       centerlinesVisible={centerlinesVisible}
       mapConfig={mapConfig}

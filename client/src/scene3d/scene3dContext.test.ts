@@ -487,3 +487,446 @@ describe('render errors', () => {
     session.release();
   });
 });
+
+describe('the box a loader should ask about', () => {
+  it('is centred on the ground the middle of the screen is showing', async () => {
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    // The camera is at the default opening view; the ground under the screen centre is not.
+    scene.pickedPosition = { longitudeDegrees: 22.7, latitudeDegrees: 46.5, height: 1100 };
+
+    const [west, south, east, north] = session.engine.getVisibleBounds()!;
+
+    expect((west + east) / 2).toBeCloseTo(22.7, 6);
+    expect((south + north) / 2).toBeCloseTo(46.5, 6);
+    session.release();
+  });
+
+  it('falls back to the ground beneath the camera when the screen centre is sky', async () => {
+    const session = acquire();
+    session.engine.setCamera({
+      longitude: 25.3,
+      latitude: 45.7,
+      height: 4000,
+      heading: 0,
+      pitch: -90,
+      roll: 0,
+    });
+
+    const [west, south, east, north] = session.engine.getVisibleBounds()!;
+
+    expect((west + east) / 2).toBeCloseTo(25.3, 6);
+    expect((south + north) / 2).toBeCloseTo(45.7, 6);
+    session.release();
+  });
+
+  it('shrinks as the camera comes down, so a close view asks about a cave and not a county', async () => {
+    const session = acquire();
+
+    session.engine.flyToZoom(8, 45.7, 8);
+    const wide = session.engine.getVisibleBounds()!;
+    session.engine.flyToZoom(8, 45.7, 18);
+    const close = session.engine.getVisibleBounds()!;
+
+    expect(close[2] - close[0]).toBeLessThan((wide[2] - wide[0]) / 100);
+    session.release();
+  });
+});
+
+describe('being told the camera moved', () => {
+  it('reports the camera coming to rest, which is when data is refetched', async () => {
+    const session = acquire();
+    const { camera } = engine.engineState.widgets[0].scene;
+    let settled = 0;
+
+    const unsubscribe = session.engine.onViewChanged(() => {
+      settled += 1;
+    });
+    camera.moveEnd.raise();
+
+    expect(settled).toBe(1);
+    unsubscribe();
+    camera.moveEnd.raise();
+    expect(settled).toBe(1);
+    session.release();
+  });
+
+  it('stops listening once the scene is gone', async () => {
+    const session = acquire();
+    session.engine.onViewChanged(() => {});
+    const { camera } = engine.engineState.widgets[0].scene;
+
+    session.release();
+
+    expect(camera.moveEnd.listeners.size).toBe(0);
+  });
+});
+
+describe('vector sources', () => {
+  function polylines(session: Scene3DSession) {
+    return session.engine.createPolylineSource('centerlines');
+  }
+
+  it('draws lines straight between the positions it was given', async () => {
+    const session = acquire();
+    const source = polylines(session);
+    const { primitives } = engine.engineState.widgets[0].scene;
+
+    source.replace([
+      {
+        positions: [
+          { longitude: 25.44, latitude: 45.53, height: 700 },
+          { longitude: 25.441, latitude: 45.53, height: 690 },
+        ],
+        widthPixels: 2,
+        color: '#7a1f1f',
+        id: { kind: 'centerline' },
+      },
+    ]);
+
+    const collection = primitives.items[0] as InstanceType<typeof engine.PolylineCollection>;
+    expect(collection.polylines).toHaveLength(1);
+    expect(collection.polylines[0].positions).toEqual([
+      { longitudeDegrees: 25.44, latitudeDegrees: 45.53, height: 700 },
+      { longitudeDegrees: 25.441, latitudeDegrees: 45.53, height: 690 },
+    ]);
+    expect(collection.polylines[0].width).toBe(2);
+    session.release();
+  });
+
+  it('gives each line its own material, because clearing the batch destroys them', async () => {
+    // A single material shared between lines is destroyed once per line when the batch is
+    // cleared, and every line after the first fails on an object that is already gone.
+    const session = acquire();
+    const source = polylines(session);
+    const { primitives } = engine.engineState.widgets[0].scene;
+    const line = (id: string) => ({
+      positions: [
+        { longitude: 25, latitude: 45, height: 0 },
+        { longitude: 25.1, latitude: 45, height: 0 },
+      ],
+      widthPixels: 2,
+      color: '#7a1f1f',
+      id,
+    });
+
+    source.replace([line('a'), line('b')]);
+
+    const collection = primitives.items[0] as InstanceType<typeof engine.PolylineCollection>;
+    expect(collection.polylines[0].material).not.toBe(collection.polylines[1].material);
+    session.release();
+  });
+
+  it('keeps markers hittable whatever the ground in front of them is doing', async () => {
+    const session = acquire();
+    const source = session.engine.createMarkerSource('entrances');
+    const { primitives } = engine.engineState.widgets[0].scene;
+
+    source.replace([
+      {
+        position: { longitude: 25.44, latitude: 45.53, height: 0 },
+        clampToGround: true,
+        image: 'data:image/svg+xml;utf8,<svg/>',
+        id: { kind: 'entrance' },
+      },
+    ]);
+
+    const collection = primitives.items[0] as InstanceType<typeof engine.BillboardCollection>;
+    // Without this a marker standing in a valley is drawn and cannot be clicked, which reads as
+    // an unresponsive map rather than as a depth problem.
+    expect(collection.billboards[0].disableDepthTestDistance).toBe(Number.POSITIVE_INFINITY);
+    expect(collection.billboards[0].heightReference).toBe(engine.HeightReference.CLAMP_TO_GROUND);
+    session.release();
+  });
+
+  it('asks for a frame on every change, because nothing else will', async () => {
+    // This is the failure the whole arrangement exists to prevent: a batch added without a redraw
+    // request appears only when the camera happens to move, which looks exactly like data that
+    // never arrived.
+    const session = acquire();
+    const source = polylines(session);
+    const { scene } = engine.engineState.widgets[0];
+    const item = {
+      positions: [
+        { longitude: 25, latitude: 45, height: 0 },
+        { longitude: 25.1, latitude: 45, height: 0 },
+      ],
+      widthPixels: 2,
+      color: '#7a1f1f',
+      id: 'a',
+    };
+
+    for (const change of [
+      () => source.replace([item]),
+      () => source.clear(),
+      () => source.setVisible(false),
+      () => source.remove(),
+    ]) {
+      const before = scene.renderRequests;
+      change();
+      expect(scene.renderRequests).toBe(before + 1);
+    }
+    session.release();
+  });
+
+  it('replaces the whole batch rather than merging into it', async () => {
+    const session = acquire();
+    const source = polylines(session);
+    const { primitives } = engine.engineState.widgets[0].scene;
+    const line = (id: string) => ({
+      positions: [
+        { longitude: 25, latitude: 45, height: 0 },
+        { longitude: 25.1, latitude: 45, height: 0 },
+      ],
+      widthPixels: 2,
+      color: '#7a1f1f',
+      id,
+    });
+
+    source.replace([line('a'), line('b')]);
+    source.replace([line('c')]);
+
+    const collection = primitives.items[0] as InstanceType<typeof engine.PolylineCollection>;
+    expect(collection.polylines.map((p) => p.id)).toEqual(['c']);
+    session.release();
+  });
+
+  it('takes the batch out of the scene when it is removed, and ignores later use', async () => {
+    const session = acquire();
+    const source = polylines(session);
+    const { primitives } = engine.engineState.widgets[0].scene;
+
+    source.remove();
+
+    expect(primitives.items).toHaveLength(0);
+    // A handle that outlives its batch must go quiet rather than reach into a destroyed scene.
+    expect(() => source.replace([])).not.toThrow();
+    expect(() => source.remove()).not.toThrow();
+    session.release();
+  });
+
+  it('replaces a batch built twice under one id, so nothing is left drawing unowned', async () => {
+    const session = acquire();
+    const { primitives } = engine.engineState.widgets[0].scene;
+
+    polylines(session);
+    polylines(session);
+
+    expect(primitives.items).toHaveLength(1);
+    session.release();
+  });
+
+  it('goes quiet once the scene it belongs to is destroyed', async () => {
+    const session = acquire();
+    const source = polylines(session);
+
+    session.release();
+
+    expect(() => source.replace([])).not.toThrow();
+    expect(() => source.setVisible(true)).not.toThrow();
+  });
+});
+
+describe('picking', () => {
+  const clickAt = (x: number, y: number) => {
+    engine.engineState.eventHandlers[0].raise('leftClick', {
+      position: new engine.Cartesian2(x, y),
+    });
+  };
+
+  it('hands back the payload the caller attached, untouched and by reference', async () => {
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    const payload = { kind: 'centerline', caveId: 'cave-1', centerlineId: 'line-1' };
+    scene.pickResult = { id: payload };
+    const picks: unknown[] = [];
+
+    session.engine.onClick((pick) => picks.push(pick?.id));
+    clickAt(10, 20);
+
+    // Identity, not equality: the payload is the database key the caller is holding, and a copy
+    // would force a lookup table alongside the geometry to get back to it.
+    expect(picks[0]).toBe(payload);
+    session.release();
+  });
+
+  it('reaches further for a finger than for a cursor', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('coarse') }));
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    session.engine.onClick(() => {});
+
+    clickAt(10, 20);
+
+    // A finger lands nowhere near as precisely as a cursor, and a marker is a few pixels of ink.
+    expect(scene.pickCalls[0]).toEqual({ x: 10, y: 20, width: 12, height: 12 });
+    session.release();
+  });
+
+  it('uses the tighter cursor tolerance when the pointer is a mouse', async () => {
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    session.engine.onClick(() => {});
+
+    clickAt(10, 20);
+
+    expect(scene.pickCalls[0]).toEqual({ x: 10, y: 20, width: 6, height: 6 });
+    session.release();
+  });
+
+  it('reports where a click landed on the ground when it hit nothing drawn', async () => {
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    scene.pickResult = undefined;
+    scene.pickedPosition = { longitudeDegrees: 25, latitudeDegrees: 45, height: 900 };
+    const picks: unknown[] = [];
+
+    session.engine.onClick((pick) => picks.push(pick));
+    clickAt(10, 20);
+
+    // The hit test never reports the globe itself, so this is the only way to answer "did the
+    // viewer click the ground?".
+    expect(picks[0]).toEqual({
+      id: undefined,
+      position: { longitude: 25, latitude: 45, height: 900 },
+    });
+    session.release();
+  });
+
+  it('reports nothing at all for a click on the sky', async () => {
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    scene.pickResult = undefined;
+    scene.pickedPosition = undefined;
+    const picks: unknown[] = [];
+
+    session.engine.onClick((pick) => picks.push(pick));
+    clickAt(10, 20);
+
+    expect(picks).toEqual([null]);
+    session.release();
+  });
+
+  it('stops calling a listener that unsubscribed', async () => {
+    const session = acquire();
+    let seen = 0;
+
+    const unsubscribe = session.engine.onClick(() => {
+      seen += 1;
+    });
+    clickAt(10, 20);
+    unsubscribe();
+    clickAt(10, 20);
+
+    expect(seen).toBe(1);
+    session.release();
+  });
+
+  it('hit tests hover at most once per drawn frame, however fast the pointer moves', async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    const hovers: unknown[] = [];
+    session.engine.onHover((pick) => hovers.push(pick));
+
+    const handler = engine.engineState.eventHandlers[0];
+    for (let x = 0; x < 20; x += 1) {
+      handler.raise('mouseMove', { endPosition: new engine.Cartesian2(x, 5) });
+    }
+
+    // An unthrottled hit test on every pointer move costs more than a frame's whole budget.
+    expect(scene.pickCalls).toHaveLength(0);
+    expect(frames).toHaveLength(1);
+
+    frames[0](0);
+    expect(scene.pickCalls).toHaveLength(1);
+    // The newest position is the only one worth answering about.
+    expect(scene.pickCalls[0].x).toBe(19);
+    expect(hovers).toHaveLength(1);
+    session.release();
+  });
+
+  it('does not read the depth buffer on hover, which is the expensive half of a click', async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    scene.pickResult = { id: { kind: 'entrance' } };
+    scene.pickedPosition = { longitudeDegrees: 25, latitudeDegrees: 45, height: 900 };
+    const hovers: { position?: unknown }[] = [];
+    session.engine.onHover((pick) => hovers.push(pick!));
+
+    engine.engineState.eventHandlers[0].raise('mouseMove', {
+      endPosition: new engine.Cartesian2(3, 4),
+    });
+    frames[0](0);
+
+    expect(hovers[0].position).toBeUndefined();
+    session.release();
+  });
+
+  it('does not hit test hover on a touch device, where the answer cannot be shown', async () => {
+    // A finger rests on nothing, and the only thing hover produces is a cursor. The engine
+    // synthesises pointer moves from a one-finger drag, so without this guard every frame of every
+    // pan on a phone would buy a hit test — a whole render pass of its own — for an answer the
+    // device has no way to display.
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('coarse') }));
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    const hovers: unknown[] = [];
+    session.engine.onHover((pick) => hovers.push(pick));
+
+    const handler = engine.engineState.eventHandlers[0];
+    for (let x = 0; x < 20; x += 1) {
+      handler.raise('mouseMove', { endPosition: new engine.Cartesian2(x, 5) });
+    }
+
+    expect(frames).toHaveLength(0);
+    expect(scene.pickCalls).toHaveLength(0);
+    expect(hovers).toHaveLength(0);
+
+    // Clicking is untouched: a finger still selects what it lands on.
+    handler.raise('leftClick', { position: new engine.Cartesian2(10, 20) });
+    expect(scene.pickCalls).toHaveLength(1);
+    session.release();
+  });
+
+  it('does no hover work at all while nothing is listening for it', async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const session = acquire();
+    session.engine.onClick(() => {});
+
+    engine.engineState.eventHandlers[0].raise('mouseMove', {
+      endPosition: new engine.Cartesian2(3, 4),
+    });
+
+    expect(frames).toHaveLength(0);
+    session.release();
+  });
+
+  it('lets go of the pointer handler when the scene is destroyed', async () => {
+    const session = acquire();
+    session.engine.onClick(() => {});
+    const handler = engine.engineState.eventHandlers[0];
+
+    session.release();
+
+    expect(handler.destroyed).toBe(true);
+  });
+});
