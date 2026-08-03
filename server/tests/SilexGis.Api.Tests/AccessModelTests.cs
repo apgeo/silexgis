@@ -138,14 +138,19 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable
             .ToListAsync();
         starter.ShouldAllBe(e => e.Effect == AccessEffect.Allow
             && e.ScopeKind == AccessScopeKind.CavingGroup && e.ScopeId == groupId
-            && e.Actions == (AccessAction.Read | AccessAction.Write | AccessAction.Create
-                | AccessAction.ViewExactLocation));
+            && (e.Actions & (AccessAction.Read | AccessAction.Write | AccessAction.Create))
+                == (AccessAction.Read | AccessAction.Write | AccessAction.Create));
         starter.Select(e => e.Domain).ShouldBe(
             [
                 AccessDomain.Features, AccessDomain.TripLogs, AccessDomain.Geofiles,
-                AccessDomain.GeoreferencedMaps, AccessDomain.MapViews,
+                AccessDomain.GeoreferencedMaps, AccessDomain.MapViews, AccessDomain.Documents,
             ],
             ignoreOrder: true);
+
+        // Every domain that can carry a position carries the exact-view bit; documents carry
+        // none, so granting it there would be a line nobody editing this ruleset could act on.
+        starter.ShouldAllBe(e => ((e.Actions & AccessAction.ViewExactLocation) != 0)
+            == (e.Domain != AccessDomain.Documents));
 
         // "«name» — managers": the creator manages the group record and can enroll
         // people from day one.

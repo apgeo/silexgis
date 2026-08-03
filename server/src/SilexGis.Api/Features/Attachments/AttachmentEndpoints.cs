@@ -138,8 +138,10 @@ public static class AttachmentEndpoints
         // everything attached here would hand out exactly what such a deny was written to
         // stop. Answered without a further query — reach is not in doubt for these rows,
         // because the target they name is the one this caller was just authorised for.
+        var cabinetReach = await DocumentAccessRules.CabinetReachAsync(
+            db, ctx, AccessAction.Read, [.. rows.Select(x => x.Document.Id)], ct);
         rows = [.. rows.Where(x =>
-            DocumentAccessRules.AllowedByOwnRulesOrAttachment(ctx, x.Document, AccessAction.Read))];
+            DocumentAccessRules.AllowedByOwnRulesOrAttachment(ctx, x.Document, AccessAction.Read, cabinetReach))];
 
         // The documents themselves are none of this rule's business — what a caller may read is
         // decided by the rules written about each one. Withheld here is only the pairing: a

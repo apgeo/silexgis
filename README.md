@@ -22,6 +22,11 @@ Previous versions:
   kind (survey report, permit, trip report, …) and each kind decides which details its
   documents are asked for, so an archive can be organized the way its club actually files
   things. Uploads are accepted up to 512 MB by default, and the limit is a setting.
+- **Cabinets** — a filing tree documents live in ("Club archive / Bulletins / 1987"), and the
+  unit permissions are granted on: one rule can hand a committee the whole archive instead of
+  one rule per document. A document can sit on several shelves at once, so there is no
+  move-versus-copy question and nothing is orphaned by belonging in two places. Filing a
+  document moves who can read it, and the app says so where the control is.
 - **One model for everything on the map** — caves, entrances, centerlines and surface
   features share a single feature model, so any of them can contain another (a karst area
   holding caves, a cave holding its entrances) and be linked to another by a named
@@ -36,7 +41,8 @@ Previous versions:
   finger, and the app installs to a home screen.
 - **Accounts & permissions** — editable permission groups instead of fixed roles: named
   rulesets of allow/deny rules per resource and scope (everything, own content, a caving
-  group's content, a feature subtree, a named feature set, one object), per-object grants
+  group's content, a feature subtree, a named feature set, a cabinet and everything filed
+  below it, one object), per-object grants
   with the same reach, and an explainer that answers "why can this person see that?".
   Two-factor sign-in (authenticator app, emailed code or texted code), optional external
   login (Google/GitHub/OIDC), and location protection for sensitive caves — which keeps a

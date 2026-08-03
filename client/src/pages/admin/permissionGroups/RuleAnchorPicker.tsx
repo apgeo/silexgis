@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Input, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
+  useCabinets,
   useCavingGroups,
   useFeatures,
   usePermissionGroups,
@@ -44,6 +45,7 @@ export default function RuleAnchorPicker({
   const { data: permissionGroups } = usePermissionGroups(
     scopeKind === 'object' && domain === 'permissionGroups',
   );
+  const { data: cabinets } = useCabinets(scopeKind === 'cabinet');
 
   if (scopeKind === 'cavingGroup') {
     return (
@@ -71,6 +73,30 @@ export default function RuleAnchorPicker({
         value={value ?? undefined}
         onChange={(id) => onChange(id, catalog.featureSets.find((s) => s.id === id)?.name ?? null)}
         options={catalog.featureSets.map((set) => ({ value: set.id, label: set.name }))}
+      />
+    );
+  }
+
+  if (scopeKind === 'cabinet') {
+    // Shown with its ancestry, because two shelves in different archives may share a
+    // name and a rule that names the wrong one is not visibly wrong afterwards.
+    const path = (cabinet: { id: string; name: string; ancestorIds: string[] }) =>
+      cabinet.ancestorIds
+        .map((id) => cabinets?.find((c) => c.id === id)?.name ?? cabinet.name)
+        .join(' / ');
+    return (
+      <Select
+        size="small"
+        style={{ minWidth: 220 }}
+        showSearch
+        optionFilterProp="label"
+        placeholder={t('permissionGroups.pickCabinetAnchor')}
+        value={value ?? undefined}
+        onChange={(id) => {
+          const picked = cabinets?.find((c) => c.id === id);
+          onChange(id, picked ? path(picked) : null);
+        }}
+        options={(cabinets ?? []).map((cabinet) => ({ value: cabinet.id, label: path(cabinet) }))}
       />
     );
   }

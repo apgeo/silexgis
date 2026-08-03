@@ -29,6 +29,10 @@ public enum AccessScopeKind : short
     /// <summary>Exactly one object: scope_feature_id in the feature domain, scope_id
     /// elsewhere.</summary>
     Object = 5,
+
+    /// <summary>A cabinet (scope_id) plus every cabinet filed below it — matched flat via
+    /// the reaching-cabinet ids of the evaluated row. Document domain only.</summary>
+    Cabinet = 6,
 }
 
 /// <summary>Effect of an access entry. Stored as smallint — do not renumber.</summary>

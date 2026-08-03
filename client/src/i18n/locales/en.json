@@ -8,6 +8,7 @@
     "caves": "Caves",
     "features": "Features",
     "geodata": "Geodata",
+    "cabinets": "Cabinets",
     "trips": "Trip logs",
     "audit": "Audit",
     "cavingGroups": "Caving groups",
@@ -328,6 +329,7 @@
     "inaccessible": "Not accessible"
   },
   "attachments": {
+    "originalWithheld": "You may not download the original of this photo: it records where it was taken, and you do not have the right to place what it shows.",
     "title": "Photos & documents",
     "photos": "Photos",
     "documents": "Documents",
@@ -363,7 +365,41 @@
     "title": "Title",
     "type": "Document kind",
     "noType": "No kind chosen",
-    "metadataInvalid": "The details do not match what this document kind allows."
+    "visibility": "Who may read it",
+    "cavingGroup": "Caving group",
+    "pickCavingGroup": "Choose a caving group",
+    "bindingForbidden": "You cannot bind a document to a caving group you do not belong to.",
+    "metadataInvalid": "The details do not match what this document kind allows.",
+    "cabinets": "Filed in",
+    "pickCabinets": "Not filed anywhere",
+    "filingMovesAccess": "A document can sit in several cabinets; each one an access rule names reaches it."
+  },
+  "cabinets": {
+    "title": "Cabinets",
+    "empty": "No cabinets yet.",
+    "pickOne": "Choose a cabinet to see what is filed in it.",
+    "new": "New",
+    "edit": "Edit cabinet",
+    "name": "Name",
+    "description": "Description",
+    "parent": "Sits inside",
+    "noParent": "At the top level",
+    "size": "Size",
+    "includeSubtree": "Include cabinets inside",
+    "includeSubtreeHint": "List documents filed anywhere below this cabinet, not only directly in it.",
+    "filingMovesAccess": "Access rules can be scoped to a cabinet, so filing a document here — or taking it out — changes who can read it.",
+    "noDocuments": "Nothing filed here that you may read.",
+    "fileElsewhere": "File elsewhere",
+    "fileElsewhereHint": "A document can sit in several cabinets at once; each one a rule names reaches it.",
+    "pickCabinet": "Choose a cabinet",
+    "unfileConfirm": "Take this document out of this cabinet?",
+    "deleteConfirm": "Delete this cabinet?",
+    "inUse": "Rules still point at this cabinet; remove them first.",
+    "notEmpty": "The cabinet still holds cabinets or documents.",
+    "nameTaken": "A cabinet with this name already sits here.",
+    "cycle": "A cabinet cannot be moved inside itself.",
+    "tooDeep": "The filing tree cannot go this deep.",
+    "filingForbidden": "You cannot file this document here."
   },
   "geodata": {
     "title": "Geodata",
@@ -604,6 +640,7 @@
       "cavingGroup": "A caving group's content",
       "subtree": "A feature and everything inside",
       "featureSet": "A feature set",
+      "cabinet": "A cabinet and everything filed below it",
       "object": "One object"
     },
     "levels": {
@@ -686,6 +723,7 @@
     "narrowType": "Narrow to type…",
     "pickCavingGroupAnchor": "Pick a caving group…",
     "pickFeatureSetAnchor": "Pick a feature set…",
+    "pickCabinetAnchor": "Pick a cabinet…",
     "pickFeatureAnchor": "Search features…",
     "pickPermissionGroupAnchor": "Pick a permission group…",
     "anchorIdPlaceholder": "Object id (paste it from the object's page)"

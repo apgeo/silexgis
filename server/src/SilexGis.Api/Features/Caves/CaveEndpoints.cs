@@ -180,8 +180,11 @@ public static class CaveEndpoints
 
         // Every row here names this cave, which the caller was authorised for a few lines
         // above — so reach through the attachment is established and the walk needs no query.
+        var cabinetReach = await DocumentAccessRules.CabinetReachAsync(
+            db, ctx!, AccessAction.Read, [.. attachmentRows.Select(r => r.Document.Id)], ct);
         var readableRows = attachmentRows
-            .Where(r => DocumentAccessRules.AllowedByOwnRulesOrAttachment(ctx!, r.Document, AccessAction.Read))
+            .Where(r => DocumentAccessRules.AllowedByOwnRulesOrAttachment(
+                ctx!, r.Document, AccessAction.Read, cabinetReach))
             .ToList();
         var withheldAttachments = await associations.WithheldIdsAsync(
             ctx,

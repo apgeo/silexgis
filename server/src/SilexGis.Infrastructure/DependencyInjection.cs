@@ -55,6 +55,7 @@ public static class DependencyInjection
         services.AddScoped<Features.FeatureIntegrityVerifier>();
         services.AddScoped<Documents.DocumentWriteService>();
         services.AddScoped<Documents.DocumentTypeWriteService>();
+        services.AddScoped<Documents.CabinetWriteService>();
 
         services.AddScoped<Domain.Access.IAccessService, Permissions.AccessService>();
         services.AddScoped<Permissions.FeatureProtection>();

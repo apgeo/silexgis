@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import type { AccessDomainName } from '../api/hooks.ts';
+import type { AccessDomainName, AccessScopeKind } from '../api/hooks.ts';
 import en from './locales/en.json';
 import ro from './locales/ro.json';
 
@@ -42,6 +42,22 @@ const accessDomains: Record<AccessDomainName, true> = {
   jobs: true,
 };
 
+/**
+ * The same exhaustiveness, for what a rule can be scoped to. The rules editor builds its
+ * scope list from the server's catalogue and labels each option by looking the scope kind
+ * up here, so a scope added on the server ships as a raw lookup key until it is named —
+ * silently, because nothing else in the client mentions the vocabulary.
+ */
+const accessScopeKinds: Record<AccessScopeKind, true> = {
+  all: true,
+  own: true,
+  cavingGroup: true,
+  subtree: true,
+  featureSet: true,
+  cabinet: true,
+  object: true,
+};
+
 // EN and RO must be maintained together.
 describe('i18n locales', () => {
   it('en and ro define exactly the same keys', () => {
@@ -66,5 +82,14 @@ describe('i18n locales', () => {
     // The reverse direction too: a leftover label for a domain the server dropped would
     // sit unnoticed in both files forever.
     expect(Object.keys(enDomains).sort()).toEqual(names.sort());
+  });
+
+  it('every access scope kind the server publishes is named in both locales', () => {
+    const kinds = Object.keys(accessScopeKinds);
+    const enScopes: Record<string, string> = en.access.scopes;
+    const roScopes: Record<string, string> = ro.access.scopes;
+    expect(kinds.filter((kind) => !enScopes[kind])).toEqual([]);
+    expect(kinds.filter((kind) => !roScopes[kind])).toEqual([]);
+    expect(Object.keys(enScopes).sort()).toEqual(kinds.sort());
   });
 });

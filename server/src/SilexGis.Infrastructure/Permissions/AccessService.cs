@@ -61,6 +61,22 @@ public sealed class AccessService(SilexGisDbContext db) : IAccessService
 
     public async Task<AccessTargetFacts> FactsOfAsync(IProtectedEntity entity, CancellationToken ct = default)
     {
+        if (entity is Document document)
+        {
+            // Filing lives in a join table, so the reach a cabinet entry matches on has to
+            // be read: every cabinet the document sits in, plus their ancestors, because a
+            // cabinet entry covers everything below it.
+            var cabinetIds = await db.CabinetDocuments.AsNoTracking()
+                .Where(m => m.DocumentId == document.Id)
+                .Join(db.Cabinets.AsNoTracking(), m => m.CabinetId, c => c.Id, (_, c) => c.AncestorIds)
+                .ToListAsync(ct);
+
+            return AccessTargetFacts.Of(entity) with
+            {
+                CabinetIds = [.. cabinetIds.SelectMany(ids => ids).Distinct()],
+            };
+        }
+
         if (entity is not Feature feature)
         {
             return AccessTargetFacts.Of(entity);

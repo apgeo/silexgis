@@ -107,6 +107,8 @@ public static class AccessSql
     /// Read-visibility fragment for NON-feature protected tables (trips, geofiles,
     /// rasters, views, documents): the walk without the arms that only exist in the
     /// feature world (subtree, set, kind/type), visibility consulting the row alone.
+    /// The one collection band that does apply is the cabinet a document is filed in — an
+    /// entry band inside the CASE, so a cabinet deny stops a domain-wide allow.
     /// The aliased table must expose <c>id</c>, <c>owner_user_id</c>,
     /// <c>caving_group_id</c> and <c>visibility</c>; no soft-delete arm is emitted, so a
     /// table that soft-deletes must add its own guard the way the feature callers do.
@@ -153,12 +155,33 @@ public static class AccessSql
         parameters.Add($"{prefix}_allow_own", set.AllowOwn);
         parameters.Add($"{prefix}_deny_cg_ids", UuidArray(set.DenyCavingGroupIds));
         parameters.Add($"{prefix}_allow_cg_ids", UuidArray(set.AllowCavingGroupIds));
+        parameters.Add($"{prefix}_deny_cabinet_ids", UuidArray(set.DenyCabinetIds));
+        parameters.Add($"{prefix}_allow_cabinet_ids", UuidArray(set.AllowCabinetIds));
+
+        // Level 2 for documents: a cabinet entry covers the cabinet and everything filed
+        // below it, matched by overlapping the filed cabinet's ancestor array — flat, one
+        // EXISTS, no recursion. Emitted only when such an entry reaches the caller, so
+        // every other domain's plan is untouched; the arrays can only be non-empty in the
+        // document domain, which is the only one where a cabinet scope is a valid entry.
+        var cabinetBand = set.DenyCabinetIds.Length == 0 && set.AllowCabinetIds.Length == 0
+            ? string.Empty
+            : $"""
+
+               WHEN EXISTS (SELECT 1 FROM cabinet_documents cd
+                            JOIN cabinets cab ON cab.id = cd.cabinet_id
+                            WHERE cd.document_id = {alias}.id
+                              AND cab.ancestor_ids && @{prefix}_deny_cabinet_ids) THEN false
+               WHEN EXISTS (SELECT 1 FROM cabinet_documents cd
+                            JOIN cabinets cab ON cab.id = cd.cabinet_id
+                            WHERE cd.document_id = {alias}.id
+                              AND cab.ancestor_ids && @{prefix}_allow_cabinet_ids) THEN true
+              """;
 
         var sql = $"""
             (@{IsFullAdminParam} OR
              CASE
                WHEN {alias}.id = ANY(@{prefix}_deny_obj)  THEN false
-               WHEN {alias}.id = ANY(@{prefix}_allow_obj) THEN true
+               WHEN {alias}.id = ANY(@{prefix}_allow_obj) THEN true{cabinetBand}
                WHEN @{prefix}_deny_all
                     OR (@{prefix}_deny_own AND {alias}.owner_user_id = @{UserIdParam})
                     OR ({alias}.caving_group_id IS NOT NULL

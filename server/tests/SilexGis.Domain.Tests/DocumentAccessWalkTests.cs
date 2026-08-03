@@ -8,13 +8,15 @@ namespace SilexGis.Domain.Tests;
 
 /// <summary>
 /// The access rule over documents, in its authoritative pure form. A document carries the
-/// owner/caving-group/visibility trio and contains nothing, so it expresses exactly four
-/// scopes — domain-wide, own, caving-group and one object — across two precedence levels:
-/// the object level, and the global level everything else lands at. Each of those bands
-/// has a faithful flat form in the EF filter and in the SQL fragment; the collection
-/// bands (subtree, feature set) have none here, which is why the domain refuses them
-/// rather than answering them in one form only. The database-backed parity suite pins all
-/// three forms against each other; these tests pin the form the other two are copies of.
+/// owner/caving-group/visibility trio and can be filed in cabinets, so it expresses five
+/// scopes — domain-wide, own, caving-group, one cabinet subtree and one object — across
+/// all three precedence levels: the object level, the collection level a cabinet rule
+/// decides at, and the global level the rest land at. Each of those bands has a faithful
+/// flat form in the EF filter and in the SQL fragment; the collection bands that belong to
+/// the feature world (containment subtree, feature set) have none here, which is why the
+/// domain still refuses them rather than answering them in one form only. The
+/// database-backed parity suite pins all three forms against each other; these tests pin
+/// the form the other two are copies of.
 /// </summary>
 public class DocumentAccessWalkTests
 {
@@ -22,6 +24,9 @@ public class DocumentAccessWalkTests
     private static readonly Guid OtherId = Guid.CreateVersion7();
     private static readonly Guid GroupId = Guid.CreateVersion7();
     private static readonly Guid OtherGroupId = Guid.CreateVersion7();
+    private static readonly Guid CabinetId = Guid.CreateVersion7();
+    private static readonly Guid SubCabinetId = Guid.CreateVersion7();
+    private static readonly Guid OtherCabinetId = Guid.CreateVersion7();
 
     private static long nextEntryId = 1;
 
@@ -43,14 +48,20 @@ public class DocumentAccessWalkTests
         Guid? owner = null,
         Visibility visibility = Visibility.Private,
         Guid? cavingGroupId = null,
-        Guid? id = null) => AccessTargetFacts.Of(new Document
+        Guid? id = null,
+        Guid[]? cabinetIds = null) => AccessTargetFacts.Of(new Document
         {
             Id = id ?? Guid.CreateVersion7(),
             Title = "Survey report",
             OwnerUserId = owner ?? OtherId,
             Visibility = visibility,
             CavingGroupId = cavingGroupId,
-        });
+        }) with
+        {
+            // What the access service resolves for a filed document: every cabinet it sits
+            // in, plus their ancestors, so a rule on an archive reaches its shelves.
+            CabinetIds = cabinetIds ?? [],
+        };
 
     private static bool Allowed(
         AccessContext ctx, AccessTargetFacts facts, AccessAction action = AccessAction.Read) =>
@@ -220,6 +231,86 @@ public class DocumentAccessWalkTests
     }
 
     [Fact]
+    public void Filing_a_document_in_a_cabinet_grants_nothing_by_itself()
+    {
+        // A caller with no rule at all over documents, and a document filed deep in a
+        // cabinet tree: filing is bookkeeping, not a grant.
+        var filed = Document(cabinetIds: [CabinetId, SubCabinetId]);
+        var noRules = Context();
+        Allowed(noRules, filed).ShouldBeFalse();
+
+        // The same caller, the same document, once someone grants on the cabinet it sits
+        // in — proving the refusal above was the absence of a rule and not an inert fact.
+        var granted = Context(
+            Entry(AccessEffect.Allow, AccessAction.Read, AccessScopeKind.Cabinet, scopeId: CabinetId));
+        Allowed(granted, filed).ShouldBeTrue();
+
+        // And a rule on some other cabinet reaches nothing here.
+        var elsewhere = Context(
+            Entry(AccessEffect.Allow, AccessAction.Read, AccessScopeKind.Cabinet, scopeId: OtherCabinetId));
+        Allowed(elsewhere, filed).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_cabinet_rule_covers_the_shelves_below_it_and_a_deny_there_wins_the_level()
+    {
+        // The archive is allowed; the shelf inside it is denied. Both are collection-level
+        // rules, and a deny anywhere in a level takes that level — so the document on the
+        // denied shelf is refused while its neighbour one shelf over is not.
+        var ctx = Context(
+            Entry(AccessEffect.Allow, AccessAction.Read, AccessScopeKind.Cabinet, scopeId: CabinetId),
+            Entry(AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Cabinet, scopeId: SubCabinetId));
+
+        Allowed(ctx, Document(cabinetIds: [CabinetId])).ShouldBeTrue();
+        Allowed(ctx, Document(cabinetIds: [CabinetId, SubCabinetId])).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_cabinet_rule_outranks_a_domain_wide_one_and_yields_to_a_rule_on_the_document()
+    {
+        var target = Document(visibility: Visibility.Public, cabinetIds: [CabinetId]);
+        var objectId = target.ObjectId!.Value;
+
+        // Level 2 deny over a level 3 allow: the whole domain is readable except what is
+        // filed in this cabinet. The visibility built-in cannot rescue it either — an
+        // entry decided, so the built-ins are never consulted.
+        var carved = Context(
+            Entry(AccessEffect.Allow, AccessAction.Read, AccessScopeKind.All),
+            Entry(AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Cabinet, scopeId: CabinetId));
+        Allowed(carved, target).ShouldBeFalse();
+        Allowed(carved, Document(visibility: Visibility.Public)).ShouldBeTrue();
+
+        // Level 1 beats level 2 in both directions: one document is let back out of a
+        // denied cabinet, and one is taken out of an allowed one.
+        var reopened = Context(
+            Entry(AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Cabinet, scopeId: CabinetId),
+            Entry(AccessEffect.Allow, AccessAction.Read, AccessScopeKind.Object, scopeId: objectId));
+        Allowed(reopened, target).ShouldBeTrue();
+        Allowed(reopened, Document(cabinetIds: [CabinetId])).ShouldBeFalse();
+
+        var withdrawn = Context(
+            Entry(AccessEffect.Allow, AccessAction.Read, AccessScopeKind.Cabinet, scopeId: CabinetId),
+            Entry(AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Object, scopeId: objectId));
+        Allowed(withdrawn, target).ShouldBeFalse();
+        Allowed(withdrawn, Document(cabinetIds: [CabinetId])).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void A_cabinet_rule_decides_before_the_attachment_built_in_can_widen_anything()
+    {
+        // Reach through an attachment only ever admits, and only where no entry spoke.
+        // A cabinet deny is an entry, so it stops the reach; the same facts without the
+        // deny show the reach working.
+        var reached = Document(cabinetIds: [CabinetId]) with { ReachedByAttachment = true };
+
+        var denied = Context(
+            Entry(AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Cabinet, scopeId: CabinetId));
+        Allowed(denied, reached).ShouldBeFalse();
+
+        Allowed(Context(), reached).ShouldBeTrue();
+    }
+
+    [Fact]
     public void Every_scope_the_domain_offers_flattens_into_the_arrays_both_filter_twins_read()
     {
         var objectId = Guid.CreateVersion7();
@@ -229,6 +320,8 @@ public class DocumentAccessWalkTests
             Entry(AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Own),
             Entry(AccessEffect.Allow, AccessAction.Read, AccessScopeKind.CavingGroup, scopeId: GroupId),
             Entry(AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Object, scopeId: objectId),
+            Entry(AccessEffect.Allow, AccessAction.Read, AccessScopeKind.Cabinet, scopeId: CabinetId),
+            Entry(AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Cabinet, scopeId: SubCabinetId),
             // Another domain's rules never bleed into this slice.
             Entry(AccessEffect.Allow, AccessAction.Read, AccessScopeKind.All, domain: AccessDomain.TripLogs),
         ];
@@ -239,6 +332,8 @@ public class DocumentAccessWalkTests
         set.DenyOwn.ShouldBeTrue();
         set.AllowCavingGroupIds.ShouldBe([GroupId]);
         set.DenyObjectIds.ShouldBe([objectId]);
+        set.AllowCabinetIds.ShouldBe([CabinetId]);
+        set.DenyCabinetIds.ShouldBe([SubCabinetId]);
 
         // The bands with no honest answer for a document must stay empty: an array only
         // the pure walk could fill would be a shape the two query forms cannot express.

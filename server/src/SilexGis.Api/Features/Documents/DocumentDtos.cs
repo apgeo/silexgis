@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.Json;
+using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 
 namespace SilexGis.Api.Features.Documents;
@@ -22,6 +23,17 @@ public sealed record DocumentDto(
     string? DocumentTypeCode,
     JsonElement Metadata,
     int? MetadataSchemaVersion,
+    Visibility Visibility,
+    Guid? CavingGroupId,
+
+    /// <summary>
+    /// The cabinets this document is filed in — where it lives, and therefore which
+    /// cabinet-scoped rules reach it. Served because filing is edited from the document
+    /// side as well as from the tree, and a control that could file but not show what is
+    /// already filed would be a one-way door. No disclosure of its own: the filing tree is
+    /// readable by anyone signed in, and this document has already been read-gated.
+    /// </summary>
+    IReadOnlyList<Guid> CabinetIds,
     Guid CurrentFileId,
     int CurrentVersionNumber,
     string MimeType,
@@ -43,5 +55,17 @@ public sealed record DocumentDto(
 /// corrected on a document whose kind has tightened its schema since the document was
 /// written. Sending a metadata object always re-validates it against the kind's current
 /// schema.
+/// <para>
+/// <see cref="Visibility"/> and <see cref="CavingGroupId"/> are the document's read
+/// audience and its club binding — the facts the access rule falls back on when no rule
+/// names the document. They are ordinary fields of this request, so changing them is a
+/// write on the document like any other; binding to a club additionally requires belonging
+/// to it or holding a rule that names its content.
+/// </para>
 /// </summary>
-public sealed record DocumentUpdateRequest(string Title, long? DocumentTypeId, JsonElement? Metadata);
+public sealed record DocumentUpdateRequest(
+    string Title,
+    long? DocumentTypeId,
+    JsonElement? Metadata,
+    Visibility Visibility,
+    Guid? CavingGroupId);

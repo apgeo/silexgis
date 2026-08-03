@@ -113,6 +113,15 @@ public static class AccessEntryRules
                     ? ScopeInvalidCode
                     : null,
 
+            // A cabinet is a filing place for documents that already exist, and filing is
+            // a write on the document rather than a creation into the cabinet — so Create
+            // is rejected here for the same reason it is rejected on a feature set.
+            AccessScopeKind.Cabinet =>
+                entry.Domain != AccessDomain.Documents
+                || entry.ScopeId is null || entry.ScopeFeatureId is not null || hasCreate
+                    ? ScopeInvalidCode
+                    : null,
+
             AccessScopeKind.Object =>
                 !AllowsObjectScope(entry.Domain) || hasCreate
                 || (entry.Domain == AccessDomain.Features

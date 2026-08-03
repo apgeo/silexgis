@@ -7,6 +7,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -16,10 +17,10 @@ namespace SilexGis.Api.Tests;
 /// Parity of the THREE synchronized forms of the access rule over documents: the pure
 /// evaluator (<c>AccessEvaluator.Decide</c>), the EF filter (<c>Documents.VisibleTo</c>)
 /// and the Dapper fragment (<c>AccessSql.VisibleToFragment</c>). A document carries the
-/// owner/caving-group/visibility trio and contains nothing, so it expresses four scopes —
-/// domain-wide, own, caving-group, one object — over two precedence levels, and this
-/// suite drives every one of them in both effects, for thirteen caller archetypes, over
-/// one seeded matrix. Each caller's set is asserted to be the same set in all three forms
+/// owner/caving-group/visibility trio and can be filed in cabinets, so it expresses five
+/// scopes — domain-wide, own, caving-group, one cabinet subtree, one object — over all
+/// three precedence levels, and this suite drives every one of them in both effects, for
+/// eighteen caller archetypes, over one seeded matrix. Each caller's set is asserted to be the same set in all three forms
 /// AND to be the right set: three forms agreeing on nonsense would still be parity.
 /// A mismatch here is a disclosure, not a flake. The first two tests run with no
 /// attachment reach at all, which is also what pins that the built-in changes nothing for
@@ -48,8 +49,16 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
     private Guid allAllowedId;     // domain-wide allow
     private Guid allDeniedId;      // domain-wide deny
     private Guid administratorId;  // Full Administrators
+    private Guid cabinetAllowedId; // allow scoped to the archive cabinet
+    private Guid cabinetDeniedId;  // domain-wide allow, deny scoped to the shelf inside it
+    private Guid cabinetOverAllId; // domain-wide deny, allow scoped to the archive
+    private Guid shelfDeniedId;    // allow on the archive, deny on one shelf inside it
+    private Guid shelfFreedId;     // deny on the archive, object allow on one document in it
 
     private Guid cavingGroupId;
+    private Guid archiveCabinetId;  // root cabinet
+    private Guid shelfCabinetId;    // filed inside the archive
+    private Guid otherCabinetId;    // an unrelated root cabinet
     private Guid docPrivate;        // owner, private, unbound — nothing admits it
     private Guid docAuthenticated;  // owner, authenticated — the read audience built-in
     private Guid docPublic;         // owner, public
@@ -59,7 +68,10 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
     private Guid docGroupBound;     // owner, private, bound to the club
     private Guid docOwnAllowed;     // owned by ownAllowed, private
     private Guid docOwnDenied;      // owned by ownDenied, authenticated
-    private Guid docAttached;       // owner, private, unbound — reached only by attachment
+    private Guid docInArchive;      // owner, private — filed in the archive itself
+    private Guid docOnShelf;        // owner, private — filed on the shelf inside the archive
+    private Guid docInOther;        // owner, private — filed in the unrelated cabinet
+    private Guid docAttached;       // owner, private — on the shelf AND reached by attachment
     private Guid[] candidateIds = [];
     private Guid[] reachCandidateIds = [];
 
@@ -85,6 +97,11 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
         ownDeniedId = await ViewerAsync("ownd");
         allAllowedId = await ViewerAsync("alla");
         allDeniedId = await ViewerAsync("alld");
+        cabinetAllowedId = await ViewerAsync("caba");
+        cabinetDeniedId = await ViewerAsync("cabd");
+        cabinetOverAllId = await ViewerAsync("cabo");
+        shelfDeniedId = await ViewerAsync("shed");
+        shelfFreedId = await ViewerAsync("shef");
         administratorId = await AuthHelper.CreateUserAsync(
             factory, GlobalRoles.Admin, $"docpar-adm-{suffix}@t.local");
 
@@ -109,7 +126,27 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
         docGroupBound = Seed(db, "Club bound", ownerId, Visibility.Private, cavingGroupId);
         docOwnAllowed = Seed(db, "Own allowed", ownAllowedId, Visibility.Private);
         docOwnDenied = Seed(db, "Own denied", ownDeniedId, Visibility.Authenticated);
+        docInArchive = Seed(db, "In the archive", ownerId, Visibility.Private);
+        docOnShelf = Seed(db, "On the shelf", ownerId, Visibility.Private);
+        docInOther = Seed(db, "In another archive", ownerId, Visibility.Private);
         docAttached = Seed(db, "Attached only", ownerId, Visibility.Private);
+
+        // The filing tree, built through its own write service so the paths and the
+        // ancestor arrays the filters match on are stamped the way a request stamps them.
+        var cabinets = scope.ServiceProvider.GetRequiredService<CabinetWriteService>();
+        var archive = await cabinets.CreateAsync($"Archive {suffix}", null, null);
+        await db.SaveChangesAsync();
+        var shelf = await cabinets.CreateAsync("Bulletins", null, archive.Id);
+        var other = await cabinets.CreateAsync($"Other archive {suffix}", null, null);
+        archiveCabinetId = archive.Id;
+        shelfCabinetId = shelf.Id;
+        otherCabinetId = other.Id;
+        await db.SaveChangesAsync();
+
+        File(db, archiveCabinetId, docInArchive);
+        File(db, shelfCabinetId, docOnShelf);
+        File(db, shelfCabinetId, docAttached);
+        File(db, otherCabinetId, docInOther);
 
         // Every rule is seeded straight into storage: this suite is about the three forms
         // of the evaluation, not about the surface that authors the rules.
@@ -130,7 +167,21 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
             Direct(ownAllowedId, AccessEffect.Allow, AccessScopeKind.Own),
             Direct(ownDeniedId, AccessEffect.Deny, AccessScopeKind.Own),
             Direct(allAllowedId, AccessEffect.Allow, AccessScopeKind.All),
-            Direct(allDeniedId, AccessEffect.Deny, AccessScopeKind.All));
+            Direct(allDeniedId, AccessEffect.Deny, AccessScopeKind.All),
+
+            Direct(cabinetAllowedId, AccessEffect.Allow, AccessScopeKind.Cabinet, archiveCabinetId),
+
+            Direct(cabinetDeniedId, AccessEffect.Allow, AccessScopeKind.All),
+            Direct(cabinetDeniedId, AccessEffect.Deny, AccessScopeKind.Cabinet, shelfCabinetId),
+
+            Direct(cabinetOverAllId, AccessEffect.Deny, AccessScopeKind.All),
+            Direct(cabinetOverAllId, AccessEffect.Allow, AccessScopeKind.Cabinet, archiveCabinetId),
+
+            Direct(shelfDeniedId, AccessEffect.Allow, AccessScopeKind.Cabinet, archiveCabinetId),
+            Direct(shelfDeniedId, AccessEffect.Deny, AccessScopeKind.Cabinet, shelfCabinetId),
+
+            Direct(shelfFreedId, AccessEffect.Deny, AccessScopeKind.Cabinet, archiveCabinetId),
+            Direct(shelfFreedId, AccessEffect.Allow, AccessScopeKind.Object, docOnShelf));
 
         await db.SaveChangesAsync();
 
@@ -138,6 +189,7 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
         [
             docPrivate, docAuthenticated, docPublic, docGroupVisible, docObjectGranted,
             docObjectDenied, docGroupBound, docOwnAllowed, docOwnDenied,
+            docInArchive, docOnShelf, docInOther,
         ];
         reachCandidateIds = [.. candidateIds, docAttached];
     }
@@ -147,13 +199,14 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var access = scope.ServiceProvider.GetRequiredService<IAccessService>();
         var connection = db.Database.GetDbConnection();
-        var facts = await FactsForAsync(db, candidateIds);
+        var facts = await FactsForAsync(db, access, candidateIds);
         var visible = new Dictionary<string, List<Guid>>();
 
         foreach (var (name, ctx) in await CallersAsync(db))
         {
-            var efIds = await db.Documents.AsNoTracking().VisibleTo(ctx, AccessDomain.Documents)
+            var efIds = await db.Documents.AsNoTracking().VisibleTo(ctx, AccessDomain.Documents, null, (db.CabinetDocuments, db.Cabinets))
                 .Where(d => candidateIds.Contains(d.Id))
                 .Select(d => d.Id).OrderBy(id => id).ToListAsync();
 
@@ -245,6 +298,37 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
         visible["all-allowed"].ShouldBe(everything);
         visible["all-denied"].ShouldBeEmpty();
 
+        // A cabinet rule reaches everything filed at or below it, and stops there: the
+        // shelf inside the archive is covered, the unrelated archive is not, and neither
+        // is a private document filed nowhere. Filing is not itself a grant — the same
+        // documents are shut for every caller above who holds no cabinet rule.
+        visible["cabinet-allowed"].ShouldContain(docInArchive);
+        visible["cabinet-allowed"].ShouldContain(docOnShelf);
+        visible["cabinet-allowed"].ShouldContain(docPublic);
+        visible["cabinet-allowed"].ShouldNotContain(docInOther);
+        visible["cabinet-allowed"].ShouldNotContain(docPrivate);
+        visible["stranger"].ShouldNotContain(docInArchive);
+        visible["stranger"].ShouldNotContain(docOnShelf);
+
+        // Level 2 deny over a level 3 allow: the shelf is carved out of a domain-wide
+        // allow and everything else, the archive around it included, stays.
+        visible["cabinet-denied"].ShouldBe(everything.Where(id => id != docOnShelf).ToList());
+
+        // Level 2 allow over a level 3 deny: the more specific level decides, so the
+        // archive subtree survives a rule that closes the whole domain.
+        visible["cabinet-over-all"].ShouldBe([docInArchive, docOnShelf], ignoreOrder: true);
+
+        // Two cabinet rules, one level: deny wins it outright. The shelf is shut and the
+        // archive it hangs in is not — the depth of the two rules never enters into it.
+        visible["shelf-denied"].ShouldContain(docInArchive);
+        visible["shelf-denied"].ShouldNotContain(docOnShelf);
+
+        // Level 1 over level 2: one document is let back out of a denied archive, and the
+        // rest of that archive stays shut.
+        visible["shelf-freed"].ShouldContain(docOnShelf);
+        visible["shelf-freed"].ShouldNotContain(docInArchive);
+        visible["shelf-freed"].ShouldContain(docPublic);
+
         // Full Administrators are decided before any entry is read, which is what makes
         // the group the recovery path out of a deny.
         visible["administrator"].ShouldBe(everything);
@@ -261,7 +345,7 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
 
         foreach (var (name, ctx) in await CallersAsync(db))
         {
-            var filtered = (await db.Documents.AsNoTracking().VisibleTo(ctx, AccessDomain.Documents)
+            var filtered = (await db.Documents.AsNoTracking().VisibleTo(ctx, AccessDomain.Documents, null, (db.CabinetDocuments, db.Cabinets))
                 .Where(d => candidateIds.Contains(d.Id))
                 .Select(d => d.Id).ToListAsync()).ToHashSet();
 
@@ -289,8 +373,9 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var access = scope.ServiceProvider.GetRequiredService<IAccessService>();
         var connection = db.Database.GetDbConnection();
-        var facts = await FactsForAsync(db, reachCandidateIds);
+        var facts = await FactsForAsync(db, access, reachCandidateIds);
 
         // One document reachable only this way, and one already denied by an object-scope
         // entry — so the same set carries both the widening and the thing it must not widen.
@@ -300,7 +385,7 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
         foreach (var (name, ctx) in await CallersAsync(db))
         {
             var efIds = await db.Documents.AsNoTracking()
-                .VisibleTo(ctx, AccessDomain.Documents, reached)
+                .VisibleTo(ctx, AccessDomain.Documents, reached, (db.CabinetDocuments, db.Cabinets))
                 .Where(d => reachCandidateIds.Contains(d.Id))
                 .Select(d => d.Id).OrderBy(id => id).ToListAsync();
 
@@ -330,7 +415,7 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
         // attached document joins that list and the unattached private one does not.
         var stranger = await RosterHelper.AccessContextOfAsync(db, strangerId);
         var withoutReach = await db.Documents.AsNoTracking()
-            .VisibleTo(stranger, AccessDomain.Documents)
+            .VisibleTo(stranger, AccessDomain.Documents, null, (db.CabinetDocuments, db.Cabinets))
             .Where(d => reachCandidateIds.Contains(d.Id))
             .Select(d => d.Id).ToListAsync();
         withoutReach.ShouldNotContain(docAttached);
@@ -348,6 +433,13 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
         // and reach adds nothing, in both of the callers written that way.
         visible["object-over-all"].ShouldBe([docObjectGranted]);
         visible["all-denied"].ShouldBeEmpty();
+
+        // A cabinet deny is an entry, so reach never gets to widen past it: the attached
+        // document sits on the denied shelf and stays shut, while the archive around it —
+        // which the same caller's domain-wide allow covers — is untouched.
+        visible["cabinet-denied"].ShouldNotContain(docAttached);
+        visible["cabinet-denied"].ShouldContain(docInArchive);
+        visible["cabinet-allowed"].ShouldContain(docAttached);
 
         // Nothing is lost: a caller granted domain-wide still sees everything, and the
         // administrator is decided before any of this runs.
@@ -375,6 +467,11 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
         db.Documents.Add(document);
         return document.Id;
     }
+
+    /// <summary>Files one document in one cabinet — the fact, and nothing more: membership
+    /// carries no grant of its own, which is what the archetypes above pin.</summary>
+    private static void File(SilexGisDbContext db, Guid cabinetId, Guid documentId) =>
+        db.CabinetDocuments.Add(new CabinetDocument { CabinetId = cabinetId, DocumentId = documentId });
 
     /// <summary>
     /// One direct rule over documents. Outside the feature domain an object anchor is the
@@ -415,16 +512,33 @@ public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
             ("own-denied", await ContextOf(ownDeniedId)),
             ("all-allowed", await ContextOf(allAllowedId)),
             ("all-denied", await ContextOf(allDeniedId)),
+            ("cabinet-allowed", await ContextOf(cabinetAllowedId)),
+            ("cabinet-denied", await ContextOf(cabinetDeniedId)),
+            ("cabinet-over-all", await ContextOf(cabinetOverAllId)),
+            ("shelf-denied", await ContextOf(shelfDeniedId)),
+            ("shelf-freed", await ContextOf(shelfFreedId)),
             ("administrator", await ContextOf(administratorId)),
         ];
     }
 
-    /// <summary>The evaluated facts of every candidate row, straight from storage — the
-    /// pure evaluator's leg of the parity.</summary>
+    /// <summary>
+    /// The evaluated facts of every candidate row, resolved by the production access
+    /// service rather than by the storage-free shorthand — cabinet membership lives in a
+    /// join table, so facts taken without touching storage would leave the evaluator's leg
+    /// of the parity blind to exactly the band this suite is here to pin.
+    /// </summary>
     private static async Task<Dictionary<Guid, AccessTargetFacts>> FactsForAsync(
-        SilexGisDbContext db, Guid[] ids) =>
-        (await db.Documents.AsNoTracking().Where(d => ids.Contains(d.Id)).ToListAsync())
-            .ToDictionary(d => d.Id, AccessTargetFacts.Of);
+        SilexGisDbContext db, IAccessService access, Guid[] ids)
+    {
+        var documents = await db.Documents.AsNoTracking().Where(d => ids.Contains(d.Id)).ToListAsync();
+        var facts = new Dictionary<Guid, AccessTargetFacts>();
+        foreach (var document in documents)
+        {
+            facts[document.Id] = await access.FactsOfAsync(document);
+        }
+
+        return facts;
+    }
 
     public Task DisposeAsync() => Task.CompletedTask;
 

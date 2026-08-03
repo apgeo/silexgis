@@ -60,6 +60,10 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<DocumentPage> DocumentPages => Set<DocumentPage>();
 
+    public DbSet<Cabinet> Cabinets => Set<Cabinet>();
+
+    public DbSet<CabinetDocument> CabinetDocuments => Set<CabinetDocument>();
+
     public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
 
     public DbSet<Geofile> Geofiles => Set<Geofile>();

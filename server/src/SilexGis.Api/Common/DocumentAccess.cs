@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Documents;
@@ -45,16 +46,76 @@ public static class DocumentAccessRules
     /// rather than two: a number that disagreed with the rows beside it would announce
     /// exactly what a rule written against a document had declined to show.
     /// </remarks>
+    /// <param name="cabinetReach">
+    /// Which cabinets reach each document, from <see cref="CabinetReachAsync"/> — the one
+    /// fact of the walk that lives in another table and so cannot be read off the row. It
+    /// is a required argument rather than an optional one because leaving it out would not
+    /// narrow the answer, it would flip it: a rule denying a shelf would go unseen and the
+    /// document would list.
+    /// </param>
     public static bool AllowedByOwnRulesOrAttachment(
-        AccessContext ctx, Document document, AccessAction action)
+        AccessContext ctx,
+        Document document,
+        AccessAction action,
+        IReadOnlyDictionary<Guid, Guid[]> cabinetReach)
     {
-        var facts = AccessTargetFacts.Of(document);
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(cabinetReach);
+
+        var facts = AccessTargetFacts.Of(document) with
+        {
+            CabinetIds = cabinetReach.TryGetValue(document.Id, out var cabinets) ? cabinets : [],
+        };
         var decision = AccessEvaluator.Decide(ctx, AccessDomain.Documents, action, facts);
         return AccessEvaluator.AttachmentReachCouldDecide(decision)
             ? AccessEvaluator
                 .Decide(ctx, AccessDomain.Documents, action, facts with { ReachedByAttachment = true })
                 .Allowed
             : decision.Allowed;
+    }
+
+    /// <summary>
+    /// The cabinets that reach each of a page of documents — every cabinet a document is
+    /// filed in, plus each of their ancestors, because a rule on a cabinet covers what is
+    /// filed below it. One query for the whole page, which is what keeps a listing's
+    /// per-row walk free of queries.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is asked at all unless a cabinet-scoped rule for this action actually
+    /// reaches this caller, which for most callers is never: with no such rule the answer
+    /// cannot depend on where anything is filed, so the lookup would be paid for an
+    /// outcome that is already known.
+    /// </remarks>
+    public static async Task<IReadOnlyDictionary<Guid, Guid[]>> CabinetReachAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        AccessAction action,
+        IReadOnlyCollection<Guid> documentIds,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(ctx);
+        ArgumentNullException.ThrowIfNull(documentIds);
+
+        var set = ctx.For(AccessDomain.Documents, action);
+        if (documentIds.Count == 0 || (set.DenyCabinetIds.Length == 0 && set.AllowCabinetIds.Length == 0))
+        {
+            return new Dictionary<Guid, Guid[]>();
+        }
+
+        var ids = documentIds.Distinct().ToList();
+        var filings = await db.CabinetDocuments.AsNoTracking()
+            .Where(m => ids.Contains(m.DocumentId))
+            .Join(
+                db.Cabinets.AsNoTracking(),
+                m => m.CabinetId,
+                c => c.Id,
+                (m, c) => new { m.DocumentId, c.AncestorIds })
+            .ToListAsync(ct);
+
+        return filings
+            .GroupBy(f => f.DocumentId)
+            .ToDictionary(g => g.Key, g => g.SelectMany(f => f.AncestorIds).Distinct().ToArray());
     }
 
     /// <summary>

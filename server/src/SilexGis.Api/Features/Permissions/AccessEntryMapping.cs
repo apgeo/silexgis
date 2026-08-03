@@ -88,7 +88,10 @@ public static class AccessEntryMapping
     /// <summary>
     /// The context the no-amplification check evaluates the author against: the anchored
     /// object's own facts where there is one, otherwise nothing — which is exactly how a
-    /// domain-wide rule is judged.
+    /// domain-wide rule is judged. Wherever the anchor sits in a hierarchy, the facts carry
+    /// the <em>whole</em> ancestry, so a rule of the author's naming anything above the
+    /// anchor still binds them — both the allow that lets them delegate below it and the
+    /// deny that must keep them out.
     /// </summary>
     public static async Task<AccessTargetFacts?> AnchorFactsAsync(
         SilexGisDbContext db, AccessEntry entry, CancellationToken ct)
@@ -116,6 +119,42 @@ public static class AccessEntryMapping
                 FeatureTypeId = feature.FeatureTypeId,
                 FeatureSetIds = setIds,
                 VisibilityChain = [new VisibilityFact(feature.Visibility, feature.CavingGroupId)],
+            };
+        }
+
+        if (entry.ScopeKind == AccessScopeKind.Cabinet && entry.ScopeId is { } cabinetId)
+        {
+            // Judged with the cabinet's whole ancestry — the same value a document filed
+            // there is judged with, and the same one the filing tree itself is administered
+            // with. Naming only the cabinet would break the rule in both directions: a deny
+            // the author carries on an archive would go unseen when they author on a shelf
+            // inside it (amplification), and an author whose only right is on that archive
+            // would be refused on its shelves (delegation they hold everywhere else). It
+            // cannot amplify: the author still has to hold the action there, and facts
+            // naming only cabinets let no object-level or ownership rule of theirs match.
+            var ancestry = await db.Cabinets.AsNoTracking()
+                .Where(c => c.Id == cabinetId)
+                .Select(c => c.AncestorIds)
+                .FirstOrDefaultAsync(ct);
+            return ancestry is null ? null : new AccessTargetFacts { CabinetIds = ancestry };
+        }
+
+        if (entry.ScopeKind == AccessScopeKind.Object
+            && entry.Domain == AccessDomain.Documents
+            && entry.ScopeId is { } documentId)
+        {
+            // Where a document is filed is part of what the author holds over it, so it
+            // rides along here too: without it a rule denying an archive could be walked
+            // around one document at a time, by anchoring on the document instead of the
+            // shelf it sits on.
+            var filedUnder = await db.CabinetDocuments.AsNoTracking()
+                .Where(m => m.DocumentId == documentId)
+                .Join(db.Cabinets.AsNoTracking(), m => m.CabinetId, c => c.Id, (_, c) => c.AncestorIds)
+                .ToListAsync(ct);
+            return new AccessTargetFacts
+            {
+                ObjectId = documentId,
+                CabinetIds = [.. filedUnder.SelectMany(ids => ids).Distinct()],
             };
         }
 
@@ -150,6 +189,7 @@ public static class AccessEntryMapping
         {
             AccessScopeKind.CavingGroup => await db.CavingGroups.AnyAsync(g => g.Id == scopeId, ct),
             AccessScopeKind.FeatureSet => await db.FeatureSets.AnyAsync(s => s.Id == scopeId, ct),
+            AccessScopeKind.Cabinet => await db.Cabinets.AnyAsync(c => c.Id == scopeId, ct),
             AccessScopeKind.Object => entry.Domain switch
             {
                 AccessDomain.TripLogs => await db.TripLogs.AnyAsync(x => x.Id == scopeId, ct),
@@ -200,6 +240,14 @@ public static class AccessEntryMapping
                 .Where(s => setIds.Contains(s.Id))
                 .ToDictionaryAsync(s => s.Id, s => s.Name, ct);
 
+        var cabinetIds = entries.Where(e => e.ScopeKind == AccessScopeKind.Cabinet && e.ScopeId is not null)
+            .Select(e => e.ScopeId!.Value).Distinct().ToArray();
+        var cabinetNames = cabinetIds.Length == 0
+            ? []
+            : await db.Cabinets.AsNoTracking()
+                .Where(c => cabinetIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+
         return
         [
             .. entries.Select(e =>
@@ -211,6 +259,7 @@ public static class AccessEntryMapping
                     {
                         AccessScopeKind.CavingGroup when e.ScopeId is { } gid => groupNames.GetValueOrDefault(gid),
                         AccessScopeKind.FeatureSet when e.ScopeId is { } sid => setNames.GetValueOrDefault(sid),
+                        AccessScopeKind.Cabinet when e.ScopeId is { } cid => cabinetNames.GetValueOrDefault(cid),
                         _ => null,
                     };
                 return new AccessEntryDto(

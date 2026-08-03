@@ -5,7 +5,19 @@ import { login } from './helpers.ts';
 /** Opens an antd select and picks the option with this label (options render in a portal). */
 async function pickOption(page: Page, select: Locator, label: string) {
   await select.click();
-  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: label }).first().click();
+  const dropdown = page.locator('.ant-select-dropdown:visible');
+  await expect(dropdown.locator('.ant-select-item-option').first()).toBeVisible();
+
+  // Long option lists are windowed: an option below the rendered slice is not in the page
+  // at all, so waiting for it would wait forever. Narrow the list by typing instead — the
+  // searchable pickers filter down to the wanted row, and the short fixed-choice ones
+  // render every option already, so nothing is typed for them.
+  const option = dropdown.locator('.ant-select-item-option').filter({ hasText: label }).first();
+  if ((await option.count()) === 0) {
+    await page.keyboard.type(label);
+  }
+
+  await option.click();
 }
 
 // The permission-group editor round-trip, including the model's sharpest edge: a deny

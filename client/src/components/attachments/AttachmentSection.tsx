@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { DeleteOutlined, DownloadOutlined, FileOutlined, InboxOutlined } from '@ant-design/icons';
-import { App, Button, Card, Empty, Flex, Image, List, Popconfirm, Typography, Upload } from 'antd';
+import {
+  App, Button, Card, Empty, Flex, Image, List, Popconfirm, Tooltip, Typography, Upload,
+} from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   useAttachments,
@@ -117,14 +119,22 @@ export default function AttachmentSection({
                       versionNumber={attachment.file.versionNumber}
                       canEdit={canEdit}
                     />,
-                    <Button
+                    // A photo whose own coordinates this caller may not be given is
+                    // delivered as renderings only; the link would answer as a missing
+                    // file, so the control says why instead of failing when followed.
+                    <Tooltip
                       key="download"
-                      type="primary"
-                      size="small"
-                      icon={<DownloadOutlined />}
-                      href={attachment.file.contentUrl}
-                      download={attachment.file.originalName}
-                    />,
+                      title={attachment.file.mayDownloadOriginal ? undefined : t('attachments.originalWithheld')}
+                    >
+                      <Button
+                        type="primary"
+                        size="small"
+                        icon={<DownloadOutlined />}
+                        disabled={!attachment.file.mayDownloadOriginal}
+                        href={attachment.file.mayDownloadOriginal ? attachment.file.contentUrl : undefined}
+                        download={attachment.file.originalName}
+                      />
+                    </Tooltip>,
                     ...(canEdit
                       ? [
                           <Popconfirm
@@ -260,13 +270,18 @@ export default function AttachmentSection({
                     versionNumber={attachment.file.versionNumber}
                     canEdit={canEdit}
                   />,
-                  <Button
+                  <Tooltip
                     key="download"
-                    size="small"
-                    icon={<DownloadOutlined />}
-                    href={attachment.file.contentUrl}
-                    download={attachment.file.originalName}
-                  />,
+                    title={attachment.file.mayDownloadOriginal ? undefined : t('attachments.originalWithheld')}
+                  >
+                    <Button
+                      size="small"
+                      icon={<DownloadOutlined />}
+                      disabled={!attachment.file.mayDownloadOriginal}
+                      href={attachment.file.mayDownloadOriginal ? attachment.file.contentUrl : undefined}
+                      download={attachment.file.originalName}
+                    />
+                  </Tooltip>,
                   ...(canEdit
                     ? [
                         <Popconfirm

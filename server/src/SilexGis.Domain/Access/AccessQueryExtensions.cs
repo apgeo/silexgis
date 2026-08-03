@@ -112,6 +112,12 @@ public static class AccessQueryExtensions
     /// trip log to inherit from). Every band left here keys on a column such a row
     /// actually carries, which is why a domain reaches this overload only when its rows
     /// carry the owner/caving-group/visibility trio.
+    /// <para>
+    /// One collection band does apply here: documents can be filed in cabinets, and a
+    /// cabinet entry decides at level 2 like any other collection. It is an entry band, not
+    /// a built-in — it sits inside the conditional chain so a cabinet deny stops a
+    /// domain-wide allow, and a per-document entry still overrules it.
+    /// </para>
     /// </summary>
     /// <param name="reachedByAttachment">
     /// Ids the caller reaches through an object the row's content is attached to, resolved
@@ -120,11 +126,18 @@ public static class AccessQueryExtensions
     /// entry decided; passing it in the outer predicate instead would let it override a
     /// deny. Empty for the domains that have no attachments at all.
     /// </param>
+    /// <param name="filings">
+    /// The cabinet filings and the cabinet rows they point at — the context's own DbSets, so
+    /// the cabinet band stays a single correlated EXISTS. Only the document domain can carry
+    /// cabinet entries; passing nothing where one reaches the caller is refused rather than
+    /// ignored, because silently dropping the band would turn a cabinet deny into an allow.
+    /// </param>
     public static IQueryable<T> VisibleTo<T>(
         this IQueryable<T> query,
         AccessContext ctx,
         AccessDomain domain,
-        IReadOnlyCollection<Guid>? reachedByAttachment = null)
+        IReadOnlyCollection<Guid>? reachedByAttachment = null,
+        (IQueryable<CabinetDocument> Memberships, IQueryable<Cabinet> Cabinets)? filings = null)
         where T : class, IProtectedEntity
     {
         if (ctx.IsFullAdmin)
@@ -152,14 +165,57 @@ public static class AccessQueryExtensions
         var allowObj = set.AllowObjectIds;
         var denyCg = set.DenyCavingGroupIds;
         var allowCg = set.AllowCavingGroupIds;
+        var denyCab = set.DenyCabinetIds;
+        var allowCab = set.AllowCabinetIds;
         var denyAll = set.DenyAll;
         var allowAll = set.AllowAll;
         var denyOwn = set.DenyOwn;
         var allowOwn = set.AllowOwn;
 
+        if (denyCab.Length == 0 && allowCab.Length == 0)
+        {
+            // No cabinet entry reaches this caller — every domain but documents, and most
+            // document callers. Emitted without the collection band so those queries keep
+            // the plan they have today rather than carrying a subquery that can never
+            // match. The band below is the same walk with level 2 spliced in; the two
+            // chains are one rule and change together.
+            return query.Where(e =>
+                denyObj.Contains(e.Id) ? false
+                : allowObj.Contains(e.Id) ? true
+                : denyAll
+                  || (denyOwn && e.OwnerUserId == userId)
+                  || (e.CavingGroupId != null && denyCg.Contains(e.CavingGroupId.Value)) ? false
+                : allowAll
+                  || (allowOwn && e.OwnerUserId == userId)
+                  || (e.CavingGroupId != null && allowCg.Contains(e.CavingGroupId.Value))
+                  || e.OwnerUserId == userId
+                  || e.Visibility >= Visibility.Authenticated
+                  || (e.Visibility == Visibility.CavingGroup
+                      && e.CavingGroupId != null
+                      && cavingGroupIds.Contains(e.CavingGroupId.Value))
+                  || reached.Contains(e.Id));
+        }
+
+        if (filings is not { } filed)
+        {
+            // Dropping the band silently would read a cabinet deny as an allow, so a list
+            // built without the filings is a defect in the caller, not a narrower query.
+            throw new InvalidOperationException(
+                "A cabinet-scoped entry reaches this caller; the read filter needs the cabinet filings to evaluate it.");
+        }
+
+        var memberships = filed.Memberships;
+        var cabinets = filed.Cabinets;
+
         return query.Where(e =>
             denyObj.Contains(e.Id) ? false
             : allowObj.Contains(e.Id) ? true
+            : memberships.Any(m => m.DocumentId == e.Id
+                && cabinets.Any(c => c.Id == m.CabinetId
+                    && c.AncestorIds.Any(a => denyCab.Contains(a)))) ? false
+            : memberships.Any(m => m.DocumentId == e.Id
+                && cabinets.Any(c => c.Id == m.CabinetId
+                    && c.AncestorIds.Any(a => allowCab.Contains(a)))) ? true
             : denyAll
               || (denyOwn && e.OwnerUserId == userId)
               || (e.CavingGroupId != null && denyCg.Contains(e.CavingGroupId.Value)) ? false

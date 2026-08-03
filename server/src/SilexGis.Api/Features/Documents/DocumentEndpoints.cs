@@ -4,6 +4,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
+using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Documents;
@@ -16,6 +17,13 @@ public sealed class DocumentUpdateRequestValidator : AbstractValidator<DocumentU
     public DocumentUpdateRequestValidator()
     {
         RuleFor(x => x.Title).NotEmpty().MaximumLength(300);
+        RuleFor(x => x.Visibility).IsInEnum();
+
+        // Club visibility says "the club this belongs to may read it", so it needs a club
+        // to name; without one it would be a band that admits nobody, silently.
+        RuleFor(x => x.CavingGroupId).NotNull()
+            .When(x => x.Visibility == Visibility.CavingGroup)
+            .WithMessage("Caving-group visibility needs a caving group.");
 
         // Shape only. Whether the metadata conforms to the kind's schema needs the schema,
         // which is a database read, so that check lives in the write path rather than here.
@@ -106,11 +114,35 @@ public static class DocumentEndpoints
                 : ApiProblems.NotFound("document.not_found");
         }
 
+        if (request.CavingGroupId is { } requestedGroupId
+            && !await db.CavingGroups.AsNoTracking().AnyAsync(g => g.Id == requestedGroupId, ct))
+        {
+            return ApiProblems.BadRequest("document.caving_group_not_found", "The caving group does not exist.");
+        }
+
+        // Binding content to a club hands that club's members whatever their rulesets grant
+        // over its content, so it is guarded beyond write: only a member, or somebody
+        // holding a rule that names that club's documents, may do it. Asked only when the
+        // binding actually changes — re-saving a document into the club it is already in is
+        // not a fresh act of binding, and refusing it would lock a title correction behind
+        // membership.
+        if (request.CavingGroupId is { } cavingGroupId
+            && cavingGroupId != subject.Document.CavingGroupId
+            && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.Documents, cavingGroupId))
+        {
+            return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
+        }
+
         try
         {
             await documents.UpdateAsync(
                 id,
-                new DocumentUpdate(request.Title, request.DocumentTypeId, RawMetadata(request.Metadata)),
+                new DocumentUpdate(
+                    request.Title,
+                    request.DocumentTypeId,
+                    RawMetadata(request.Metadata),
+                    request.Visibility,
+                    request.CavingGroupId),
                 ct);
         }
         catch (DocumentWriteException e)
@@ -132,7 +164,8 @@ public static class DocumentEndpoints
     /// A document with the revision and file it currently serves — null when it serves
     /// none — and its kind's code.
     /// </summary>
-    private sealed record DocumentSubject(Document Document, DocumentFile? Content, string? TypeCode);
+    private sealed record DocumentSubject(
+        Document Document, DocumentFile? Content, string? TypeCode, List<Guid> CabinetIds);
 
     private static async Task<DocumentSubject?> LoadAsync(SilexGisDbContext db, Guid id, CancellationToken ct)
     {
@@ -149,7 +182,15 @@ public static class DocumentEndpoints
         var typeCode = document.DocumentTypeId is { } typeId
             ? await db.DocumentTypes.AsNoTracking().Where(t => t.Id == typeId).Select(t => t.Code).FirstOrDefaultAsync(ct)
             : null;
-        return new DocumentSubject(document, content, typeCode);
+
+        // The cabinets it is filed in, not their ancestors: this says where the document
+        // was put, which is what a filing control edits. Which cabinets *reach* it — the
+        // access question — is the ancestry walk the access rule does for itself.
+        var cabinetIds = await db.CabinetDocuments.AsNoTracking()
+            .Where(m => m.DocumentId == id)
+            .Select(m => m.CabinetId)
+            .ToListAsync(ct);
+        return new DocumentSubject(document, content, typeCode, cabinetIds);
     }
 
     private static Task<bool> CanReadAsync(
@@ -160,7 +201,7 @@ public static class DocumentEndpoints
 
     private static DocumentDto ToDto(DocumentSubject subject, DocumentFile content)
     {
-        var (document, _, typeCode) = subject;
+        var (document, _, typeCode, cabinetIds) = subject;
         var file = content.File;
         return new DocumentDto(
             document.Id,
@@ -169,6 +210,9 @@ public static class DocumentEndpoints
             typeCode,
             JsonSerializer.Deserialize<JsonElement>(document.Metadata),
             document.MetadataSchemaVersion,
+            document.Visibility,
+            document.CavingGroupId,
+            cabinetIds,
             file.Id,
             content.Version.VersionNumber,
             file.MimeType,

@@ -162,6 +162,24 @@ public sealed class AccessExplainer(SilexGisDbContext db)
             }
         }
 
+        // A cabinet name is served whenever a cabinet rule decided: cabinets are global
+        // filing structure with no read gate of their own, so withholding the name would
+        // hide why a refusal happened without hiding anything the caller could not
+        // otherwise learn. Should cabinets gain a domain of their own, gate this the way
+        // the feature sets above are gated.
+        var cabinetIds = deciding.Where(e => e.ScopeKind == AccessScopeKind.Cabinet && e.ScopeId is not null)
+            .Select(e => e.ScopeId!.Value).Distinct().ToArray();
+        if (cabinetIds.Length > 0)
+        {
+            foreach (var cabinet in await db.Cabinets.AsNoTracking()
+                         .Where(c => cabinetIds.Contains(c.Id))
+                         .Select(c => new { c.Id, c.Name })
+                         .ToListAsync(ct))
+            {
+                names[$"cabinet:{cabinet.Id}"] = cabinet.Name;
+            }
+        }
+
         return names;
     }
 
@@ -173,6 +191,7 @@ public sealed class AccessExplainer(SilexGisDbContext db)
         { PermissionGroupId: { } id } => $"group:{id}",
         { ScopeKind: AccessScopeKind.Subtree, ScopeFeatureId: { } id } => $"subtree:{id}",
         { ScopeKind: AccessScopeKind.FeatureSet, ScopeId: { } id } => $"set:{id}",
+        { ScopeKind: AccessScopeKind.Cabinet, ScopeId: { } id } => $"cabinet:{id}",
         _ => DirectAnchor,
     };
 }

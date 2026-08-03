@@ -5,6 +5,7 @@ import {
   DatabaseOutlined,
   EnvironmentOutlined,
   FileTextOutlined,
+  FolderOutlined,
   GoldOutlined,
   GroupOutlined,
   HistoryOutlined,
@@ -54,7 +55,7 @@ export default function AppLayout() {
   // "settings" is listed so an unmatched path does not fall through to highlighting the map.
   // It matches no menu item, so nothing lights up — settings is not a sidebar destination.
   const sections = [
-    'dashboard', 'caves', 'features', 'geodata', 'trip-logs', 'caving-groups', 'cavers',
+    'dashboard', 'caves', 'features', 'geodata', 'cabinets', 'trip-logs', 'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
     'admin/feature-sets', 'admin/document-types', 'settings',
   ] as const;
@@ -137,6 +138,11 @@ export default function AppLayout() {
               { key: 'caves', icon: <TableOutlined />, label: t('nav.caves') },
               { key: 'features', icon: <GoldOutlined />, label: t('nav.features') },
               { key: 'geodata', icon: <DatabaseOutlined />, label: t('nav.geodata') },
+              // The filing tree is readable by anyone who may read documents at all; what
+              // is on a shelf is decided per document, not by hiding the shelf.
+              ...(can('documents')
+                ? [{ key: 'cabinets', icon: <FolderOutlined />, label: t('nav.cabinets') }]
+                : []),
               { key: 'trip-logs', icon: <CarOutlined />, label: t('nav.trips') },
               { key: 'caving-groups', icon: <TeamOutlined />, label: t('nav.cavingGroups') },
               { key: 'cavers', icon: <UserOutlined />, label: t('nav.cavers') },

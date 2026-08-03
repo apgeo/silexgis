@@ -13,6 +13,7 @@ using SilexGis.Api.Features.About;
 using SilexGis.Api.Features.Admin;
 using SilexGis.Api.Features.Attachments;
 using SilexGis.Api.Features.Audit;
+using SilexGis.Api.Features.Cabinets;
 using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Dashboard;
 using SilexGis.Api.Features.Documents;
@@ -208,6 +209,7 @@ try
     api.MapFileEndpoints();
     api.MapDocumentEndpoints();
     api.MapDocumentTypeEndpoints();
+    api.MapCabinetEndpoints();
     api.MapAttachmentEndpoints();
     api.MapGeoreferencedMapEndpoints();
     api.MapTripLogEndpoints();

@@ -4,7 +4,8 @@ namespace SilexGis.Domain.Access;
 /// <summary>
 /// One (domain, action) slice of the caller's entries, flattened into the arrays the
 /// EF and SQL filter twins splice into queries. Level 1 = the object arrays, level 2 =
-/// subtree roots + set ids, level 3 = the scalars and the narrowed-conjunction arrays.
+/// subtree roots + set ids + cabinet ids, level 3 = the scalars and the
+/// narrowed-conjunction arrays.
 /// Every narrowed array keeps its conjunction (<c>AllowOwnKinds = [cave]</c> means
 /// "own AND kind = cave", never two independent facts) — an entry narrows by kind OR by
 /// type, never both, so one array element is always one whole conjunction.
@@ -24,6 +25,12 @@ public sealed record AccessFilterSet
     public Guid[] DenySetIds { get; init; } = [];
 
     public Guid[] AllowSetIds { get; init; } = [];
+
+    /// <summary>Cabinet roots an entry names; a row matches when one of them reaches it,
+    /// which for a document means it is filed at or below that cabinet.</summary>
+    public Guid[] DenyCabinetIds { get; init; } = [];
+
+    public Guid[] AllowCabinetIds { get; init; } = [];
 
     public bool DenyAll { get; init; }
 
@@ -60,6 +67,7 @@ public sealed record AccessFilterSet
         && DenyObjectIds.Length == 0 && AllowObjectIds.Length == 0
         && DenySubtreeRoots.Length == 0 && AllowSubtreeRoots.Length == 0
         && DenySetIds.Length == 0 && AllowSetIds.Length == 0
+        && DenyCabinetIds.Length == 0 && AllowCabinetIds.Length == 0
         && DenyAllKinds.Length == 0 && AllowAllKinds.Length == 0
         && DenyOwnKinds.Length == 0 && AllowOwnKinds.Length == 0
         && DenyAllTypeIds.Length == 0 && AllowAllTypeIds.Length == 0
@@ -77,6 +85,7 @@ public sealed record AccessFilterSet
     {
         List<Guid> denyObj = [], allowObj = [], denySub = [], allowSub = [];
         List<Guid> denySet = [], allowSet = [], denyCg = [], allowCg = [];
+        List<Guid> denyCab = [], allowCab = [];
         List<short> denyAllKinds = [], allowAllKinds = [], denyOwnKinds = [], allowOwnKinds = [];
         List<long> denyAllTypes = [], allowAllTypes = [], denyOwnTypes = [], allowOwnTypes = [];
         bool denyAll = false, allowAll = false, denyOwn = false, allowOwn = false;
@@ -112,6 +121,14 @@ public sealed record AccessFilterSet
                     if (entry.ScopeId is { } set)
                     {
                         (deny ? denySet : allowSet).Add(set);
+                    }
+
+                    break;
+
+                case AccessScopeKind.Cabinet:
+                    if (entry.ScopeId is { } cabinet)
+                    {
+                        (deny ? denyCab : allowCab).Add(cabinet);
                     }
 
                     break;
@@ -177,6 +194,8 @@ public sealed record AccessFilterSet
             AllowSubtreeRoots = [.. allowSub],
             DenySetIds = [.. denySet],
             AllowSetIds = [.. allowSet],
+            DenyCabinetIds = [.. denyCab],
+            AllowCabinetIds = [.. allowCab],
             DenyCavingGroupIds = [.. denyCg],
             AllowCavingGroupIds = [.. allowCg],
             DenyAll = denyAll,

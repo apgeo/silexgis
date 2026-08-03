@@ -39,6 +39,15 @@ public sealed record AccessTargetFacts
     public Guid[] FeatureSetIds { get; init; } = [];
 
     /// <summary>
+    /// Cabinets that reach the evaluated document: every cabinet it is filed in plus each
+    /// of their ancestors, so a cabinet-scoped entry matches the whole subtree below it
+    /// with one flat containment test. Resolved by the access service — filing lives in a
+    /// join table the pure rule cannot read. Empty for Create, for documents filed
+    /// nowhere, and for every domain but documents.
+    /// </summary>
+    public Guid[] CabinetIds { get; init; } = [];
+
+    /// <summary>
     /// Audience facts of the row itself plus — for features — every ancestor, feeding
     /// the read-time visibility cascade: a row is visibility-readable when any link of
     /// this chain admits the caller. Empty when visibility can never apply (Create,

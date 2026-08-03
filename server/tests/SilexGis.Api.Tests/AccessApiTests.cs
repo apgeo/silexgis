@@ -93,17 +93,23 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable
         setScope.GetProperty("actions").EnumerateArray()
             .Select(a => a.GetString()).ShouldNotContain("create");
 
-        // Documents are owned content: they carry the trio, so they take every scope
-        // that keys on it, and they contain nothing, so they take neither collection
-        // scope and no kind narrowing.
+        // Documents are owned content: they carry the trio, so they take every scope that
+        // keys on it, plus the one collection they belong to — the cabinet they are filed
+        // in. They are not features, so the feature-world collections and kind narrowing
+        // stay off the menu.
         var documents = DomainOf("documents");
-        ScopesOf(documents).ShouldBe(["all", "own", "cavingGroup", "object"], ignoreOrder: true);
+        ScopesOf(documents).ShouldBe(
+            ["all", "own", "cavingGroup", "cabinet", "object"], ignoreOrder: true);
         documents.GetProperty("supportsKindNarrowing").GetBoolean().ShouldBeFalse();
 
         List<string> ActionsOf(JsonElement domain, string scopeKind) =>
             [.. domain.GetProperty("scopes").EnumerateArray()
                 .First(s => s.GetProperty("scopeKind").GetString() == scopeKind)
                 .GetProperty("actions").EnumerateArray().Select(a => a.GetString()!)];
+
+        // Filing an existing document is a write on that document, so nothing is created
+        // "into" a cabinet — the same refusal the validator makes for a feature set.
+        ActionsOf(documents, "cabinet").ShouldNotContain("create");
 
         // Uploading a document is a Create right, offered exactly where a prospective
         // row can be evaluated: domain-wide and against a club binding, never against an

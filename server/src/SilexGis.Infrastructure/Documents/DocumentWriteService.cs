@@ -35,8 +35,21 @@ public sealed record StoredContent(
 /// The editable, document-level facts of a document. A null <see cref="Metadata"/> means
 /// "leave what is stored alone" rather than "clear it" — which is what lets a title be
 /// corrected on a document whose kind has since tightened its schema.
+/// <para>
+/// <see cref="Visibility"/> and <see cref="CavingGroupId"/> are the read audience and the
+/// club binding: the facts the access rule reads when no entry has an opinion. They are
+/// carried here rather than edited row-side so that every write of them travels the one
+/// path, and so the audit trail records them like any other document change. Whether the
+/// caller may bind to the named club is decided before this is called — that guard needs
+/// the caller, which this service deliberately does not have.
+/// </para>
 /// </summary>
-public sealed record DocumentUpdate(string Title, long? DocumentTypeId, string? Metadata);
+public sealed record DocumentUpdate(
+    string Title,
+    long? DocumentTypeId,
+    string? Metadata,
+    Visibility Visibility,
+    Guid? CavingGroupId);
 
 /// <summary>
 /// The single mutator of a document's derived state: which revision is current, what
@@ -85,8 +98,18 @@ public sealed class DocumentWriteService(SilexGisDbContext db, ITypedPropertiesV
     /// Records new content as a brand-new document: one revision, current from the start,
     /// carrying one file. Tracked, not saved — the caller commits it.
     /// </summary>
+    /// <param name="cavingGroupId">
+    /// The club the new document belongs to, when the upload named one. Whether the
+    /// uploader may bind to it is settled before this is reached — that guard needs the
+    /// caller, which this service deliberately does not have.
+    /// </param>
     public DocumentFile Create(
-        StoredContent content, string? title, Guid ownerUserId, Guid? uploadedBy, DateOnly? documentDate = null)
+        StoredContent content,
+        string? title,
+        Guid ownerUserId,
+        Guid? uploadedBy,
+        DateOnly? documentDate = null,
+        Guid? cavingGroupId = null)
     {
         ArgumentNullException.ThrowIfNull(content);
 
@@ -94,6 +117,7 @@ public sealed class DocumentWriteService(SilexGisDbContext db, ITypedPropertiesV
         {
             Title = TitleOf(title, content.OriginalName),
             OwnerUserId = ownerUserId,
+            CavingGroupId = cavingGroupId,
         };
         db.Documents.Add(document);
 
@@ -196,6 +220,8 @@ public sealed class DocumentWriteService(SilexGisDbContext db, ITypedPropertiesV
 
         document.Title = TitleOf(update.Title, null);
         document.DocumentTypeId = update.DocumentTypeId;
+        document.Visibility = update.Visibility;
+        document.CavingGroupId = update.CavingGroupId;
         document.Metadata = metadata;
         document.MetadataSchemaVersion =
             await ValidateMetadataAsync(document, type, metadata, rewritten, ct);

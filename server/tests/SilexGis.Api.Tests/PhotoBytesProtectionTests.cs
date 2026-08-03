@@ -118,9 +118,14 @@ public sealed class PhotoBytesProtectionTests : IAsyncLifetime, IDisposable
         (await reader.GetAsync(seen.GetProperty("contentUrl").GetString()))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
+        // And the response says so up front, so a client can label a download control it
+        // must not offer instead of discovering the refusal by following the link.
+        seen.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeFalse();
+
         // The owner may place the cave exactly, so the same request serves them the original —
         // which is what makes the refusal above the rule rather than a broken URL.
         var held = await ReadJsonAsync(await owner.GetAsync($"/api/v1/files/{fileId}"));
+        held.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeTrue();
         (await owner.GetAsync(held.GetProperty("contentUrl").GetString()))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
     }

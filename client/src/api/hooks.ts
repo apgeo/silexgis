@@ -14,6 +14,10 @@ export type Taxonomy = components['schemas']['TaxonomyDto'];
 export type FeatureType = components['schemas']['FeatureTypeDto'];
 export type DocumentType = components['schemas']['DocumentTypeDto'];
 export type DocumentInfo = components['schemas']['DocumentDto'];
+export type CabinetInfo = components['schemas']['CabinetDto'];
+export type CabinetWrite = components['schemas']['CabinetWriteRequest'];
+export type CabinetDocument = components['schemas']['CabinetDocumentDto'];
+export type Visibility = components['schemas']['Visibility'];
 export type FileConfig = components['schemas']['FileConfigDto'];
 export type EntranceFeatureCollection = components['schemas']['FeatureCollection'];
 export type Me = components['schemas']['MeDto'];
@@ -63,6 +67,9 @@ export const queryKeys = {
   fileVersions: (fileId: string) => ['file-versions', fileId] as const,
   fileConfig: ['file-config'] as const,
   document: (id: string) => ['documents', 'detail', id] as const,
+  cabinets: ['cabinets'] as const,
+  cabinetDocuments: (id: string, params: CabinetDocumentParams) =>
+    ['cabinets', id, 'documents', params] as const,
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
@@ -1148,9 +1155,13 @@ export function useDocument(id: string | undefined, enabled = true) {
 }
 
 /**
- * Updates a document's title, kind and typed metadata. A null `metadata` leaves what is
- * stored untouched — that is how a title is corrected on a document whose kind has
- * tightened its schema since the document was written.
+ * Updates a document's title, kind, typed metadata, read audience and club binding. A
+ * null `metadata` leaves what is stored untouched — that is how a title is corrected on a
+ * document whose kind has tightened its schema since the document was written.
+ *
+ * Visibility and the caving group decide who may read the document when no rule names it,
+ * so saving them moves access: the cached lists that were filtered by that answer are
+ * dropped along with the document itself.
  */
 export function useUpdateDocument() {
   const invalidateAttachments = useInvalidateAttachments();
@@ -1161,10 +1172,114 @@ export function useUpdateDocument() {
       title: string;
       documentTypeId: number | null;
       metadata: Record<string, unknown> | null;
+      visibility: Visibility;
+      cavingGroupId: string | null;
     }) => unwrap(api.PUT('/api/v1/documents/{id}', { params: { path: { id } }, body })),
     onSuccess: (_result, variables) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.document(variables.id) });
+      void queryClient.invalidateQueries({ queryKey: ['cabinets'] });
       invalidateAttachments();
+    },
+  });
+}
+
+/** The whole filing tree: small by construction, so one fetch draws the sider and every breadcrumb. */
+export function useCabinets(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.cabinets,
+    queryFn: () => unwrap(api.GET('/api/v1/cabinets')),
+    enabled,
+    retry: false,
+  });
+}
+
+/**
+ * Cabinet edits move access — rules are scoped to cabinets and filing decides which of
+ * them reach a document — so capabilities and effective-access answers refresh with the
+ * tree, exactly as they do for feature sets.
+ */
+function useInvalidateCabinets() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['cabinets'] });
+    // The rules editor lists cabinets as scope anchors from the catalog.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.accessCatalog });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.capabilities });
+    void queryClient.invalidateQueries({ queryKey: ['effective-access'] });
+  };
+}
+
+export function useCreateCabinet() {
+  const invalidate = useInvalidateCabinets();
+  return useMutation({
+    mutationFn: (body: CabinetWrite) => unwrap(api.POST('/api/v1/cabinets', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateCabinet() {
+  const invalidate = useInvalidateCabinets();
+  return useMutation({
+    mutationFn: ({ id, ...body }: CabinetWrite & { id: string }) =>
+      unwrap(api.PUT('/api/v1/cabinets/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useDeleteCabinet() {
+  const invalidate = useInvalidateCabinets();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/cabinets/{id}', { params: { path: { id } } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export interface CabinetDocumentParams {
+  includeSubtree?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * What is on a shelf for this caller. The cabinet's own `documentCount` says how full it
+ * is; this list says what of it you may read, so the two can legitimately differ.
+ */
+export function useCabinetDocuments(id: string | undefined, params: CabinetDocumentParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.cabinetDocuments(id ?? '', params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/cabinets/{id}/documents', {
+        params: { path: { id: id! }, query: params },
+      })),
+    enabled: !!id,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+/**
+ * Files a document into a cabinet, or takes it out. Both directions move access — a
+ * document leaving a cabinet a deny names becomes readable again — so both invalidate the
+ * same caches a rule edit would.
+ */
+export function useFileDocument() {
+  const invalidate = useInvalidateCabinets();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ cabinetId, documentId, filed }: {
+      cabinetId: string;
+      documentId: string;
+      filed: boolean;
+    }) => {
+      const params = { path: { id: cabinetId, documentId } };
+      return filed
+        ? unwrapVoid(api.PUT('/api/v1/cabinets/{id}/documents/{documentId}', { params }))
+        : unwrapVoid(api.DELETE('/api/v1/cabinets/{id}/documents/{documentId}', { params }));
+    },
+    onSuccess: (_result, variables) => {
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.document(variables.documentId) });
     },
   });
 }

@@ -91,6 +91,7 @@ public static class FileEndpoints
 
     private static async Task<Results<Created<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
         IFormFile file,
+        Guid? cavingGroupId,
         SilexGisDbContext db,
         DocumentWriteService documents,
         IFileStore fileStore,
@@ -113,7 +114,26 @@ public static class FileEndpoints
         // upload" is Create in the documents domain rather than a staff-grade right over
         // the file store. The two are different questions: one is authoring content, the
         // other is administering the store it lands in.
-        if (!CreateRules.MayCreate(ctx, AccessDomain.Documents))
+        //
+        // A club named on the upload is part of that question, exactly as it is for a
+        // feature or a trip: it is what lets a ruleset granting a club's own content admit
+        // its members, rather than requiring an installation-wide right to add anything at
+        // all. Binding is guarded on its own terms — belonging to the club, or holding a
+        // rule that names its documents — so naming a club cannot be a way into one.
+        if (cavingGroupId is { } requestedGroupId)
+        {
+            if (!await db.CavingGroups.AsNoTracking().AnyAsync(g => g.Id == requestedGroupId, ct))
+            {
+                return ApiProblems.BadRequest("document.caving_group_not_found", "The caving group does not exist.");
+            }
+
+            if (!CavingGroupBindingRules.MayBind(ctx, AccessDomain.Documents, requestedGroupId))
+            {
+                return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
+            }
+        }
+
+        if (!CreateRules.MayCreate(ctx, AccessDomain.Documents, cavingGroupId))
         {
             return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
@@ -124,7 +144,8 @@ public static class FileEndpoints
         }
 
         var content = await ReadContentAsync(file, fileStore, geotagReader, metadataReader, ct);
-        var stored = documents.Create(content, content.OriginalName, user.UserId, user.UserId);
+        var stored = documents.Create(
+            content, content.OriginalName, user.UserId, user.UserId, documentDate: null, cavingGroupId);
         await db.SaveChangesAsync(ct);
 
         // Nothing can hang on a row created this instant, so a photo uploaded here places

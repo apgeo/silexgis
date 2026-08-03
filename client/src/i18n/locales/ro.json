@@ -8,6 +8,7 @@
     "caves": "Peșteri",
     "features": "Elemente",
     "geodata": "Geodate",
+    "cabinets": "Dulapuri",
     "trips": "Jurnale de tură",
     "audit": "Istoric",
     "cavingGroups": "Grupuri de speologie",
@@ -328,6 +329,7 @@
     "inaccessible": "Inaccesibil"
   },
   "attachments": {
+    "originalWithheld": "Nu poți descărca originalul acestei fotografii: el înregistrează unde a fost făcută, iar tu nu ai dreptul de a localiza ceea ce arată.",
     "title": "Fotografii și documente",
     "photos": "Fotografii",
     "documents": "Documente",
@@ -363,7 +365,41 @@
     "title": "Titlu",
     "type": "Tip de document",
     "noType": "Niciun tip ales",
-    "metadataInvalid": "Detaliile nu corespund cu ce permite acest tip de document."
+    "visibility": "Cine îl poate citi",
+    "cavingGroup": "Grup de speologie",
+    "pickCavingGroup": "Alege un grup de speologie",
+    "bindingForbidden": "Nu poți lega un document de un grup de speologie din care nu faci parte.",
+    "metadataInvalid": "Detaliile nu corespund cu ce permite acest tip de document.",
+    "cabinets": "Așezat în",
+    "pickCabinets": "Neașezat nicăieri",
+    "filingMovesAccess": "Un document poate sta în mai multe dulapuri; fiecare dulap numit de o regulă de acces îl cuprinde."
+  },
+  "cabinets": {
+    "title": "Dulapuri",
+    "empty": "Niciun dulap încă.",
+    "pickOne": "Alege un dulap pentru a vedea ce este clasat în el.",
+    "new": "Nou",
+    "edit": "Editează dulapul",
+    "name": "Denumire",
+    "description": "Descriere",
+    "parent": "Se află în",
+    "noParent": "La nivelul de sus",
+    "size": "Mărime",
+    "includeSubtree": "Include dulapurile din interior",
+    "includeSubtreeHint": "Listează documentele clasate oriunde sub acest dulap, nu doar direct în el.",
+    "filingMovesAccess": "Regulile de acces pot fi limitate la un dulap, așa că a clasa un document aici — sau a-l scoate — schimbă cine îl poate citi.",
+    "noDocuments": "Nimic clasat aici pe care să îl poți citi.",
+    "fileElsewhere": "Clasează și în altă parte",
+    "fileElsewhereHint": "Un document poate sta în mai multe dulapuri deodată; fiecare dulap numit de o regulă îl atinge.",
+    "pickCabinet": "Alege un dulap",
+    "unfileConfirm": "Scoți acest document din acest dulap?",
+    "deleteConfirm": "Ștergi acest dulap?",
+    "inUse": "Există reguli care indică acest dulap; șterge-le mai întâi.",
+    "notEmpty": "Dulapul încă mai conține dulapuri sau documente.",
+    "nameTaken": "Un dulap cu această denumire se află deja aici.",
+    "cycle": "Un dulap nu poate fi mutat în el însuși.",
+    "tooDeep": "Arborele de clasare nu poate coborî atât de adânc.",
+    "filingForbidden": "Nu poți clasa acest document aici."
   },
   "geodata": {
     "title": "Geodate",
@@ -604,6 +640,7 @@
       "cavingGroup": "Conținutul unui grup de speologie",
       "subtree": "Un element și tot ce conține",
       "featureSet": "Un set de elemente",
+      "cabinet": "Un dulap și tot ce este clasat sub el",
       "object": "Un singur obiect"
     },
     "levels": {
@@ -686,6 +723,7 @@
     "narrowType": "Restrânge la un tip…",
     "pickCavingGroupAnchor": "Alege un grup de speologie…",
     "pickFeatureSetAnchor": "Alege un set de elemente…",
+    "pickCabinetAnchor": "Alege un dulap…",
     "pickFeatureAnchor": "Caută elemente…",
     "pickPermissionGroupAnchor": "Alege un grup de permisiuni…",
     "anchorIdPlaceholder": "Id-ul obiectului (copiați-l din pagina lui)"

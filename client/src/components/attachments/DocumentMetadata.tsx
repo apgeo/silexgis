@@ -4,8 +4,36 @@ import { ProfileOutlined } from '@ant-design/icons';
 import { App, Button, Checkbox, Flex, Input, InputNumber, Popover, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
-import { useDocument, useDocumentTypes, useUpdateDocument } from '../../api/hooks.ts';
+import {
+  hasAccessAction,
+  useCabinets,
+  useCapabilities,
+  useCavingGroups,
+  useDocument,
+  useDocumentTypes,
+  useFileDocument,
+  useUpdateDocument,
+  type CabinetInfo,
+  type Visibility,
+} from '../../api/hooks.ts';
 import { parsePropertiesSchema, type SchemaField } from '../typedProperties/propertiesSchema.ts';
+
+const visibilities: Visibility[] = ['private', 'cavingGroup', 'authenticated', 'public'];
+
+/**
+ * A cabinet named by its whole path. Names are unique only among siblings — "1987" sits
+ * under many archives — so a bare name would be ambiguous away from the tree that gives
+ * it context, which is exactly the situation here.
+ */
+function cabinetOptions(cabinets: CabinetInfo[]) {
+  const names = new Map(cabinets.map((cabinet) => [cabinet.id, cabinet.name]));
+  return cabinets
+    .map((cabinet) => ({
+      value: cabinet.id,
+      label: cabinet.ancestorIds.map((id) => names.get(id) ?? '…').join(' / '),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -34,10 +62,23 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
   const [open, setOpen] = useState(false);
   const { data: document } = useDocument(documentId, open);
   const { data: types } = useDocumentTypes();
+  const { data: cavingGroups } = useCavingGroups();
   const updateDocument = useUpdateDocument();
+
+  // Filing is edited here as well as from the tree, because the tree can only re-file
+  // what is already on a shelf — a document has to be able to reach its first cabinet
+  // from the panel that owns it. Whoever may not write documents at all never sees the
+  // control; the server re-decides it per cabinet, so this only hides what it would refuse.
+  const { data: capabilities } = useCapabilities();
+  const mayFile = hasAccessAction(capabilities?.domains.documents, 'write');
+  const { data: cabinets } = useCabinets(open && mayFile);
+  const fileDocument = useFileDocument();
 
   const [title, setTitle] = useState('');
   const [typeId, setTypeId] = useState<number | null>(null);
+  const [visibility, setVisibility] = useState<Visibility>('private');
+  const [cavingGroupId, setCavingGroupId] = useState<string | null>(null);
+  const [filedIn, setFiledIn] = useState<string[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
 
   // Re-sync from server state whenever the popover opens, or when the fetch that the
@@ -46,6 +87,9 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
     if (open && document) {
       setTitle(document.title);
       setTypeId(document.documentTypeId);
+      setVisibility(document.visibility);
+      setCavingGroupId(document.cavingGroupId);
+      setFiledIn(document.cabinetIds);
       setValues((document.metadata as Record<string, unknown> | null) ?? {});
     }
   }, [open, document]);
@@ -55,6 +99,28 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
     () => parsePropertiesSchema(selectedType?.metadataSchema),
     [selectedType],
   );
+  const shelves = useMemo(() => cabinetOptions(cabinets ?? []), [cabinets]);
+
+  /**
+   * Filing is its own request rather than part of Save: it is guarded separately (write on
+   * the document *and* a right at that cabinet), so bundling it into the form would make a
+   * refusal of one look like a refusal of the other, and could half-succeed.
+   */
+  const file = async (cabinetId: string, filed: boolean) => {
+    const before = filedIn;
+    setFiledIn(filed ? [...before, cabinetId] : before.filter((id) => id !== cabinetId));
+    try {
+      await fileDocument.mutateAsync({ cabinetId, documentId, filed });
+      message.success(t('common.saved'));
+    } catch (error) {
+      setFiledIn(before);
+      message.error(
+        error instanceof ApiError && error.code === 'document.write_forbidden'
+          ? t('cabinets.filingForbidden')
+          : t('common.saveFailed'),
+      );
+    }
+  };
 
   const save = async () => {
     // Merge the schema-driven values over what is stored so keys the current schema does
@@ -76,16 +142,24 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
         title: title.trim(),
         documentTypeId: typeId,
         metadata,
+        visibility,
+        // A club binding only means anything under club visibility; keeping a stale one
+        // on a document turned private would leave the club named on a row it no longer
+        // decides anything about.
+        cavingGroupId: visibility === 'cavingGroup' ? cavingGroupId : null,
       });
       message.success(t('common.saved'));
       setOpen(false);
     } catch (error) {
-      // The server checks the metadata against the kind's schema, and that refusal is the
-      // one worth naming: "save failed" would leave someone guessing which field it meant.
+      // Two refusals are worth naming rather than folding into "save failed": metadata the
+      // kind's schema rejects, and binding to a club the saver does not belong to — both
+      // leave someone guessing which control was at fault otherwise.
       message.error(
         error instanceof ApiError && error.code === 'document.metadata_invalid'
           ? t('documents.metadataInvalid')
-          : t('common.saveFailed'),
+          : error instanceof ApiError && error.code === 'access.caving_group_binding_forbidden'
+            ? t('documents.bindingForbidden')
+            : t('common.saveFailed'),
       );
     }
   };
@@ -105,6 +179,46 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
           options={(types ?? []).map((type) => ({ value: type.id, label: type.name }))}
         />
       </Field>
+      <Field label={t('documents.visibility')}>
+        <Select
+          value={visibility}
+          onChange={setVisibility}
+          options={visibilities.map((value) => ({
+            value,
+            label: t(`caves.visibilityValues.${value}`),
+          }))}
+        />
+      </Field>
+      {visibility === 'cavingGroup' && (
+        <Field label={t('documents.cavingGroup')}>
+          <Select
+            value={cavingGroupId}
+            onChange={setCavingGroupId}
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('documents.pickCavingGroup')}
+            options={(cavingGroups ?? []).map((group) => ({ value: group.id, label: group.name }))}
+          />
+        </Field>
+      )}
+      {mayFile && shelves.length > 0 && (
+        <Field label={t('documents.cabinets')}>
+          <Select
+            mode="multiple"
+            value={filedIn}
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('documents.pickCabinets')}
+            disabled={fileDocument.isPending}
+            onSelect={(id: string) => void file(id, true)}
+            onDeselect={(id: string) => void file(id, false)}
+            options={shelves}
+          />
+          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+            {t('documents.filingMovesAccess')}
+          </Typography.Text>
+        </Field>
+      )}
       {fields.map((field) => (
         <Field key={field.key} label={field.required ? `${field.label} *` : field.label}>
           <TypedField
@@ -117,7 +231,9 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
       <Button
         type="primary"
         size="small"
-        disabled={!document || !title.trim()}
+        disabled={
+          !document || !title.trim() || (visibility === 'cavingGroup' && !cavingGroupId)
+        }
         loading={updateDocument.isPending}
         onClick={() => void save()}
       >

@@ -4296,7 +4296,9 @@ export interface paths {
         /** Uploads a file (multipart); attach it to an entity via /attachments. */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    cavingGroupId?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -4750,6 +4752,250 @@ export interface paths {
         };
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cabinets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The whole filing tree, each cabinet with its ancestry and size. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CabinetDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates a cabinet. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CabinetWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CabinetDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cabinets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One cabinet. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CabinetDto"];
+                    };
+                };
+            };
+        };
+        /** Renames, re-describes or moves a cabinet and everything below it. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CabinetWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CabinetDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes an empty cabinet no rule points at. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cabinets/{id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documents filed in a cabinet that the caller may read. */
+        get: {
+            parameters: {
+                query?: {
+                    includeSubtree?: boolean;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfCabinetDocumentDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cabinets/{id}/documents/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Files a document in a cabinet. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        /** Removes a document from a cabinet. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -7132,7 +7378,7 @@ export interface components {
             subjectId: string;
         };
         /** @enum {unknown} */
-        AccessScopeKind: "all" | "own" | "cavingGroup" | "subtree" | "featureSet" | "object";
+        AccessScopeKind: "all" | "own" | "cavingGroup" | "subtree" | "featureSet" | "object" | "cabinet";
         /** @enum {unknown} */
         AccessSubjectKind: "user" | "cavingGroup";
         /** @enum {unknown} */
@@ -7203,6 +7449,41 @@ export interface components {
         };
         AvatarPresetsDto: {
             presets: string[];
+        };
+        CabinetDocumentDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: int64 */
+            documentTypeId: null | number;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            /** Format: uuid */
+            currentFileId: null | string;
+            kind: null | components["schemas"]["FileKind"];
+            mimeType: null | string;
+            /** Format: int64 */
+            sizeBytes: null | number;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CabinetDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            parentId: null | string;
+            name: string;
+            description: null | string;
+            ancestorIds: string[];
+            /** Format: int32 */
+            documentCount: number;
+        };
+        CabinetWriteRequest: {
+            name: string;
+            description: null | string;
+            /** Format: uuid */
+            parentId: null | string;
         };
         CapabilitiesDto: {
             domains: {
@@ -7554,6 +7835,10 @@ export interface components {
             metadata: components["schemas"]["JsonElement"];
             /** Format: int32 */
             metadataSchemaVersion: null | number;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            cabinetIds: string[];
             /** Format: uuid */
             currentFileId: string;
             /** Format: int32 */
@@ -7603,6 +7888,9 @@ export interface components {
             /** Format: int64 */
             documentTypeId: null | number;
             metadata: null | components["schemas"]["JsonElement"];
+            visibility: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
         };
         EffectiveAccessDto: {
             actions: components["schemas"]["AccessAction"];
@@ -7940,6 +8228,7 @@ export interface components {
             createdAt: string;
             contentUrl: string;
             thumbnailUrl: null | string;
+            mayDownloadOriginal: boolean;
         };
         /** @enum {unknown} */
         FileKind: "image" | "document" | "survey" | "raster" | "vector" | "model" | "other" | "audio" | "video";
@@ -8367,6 +8656,15 @@ export interface components {
         };
         PagedResultOfAuditEntryDto: {
             items: components["schemas"]["AuditEntryDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfCabinetDocumentDto: {
+            items: components["schemas"]["CabinetDocumentDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */

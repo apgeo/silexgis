@@ -54,7 +54,7 @@ public sealed class AccessEntryConfiguration : IEntityTypeConfiguration<AccessEn
             t.HasCheckConstraint(
                 "ck_access_entries_scope_anchor",
                 "(scope_kind IN (0, 1) AND scope_feature_id IS NULL AND scope_id IS NULL) OR " +
-                "(scope_kind IN (2, 4) AND scope_feature_id IS NULL AND scope_id IS NOT NULL) OR " +
+                "(scope_kind IN (2, 4, 6) AND scope_feature_id IS NULL AND scope_id IS NOT NULL) OR " +
                 "(scope_kind = 3 AND scope_feature_id IS NOT NULL AND scope_id IS NULL) OR " +
                 "(scope_kind = 5 AND ((domain = 0 AND scope_feature_id IS NOT NULL AND scope_id IS NULL) OR " +
                 "(domain <> 0 AND scope_feature_id IS NULL AND scope_id IS NOT NULL)))");

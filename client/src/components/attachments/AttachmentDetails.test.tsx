@@ -43,6 +43,7 @@ const attachment: AttachmentInfo = {
     documentDate: '2019-08-01',
     createdAt: '2026-07-15T10:00:00Z',
     contentUrl: '/c/file-1',
+    mayDownloadOriginal: true,
     thumbnailUrl: null,
   },
 };

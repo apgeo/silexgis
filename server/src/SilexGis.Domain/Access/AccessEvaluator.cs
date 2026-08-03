@@ -167,6 +167,14 @@ public static class AccessEvaluator
                 ? AccessLevel.Collection
                 : null,
 
+        // A cabinet entry covers the cabinet and everything filed below it, so the reach
+        // is already flattened into the row's facts. Collection, like the other two: a
+        // per-document entry still outranks it, and it still outranks a domain-wide one.
+        AccessScopeKind.Cabinet =>
+            target is not null && entry.ScopeId is { } cabinetId && target.CabinetIds.Contains(cabinetId)
+                ? AccessLevel.Collection
+                : null,
+
         AccessScopeKind.CavingGroup =>
             target?.CavingGroupId is { } cavingGroupId && cavingGroupId == entry.ScopeId
                 ? AccessLevel.Global

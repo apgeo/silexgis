@@ -102,9 +102,34 @@ public class AccessEntryRulesTests
             AccessDomain.Documents, AccessAction.Read | AccessAction.Share, AccessScopeKind.Object,
             scopeId: Anchor)).ShouldBeNull();
 
-        // A document contains nothing and joins no named set, so the two collection
-        // scopes have no honest answer here — offering them would promise a walk the
-        // flat forms cannot make.
+        // The one collection a document belongs to is the cabinet it is filed in, and the
+        // rule covers everything filed below that cabinet as well.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Read | AccessAction.Write, AccessScopeKind.Cabinet,
+            scopeId: Anchor)).ShouldBeNull();
+
+        // Filing an existing document is a write on that document, not a creation into
+        // the cabinet — so there is nothing for Create to key on here.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Create, AccessScopeKind.Cabinet, scopeId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+
+        // A cabinet anchors on the plain scope id; the feature anchor column is not a
+        // second home for it, and an unanchored cabinet rule names no cabinet at all.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Read, AccessScopeKind.Cabinet, scopeFeatureId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Documents, AccessAction.Read, AccessScopeKind.Cabinet))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+
+        // Cabinets file documents and nothing else, so the scope means nothing elsewhere.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.TripLogs, AccessAction.Read, AccessScopeKind.Cabinet, scopeId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+
+        // A document is not a feature: it sits in no containment DAG and joins no named
+        // feature set, so those two collection scopes still have no honest answer here.
         AccessEntryRules.Validate(Entry(
             AccessDomain.Documents, AccessAction.Read, AccessScopeKind.Subtree, scopeFeatureId: Anchor))
             .ShouldBe(AccessEntryRules.ScopeInvalidCode);

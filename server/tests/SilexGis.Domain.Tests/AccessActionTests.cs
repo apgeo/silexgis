@@ -56,6 +56,7 @@ public class AccessActionTests
         ((short)AccessScopeKind.Subtree).ShouldBe((short)3);
         ((short)AccessScopeKind.FeatureSet).ShouldBe((short)4);
         ((short)AccessScopeKind.Object).ShouldBe((short)5);
+        ((short)AccessScopeKind.Cabinet).ShouldBe((short)6);
         ((short)AccessDomain.Features).ShouldBe((short)0);
         ((short)AccessDomain.Jobs).ShouldBe((short)18);
         ((short)AccessDomain.Documents).ShouldBe((short)19);

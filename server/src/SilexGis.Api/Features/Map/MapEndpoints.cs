@@ -185,6 +185,8 @@ public static class MapEndpoints
             geofileIds, ct);
 
         var linksByFile = links.GroupBy(l => l.FileId).ToDictionary(g => g.Key, g => g.ToList());
+        var cabinetReach = await DocumentAccessRules.CabinetReachAsync(
+            db, ctx, AccessAction.Read, [.. candidates.Select(c => c.Document.Id)], ct);
         var features = new List<GeoFeature>();
         foreach (var candidate in candidates)
         {
@@ -218,7 +220,8 @@ public static class MapEndpoints
             // map cannot publish what the cave's own document list has already withheld — the
             // fact resolved a moment ago is the only thing the rule could not fetch, so the
             // walk costs no query.
-            if (!DocumentAccessRules.AllowedByOwnRulesOrAttachment(ctx, candidate.Document, AccessAction.Read))
+            if (!DocumentAccessRules.AllowedByOwnRulesOrAttachment(
+                    ctx, candidate.Document, AccessAction.Read, cabinetReach))
             {
                 continue;
             }

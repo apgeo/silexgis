@@ -9,6 +9,15 @@ namespace SilexGis.Api.Features.Files;
 /// capability token — clients use them as-is in img/src and download links and refetch
 /// the metadata when a token expires.
 /// </summary>
+/// <param name="MayDownloadOriginal">
+/// Whether <see cref="ContentUrl"/> will actually hand over the stored bytes. It is false
+/// for a photo whose own coordinates this caller may not be given: the delivery route
+/// refuses such a request whatever the response said, because a token carries no identity
+/// and that route is the only place the decision can be honoured. The field exists so a
+/// client can label a control it must not offer, rather than discovering the refusal by
+/// following the link — the URL itself stays present and answers as a missing file, which
+/// is what every other withheld thing answers.
+/// </param>
 public sealed record FileDto(
     Guid Id,
     Guid DocumentId,
@@ -21,7 +30,8 @@ public sealed record FileDto(
     DateOnly? DocumentDate,
     DateTimeOffset CreatedAt,
     string ContentUrl,
-    string? ThumbnailUrl);
+    string? ThumbnailUrl,
+    bool MayDownloadOriginal);
 
 /// <summary>
 /// Upload limits this installation applies. Published so a client checks a file before
@@ -77,7 +87,8 @@ internal static class FileMapping
             ContentUrl(f.Id, token),
             f.Kind == FileKind.Image
                 ? $"/api/v1/files/{f.Id}/thumbnail?size=480&token={Uri.EscapeDataString(token)}"
-                : null);
+                : null,
+            delivery == FileDelivery.Full);
     }
 
     public static string ContentUrl(Guid fileId, string token) =>

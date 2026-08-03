@@ -33,6 +33,7 @@ const MessageTemplatesPage = lazy(() => import('./pages/admin/MessageTemplatesPa
 const PermissionGroupsPage = lazy(() => import('./pages/admin/permissionGroups/PermissionGroupsPage.tsx'));
 const FeatureSetsPage = lazy(() => import('./pages/admin/FeatureSetsPage.tsx'));
 const DocumentTypesPage = lazy(() => import('./pages/admin/DocumentTypesPage.tsx'));
+const CabinetsPage = lazy(() => import('./pages/documents/CabinetsPage.tsx'));
 const CavingGroupsPage = lazy(() => import('./pages/cavingGroups/CavingGroupsPage.tsx'));
 const CaversPage = lazy(() => import('./pages/cavers/CaversPage.tsx'));
 const SharedViewPage = lazy(() => import('./pages/SharedViewPage.tsx'));
@@ -90,6 +91,7 @@ const router = createBrowserRouter([
           { path: '/admin/permission-groups', element: <Loadable><PermissionGroupsPage /></Loadable> },
           { path: '/admin/feature-sets', element: <Loadable><FeatureSetsPage /></Loadable> },
           { path: '/admin/document-types', element: <Loadable><DocumentTypesPage /></Loadable> },
+          { path: '/cabinets', element: <Loadable><CabinetsPage /></Loadable> },
           { path: '/caving-groups', element: <Loadable><CavingGroupsPage /></Loadable> },
           { path: '/cavers', element: <Loadable><CaversPage /></Loadable> },
           {

@@ -63,7 +63,7 @@ public static class AccessCatalog
 
     private static bool RequiresAnchor(AccessScopeKind scope) =>
         scope is AccessScopeKind.CavingGroup or AccessScopeKind.Subtree
-            or AccessScopeKind.FeatureSet or AccessScopeKind.Object;
+            or AccessScopeKind.FeatureSet or AccessScopeKind.Cabinet or AccessScopeKind.Object;
 
     /// <summary>Stable camel-case domain names for payloads and UI keys.</summary>
     public static string Name(AccessDomain domain) =>
