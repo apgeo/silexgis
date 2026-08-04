@@ -2,10 +2,14 @@
 namespace SilexGis.Domain.Entities;
 
 /// <summary>
-/// Non-feature entity classes that can carry attachments/tags/ACL rows through the
-/// polymorphic pair. Physical features are addressed by the real `feature_id` FK
-/// instead and have no member here. Stored as smallint; values are a schema contract —
-/// append only, never renumber (0–2 were the feature kinds, retired with the supertype).
+/// Non-feature entity classes addressable through the polymorphic pair — by attachments,
+/// taggings, ACL rows and resource-link members. Physical features are addressed by the
+/// real `feature_id` FK instead and have no member here. The enum is the shared
+/// vocabulary; which values a given consumer actually accepts is that consumer's own
+/// validity rule (attachments and taggings accept none of the values from
+/// <see cref="Document"/> up — those exist for resource links). Stored as smallint;
+/// values are a schema contract — append only, never renumber (0–2 were the feature
+/// kinds, retired with the supertype).
 /// </summary>
 public enum AttachedEntityType : short
 {
@@ -15,6 +19,19 @@ public enum AttachedEntityType : short
     GeoreferencedMap = 6,
     MapView = 7,
     StoredFile = 8,
+
+    /// <summary>The document itself — the stable identity above its versions and files.</summary>
+    Document = 9,
+
+    SurveyModel = 10,
+
+    /// <summary>A roster caver (which may or may not have a linked account).</summary>
+    Caver = 11,
+
+    Cabinet = 12,
+
+    /// <summary>Reserved for a comment entity that does not exist yet; no consumer accepts it.</summary>
+    Comment = 13,
 }
 
 /// <summary>Maps non-feature protected entity instances to their polymorphic discriminator.</summary>
@@ -46,6 +63,11 @@ public static class AttachedEntityTypes
         AttachedEntityType.GeoreferencedMap => nameof(AttachedEntityType.GeoreferencedMap),
         AttachedEntityType.MapView => nameof(AttachedEntityType.MapView),
         AttachedEntityType.StoredFile => nameof(AttachedEntityType.StoredFile),
+        AttachedEntityType.Document => nameof(AttachedEntityType.Document),
+        AttachedEntityType.SurveyModel => nameof(AttachedEntityType.SurveyModel),
+        AttachedEntityType.Caver => nameof(AttachedEntityType.Caver),
+        AttachedEntityType.Cabinet => nameof(AttachedEntityType.Cabinet),
+        AttachedEntityType.Comment => nameof(AttachedEntityType.Comment),
         _ => type.ToString(),
     };
 }

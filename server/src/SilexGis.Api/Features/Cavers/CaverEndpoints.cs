@@ -276,6 +276,10 @@ public static class CaverEndpoints
         // Deleting the person cascades their memberships, which can sever an account's
         // only path into Full Administrators.
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        // Resource-link members naming the person have no FK; they go with the entry.
+        await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.Caver && m.EntityId == id)
+            .ExecuteDeleteAsync(ct);
         db.Cavers.Remove(caver);
         await db.SaveChangesAsync(ct);
         if (!await fullAdminGuard.AnyLiveFullAdminAsync(ct))
@@ -481,6 +485,30 @@ public static class CaverEndpoints
             else
             {
                 membership.CaverId = target.Id;
+            }
+        }
+
+        // Resource-link members follow the fold like trips and memberships do: what
+        // named the duplicate now names the survivor, except where the survivor is
+        // already a whole member of the same link — the duplicate row goes rather than
+        // colliding with one-whole-member-per-target.
+        var sourceLinkMembers = await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.Caver && m.EntityId == source.Id)
+            .ToListAsync(ct);
+        var targetLinkIds = await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.Caver && m.EntityId == target.Id)
+            .Select(m => m.ResLinkId)
+            .ToListAsync(ct);
+
+        foreach (var linkMember in sourceLinkMembers)
+        {
+            if (targetLinkIds.Contains(linkMember.ResLinkId))
+            {
+                db.ResLinkMembers.Remove(linkMember);
+            }
+            else
+            {
+                linkMember.EntityId = target.Id;
             }
         }
 

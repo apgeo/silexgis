@@ -319,6 +319,10 @@ public static class CabinetEndpoints
             return ApiProblems.Conflict(NotEmptyCode, "The cabinet still holds cabinets or documents.");
         }
 
+        // Resource-link members naming the shelf have no FK; they go with it.
+        await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.Cabinet && m.EntityId == cabinet.Id)
+            .ExecuteDeleteAsync(ct);
         db.Cabinets.Remove(cabinet);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();

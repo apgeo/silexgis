@@ -5162,6 +5162,455 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reslinks/for-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Links incident to one target, sibling members resolved; the total doubles as the badge count. */
+        get: {
+            parameters: {
+                query: {
+                    type: string;
+                    id: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfResLinkDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reslinks/targets/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Picker feed: readable targets of one type matching a query, as uniform rows. */
+        get: {
+            parameters: {
+                query: {
+                    type: string;
+                    q?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResLinkTargetHitDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reslinks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Creates a link with its initial members (at least one). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ResLinkCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResLinkDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reslinks/{idOrCode}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One link by id or by short code — told apart by shape. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    idOrCode: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResLinkDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reslinks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Hard-deletes a link and its members, audited (creator or admin). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Sets description and relation type (creator or admin); mainMemberId moves the marker with them. */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ResLinkUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResLinkDto"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/reslinks/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adds a member — a readable target, or a new GPS point via newGeoPoint (creator or admin). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ResLinkMemberAddRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResLinkMemberDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reslinks/{id}/members/{memberId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes a member; the last member is refused — delete the link instead. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    memberId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Edits isMain/sortOrder/note; anchors are replace-only — delete and re-add. */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    memberId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ResLinkMemberUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResLinkMemberDto"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/reslinks/relation-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The relation vocabulary: seeded rows (translated by code) and custom rows (shown as written). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResLinkRelationTypeDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Adds a custom relation type (admin). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ResLinkRelationTypeWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResLinkRelationTypeDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reslinks/relation-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Deletes an unreferenced custom relation type (admin). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Edits a relation type (admin); seeded code and directedness are immutable. */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ResLinkRelationTypeWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResLinkRelationTypeDto"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/api/v1/georeferenced-maps": {
         parameters: {
             query?: never;
@@ -7427,6 +7876,8 @@ export interface components {
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
+        /** @enum {unknown} */
+        AnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange" | "modelStation" | "modelStationRange" | "modelSurvey" | "modelSurveyRange" | "modelPoint" | "waypoint" | "waypointRange";
         AttachmentCreateRequest: {
             /** Format: uuid */
             fileId: string;
@@ -8772,6 +9223,15 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfResLinkDto: {
+            items: components["schemas"]["ResLinkDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfTripLogDto: {
             items: components["schemas"]["TripLogDto"][];
             /** Format: int32 */
@@ -8879,6 +9339,128 @@ export interface components {
             email: string;
             token: string;
             newPassword: string;
+        };
+        /** @enum {unknown} */
+        ResLinkAnchorState: "exact" | "reanchored" | "degraded" | "unresolvable";
+        ResLinkCreateRequest: {
+            /** Format: int64 */
+            relationTypeId: null | number;
+            description: null | string;
+            members: components["schemas"]["ResLinkMemberInput"][];
+        };
+        ResLinkDto: {
+            /** Format: uuid */
+            id: string;
+            shortCode: string;
+            relationType: null | components["schemas"]["ResLinkRelationTypeDto"];
+            description: null | string;
+            /** Format: uuid */
+            createdBy: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            members: components["schemas"]["ResLinkMemberDto"][];
+        };
+        ResLinkMemberAddRequest: {
+            targetType: null | string;
+            /** Format: uuid */
+            targetId: null | string;
+            newGeoPoint: null | components["schemas"]["ResLinkNewGeoPointInput"];
+            isMain: boolean;
+            /** Format: int32 */
+            sortOrder: number;
+            note: null | string;
+            anchorKind: components["schemas"]["AnchorKind"];
+            anchor: null | components["schemas"]["JsonElement"];
+            /** Format: uuid */
+            anchorFileId: null | string;
+        };
+        ResLinkMemberDto: {
+            /** Format: uuid */
+            id: string;
+            targetType: string;
+            /** Format: uuid */
+            targetId: string;
+            isMain: boolean;
+            /** Format: int32 */
+            sortOrder: number;
+            note: null | string;
+            anchorKind: components["schemas"]["AnchorKind"];
+            anchor: null | components["schemas"]["JsonElement"];
+            /** Format: uuid */
+            anchorFileId: null | string;
+            anchorState: components["schemas"]["ResLinkAnchorState"];
+            display: null | components["schemas"]["ResLinkTargetDisplayDto"];
+        };
+        ResLinkMemberInput: {
+            targetType: string;
+            /** Format: uuid */
+            targetId: string;
+            isMain: boolean;
+            /** Format: int32 */
+            sortOrder: number;
+            note: null | string;
+            anchorKind: components["schemas"]["AnchorKind"];
+            anchor: null | components["schemas"]["JsonElement"];
+            /** Format: uuid */
+            anchorFileId: null | string;
+        };
+        ResLinkMemberUpdateRequest: {
+            isMain: boolean;
+            /** Format: int32 */
+            sortOrder: number;
+            note: null | string;
+        };
+        ResLinkNewGeoPointInput: {
+            /** Format: double */
+            lon: number;
+            /** Format: double */
+            lat: number;
+            /** Format: double */
+            z: null | number;
+            name: null | string;
+            visibility: null | components["schemas"]["Visibility"];
+        };
+        ResLinkRelationTypeDto: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            directed: boolean;
+            inverseName: null | string;
+            seeded: boolean;
+        };
+        ResLinkRelationTypeWriteRequest: {
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            directed: boolean;
+            inverseName: null | string;
+        };
+        ResLinkTargetDisplayDto: {
+            title: string;
+            subtitle: null | string;
+            route: null | string;
+            thumbnailUrl: null | string;
+        };
+        ResLinkTargetHitDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            subtitle: null | string;
+        };
+        ResLinkUpdateRequest: {
+            description: null | string;
+            /** Format: int64 */
+            relationTypeId: null | number;
+            /** Format: uuid */
+            mainMemberId: null | string;
         };
         SearchFeatureItemDto: {
             /** Format: uuid */

@@ -637,6 +637,14 @@ public sealed class DocumentWriteService(SilexGisDbContext db, ITypedPropertiesV
         var versions = await db.DocumentVersions.Where(v => v.DocumentId == documentId).ToListAsync(ct);
         var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == documentId, ct);
 
+        // Resource-link members naming the document have no FK of their own; tracked
+        // removal keeps them in the same save — and in the timeline — as the document.
+        // (Members merely *pinned* to one of these files survive: that FK sets null.)
+        var linkMembers = await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.Document && m.EntityId == documentId)
+            .ToListAsync(ct);
+        db.ResLinkMembers.RemoveRange(linkMembers);
+
         db.StoredFiles.RemoveRange(files);
         db.DocumentVersions.RemoveRange(versions);
         if (document is not null)

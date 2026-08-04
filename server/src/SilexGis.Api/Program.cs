@@ -31,6 +31,7 @@ using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
 using SilexGis.Api.Features.Notifications;
 using SilexGis.Api.Features.Features;
+using SilexGis.Api.Features.ResLinks;
 using SilexGis.Api.Features.FeatureShares;
 using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.Tags;
@@ -122,6 +123,18 @@ try
         .BindConfiguration(MapOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
+    // One resolver per resource-link target world; the directory is what the link
+    // surface fans out through for display, the picker feed and the authoring floor.
+    builder.Services.AddScoped<IResLinkTargetResolver, FeatureTargetResolver>();
+    builder.Services.AddScoped<IResLinkTargetResolver, DocumentTargetResolver>();
+    builder.Services.AddScoped<IResLinkTargetResolver, TripLogTargetResolver>();
+    builder.Services.AddScoped<IResLinkTargetResolver, CaverTargetResolver>();
+    builder.Services.AddScoped<IResLinkTargetResolver, CavingGroupTargetResolver>();
+    builder.Services.AddScoped<IResLinkTargetResolver, MapViewTargetResolver>();
+    builder.Services.AddScoped<IResLinkTargetResolver, CabinetTargetResolver>();
+    builder.Services.AddScoped<IResLinkTargetResolver, SurveyModelTargetResolver>();
+    builder.Services.AddScoped<IResLinkTargetResolver, GeofileTargetResolver>();
+    builder.Services.AddScoped<ResLinkTargetDirectory>();
     // Credential-guessing protection: per-IP fixed window on the auth surface.
     // Limit is configurable for installations behind shared NATs.
     var authPermitLimit = builder.Configuration.GetValue("Auth:RateLimitPerMinute", 60);
@@ -211,6 +224,8 @@ try
     api.MapDocumentTypeEndpoints();
     api.MapCabinetEndpoints();
     api.MapAttachmentEndpoints();
+    api.MapResLinkEndpoints();
+    api.MapResLinkRelationTypeEndpoints();
     api.MapGeoreferencedMapEndpoints();
     api.MapTripLogEndpoints();
     api.MapTagEndpoints();

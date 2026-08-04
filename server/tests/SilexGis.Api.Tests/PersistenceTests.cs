@@ -63,12 +63,35 @@ public sealed class PersistenceTests : IDisposable
         var associatedCave = await db.LinkKinds.SingleAsync(x => x.Code == "associated_cave");
         associatedCave.Locating.ShouldBeTrue();
 
+        // Resource-link relation vocabulary: the seeded codes are the exchange contract,
+        // and Directed is semantics-bearing (it decides whether a link must carry a main
+        // member or must not), so each seeded row's flag is pinned here.
+        (string Code, bool Directed)[] relations =
+        [
+            ("same-object", false),
+            ("related-to", false),
+            ("contains", true),
+            ("documents", true),
+            ("derived-from", true),
+            ("adjacent-to", false),
+            ("duplicate-of", true),
+            ("needs-clarification", false),
+        ];
+        foreach (var (code, directed) in relations)
+        {
+            var row = await db.ResLinkRelationTypes.SingleAsync(x => x.Code == code);
+            row.Directed.ShouldBe(directed, code);
+            (row.InverseName is not null).ShouldBe(directed, code);
+        }
+
         // Re-running the seeder must not duplicate rows.
         var before = await db.FeatureTypes.CountAsync();
         var linkKindsBefore = await db.LinkKinds.CountAsync();
+        var relationTypesBefore = await db.ResLinkRelationTypes.CountAsync();
         await TaxonomySeeder.SeedAsync(db);
         (await db.FeatureTypes.CountAsync()).ShouldBe(before);
         (await db.LinkKinds.CountAsync()).ShouldBe(linkKindsBefore);
+        (await db.ResLinkRelationTypes.CountAsync()).ShouldBe(relationTypesBefore);
     }
 
     [Fact]
