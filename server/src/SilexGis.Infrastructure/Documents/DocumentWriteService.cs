@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using Npgsql;
 using SilexGis.Domain;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents.Extraction;
 using SilexGis.Infrastructure.Files;
+using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Documents;
@@ -86,6 +89,7 @@ public sealed class DocumentWriteService(SilexGisDbContext db, ITypedPropertiesV
     /// </summary>
     private const int NameFactMaxLength = 255;
     private const int CodecMaxLength = 64;
+    private const int TextExtractionErrorMaxLength = 1000;
 
     /// <summary>Last-resort title when the upload supplied nothing usable to name it by.</summary>
     private const string UntitledTitle = "Untitled";
@@ -177,7 +181,127 @@ public sealed class DocumentWriteService(SilexGisDbContext db, ITypedPropertiesV
             file.PageCount = 1;
         }
 
+        // A format that carries words is pending from the instant it is recorded, and the row
+        // that says so is written in the same breath as the queue row that will answer it.
+        // Marking the file without queuing it would leave it waiting forever; queuing without
+        // marking it would let a reader look at the file in the meantime and report, wrongly,
+        // that there is nothing in it. Both go in the caller's unit of work, so a rejected
+        // upload takes the job with it.
+        if (TextExtractionFormats.CarriesText(file.MimeType))
+        {
+            file.TextExtraction = TextExtractionState.Pending;
+            db.ProcessingJobs.Add(new ProcessingJob
+            {
+                Kind = ProcessingJobKinds.TextExtraction,
+                Payload = JsonSerializer.Serialize(
+                    new TextExtractionPayload(file.Id), JsonSerializerOptions.Web),
+
+                // Deliberately nobody: the queue emails its requester on every outcome, and an
+                // upload is not a request for a mail saying a background task finished. Where
+                // the reading got to is a fact about the document, and it is on the document.
+                RequestedBy = null,
+            });
+        }
+
         return file;
+    }
+
+    /// <summary>
+    /// Records what a reader made of a file: the pages it found, and the reader and version
+    /// that found them. Saves. Returns false when the file has since been deleted, which is an
+    /// ordinary outcome for a queued reading and not a failure of anything.
+    /// </summary>
+    /// <remarks>
+    /// Written to be run again over a file it has already read. Rows are matched by page
+    /// number and updated in place rather than replaced, so nothing that points at a page
+    /// loses its target to a re-reading; pages past the end of the new reading are removed,
+    /// because a file that turned out to have fewer pages than a previous reader thought must
+    /// not keep the surplus. The page count on the file moves in the same unit of work as the
+    /// rows, so the two cannot disagree.
+    /// <para>
+    /// The upload itself is never touched. Everything written here is derived data hanging off
+    /// the file — the stored bytes, their hash, their recorded format and their name stay
+    /// exactly as they were received.
+    /// </para>
+    /// </remarks>
+    public async Task<bool> RecordPageTextAsync(
+        Guid fileId,
+        string extractor,
+        int version,
+        IReadOnlyList<ExtractedPage> pages,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(pages);
+
+        var file = await db.StoredFiles.FirstOrDefaultAsync(f => f.Id == fileId, ct);
+        if (file is null)
+        {
+            return false;
+        }
+
+        var existing = await db.DocumentPages.Where(p => p.FileId == fileId).ToListAsync(ct);
+        var byNumber = existing.ToDictionary(p => p.PageNumber);
+
+        foreach (var page in pages)
+        {
+            if (byNumber.TryGetValue(page.PageNumber, out var row))
+            {
+                row.Text = page.Text;
+                row.Extractor = extractor;
+                row.ExtractorVersion = version;
+                continue;
+            }
+
+            db.DocumentPages.Add(new DocumentPage
+            {
+                FileId = fileId,
+                PageNumber = page.PageNumber,
+                Text = page.Text,
+                Extractor = extractor,
+                ExtractorVersion = version,
+            });
+        }
+
+        var highest = pages.Count == 0 ? 0 : pages.Max(p => p.PageNumber);
+        foreach (var stale in existing.Where(p => p.PageNumber > highest))
+        {
+            db.DocumentPages.Remove(stale);
+        }
+
+        file.PageCount = pages.Count;
+
+        // A file that was read in full and holds no words is a different answer from one
+        // nothing has looked at, and the interface has to be able to say which — a scanned
+        // page will not become readable by waiting.
+        file.TextExtraction = pages.Any(p => !string.IsNullOrEmpty(p.Text))
+            ? TextExtractionState.Extracted
+            : TextExtractionState.NoText;
+        file.TextExtractionError = null;
+
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    /// <summary>
+    /// Records that a reading ended without pages — nothing could read the format, or the
+    /// bytes would not open. Saves. Returns false when the file has since been deleted.
+    /// </summary>
+    public async Task<bool> RecordTextExtractionOutcomeAsync(
+        Guid fileId,
+        TextExtractionState state,
+        string? error,
+        CancellationToken ct)
+    {
+        var file = await db.StoredFiles.FirstOrDefaultAsync(f => f.Id == fileId, ct);
+        if (file is null)
+        {
+            return false;
+        }
+
+        file.TextExtraction = state;
+        file.TextExtractionError = Trim(error, TextExtractionErrorMaxLength);
+        await db.SaveChangesAsync(CancellationToken.None);
+        return true;
     }
 
     /// <summary>

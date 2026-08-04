@@ -40,6 +40,15 @@ public sealed record DocumentDto(
     long SizeBytes,
     FileKind Kind,
     int? PageCount,
+
+    /// <summary>
+    /// How far reading this document's text has got. Served so the interface can say which
+    /// of the two silences it is looking at: a document nothing has read yet will have text
+    /// shortly, and a scanned one never will, and both otherwise show as a document with no
+    /// words in it. No disclosure of its own — it is a fact about the document, and the
+    /// document has already been read-gated.
+    /// </summary>
+    TextExtractionState TextExtraction,
     string? Author,
     string? Producer,
     DateTimeOffset? ContentCreatedAt,

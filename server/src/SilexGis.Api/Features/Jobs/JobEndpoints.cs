@@ -27,10 +27,30 @@ public static class JobEndpoints
         api.MapPost("/jobs/photo-geo-backfill", EnqueuePhotoGeoBackfillAsync)
             .WithTags("Jobs")
             .WithSummary("Enqueues a one-off backfill of EXIF GPS points onto existing photos; requires Execute on the Jobs domain.");
+        api.MapPost("/jobs/text-extraction-backfill", EnqueueTextExtractionBackfillAsync)
+            .WithTags("Jobs")
+            .WithSummary("Enqueues a sweep that reads the text of stored files nothing has read, or that a newer reader should read again; requires Execute on the Jobs domain.");
         return api;
     }
 
-    private static async Task<Results<Ok<ProcessingJobDto>, UnauthorizedHttpResult, ProblemHttpResult>> EnqueuePhotoGeoBackfillAsync(
+    private static Task<Results<Ok<ProcessingJobDto>, UnauthorizedHttpResult, ProblemHttpResult>> EnqueuePhotoGeoBackfillAsync(
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+        => EnqueueAsync(ProcessingJobKinds.PhotoGeoBackfill, db, accessAccessor, ct);
+
+    private static Task<Results<Ok<ProcessingJobDto>, UnauthorizedHttpResult, ProblemHttpResult>> EnqueueTextExtractionBackfillAsync(
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+        => EnqueueAsync(ProcessingJobKinds.TextExtractionBackfill, db, accessAccessor, ct);
+
+    /// <summary>
+    /// Queues a maintenance sweep. Each takes no input of its own — the work it does is a
+    /// property of the installation's own rows — so the only thing that varies is which one.
+    /// </summary>
+    private static async Task<Results<Ok<ProcessingJobDto>, UnauthorizedHttpResult, ProblemHttpResult>> EnqueueAsync(
+        string kind,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -48,7 +68,7 @@ public static class JobEndpoints
 
         var job = new ProcessingJob
         {
-            Kind = ProcessingJobKinds.PhotoGeoBackfill,
+            Kind = kind,
             RequestedBy = ctx.UserId,
         };
         db.ProcessingJobs.Add(job);

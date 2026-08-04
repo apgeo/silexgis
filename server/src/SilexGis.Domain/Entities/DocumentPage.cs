@@ -22,4 +22,19 @@ public class DocumentPage
 
     /// <summary>Extracted plain text of the page; null when nothing has extracted it yet.</summary>
     public string? Text { get; set; }
+
+    /// <summary>
+    /// Stable name of the reader that produced <see cref="Text"/>, or null where nothing has
+    /// read the page. Recorded because a page with no text and a page nothing has looked at
+    /// are the same row otherwise, and only one of them is worth reading again.
+    /// </summary>
+    public string? Extractor { get; set; }
+
+    /// <summary>
+    /// Output version of the reader named in <see cref="Extractor"/>, bumped whenever a change
+    /// makes it produce different text from the same bytes. Stored beside the name so pages
+    /// left behind by an older reader are findable without opening a single file, which is
+    /// what makes a re-reading a decidable question and a half-finished one resumable.
+    /// </summary>
+    public int? ExtractorVersion { get; set; }
 }

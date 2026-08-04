@@ -1433,6 +1433,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/text-extraction-backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enqueues a sweep that reads the text of stored files nothing has read, or that a newer reader should read again; requires Execute on the Jobs domain. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProcessingJobDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/export/caves": {
         parameters: {
             query?: never;
@@ -7849,6 +7885,7 @@ export interface components {
             kind: components["schemas"]["FileKind"];
             /** Format: int32 */
             pageCount: null | number;
+            textExtraction: components["schemas"]["TextExtractionState"];
             author: null | string;
             producer: null | string;
             /** Format: date-time */
@@ -9073,6 +9110,8 @@ export interface components {
             sent: boolean;
             error: null | string;
         };
+        /** @enum {unknown} */
+        TextExtractionState: "notApplicable" | "pending" | "extracted" | "noText" | "failed" | "unsupported";
         TripLogDto: {
             /** Format: uuid */
             id: string;

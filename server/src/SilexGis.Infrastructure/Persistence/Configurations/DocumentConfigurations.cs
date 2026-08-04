@@ -67,6 +67,8 @@ public sealed class DocumentPageConfiguration : IEntityTypeConfiguration<Documen
         // Pages are re-derivable from the bytes, so they go with the file they describe.
         builder.HasOne<StoredFile>().WithMany().HasForeignKey(x => x.FileId).OnDelete(DeleteBehavior.Cascade);
 
+        builder.Property(x => x.Extractor).HasMaxLength(64);
+
         builder.HasIndex(x => new { x.FileId, x.PageNumber }).IsUnique();
     }
 }

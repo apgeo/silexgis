@@ -21,7 +21,12 @@ Previous versions:
   documents, audio and video, and georeferenced raster (COG) map overlays. A document has a
   kind (survey report, permit, trip report, …) and each kind decides which details its
   documents are asked for, so an archive can be organized the way its club actually files
-  things. Uploads are accepted up to 512 MB by default, and the limit is a setting.
+  things. Uploads are accepted up to 512 MB by default, and the limit is a setting. The text
+  of an uploaded document is read in the background — PDF, Word, Excel, PowerPoint, LibreOffice,
+  Rich Text, plain text, Markdown and CSV, including files written in the older Central European
+  code pages Romanian archives are full of. Nothing recognises text in a photograph, so scanned
+  pages and image-only PDFs have no text to read, and the document panel says exactly that
+  instead of leaving you waiting for words that are never coming.
 - **Cabinets** — a filing tree documents live in ("Club archive / Bulletins / 1987"), and the
   unit permissions are granted on: one rule can hand a committee the whole archive instead of
   one rule per document. A document can sit on several shelves at once, so there is no

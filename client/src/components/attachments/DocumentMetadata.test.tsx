@@ -32,6 +32,7 @@ const document = {
   // Filed nowhere: this is the state the tree cannot mend, since it only ever lists what
   // is already on a shelf.
   cabinetIds: [] as string[],
+  textExtraction: 'extracted',
 };
 
 const cavingGroups = [{ id: 'cg-1', name: 'Speo Club' }];
@@ -79,6 +80,16 @@ vi.mock('../../api/hooks.ts', () => ({
 const { default: DocumentMetadata } = await import('./DocumentMetadata.tsx');
 
 afterEach(cleanup);
+
+/** Every sentence the panel can say about the reading — one of them, and only one, per state. */
+const sentences = [
+  'This document has no text layer: it is pictures of pages, so there are no words in it to read.',
+  'Reading the text…',
+  'The text has been read.',
+  'The text could not be read.',
+  "Nothing here can read this format's text yet.",
+  'This kind of file holds no text to read.',
+];
 
 describe('DocumentMetadata', () => {
   it('builds the form from the kind schema and keeps values the schema does not describe', async () => {
@@ -181,5 +192,32 @@ describe('DocumentMetadata', () => {
     await screen.findByText('Cave');
     expect(screen.queryByText('Not filed anywhere')).not.toBeInTheDocument();
     documentActions = 'read, write';
+  });
+
+  // A scanned document and a document waiting its turn both show no words. The panel has to
+  // separate them in words, and each of these asserts the other sentence is absent — a
+  // "no text layer" notice that also appeared while reading was still running would be a
+  // wrong statement, not a merely redundant one.
+  it.each([
+    ['noText', 'This document has no text layer: it is pictures of pages, so there are no words in it to read.'],
+    ['pending', 'Reading the text…'],
+    ['extracted', 'The text has been read.'],
+    ['failed', 'The text could not be read.'],
+    ['unsupported', "Nothing here can read this format's text yet."],
+    ['notApplicable', 'This kind of file holds no text to read.'],
+  ])('says plainly what reading the text of a %s document found', async (state, sentence) => {
+    document.textExtraction = state;
+    render(
+      <App>
+        <DocumentMetadata documentId="doc-1" />
+      </App>,
+    );
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(await screen.findByText(sentence)).toBeInTheDocument();
+    for (const other of sentences.filter((s) => s !== sentence)) {
+      expect(screen.queryByText(other)).not.toBeInTheDocument();
+    }
+    document.textExtraction = 'extracted';
   });
 });

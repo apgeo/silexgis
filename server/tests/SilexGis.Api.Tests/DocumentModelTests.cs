@@ -84,8 +84,10 @@ public sealed class DocumentModelTests : IAsyncLifetime, IDisposable
             && a.RootEntityId == documentKey))
             .ShouldBe(1);
 
-        // A text file's page count is unknown until something extracts it; no page is invented.
-        (await db.DocumentPages.CountAsync(p => p.FileId == fileId)).ShouldBe(0);
+        // A text file's page count is unknown until something reads it, so no page is invented
+        // at upload. What the upload does record is that the file is worth reading — it never
+        // rests at "this format holds no words", which is the answer only a picture deserves.
+        file.TextExtraction.ShouldNotBe(TextExtractionState.NotApplicable);
     }
 
     [Fact]

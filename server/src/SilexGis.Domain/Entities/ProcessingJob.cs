@@ -53,4 +53,13 @@ public static class ProcessingJobKinds
 
     /// <summary>Re-derive and check the feature aggregate's maintained state. Scheduled.</summary>
     public const string FeatureIntegrityVerify = "feature-integrity-verify";
+
+    /// <summary>Read the text layer out of a stored file into its page rows.</summary>
+    public const string TextExtraction = "text-extraction";
+
+    /// <summary>
+    /// Queue a reading for every stored file this installation has not read the text of —
+    /// files that predate the readers, and files a newer reader should look at again.
+    /// </summary>
+    public const string TextExtractionBackfill = "text-extraction-backfill";
 }

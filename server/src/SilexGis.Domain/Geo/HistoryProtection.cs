@@ -48,9 +48,13 @@ public static class HistoryProtection
     // location data — so drop all three for everyone (defence in depth), never emitted in any
     // timeline. The page count joins them as bookkeeping rather than as protection: it is
     // filled in by whatever reads the file, so it moves without a person having done anything.
+    // The text-extraction state and its error are there for the same reason: they are a
+    // background reader's progress notes, and a timeline of them would record the queue's
+    // scheduling rather than anybody's decision.
     private static readonly string[] FileNoise =
         [nameof(StoredFile.Geom), nameof(StoredFile.Metadata), nameof(StoredFile.StoragePath),
-         nameof(StoredFile.PageCount)];
+         nameof(StoredFile.PageCount), nameof(StoredFile.TextExtraction),
+         nameof(StoredFile.TextExtractionError)];
 
     // Coordinate-bearing fields, mirroring the live DTO masking exactly. Named via nameof so a
     // property rename is a compile error here rather than a silent redaction (location) leak.

@@ -70,6 +70,19 @@ public class StoredFile : ITimestamped, IAuditable
     /// </summary>
     public int? PageCount { get; set; }
 
+    /// <summary>
+    /// How far reading this file's text layer has got. Written only by extraction, so it says
+    /// nothing about who uploaded the file or when — a file whose format holds no text rests
+    /// at <see cref="TextExtractionState.NotApplicable"/> and is never queued.
+    /// </summary>
+    public TextExtractionState TextExtraction { get; set; } = TextExtractionState.NotApplicable;
+
+    /// <summary>
+    /// Why reading failed, when it did. Bounded free text meant for whoever has to explain a
+    /// document that will not open; null in every other state.
+    /// </summary>
+    public string? TextExtractionError { get; set; }
+
     /// <summary>Author embedded in the file's own metadata, not the account that uploaded it.</summary>
     public string? Author { get; set; }
 

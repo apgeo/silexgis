@@ -372,7 +372,16 @@
     "metadataInvalid": "The details do not match what this document kind allows.",
     "cabinets": "Filed in",
     "pickCabinets": "Not filed anywhere",
-    "filingMovesAccess": "A document can sit in several cabinets; each one an access rule names reaches it."
+    "filingMovesAccess": "A document can sit in several cabinets; each one an access rule names reaches it.",
+    "text": "Text",
+    "textStates": {
+      "notApplicable": "This kind of file holds no text to read.",
+      "pending": "Reading the text…",
+      "extracted": "The text has been read.",
+      "noText": "This document has no text layer: it is pictures of pages, so there are no words in it to read.",
+      "failed": "The text could not be read.",
+      "unsupported": "Nothing here can read this format's text yet."
+    }
   },
   "cabinets": {
     "title": "Cabinets",

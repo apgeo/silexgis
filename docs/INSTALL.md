@@ -165,6 +165,20 @@ docker compose up -d
 Database migrations run automatically on start. Take a backup first; release notes call out
 any manual steps.
 
+### Upgrading across the document text-reading release
+
+An installation that already holds documents queues one background sweep the first time it
+starts on the new schema, and that sweep queues one reading per stored file whose format
+carries text. Nothing you uploaded is modified — a reading only writes the text it found beside
+the file it read — but on a large archive the background worker will be busy for a while after
+the upgrade, and until a document has been reached its panel says its text has not been read
+yet. Nothing else waits on it: the site is usable throughout.
+
+An administrator can start the sweep again at any time (`POST /api/v1/jobs/text-extraction-backfill`,
+which needs the job-execution right). It is safe to run as often as you like — a file that has
+already been read by the current reader costs one query and nothing else — and it is how you
+pick up an improved reader after a later upgrade.
+
 ## External login providers
 
 Sign-in with Google, GitHub, or any OpenID Connect provider is optional and off by default —

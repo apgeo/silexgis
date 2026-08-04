@@ -124,11 +124,30 @@ public static class DependencyInjection
         services.AddSingleton<IContentMetadataReader, ContentMetadataReader>();
         services.AddSingleton<IVectorIO, GdalVectorIO>();
         services.AddSingleton<RasterCogService>();
+
+        // Readers of stored files' text layers. Stateless, so one of each serves everything;
+        // the selector is what turns a stored format into the reader that understands it.
+        services.AddSingleton<Documents.Extraction.ITextExtractor,
+            Documents.Extraction.PlainTextExtractor>();
+        services.AddSingleton<Documents.Extraction.ITextExtractor,
+            Documents.Extraction.OpenDocumentTextExtractor>();
+        services.AddSingleton<Documents.Extraction.ITextExtractor,
+            Documents.Extraction.RichTextExtractor>();
+        services.AddSingleton<Documents.Extraction.ITextExtractor,
+            Documents.Extraction.PdfTextExtractor>();
+        services.AddSingleton<Documents.Extraction.ITextExtractor,
+            Documents.Extraction.OfficeOpenXmlTextExtractor>();
+        services.AddSingleton<Documents.Extraction.ITextExtractor,
+            Documents.Extraction.LegacyOfficeTextExtractor>();
+        services.AddSingleton<Documents.Extraction.TextExtractorSelector>();
+
         services.AddScoped<IProcessingJobHandler, GeofileImportHandler>();
         services.AddScoped<IProcessingJobHandler, RasterCogHandler>();
         services.AddScoped<IProcessingJobHandler, PhotoGeoBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, AccountDataExportHandler>();
         services.AddScoped<IProcessingJobHandler, FeatureIntegrityVerifyHandler>();
+        services.AddScoped<IProcessingJobHandler, TextExtractionHandler>();
+        services.AddScoped<IProcessingJobHandler, TextExtractionBackfillHandler>();
         services.AddHostedService<ProcessingJobWorker>();
 
         services.Configure<FeatureIntegrityOptions>(

@@ -219,6 +219,7 @@ public static class DocumentEndpoints
             file.SizeBytes,
             file.Kind,
             file.PageCount,
+            file.TextExtraction,
             file.Author,
             file.Producer,
             file.ContentCreatedAt,

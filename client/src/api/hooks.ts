@@ -14,6 +14,7 @@ export type Taxonomy = components['schemas']['TaxonomyDto'];
 export type FeatureType = components['schemas']['FeatureTypeDto'];
 export type DocumentType = components['schemas']['DocumentTypeDto'];
 export type DocumentInfo = components['schemas']['DocumentDto'];
+export type TextExtractionState = components['schemas']['TextExtractionState'];
 export type CabinetInfo = components['schemas']['CabinetDto'];
 export type CabinetWrite = components['schemas']['CabinetWriteRequest'];
 export type CabinetDocument = components['schemas']['CabinetDocumentDto'];
@@ -1151,6 +1152,10 @@ export function useDocument(id: string | undefined, enabled = true) {
     queryKey: queryKeys.document(id ?? ''),
     queryFn: () => unwrap(api.GET('/api/v1/documents/{id}', { params: { path: { id: id! } } })),
     enabled: !!id && enabled,
+    // Reading a document's text runs in a background job, so "being read" is a state that
+    // resolves on its own while the panel is open. Poll only through that one state: every
+    // other one is settled, and re-asking would be asking the same question forever.
+    refetchInterval: (query) => (query.state.data?.textExtraction === 'pending' ? 2000 : false),
   });
 }
 

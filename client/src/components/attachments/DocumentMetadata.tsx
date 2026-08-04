@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ProfileOutlined } from '@ant-design/icons';
+import {
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+  FileImageOutlined,
+  MinusCircleOutlined,
+  ProfileOutlined,
+  QuestionCircleOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { App, Button, Checkbox, Flex, Input, InputNumber, Popover, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
@@ -14,6 +22,7 @@ import {
   useFileDocument,
   useUpdateDocument,
   type CabinetInfo,
+  type TextExtractionState,
   type Visibility,
 } from '../../api/hooks.ts';
 import { parsePropertiesSchema, type SchemaField } from '../typedProperties/propertiesSchema.ts';
@@ -42,6 +51,42 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
         {label}
       </Typography.Text>
       {children}
+    </Flex>
+  );
+}
+
+/** How each state of the reading is drawn, beside the sentence that names it. */
+const textStates: Record<
+  TextExtractionState,
+  { icon: ReactNode; tone: 'success' | 'secondary' | 'warning' | 'danger' }
+> = {
+  extracted: { icon: <CheckCircleOutlined />, tone: 'success' },
+  pending: { icon: <SyncOutlined spin />, tone: 'secondary' },
+  noText: { icon: <FileImageOutlined />, tone: 'warning' },
+  notApplicable: { icon: <MinusCircleOutlined />, tone: 'secondary' },
+  unsupported: { icon: <QuestionCircleOutlined />, tone: 'secondary' },
+  failed: { icon: <ExclamationCircleOutlined />, tone: 'danger' },
+};
+
+/**
+ * Says what happened when the document's text was read, in a sentence rather than a badge.
+ *
+ * This is stated for every document, including the ones with nothing in them, because the
+ * two silences are indistinguishable otherwise: a document nobody has read yet and a
+ * scanned one that will never have words both show as a document with no text. Leaving
+ * that unsaid is how someone waits for a search result that is never coming.
+ */
+function TextState({ state }: { state: TextExtractionState }) {
+  const { t } = useTranslation();
+  const { icon, tone } = textStates[state];
+  return (
+    <Flex gap={6} align="baseline">
+      <Typography.Text type={tone} style={{ fontSize: 12 }}>
+        {icon}
+      </Typography.Text>
+      <Typography.Text type={tone} style={{ fontSize: 12 }}>
+        {t(`documents.textStates.${state}`)}
+      </Typography.Text>
     </Flex>
   );
 }
@@ -166,6 +211,11 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
 
   const content = (
     <Flex vertical gap={10} style={{ width: 300 }}>
+      {document && (
+        <Field label={t('documents.text')}>
+          <TextState state={document.textExtraction} />
+        </Field>
+      )}
       <Field label={t('documents.title')}>
         <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} />
       </Field>

@@ -34,6 +34,13 @@ public sealed class StoredFileConfiguration : IEntityTypeConfiguration<StoredFil
         builder.Property(x => x.Producer).HasMaxLength(255);
         builder.Property(x => x.Codec).HasMaxLength(64);
 
+        builder.Property(x => x.TextExtraction).HasConversion<short>();
+        builder.Property(x => x.TextExtractionError).HasMaxLength(1000);
+        // The maintenance sweep that finds text still to read asks by state and nothing else —
+        // once for the files nothing has read, once for the files it has to check the age of —
+        // over a table that grows with every upload the installation ever takes.
+        builder.HasIndex(x => x.TextExtraction);
+
         // Bytes belong to a document revision; deleting the revision takes them with it.
         builder.HasOne<DocumentVersion>().WithMany().HasForeignKey(x => x.DocumentVersionId)
             .OnDelete(DeleteBehavior.Cascade);

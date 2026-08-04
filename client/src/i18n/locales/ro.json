@@ -372,7 +372,16 @@
     "metadataInvalid": "Detaliile nu corespund cu ce permite acest tip de document.",
     "cabinets": "Așezat în",
     "pickCabinets": "Neașezat nicăieri",
-    "filingMovesAccess": "Un document poate sta în mai multe dulapuri; fiecare dulap numit de o regulă de acces îl cuprinde."
+    "filingMovesAccess": "Un document poate sta în mai multe dulapuri; fiecare dulap numit de o regulă de acces îl cuprinde.",
+    "text": "Text",
+    "textStates": {
+      "notApplicable": "Acest fel de fișier nu conține text de citit.",
+      "pending": "Se citește textul…",
+      "extracted": "Textul a fost citit.",
+      "noText": "Documentul nu are strat de text: sunt poze ale paginilor, așa că nu există cuvinte de citit în el.",
+      "failed": "Textul nu a putut fi citit.",
+      "unsupported": "Nimic de aici nu știe încă să citească textul acestui format."
+    }
   },
   "cabinets": {
     "title": "Dulapuri",
