@@ -17,6 +17,14 @@ describe('parseMapHash', () => {
     expect(parseMapHash('#14.0/45.7')).toBeNull();
   });
 
+  it('does not mistake a 3D position for a map one', () => {
+    // The two hashes share one address bar and must never be read as each other. This holds
+    // because the expression is anchored at both ends and its first group takes digits only, so
+    // the literal `3d` fails it twice over — asserted rather than assumed, because that is the
+    // kind of property that quietly stops being true when somebody relaxes an anchor.
+    expect(parseMapHash('#3d/45.68321/25.30612/-184/137.5/-22.4')).toBeNull();
+  });
+
   it('rejects out-of-range coordinates', () => {
     expect(parseMapHash('#10/91/25')).toBeNull(); // lat > 90
     expect(parseMapHash('#10/45/181')).toBeNull(); // lon > 180

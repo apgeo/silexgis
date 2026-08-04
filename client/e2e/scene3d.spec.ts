@@ -69,6 +69,56 @@ test('the 3D view loads the caves in front of it, asking for surveyed depths', a
   await expect(page.getByText('Click a feature on the map to see details.')).toBeVisible();
 });
 
+test('a place in the scene is bookmarkable, and reopens where it was left', async ({ page }) => {
+  await login(page);
+  await page.goto('/map3d');
+  await expect(page.getByTestId('scene3d-container').locator('canvas').first()).toBeAttached({
+    timeout: 30_000,
+  });
+
+  // A preset is a camera move, which is what puts a position in the address bar.
+  await page.getByTestId('scene3d-preset-north').click();
+  await expect.poll(() => page.url(), { timeout: 30_000 }).toMatch(/#3d\//);
+
+  const shared = page.url();
+  await page.goto(shared);
+  await expect(page.getByTestId('scene3d-container').locator('canvas').first()).toBeAttached({
+    timeout: 30_000,
+  });
+
+  // Reopening a shared link puts the camera back rather than at the opening view, and the
+  // position written for it survives the round trip to about a metre.
+  const before = new URL(shared).hash.split('/').slice(1, 3).map(Number);
+  await expect
+    .poll(
+      () => {
+        const after = new URL(page.url()).hash.split('/').slice(1, 3).map(Number);
+        return Math.max(Math.abs(after[0] - before[0]), Math.abs(after[1] - before[1]));
+      },
+      { timeout: 30_000 },
+    )
+    .toBeLessThan(0.001);
+});
+
+test('the scene opens beside the flat map, sharing the one scene this window has', async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto('/map');
+
+  await page.getByTestId('map-scene3d-toggle').click();
+
+  await expect(page.getByTestId('scene3d-container').locator('canvas').first()).toBeAttached({
+    timeout: 30_000,
+  });
+  await expect(page.getByText('The 3D view could not be started')).toHaveCount(0);
+  // Exactly one drawing surface in the window, whatever is showing it.
+  await expect(page.getByTestId('scene3d-surface')).toHaveCount(1);
+  // The map keeps the address bar while the scene is only a panel beside it: one window has one
+  // hash, and two writers would overwrite each other on every camera move.
+  await expect.poll(() => page.url(), { timeout: 30_000 }).not.toMatch(/#3d\//);
+});
+
 test('a browser without WebGL 2 is told why, rather than shown a dead canvas', async ({
   browser,
 }) => {

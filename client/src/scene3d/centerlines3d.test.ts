@@ -2,7 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { centerlinePalette } from '../map/markerPalette.ts';
 import {
+  caveCenterlines,
   CENTERLINE_DEPTH_BANDS,
+  centerlineBounds,
   centerlineLoadState,
   centerlinePolylines,
   nearestCaveCenterlines,
@@ -483,6 +485,39 @@ describe('nearestCaveCenterlines', () => {
 
   it('has nothing to offer when nothing was drawn', () => {
     expect(nearestCaveCenterlines([], { longitude: 25.44, latitude: 45.53 })).toEqual([]);
+  });
+});
+
+describe('framing one cave out of what was drawn', () => {
+  const line = (caveId: string, longitude: number): Scene3DPolyline => ({
+    positions: [
+      { longitude, latitude: 45.53, height: 0 },
+      { longitude: longitude + 0.01, latitude: 45.54, height: -820 },
+    ],
+    widthPixels: 2,
+    color: '#7a1f1f',
+    id: { kind: 'centerline', caveId, centerlineId: `${caveId}-1` },
+  });
+
+  it('takes only the lines of the cave asked for', () => {
+    const wanted = line('cave-1', 25.44);
+    expect(caveCenterlines([wanted, line('cave-2', 26.44)], 'cave-1')).toEqual([wanted]);
+  });
+
+  it('measures the ground a survey covers and leaves its depth out of it', () => {
+    // A camera is framed by the ground it has to cover. A cave eight hundred metres deep and a
+    // hundred metres wide would, if its depth were counted, be framed from far enough away to be
+    // a dot.
+    const [west, south, east, north] = centerlineBounds([line('cave-1', 25.44)])!;
+    expect(west).toBeCloseTo(25.44, 9);
+    expect(south).toBeCloseTo(45.53, 9);
+    expect(east).toBeCloseTo(25.45, 9);
+    expect(north).toBeCloseTo(45.54, 9);
+  });
+
+  it('has no box to offer when nothing of that cave is drawn', () => {
+    expect(centerlineBounds([])).toBeUndefined();
+    expect(centerlineBounds(caveCenterlines([line('cave-1', 25.44)], 'cave-9'))).toBeUndefined();
   });
 });
 

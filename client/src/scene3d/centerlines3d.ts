@@ -2,7 +2,7 @@
 import { centerlinePalette } from '../map/markerPalette.ts';
 import { featuresOf, lineStrings, propertiesOf, stringProperty } from './geoJson3d.ts';
 import type { CenterlinePick } from './selection3d.ts';
-import type { Scene3DPolyline, Scene3DPosition } from './scene3dEngine.ts';
+import type { Scene3DBounds, Scene3DPolyline, Scene3DPosition } from './scene3dEngine.ts';
 
 // Cave survey lines, at the depths they were surveyed at.
 //
@@ -289,6 +289,39 @@ export function nearestCaveCenterlines(
     }
   }
   return nearest;
+}
+
+/** Just the lines belonging to one cave, out of everything a response drew. */
+export function caveCenterlines(
+  polylines: readonly Scene3DPolyline[],
+  caveId: string,
+): Scene3DPolyline[] {
+  return polylines.filter((polyline) => caveIdOf(polyline) === caveId);
+}
+
+/**
+ * The ground box a set of survey lines occupies, or undefined when they hold no positions.
+ *
+ * Longitude and latitude only. This is what a "frame this cave" action needs, and a camera is
+ * framed by the ground it has to cover: a cave eight hundred metres deep and forty metres wide
+ * would, if its depth were counted, be framed from far enough away to be a dot.
+ */
+export function centerlineBounds(
+  polylines: readonly Scene3DPolyline[],
+): Scene3DBounds | undefined {
+  let west = Number.POSITIVE_INFINITY;
+  let south = Number.POSITIVE_INFINITY;
+  let east = Number.NEGATIVE_INFINITY;
+  let north = Number.NEGATIVE_INFINITY;
+  for (const polyline of polylines) {
+    for (const position of polyline.positions) {
+      west = Math.min(west, position.longitude);
+      east = Math.max(east, position.longitude);
+      south = Math.min(south, position.latitude);
+      north = Math.max(north, position.latitude);
+    }
+  }
+  return Number.isFinite(west) && Number.isFinite(south) ? [west, south, east, north] : undefined;
 }
 
 /** What the last response held back, and how much of it could not be given real depths. */

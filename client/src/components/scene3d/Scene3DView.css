@@ -13,6 +13,27 @@
   background: #e8ecef;
 }
 
+/* The window's single drawing surface, moved into whichever panel is showing the scene. It is
+   sized here rather than by whoever borrows it, so a new place to show the scene cannot forget to
+   give it a height and end up with a working scene nobody can see. */
+.scene3d-surface {
+  width: 100%;
+  height: 100%;
+}
+
+/* Said when the one scene this window has is being shown somewhere else — a route and a panel
+   cannot each have one, so the newest place to ask for it wins and the other says why it is empty
+   instead of leaving a blank rectangle. */
+.scene3d-elsewhere {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+}
+
 /* The engine appends its own attribution strip and styles it as 10px white text with a shadow,
    which is unreadable over a light basemap. It is not hidden: the tile licences require the
    attribution to be shown, and the 2D map shows it too. Restyled instead to match the

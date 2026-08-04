@@ -7,9 +7,33 @@
 
 import type { WorkspaceSelection } from '../stores/workspaceStore.ts';
 
+/**
+ * Which kind of view an event came from.
+ *
+ * The bus delivers to the publisher's own window as well as to the others, so an event with no
+ * sender on it cannot be told apart from an echo of itself. Two views that follow each other need
+ * that distinction; the two that do not (a pop-out publishing a pick) leave it off.
+ */
+export type ViewKind = 'map2d' | 'scene3d';
+
+/** Longitude/latitude bounds in degrees, west, south, east, north — the same order both views use. */
+export type ViewExtent = [number, number, number, number];
+
 export type WorkspaceEvent =
-  | { kind: 'selection'; selection: WorkspaceSelection | null }
-  | { kind: 'fly-to'; lon: number; lat: number; zoom?: number };
+  | { kind: 'selection'; selection: WorkspaceSelection | null; origin?: ViewKind }
+  | { kind: 'fly-to'; lon: number; lat: number; zoom?: number }
+  /** What one view is showing, as ground rather than as a camera: the other views frame it their own way. */
+  | { kind: 'extent'; origin: ViewKind; bounds: ViewExtent; zoom: number }
+  /**
+   * A view that has just opened, asking where everybody else is looking.
+   *
+   * A window that opens on its own — the 3D scene popped out to a second monitor — has no memory
+   * of anything said before it existed, and the bus retains nothing: without asking, it opens at
+   * its own default and then announces that default as though its viewer had chosen it, sending
+   * the window it was opened from off to the middle of nowhere. Asking costs one message and is
+   * answered only by a view that has been open long enough to be the one worth following.
+   */
+  | { kind: 'view-hello'; origin: ViewKind };
 
 type Listener = (event: WorkspaceEvent) => void;
 

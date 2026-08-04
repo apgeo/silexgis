@@ -186,6 +186,19 @@ export class PerspectiveFrustum {
   fovy = Math.PI / 3;
 }
 
+/**
+ * A frustum with no convergence: how much ground is on screen is its `width` and nothing else.
+ *
+ * Modelled because the scene module branches on which frustum the camera is holding — the zoom it
+ * reports and the box it asks the server for are computed differently under each — and because the
+ * real library replaces the frustum object outright when the projection is switched. A double that
+ * merely flipped a flag would let a switch that never happened pass.
+ */
+export class OrthographicFrustum {
+  near = 1;
+  width = 0;
+}
+
 export class NearFarScalar {
   near: number;
   nearValue: number;
@@ -425,11 +438,39 @@ interface FakeViewOptions {
 }
 
 class FakeCamera {
-  frustum = new PerspectiveFrustum();
+  frustum: PerspectiveFrustum | OrthographicFrustum = new PerspectiveFrustum();
   positionWC: FakeCartesian3 = { longitudeDegrees: 0, latitudeDegrees: 0, height: 0 };
   heading = 0;
   pitch = 0;
-  roll = 0;
+  private rollRadians = 0;
+  /** Where the ground is, so the distance a box frustum is sized from can be worked out. */
+  private readonly groundHeight: () => number;
+
+  constructor(groundHeight: () => number = () => 0) {
+    this.groundHeight = groundHeight;
+  }
+
+  /**
+   * The roll the real library reports, quirk included.
+   *
+   * It does not hand back the roll it was given: it measures the angle from the camera's own axes
+   * and folds the answer into a whole turn, so a camera placed level comes back as a *whole turn*
+   * rather than as nothing — at every tilt except straight down, where the frame it measures
+   * against degenerates and the answer really is nothing. Modelled here because reading that value
+   * raw says a level camera is upside down, and nothing but a stand-in that reproduces it can
+   * catch what follows from that without a graphics card.
+   */
+  get roll(): number {
+    if (this.rollRadians !== 0) {
+      return this.rollRadians;
+    }
+    return this.pitch <= -Math.PI / 2 + 1e-9 ? 0 : Math.PI * 2;
+  }
+
+  set roll(value: number) {
+    this.rollRadians = value;
+  }
+
   /** Destinations that were not point positions — how `fitBounds` becomes observable. */
   readonly framed: unknown[] = [];
   flightCount = 0;
@@ -443,6 +484,41 @@ class FakeCamera {
   flyTo(options: FakeViewOptions) {
     this.flightCount += 1;
     this.apply(options);
+  }
+
+  /**
+   * Stands in for the last tick of a flight, which a test raises by hand.
+   *
+   * The real library animates a flight by putting the camera through `setView` on every frame of
+   * it, so anything a caller does to the frustum after starting the flight — rather than to the
+   * camera the flight is heading for — is undone by the next frame. The destination is applied
+   * here at once, as it is by `flyTo` above, so the only thing this changes is the box frustum's
+   * width, which is exactly the behaviour it exists to expose.
+   */
+  finishFlight() {
+    this.adjustOrthographicFrustum();
+  }
+
+  /**
+   * Swaps in a box frustum, sized from how far the camera is from the ground, which is what the
+   * real library does — the switch is meant to keep roughly the framing the viewer already had
+   * rather than jumping to some default.
+   */
+  switchToOrthographicFrustum() {
+    if (this.frustum instanceof OrthographicFrustum) {
+      return;
+    }
+    this.frustum = new OrthographicFrustum();
+    this.adjustOrthographicFrustum();
+  }
+
+  switchToPerspectiveFrustum() {
+    if (this.frustum instanceof PerspectiveFrustum) {
+      return;
+    }
+    // A fresh object carrying the library's defaults, so a scene that does not put its own near
+    // plane back is caught rather than quietly inheriting the one it set before the switch.
+    this.frustum = new PerspectiveFrustum();
   }
 
   pickEllipsoid(_windowPosition: Cartesian2, _ellipsoid: unknown): FakeCartesian3 | undefined {
@@ -461,6 +537,38 @@ class FakeCamera {
       this.pitch = options.orientation.pitch;
       this.roll = options.orientation.roll;
     }
+    this.adjustOrthographicFrustum();
+  }
+
+  /**
+   * Resizes a box frustum from where the camera now stands, which the real library does on every
+   * camera move — placing it, flying it, dragging it, zooming it.
+   *
+   * Modelled because it is the difference between a width being a property a caller can set and a
+   * width being a reading off the camera's position, and the whole of how this application frames
+   * a view without perspective turns on which of those it is. A stand-in that quietly let an
+   * assigned width persist would certify a behaviour the library does not have.
+   */
+  private adjustOrthographicFrustum() {
+    if (!(this.frustum instanceof OrthographicFrustum)) {
+      return;
+    }
+    this.frustum.width = this.distanceToGround();
+  }
+
+  /**
+   * Distance from the eye to the ground under the middle of the screen — the real measure the
+   * library sizes a box frustum by. With the middle of the screen showing sky (or the camera under
+   * the ground) there is nothing to measure to, and the library falls back to the height above the
+   * ellipsoid, so this does the same.
+   */
+  private distanceToGround(): number {
+    const above = this.positionWC.height - this.groundHeight();
+    const sinPitch = Math.abs(Math.sin(this.pitch));
+    if (above <= 0 || sinPitch < 1e-9) {
+      return Math.max(this.positionWC.height, 0);
+    }
+    return above / sinPitch;
   }
 }
 
@@ -621,7 +729,9 @@ export interface FakePickCall {
 
 class FakeScene {
   readonly globe = new FakeGlobe();
-  readonly camera = new FakeCamera();
+  // The camera is given the ground rather than the scene: sizing a box frustum is the one thing it
+  // does that depends on anything outside itself.
+  readonly camera = new FakeCamera(() => this.globe.terrainHeight ?? 0);
   readonly imageryLayers = new FakeImageryLayerCollection();
   readonly primitives = new FakePrimitiveCollection();
   readonly renderError = new FakeEvent();

@@ -1,0 +1,18 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The camera presets, stacked down the right edge under the layer control. Vertical rather than
+   horizontal so the row of buttons never grows into the middle of the scene on a narrow panel,
+   which is where the caves are. */
+.scene3d-camera-controls {
+  position: absolute;
+  top: 44px;
+  right: 8px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scene3d-camera-controls .ant-btn {
+  min-width: 28px;
+  padding-inline: 4px;
+}

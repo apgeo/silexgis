@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
-import { viewFlyTo } from '../../workspace/viewCamera.ts';
+import { setActiveViewCamera, viewFlyTo } from '../../workspace/viewCamera.ts';
 
 // The engine library is replaced by the same double the scene module's own suite uses; the test
 // runner has no graphics context to give it.
@@ -99,13 +99,40 @@ describe('Scene3DView', () => {
     expect(engine.engineState.widgets).toHaveLength(0);
   });
 
-  it('builds the scene inside its own element when the browser can run it', async () => {
+  it('builds the scene inside the window\'s one drawing surface, shown in its own box', async () => {
     withWebGl2(true);
     renderView();
 
     await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
-    expect(engine.engineState.widgets[0].container).toBe(screen.getByTestId('scene3d-container'));
+    const surface = screen.getByTestId('scene3d-surface');
+    // The scene is always built in the same element, whichever view is showing it, which is what
+    // makes a second scene in one window impossible rather than merely unlikely.
+    expect(engine.engineState.widgets[0].container).toBe(surface);
+    expect(screen.getByTestId('scene3d-container')).toContainElement(surface);
     await waitFor(() => expect(screen.queryByTestId('scene3d-loading')).not.toBeInTheDocument());
+  });
+
+  it('lends the one scene to a second view instead of refusing it', async () => {
+    // A route and a workspace panel are both mounted for a moment during every route change. A
+    // second drawing context is not merely wasteful — a browser drops the oldest once a handful
+    // are alive — so the second view joins this one, and says so rather than showing a blank box.
+    withWebGl2(true);
+    const first = render(
+      <MemoryRouter>
+        <Scene3DView />
+        <Scene3DView />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    expect(screen.queryByText('The 3D view could not be started')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('scene3d-elsewhere')).toBeInTheDocument();
+    // The displaced mount is inert: it does not load a second copy of the cave data into the one
+    // scene, which would build two batches under each source id and take each other's out of it.
+    expect(screen.getAllByTestId('scene3d-camera-controls')).toHaveLength(1);
+    const sourceIds = engine.engineState.widgets[0].scene.primitives.items.length;
+    expect(sourceIds).toBeGreaterThan(0);
+    first.unmount();
   });
 
   it('tears the scene down when it goes away', async () => {
@@ -243,6 +270,24 @@ describe('Scene3DView', () => {
     expect(camera.flightCount).toBe(flightsBefore);
   });
 
+  it('hands the camera back to the view it was opened beside', async () => {
+    // This scene opens as a pane BESIDE the flat map, inside a page that is still mounted when the
+    // pane closes and that registers its camera only once, when it mounts. A scene that cleared
+    // the registration on its way out would therefore leave the map's own "zoom to" buttons doing
+    // nothing at all for the rest of the visit, with nothing to say so.
+    withWebGl2(true);
+    const flatMap = { flyTo: vi.fn(), fitGeometry: vi.fn() };
+    const detachFlatMap = setActiveViewCamera(flatMap);
+    const view = renderView();
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+
+    view.unmount();
+    viewFlyTo(25.5, 45.5, 16);
+
+    expect(flatMap.flyTo).toHaveBeenCalledWith(25.5, 45.5, 16);
+    detachFlatMap();
+  });
+
   it('refetches the ground it is showing when a feature is written from beside it', async () => {
     withWebGl2(true);
     renderView();
@@ -269,6 +314,104 @@ describe('Scene3DView', () => {
     expect(await screen.findByText('The 3D view could not be started')).toBeInTheDocument();
     expect(await screen.findByText(/different container/)).toBeInTheDocument();
     other.release();
+  });
+});
+
+describe('Scene3DView camera controls', () => {
+  it('turns the camera to a compass view in one press, and says which one it is at', async () => {
+    withWebGl2(true);
+    renderView();
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+
+    fireEvent.click(await screen.findByTestId('scene3d-preset-north'));
+
+    const { camera } = engine.engineState.widgets[0].scene;
+    // Standing to the north of what it is looking at, facing south.
+    expect((camera.heading * 180) / Math.PI).toBeCloseTo(180, 4);
+    await waitFor(() =>
+      expect(screen.getByTestId('scene3d-preset-north')).toHaveAttribute('aria-pressed', 'true'),
+    );
+  });
+
+  it('stops claiming a preset once the viewer moves the camera themselves', async () => {
+    // Presets do not latch — nothing re-applies one — so the highlight is read off the camera and
+    // goes out the moment it is dragged. A preset that fought the free camera would be unusable.
+    withWebGl2(true);
+    renderView();
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    fireEvent.click(await screen.findByTestId('scene3d-preset-top'));
+    await waitFor(() =>
+      expect(screen.getByTestId('scene3d-preset-top')).toHaveAttribute('aria-pressed', 'true'),
+    );
+
+    const { camera } = engine.engineState.widgets[0].scene;
+    act(() => {
+      camera.pitch = (-31 * Math.PI) / 180;
+      camera.moveEnd.raise();
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('scene3d-preset-top')).toHaveAttribute('aria-pressed', 'false'),
+    );
+  });
+
+  it('takes the perspective out of the view and puts it back', async () => {
+    withWebGl2(true);
+    renderView();
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    const { scene } = engine.engineState.widgets[0];
+
+    fireEvent.click(await screen.findByTestId('scene3d-projection-toggle'));
+    await waitFor(() => expect(scene.camera.frustum).toBeInstanceOf(engine.OrthographicFrustum));
+
+    fireEvent.click(screen.getByTestId('scene3d-projection-toggle'));
+    await waitFor(() => expect(scene.camera.frustum).toBeInstanceOf(engine.PerspectiveFrustum));
+    // The near plane a cave view needs inside a narrow passage has to be put back on the frustum
+    // the switch built, which carries the library's own default.
+    expect((scene.camera.frustum as InstanceType<typeof engine.PerspectiveFrustum>).near).toBe(0.5);
+  });
+
+  it('offers nothing to frame until a survey is drawn', async () => {
+    withWebGl2(true);
+    renderView();
+
+    expect(await screen.findByTestId('scene3d-fit-cave')).toBeDisabled();
+  });
+
+  it('frames the cave the view is centred on once one is drawn', async () => {
+    withWebGl2(true);
+    centerlineResponse = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [25.44, 45.53, 700],
+              [25.45, 45.535, 420],
+            ],
+          },
+          properties: { id: 'line-1', caveId: 'cave-1', hasZ: true },
+        },
+      ],
+      withheldCount: 0,
+      detail: true,
+      flatCount: 0,
+    };
+    renderView();
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+
+    const fit = await screen.findByTestId('scene3d-fit-cave');
+    await waitFor(() => expect(fit).not.toBeDisabled());
+    const { camera } = engine.engineState.widgets[0].scene;
+    const framedBefore = camera.framed.length;
+    fireEvent.click(fit);
+
+    // Framing a box is the one camera move the engine does by rectangle, and the double records
+    // what it was asked to frame — which is the drawn survey's own extent.
+    expect(camera.framed).toHaveLength(framedBefore + 1);
+    expect(camera.framed.at(-1)).toMatchObject({ west: 25.44, south: 45.53, east: 25.45, north: 45.535 });
   });
 });
 
@@ -345,6 +488,22 @@ describe('Scene3DView layer controls', () => {
       const collection = primitives.items[0] as InstanceType<typeof engine.PolylineCollection>;
       expect(collection.show).toBe(false);
     });
+  });
+
+  it('offers no cave to frame once the viewer turns the survey layer off', async () => {
+    // The control frames the cave the survey draws. With that layer off there is no survey on the
+    // screen to frame, and a control left lit would fly the camera to geometry that is not drawn —
+    // and go on doing so however far the viewer travelled, since a layer that is off is never
+    // fetched again and so nothing would ever correct it.
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    renderView();
+    const fit = await screen.findByTestId('scene3d-fit-cave');
+    await waitFor(() => expect(fit).not.toBeDisabled());
+
+    act(() => useWorkspaceStore.getState().setOverlayVisible('centerlines', false));
+
+    await waitFor(() => expect(screen.getByTestId('scene3d-fit-cave')).toBeDisabled());
   });
 
   it('fades the basemap without touching what is drawn over it', async () => {

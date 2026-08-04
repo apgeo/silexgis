@@ -546,6 +546,40 @@ describe('layers a viewer turns off and fades', () => {
     handle.detach();
   });
 
+  it('offers no cave to frame while the survey layer is off, and offers it again when it returns', async () => {
+    // The framing box and the opening cut in the ground are two answers to one question — which
+    // cave is the viewer looking at — so they have to go away together. A box left behind keeps a
+    // "frame the cave" control lit over a scene with no survey drawn in it, and pressing it flies
+    // the camera to geometry that is not on screen.
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(handle.caveBounds()).toBeDefined());
+
+    // Read from inside the notification, because that is when whoever draws the control recomputes
+    // whether there is anything to frame: forgetting only after the notice went out would leave
+    // the control lit until some later load happened to publish.
+    const seenWhileHiding: (Scene3DBounds | undefined)[] = [];
+    const unsubscribe = handle.subscribe(() => seenWhileHiding.push(handle.caveBounds()));
+    handle.setLayerVisible(CENTERLINE_SOURCE_ID, false);
+
+    expect(seenWhileHiding).toEqual([undefined]);
+    expect(handle.caveBounds()).toBeUndefined();
+
+    // And it stays forgotten however far the viewer travels — which is the state it would
+    // otherwise be stuck in, since a hidden layer is never fetched and so nothing could refresh it.
+    engine.bounds = [20.0, 40.4, 20.6, 40.8];
+    handle.reload();
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+    expect(handle.caveBounds()).toBeUndefined();
+    unsubscribe();
+
+    engine.bounds = [25.0, 45.4, 25.6, 45.8];
+    handle.setLayerVisible(CENTERLINE_SOURCE_ID, true);
+
+    await vi.waitFor(() => expect(handle.caveBounds()).toBeDefined());
+    handle.detach();
+  });
+
   it('ignores an answer that lands after the layer was turned off', async () => {
     // Turning the layer off clears the notices on purpose, and no load starts, so a request that
     // was already in the air would sail past the staleness check and put them back over a view the

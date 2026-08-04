@@ -9,6 +9,8 @@ import { getMapTagFilter } from '../map/mapFilters.ts';
 import { entranceMarkers, surfaceFeatureLines, surfaceFeatureMarkers } from './caveMarkers3d.ts';
 import { cameraFloorFor, caveFootprint } from './caveFootprint3d.ts';
 import {
+  caveCenterlines,
+  centerlineBounds,
   centerlineLoadState,
   centerlinePolylines,
   EMPTY_CENTERLINE_LOAD_STATE,
@@ -18,6 +20,7 @@ import {
 import { mapZoomFor } from './pseudoZoom.ts';
 import { boundsToBbox } from './viewBounds3d.ts';
 import type {
+  Scene3DBounds,
   Scene3DCamera,
   Scene3DMarker,
   Scene3DPolyline,
@@ -37,8 +40,18 @@ import type {
 // The engine arrives as an argument rather than being reached for, so everything here can be
 // exercised against a plain object.
 
-/** The parts of the engine this loader touches. */
-export interface CaveData3DEngine extends Scene3DCamera, Scene3DVectorSources, Scene3DSurface {}
+/**
+ * The parts of the engine this loader touches — named one by one rather than as whole groups, so
+ * that a member added to the camera for some other feature does not silently become something
+ * every stand-in for this loader has to provide.
+ */
+export interface CaveData3DEngine
+  extends Pick<
+      Scene3DCamera,
+      'getVisibleBounds' | 'getPseudoZoom' | 'onViewChanged' | 'setCameraFloorHeight'
+    >,
+    Scene3DVectorSources,
+    Scene3DSurface {}
 
 /**
  * The installation's rendering limits, which the server publishes and a viewer may override.
@@ -103,6 +116,15 @@ export const EMPTY_CAVE_DATA_3D_STATE: CaveData3DState = {
 export interface CaveData3DHandle {
   /** Loads the current view now, without waiting for the camera to move. */
   reload(): void;
+  /**
+   * The ground box the drawn survey of one cave occupies — what "frame this cave" needs.
+   *
+   * With no cave named it answers for the one the view is centred on, which is the same cave the
+   * ground is cut away around, so the two controls always agree about which cave the viewer is
+   * looking at. Undefined when nothing of that cave is drawn: the survey layer is off, the server
+   * withheld it at this zoom, or the camera is nowhere near one.
+   */
+  caveBounds(caveId?: string): Scene3DBounds | undefined;
   /** Applies the installation's published limits; a partial update leaves the rest alone. */
   setLimits(limits: Partial<CaveData3DLimits>): void;
   /**
@@ -167,6 +189,8 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
   let requestSeq = 0;
   let settleTimer: number | undefined;
   let detached = false;
+  let drawnCenterlines: readonly Scene3DPolyline[] = [];
+  let drawnCenter = { longitude: 0, latitude: 0 };
 
   const publish = (next: Partial<CaveData3DState>) => {
     state = { ...state, ...next };
@@ -203,6 +227,11 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       }
       const polylines = centerlinePolylines(collection);
       centerlines.replace(polylines);
+      // Kept so a "frame this cave" action can answer from what is actually drawn rather than
+      // fetching the cave again: the two would then disagree whenever the server had withheld
+      // part of the survey, and the camera would frame geometry that is not on the screen.
+      drawnCenterlines = polylines;
+      drawnCenter = center;
       publish(centerlineLoadState(collection));
       // The survey is what says where the ground may be cut away and how far down a viewer may
       // go, so both are derived from what was just drawn rather than configured anywhere. The
@@ -292,6 +321,12 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
     reload() {
       void load();
     },
+    caveBounds(caveId) {
+      const lines = caveId
+        ? caveCenterlines(drawnCenterlines, caveId)
+        : nearestCaveCenterlines(drawnCenterlines, drawnCenter);
+      return centerlineBounds(lines);
+    },
     setLimits(next) {
       const merged = { ...limits, ...next };
       if (merged.detailZoom === limits.detailZoom && merged.maxPaths === limits.maxPaths) {
@@ -310,6 +345,16 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       }
       if (!visible) {
         if (layer === CENTERLINE_SOURCE_ID) {
+          // Forgotten before anything is told, because what is drawn is exactly nothing now. This
+          // is the same staleness the ground is handed back for below, and it has to be dropped
+          // first: publishing runs the subscribers, and they ask what there is to frame.
+          //
+          // A layer that is off is not fetched either, so nothing else could ever refresh or empty
+          // this — it would answer for the last cave the viewer looked at however far they
+          // travelled from it, and a "frame the cave" control reading it would stay lit and fly
+          // the camera back to a survey that is not on the screen.
+          drawnCenterlines = [];
+          drawnCenter = { longitude: 0, latitude: 0 };
           // The notices explain what the survey layer could not show. With the layer off there is
           // nothing on screen for them to be about, and a viewer reading "some caves are not shown
           // at this zoom" over a view they themselves emptied would be told the wrong thing.
@@ -329,8 +374,9 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
         }
         return;
       }
-      // What the view missed while the layer was off. The geometry is kept rather than thrown
-      // away when a layer is hidden, so this is a catch-up rather than a cold start.
+      // What the view missed while the layer was off. What is in the scene is only hidden, never
+      // thrown away, so this is a catch-up rather than a cold start — and it is also what puts
+      // back the note of which cave is drawn that hiding the survey layer dropped.
       void load();
     },
     setLayerOpacity(layer, opacity) {

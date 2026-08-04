@@ -337,6 +337,23 @@ describe('camera', () => {
     session.release();
   });
 
+  it('reports a level camera as level at a tilt, not as tipped right over', async () => {
+    const session = acquire();
+
+    // Placed level and tilted a little below the horizon — which is what each of the standard
+    // compass views is. The engine measures roll from the camera's own axes and folds the answer
+    // into a whole turn, so what it holds for this camera is a whole turn rather than nothing.
+    session.engine.setCamera({
+      longitude: 22.5, latitude: 45.1, height: 900, heading: 180, pitch: -10, roll: 0,
+    });
+    expect(engine.engineState.widgets[0].scene.camera.roll).toBeCloseTo(2 * Math.PI, 9);
+
+    // Passed on raw, that value says the camera is upside down, and everything downstream that
+    // asks whether a camera is level would answer no for every camera not pointing straight down.
+    expect(session.engine.getCamera().roll).toBeCloseTo(0, 9);
+    session.release();
+  });
+
   it('animates only when asked to', async () => {
     const session = acquire();
     const { camera } = engine.engineState.widgets[0].scene;
@@ -371,6 +388,46 @@ describe('camera', () => {
     // The same camera with a mountain under it sees less ground, so it is a closer zoom.
     engine.engineState.widgets[0].scene.globe.terrainHeight = 1500;
     expect(session.engine.getPseudoZoom()).toBeGreaterThan(overSeaLevel);
+    session.release();
+  });
+
+  it('says how high to be for a map zoom, which is the inverse of the zoom it reports', async () => {
+    const session = acquire();
+
+    const height = session.engine.cameraHeightForZoom(14, 45.7);
+    session.engine.setCamera({
+      longitude: 25.3,
+      latitude: 45.7,
+      height,
+      heading: 0,
+      pitch: -90,
+      roll: 0,
+    });
+
+    expect(session.engine.getPseudoZoom()).toBeCloseTo(14, 6);
+    session.release();
+  });
+
+  it('reports the ground the middle of the screen is showing', async () => {
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    scene.pickedPosition = { longitudeDegrees: 25.44, latitudeDegrees: 45.53, height: 800 };
+
+    // What a preset turns around and what a saved view is really about: a view is remembered as a
+    // place seen from a direction, and only the place survives being reopened in a different
+    // window shape.
+    const target = session.engine.getCameraTarget()!;
+    expect(target.longitude).toBeCloseTo(25.44, 9);
+    expect(target.latitude).toBeCloseTo(45.53, 9);
+    expect(target.height).toBeCloseTo(800, 6);
+    session.release();
+  });
+
+  it('has no target when the middle of the screen is sky', async () => {
+    const session = acquire();
+    engine.engineState.widgets[0].scene.pickedPosition = undefined;
+
+    expect(session.engine.getCameraTarget()).toBeUndefined();
     session.release();
   });
 
@@ -794,6 +851,132 @@ describe('vector sources', () => {
     const collection = primitives.items[0] as InstanceType<typeof engine.BillboardCollection>;
     expect(collection.billboards[0].color.alpha).toBe(0.3);
     session.release();
+  });
+});
+
+describe('drawing without perspective', () => {
+  it('starts with the ordinary projection and switches on request', async () => {
+    const session = acquire();
+    expect(session.engine.getProjection()).toBe('perspective');
+    expect(session.engine.getOrthoHalfWidth()).toBeUndefined();
+
+    session.engine.setProjection('orthographic');
+
+    expect(session.engine.getProjection()).toBe('orthographic');
+    expect(session.engine.getOrthoHalfWidth()).toBeGreaterThan(0);
+    session.release();
+  });
+
+  it('adopts a width it is given, which is how a saved view is reopened as it was saved', async () => {
+    const session = acquire();
+
+    session.engine.setProjection('orthographic', 640);
+
+    expect(session.engine.getOrthoHalfWidth()).toBe(640);
+    session.release();
+  });
+
+  it('puts back the near plane a cave view needs when perspective returns', async () => {
+    // Switching builds a fresh frustum carrying the library's own default, which clips the walls
+    // away when the camera is inside a narrow passage — precisely where this view is most useful.
+    const session = acquire();
+    session.engine.setProjection('orthographic');
+
+    session.engine.setProjection('perspective');
+
+    const { frustum } = engine.engineState.widgets[0].scene.camera;
+    expect(frustum).toBeInstanceOf(engine.PerspectiveFrustum);
+    expect((frustum as InstanceType<typeof engine.PerspectiveFrustum>).near).toBe(0.5);
+    session.release();
+  });
+
+  it('measures zoom from the width of the box on screen, not from the perspective arithmetic', async () => {
+    // A box frustum has no cone that widens with distance, so what is on screen is its width and
+    // nothing else. Left on the perspective arithmetic, a scene that had switched would report a
+    // zoom it is not at and ask the server for a different patch of ground than the one drawn.
+    const session = acquire();
+    session.engine.flyToZoom(25.3, 45.7, 14);
+    session.engine.setProjection('orthographic');
+    const zoomAtWidth = session.engine.getPseudoZoom();
+    // And the width is a reading off the camera rather than a setting of its own: the engine sizes
+    // the box by how far the eye is from the ground it is looking at.
+    expect(session.engine.getOrthoHalfWidth()).toBeCloseTo(session.engine.getCamera().height / 2, 6);
+
+    const camera = session.engine.getCamera();
+    session.engine.setCamera({ ...camera, height: camera.height * 2 });
+
+    // Twice as far back is twice as much ground across the screen: exactly one zoom level out.
+    expect(session.engine.getPseudoZoom()).toBeCloseTo(zoomAtWidth - 1, 6);
+    session.release();
+  });
+
+  it('keeps a width it was given when the camera is next written to', async () => {
+    // A saved plan view, reopened. The width is honoured by standing where it comes from, so the
+    // next camera move — the flat map beside it reporting where it has been panned to, a preset
+    // button, the depth clamp — carries it along instead of resizing the view from a distance.
+    const session = acquire();
+    session.engine.setProjection('orthographic', 640);
+    expect(session.engine.getOrthoHalfWidth()).toBe(640);
+
+    const camera = session.engine.getCamera();
+    session.engine.setCamera({ ...camera, longitude: camera.longitude + 0.01 });
+
+    expect(session.engine.getOrthoHalfWidth()).toBeCloseTo(640, 6);
+    session.release();
+  });
+
+  it('resizes the view when it is flown to a zoom, not just moved', async () => {
+    const session = acquire();
+    session.engine.setProjection('orthographic');
+
+    session.engine.flyToZoom(25.3, 45.7, 16);
+
+    expect(session.engine.getPseudoZoom()).toBeCloseTo(16, 6);
+    session.release();
+  });
+
+  it('lands an animated flight at the zoom it was asked for, which the flight cannot then undo', async () => {
+    // The engine puts the camera through a view change on every frame of a flight, and each one
+    // resizes the box from where the camera has got to. A width written down after the flight was
+    // started therefore lives exactly one frame, so the view has to be framed by where it flies to.
+    const session = acquire();
+    session.engine.setProjection('orthographic');
+
+    session.engine.flyToZoom(25.3, 45.7, 16, { animate: true });
+    engine.engineState.widgets[0].scene.camera.finishFlight();
+
+    expect(session.engine.getPseudoZoom()).toBeCloseTo(16, 6);
+    session.release();
+  });
+
+  it('reopens a written-down plan view exactly as it was written down', async () => {
+    // What a saved view is worth: the whole round trip through the neutral state, back into a
+    // scene the viewer has since moved somewhere else entirely.
+    const { applyCamera3D, readCamera3D } = await import('./camera3d.ts');
+    const session = acquire();
+    session.engine.flyToZoom(25.44, 45.53, 17);
+    session.engine.setProjection('orthographic');
+    const saved = readCamera3D(session.engine);
+    expect(saved.projection).toBe('orthographic');
+    expect(saved.orthoHalfWidth).toBeGreaterThan(0);
+
+    session.engine.flyToZoom(22.1, 46.9, 9);
+
+    applyCamera3D(session.engine, saved);
+
+    const reopened = readCamera3D(session.engine);
+    expect(reopened.eye.lon).toBeCloseTo(saved.eye.lon, 9);
+    expect(reopened.eye.lat).toBeCloseTo(saved.eye.lat, 9);
+    expect(reopened.eye.height).toBeCloseTo(saved.eye.height, 6);
+    expect(reopened.orthoHalfWidth).toBeCloseTo(saved.orthoHalfWidth!, 6);
+    session.release();
+  });
+
+  it('refuses to touch a scene that has been torn down', async () => {
+    const session = acquire();
+    session.release();
+
+    expect(() => session.engine.setProjection('orthographic')).not.toThrow();
   });
 });
 

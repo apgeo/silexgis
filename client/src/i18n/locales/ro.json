@@ -137,6 +137,8 @@
     "swipeCompare": "Compară rasterul cu harta de dedesubt (glisor)",
     "hideChrome": "Ascunde barele de instrumente ale hărții",
     "showChrome": "Arată barele de instrumente ale hărții",
+    "showScene3d": "Arată scena 3D lângă hartă",
+    "hideScene3d": "Ascunde scena 3D",
     "unsavedEdits": "{{count}} modificări nesalvate",
     "contextAdd": "Adaugă fenomen",
     "contextNewCave": "Peșteră nouă aici",
@@ -775,8 +777,10 @@
     "registryTitle": "Registrul peșterilor",
     "popOut": "Deschide registrul într-o fereastră separată",
     "popOut3d": "Deschide fereastra 3D",
+    "popOutScene3d": "Deschide scena 3D într-o fereastră separată",
     "viewer3dTitle": "Vizualizator 3D",
-    "viewer3dEmpty": "Selectează o peșteră cu model 3D pentru a-l afișa aici."
+    "viewer3dEmpty": "Selectează o peșteră cu model 3D pentru a-l afișa aici.",
+    "scene3dTitle": "Scena 3D"
   },
   "scene3d": {
     "unsupportedTitle": "Acest browser nu poate afișa vizualizarea 3D",
@@ -794,7 +798,26 @@
     "cutawayPaused": "De aici deschiderea se vede din profil — înclină vederea în jos spre peșteră pentru a privi în ea.",
     "cutawayUnderground": "Vederea este sub suprafață, unde nu mai există teren între tine și peșteră. Urcă înapoi deasupra ei pentru a privi în jos, prin deschidere.",
     "depthLegend": "Adâncimea sub partea de sus a peșterii",
-    "depthLegendBand": "{{meters}} m"
+    "depthLegendBand": "{{meters}} m",
+    "showingElsewhere": "Scena 3D este deschisă în alt panou al acestei ferestre.",
+    "fitCave": "Încadrează peștera din vedere",
+    "projectionOrthographic": "Elimină perspectiva",
+    "projectionOrthographicHint": "Elimină perspectiva, astfel încât distanțele să se citească la fel aproape și departe",
+    "projectionPerspectiveHint": "Reactivează perspectiva",
+    "presetGlyph": {
+      "top": "⌖",
+      "north": "N",
+      "south": "S",
+      "east": "E",
+      "west": "V"
+    },
+    "preset": {
+      "top": "Privire verticală (plan)",
+      "north": "Vedere dinspre nord",
+      "south": "Vedere dinspre sud",
+      "east": "Vedere dinspre est",
+      "west": "Vedere dinspre vest"
+    }
   },
   "caveview": {
     "loadError": "Modelul 3D nu a putut fi încărcat"

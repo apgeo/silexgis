@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { eyeLookingAt, type Camera3DEye, type Camera3DState } from './camera3d.ts';
 import { clampLatitude, METERS_PER_DEGREE_LATITUDE } from './pseudoZoom.ts';
 import type { Scene3DBounds } from './scene3dEngine.ts';
 
@@ -75,6 +76,56 @@ export function viewportBounds(view: GroundView): Scene3DBounds | undefined {
  */
 export function boundsToBbox(bounds: Scene3DBounds): string {
   return bounds.map((n) => n.toFixed(5)).join(',');
+}
+
+/** The middle of a box, as a ground point at ellipsoid height. */
+export function boundsCenter(bounds: Scene3DBounds): Camera3DEye {
+  const [west, south, east, north] = bounds;
+  return { lon: (west + east) / 2, lat: (south + north) / 2, height: 0 };
+}
+
+/**
+ * The shallowest a camera is allowed to be tilted when it is asked to frame a box, in degrees.
+ *
+ * A camera looking near the horizon is an arbitrary distance from what it is aiming at — the
+ * distance goes to infinity as the tilt goes to zero — so "stand back far enough to see this box"
+ * has no answer down there. Framing from a shallow angle at all is unusual; framing from one at a
+ * plausible distance is what a viewer wants, and this is what makes it computable.
+ */
+const MINIMUM_FRAMING_PITCH_DEGREES = 5;
+
+/**
+ * The camera that shows `bounds` at map zoom `zoom`, *without changing which way the camera is
+ * pointing*.
+ *
+ * This is how the 3D view follows the flat map. The obvious alternative — hand the box to the
+ * engine's own "frame this rectangle" — reorients the camera to look straight down at it, so
+ * panning the flat map would repeatedly flatten a view the viewer had deliberately tilted. Only
+ * one number here needs the engine at all: how high a camera has to be to show a given map zoom,
+ * which depends on the frustum and on the size of the drawing surface. It arrives as a function so
+ * everything else stays testable without one.
+ */
+export function cameraFramingBounds(
+  bounds: Scene3DBounds,
+  zoom: number,
+  current: Camera3DState,
+  heightForZoom: (zoom: number, latitude: number) => number,
+): Camera3DState | undefined {
+  const target = boundsCenter(bounds);
+  const height = heightForZoom(zoom, target.lat);
+  if (!Number.isFinite(height) || height <= 0) {
+    return undefined;
+  }
+  // The camera's height above what it is looking at is what a zoom describes, and it is the
+  // vertical leg of the triangle whose hypotenuse is the distance to that point.
+  const pitch = Math.min(current.pitch, -MINIMUM_FRAMING_PITCH_DEGREES);
+  const distance = height / Math.sin((-pitch * Math.PI) / 180);
+  return {
+    ...current,
+    eye: eyeLookingAt(target, current.heading, pitch, distance),
+    pitch,
+    target,
+  };
 }
 
 /** Guards the division at the poles; the clamp above already keeps this from ever biting a map. */

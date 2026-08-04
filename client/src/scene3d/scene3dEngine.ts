@@ -113,9 +113,61 @@ export interface Scene3DCameraOptions {
   animate?: boolean;
 }
 
+/**
+ * How the scene projects the world onto the screen.
+ *
+ * `perspective` is the ordinary one: things further away are drawn smaller, which is how a view
+ * of a landscape is read. `orthographic` removes that convergence, so two passages the same width
+ * are drawn the same width however far apart they are — which is what makes a plan or an elevation
+ * of a survey measurable off the screen, and is why a cave viewer needs both.
+ */
+export type Scene3DProjection = 'perspective' | 'orthographic';
+
 export interface Scene3DCamera {
   getCamera(): Scene3DCameraState;
   setCamera(state: Scene3DCameraState, options?: Scene3DCameraOptions): void;
+  /**
+   * The ground the middle of the screen is showing, or undefined when the camera is not pointed
+   * at the globe at all.
+   *
+   * It is the pivot a camera preset turns around and the point a saved view is really about — a
+   * view is remembered as "this place, from this direction", and only the place is stable when the
+   * window it is reopened in is a different shape. Computing it outside the engine would mean
+   * knowing the size of the drawing surface, which is the engine's to know.
+   */
+  getCameraTarget(): Scene3DPosition | undefined;
+  /** Which projection the scene is drawing with. */
+  getProjection(): Scene3DProjection;
+  /**
+   * Switches projection. `halfWidthMeters` sets how much ground an orthographic view spans from
+   * the middle of the screen to its edge; omitted, the scene keeps the framing the perspective
+   * camera had. It is ignored for `perspective`, which is framed by distance alone.
+   *
+   * Asking for a width may move the camera. How wide an orthographic view is and how far back it
+   * stands are one fact and not two — a renderer is free to derive either from the other, and the
+   * one behind this contract derives the width from the distance, recomputing it on every camera
+   * move — so a width that is meant to outlive the next move has to be expressed as the distance
+   * it comes from. Restoring a camera this application wrote down moves nothing, because the width
+   * it carries was read off that same camera.
+   */
+  setProjection(projection: Scene3DProjection, halfWidthMeters?: number): void;
+  /**
+   * Half the ground an orthographic view spans horizontally, in metres, or undefined under a
+   * perspective projection where the question has no answer.
+   */
+  getOrthoHalfWidth(): number | undefined;
+  /**
+   * How high above the ellipsoid this camera has to be to show the same ground detail a 2D map at
+   * `zoom` would, at the given latitude.
+   *
+   * The answer depends on the projection in force: under an orthographic one a camera's distance
+   * is what sets how much ground is on screen, so the same zoom asks for a different height.
+   *
+   * The inverse of `getPseudoZoom`, and the one part of "put this box on the screen" that depends
+   * on the frustum and on the size of the drawing surface. Exposing it is what lets a caller frame
+   * a box without also handing the engine its own idea of where the camera should end up pointing.
+   */
+  cameraHeightForZoom(zoom: number, latitude: number): number;
   /**
    * Places the camera looking straight down at a point, framed so that the ground covers the same
    * area a 2D map at `zoom` would. This is the currency the two views share: the map endpoints are

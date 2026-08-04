@@ -93,6 +93,27 @@ export function pseudoZoom(view: CameraView): number {
 }
 
 /**
+ * Ground metres per pixel for a camera drawing without perspective.
+ *
+ * An orthographic view has no field of view and its height above the ground changes nothing about
+ * how much of it is on screen — the frustum is a box, not a cone, so the width of that box is the
+ * whole answer. Everything downstream of this number (which zoom to request, how big a box to ask
+ * the server for) is then the same arithmetic as for an ordinary camera, which is exactly why the
+ * difference is confined to this one function: without it a camera switched to a plan projection
+ * keeps reporting the zoom its distance would have implied and quietly asks the server for the
+ * wrong patch of ground.
+ */
+export function orthographicGroundSampleDistance(
+  widthMeters: number,
+  viewportWidthPixels: number,
+): number {
+  if (!(widthMeters > 0) || !(viewportWidthPixels > 0)) {
+    return Number.NaN;
+  }
+  return widthMeters / viewportWidthPixels;
+}
+
+/**
  * The inverse: how high the camera has to sit for the scene to match a given map zoom. Used to
  * enter 3D at the zoom the 2D map was left at, so the handover does not jump.
  */

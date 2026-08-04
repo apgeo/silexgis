@@ -20,6 +20,7 @@ import {
   Material,
   Math as CesiumMath,
   NearFarScalar,
+  OrthographicFrustum,
   PerInstanceColorAppearance,
   PerspectiveFrustum,
   PolygonGeometry,
@@ -35,12 +36,19 @@ import {
   WallGeometry,
 } from 'cesium';
 import { coarsePointer } from '../map/pointer.ts';
+import { eyeLookingAt, wrapRoll } from './camera3d.ts';
 import {
   cutawayPitchLimitDegrees,
   DEFAULT_CAMERA_FLOOR_METERS,
   footprintCenter,
 } from './caveFootprint3d.ts';
-import { cameraGroundSampleDistance, cameraHeightForZoom, zoomForGroundSampleDistance } from './pseudoZoom.ts';
+import {
+  cameraGroundSampleDistance,
+  cameraHeightForZoom,
+  groundSampleDistance as groundSampleDistanceForZoom,
+  orthographicGroundSampleDistance,
+  zoomForGroundSampleDistance,
+} from './pseudoZoom.ts';
 import { viewportBounds } from './viewBounds3d.ts';
 import type {
   Scene3DBounds,
@@ -53,6 +61,7 @@ import type {
   Scene3DPick,
   Scene3DPolyline,
   Scene3DPosition,
+  Scene3DProjection,
   Scene3DScreenPosition,
   Scene3DSurfaceMode,
   Scene3DSurfaceState,
@@ -408,7 +417,11 @@ class CesiumScene3D implements Scene3DCore {
       // where the camera did not move.
       heading: wrapDegrees(CesiumMath.toDegrees(camera.heading)),
       pitch: CesiumMath.toDegrees(camera.pitch),
-      roll: CesiumMath.toDegrees(camera.roll),
+      // Folded around zero for the same reason, and it bites harder: the engine reports a level
+      // camera's roll as a whole turn at every tilt except straight down, so read raw it says the
+      // camera is upside down nearly all the time — and "is this camera level" is exactly what
+      // decides whether one of the standard views is shown as the current one.
+      roll: wrapRoll(CesiumMath.toDegrees(camera.roll)),
     };
   }
 
@@ -427,17 +440,75 @@ class CesiumScene3D implements Scene3DCore {
     }
   }
 
+  getCameraTarget(): Scene3DPosition | undefined {
+    return this.screenToPosition({
+      x: this.viewportWidthPixels() / 2,
+      y: this.viewportHeightPixels() / 2,
+    });
+  }
+
+  getProjection(): Scene3DProjection {
+    return this.widget.scene.camera.frustum instanceof OrthographicFrustum
+      ? 'orthographic'
+      : 'perspective';
+  }
+
+  setProjection(projection: Scene3DProjection, halfWidthMeters?: number): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    const { camera } = this.widget.scene;
+    if (projection === 'orthographic') {
+      if (!(camera.frustum instanceof OrthographicFrustum)) {
+        // The engine derives the width from how far the camera currently is from the ground, so
+        // the switch keeps roughly the framing the viewer already had rather than jumping.
+        camera.switchToOrthographicFrustum();
+      }
+      if (halfWidthMeters !== undefined && halfWidthMeters > 0) {
+        this.standWhereWidthIs(halfWidthMeters * 2);
+      }
+    } else if (camera.frustum instanceof OrthographicFrustum) {
+      camera.switchToPerspectiveFrustum();
+      // The switch builds a fresh frustum carrying the library's defaults, so the near plane this
+      // scene needs to see inside a narrow passage has to be put back on it.
+      camera.frustum.near = NEAR_PLANE_METERS;
+    }
+    this.requestRender();
+  }
+
+  getOrthoHalfWidth(): number | undefined {
+    const { frustum } = this.widget.scene.camera;
+    return frustum instanceof OrthographicFrustum ? frustum.width / 2 : undefined;
+  }
+
+  cameraHeightForZoom(zoom: number, latitude: number): number {
+    if (this.getProjection() === 'orthographic') {
+      // An orthographic view has no cone to widen with distance: how much ground is on screen is
+      // the width of its box, and this engine does not let that be an independent property — it
+      // recomputes the width from how far the camera stands from the ground under the middle of
+      // the screen, on every single camera move including every frame of an animated one. So the
+      // only durable way to ask for an amount of ground is to stand where that amount implies,
+      // and for a camera looking straight down the distance to the ground is its height over it.
+      return groundSampleDistanceForZoom(zoom, latitude) * this.viewportWidthPixels();
+    }
+    return cameraHeightForZoom(zoom, {
+      latitudeDegrees: latitude,
+      fieldOfViewRadians: this.fieldOfViewRadians(),
+      viewportHeightPixels: this.viewportHeightPixels(),
+    });
+  }
+
   flyToZoom(
     longitude: number,
     latitude: number,
     zoom: number,
     options: Scene3DCameraOptions = {},
   ): void {
-    const height = cameraHeightForZoom(zoom, {
-      latitudeDegrees: latitude,
-      fieldOfViewRadians: this.fieldOfViewRadians(),
-      viewportHeightPixels: this.viewportHeightPixels(),
-    });
+    // Nothing is done to the frustum afterwards, deliberately: under an orthographic projection
+    // the height above answers for the zoom, and a width written here would be overwritten by the
+    // engine on the next camera move — including, when this move is animated, by every frame of
+    // the flight it has just started.
+    const height = this.cameraHeightForZoom(zoom, latitude);
     this.setCamera(
       {
         longitude,
@@ -988,6 +1059,51 @@ class CesiumScene3D implements Scene3DCore {
   }
 
   /**
+   * Frames an orthographic view a given number of metres wide, by standing where that width comes
+   * from rather than by writing the width down.
+   *
+   * The engine treats an orthographic frustum's width as derived, not given: every camera move
+   * recomputes it as the distance from the eye to the ground under the middle of the screen. That
+   * is not an implementation detail to work around — it is what makes an ordinary zoom gesture
+   * work at all under this projection, since zooming moves the camera and the box follows. A width
+   * assigned on top of that survives until the next move, which in practice means until the flight
+   * that was just started puts its next frame through, or until the viewer nudges either view. So
+   * a width that has to last is applied as a distance, and then nothing has to defend it.
+   *
+   * Nothing moves when the camera already stands at that distance, which is the ordinary case when
+   * a saved view is reopened: the width it carries was read off the very camera being restored.
+   */
+  private standWhereWidthIs(widthMeters: number): void {
+    const currentHalfWidth = this.getOrthoHalfWidth();
+    if (currentHalfWidth === undefined || !(widthMeters > 0)) {
+      return;
+    }
+    // A relative comparison, because these are metres of ground and range from a cave passage to
+    // half a continent; an absolute tolerance would be meaningless at one end or the other.
+    if (Math.abs(currentHalfWidth * 2 - widthMeters) <= widthMeters * 1e-9) {
+      return;
+    }
+    const camera = this.getCamera();
+    const target = this.getCameraTarget();
+    const pivot = {
+      lon: target?.longitude ?? camera.longitude,
+      lat: target?.latitude ?? camera.latitude,
+      // The middle of the screen is showing sky. The ground below the camera is the honest
+      // substitute: it is where a view that has lost the horizon is still standing over.
+      height: target?.height ?? this.groundHeightAt(camera.longitude, camera.latitude),
+    };
+    const eye = eyeLookingAt(pivot, camera.heading, camera.pitch, widthMeters);
+    this.setCamera({
+      longitude: eye.lon,
+      latitude: eye.lat,
+      height: eye.height,
+      heading: camera.heading,
+      pitch: camera.pitch,
+      roll: camera.roll,
+    });
+  }
+
+  /**
    * Stops the camera at the floor. With the engine's collision detection off there is nothing
    * else holding it: a viewer who keeps zooming in past the cave passes through the planet and
    * comes out looking at the sky from the inside, with no gesture that gets them back.
@@ -1102,6 +1218,15 @@ class CesiumScene3D implements Scene3DCore {
    * of 2000 m.
    */
   private groundSampleDistance(camera: Scene3DCameraState): number {
+    // An orthographic view is a box, not a cone: its width is the whole answer, and the camera's
+    // distance from the ground contributes nothing. Feeding the perspective arithmetic a camera
+    // that has switched projection would report a zoom the view is not at, and both the data
+    // loader's requests and the box it asks for would then describe a different view than the one
+    // on screen.
+    const halfWidth = this.getOrthoHalfWidth();
+    if (halfWidth !== undefined) {
+      return orthographicGroundSampleDistance(halfWidth * 2, this.viewportWidthPixels());
+    }
     return cameraGroundSampleDistance({
       heightMeters: camera.height - this.groundHeightAt(camera.longitude, camera.latitude),
       latitudeDegrees: camera.latitude,

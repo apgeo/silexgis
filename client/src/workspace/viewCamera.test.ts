@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it, vi } from 'vitest';
 import {
+  applyViewCamera3d,
   setActiveViewCamera,
+  viewCamera3dState,
   viewFitGeometry,
   viewFlyTo,
   type ViewCameraTarget,
@@ -57,6 +59,63 @@ describe('the camera of the view on screen', () => {
 
     expect(scene.flyTo).toHaveBeenCalledTimes(1);
     detachScene();
+  });
+
+  it('gives the camera back to the view underneath when the newer one closes', () => {
+    // The arrangement this exists for: the 3D scene opens as a pane BESIDE the flat map, inside
+    // the page the map is already mounted in. The map registers once when it mounts and there is
+    // nothing that would ever re-register it, so a registry that merely cleared itself would leave
+    // the map's own "zoom to" buttons dead for the rest of the visit the moment the pane closed.
+    const flat = recorder();
+    const detachFlat = setActiveViewCamera(flat);
+    const scene = recorder();
+    const detachScene = setActiveViewCamera(scene);
+
+    detachScene();
+    viewFlyTo(25.3, 45.7, 16);
+    viewFitGeometry({ type: 'Point', coordinates: [25.3, 45.7] });
+
+    expect(flat.flyTo).toHaveBeenCalledWith(25.3, 45.7, 16);
+    expect(flat.fitGeometry).toHaveBeenCalledTimes(1);
+    expect(scene.flyTo).not.toHaveBeenCalled();
+    detachFlat();
+  });
+
+  it('carries the 3D camera members back to the view underneath too', () => {
+    const camera = {
+      eye: { lon: 25.3, lat: 45.7, height: 900 },
+      heading: 0,
+      pitch: -45,
+      roll: 0,
+      projection: 'perspective' as const,
+    };
+    const flat = { ...recorder(), getCamera3D: vi.fn(() => camera), setCamera3D: vi.fn() };
+    const detachFlat = setActiveViewCamera(flat);
+    const scene = { ...recorder(), getCamera3D: vi.fn(() => undefined), setCamera3D: vi.fn() };
+    setActiveViewCamera(scene)();
+
+    expect(viewCamera3dState()).toBe(camera);
+    applyViewCamera3d(camera);
+
+    expect(flat.setCamera3D).toHaveBeenCalledWith(camera);
+    expect(scene.setCamera3D).not.toHaveBeenCalled();
+    detachFlat();
+  });
+
+  it('ignores a second detach rather than unregistering somebody else', () => {
+    // React runs an effect's cleanup twice in development; a second call must not reach past this
+    // view's own registration and take the camera off whoever holds it now.
+    const flat = recorder();
+    const detachFlat = setActiveViewCamera(flat);
+    const scene = recorder();
+    const detachScene = setActiveViewCamera(scene);
+
+    detachScene();
+    detachScene();
+    viewFlyTo(25.3, 45.7, 16);
+
+    expect(flat.flyTo).toHaveBeenCalledTimes(1);
+    detachFlat();
   });
 
   it('stops delivering once the view goes away, rather than staging the move for the next one', () => {

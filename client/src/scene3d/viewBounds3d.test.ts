@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { groundSampleDistance } from './pseudoZoom.ts';
-import { boundsToBbox, viewportBounds, type GroundView } from './viewBounds3d.ts';
+import type { Camera3DState } from './camera3d.ts';
+import { cameraHeightForZoom, groundSampleDistance } from './pseudoZoom.ts';
+import { boundsToBbox, cameraFramingBounds, viewportBounds, type GroundView } from './viewBounds3d.ts';
 
 function view(overrides: Partial<GroundView> = {}): GroundView {
   return {
@@ -83,5 +84,59 @@ describe('viewportBounds', () => {
 describe('boundsToBbox', () => {
   it('sends west,south,east,north at the precision the flat map sends', () => {
     expect(boundsToBbox([25.1234567, 45.1, 25.2, 45.2])).toBe('25.12346,45.10000,25.20000,45.20000');
+  });
+});
+
+describe('cameraFramingBounds', () => {
+  const tilted: Camera3DState = {
+    eye: { lon: 20, lat: 40, height: 5000 },
+    heading: 90,
+    pitch: -30,
+    roll: 0,
+    projection: 'perspective',
+  };
+  // Stands in for the one thing that needs the scene: how high to be for a given map zoom.
+  const heightForZoom = (zoom: number, latitude: number) =>
+    cameraHeightForZoom(zoom, {
+      latitudeDegrees: latitude,
+      fieldOfViewRadians: Math.PI / 3,
+      viewportHeightPixels: 800,
+    });
+
+  it('aims at the middle of the box and leaves the camera pointing where it was', () => {
+    const framed = cameraFramingBounds([25.2, 45.6, 25.4, 45.8], 14, tilted, heightForZoom)!;
+
+    expect(framed.target!.lon).toBeCloseTo(25.3, 9);
+    expect(framed.target!.lat).toBeCloseTo(45.7, 9);
+    expect(framed.heading).toBe(90);
+    expect(framed.pitch).toBe(-30);
+  });
+
+  it('stands the camera the right height above what it is looking at', () => {
+    // The height a zoom describes is the camera's height above the ground it is aimed at, which
+    // is the vertical leg of the triangle the distance is the hypotenuse of.
+    const framed = cameraFramingBounds([25.2, 45.6, 25.4, 45.8], 14, tilted, heightForZoom)!;
+    expect(framed.eye.height).toBeCloseTo(heightForZoom(14, 45.7), 0);
+  });
+
+  it('closes in as the zoom goes up', () => {
+    const wide = cameraFramingBounds([25.2, 45.6, 25.4, 45.8], 10, tilted, heightForZoom)!;
+    const close = cameraFramingBounds([25.2, 45.6, 25.4, 45.8], 16, tilted, heightForZoom)!;
+    expect(close.eye.height).toBeLessThan(wide.eye.height);
+  });
+
+  it('refuses to frame from a camera looking at the horizon by tilting it down first', () => {
+    // The distance to what a level camera is aiming at goes to infinity as the tilt goes to zero,
+    // so "stand back far enough to see this box" has no answer down there.
+    const level: Camera3DState = { ...tilted, pitch: 0 };
+    const framed = cameraFramingBounds([25.2, 45.6, 25.4, 45.8], 14, level, heightForZoom)!;
+    expect(framed.pitch).toBeLessThan(0);
+    expect(Number.isFinite(framed.eye.lat)).toBe(true);
+  });
+
+  it('answers with nothing when the scene cannot say how high to be', () => {
+    expect(
+      cameraFramingBounds([25.2, 45.6, 25.4, 45.8], 14, tilted, () => Number.NaN),
+    ).toBeUndefined();
   });
 });

@@ -137,6 +137,8 @@
     "swipeCompare": "Compare raster with the map beneath (swipe)",
     "hideChrome": "Hide map toolbars",
     "showChrome": "Show map toolbars",
+    "showScene3d": "Show the 3D scene beside the map",
+    "hideScene3d": "Hide the 3D scene",
     "unsavedEdits": "{{count}} unsaved edits",
     "contextAdd": "Add feature",
     "contextNewCave": "New cave here",
@@ -775,8 +777,10 @@
     "registryTitle": "Cave registry",
     "popOut": "Pop out the registry into its own window",
     "popOut3d": "Open 3D viewer window",
+    "popOutScene3d": "Open the 3D scene in its own window",
     "viewer3dTitle": "3D viewer",
-    "viewer3dEmpty": "Select a cave with a 3D model to display it here."
+    "viewer3dEmpty": "Select a cave with a 3D model to display it here.",
+    "scene3dTitle": "3D scene"
   },
   "scene3d": {
     "unsupportedTitle": "This browser cannot show the 3D view",
@@ -794,7 +798,26 @@
     "cutawayPaused": "The opening is edge-on from here — tilt the view down towards the cave to look into it.",
     "cutawayUnderground": "The view is below the surface, where there is no ground left between you and the cave. Rise back above it to look down into the opening.",
     "depthLegend": "Depth below the top of the cave",
-    "depthLegendBand": "{{meters}} m"
+    "depthLegendBand": "{{meters}} m",
+    "showingElsewhere": "The 3D scene is open in another panel of this window.",
+    "fitCave": "Frame the cave in view",
+    "projectionOrthographic": "Remove perspective",
+    "projectionOrthographicHint": "Remove perspective, so distances read the same near and far",
+    "projectionPerspectiveHint": "Put perspective back",
+    "presetGlyph": {
+      "top": "⌖",
+      "north": "N",
+      "south": "S",
+      "east": "E",
+      "west": "W"
+    },
+    "preset": {
+      "top": "Look straight down (plan)",
+      "north": "View from the north",
+      "south": "View from the south",
+      "east": "View from the east",
+      "west": "View from the west"
+    }
   },
   "caveview": {
     "loadError": "Failed to load the 3D model"
