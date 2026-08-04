@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using NpgsqlTypes;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -21,9 +22,36 @@ public sealed record SearchFeatureItemDto(Guid Id, FeatureKind Kind, string? Nam
 /// <summary>A trip-log hit.</summary>
 public sealed record SearchTripItemDto(Guid Id, string Title, DateOnly TripDate);
 
+/// <summary>
+/// A document whose text matches, quoted at the stretch that matched it.
+/// </summary>
+/// <param name="Division">
+/// What <paramref name="PageNumber"/> counts. Only a PDF has pages, a spreadsheet has sheets and
+/// a presentation slides; everything else arrives as one row however long it is, and says so
+/// here rather than letting an interface announce "page 1 of 1" about a forty-page report.
+/// </param>
+/// <param name="Snippet">
+/// The matching stretch of that division, matched words wrapped in <c>[[</c>…<c>]]</c>. Markers
+/// rather than markup: the value is data, and whatever renders it decides what a match looks
+/// like without being tempted to trust the text. The quotation keeps the diacritics its author
+/// wrote even when the search that found it did not.
+/// </param>
+public sealed record SearchDocumentItemDto(
+    Guid Id,
+    string Title,
+    Guid FileId,
+    string MimeType,
+    Guid VersionId,
+    int VersionNumber,
+    bool IsCurrentVersion,
+    int PageNumber,
+    PageDivision Division,
+    string Snippet);
+
 public sealed record SearchResultDto(
     IReadOnlyList<SearchFeatureItemDto> Features,
-    IReadOnlyList<SearchTripItemDto> Trips);
+    IReadOnlyList<SearchTripItemDto> Trips,
+    PagedResult<SearchDocumentItemDto> Documents);
 
 /// <summary>
 /// Unified search over every feature kind — caves, their entrances and centerlines, and the
@@ -42,6 +70,15 @@ public sealed record SearchResultDto(
 /// registry, the resolver, the cave's own list, the map overlay and exports all refuse to
 /// admit it exists. Naming one here would disclose that a cave whose position is guarded has
 /// a survey at all, so they are dropped from results the same way.
+///
+/// Documents are searched by what they say, and that is a third question rather than a third
+/// spelling of the first: the text of a document is matched by the content query, whose whole
+/// answer — which rows, in what order, and how many of them — is decided inside one statement
+/// that already carries the caller's read walk. Being attached to a cave whose position is
+/// guarded is not a reason to withhold a document, hide it from this list or strip its text; a
+/// document a caller may read is found by its words. What must not be disclosed is the pairing,
+/// and a hit here names no feature, carries no geometry and says nothing about what the document
+/// hangs off, so there is no pairing in it to withhold.
 /// </summary>
 public static class SearchEndpoints
 {
@@ -49,17 +86,37 @@ public static class SearchEndpoints
     private const int FeatureLimit = 20;
     private const int TripLimit = 10;
 
+    /// <summary>
+    /// How many documents one page of content hits holds. Smaller than the feature budget and
+    /// paged where the other two sections are not, because this is the only section where the
+    /// interesting answer can honestly be the hundredth one: a phrase in a survey archive is
+    /// looked for, while a place is looked up.
+    /// </summary>
+    private const int DocumentPageSize = 10;
+
     public static RouteGroupBuilder MapSearchEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/search", SearchAsync)
             .WithTags("Search")
-            .WithSummary("Searches features of every kind and trip logs (accent-insensitive).");
+            .WithSummary("Searches features of every kind, trip logs and document text (accent-insensitive).");
         return api;
     }
 
+    /// <param name="documentPage">
+    /// Which page of document hits to return, 1-based. The features and trip sections are
+    /// capped budgets and ignore it.
+    /// </param>
+    /// <param name="includeSuperseded">
+    /// Whether to search revisions that have been replaced. Off by default, and never a way past
+    /// the rule that an old revision is readable only by someone who may also replace the
+    /// document: the walk that decides it runs inside the content query, so asking for them
+    /// widens nothing for a caller who may only read.
+    /// </param>
     private static async Task<Results<Ok<SearchResultDto>, UnauthorizedHttpResult, ProblemHttpResult>> SearchAsync(
         string q,
         string? kind,
+        int? documentPage,
+        bool? includeSuperseded,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
@@ -124,8 +181,9 @@ public static class SearchEndpoints
 
         // Withhold protected centerlines. Filtered after the query rather than before it:
         // the exclusion the registry does up front exists so its paging total stays right,
-        // and search has no total — while re-running the match predicate to pre-exclude
-        // would double the text-search work on every request for no gain. The cost here is
+        // and this section publishes no total to skew — while re-running the match predicate
+        // to pre-exclude would double the text-search work on every request for no gain. The
+        // cost here is
         // one id lookup, and only when a centerline actually matched.
         var centerlineIds = hits.Where(h => h.Kind == FeatureKind.Centerline).Select(h => h.Id).ToList();
         if (centerlineIds.Count > 0)
@@ -154,12 +212,51 @@ public static class SearchEndpoints
             .Select(x => new SearchTripItemDto(x.Id, x.Title, x.TripDate))
             .ToListAsync(ct);
 
+        // Document text is the one section with a total beside it, and the total comes out of
+        // the same statement as the rows for the reason a number beside a filtered list always
+        // has to: computed separately it would count rows the list declined to show and announce
+        // exactly what the rules had withheld. The other two sections publish no total because
+        // they have none — they are budgets, not pages.
+        //
+        // Reach through an attached object is deliberately not resolved for this query, the same
+        // trade the cabinet listing makes: resolving it is a walk over every world a document's
+        // files hang in, and it would be paid on every keystroke of a search box. The consequence
+        // is stated rather than hidden — a document a caller can only reach because it hangs off
+        // a cave they may read is not found by its text, though fetching it by id still works.
+        var page = Math.Max(1, documentPage ?? 1);
+        var contentHits = await DocumentContentSql.SearchAsync(
+            db,
+            ctx,
+            term,
+            DocumentPageSize,
+            (page - 1) * DocumentPageSize,
+            includeSuperseded ?? false,
+            reachedByAttachment: null,
+            ct);
+
+        var documents = new PagedResult<SearchDocumentItemDto>(
+            [.. contentHits.Select(h => new SearchDocumentItemDto(
+                h.DocumentId,
+                h.Title,
+                h.FileId,
+                h.MimeType,
+                h.VersionId,
+                h.VersionNumber,
+                h.IsCurrentVersion,
+                h.PageNumber,
+                h.Division,
+                h.Snippet))],
+            page,
+            DocumentPageSize,
+            contentHits.Count > 0 ? contentHits[0].TotalDocuments : 0);
+
         return TypedResults.Ok(new SearchResultDto(
             [.. hits.Select(h => new SearchFeatureItemDto(
                 h.Id,
                 h.Kind,
                 h.Name,
                 h.FeatureTypeId is null ? null : typeCodes.GetValueOrDefault(h.FeatureTypeId.Value)))],
-            trips));
+            trips,
+            documents));
     }
 }

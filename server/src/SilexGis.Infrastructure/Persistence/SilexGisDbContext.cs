@@ -60,6 +60,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<DocumentPage> DocumentPages => Set<DocumentPage>();
 
+    public DbSet<TextSearchLanguage> TextSearchLanguages => Set<TextSearchLanguage>();
+
     public DbSet<Cabinet> Cabinets => Set<Cabinet>();
 
     public DbSet<CabinetDocument> CabinetDocuments => Set<CabinetDocument>();
@@ -119,6 +121,7 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
         builder.HasPostgresExtension("postgis");
         builder.HasPostgresExtension("unaccent");
         builder.HasPostgresExtension("ltree");
+        builder.HasPostgresExtension("pg_trgm");
 
         // Identity tables use plain names (users/roles/…), not AspNet* defaults.
         builder.Entity<SilexGisUser>().ToTable("users");

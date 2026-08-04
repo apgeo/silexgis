@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Identity;
 
@@ -16,6 +17,7 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
         builder.Property(x => x.Title).HasMaxLength(300);
         builder.Property(x => x.Visibility).HasConversion<short>();
         builder.Property(x => x.Metadata).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+        builder.Property(x => x.Language).HasMaxLength(DocumentLanguage.MaxLength);
 
         // Restrict, like every other owned content table: an account that still owns
         // documents cannot be dropped out from under them.
@@ -70,5 +72,25 @@ public sealed class DocumentPageConfiguration : IEntityTypeConfiguration<Documen
         builder.Property(x => x.Extractor).HasMaxLength(64);
 
         builder.HasIndex(x => new { x.FileId, x.PageNumber }).IsUnique();
+
+        // The full-text vector over page_text is deliberately NOT mapped here. It is a real
+        // column with a GIN index, maintained by a database trigger and read only by the raw
+        // content-search query. Mapping it would pull a vector derived from up to two million
+        // characters into memory for every page row loaded on a re-extraction, for a value no
+        // C# code ever looks at. The column, its trigger and its index are created in the
+        // migration that introduced content search; because nothing here maps it, no later
+        // model change will propose dropping it either.
+    }
+}
+
+public sealed class TextSearchLanguageConfiguration : IEntityTypeConfiguration<TextSearchLanguage>
+{
+    public void Configure(EntityTypeBuilder<TextSearchLanguage> builder)
+    {
+        builder.ToTable("text_search_languages");
+        builder.HasKey(x => x.Code);
+
+        builder.Property(x => x.Code).HasMaxLength(DocumentLanguage.MaxLength);
+        builder.Property(x => x.Configuration).HasMaxLength(64);
     }
 }

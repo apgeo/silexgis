@@ -27,6 +27,14 @@ Previous versions:
   code pages Romanian archives are full of. Nothing recognises text in a photograph, so scanned
   pages and image-only PDFs have no text to read, and the document panel says exactly that
   instead of leaving you waiting for words that are never coming.
+- **Search inside documents** — the same search box that finds caves and trips also finds
+  documents by what is written in them, quoting the sentence that matched. Searching is
+  accent-insensitive in both directions: "pestera" finds "peșteră", and the result is quoted back
+  spelled the way its author wrote it. Words are stemmed in the language a document is written in,
+  Romanian and English out of the box and any language PostgreSQL has a stemmer for by adding one
+  row. You only ever find documents you are allowed to read, and replaced versions of a document
+  are searchable only by the people who could replace it — a paragraph removed in a new version
+  does not stay findable in the old one.
 - **Cabinets** — a filing tree documents live in ("Club archive / Bulletins / 1987"), and the
   unit permissions are granted on: one rule can hand a committee the whole archive instead of
   one rule per document. A document can sit on several shelves at once, so there is no

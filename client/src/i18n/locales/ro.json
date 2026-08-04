@@ -1164,6 +1164,15 @@
   "search": {
     "features": "Fenomene",
     "trips": "Jurnale de tură",
+    "documents": "În textul documentelor",
+    "moreDocuments": "Se afișează {{shown}} din {{total}} documente găsite",
+    "noTextLayerHint": "Niciun text de document nu se potrivește. Paginile scanate nu conțin text care să poată fi căutat până când nu sunt transcrise.",
+    "supersededVersion": "versiunea {{number}}, înlocuită",
+    "divisions": {
+      "page": "pagina {{number}}",
+      "sheet": "foaia {{number}}",
+      "slide": "diapozitivul {{number}}"
+    },
     "openFailed": "Înregistrarea nu a putut fi deschisă."
   },
   "shares": {

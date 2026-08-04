@@ -1164,6 +1164,15 @@
   "search": {
     "features": "Features",
     "trips": "Trip logs",
+    "documents": "In document text",
+    "moreDocuments": "Showing {{shown}} of {{total}} matching documents",
+    "noTextLayerHint": "No document text matched. Scanned pages hold no text to search until they are typed up.",
+    "supersededVersion": "version {{number}}, replaced",
+    "divisions": {
+      "page": "page {{number}}",
+      "sheet": "sheet {{number}}",
+      "slide": "slide {{number}}"
+    },
     "openFailed": "Could not open this record."
   },
   "shares": {

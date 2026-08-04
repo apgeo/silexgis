@@ -674,14 +674,23 @@ export async function fetchPhotoFeatures(bbox: string): Promise<EntranceFeatureC
 export type SearchResult = components['schemas']['SearchResultDto'];
 export type SearchFeatureItem = components['schemas']['SearchFeatureItemDto'];
 export type SearchTripItem = components['schemas']['SearchTripItemDto'];
+export type SearchDocumentItem = components['schemas']['SearchDocumentItemDto'];
 
 /**
- * Global search: features of every kind plus trip logs. Results carry no coordinates —
- * navigate to the entity (or fetch it) instead of centering the map from here.
+ * Global search: features of every kind, trip logs, and documents matched by what their text
+ * says. Results carry no coordinates — navigate to the entity (or fetch it) instead of
+ * centering the map from here.
  *
  * Pass `kind` when only one kind can be picked. The server's hit budget is shared across
  * kinds, so filtering the answer here instead would let commoner kinds crowd the wanted
  * one out of the response entirely.
+ *
+ * The document section is the one that is paged, and this hook asks only for its first page:
+ * a search box shows the best few answers, and the total that comes back with them says
+ * honestly how many more there are. The two query parameters that would change that answer —
+ * which page, and whether replaced revisions are searched — are deliberately not passed here,
+ * because they are not in the cache key and a request that varied them would be served the
+ * previous one's rows.
  */
 export function useSearch(q: string, kind?: FeatureKind) {
   return useQuery({
