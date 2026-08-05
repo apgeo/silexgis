@@ -399,6 +399,19 @@
       "textFailed": "Textul acestui document nu a putut fi încărcat.",
       "textTruncated": "Aici se văd doar primii {{kilobytes}} kB. Descarcă fișierul ca să citești restul."
     },
+    "comments": {
+      "title": "Discuție",
+      "empty": "Încă nu s-a spus nimic despre acest document.",
+      "placeholder": "Scrie o observație despre acest document",
+      "replyPlaceholder": "Scrie un răspuns",
+      "body": "Observație",
+      "post": "Trimite",
+      "reply": "Răspunde",
+      "edit": "Modifică",
+      "delete": "Șterge",
+      "edited": "modificat",
+      "deleteConfirm": "Ștergi această observație? Răspunsurile la ea dispar odată cu ea."
+    },
     "text": "Text",
     "textStates": {
       "notApplicable": "Acest fel de fișier nu conține text de citit.",

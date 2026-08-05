@@ -399,6 +399,19 @@
       "textFailed": "This document's text could not be loaded.",
       "textTruncated": "Only the first {{kilobytes}} kB are shown here. Download the file to read the rest."
     },
+    "comments": {
+      "title": "Discussion",
+      "empty": "Nothing has been said about this document yet.",
+      "placeholder": "Write a remark about this document",
+      "replyPlaceholder": "Write a reply",
+      "body": "Remark",
+      "post": "Post",
+      "reply": "Reply",
+      "edit": "Edit",
+      "delete": "Delete",
+      "edited": "edited",
+      "deleteConfirm": "Delete this remark? Its replies go with it."
+    },
     "text": "Text",
     "textStates": {
       "notApplicable": "This kind of file holds no text to read.",

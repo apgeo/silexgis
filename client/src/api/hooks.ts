@@ -14,6 +14,7 @@ export type Taxonomy = components['schemas']['TaxonomyDto'];
 export type FeatureType = components['schemas']['FeatureTypeDto'];
 export type DocumentType = components['schemas']['DocumentTypeDto'];
 export type DocumentInfo = components['schemas']['DocumentDto'];
+export type DocumentComment = components['schemas']['DocumentCommentDto'];
 export type TextExtractionState = components['schemas']['TextExtractionState'];
 export type CabinetInfo = components['schemas']['CabinetDto'];
 export type CabinetWrite = components['schemas']['CabinetWriteRequest'];
@@ -69,6 +70,10 @@ export const queryKeys = {
   fileVersions: (fileId: string) => ['file-versions', fileId] as const,
   fileConfig: ['file-config'] as const,
   document: (id: string) => ['documents', 'detail', id] as const,
+  // Deliberately its own root rather than nested under 'documents': saving a title
+  // invalidates that whole prefix, and a remark thread has no reason to be refetched
+  // because somebody corrected a spelling in the metadata panel above it.
+  documentComments: (id: string) => ['document-comments', id] as const,
   cabinets: ['cabinets'] as const,
   cabinetDocuments: (id: string, params: CabinetDocumentParams) =>
     ['cabinets', id, 'documents', params] as const,
@@ -1273,6 +1278,76 @@ export function useUpdateDocument() {
       void queryClient.invalidateQueries({ queryKey: ['search'] });
       invalidateAttachments();
     },
+  });
+}
+
+/**
+ * Comments are audited children of the document they sit on, so writing one changes that
+ * document's timeline as well as the thread.
+ */
+function useInvalidateDocumentComments() {
+  const queryClient = useQueryClient();
+  return (documentId: string) => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.documentComments(documentId) });
+    void queryClient.invalidateQueries({ queryKey: ['history'] });
+  };
+}
+
+/**
+ * The remarks written on a document, oldest first. Reading them is reading the document:
+ * the server answers a caller who may not read the document exactly as it answers one
+ * asking about a document that is not there, so this hook's error carries no information
+ * the document query did not already give.
+ */
+export function useDocumentComments(documentId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.documentComments(documentId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/documents/{documentId}/comments', {
+        params: { path: { documentId: documentId! }, query: { pageSize: 200 } },
+      })),
+    enabled: !!documentId && enabled,
+  });
+}
+
+/**
+ * Posts a remark, or a reply to one. `parentId` names the remark being replied to; threads
+ * are one level deep and the server refuses a reply to a reply rather than flattening it.
+ */
+export function useCreateDocumentComment() {
+  const invalidate = useInvalidateDocumentComments();
+  return useMutation({
+    mutationFn: ({ documentId, ...body }: { documentId: string; parentId: string | null; body: string }) =>
+      unwrap(api.POST('/api/v1/documents/{documentId}/comments', {
+        params: { path: { documentId } },
+        body: { ...body, anchorKind: 'whole', anchor: null, anchorFileId: null },
+      })),
+    onSuccess: (_result, variables) => invalidate(variables.documentId),
+  });
+}
+
+/** Rewrites a remark. Only its author may, and the change is recorded in the document's history. */
+export function useUpdateDocumentComment() {
+  const invalidate = useInvalidateDocumentComments();
+  return useMutation({
+    mutationFn: ({ documentId, id, ...body }: { documentId: string; id: string; body: string }) =>
+      unwrap(api.PUT('/api/v1/documents/{documentId}/comments/{id}', {
+        params: { path: { documentId, id } },
+        body,
+      })),
+    onSuccess: (_result, variables) => invalidate(variables.documentId),
+  });
+}
+
+/** Removes a remark, and the replies under it: its author, or an administrator. */
+export function useDeleteDocumentComment() {
+  const invalidate = useInvalidateDocumentComments();
+  return useMutation({
+    mutationFn: ({ documentId, id }: { documentId: string; id: string }) =>
+      unwrapVoid(api.DELETE('/api/v1/documents/{documentId}/comments/{id}', {
+        params: { path: { documentId, id } },
+      })),
+    onSuccess: (_result, variables) => invalidate(variables.documentId),
   });
 }
 

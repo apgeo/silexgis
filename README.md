@@ -49,6 +49,12 @@ Previous versions:
   text, the page says which of those it is and offers the download — you are never left looking
   at a blank panel wondering. It works on a phone, and someone allowed to read a protected cave's
   report can read it there without ever being able to download the file.
+- **Talk about a document where it lives** — every document page carries a discussion: who
+  recognises the cave in an unlabelled 1987 photograph, which survey superseded which. Replies go
+  one level deep, so a thread stays readable; the person who wrote a remark can correct it, and
+  they or an administrator can take it down. Whoever may read the document may join in — and
+  nobody else can even tell the conversation is there, because a remark is only ever reachable
+  through the document it sits on. Remarks are plain words, shown as the words that were typed.
 - **Cabinets** — a filing tree documents live in ("Club archive / Bulletins / 1987"), and the
   unit permissions are granted on: one rule can hand a committee the whole archive instead of
   one rule per document. A document can sit on several shelves at once, so there is no

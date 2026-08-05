@@ -83,6 +83,44 @@ public sealed class DocumentPageConfiguration : IEntityTypeConfiguration<Documen
     }
 }
 
+public sealed class DocumentCommentConfiguration : IEntityTypeConfiguration<DocumentComment>
+{
+    public void Configure(EntityTypeBuilder<DocumentComment> builder)
+    {
+        builder.ToTable("document_comments", t =>
+        {
+            // The whole-document anchor is the one kind with no payload, and the only one
+            // that is never pinned to a file. Stated here as well as in the rules class
+            // because a row that broke it could not be interpreted at read time at all.
+            t.HasCheckConstraint(
+                "ck_document_comments_anchor_payload",
+                "(anchor_kind = 0 AND anchor IS NULL AND anchor_file_id IS NULL) OR (anchor_kind <> 0 AND anchor IS NOT NULL)");
+            t.HasCheckConstraint("ck_document_comments_body", "length(btrim(body)) > 0");
+        });
+
+        builder.Property(x => x.Id).ValueGeneratedNever();
+
+        builder.Property(x => x.Body).HasMaxLength(DocumentCommentRules.MaxBodyLength);
+        builder.Property(x => x.AnchorKind).HasConversion<short>();
+        builder.Property(x => x.Anchor).HasColumnType("jsonb");
+
+        // The comment belongs to the document, not to the bytes: deleting the document
+        // takes its discussion with it, and a reply goes with the comment it answers.
+        builder.HasOne<Document>().WithMany().HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<DocumentComment>().WithMany().HasForeignKey(x => x.ParentId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.SetNull);
+        // The pin names an immutable file it was measured against; losing that file
+        // degrades the anchor to a coarser one rather than deleting the remark.
+        builder.HasOne<StoredFile>().WithMany().HasForeignKey(x => x.AnchorFileId).OnDelete(DeleteBehavior.SetNull);
+
+        // The listing order: a document's thread, oldest first.
+        builder.HasIndex(x => new { x.DocumentId, x.CreatedAt });
+        builder.HasIndex(x => x.ParentId);
+        builder.HasIndex(x => x.AuthorId);
+        builder.HasIndex(x => x.AnchorFileId);
+    }
+}
+
 public sealed class TextSearchLanguageConfiguration : IEntityTypeConfiguration<TextSearchLanguage>
 {
     public void Configure(EntityTypeBuilder<TextSearchLanguage> builder)

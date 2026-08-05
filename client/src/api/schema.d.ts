@@ -4835,6 +4835,137 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/{documentId}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The remarks written on a document, oldest first; requires read of the document. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfDocumentCommentDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Writes a remark on a document; requires read of the document. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DocumentCommentCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocumentCommentDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{documentId}/comments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Rewrites a remark; its author only. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    documentId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DocumentCommentUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocumentCommentDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Removes a remark and its replies; its author or an administrator. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    documentId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cabinets": {
         parameters: {
             query?: never;
@@ -7903,6 +8034,44 @@ export interface components {
             /** Format: date-time */
             expiresAt: null | string;
         };
+        /** @enum {unknown} */
+        DocumentAnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange";
+        DocumentCommentCreateRequest: {
+            /** Format: uuid */
+            parentId: null | string;
+            body: string;
+            anchorKind: components["schemas"]["DocumentAnchorKind"];
+            anchor: null | components["schemas"]["JsonElement"];
+            /** Format: uuid */
+            anchorFileId: null | string;
+        };
+        DocumentCommentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            parentId: null | string;
+            body: string;
+            /** Format: uuid */
+            authorId: null | string;
+            authorName: null | string;
+            anchorKind: components["schemas"]["DocumentAnchorKind"];
+            anchor: null | components["schemas"]["JsonElement"];
+            /** Format: uuid */
+            anchorFileId: null | string;
+            mayEdit: boolean;
+            mayDelete: boolean;
+            /** Format: date-time */
+            editedAt: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        DocumentCommentUpdateRequest: {
+            body: string;
+        };
         DocumentDto: {
             /** Format: uuid */
             id: string;
@@ -8757,6 +8926,15 @@ export interface components {
         };
         PagedResultOfCaveListItemDto: {
             items: components["schemas"]["CaveListItemDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfDocumentCommentDto: {
+            items: components["schemas"]["DocumentCommentDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */

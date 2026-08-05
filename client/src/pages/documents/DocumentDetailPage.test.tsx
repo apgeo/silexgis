@@ -79,6 +79,10 @@ vi.mock('../../api/hooks.ts', () => ({
 vi.mock('../../components/attachments/DocumentMetadata.tsx', () => ({
   default: () => <div>document-properties</div>,
 }));
+// The discussion has its own tests; here it is only expected to be on the page.
+vi.mock('../../components/documents/DocumentComments.tsx', () => ({
+  default: () => <div>document-comments</div>,
+}));
 vi.mock('../../components/attachments/FileVersions.tsx', () => ({
   default: ({ canEdit }: { canEdit: boolean }) => (
     <div>{canEdit ? 'versions-editable' : 'versions-readonly'}</div>

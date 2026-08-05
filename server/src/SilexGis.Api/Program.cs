@@ -209,6 +209,7 @@ try
     api.MapFileEndpoints();
     api.MapDocumentEndpoints();
     api.MapDocumentTypeEndpoints();
+    api.MapDocumentCommentEndpoints();
     api.MapCabinetEndpoints();
     api.MapAttachmentEndpoints();
     api.MapGeoreferencedMapEndpoints();

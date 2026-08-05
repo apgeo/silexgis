@@ -60,6 +60,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<DocumentPage> DocumentPages => Set<DocumentPage>();
 
+    public DbSet<DocumentComment> DocumentComments => Set<DocumentComment>();
+
     public DbSet<TextSearchLanguage> TextSearchLanguages => Set<TextSearchLanguage>();
 
     public DbSet<Cabinet> Cabinets => Set<Cabinet>();

@@ -13,6 +13,7 @@ import {
 import DocumentMetadata from '../../components/attachments/DocumentMetadata.tsx';
 import FileVersions from '../../components/attachments/FileVersions.tsx';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
+import DocumentComments from '../../components/documents/DocumentComments.tsx';
 import DocumentContent from '../../components/documents/DocumentContent.tsx';
 import DownloadDocument from '../../components/documents/DownloadDocument.tsx';
 import TextState from '../../components/documents/TextState.tsx';
@@ -185,6 +186,15 @@ export default function DocumentDetailPage() {
         ) : (
           <Spin />
         )}
+      </Card>
+
+      {/*
+        The discussion, under the document it is about. Whoever may read the document may
+        read and add to it, which is why this card carries no rights check of its own: the
+        page would not have rendered for somebody the server refused.
+      */}
+      <Card size="small" title={t('documents.comments.title')} style={{ marginTop: 16 }}>
+        <DocumentComments documentId={document.id} />
       </Card>
     </div>
   );
