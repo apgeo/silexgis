@@ -65,6 +65,10 @@ public sealed record ResLinkMemberDto(
     /// <summary>The anchor payload as authored; withheld (null) when the caller may not
     /// read the target, because a payload can quote what it anchors to.</summary>
     JsonElement? Anchor,
+    /// <summary>The measured-against pin; withheld with the payload for an unreadable
+    /// target, and — once the pinned file is superseded — withheld from callers the
+    /// document's own rules keep out of superseded versions, who still see the
+    /// degradation but are never routed into history.</summary>
     Guid? AnchorFileId,
     ResLinkAnchorState AnchorState,
     ResLinkTargetDisplayDto? Display);

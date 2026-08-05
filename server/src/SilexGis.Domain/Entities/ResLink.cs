@@ -103,7 +103,13 @@ public class ResLinkRelationType : TaxonomyBase
 /// cavers, survey models, … — related under an optional relation type, with a free-text
 /// description and a permalink short code. The link itself grants no access: every
 /// member is shown or withheld under its target's own visibility rules, and an
-/// unreadable member renders without display data rather than disappearing. A link keeps
+/// unreadable member renders without display data rather than disappearing — except a
+/// member naming a feature whose exact position the caller may not see, which the
+/// association-disclosure rule drops from the response entirely, because that row would
+/// name the guarded feature rather than merely admit something restricted exists; and
+/// when a sibling member shows the caller exact coordinates, that drop holds whatever
+/// the installation's reveal setting says, since the name would then stand beside a
+/// position. A link keeps
 /// at least one member; removing the last one is refused — deleting the link is the
 /// explicit act, and deletion is hard (audited, no soft-delete state).
 /// </summary>

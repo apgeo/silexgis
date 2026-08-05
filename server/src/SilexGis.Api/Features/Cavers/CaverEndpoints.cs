@@ -85,10 +85,11 @@ public static class CaverEndpoints
     }
 
     /// <summary>
-    /// Who may edit the roster: Write over the caver domain. One place on purpose — every other
+    /// Who may edit the roster. The definition lives with the shared caver directory so every
+    /// surface a caver appears on — this slice included — asks the same question; every other
     /// decision here, including how much of a person's contact details are disclosed, defers to it.
     /// </summary>
-    private static bool CanKeepRoster(AccessContext ctx) => Holds(ctx, AccessAction.Write);
+    private static bool CanKeepRoster(AccessContext ctx) => CaverDirectory.CanKeepRoster(ctx);
 
     /// <summary>
     /// The domain check for the roster. A rule may be scoped to a single person, so the object

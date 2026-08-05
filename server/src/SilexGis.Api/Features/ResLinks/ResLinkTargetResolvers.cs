@@ -5,6 +5,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Profiles;
 using SilexGis.Domain.ResLinks;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -280,9 +281,13 @@ public sealed class TripLogTargetResolver(SilexGisDbContext db) : IResLinkTarget
     private static string Subtitle(TripLog t) => t.TripDate.ToString("yyyy-MM-dd");
 }
 
-/// <summary>Cavers under the disclosure tiers: any signed-in caller may see a person's
-/// display label (the linked account's chosen label wins over the roster name), and
-/// nothing beyond the label — contact details never travel through link display.</summary>
+/// <summary>Cavers projected through the roster's disclosure tiers: any signed-in caller
+/// may see a person's display label (the linked account's chosen label wins over the
+/// roster name), and the subtitle is the person's email exactly as the tiers serve it —
+/// a linked person's own per-field profile settings decide, an account-less person's is
+/// roster-keeper-only. Every field travels through the one projection in
+/// <see cref="CaverProtection"/>, so link display can never show more of a person than
+/// the roster itself would.</summary>
 public sealed class CaverTargetResolver(
     SilexGisDbContext db, IUserContextAccessor userAccessor) : IResLinkTargetResolver
 {
@@ -296,11 +301,28 @@ public sealed class CaverTargetResolver(
             return new Dictionary<Guid, ResLinkTargetDisplayDto>();
         }
 
+        // Anonymous callers never turn ids into people. Every reslink caller is signed
+        // in today, but the tier rule does not lean on that staying true.
         var user = await userAccessor.GetAsync(ct);
-        var labels = await CaverDirectory.ResolveLabelsAsync(db, user, ids, ct);
-        return labels.ToDictionary(
-            kv => kv.Key,
-            kv => new ResLinkTargetDisplayDto(kv.Value, null, null, null));
+        if (user is null)
+        {
+            return new Dictionary<Guid, ResLinkTargetDisplayDto>();
+        }
+
+        var cavers = await db.Cavers.AsNoTracking().Where(c => ids.Contains(c.Id)).ToListAsync(ct);
+        var canKeepRoster = CaverDirectory.CanKeepRoster(ctx);
+        var profiles = await ProfileDirectory.ResolveAsync(
+            db, user, cavers.Where(c => c.UserId is not null).Select(c => c.UserId!.Value), ct);
+        return cavers.ToDictionary(
+            c => c.Id,
+            c =>
+            {
+                // For an account holder the profile projection has already applied their
+                // own settings; the tier rule itself has one home in CaverProtection.
+                var projected = CaverProtection.Project(
+                    c, canKeepRoster, c.UserId is { } userId ? profiles.GetValueOrDefault(userId) : null);
+                return new ResLinkTargetDisplayDto(projected.FullName, projected.Email, null, null);
+            });
     }
 
     public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(

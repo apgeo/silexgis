@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Shouldly;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 using static SilexGis.Domain.ResLinks.ResLinkRules;
 
 namespace SilexGis.Domain.Tests;
@@ -450,5 +451,139 @@ public class ResLinkRulesTests
 
         // 62^8 values — 200 draws colliding would point at a broken generator.
         codes.Count.ShouldBe(200);
+    }
+
+    // ---- membership disclosure ------------------------------------------------------
+
+    [Fact]
+    public void A_membership_naming_a_feature_answers_the_association_rule()
+    {
+        var membership = MemberAssociation(SomeId);
+
+        // Withheld exactly when the feature's coordinates would be: the caller lacks
+        // exact view and the installation keeps its default.
+        AssociationProtection.IsWithheld(
+                membership, exactViewOfTarget: false, revealProtectedAssociations: false)
+            .ShouldBeTrue();
+
+        // …and the two disclosures that must survive the withholding: exact view on the
+        // feature, or the installation deciding to reveal associations.
+        AssociationProtection.IsWithheld(
+                membership, exactViewOfTarget: true, revealProtectedAssociations: false)
+            .ShouldBeFalse();
+        AssociationProtection.IsWithheld(
+                membership, exactViewOfTarget: false, revealProtectedAssociations: true)
+            .ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_membership_naming_no_feature_is_never_withheld()
+    {
+        // An entity-world member — a document, a trip, a caver — presents no position
+        // for the rule to guard; what travels for it is its own world's business.
+        MemberAssociation(null).TargetFeatureId.ShouldBeNull();
+        AssociationProtection.IsWithheld(
+                MemberAssociation(null), exactViewOfTarget: false, revealProtectedAssociations: false)
+            .ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_membership_row_carries_no_position_of_its_own()
+    {
+        // Unlike a geotagged photo, nothing in a bare membership row is coordinates —
+        // so the sibling-less mapping can never trip the rule's always-withheld arm,
+        // and the setting genuinely decides.
+        MemberAssociation(SomeId).DocumentCarriesItsOwnPosition.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_sibling_showing_coordinates_withholds_past_the_reveal_setting()
+    {
+        // A link whose other member shows the caller exact coordinates puts the
+        // protected feature's name beside a position — the same pairing as a geotagged
+        // photo attached to it, mapped onto the same arm of the same rule, which the
+        // installation's reveal setting never opens.
+        var beside = MemberAssociation(SomeId, siblingShowsCoordinates: true);
+        AssociationProtection.IsWithheld(
+                beside, exactViewOfTarget: false, revealProtectedAssociations: true)
+            .ShouldBeTrue();
+        AssociationProtection.IsWithheld(
+                beside, exactViewOfTarget: false, revealProtectedAssociations: false)
+            .ShouldBeTrue();
+
+        // The matching positives: exact view on the feature ends the question — there
+        // is no position left to protect from its own coordinates — and without the
+        // exposing sibling the reveal setting decides as before.
+        AssociationProtection.IsWithheld(
+                beside, exactViewOfTarget: true, revealProtectedAssociations: false)
+            .ShouldBeFalse();
+        AssociationProtection.IsWithheld(
+                MemberAssociation(SomeId, siblingShowsCoordinates: false),
+                exactViewOfTarget: false, revealProtectedAssociations: true)
+            .ShouldBeFalse();
+
+        // An entity-world member has no position for the sibling to give away.
+        AssociationProtection.IsWithheld(
+                MemberAssociation(null, siblingShowsCoordinates: true),
+                exactViewOfTarget: false, revealProtectedAssociations: false)
+            .ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Waypoint_anchors_are_the_kinds_that_address_coordinates()
+    {
+        // A waypoint anchor names positioned points of a geofile, so a member carrying
+        // one shows its reader coordinates; every other kind addresses content.
+        AnchorAddressesCoordinates(AnchorKind.Waypoint).ShouldBeTrue();
+        AnchorAddressesCoordinates(AnchorKind.WaypointRange).ShouldBeTrue();
+        foreach (var kind in Enum.GetValues<AnchorKind>()
+                     .Where(k => k is not (AnchorKind.Waypoint or AnchorKind.WaypointRange)))
+        {
+            AnchorAddressesCoordinates(kind).ShouldBeFalse(kind.ToString());
+        }
+    }
+
+    // ---- anchor presentation --------------------------------------------------------
+
+    [Fact]
+    public void An_unreadable_target_takes_its_whole_anchor_with_it()
+    {
+        // Payload (it can quote the content), pin (it names a file of the document) and
+        // degradation (re-versioning is a fact about the document) all stay withheld,
+        // whatever the pin's state is.
+        foreach (var superseded in new[] { false, true })
+        {
+            foreach (var editor in new[] { false, true })
+            {
+                PresentAnchor(
+                        targetReadable: false,
+                        pinSuperseded: superseded,
+                        supersededVersionsReadable: editor)
+                    .ShouldBe(new AnchorPresentation(false, false, false));
+            }
+        }
+    }
+
+    [Fact]
+    public void A_current_pin_travels_whole_to_any_reader()
+    {
+        PresentAnchor(targetReadable: true, pinSuperseded: false, supersededVersionsReadable: false)
+            .ShouldBe(new AnchorPresentation(
+                PayloadShown: true, PinShown: true, DegradationShown: false));
+    }
+
+    [Fact]
+    public void A_superseded_pin_degrades_for_all_readers_but_routes_only_editors()
+    {
+        // Every reader is told the anchor no longer addresses what the document serves —
+        // that is a fact of this link. Only a caller whom the document's own rules let
+        // into superseded versions gets the superseded file's id; a read-only caller
+        // must never be handed a marker into history their document read would refuse.
+        PresentAnchor(targetReadable: true, pinSuperseded: true, supersededVersionsReadable: true)
+            .ShouldBe(new AnchorPresentation(
+                PayloadShown: true, PinShown: true, DegradationShown: true));
+        PresentAnchor(targetReadable: true, pinSuperseded: true, supersededVersionsReadable: false)
+            .ShouldBe(new AnchorPresentation(
+                PayloadShown: true, PinShown: false, DegradationShown: true));
     }
 }

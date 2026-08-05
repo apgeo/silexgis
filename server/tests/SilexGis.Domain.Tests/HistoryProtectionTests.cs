@@ -164,6 +164,39 @@ public class HistoryProtectionTests
     }
 
     [Fact]
+    public void ResLink_membership_names_no_link_in_a_protected_features_timeline()
+    {
+        var linkId = Guid.NewGuid().ToString();
+        (string, string?, string?)[] props =
+        [
+            ("ResLinkId", null, linkId),
+            ("FeatureId", null, Guid.NewGuid().ToString()),
+            ("Note", null, "seen from the ridge"),
+            ("AddedBy", null, Guid.NewGuid().ToString()),
+            ("IsMain", null, "false"),
+            ("SortOrder", null, "0"),
+        ];
+
+        // Hidden: the event stays — a membership changed — while which link it joined does
+        // not, because that association is exactly what the live link reads withhold. The
+        // timeline can consult neither the reveal setting nor the link's siblings, so it is
+        // strictly more restrictive than the live answer, the only direction it may differ in.
+        var hidden = HistoryProtection.Redact(
+            "ResLinkMember", Changes(props), governingHidden: true, NoLinkHidden);
+        hidden.Redacted.Order().ShouldBe(["AddedBy", "Note", "ResLinkId"]);
+        hidden.Changes!.ContainsKey("ResLinkId").ShouldBeFalse();
+        hidden.Changes.ContainsKey("SortOrder").ShouldBeTrue();
+        hidden.Changes.ToJsonString().ShouldNotContain(linkId);
+
+        // And a caller who may place the feature exactly reads the whole row.
+        var shown = HistoryProtection.Redact(
+            "ResLinkMember", Changes(props), governingHidden: false, NoLinkHidden);
+        shown.Redacted.ShouldBeEmpty();
+        shown.Changes!.ContainsKey("ResLinkId").ShouldBeTrue();
+        shown.Changes.ContainsKey("Note").ShouldBeTrue();
+    }
+
+    [Fact]
     public void Null_changes_pass_through()
     {
         var result = HistoryProtection.Redact("Feature:Cave", null, governingHidden: true, NoLinkHidden);

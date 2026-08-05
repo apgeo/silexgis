@@ -2,6 +2,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 
 namespace SilexGis.Domain.ResLinks;
 
@@ -9,9 +10,12 @@ namespace SilexGis.Domain.ResLinks;
 /// Validity of resource links and their members — the single home for every write-path
 /// law: the target's two shapes, which entity types may participate, which anchor kinds
 /// each target type admits, what each anchor payload must contain, when a main member
-/// is required or forbidden, the membership floor, and the short-code format. Write
-/// flows delegate here before touching the database; the schema CHECKs re-state only
-/// the structural subset (target XOR, single main) as a backstop.
+/// is required or forbidden, the membership floor, and the short-code format — plus the
+/// read-path laws: how a membership presents itself to the association-disclosure rule,
+/// which anchor kinds put coordinates in front of the reader, and what of an anchor
+/// travels to one caller. Write flows delegate here before touching the database; the
+/// schema CHECKs re-state only the structural subset (target XOR, single main) as a
+/// backstop.
 /// </summary>
 public static class ResLinkRules
 {
@@ -337,6 +341,83 @@ public static class ResLinkRules
     /// </summary>
     public static string NewShortCode() =>
         RandomNumberGenerator.GetString(ShortCodeAlphabet, ShortCodeLength);
+
+    // ---- membership disclosure ----------------------------------------------------
+
+    /// <summary>
+    /// A membership as the association-disclosure rule sees it, before any sibling is
+    /// considered. A member that names a feature is an association that can place the
+    /// feature — the same act as attaching a document to it — so every read path asks
+    /// <see cref="AssociationProtection"/> about each member before emitting it, under
+    /// this mapping and never a private reading of protection. A membership that names
+    /// no feature (an entity-world member) presents no position for the rule to guard.
+    /// A membership row carries no coordinates of its own the way a geotagged photo
+    /// does, so alone it can never trip the rule's always-withheld arm — only the
+    /// caller's exact-view answer and the installation setting decide.
+    /// </summary>
+    public static FeatureAssociation MemberAssociation(Guid? featureId) => new(featureId, false);
+
+    /// <summary>
+    /// A membership seen together with its siblings. A link is one association among all
+    /// of its members, so when any sibling member shows this caller exact coordinates —
+    /// a feature whose exact position they may see, a document with a capture-point file
+    /// they may both see and fetch (a superseded revision's counts only for callers the
+    /// document lets into version history), a survey model they may open, an anchor that
+    /// reads coordinates out of a geofile they may read — the protected feature's name
+    /// stands beside a position, exactly like a geotagged photo attached to it. That is
+    /// the association the reveal setting never opens, and mapping the sibling fact onto
+    /// the rule's own-position arm is what makes the same written rule decide, instead
+    /// of a second copy of it.
+    /// </summary>
+    /// <param name="siblingShowsCoordinates">
+    /// Whether any <b>other</b> member of the same link exposes exact coordinates this
+    /// caller may see. The member's own facts never count — a feature the caller may
+    /// place exactly needs no protecting from its own position.
+    /// </param>
+    public static FeatureAssociation MemberAssociation(Guid? featureId, bool siblingShowsCoordinates) =>
+        new(featureId, siblingShowsCoordinates);
+
+    /// <summary>
+    /// Anchor kinds whose payload names coordinates of the target's content: waypoint
+    /// anchors address positioned points of a geofile, so a member carrying one puts the
+    /// coordinates themselves in front of whoever may read that geofile. Document and
+    /// survey-model part anchors address text, pages, pixels or stations — content, not
+    /// coordinates (a survey model is unreadable without exact view in the first place).
+    /// </summary>
+    public static bool AnchorAddressesCoordinates(AnchorKind kind) =>
+        kind is AnchorKind.Waypoint or AnchorKind.WaypointRange;
+
+    /// <summary>What of one member's anchor is emitted to one caller.</summary>
+    /// <param name="PayloadShown">The authored payload travels.</param>
+    /// <param name="PinShown">The measured-against file id travels.</param>
+    /// <param name="DegradationShown">The caller is told the pin is superseded.</param>
+    public readonly record struct AnchorPresentation(
+        bool PayloadShown, bool PinShown, bool DegradationShown);
+
+    /// <summary>
+    /// How a member's anchor presents itself to one caller. An unreadable target takes
+    /// everything with it — payload, pin and state alike, since a payload can quote what
+    /// it anchors to and the state is a fact about the target's version history. For a
+    /// readable target the payload always travels; a superseded pin is disclosed as
+    /// degraded to every reader — that the anchor no longer addresses what the document
+    /// currently serves is a fact of this link — but the superseded file's id travels
+    /// only to callers who may see superseded versions at all (document editors), so the
+    /// marker never routes a read-only caller into history their document read would
+    /// refuse.
+    /// </summary>
+    public static AnchorPresentation PresentAnchor(
+        bool targetReadable, bool pinSuperseded, bool supersededVersionsReadable)
+    {
+        if (!targetReadable)
+        {
+            return new(PayloadShown: false, PinShown: false, DegradationShown: false);
+        }
+
+        return new(
+            PayloadShown: true,
+            PinShown: !pinSuperseded || supersededVersionsReadable,
+            DegradationShown: pinSuperseded);
+    }
 
     // ---- payload field helpers ----------------------------------------------------
 

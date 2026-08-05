@@ -10,6 +10,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.ResLinks;
 using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.ResLinks;
@@ -27,6 +28,23 @@ namespace SilexGis.Api.Features.ResLinks;
 /// but with no display data, no anchor payload and no route. Withholding the member row
 /// entirely would make links quietly incomplete for different readers, which is worse
 /// than admitting something restricted sits there.
+/// </para>
+/// <para>
+/// One kind of member is withheld outright instead of bared: a member naming a feature
+/// whose exact position the caller may not see. There a bare row would not admit that
+/// "something restricted" exists — it would name the feature, and which links a guarded
+/// feature participates in is exactly the association the attachment world keeps from
+/// callers without exact view. The same disclosure rule decides here, installation
+/// setting included: such a member is absent from every link read, and the panel on
+/// such a feature lists no links at all, since each one it named would disclose the
+/// association by existing. One thing the reveal setting never opens: when a sibling
+/// member of the same link shows the caller exact coordinates — a feature they may
+/// place, a geotagged file whose capture point they may see and reach, a survey model
+/// they may open, a waypoint anchor into a geofile they may read — the protected
+/// feature's name would stand beside a position, so its member stays withheld
+/// regardless. The write acknowledgments stay exempt — the member-write echoes and the
+/// create response alike answer the caller with the very memberships that caller just
+/// asserted, which cannot be news to them.
 /// </para>
 /// <para>
 /// Authoring is asymmetric on purpose: adding a member takes Read on its target — the
@@ -83,6 +101,10 @@ public static class ResLinkEndpoints
         ResLinkCreateRequest request,
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
+        AssociationDisclosure associations,
+        FeatureProtection protection,
+        PhotoPositionDisclosure photoPositions,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -184,7 +206,13 @@ public static class ResLinkEndpoints
         db.ResLinkMembers.AddRange(members);
         await SaveWithFreshShortCodeAsync(db, link, ct);
 
-        var dto = (await ProjectAsync(db, targets, ctx, [link], ct)).Single();
+        // Echoed without the membership-disclosure cut, like the member-write
+        // acknowledgments: every member of this response was asserted by this caller in
+        // this very request, so none can be news to them — while a cut echo of a
+        // single-member link would read as a failed write.
+        var dto = (await ProjectAsync(
+            db, targets, associations, protection, photoPositions, access, ctx, [link], ct,
+            skipMembershipCut: true)).Single();
         return TypedResults.Created($"/api/v1/reslinks/{link.Id}", dto);
     }
 
@@ -192,6 +220,10 @@ public static class ResLinkEndpoints
         string idOrCode,
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
+        AssociationDisclosure associations,
+        FeatureProtection protection,
+        PhotoPositionDisclosure photoPositions,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -208,7 +240,8 @@ public static class ResLinkEndpoints
             var byId = await db.ResLinks.AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
             return byId is null
                 ? ApiProblems.NotFound(NotFoundCode)
-                : TypedResults.Ok((await ProjectAsync(db, targets, ctx, [byId], ct)).Single());
+                : TypedResults.Ok((await ProjectAsync(
+                    db, targets, associations, protection, photoPositions, access, ctx, [byId], ct)).Single());
         }
 
         var byCode = ResLinkRules.IsShortCode(idOrCode)
@@ -216,7 +249,8 @@ public static class ResLinkEndpoints
             : null;
         return byCode is null
             ? ApiProblems.NotFound(CodeUnresolvedCode)
-            : TypedResults.Ok((await ProjectAsync(db, targets, ctx, [byCode], ct)).Single());
+            : TypedResults.Ok((await ProjectAsync(
+                db, targets, associations, protection, photoPositions, access, ctx, [byCode], ct)).Single());
     }
 
     private static async Task<Results<Ok<ResLinkDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -224,6 +258,10 @@ public static class ResLinkEndpoints
         ResLinkUpdateRequest request,
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
+        AssociationDisclosure associations,
+        FeatureProtection protection,
+        PhotoPositionDisclosure photoPositions,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -298,7 +336,8 @@ public static class ResLinkEndpoints
 
         await tx.CommitAsync(ct);
 
-        return TypedResults.Ok((await ProjectAsync(db, targets, ctx, [link], ct)).Single());
+        return TypedResults.Ok((await ProjectAsync(
+            db, targets, associations, protection, photoPositions, access, ctx, [link], ct)).Single());
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
@@ -339,6 +378,7 @@ public static class ResLinkEndpoints
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
         FeatureWriteService featureWriter,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -456,6 +496,17 @@ public static class ResLinkEndpoints
             return pinProblem;
         }
 
+        // The snapshot behind this check is uncut by membership disclosure, so the
+        // refusal can confirm to the caller that a whole target — possibly a member
+        // their own reads withhold — already sits in the link. Accepted, eyes open:
+        // only the link's creator or a full administrator (who reads every member
+        // anyway) can reach this line, so the audience is whoever authored the link,
+        // and the honest alternatives are worse — a disclosure-cut snapshot would
+        // drive the insert into the unique backstop index, and answering "created"
+        // for a row that already exists would either misstate its fields or overwrite
+        // another author's. The count-based rules above share the same snapshot and
+        // the same bounded audience: a creator can infer that hidden members exist,
+        // never which targets they name.
         if (request.AnchorKind == AnchorKind.Whole && members.Any(m =>
                 m.AnchorKind == AnchorKind.Whole && m.FeatureId == featureId
                 && m.EntityType == entityType && m.EntityId == entityId))
@@ -497,7 +548,10 @@ public static class ResLinkEndpoints
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        var dto = (await ProjectMembersAsync(db, targets, ctx, [member], ct))[member.Id];
+        // Projected without the membership-disclosure cut the link reads apply: this
+        // acknowledgment answers the author of the very write, and the membership
+        // cannot be news to whoever just asserted it.
+        var dto = (await ProjectMembersAsync(db, targets, access, ctx, [member], ct))[member.Id];
         return TypedResults.Created($"/api/v1/reslinks/{link.Id}/members/{member.Id}", dto);
     }
 
@@ -507,6 +561,7 @@ public static class ResLinkEndpoints
         ResLinkMemberUpdateRequest request,
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -562,7 +617,10 @@ public static class ResLinkEndpoints
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        return TypedResults.Ok((await ProjectMembersAsync(db, targets, ctx, [member], ct))[member.Id]);
+        // Like the add acknowledgment: the caller wrote this member, so membership
+        // disclosure is not re-asked for the echo.
+        return TypedResults.Ok(
+            (await ProjectMembersAsync(db, targets, access, ctx, [member], ct))[member.Id]);
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteMemberAsync(
@@ -643,6 +701,10 @@ public static class ResLinkEndpoints
         Guid id,
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
+        AssociationDisclosure associations,
+        FeatureProtection protection,
+        PhotoPositionDisclosure photoPositions,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct,
         int? page = null,
@@ -665,6 +727,8 @@ public static class ResLinkEndpoints
             return ApiProblems.NotFound(TargetNotFoundCode);
         }
 
+        var (p, size) = Paging.Normalize(page, pageSize);
+
         var incident = parsedType is { } pairType
             ? db.ResLinkMembers.AsNoTracking().Where(m => m.EntityType == pairType && m.EntityId == id)
             : db.ResLinkMembers.AsNoTracking().Where(m => m.FeatureId == id);
@@ -673,10 +737,51 @@ public static class ResLinkEndpoints
             .OrderByDescending(l => l.CreatedAt)
             .ThenBy(l => l.Id);
 
-        var (p, size) = Paging.Normalize(page, pageSize);
+        // Every link this panel could list is connected to the queried target by a
+        // member naming it, and for a feature target that connection is itself an
+        // association under the disclosure rule. A feature the caller may place exactly
+        // is never withheld, so its panel pages ordinarily below. Otherwise the rule's
+        // uniform arm is asked first: when the association is withheld for this caller
+        // and feature, no link has a connection that may be shown, so the panel is
+        // empty — listing even one row (or a non-zero total, which doubles as the badge
+        // count) would disclose that links about this feature exist.
+        if (parsedType is null
+            && !(await protection.ExactViewIdsAsync(ctx, [id], ct)).Contains(id))
+        {
+            if (await associations.IsWithheldAsync(ctx, ResLinkRules.MemberAssociation(id), ct))
+            {
+                return TypedResults.Ok(new PagedResult<ResLinkDto>([], p, size, 0));
+            }
+
+            // The installation reveals protected associations, so each link now decides
+            // for itself: a sibling member showing this caller exact coordinates
+            // re-withholds the member naming this feature, and with it the link's
+            // presence here — a row on this feature's page states the association the
+            // dropped member no longer may. The projection already makes that per-link
+            // decision, so the panel projects every incident link and lists exactly
+            // those still connected to the feature, paging in memory to keep the total
+            // (and badge) honest. Links a feature accrues are bounded in practice; the
+            // exact-view fast path above keeps unprotected features off this path.
+            // Nothing bounds them in principle, though, and this arm's cost grows with
+            // the feature's total link count rather than the page size — the accepted
+            // price of an honest badge. If a heavily-linked protected feature ever
+            // appears, cap the candidates or split the sibling-exposure question into
+            // a cheaper first pass before projecting.
+            var candidates = await linkQuery.ToListAsync(ct);
+            var projected = await ProjectAsync(
+                db, targets, associations, protection, photoPositions, access, ctx, candidates, ct);
+            var listed = projected
+                .Where(l => l.Members.Any(m =>
+                    m.TargetType == ResLinkTargets.FeatureName && m.TargetId == id))
+                .ToList();
+            return TypedResults.Ok(new PagedResult<ResLinkDto>(
+                [.. listed.Skip((p - 1) * size).Take(size)], p, size, listed.Count));
+        }
+
         var total = await linkQuery.CountAsync(ct);
         var links = await linkQuery.Skip((p - 1) * size).Take(size).ToListAsync(ct);
-        var dtos = await ProjectAsync(db, targets, ctx, links, ct);
+        var dtos = await ProjectAsync(
+            db, targets, associations, protection, photoPositions, access, ctx, links, ct);
         return TypedResults.Ok(new PagedResult<ResLinkDto>(dtos, p, size, total));
     }
 
@@ -836,12 +941,22 @@ public static class ResLinkEndpoints
             ConstraintName: "ix_res_links_short_code",
         };
 
+    /// <param name="skipMembershipCut">
+    /// True only for the create echo: like the member-write acknowledgments, it answers
+    /// the caller with memberships that caller asserted in the same request, so the
+    /// disclosure cut every other link projection applies is deliberately not re-asked.
+    /// </param>
     private static async Task<List<ResLinkDto>> ProjectAsync(
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
+        AssociationDisclosure associations,
+        FeatureProtection protection,
+        PhotoPositionDisclosure photoPositions,
+        IAccessService access,
         AccessContext ctx,
         IReadOnlyList<ResLink> links,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool skipMembershipCut = false)
     {
         if (links.Count == 0)
         {
@@ -856,6 +971,41 @@ public static class ResLinkEndpoints
             .ThenBy(m => m.Id)
             .ToListAsync(ct);
 
+        // Displays are resolved before the disclosure cut: which members this caller can
+        // read is also an input to it — only a readable sibling can show them coordinates.
+        var displays = await ResolveDisplaysAsync(targets, ctx, members, ct);
+
+        // A member naming a feature is an association that can place the feature, so the
+        // rule governing document attachments decides whether this caller is told of it
+        // at all. A withheld membership leaves the response entirely — no bare row: for
+        // an unreadable target the row admits only that something restricted exists, but
+        // this row would name the feature, which is the very fact being kept. Each
+        // member is judged with its siblings: one of them showing this caller exact
+        // coordinates puts the feature's name beside a position, which is the pairing
+        // the reveal setting never opens.
+        if (!skipMembershipCut)
+        {
+            var exposing = await ExposingMemberIdsAsync(
+                db, protection, photoPositions, access, ctx, members, displays, ct);
+            var exposingByLink = members
+                .Where(m => exposing.Contains(m.Id))
+                .GroupBy(m => m.ResLinkId)
+                .ToDictionary(g => g.Key, g => g.Select(m => m.Id).ToList());
+            var withheld = await associations.WithheldIdsAsync(
+                ctx,
+                [.. members.Select(m => new AssociationCandidate(
+                    m.Id,
+                    ResLinkRules.MemberAssociation(
+                        m.FeatureId,
+                        exposingByLink.TryGetValue(m.ResLinkId, out var siblings)
+                            && siblings.Any(s => s != m.Id))))],
+                ct);
+            if (withheld.Count > 0)
+            {
+                members = [.. members.Where(m => !withheld.Contains(m.Id))];
+            }
+        }
+
         var relationIds = links
             .Where(l => l.RelationTypeId is not null)
             .Select(l => l.RelationTypeId!.Value)
@@ -867,7 +1017,7 @@ public static class ResLinkEndpoints
                 .Where(r => relationIds.Contains(r.Id))
                 .ToDictionaryAsync(r => r.Id, ct);
 
-        var memberDtos = await ProjectMembersAsync(db, targets, ctx, members, ct);
+        var memberDtos = await AssembleMembersAsync(db, access, ctx, members, displays, ct);
         var byLink = members
             .GroupBy(m => m.ResLinkId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<ResLinkMemberDto>)[.. g.Select(m => memberDtos[m.Id])]);
@@ -887,14 +1037,29 @@ public static class ResLinkEndpoints
 
     /// <summary>
     /// Members as one caller sees them: display through each target world's resolver
-    /// (null when the target is unreadable — the member still appears, but nothing of the
-    /// target travels with it, the anchor payload included, since a payload can quote
-    /// what it anchors to), and the anchor state — Degraded when the pinned
-    /// measured-against file is no longer what the document currently serves, because
-    /// following such an anchor against current content could highlight the wrong thing.
+    /// (null when the target is unreadable — the member still appears, but nothing of
+    /// the target travels with it), the anchor presented under the anchor-presentation
+    /// rule. Whether a member row may be emitted at all — membership disclosure for
+    /// protected-feature targets — is its callers' decision: link projections drop
+    /// withheld members before asking here, while the write acknowledgments — the
+    /// member-write echoes and the create response — deliberately do not, since they
+    /// answer the caller with memberships that caller just asserted.
     /// </summary>
     private static async Task<Dictionary<Guid, ResLinkMemberDto>> ProjectMembersAsync(
         SilexGisDbContext db,
+        ResLinkTargetDirectory targets,
+        IAccessService access,
+        AccessContext ctx,
+        IReadOnlyList<ResLinkMember> members,
+        CancellationToken ct)
+    {
+        var displays = await ResolveDisplaysAsync(targets, ctx, members, ct);
+        return await AssembleMembersAsync(db, access, ctx, members, displays, ct);
+    }
+
+    /// <summary>Each member's display through its target world's resolver, keyed by
+    /// member id; a member whose target is missing or unreadable has no entry.</summary>
+    private static async Task<Dictionary<Guid, ResLinkTargetDisplayDto>> ResolveDisplaysAsync(
         ResLinkTargetDirectory targets,
         AccessContext ctx,
         IReadOnlyList<ResLinkMember> members,
@@ -914,10 +1079,182 @@ public static class ResLinkEndpoints
             }
         }
 
-        // Only readable members' pins are even asked about: the anchor state is derived
-        // from the pinned document's version chain, so for an unreadable target it is
-        // withheld with everything else — a caller barred from a document must not learn
-        // from a link that the document was re-versioned.
+        return displays;
+    }
+
+    /// <summary>
+    /// The members that show this caller exact coordinates — the sibling fact the
+    /// membership-disclosure mapping asks for. Four ways a member does: it names a
+    /// feature with a drawn geometry the caller may both read and place exactly; a file
+    /// of its document carries a capture point of its own that the photo-position rule
+    /// discloses to this caller and that the caller can actually fetch — any currently
+    /// served file, or a superseded one for callers the document's own rules let into
+    /// version history; it names a survey model the caller may open, which resolves only
+    /// with exact view on its cave and routes straight to it; or its anchor reads
+    /// coordinates out of a geofile the caller may read. Batched throughout — a link
+    /// page costs the same handful of queries however many members it has.
+    /// </summary>
+    private static async Task<HashSet<Guid>> ExposingMemberIdsAsync(
+        SilexGisDbContext db,
+        FeatureProtection protection,
+        PhotoPositionDisclosure photoPositions,
+        IAccessService access,
+        AccessContext ctx,
+        IReadOnlyList<ResLinkMember> members,
+        IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto> displays,
+        CancellationToken ct)
+    {
+        var exposing = new HashSet<Guid>();
+
+        // Feature members: readable (exact view alone does not put coordinates on a page
+        // the caller cannot even list the feature on), positioned, and exactly placeable.
+        var featureMembers = members
+            .Where(m => m.FeatureId is not null && displays.ContainsKey(m.Id))
+            .ToList();
+        var featureIds = featureMembers.Select(m => m.FeatureId!.Value).Distinct().ToList();
+        if (featureIds.Count > 0)
+        {
+            var positioned = await db.Features.AsNoTracking()
+                .Where(f => featureIds.Contains(f.Id) && f.Geom != null)
+                .Select(f => f.Id)
+                .ToHashSetAsync(ct);
+            if (positioned.Count > 0)
+            {
+                var exact = await protection.ExactViewIdsAsync(ctx, positioned, ct);
+                exposing.UnionWith(featureMembers
+                    .Where(m => exact.Contains(m.FeatureId!.Value))
+                    .Select(m => m.Id));
+            }
+        }
+
+        // Geofile members whose anchor addresses coordinates of a file the caller may read.
+        exposing.UnionWith(members
+            .Where(m => m.EntityType == AttachedEntityType.Geofile
+                && ResLinkRules.AnchorAddressesCoordinates(m.AnchorKind)
+                && displays.ContainsKey(m.Id))
+            .Select(m => m.Id));
+
+        // Survey-model members the caller may open. A model resolves only for callers
+        // with exact view on its cave — its files are absolute georeferenced coordinates
+        // and its display routes to that cave — so a resolved display IS the proof that
+        // this member puts the cave's exact position one step from the reader, the same
+        // disclosure as a feature member the caller may place.
+        exposing.UnionWith(members
+            .Where(m => m.EntityType == AttachedEntityType.SurveyModel && displays.ContainsKey(m.Id))
+            .Select(m => m.Id));
+
+        // Document members with a file stamped with a position of its own — the geotagged
+        // photo — that the photo-position rule discloses to this caller. An undisclosable
+        // capture point shows the caller nothing, so it does not count against the
+        // siblings either; nor does a capture point the caller cannot reach: a superseded
+        // file's geotag counts only for callers the document's own rules let into version
+        // history, because for everyone else no route serves it.
+        var documentMembers = members
+            .Where(m => m.EntityType == AttachedEntityType.Document && displays.ContainsKey(m.Id))
+            .ToList();
+        var documentIds = documentMembers.Select(m => m.EntityId!.Value).Distinct().ToList();
+        if (documentIds.Count > 0)
+        {
+            var geotagged = await (
+                    from version in db.DocumentVersions.AsNoTracking()
+                    join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
+                    where documentIds.Contains(version.DocumentId) && file.Geom != null
+                    select new { version.DocumentId, FileId = file.Id, version.IsCurrent })
+                .ToListAsync(ct);
+            if (geotagged.Count > 0)
+            {
+                var disclosable = await photoPositions.DisclosableIdsAsync(
+                    ctx, [.. geotagged.Select(g => g.FileId)], ct);
+                var exposingDocuments = geotagged
+                    .Where(g => g.IsCurrent && disclosable.Contains(g.FileId))
+                    .Select(g => g.DocumentId)
+                    .ToHashSet();
+
+                var supersededOnly = geotagged
+                    .Where(g => !g.IsCurrent && disclosable.Contains(g.FileId))
+                    .Select(g => g.DocumentId)
+                    .Where(id => !exposingDocuments.Contains(id))
+                    .Distinct()
+                    .ToList();
+                if (supersededOnly.Count > 0)
+                {
+                    exposingDocuments.UnionWith(
+                        await VersionReaderDocumentIdsAsync(db, access, ctx, supersededOnly, ct));
+                }
+
+                exposing.UnionWith(documentMembers
+                    .Where(m => exposingDocuments.Contains(m.EntityId!.Value))
+                    .Select(m => m.Id));
+            }
+        }
+
+        return exposing;
+    }
+
+    /// <summary>
+    /// Of the given documents, those whose superseded versions this caller may see — the
+    /// document-write walk, the same one the version-history endpoint answers with,
+    /// decided against each document's currently served file. Per-document, so callers
+    /// keep the input small: documents behind stale pins, documents whose only geotag is
+    /// a superseded file.
+    /// </summary>
+    private static async Task<HashSet<Guid>> VersionReaderDocumentIdsAsync(
+        SilexGisDbContext db,
+        IAccessService access,
+        AccessContext ctx,
+        IReadOnlyCollection<Guid> documentIds,
+        CancellationToken ct)
+    {
+        var readers = new HashSet<Guid>();
+        if (documentIds.Count == 0)
+        {
+            return readers;
+        }
+
+        var documents = await db.Documents.AsNoTracking()
+            .Where(d => documentIds.Contains(d.Id))
+            .ToListAsync(ct);
+        var currentFiles = (await (
+                from version in db.DocumentVersions.AsNoTracking()
+                join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
+                where documentIds.Contains(version.DocumentId) && version.IsCurrent
+                orderby file.CreatedAt, file.Id
+                select new { version.DocumentId, File = file })
+            .ToListAsync(ct))
+            .GroupBy(x => x.DocumentId)
+            .ToDictionary(g => g.Key, g => g.First().File);
+        foreach (var document in documents)
+        {
+            if (await DocumentAccessRules.CanWriteAsync(
+                    db, access, ctx, document, currentFiles.GetValueOrDefault(document.Id), ct))
+            {
+                readers.Add(document.Id);
+            }
+        }
+
+        return readers;
+    }
+
+    /// <summary>
+    /// Member DTOs from already-resolved displays. The anchor travels under the
+    /// anchor-presentation rule: an unreadable target takes payload, pin and state with
+    /// it — a payload can quote what it anchors to, and that a document was re-versioned
+    /// is a fact about the document — while a superseded pin is disclosed as degraded to
+    /// every reader but its file id is handed only to callers the document's own rules
+    /// let into superseded versions, so the marker never routes a read-only caller into
+    /// history their document read would refuse.
+    /// </summary>
+    private static async Task<Dictionary<Guid, ResLinkMemberDto>> AssembleMembersAsync(
+        SilexGisDbContext db,
+        IAccessService access,
+        AccessContext ctx,
+        IReadOnlyList<ResLinkMember> members,
+        IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto> displays,
+        CancellationToken ct)
+    {
+        // Only readable members' pins are even asked about: for an unreadable target
+        // everything is withheld anyway, and its version chain must not be queried on a
+        // path whose timing could differ.
         var pins = members
             .Where(m => m.AnchorFileId is not null && displays.ContainsKey(m.Id))
             .Select(m => m.AnchorFileId!.Value)
@@ -933,10 +1270,26 @@ public static class ResLinkEndpoints
                     select file.Id)
                 .ToHashSetAsync(ct);
 
+        // Of the documents behind stale pins, those whose superseded versions this
+        // caller may see. Stale pins are rare, so the per-document walk is bounded by
+        // their count, not the page's.
+        var staleDocumentIds = members
+            .Where(m => m.EntityType == AttachedEntityType.Document && m.EntityId is not null
+                && m.AnchorFileId is { } pin && stalePins.Contains(pin)
+                && displays.ContainsKey(m.Id))
+            .Select(m => m.EntityId!.Value)
+            .Distinct()
+            .ToList();
+        var versionReaders = await VersionReaderDocumentIdsAsync(db, access, ctx, staleDocumentIds, ct);
+
         return members.ToDictionary(m => m.Id, m =>
         {
             var display = displays.GetValueOrDefault(m.Id);
-            var readable = display is not null;
+            var facing = ResLinkRules.PresentAnchor(
+                targetReadable: display is not null,
+                pinSuperseded: m.AnchorFileId is { } pin && stalePins.Contains(pin),
+                supersededVersionsReadable: m.EntityId is { } documentId
+                    && versionReaders.Contains(documentId));
             return new ResLinkMemberDto(
                 m.Id,
                 ResLinkTargets.NameOf(m.FeatureId, m.EntityType),
@@ -945,11 +1298,9 @@ public static class ResLinkEndpoints
                 m.SortOrder,
                 m.Note,
                 m.AnchorKind,
-                readable ? ParseAnchor(m.Anchor) : null,
-                readable ? m.AnchorFileId : null,
-                readable && m.AnchorFileId is { } pin && stalePins.Contains(pin)
-                    ? ResLinkAnchorState.Degraded
-                    : ResLinkAnchorState.Exact,
+                facing.PayloadShown ? ParseAnchor(m.Anchor) : null,
+                facing.PinShown ? m.AnchorFileId : null,
+                facing.DegradationShown ? ResLinkAnchorState.Degraded : ResLinkAnchorState.Exact,
                 display);
         });
     }
