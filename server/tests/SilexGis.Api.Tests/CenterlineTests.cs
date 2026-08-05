@@ -615,6 +615,18 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
         config.GetProperty("clusterMaxZoom").GetInt32().ShouldBe(11);
     }
 
+    [Fact]
+    public async Task Map_config_publishes_no_elevation_model_for_an_installation_that_has_none()
+    {
+        // The shipped state, asserted over real HTTP. An installation that has not baked a tile
+        // pyramid publishes null rather than an empty object, and the 3D view then draws the
+        // smooth reference ellipsoid — which needs no elevation server, no download and no
+        // pre-baking. This is the guard on "if an operator does nothing, nothing changes".
+        var config = await reader.GetFromJsonAsync<JsonElement>("/api/v1/map/config");
+
+        config.GetProperty("terrain").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
     // ---- helpers ----
 
     /// <summary>The whole centerline map response, so the foreign members can be asserted too.</summary>

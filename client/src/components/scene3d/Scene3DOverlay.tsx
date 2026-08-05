@@ -5,7 +5,7 @@ import { Button, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { placeOverlay, type OverlayRect } from '../../scene3d/overlayPlacement.ts';
 import type { Scene3DPickPayload } from '../../scene3d/selection3d.ts';
-import type { Scene3DPosition, Scene3DScreenPosition } from '../../scene3d/scene3dEngine.ts';
+import type { Scene3DAnchor, Scene3DScreenPosition } from '../../scene3d/scene3dEngine.ts';
 import './Scene3DOverlay.css';
 
 // The two pieces of chrome that name what is under the pointer and what was picked, drawn as
@@ -38,8 +38,15 @@ export interface Scene3DOverlayProps {
   hoveredAt?: Scene3DScreenPosition;
   /** What was picked in this scene, or undefined when nothing was or it was dismissed. */
   selected?: Scene3DPickPayload;
-  /** Where a position on the globe lands on the drawing surface right now. */
-  project(position: Scene3DPosition): Scene3DScreenPosition | undefined;
+  /**
+   * Where a position on the globe lands on the drawing surface right now.
+   *
+   * An anchor that stands on the ground arrives here with the ellipsoid as its height and a note
+   * saying so, and resolving that against the ground actually drawn is the caller's to do: this
+   * component has no scene to ask, and an anchor left at the ellipsoid under an eleven-hundred
+   * metre hillside projects far off the bottom of the view.
+   */
+  project(position: Scene3DAnchor): Scene3DScreenPosition | undefined;
   /** Subscribes to drawn frames; the returned function unsubscribes. */
   subscribeFrames(listener: () => void): () => void;
   /** Takes the callout down, from its own close button or from Escape. */
@@ -219,7 +226,7 @@ function place(
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 /** Where on the globe a callout about this pick is pinned. */
-function anchorOf(payload: Scene3DPickPayload | undefined): Scene3DPosition | undefined {
+function anchorOf(payload: Scene3DPickPayload | undefined): Scene3DAnchor | undefined {
   if (!payload) {
     return undefined;
   }
@@ -227,9 +234,10 @@ function anchorOf(payload: Scene3DPickPayload | undefined): Scene3DPosition | un
     return payload.anchor;
   }
   // A cluster stands at a place by construction — it is a count over a patch of ground and the
-  // patch is what it reports — so it has one even when nothing filled the field in.
+  // patch is what it reports — so it has one even when nothing filled the field in. On the ground,
+  // like the marker drawn for it.
   return payload.kind === 'cluster'
-    ? { longitude: payload.lon, latitude: payload.lat, height: 0 }
+    ? { longitude: payload.lon, latitude: payload.lat, height: 0, onGround: true }
     : undefined;
 }
 

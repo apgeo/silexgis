@@ -1082,6 +1082,189 @@ describe('vector sources', () => {
   });
 });
 
+describe('lines that belong on the ground', () => {
+  const scene = () => engine.engineState.widgets[0].scene;
+
+  const onTheGround = (id: string, color = '#2f6f4f') => ({
+    positions: [
+      { longitude: 22.7, latitude: 46.5, height: 0 },
+      { longitude: 22.71, latitude: 46.51, height: 0 },
+    ],
+    widthPixels: 3,
+    color,
+    clampToGround: true,
+    id,
+  });
+
+  const inTheAir = (id: string) => ({
+    positions: [
+      { longitude: 22.7, latitude: 46.5, height: 640 },
+      { longitude: 22.71, latitude: 46.51, height: 610 },
+    ],
+    widthPixels: 2,
+    color: '#7a1f1f',
+    id,
+  });
+
+  const flatBatch = () =>
+    scene().primitives.items.find(
+      (item): item is InstanceType<typeof engine.PolylineCollection> =>
+        item instanceof engine.PolylineCollection,
+    )!;
+
+  const drapedBatches = () =>
+    scene().groundPrimitives.items as InstanceType<typeof engine.GroundPolylinePrimitive>[];
+
+  it('draws them in the ordinary batch while the globe has no relief on it', async () => {
+    // The ellipsoid IS height zero, which is where these positions already are, so the ordinary
+    // batch puts them in exactly the right place. This is the shipped state and it must stay
+    // free: the draped shape additionally pulls a third of a megabyte of terrain reference data
+    // into an installation that has no elevation model at all.
+    const session = acquire();
+    const source = session.engine.createPolylineSource('surface-feature-lines');
+
+    source.replace([onTheGround('fault-1')]);
+
+    expect(flatBatch().polylines).toHaveLength(1);
+    expect(drapedBatches()).toHaveLength(0);
+    session.release();
+  });
+
+  it('lays them on the ground once an elevation model is attached, with nothing replacing them', async () => {
+    // Nothing put a new batch into the scene, and yet where these lines belong has just moved by
+    // the whole height of the landscape. Left where they were they would be drawn a hillside
+    // under the ground they describe, and under the markers of the same overlay.
+    const session = acquire();
+    const source = session.engine.createPolylineSource('surface-feature-lines');
+    source.replace([onTheGround('fault-1'), inTheAir('survey-1')]);
+
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+
+    expect(drapedBatches()).toHaveLength(1);
+    expect(drapedBatches()[0].geometryInstances.map((instance) => instance.id)).toEqual(['fault-1']);
+    // The line that has a height of its own is left exactly where it was.
+    expect(flatBatch().polylines.map((line) => line.id)).toEqual(['survey-1']);
+    session.release();
+  });
+
+  it('asks for a frame once the reference draping needs has arrived', async () => {
+    // The engine starts that load from inside a frame, gives up on that frame, and asks for no
+    // other when it lands. On a scene that draws only when it is asked to, the lines would then
+    // sit invisible until the viewer next touched the camera — which looks exactly like data that
+    // never loaded.
+    const session = acquire();
+    const source = session.engine.createPolylineSource('surface-feature-lines');
+    source.replace([onTheGround('fault-1')]);
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+    expect(engine.GroundPolylinePrimitive.terrainHeightRequests).toBeGreaterThan(0);
+    const before = scene().renderRequests;
+
+    engine.GroundPolylinePrimitive.deliverTerrainHeights();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(scene().renderRequests).toBeGreaterThan(before);
+    session.release();
+  });
+
+  it('draws them flat rather than not at all when that reference cannot be fetched', async () => {
+    // Without it nothing can be draped, which is the same position a browser without the
+    // extension is in and is answered the same way. Real data drawn a little out of place is a
+    // great deal better than real data quietly not drawn.
+    const session = acquire();
+    const source = session.engine.createPolylineSource('surface-feature-lines');
+    source.replace([onTheGround('fault-1')]);
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+    expect(drapedBatches()).toHaveLength(1);
+
+    engine.GroundPolylinePrimitive.deliverTerrainHeights(new Error('offline'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(drapedBatches()).toHaveLength(0);
+    expect(flatBatch().polylines).toHaveLength(1);
+    session.release();
+  });
+
+  it('brings them back to the ordinary batch when the elevation model is taken away', async () => {
+    const session = acquire();
+    const source = session.engine.createPolylineSource('surface-feature-lines');
+    source.replace([onTheGround('fault-1')]);
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+
+    await session.engine.setTerrainSource(undefined);
+
+    expect(drapedBatches()).toHaveLength(0);
+    expect(flatBatch().polylines).toHaveLength(1);
+    session.release();
+  });
+
+  it('draws them flat where the browser cannot drape a line at all', async () => {
+    // Draping needs a depth-texture extension a few drivers do not publish. Drawing the line at
+    // the positions given is the bare-ellipsoid rendering, which is legible; dropping it would
+    // take real data off the map over a capability the viewer has no say in.
+    engine.engineState.depthTexture = false;
+    const session = acquire();
+    const source = session.engine.createPolylineSource('surface-feature-lines');
+    source.replace([onTheGround('fault-1')]);
+
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+
+    expect(drapedBatches()).toHaveLength(0);
+    expect(flatBatch().polylines).toHaveLength(1);
+    session.release();
+  });
+
+  it('groups them by colour, so a fade costs a number rather than a rebuild', async () => {
+    const session = acquire();
+    const source = session.engine.createPolylineSource('surface-feature-lines');
+    source.replace([
+      onTheGround('a', '#2f6f4f'),
+      onTheGround('b', '#2f6f4f'),
+      onTheGround('c', '#8c2f6b'),
+    ]);
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+
+    expect(drapedBatches()).toHaveLength(2);
+
+    source.setOpacity(0.25);
+
+    for (const batch of drapedBatches()) {
+      const color = batch.appearance!.material!.uniforms.color as InstanceType<typeof engine.Color>;
+      expect(color.alpha).toBe(0.25);
+    }
+    session.release();
+  });
+
+  it('hides and shows both halves of a batch together', async () => {
+    const session = acquire();
+    const source = session.engine.createPolylineSource('surface-feature-lines');
+    source.replace([onTheGround('fault-1'), inTheAir('survey-1')]);
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+
+    source.setVisible(false);
+
+    expect(drapedBatches()[0].show).toBe(false);
+    expect(flatBatch().show).toBe(false);
+    session.release();
+  });
+
+  it('takes them out of the scene with the batch that owns them', async () => {
+    const session = acquire();
+    const source = session.engine.createPolylineSource('surface-feature-lines');
+    source.replace([onTheGround('fault-1')]);
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+
+    source.remove();
+
+    expect(drapedBatches()).toHaveLength(0);
+    // And a later change of ground does not resurrect a batch that is gone.
+    await session.engine.setTerrainSource(undefined);
+    expect(drapedBatches()).toHaveLength(0);
+    session.release();
+  });
+});
+
 describe('drawing without perspective', () => {
   it('starts with the ordinary projection and switches on request', async () => {
     const session = acquire();
@@ -1886,5 +2069,283 @@ describe('picking', () => {
     session.release();
 
     expect(handler.destroyed).toBe(true);
+  });
+});
+
+describe("the ground's elevation", () => {
+  const scene = () => engine.engineState.widgets[0].scene;
+
+  /** A hillside: 1100 m along one edge of the outline and 1400 m along the other. */
+  const apuseniRelief = (longitude: number) => (longitude < 25.35 ? 1100 : 1400);
+
+  const footprint = () => ({
+    ring: [
+      { longitude: 25.3, latitude: 45.7, height: 0 },
+      { longitude: 25.4, latitude: 45.7, height: 0 },
+      { longitude: 25.4, latitude: 45.8, height: 0 },
+      { longitude: 25.3, latitude: 45.8, height: 0 },
+    ],
+    floorHeight: -600,
+  });
+
+  const currentFill = () =>
+    scene().primitives.items.filter(
+      (item): item is InstanceType<typeof engine.Primitive> => item instanceof engine.Primitive,
+    ).at(-1);
+
+  const wallTops = () => {
+    const wall = currentFill()!.geometryInstances[0].geometry as InstanceType<
+      typeof engine.WallGeometry
+    >;
+    return wall.options.maximumHeights as number[];
+  };
+
+  it('draws the smooth ellipsoid until an installation says otherwise', async () => {
+    const session = acquire();
+
+    expect(session.engine.hasTerrain()).toBe(false);
+    expect(scene().terrainProvider).toBeInstanceOf(engine.EllipsoidTerrainProvider);
+    // Nothing was fetched, so a stock deployment needs no elevation server and no pre-baking.
+    expect(engine.engineState.terrainRequests).toEqual([]);
+    session.release();
+  });
+
+  it('reads a configured pyramid, asking for the normals that make relief visible', async () => {
+    const session = acquire();
+
+    await session.engine.setTerrainSource({ url: '/terrain/', attribution: '© Copernicus' });
+
+    expect(engine.engineState.terrainRequests).toHaveLength(1);
+    const request = engine.engineState.terrainRequests[0];
+    expect(request.url).toBe('/terrain/');
+    // Without these the hillside is drawn as an unlit wash of basemap with no relief in it at
+    // all, which is most of what attaching an elevation model was for.
+    expect(request.requestVertexNormals).toBe(true);
+    // Shown on the scene rather than filed behind the engine's collapsed attribution control:
+    // the licences of the freely available elevation models ask for visible credit.
+    expect((request.credit as InstanceType<typeof engine.Credit>).showOnScreen).toBe(true);
+    expect(session.engine.hasTerrain()).toBe(true);
+    expect(scene().terrainProvider).toBeInstanceOf(engine.CesiumTerrainProvider);
+    session.release();
+  });
+
+  it('asks for a frame, because changing the ground moves no camera', async () => {
+    const session = acquire();
+    const before = scene().renderRequests;
+
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+
+    // The scene draws only when asked. Without this the globe keeps showing the ellipsoid until
+    // the viewer happens to touch it.
+    expect(scene().renderRequests).toBeGreaterThan(before);
+    session.release();
+  });
+
+  it('reads a pyramid once, however often it is told to use the same one', async () => {
+    // Attaching one discards every surface tile the globe is holding, so repeating it because a
+    // view re-rendered would empty and refill the globe for nothing.
+    const session = acquire();
+
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+
+    expect(engine.engineState.terrainRequests).toHaveLength(1);
+    session.release();
+  });
+
+  it('goes back to the ellipsoid when the source is taken away', async () => {
+    const session = acquire();
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+
+    await session.engine.setTerrainSource(undefined);
+
+    expect(session.engine.hasTerrain()).toBe(false);
+    expect(scene().terrainProvider).toBeInstanceOf(engine.EllipsoidTerrainProvider);
+    session.release();
+  });
+
+  it('drops a pyramid that was taken away while it was still being read', async () => {
+    // Reading a pyramid is a network round trip, and for the whole of it the model in force and
+    // the model wanted are two different things. On a FIRST attach nothing is in force yet, so a
+    // request to go back to the smooth globe arriving in that window looks exactly like a request
+    // for what is already there — and if it is treated as one, the read it was meant to call off
+    // lands afterwards. The globe then draws a hillside nothing asked for while everything placed
+    // against it was placed for a smooth one, which is the whole failure the placement exists to
+    // prevent, and nothing ever notices: no further change is coming to put it right.
+    const session = acquire();
+    const pending = session.engine.setTerrainSource({ url: '/terrain/' });
+
+    await session.engine.setTerrainSource(undefined);
+    await pending;
+
+    expect(session.engine.hasTerrain()).toBe(false);
+    expect(scene().terrainProvider).toBeInstanceOf(engine.EllipsoidTerrainProvider);
+    session.release();
+  });
+
+  it('reads it again after a retry of a read that failed', async () => {
+    // A read that failed put nothing in force, so what it recorded has to go with it — otherwise
+    // asking for the same address again is mistaken for asking for what is already there and the
+    // retry quietly does nothing at all.
+    const session = acquire();
+    engine.engineState.terrainFailures.add('/terrain/');
+    await expect(session.engine.setTerrainSource({ url: '/terrain/' })).rejects.toThrow();
+
+    engine.engineState.terrainFailures.delete('/terrain/');
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+
+    expect(session.engine.hasTerrain()).toBe(true);
+    session.release();
+  });
+
+  it('reports a pyramid it could not read rather than leaving the globe blank', async () => {
+    const session = acquire();
+    engine.engineState.terrainFailures.add('/nowhere/');
+
+    await expect(session.engine.setTerrainSource({ url: '/nowhere/' })).rejects.toThrow();
+
+    // The caller turns this into something a person can read. What must not happen is the scene
+    // believing it has ground: that draws a black void with no error anywhere.
+    expect(session.engine.hasTerrain()).toBe(false);
+    expect(scene().terrainProvider).toBeInstanceOf(engine.EllipsoidTerrainProvider);
+    session.release();
+  });
+
+  it('ignores a pyramid that finished reading after the scene was torn down', async () => {
+    const session = acquire();
+    const pending = session.engine.setTerrainSource({ url: '/terrain/' });
+
+    session.release();
+    await pending;
+
+    // Nothing to assert on the destroyed scene beyond its not having thrown: the point is that a
+    // network answer arriving into a scene that no longer exists is a no-op rather than a
+    // rejection nobody is holding.
+    expect(session.engine.hasTerrain()).toBe(false);
+  });
+
+  it('answers how high the drawn ground is, point by point', async () => {
+    const session = acquire();
+    scene().globe.terrainHeightAt = apuseniRelief;
+
+    expect(session.engine.groundHeight(25.3, 45.7)).toBe(1100);
+    expect(session.engine.groundHeight(25.4, 45.7)).toBe(1400);
+    session.release();
+  });
+
+  it('does not believe a ground height the earth does not have', async () => {
+    // Just after the camera arrives somewhere the globe answers from a very coarse tile, whose
+    // mesh is a flat chord across many degrees of a curved planet — tens of kilometres below the
+    // surface it stands for. Attaching an elevation model makes that more frequent, not less.
+    const session = acquire();
+    scene().globe.terrainHeight = -35_966;
+
+    expect(session.engine.groundHeight(25.3, 45.7)).toBe(0);
+    session.release();
+  });
+
+  it('cuts the excavation into the hillside rather than into a flat disc', async () => {
+    const session = acquire();
+    scene().globe.terrainHeightAt = apuseniRelief;
+
+    session.engine.setCutawayFootprint(footprint());
+
+    // Two points of the outline stand on 1100 m ground and two on 1400 m, and the wall reaches
+    // just past the ground at each of them: an excavation cut into real relief has a rim that
+    // follows the hillside, not a flat lid at one height.
+    // Five, not four: a wall is a path and the ring is an outline, so the first point closes it.
+    expect(wallTops()).toEqual([1102, 1402, 1402, 1102, 1102]);
+    session.release();
+  });
+
+  it('rebuilds the excavation when elevation data arrives under an outline that has not moved', async () => {
+    // The defect this exists for: the walls are built from the ground of the moment, and the
+    // moment they are built is the moment the surface is at its coarsest. The outline is compared
+    // point by point and never changes for a cave the viewer is still looking at, so without this
+    // the excavation stays a wall stopping hundreds of metres under its own hillside for the life
+    // of the scene.
+    const session = acquire();
+    session.engine.setCutawayFootprint(footprint());
+    expect(wallTops()).toEqual([2, 2, 2, 2, 2]);
+
+    scene().globe.terrainHeightAt = apuseniRelief;
+    scene().globe.tileLoadProgressEvent.raise(0);
+
+    expect(wallTops()).toEqual([1102, 1402, 1402, 1102, 1102]);
+    session.release();
+  });
+
+  it('leaves the excavation alone while elevation tiles are still arriving', async () => {
+    const session = acquire();
+    session.engine.setCutawayFootprint(footprint());
+    const built = currentFill();
+
+    scene().globe.terrainHeightAt = apuseniRelief;
+    scene().globe.tileLoadProgressEvent.raise(7);
+
+    // Rebuilding on every progress report would discard and re-upload the geometry dozens of
+    // times while a region loads. Only a settled surface is worth rebuilding for.
+    expect(currentFill()).toBe(built);
+    session.release();
+  });
+
+  it('does not rebuild the excavation when the ground has not really moved', async () => {
+    const session = acquire();
+    scene().globe.terrainHeightAt = apuseniRelief;
+    session.engine.setCutawayFootprint(footprint());
+    const built = currentFill();
+
+    scene().globe.tileLoadProgressEvent.raise(0);
+
+    expect(currentFill()).toBe(built);
+    session.release();
+  });
+
+  it('keeps a rebuilt excavation hidden while the scene is showing the overlay', async () => {
+    // The cutaway is a mode the viewer chooses. A rebuild that put the shaft back on screen would
+    // stand a brown pit on unbroken hillside in the middle of a view nobody asked to cut.
+    const session = acquire();
+    session.engine.setCutawayFootprint(footprint());
+
+    scene().globe.terrainHeightAt = apuseniRelief;
+    scene().globe.tileLoadProgressEvent.raise(0);
+
+    expect(currentFill()!.show).toBe(false);
+    session.release();
+  });
+
+  it('keeps a rebuilt excavation on screen while the scene is showing the cutaway', async () => {
+    const session = acquire();
+    const { camera } = scene();
+    camera.positionWC = { longitudeDegrees: 25.35, latitudeDegrees: 45.75, height: 9000 };
+    camera.pitch = -Math.PI / 2.2;
+    session.engine.setCutawayFootprint(footprint());
+    session.engine.setSurfaceMode('cutaway');
+    expect(session.engine.getSurfaceState().effective).toBe('cutaway');
+
+    scene().globe.terrainHeightAt = apuseniRelief;
+    scene().globe.tileLoadProgressEvent.raise(0);
+
+    expect(currentFill()!.show).toBe(true);
+    session.release();
+  });
+
+  it('hands the cutaway back once the camera turns out to be inside the hillside', async () => {
+    // A camera at 900 m over ground that was the ellipsoid a moment ago and is 1400 m now is
+    // under the surface, where no angle recovers the opening — only climbing back above it.
+    const session = acquire();
+    const { camera } = scene();
+    camera.positionWC = { longitudeDegrees: 25.4, latitudeDegrees: 45.75, height: 900 };
+    camera.pitch = -Math.PI / 2.2;
+    session.engine.setCutawayFootprint(footprint());
+    session.engine.setSurfaceMode('cutaway');
+    expect(session.engine.getSurfaceState().effective).toBe('cutaway');
+
+    scene().globe.terrainHeightAt = apuseniRelief;
+    scene().render();
+
+    expect(session.engine.getSurfaceState().effective).toBe('overlay');
+    expect(session.engine.getSurfaceState().pausedBy).toBe('belowSurface');
+    session.release();
   });
 });

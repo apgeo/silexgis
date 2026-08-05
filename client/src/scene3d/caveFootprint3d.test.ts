@@ -49,6 +49,27 @@ describe('caveFootprint', () => {
     expect(caveFootprint([line([])])).toBeUndefined();
   });
 
+  it('has nothing to cut around a survey that lies on the ground', () => {
+    // A cave served without depths is drawn as a plan on the surface, and there is nothing under
+    // a plan on the surface to reveal. Counting it would be actively harmful rather than merely
+    // pointless: its heights are the ground's, so the floor would be put below the ground and the
+    // shaft measured from the ground down to it — over real relief a shaft as deep as the hillside
+    // is tall, which then demands a near-overhead camera before the mode will engage at all.
+    const flat = { ...line([[22.7, 46.5, 0], [22.71, 46.51, 0]]), clampToGround: true };
+
+    expect(caveFootprint([flat])).toBeUndefined();
+  });
+
+  it('takes the floor from the passages with depths, ignoring any drawn on the ground', () => {
+    // With an elevation model attached a surveyed passage is drawn at its own altitude, which in
+    // the karst this is for is several hundred metres up, while a plan on the ground carries the
+    // heights of the ground. Letting the second into the sum drags the floor down past the first.
+    const surveyed = line([[22.70, 46.50, 700], [22.71, 46.51, 420]]);
+    const flat = { ...line([[22.70, 46.50, 0], [22.72, 46.52, 0]]), clampToGround: true };
+
+    expect(caveFootprint([surveyed, flat])!.floorHeight).toBe(220);
+  });
+
   it('draws one smooth ring rather than tracing the passages', () => {
     // Measured against a tight outline traced around the passages: a traced shape shows the whole
     // survey from straight above and loses more than half of it the moment the camera tilts,

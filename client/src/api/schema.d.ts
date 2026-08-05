@@ -7882,6 +7882,7 @@ export interface components {
             centerlineGateZoom: number;
             /** Format: int32 */
             clusterMaxZoom: number;
+            terrain: null | components["schemas"]["TerrainSourceDto"];
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";
@@ -8494,6 +8495,12 @@ export interface components {
             description: null | string;
             /** Format: int32 */
             sortOrder: number;
+        };
+        TerrainSourceDto: {
+            url: string;
+            attribution: null | string;
+            /** Format: double */
+            surveyHeightOffsetM: number;
         };
         TestMessageRequest: {
             recipient: string;

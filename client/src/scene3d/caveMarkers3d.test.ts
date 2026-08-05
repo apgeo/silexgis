@@ -210,8 +210,16 @@ describe('surfaceFeatureMarkers', () => {
     // than jumping to the first of them.
     const [first, second] = markers.map((marker) => marker.id as Record<string, unknown>);
     expect(first.featureId).toBe(second.featureId);
-    expect(first.anchor).toEqual({ longitude: 25, latitude: 45, height: 0 });
-    expect(second.anchor).toEqual({ longitude: 25.1, latitude: 45.1, height: 0 });
+    // On the ground, and saying so: nothing here can know how high the ground is, so the anchor
+    // carries the ellipsoid as its fallback and leaves the scene to resolve it against what is
+    // actually drawn there.
+    expect(first.anchor).toEqual({ longitude: 25, latitude: 45, height: 0, onGround: true });
+    expect(second.anchor).toEqual({
+      longitude: 25.1,
+      latitude: 45.1,
+      height: 0,
+      onGround: true,
+    });
   });
 
   it('ignores a protected row served without geometry', () => {
@@ -301,5 +309,34 @@ describe('surfaceFeatureLines', () => {
     );
 
     expect(lines[0].positions.map((p) => p.height)).toEqual([0, 0]);
+  });
+
+  it('lays the line on the ground rather than at a height of zero', () => {
+    // Discarding the altitude is only half of it. Zero is the ellipsoid, which is the ground on a
+    // smooth globe and a whole hillside below it on a real one — and drawing the cave data over
+    // the terrain does not rescue that, because it governs what hides what and not where a point
+    // lands on the screen. From any camera not looking straight down the line's own vertical, a
+    // vertex eleven hundred metres under the ground it belongs to projects a long way from it, and
+    // a karst area's outline is seen adrift from the very imagery it was drawn over.
+    const lines = surfaceFeatureLines(
+      collection([
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [25.442, 45.528],
+              [25.449, 45.5335],
+            ],
+          },
+          properties: { id: 'fault-1' },
+        },
+      ]),
+    );
+
+    expect(lines[0].clampToGround).toBe(true);
+    // The point symbols of the same overlay are dropped onto the ground, and chrome pinned to
+    // either half has to end up in the same place as the half it is about.
+    expect(lines[0].id).toMatchObject({ anchor: { height: 0, onGround: true } });
   });
 });

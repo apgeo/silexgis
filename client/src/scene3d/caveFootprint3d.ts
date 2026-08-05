@@ -135,6 +135,14 @@ export function cutawayPitchLimitDegrees(
  * The ellipse is built in degrees rather than in metres because that is what the ring is consumed
  * as, with the longitude axis widened by 1/cos(latitude) so the shape is a circle on the ground
  * rather than one squashed east-west at Carpathian latitudes.
+ *
+ * Lines that lie on the ground are not part of it, and that is the whole answer for a cave whose
+ * survey arrived without depths. An excavation exists to reveal what is under the surface; a plan
+ * drawn on the surface has nothing under it to reveal, so there is nothing to cut. Counting one
+ * anyway would be worse than useless: its heights are the ground's, so the shaft would be measured
+ * from the ground down to a floor placed below the ground, which over real relief is a shaft as
+ * deep as the hillside is tall — and how far over an opening a viewer must be is worked out from
+ * exactly that depth, so the mode would demand a near-overhead camera and then hand itself back.
  */
 export function caveFootprint(
   polylines: readonly Scene3DPolyline[],
@@ -146,6 +154,9 @@ export function caveFootprint(
   let lowest = Number.POSITIVE_INFINITY;
 
   for (const line of polylines) {
+    if (line.clampToGround) {
+      continue;
+    }
     for (const position of line.positions) {
       west = Math.min(west, position.longitude);
       east = Math.max(east, position.longitude);

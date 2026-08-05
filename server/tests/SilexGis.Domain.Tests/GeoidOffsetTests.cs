@@ -46,6 +46,39 @@ public class GeoidOffsetTests
     }
 
     [Fact]
+    public void A_terrain_source_serving_sea_level_heights_needs_no_correction_at_all()
+    {
+        // The failure this decides. A source whose tiles hold heights above sea level speaks the
+        // same language a cave survey does: a globe misplaces both by the same undulation, so
+        // they agree with each other, which is what putting a cave inside its hillside needs.
+        // Correcting anyway lifts the whole cave the undulation clear of the ground it is in.
+        GeoidOffset.SurveyToSceneOffsetM(TerrainHeightDatum.Orthometric, BanatUndulation)
+            .ShouldBe(0);
+        GeoidOffset.SurveyToSceneOffsetM(TerrainHeightDatum.Orthometric, 0).ShouldBe(0);
+    }
+
+    [Fact]
+    public void A_terrain_source_serving_ellipsoidal_heights_raises_the_survey_by_the_undulation()
+    {
+        // Tiles converted when they were baked draw the ground where it really is, so a surveyed
+        // altitude has to travel the undulation before it will meet that ground.
+        GeoidOffset.SurveyToSceneOffsetM(TerrainHeightDatum.Ellipsoidal, PiatraCraiuluiUndulation)
+            .ShouldBe(PiatraCraiuluiUndulation);
+    }
+
+    [Fact]
+    public void The_correction_agrees_with_the_conversion_it_is_made_of()
+    {
+        // Both live here, and this is the claim that keeps them consistent: raising a survey by
+        // the offset a source asks for is the same arithmetic as converting it.
+        const double surveyed = 1200;
+        var offset = GeoidOffset.SurveyToSceneOffsetM(
+            TerrainHeightDatum.Ellipsoidal, PiatraCraiuluiUndulation);
+        (surveyed + offset)
+            .ShouldBe(GeoidOffset.EllipsoidalFromOrthometric(surveyed, PiatraCraiuluiUndulation));
+    }
+
+    [Fact]
     public void The_installation_default_stays_within_a_few_metres_of_every_measured_romanian_value()
     {
         // The default is a single scalar standing in for a surface that varies across the country;

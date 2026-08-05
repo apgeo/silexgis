@@ -53,20 +53,55 @@ export const CENTERLINE_DEPTH_BANDS: readonly CenterlineDepthBand[] = [
 ];
 
 /**
- * A survey's altitudes are heights above the sea-level datum the survey was recorded against —
- * roughly 1100 m for a cave in the Carpathians. The globe positions everything by height above
- * the reference ellipsoid, and with no elevation model loaded its surface is that ellipsoid: a
- * flat sphere at height zero, with no hillside anywhere on it for the cave to be inside. Drawing
- * the survey at its recorded altitudes would therefore hang it a kilometre in the air above a
- * smooth globe, above the entrance markers that sit on the surface and above a camera that a
- * viewer flies down to the ground — the survey would simply vanish upwards at exactly the zoom
- * that finally delivers real depths.
+ * Where a surveyed altitude ends up in the scene, which depends entirely on whether the globe has
+ * any relief on it.
  *
- * So the survey is anchored: its top is placed on the surface and everything else hangs below at
- * its true distance beneath that top, which is the depth a caver reads. Relative depths within a
- * cave, the only thing this drawing can honestly show without terrain, are exact; absolute
- * altitude is not shown at all rather than shown wrongly, and no cave is drawn against a hillside
- * that is not there.
+ * <b>On the bare ellipsoid there is nowhere honest to put it.</b> A survey's altitudes are heights
+ * above the sea-level datum it was recorded against — roughly 1100 m for a cave in the Carpathians
+ * — and the ellipsoid is a smooth sphere at height zero with no hillside anywhere on it. Drawing
+ * the cave at its recorded altitudes would hang it a kilometre in the air over that sphere, above
+ * the entrance markers sitting on the surface and above a camera flown down to the ground. So the
+ * survey is anchored instead: its top is placed on the surface and everything else hangs below at
+ * its true distance beneath that top, which is the depth a caver reads. Relative depths stay
+ * exact; absolute altitude is not shown at all rather than shown wrongly.
+ *
+ * <b>With an elevation model there is.</b> The hillside is drawn, so the cave goes where it was
+ * surveyed — inside it — and the anchoring becomes the thing that would be wrong, burying a cave
+ * whose entrance is at 1100 m eleven hundred metres under its own hillside. `offsetM` is what
+ * makes the two meet, and it is a property of the elevation model rather than of this
+ * installation: a model serving heights above sea level, which is what an unconverted one does,
+ * already speaks the same language as the survey and needs none, while one whose heights were
+ * converted to the ellipsoid when it was baked needs the survey raised by the same conversion.
+ *
+ * <b>Neither applies to a row that arrived with no altitudes at all</b>, and this is the common
+ * case rather than the exception: the compact representation the server sends for a whole region
+ * at once is flat by construction, so at any ordinary browsing zoom most surveys carry a plan and
+ * nothing more. There is no altitude to place such a row at, and treating the zeros it arrived
+ * with as surveyed altitudes puts it at sea level — under real relief, an entire hillside below
+ * the entrance markers of the very same caves. Those rows are laid on the ground instead, which
+ * is both where a plan with no depths belongs and what the view already tells the viewer it did.
+ */
+export interface Altitude3DPlacement {
+  /** True when the ground has relief, so a survey is drawn where it was surveyed. */
+  absolute: boolean;
+  /** Metres added to a surveyed altitude to place it against this scene's ground. */
+  offsetM: number;
+}
+
+/** What a scene with no elevation model draws: every cave hung from the surface under it. */
+export const ANCHORED_TO_SURFACE: Altitude3DPlacement = { absolute: false, offsetM: 0 };
+
+/**
+ * The height the top of a survey is drawn at — zero on the bare ellipsoid, its own real altitude
+ * against real ground. Every other point of the survey is drawn at its true distance below this,
+ * so the shape of the cave is identical either way and only its place in the world changes.
+ */
+function drawnTopHeight(anchor: number, placement: Altitude3DPlacement): number {
+  return placement.absolute ? anchor + placement.offsetM : 0;
+}
+
+/**
+ * The altitude the rest of the survey hangs from.
  *
  * The anchor is the top of the WHOLE centerline, which the response reports, and not the top of
  * the geometry that arrived. At close zooms the server cuts the survey to the viewport, so the
@@ -200,7 +235,10 @@ function depthBandRuns(
  * thousands, to solve a legibility problem the scene does not have — a survey drawn over terrain
  * is read against one background, not against whichever basemap happens to be underneath.
  */
-export function centerlinePolylines(collection: unknown): Scene3DPolyline[] {
+export function centerlinePolylines(
+  collection: unknown,
+  placement: Altitude3DPlacement = ANCHORED_TO_SURFACE,
+): Scene3DPolyline[] {
   const polylines: Scene3DPolyline[] = [];
   for (const feature of featuresOf(collection)) {
     const properties = propertiesOf(feature);
@@ -210,7 +248,16 @@ export function centerlinePolylines(collection: unknown): Scene3DPolyline[] {
       continue; // Not a row this application can act on; drawing an unselectable line is worse.
     }
     const components = lineStrings(feature);
-    const anchor = anchorAltitude(properties, components);
+    // The server states, per row, whether the representation it served carries altitudes. It is
+    // read rather than inferred: a row without them arrives as coordinate pairs, which read as
+    // altitude zero, and zero is also a perfectly ordinary surveyed altitude — so the geometry
+    // alone cannot tell "at sea level" from "no depths were sent for this cave".
+    const flat = properties.hasZ === false;
+    const anchor = flat ? 0 : anchorAltitude(properties, components);
+    // Where the top of this cave is drawn. Everything below is worked out relative to the top and
+    // then lifted by this, so the depth bands — which are metres below the top and nothing else —
+    // are the same colours in the same places whether or not the ground has any relief on it.
+    const topHeight = flat ? 0 : drawnTopHeight(anchor, placement);
     // Where chrome about this survey is pinned. One payload is shared by every line of a cave, so
     // it stands at one place rather than at each of them, and the highest surveyed point is the
     // honest choice: it is on the geometry, it is the shallowest part of it — so a label there is
@@ -224,18 +271,40 @@ export function centerlinePolylines(collection: unknown): Scene3DPolyline[] {
       caveId,
       centerlineId,
       ...(label ? { label } : {}),
-      ...(top ? { anchor: { ...top, height: top.height - anchor } } : {}),
+      ...(top
+        ? {
+            anchor: flat
+              ? // A plan on the ground has no height of its own to be pinned at, so the anchor
+                // says so and lets whatever draws the chrome ask the scene where the ground is.
+                { ...top, height: 0, onGround: true }
+              : { ...top, height: top.height - anchor + topHeight },
+          }
+        : {}),
     };
     for (const positions of components) {
-      // A flat row arrives at height zero throughout and its anchor is zero too, so it stays on
-      // the surface, in one piece, in the first band's colour.
+      // A row with no altitudes is a plan and nothing more: one piece, in the first band's colour,
+      // laid on the ground. Its coordinates arrived as pairs and read as height zero, which is the
+      // ellipsoid — right until an elevation model is attached, from which point only the renderer
+      // knows where the ground is, so it is asked to put the line there rather than told a number.
+      if (flat) {
+        polylines.push({
+          positions,
+          widthPixels: WIDTH_PIXELS,
+          color: CENTERLINE_DEPTH_BANDS[0].color,
+          clampToGround: true,
+          id,
+        });
+        continue;
+      }
       const anchored = positions.map((position) => ({
         ...position,
         height: position.height - anchor,
       }));
       for (const run of depthBandRuns(anchored)) {
         polylines.push({
-          positions: run.positions,
+          // The band was chosen from the depth below the cave's own top, which is the number the
+          // colour means; the drawn height is that depth put back where the cave actually is.
+          positions: topHeight === 0 ? run.positions : liftBy(run.positions, topHeight),
           widthPixels: WIDTH_PIXELS,
           color: CENTERLINE_DEPTH_BANDS[run.band].color,
           id,
@@ -244,6 +313,11 @@ export function centerlinePolylines(collection: unknown): Scene3DPolyline[] {
     }
   }
   return polylines;
+}
+
+/** The same positions, all raised by the same number of metres. */
+function liftBy(positions: readonly Scene3DPosition[], meters: number): Scene3DPosition[] {
+  return positions.map((position) => ({ ...position, height: position.height + meters }));
 }
 
 /** The cave a survey line belongs to, or nothing when the line came from somewhere else. */

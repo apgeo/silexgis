@@ -342,6 +342,25 @@ describe('attachCaveData3d', () => {
     handle.detach();
   });
 
+  it('redraws the surveys where the ground is, once there is ground, and only then', async () => {
+    // An elevation model is read over the network, so the first caves are usually on screen
+    // before it is in force. The redraw is a refetch rather than a re-place, because everything
+    // derived from the drawn heights — the ground the cutaway is cut into, how deep a viewer may
+    // descend — has to move with them.
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(calls.centerlines).toHaveLength(1));
+
+    handle.setAltitudePlacement({ absolute: true, offsetM: 43.03 });
+    await vi.waitFor(() => expect(calls.centerlines).toHaveLength(2));
+
+    // Told the same thing twice, nothing is refetched: this is applied from an effect that re-runs
+    // whenever the view re-renders.
+    handle.setAltitudePlacement({ absolute: true, offsetM: 43.03 });
+    expect(calls.centerlines).toHaveLength(2);
+    handle.detach();
+  });
+
   it('applies the installation\'s limits and reloads, but only when they actually changed', async () => {
     const engine = new FakeEngine();
     const handle = attachCaveData3d(engine);
@@ -673,6 +692,7 @@ describe('finding a pick again after the scene has reloaded', () => {
       longitude: 25.6,
       latitude: 45.7,
       height: 0,
+      onGround: true,
     });
     handle.detach();
   });

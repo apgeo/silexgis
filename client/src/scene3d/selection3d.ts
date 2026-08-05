@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { Scene3DPick, Scene3DPosition } from './scene3dEngine.ts';
+import type { Scene3DAnchor, Scene3DPick } from './scene3dEngine.ts';
 import type { WorkspaceSelection } from '../stores/workspaceStore.ts';
 
 // What clicking something in the scene means.
@@ -30,8 +30,12 @@ import type { WorkspaceSelection } from '../stores/workspaceStore.ts';
 export interface Scene3DPickChrome {
   /** What to call this, already composed the way the flat map composes it. */
   label?: string;
-  /** Where on the globe to pin something to it. */
-  anchor?: Scene3DPosition;
+  /**
+   * Where on the globe to pin something to it. An anchor belonging to something drawn on the
+   * ground says so and carries the ellipsoid as its fallback height, because how high the ground
+   * is at a point is not something a server response can answer.
+   */
+  anchor?: Scene3DAnchor;
 }
 
 /** A single cave entrance, as the entrance overlay serves it. */
@@ -178,7 +182,12 @@ export function pickPayload(pick: Scene3DPick | null): Scene3DPickPayload | unde
   // must read as a pick with no name to show, not put `undefined` on the screen.
   const chrome: Scene3DPickChrome = {
     ...(typeof bag.label === 'string' && bag.label ? { label: bag.label } : {}),
-    ...(isPosition(bag.anchor) ? { anchor: bag.anchor } : {}),
+    // The flag rides along with the position: an anchor that says it is on the ground has to keep
+    // saying so through a round trip, or a marker's label goes back to being pinned at the
+    // ellipsoid under its hillside the first time the callout is recomposed.
+    ...(isPosition(bag.anchor)
+      ? { anchor: bag.anchor.onGround === true ? { ...bag.anchor, onGround: true } : bag.anchor }
+      : {}),
   };
   switch (bag.kind) {
     case 'entrance':
@@ -203,7 +212,7 @@ export function pickPayload(pick: Scene3DPick | null): Scene3DPickPayload | unde
   }
 }
 
-function isPosition(value: unknown): value is Scene3DPosition {
+function isPosition(value: unknown): value is Scene3DAnchor {
   if (typeof value !== 'object' || value === null) {
     return false;
   }

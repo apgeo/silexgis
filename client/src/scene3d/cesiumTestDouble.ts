@@ -42,6 +42,13 @@ export interface FakeWidgetOptions {
   terrain?: unknown;
 }
 
+/** One `CesiumTerrainProvider.fromUrl` the scene made, with the options it passed. */
+export interface FakeTerrainRequest {
+  url: string;
+  requestVertexNormals: boolean | undefined;
+  credit: Credit | string | undefined;
+}
+
 /** The vendor default the real library ships with, so a test can see it being cleared. */
 export const VENDOR_DEFAULT_TOKEN = 'a-vendor-default-token';
 
@@ -66,12 +73,33 @@ export const engineState = {
    * ground — which is asked once, when the scene is built, and so cannot be arranged afterwards.
    */
   webgl2: true,
+  /**
+   * Whether the graphics context a new scene gets publishes the depth-texture extension a line
+   * laid along the ground needs. Independent of the flag above because a browser really can have
+   * one without the other, and the fallback for a missing one — the line drawn at the positions
+   * given — has to be reachable in a test.
+   */
+  depthTexture: true,
+  /**
+   * Every elevation model the scene asked to read, in order, and how each one answered.
+   *
+   * A test arranges the answer before the scene asks: `terrainFailures` names URLs whose read
+   * rejects, standing in for a pyramid that is not there or whose `layer.json` cannot be parsed.
+   * The real read is a network round trip, which is why the calls are recorded rather than
+   * awaited — a test that cares about ordering can see two of them in flight.
+   */
+  terrainRequests: [] as FakeTerrainRequest[],
+  terrainFailures: new Set<string>(),
   reset() {
     engineState.widgets = [];
     engineState.widgetOptions = [];
     engineState.providers = [];
     engineState.eventHandlers = [];
     engineState.webgl2 = true;
+    engineState.depthTexture = true;
+    GroundPolylinePrimitive.forget();
+    engineState.terrainRequests = [];
+    engineState.terrainFailures = new Set();
   },
 };
 
@@ -426,10 +454,12 @@ export class WallGeometry {
 
 export class GeometryInstance {
   geometry: unknown;
-  attributes: { color: unknown };
-  constructor(options: { geometry: unknown; attributes: { color: unknown } }) {
+  attributes: { color: unknown } | undefined;
+  id: unknown;
+  constructor(options: { geometry: unknown; attributes?: { color: unknown }; id?: unknown }) {
     this.geometry = options.geometry;
     this.attributes = options.attributes;
+    this.id = options.id;
   }
 }
 
@@ -472,6 +502,87 @@ export class Primitive {
     this.asynchronous = options.asynchronous ?? true;
     this.allowPicking = options.allowPicking ?? true;
     this.show = options.show ?? true;
+  }
+}
+
+// Lines laid along the ground. The real library draws these with a different shape from an
+// ordinary line — a volume projected onto the terrain by the graphics card — so the two cannot
+// share a batch, and which of them a line ended up in is exactly what a test about placement has
+// to be able to see.
+
+/** A line whose heights are ignored because it follows whatever the ground turns out to be. */
+export class GroundPolylineGeometry {
+  readonly positions: FakeCartesian3[];
+  readonly width: number;
+  constructor(options: { positions: FakeCartesian3[]; width?: number }) {
+    this.positions = options.positions;
+    this.width = options.width ?? 1;
+  }
+}
+
+export class PolylineMaterialAppearance {
+  readonly material: { type: string; uniforms: Record<string, unknown> } | undefined;
+  constructor(
+    options: { material?: { type: string; uniforms: Record<string, unknown> } } = {},
+  ) {
+    this.material = options.material;
+  }
+}
+
+export class GroundPolylinePrimitive {
+  readonly geometryInstances: GeometryInstance[];
+  readonly appearance: PolylineMaterialAppearance | undefined;
+  show: boolean;
+  destroyed = false;
+
+  constructor(
+    options: {
+      geometryInstances?: GeometryInstance[];
+      appearance?: PolylineMaterialAppearance;
+      show?: boolean;
+    } = {},
+  ) {
+    this.geometryInstances = options.geometryInstances ?? [];
+    this.appearance = options.appearance;
+    this.show = options.show ?? true;
+  }
+
+  /**
+   * The real check asks the graphics context for the depth-texture extension. It reads the scene's
+   * own flag here for the same reason the hole-cutting check does: it is asked once, when the
+   * scene is built, so a test cannot arrange it any later than that.
+   */
+  static isSupported(scene: { context?: { depthTexture?: boolean } } | undefined) {
+    return scene?.context?.depthTexture === true;
+  }
+
+  /**
+   * Loads the coarse worldwide height reference draping is projected against.
+   *
+   * The real one fetches a third of a megabyte over the network, so it lands well after the frame
+   * that asked for it — and the scene only draws when it is asked to. That timing is the whole
+   * behaviour worth modelling, so the promise stays pending until a test lets it land.
+   */
+  static terrainHeightRequests = 0;
+  private static terrainHeightsArrived: ((error?: unknown) => void) | undefined;
+
+  static initializeTerrainHeights() {
+    GroundPolylinePrimitive.terrainHeightRequests += 1;
+    return new Promise<void>((resolve, reject) => {
+      GroundPolylinePrimitive.terrainHeightsArrived = (error) =>
+        error === undefined ? resolve() : reject(error);
+    });
+  }
+
+  /** Lets the load above finish, standing in for the reference file arriving — or not. */
+  static deliverTerrainHeights(error?: unknown) {
+    GroundPolylinePrimitive.terrainHeightsArrived?.(error);
+    GroundPolylinePrimitive.terrainHeightsArrived = undefined;
+  }
+
+  static forget() {
+    GroundPolylinePrimitive.terrainHeightRequests = 0;
+    GroundPolylinePrimitive.terrainHeightsArrived = undefined;
   }
 }
 
@@ -784,10 +895,63 @@ export class ScreenSpaceEventHandler {
   }
 }
 
+/**
+ * The globe's default surface: the smooth reference ellipsoid, which needs no server and answers
+ * zero everywhere. What a scene with no elevation model configured draws.
+ */
+export class EllipsoidTerrainProvider {
+  readonly kind = 'ellipsoid';
+}
+
+/**
+ * A read of a pre-baked tile pyramid. Only the static factory is modelled, because that is the
+ * whole of the surface the scene uses — and it is asynchronous in the real library, which is the
+ * behaviour that matters here: a scene can be torn down, or pointed at a different pyramid, while
+ * one of these is still in the air.
+ */
+export class CesiumTerrainProvider {
+  readonly url: string;
+
+  private constructor(url: string) {
+    this.url = url;
+  }
+
+  static async fromUrl(
+    url: string,
+    options?: { requestVertexNormals?: boolean; credit?: Credit | string },
+  ): Promise<CesiumTerrainProvider> {
+    engineState.terrainRequests.push({
+      url,
+      requestVertexNormals: options?.requestVertexNormals,
+      credit: options?.credit,
+    });
+    // A microtask rather than a timer: it is enough to make every caller go through the
+    // asynchronous path, and it keeps tests free of fake clocks.
+    await Promise.resolve();
+    if (engineState.terrainFailures.has(url)) {
+      throw new Error(`no terrain at ${url}`);
+    }
+    return new CesiumTerrainProvider(url);
+  }
+}
+
 class FakeGlobe {
   /** Opposite of what the scene module sets, so the test proves the module set it. */
   depthTestAgainstTerrain = true;
   terrainHeight: number | undefined = 0;
+  /**
+   * Ground that varies from place to place, which is the whole difference an elevation model
+   * makes and the one thing a single number cannot stand in for. Set it and `terrainHeight` is
+   * ignored; leave it and every point answers the same, as the bare ellipsoid does.
+   */
+  terrainHeightAt: ((longitudeDegrees: number, latitudeDegrees: number) => number) | undefined =
+    undefined;
+  /**
+   * Raised with the number of surface tiles still being fetched. The real globe raises it as
+   * tiles arrive, and zero is the surface having settled — which is the only moment anything
+   * built from ground heights can find out that the ground has changed under it.
+   */
+  readonly tileLoadProgressEvent = new FakeEvent();
   /** The engine's own defaults, so a test can see the scene replace them. */
   undergroundColor: Color | undefined = new Color('#000000', 1);
   undergroundColorAlphaByDistance: NearFarScalar | undefined = undefined;
@@ -807,7 +971,10 @@ class FakeGlobe {
     this.outlines = value;
   }
 
-  getHeight(_cartographic: unknown) {
+  getHeight(cartographic: { longitudeDegrees: number; latitudeDegrees: number } | undefined) {
+    if (this.terrainHeightAt && cartographic) {
+      return this.terrainHeightAt(cartographic.longitudeDegrees, cartographic.latitudeDegrees);
+    }
     return this.terrainHeight;
   }
 }
@@ -837,18 +1004,25 @@ class FakeScene {
   readonly camera = new FakeCamera(() => this.globe.terrainHeight ?? 0);
   readonly imageryLayers = new FakeImageryLayerCollection();
   readonly primitives = new FakePrimitiveCollection();
+  /** Where anything drawn against the ground rather than in the air goes; a separate list. */
+  readonly groundPrimitives = new FakePrimitiveCollection();
   readonly renderError = new FakeEvent();
   readonly screenSpaceCameraController = new FakeScreenSpaceCameraController();
   /** Raised before each drawn frame; a test raises it to stand in for the scene drawing one. */
   readonly preRender = new FakeEvent();
   /** What the graphics context admits to, fixed when the scene is built, as the real one is. */
-  readonly context = { webgl2: engineState.webgl2 };
+  readonly context = { webgl2: engineState.webgl2, depthTexture: engineState.depthTexture };
   /**
    * The full-screen passes. Only edge smoothing is modelled, and only because the engine ships it
    * switched off while this scene switches it on — a default the tests have to be able to see
    * being changed rather than merely restated.
    */
   readonly postProcessStages = { fxaa: { enabled: false } };
+  /**
+   * What the ground is drawn from. The real scene starts on the bare ellipsoid and hands whatever
+   * is assigned here down to its globe, so this is where a test sees an elevation model arrive.
+   */
+  terrainProvider: EllipsoidTerrainProvider | CesiumTerrainProvider = new EllipsoidTerrainProvider();
   renderRequests = 0;
   pickedPosition: FakeCartesian3 | undefined = undefined;
   /** What the next hit test answers with; the real one returns undefined when it finds nothing. */

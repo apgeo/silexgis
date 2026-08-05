@@ -21,17 +21,45 @@ namespace SilexGis.Domain.Geo;
 /// </para>
 ///
 /// <para>
-/// The undulation varies smoothly across the country, so a single installation-wide offset is
+/// The undulation varies smoothly across the country, so a single value for one installation is
 /// an approximation: within Romania it is good to a few metres, which is well inside the
 /// accuracy of a hand-recorded cave altitude, and it needs no grid file, no network lookup and
-/// no dependency. An installation elsewhere sets its own value. The offset is a parameter here
-/// rather than a constant because it is installation configuration, and this layer holds no
-/// configuration of its own — but the arithmetic has exactly one home, this one, so no caller
-/// has to remember which way the sign goes.
+/// no dependency. An installation elsewhere sets its own. The undulation is a parameter here
+/// rather than a constant because this layer holds no configuration of its own — but the
+/// arithmetic has exactly one home, this one, so no caller has to remember which way the sign
+/// goes.
+/// </para>
+///
+/// <para>
+/// <b>Whether the correction applies at all is a property of the terrain source, not of the
+/// installation.</b> A globe draws terrain tiles as heights above the ellipsoid whatever the
+/// numbers in them were measured from, so a source that serves orthometric heights already
+/// agrees with a surveyed altitude and "correcting" it would lift the whole cave off the
+/// hillside by the undulation. That is what <see cref="SurveyToSceneOffsetM"/> decides, and it
+/// is the entry point for anything drawing survey data against terrain.
 /// </para>
 /// </summary>
 public static class GeoidOffset
 {
+    /// <summary>
+    /// Metres to add to a surveyed (orthometric) altitude so that it sits where it belongs on the
+    /// ground a given terrain source draws.
+    ///
+    /// <para>
+    /// Zero for an orthometric source: its tile heights are the same kind of number the survey
+    /// carries, and a globe misplaces both by the same undulation, so they agree with each other
+    /// — which is what putting a cave inside its hillside needs. The undulation for an ellipsoidal
+    /// source, whose tiles have already had it added and whose ground is therefore drawn where it
+    /// really is.
+    /// </para>
+    /// </summary>
+    /// <param name="datum">What the terrain source's heights are measured from.</param>
+    /// <param name="geoidHeightM">
+    /// The local geoid undulation, in metres, used only for an ellipsoidal source.
+    /// </param>
+    public static double SurveyToSceneOffsetM(TerrainHeightDatum datum, double geoidHeightM) =>
+        datum == TerrainHeightDatum.Ellipsoidal ? geoidHeightM : 0;
+
     /// <summary>
     /// Ellipsoidal (WGS84) height for an orthometric height, given the local geoid undulation.
     /// The geoid sits <i>above</i> the ellipsoid across Romania, so a positive offset raises the

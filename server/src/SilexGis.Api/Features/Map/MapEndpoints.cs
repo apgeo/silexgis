@@ -29,13 +29,28 @@ public sealed record CenterlineFeatureCollection(
     bool Detail,
     int FlatCount);
 
+/// <summary>
+/// The elevation model the 3D scene should draw its ground from, when this installation has one.
+/// Absent — not an empty object — when it does not, which is the shipped state.
+/// </summary>
+/// <param name="Url">Where the tile pyramid is served from; <c>layer.json</c> sits directly under it.</param>
+/// <param name="Attribution">Credit line the elevation data's licence requires, if any.</param>
+/// <param name="SurveyHeightOffsetM">
+/// Metres to add to a surveyed altitude before drawing it against this source's ground. Resolved
+/// from the source's declared vertical datum on the server, so the client is handed an answer
+/// rather than a datum it could apply backwards, and so swapping the source cannot leave a stale
+/// correction behind. Zero for a source whose heights are already the kind a survey carries.
+/// </param>
+public sealed record TerrainSourceDto(string Url, string? Attribution, double SurveyHeightOffsetM);
+
 /// <summary>Map rendering limits published to the client.</summary>
 public sealed record MapConfigDto(
     int CenterlineDetailZoom,
     int CenterlineMaxPaths,
     int CenterlineMaxPathsLimit,
     int CenterlineGateZoom,
-    int ClusterMaxZoom);
+    int ClusterMaxZoom,
+    TerrainSourceDto? Terrain);
 
 /// <summary>
 /// GeoJSON layer endpoints for the map workspace. Always visibility-filtered; protected
@@ -87,10 +102,17 @@ public static class MapEndpoints
     /// The rendering limits the client needs in order to ask for the right thing: which zoom
     /// switches the centerline overlay to full detail, and how much it may request. Serving them
     /// rather than hard-coding them keeps a client build from disagreeing with its server.
+    ///
+    /// <para>
+    /// The elevation model rides along here for the same reason and one more: the client is built
+    /// once and deployed everywhere, so it cannot carry a terrain URL, and this is already the
+    /// request the 3D view makes before it draws anything.
+    /// </para>
     /// </summary>
     private static async Task<Results<Ok<MapConfigDto>, UnauthorizedHttpResult>> MapConfigAsync(
         IUserContextAccessor userAccessor,
         IOptions<MapOptions> mapOptions,
+        IOptions<TerrainOptions> terrainOptions,
         CancellationToken ct)
     {
         if (await userAccessor.GetAsync(ct) is null)
@@ -99,12 +121,19 @@ public static class MapEndpoints
         }
 
         var options = mapOptions.Value;
+        var terrain = terrainOptions.Value;
         return TypedResults.Ok(new MapConfigDto(
             options.CenterlineDetailZoom,
             options.CenterlineMaxPaths,
             options.CenterlineMaxPathsLimit,
             options.CenterlineGateZoom,
-            ClusterMaxZoom));
+            ClusterMaxZoom,
+            terrain.IsConfigured
+                ? new TerrainSourceDto(
+                    terrain.ResolvedUrl,
+                    string.IsNullOrWhiteSpace(terrain.Attribution) ? null : terrain.Attribution.Trim(),
+                    terrain.SurveyHeightOffsetM)
+                : null));
     }
 
     /// <summary>

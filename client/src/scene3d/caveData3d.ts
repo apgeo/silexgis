@@ -9,12 +9,14 @@ import { getMapTagFilter } from '../map/mapFilters.ts';
 import { entranceMarkers, surfaceFeatureLines, surfaceFeatureMarkers } from './caveMarkers3d.ts';
 import { cameraFloorFor, caveFootprint } from './caveFootprint3d.ts';
 import {
+  ANCHORED_TO_SURFACE,
   caveCenterlines,
   centerlineBounds,
   centerlineLoadState,
   centerlinePolylines,
   EMPTY_CENTERLINE_LOAD_STATE,
   nearestCaveCenterlines,
+  type Altitude3DPlacement,
   type CenterlineLoad3DState,
 } from './centerlines3d.ts';
 import { mapZoomFor } from './pseudoZoom.ts';
@@ -141,6 +143,15 @@ export interface CaveData3DHandle {
   /** Applies the installation's published limits; a partial update leaves the rest alone. */
   setLimits(limits: Partial<CaveData3DLimits>): void;
   /**
+   * Says whether the ground has relief under the surveys, which decides where they are drawn.
+   *
+   * Redraws everything when it changes, and it can change after the first load: an elevation
+   * model is read over the network and may only be in force a moment after the first caves are on
+   * screen. Told rather than asked because the answer is not "is a model configured" but "is one
+   * actually drawing", and only the view that attached it knows whether it could be.
+   */
+  setAltitudePlacement(placement: Altitude3DPlacement): void;
+  /**
    * Draws or stops drawing one layer. A layer that is off is also not fetched: the requests it
    * would make are the expensive part of it, and a viewer who turned it off is not waiting for
    * them. Turning it back on loads the view it missed.
@@ -196,6 +207,7 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
   };
 
   let limits: CaveData3DLimits = { ...fallbackLimits };
+  let placement: Altitude3DPlacement = ANCHORED_TO_SURFACE;
   let state: CaveData3DState = { ...EMPTY_CAVE_DATA_3D_STATE };
   const listeners = new Set<(next: CaveData3DState) => void>();
 
@@ -244,7 +256,7 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       if (seq !== requestSeq || detached || !layerVisible[CENTERLINE_SOURCE_ID]) {
         return;
       }
-      const polylines = centerlinePolylines(collection);
+      const polylines = centerlinePolylines(collection, placement);
       centerlines.replace(polylines);
       // Kept so a "frame this cave" action can answer from what is actually drawn rather than
       // fetching the cave again: the two would then disagree whenever the server had withheld
@@ -366,6 +378,17 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
         return;
       }
       limits = merged;
+      void load();
+    },
+    setAltitudePlacement(next) {
+      if (next.absolute === placement.absolute && next.offsetM === placement.offsetM) {
+        return;
+      }
+      placement = next;
+      // A reload rather than a redraw of what is held: the drawn heights are baked into the
+      // polylines, and everything derived from them — the ground the cutaway is cut into, how deep
+      // a viewer may descend — is derived from the drawn ones. Refetching is what puts all of it
+      // back in step, and it happens at most twice in the life of a view.
       void load();
     },
     setLayerVisible(layer, visible) {

@@ -16,7 +16,7 @@ import { setActiveViewCamera, viewFlyTo } from '../../workspace/viewCamera.ts';
 vi.mock('cesium', () => import('../../scene3d/cesiumTestDouble.ts'));
 vi.mock('../../api/hooks.ts', () => ({
   useMapLayers: () => ({ data: mapLayers }),
-  useMapConfig: () => ({ data: undefined }),
+  useMapConfig: () => ({ data: mapConfig }),
   useFeatureTypes: () => ({ data: featureTypes }),
   fetchCenterlineFeatures: (...args: unknown[]) => {
     centerlineRequests.push(args);
@@ -31,6 +31,8 @@ const { useWorkspaceStore } = await import('../../stores/workspaceStore.ts');
 const { default: Scene3DView } = await import('./Scene3DView.tsx');
 
 let mapLayers: unknown[] | undefined;
+/** What the server publishes about this installation, including its elevation model if it has one. */
+let mapConfig: Record<string, unknown> | undefined;
 /** What each kind of surface feature is called; this view fills the catalog the labels read. */
 const featureTypes = [{ id: 3, code: 'sinkhole', name: 'Sinkhole', symbolFile: null }];
 let centerlineRequests: unknown[][] = [];
@@ -87,6 +89,7 @@ function renderView() {
 beforeEach(() => {
   engine.engineState.reset();
   mapLayers = undefined;
+  mapConfig = undefined;
   centerlineRequests = [];
   featureResponse = emptyCollection;
   centerlineResponse = {
@@ -761,5 +764,202 @@ describe('Scene3DView layer controls', () => {
 
     expect(await screen.findByText(/Rise back above it/)).toBeInTheDocument();
     expect(screen.queryByText(/tilt the view down towards the cave/)).not.toBeInTheDocument();
+  });
+});
+
+describe('the ground the caves are drawn against', () => {
+  /** A survey whose top is at 700 m and which drops to 420 m. */
+  const aSurvey = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [25.44, 45.53, 700],
+            [25.45, 45.535, 420],
+          ],
+        },
+        properties: { id: 'line-1', caveId: 'cave-1', topAltitudeM: 700, hasZ: true },
+      },
+    ],
+    withheldCount: 0,
+    detail: true,
+    flatCount: 0,
+  };
+
+  const LAYER_JSON = {
+    format: 'quantized-mesh-1.0',
+    available: [[{ startX: 0, endX: 2, startY: 0, endY: 1 }]],
+  };
+
+  /**
+   * A web server holding a pyramid at `/terrain/`, or — with `tile` set to a gzip stream — one
+   * serving it in the form that draws a globe with no ground on it and reports nothing.
+   */
+  function servingTerrain(tile = new Uint8Array([0x8d, 0x97, 0x6e, 0x3f])) {
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const bytes = url.endsWith('layer.json')
+        ? new TextEncoder().encode(JSON.stringify(LAYER_JSON))
+        : tile;
+      return { ok: true, status: 200, arrayBuffer: async () => bytes.buffer } as Response;
+    });
+  }
+
+  /** The heights the survey was actually drawn at, out of every line handed to the scene. */
+  function drawnHeights(): number[] {
+    return engine.engineState.widgets[0].scene.primitives.items
+      .filter(
+        (item): item is InstanceType<typeof engine.PolylineCollection> =>
+          item instanceof engine.PolylineCollection,
+      )
+      .flatMap((collection) => collection.polylines)
+      .flatMap((line) => line.positions.map((position) => position.height));
+  }
+
+  it('draws a smooth globe, and hangs the caves from it, when nothing is configured', async () => {
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+
+    // Nothing was fetched and nothing was read: the shipped installation needs no elevation
+    // server, no download and no pre-baking.
+    expect(engine.engineState.terrainRequests).toEqual([]);
+    await waitFor(() => expect(drawnHeights()).toContain(0));
+    // The cave's top on the surface, everything else at its depth below it.
+    expect(Math.min(...drawnHeights())).toBe(-280);
+  });
+
+  it('reads the configured pyramid and then puts the caves at their real altitude', async () => {
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    servingTerrain();
+    mapConfig = {
+      centerlineDetailZoom: 18,
+      centerlineMaxPaths: 25000,
+      terrain: { url: '/terrain/', attribution: '© Copernicus', surveyHeightOffsetM: 0 },
+    };
+
+    renderView();
+
+    await waitFor(() => expect(engine.engineState.terrainRequests).toHaveLength(1));
+    expect(engine.engineState.terrainRequests[0].url).toBe('/terrain/');
+    // The survey moves from hanging off the ellipsoid to sitting where it was surveyed, which
+    // with a hillside drawn is inside it.
+    await waitFor(() => expect(drawnHeights()).toContain(700));
+    expect(Math.min(...drawnHeights())).toBe(420);
+  });
+
+  it('raises the caves by the correction the source declares, and by nothing else', async () => {
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    servingTerrain();
+    mapConfig = {
+      centerlineDetailZoom: 18,
+      centerlineMaxPaths: 25000,
+      // A pyramid converted to heights above the ellipsoid when it was baked. The server worked
+      // this number out from the datum the source declares; the client is handed the answer.
+      terrain: { url: '/terrain/', attribution: null, surveyHeightOffsetM: 43.03 },
+    };
+
+    renderView();
+
+    await waitFor(() => expect(Math.max(...drawnHeights())).toBeCloseTo(743.03, 6));
+  });
+
+  it('refuses a pyramid served in a form that cannot be drawn, and says so', async () => {
+    // The whole reason the check exists. Handing this to the engine would resolve, answer 200 to
+    // every tile, raise no error anywhere, and draw a globe with no ground on it — so the caves
+    // stay hung from the surface and a sentence on screen says what is wrong.
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    servingTerrain(new Uint8Array([0x1f, 0x8b, 0x08, 0x00]));
+    mapConfig = {
+      centerlineDetailZoom: 18,
+      centerlineMaxPaths: 25000,
+      terrain: { url: '/terrain/', attribution: null, surveyHeightOffsetM: 0 },
+    };
+
+    renderView();
+
+    expect(await screen.findByText(/compression that does not match/)).toBeInTheDocument();
+    expect(engine.engineState.terrainRequests).toEqual([]);
+    expect(drawnHeights()).toContain(0);
+  });
+
+  it('takes a pyramid it can no longer verify off the globe, not just off the caves', async () => {
+    // What is on screen and what is said about it are one statement. Refusing a source without
+    // detaching the one already drawing leaves the globe with a hillside on it while every cave
+    // is placed for a smooth one — each survey drawn a hillside below its own entrance marker —
+    // under a sentence saying the ground is a smooth globe, which sends the operator to check
+    // something that is not wrong. Reached by re-pointing the address at a directory that is not
+    // there yet, which is an ordinary step of a re-bake.
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    servingTerrain();
+    mapConfig = {
+      centerlineDetailZoom: 18,
+      centerlineMaxPaths: 25000,
+      terrain: { url: '/terrain/', attribution: null, surveyHeightOffsetM: 0 },
+    };
+
+    const view = renderView();
+    await waitFor(() => expect(drawnHeights()).toContain(700));
+    expect(engine.engineState.widgets[0].scene.terrainProvider).toBeInstanceOf(
+      engine.CesiumTerrainProvider,
+    );
+
+    // A web server told to fall back to a single-page application answers 200 with HTML for a
+    // path that does not exist, which is what a re-pointed pyramid looks like before it arrives.
+    vi.stubGlobal(
+      'fetch',
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => new TextEncoder().encode('<!doctype html>').buffer,
+        }) as Response,
+    );
+    mapConfig = {
+      ...mapConfig,
+      terrain: { url: '/elevation/', attribution: null, surveyHeightOffsetM: 0 },
+    };
+    view.rerender(
+      <MemoryRouter>
+        <Scene3DView />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/does not hold a terrain tile set/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(engine.engineState.widgets[0].scene.terrainProvider).toBeInstanceOf(
+        engine.EllipsoidTerrainProvider,
+      ),
+    );
+    await waitFor(() => expect(drawnHeights()).toContain(0));
+  });
+
+  it('says which way to look when the address holds no pyramid at all', async () => {
+    withWebGl2(true);
+    vi.stubGlobal('fetch', async () =>
+      ({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => new TextEncoder().encode('<!doctype html>').buffer,
+      }) as Response,
+    );
+    mapConfig = {
+      centerlineDetailZoom: 18,
+      centerlineMaxPaths: 25000,
+      terrain: { url: '/terrain/', attribution: null, surveyHeightOffsetM: 0 },
+    };
+
+    renderView();
+
+    expect(await screen.findByText(/does not hold a terrain tile set/)).toBeInTheDocument();
+    expect(engine.engineState.terrainRequests).toEqual([]);
   });
 });

@@ -11,7 +11,12 @@ import {
 } from './geoJson3d.ts';
 import { clusterIcon, entranceIcon, surfaceFeatureIcon } from './markerIcons3d.ts';
 import type { ClusterPick, EntrancePick, FeaturePick } from './selection3d.ts';
-import type { Scene3DMarker, Scene3DPolyline, Scene3DPosition } from './scene3dEngine.ts';
+import type {
+  Scene3DAnchor,
+  Scene3DMarker,
+  Scene3DPolyline,
+  Scene3DPosition,
+} from './scene3dEngine.ts';
 
 // Entrances, clusters and surface features as scene items.
 //
@@ -118,10 +123,19 @@ export function surfaceFeatureMarkers(collection: unknown): Scene3DMarker[] {
  * and no fill; a filled surface would hide whatever it was drawn over, which in this view is the
  * cave the viewer came for.
  *
- * They are drawn on the surface, altitude discarded. This overlay's points are placed on the
- * surface too, and the two halves of one feature have to agree: an imported geodata row can
- * carry a third ordinate on some geometries and not on others, and honouring it would leave a
- * karst area's outline floating a thousand metres over the symbols marking the same area.
+ * They are laid on the ground, altitude discarded. This overlay's points are dropped onto the
+ * ground too, and the two halves of the overlay have to agree: an imported geodata row can carry a
+ * third ordinate on some geometries and not on others, and honouring it would leave a karst area's
+ * outline floating a thousand metres over the symbols marking the same ground.
+ *
+ * Discarding the altitude is not by itself enough, and the difference only appears once an
+ * elevation model is loaded. A height of zero is the ellipsoid, which is the ground on a smooth
+ * globe and a whole hillside below it on a real one — and turning the depth test off does not
+ * rescue it, because that governs what hides what and not where a point lands on the screen: from
+ * any camera that is not looking exactly along the line's own vertical, a vertex eleven hundred
+ * metres under the ground it belongs to projects a long way from it, and the outline is seen
+ * visibly adrift from the imagery draped over that same ground. So these are marked as belonging
+ * to the ground rather than given a height, and where they end up is the renderer's to decide.
  */
 export function surfaceFeatureLines(collection: unknown): Scene3DPolyline[] {
   const polylines: Scene3DPolyline[] = [];
@@ -133,12 +147,16 @@ export function surfaceFeatureLines(collection: unknown): Scene3DPolyline[] {
     for (const positions of lineStrings(feature)) {
       const flattened = positions.map((position) => ({ ...position, height: 0 }));
       // One end of the line rather than its middle: the middle of a fracture line kilometres long
-      // is a place nothing was drawn near, while an end is a point on the line itself.
-      const id: FeaturePick = flattened.length > 0 ? { ...payload, anchor: flattened[0] } : payload;
+      // is a place nothing was drawn near, while an end is a point on the line itself. Anchored to
+      // the ground for the same reason the line is, so chrome about it is pinned to where it is
+      // actually drawn instead of to the ellipsoid underneath.
+      const id: FeaturePick =
+        flattened.length > 0 ? { ...payload, anchor: drawnOnTheGround(flattened[0]) } : payload;
       polylines.push({
         positions: flattened,
         widthPixels: FEATURE_LINE_WIDTH_PIXELS,
         color: surfaceFeaturePalette.line,
+        clampToGround: true,
         id,
       });
     }
@@ -152,21 +170,23 @@ const FEATURE_LINE_WIDTH_PIXELS = 3;
 /**
  * Where a marker dropped onto the ground actually is, for chrome to be pinned to.
  *
- * Zero here is the ellipsoid — the smooth mathematical figure of the earth — and not the ground.
- * On the featureless globe a stock deployment draws, those are the same surface and this is exact.
+ * The height cannot be worked out here and is not meant to be. This module has no scene and no
+ * elevation model — it turns a server response into items — and how high the ground is at a point
+ * is a question only the thing drawing it can answer, and only for the tiles it is holding at that
+ * moment. So the anchor says *that it is on the ground* and carries zero, the ellipsoid, as the
+ * answer to fall back on. On the featureless globe a stock deployment draws, those are the same
+ * surface and the fallback is exact.
  *
  * With an elevation model loaded they are not, and the error is neither small nor a matter of
- * slope: a marker dropped onto the ground goes to the terrain height, so the anchor ends up the
- * WHOLE of that height below it. In the Carpathian karst this application is for that is around
- * 1100 m, on flat ground and on a cliff alike. With the camera a couple of kilometres up looking
- * down, an anchor a kilometre under its own marker projects hundreds of pixels off the bottom of
- * the view and the label is not drawn at all; further out it is drawn visibly detached from the
- * thing it names. Whatever attaches an elevation model has to resolve these anchors against the
- * drawn ground — sampling the height at the point, as the excavated ground already does — rather
- * than leaving them at zero.
+ * slope: a marker dropped onto the ground goes to the terrain height, so an anchor left at zero
+ * ends up the WHOLE of that height below it. In the Carpathian karst this application is for that
+ * is around 1100 m, on flat ground and on a cliff alike. With the camera a couple of kilometres up
+ * looking down, an anchor a kilometre under its own marker projects hundreds of pixels off the
+ * bottom of the view and the label is not drawn at all; further out it is drawn visibly detached
+ * from the thing it names.
  */
-function drawnOnTheGround(position: Scene3DPosition): Scene3DPosition {
-  return { ...position, height: 0 };
+function drawnOnTheGround(position: Scene3DPosition): Scene3DAnchor {
+  return { ...position, height: 0, onGround: true };
 }
 
 function featurePayload(feature: GeoJsonFeatureLike): FeaturePick | undefined {

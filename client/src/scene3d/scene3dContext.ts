@@ -6,6 +6,7 @@ import {
   Cartesian2,
   Cartesian3,
   Cartographic,
+  CesiumTerrainProvider,
   CesiumWidget,
   ClippingPolygon,
   ClippingPolygonCollection,
@@ -13,7 +14,10 @@ import {
   ColorGeometryInstanceAttribute,
   Credit,
   Ellipsoid,
+  EllipsoidTerrainProvider,
   GeometryInstance,
+  GroundPolylineGeometry,
+  GroundPolylinePrimitive,
   HeightReference,
   type ImageryLayer,
   Ion,
@@ -27,6 +31,7 @@ import {
   PolygonGeometry,
   PolygonHierarchy,
   PolylineCollection,
+  PolylineMaterialAppearance,
   Primitive,
   Rectangle,
   SceneTransforms,
@@ -66,6 +71,7 @@ import type {
   Scene3DScreenPosition,
   Scene3DSurfaceMode,
   Scene3DSurfaceState,
+  Scene3DTerrainSource,
   Scene3DVectorSource,
 } from './scene3dEngine.ts';
 
@@ -148,6 +154,23 @@ const MARKER_PICKABLE_AT_ANY_DEPTH = Number.POSITIVE_INFINITY;
 const CUTAWAY_RIM_OVERLAP_METERS = 2;
 
 /**
+ * How far the ground under the rim of an excavation has to have moved before the excavation is
+ * rebuilt to follow it, in metres.
+ *
+ * The rim is the one piece of this scene that is built from ground heights once and then kept.
+ * On the bare ellipsoid that is free — every point answers zero for ever — but an elevation model
+ * answers from whatever surface tile has arrived, which is a coarse one at first and the real
+ * hillside a moment later. A rim built from the coarse answer is a wall stopping hundreds of
+ * metres under the ground it is supposed to be cut into: the excavation reads as a pit floating
+ * inside the mountain, and nothing would ever rebuild it, because the outline it was made from
+ * has not changed and never will.
+ *
+ * A metre is well under what is visible at the distance a cave is looked at from, and well over
+ * the jitter between two answers about the same fully-loaded tile.
+ */
+const CUTAWAY_RIM_REFRESH_METERS = 1;
+
+/**
  * The excavation is drawn in earth colours rather than left as the hole it is. Cutting the ground
  * away does not put anything in its place: the opening renders as a hard black void with a
  * stepped rim, which reads as a broken renderer rather than as a hole in a hillside. These are the
@@ -211,9 +234,52 @@ class CesiumScene3D implements Scene3DCore {
    * only changes when the excavation does, and the answer is wanted on every drawn frame.
    */
   private cutawayPitchLimit = 0;
+  /**
+   * The ground heights the excavation's walls were built up to, one per outline point. Kept so
+   * that elevation data arriving after the walls were built can be noticed: nothing else in the
+   * scene would ever see it, because the outline itself does not change when the ground under it
+   * does.
+   */
+  private cutawayWallTops: number[] = [];
   private readonly cutawayAvailable: boolean;
+  /** Whether this browser can drape a line along the ground; see `Scene3DPolyline.clampToGround`. */
+  private drapedLinesAvailable: boolean;
+  /** The one load of the height reference draping is projected against, once anything needs it. */
+  private drapingReference: Promise<void> | undefined;
   private readonly removePreRenderHandler: () => void;
   private readonly beforeRenderListeners = new Set<() => void>();
+
+  /**
+   * One per line batch in the scene: puts that batch back into the scene against the ground as it
+   * now is. Called when the elevation model changes, which is the one event that moves a
+   * ground-clamped line without anything having replaced it.
+   */
+  private readonly groundLineLayouts = new Set<() => void>();
+
+  /** The elevation model in force, by the URL it was asked for, or undefined for the ellipsoid. */
+  private terrainUrl: string | undefined;
+  /**
+   * The elevation model most recently ASKED for, recorded the moment it is asked for rather than
+   * when it arrives.
+   *
+   * Reading a model is a network round trip, so for the whole of that trip the model in force and
+   * the model wanted are two different things, and only this one can answer "is this call a
+   * change?". Comparing against what is in force instead has a hole exactly where it matters: on
+   * a first attach nothing is in force yet, so a request to go back to the bare ellipsoid arriving
+   * mid-read looks like a request for what is already there, returns without cancelling anything,
+   * and the read it was meant to call off lands afterwards — leaving the scene drawing ground that
+   * the configuration no longer names, with everything the caller placed for a smooth globe now a
+   * hillside out of place.
+   */
+  private terrainRequestedUrl: string | undefined;
+  /**
+   * Which attach request is the current one. Reading an elevation model is a network round trip,
+   * and a viewer whose configuration changes twice — or who opens a scene, closes it and opens it
+   * again — can have two of them in the air; without this the slower one wins whenever it happens
+   * to answer last.
+   */
+  private terrainSeq = 0;
+  private removeTileLoadHandler: (() => void) | undefined;
 
   constructor(container: HTMLElement) {
     this.widget = new CesiumWidget(container, {
@@ -309,6 +375,10 @@ class CesiumScene3D implements Scene3DCore {
     // the surface state so the chrome can offer the mode or explain its absence rather than
     // presenting a control that quietly does nothing.
     this.cutawayAvailable = ClippingPolygonCollection.isSupported(scene);
+    // Laying a line along the ground needs a depth-texture extension for the same sort of reason,
+    // and a browser can have one capability without the other. Asked once, here, so that deciding
+    // how to draw a batch never costs a capability query.
+    this.drapedLinesAvailable = GroundPolylinePrimitive.isSupported(scene);
     this.surfaceState = this.surfaceStateNow();
 
     // Settings measured on this scene and deliberately LEFT AS THEY ARE, recorded so the next
@@ -347,6 +417,24 @@ class CesiumScene3D implements Scene3DCore {
     };
     scene.preRender.addEventListener(onPreRender);
     this.removePreRenderHandler = () => scene.preRender.removeEventListener(onPreRender);
+
+    // The one thing that has to be redone when elevation data arrives rather than when the camera
+    // moves. Everything else in the scene either reads the ground on the frame it needs it or is
+    // rebuilt when the survey reloads; the excavation's walls are built once from the ground of
+    // the moment and then kept, and the moment they are built is the moment the surface under
+    // them is at its coarsest.
+    //
+    // The globe reports how many surface tiles it is still waiting for; zero is the surface
+    // having settled. Subscribed unconditionally but inert while the globe is the bare ellipsoid,
+    // where a rebuild would find the same zeroes it already has.
+    const onTileLoadProgress = (queuedTileCount: number) => {
+      if (queuedTileCount === 0) {
+        this.refreshCutawayGround();
+      }
+    };
+    scene.globe.tileLoadProgressEvent.addEventListener(onTileLoadProgress);
+    this.removeTileLoadHandler = () =>
+      scene.globe.tileLoadProgressEvent.removeEventListener(onTileLoadProgress);
 
     // Two parameters, and the first one is deliberately unused: the engine raises this event as
     // `(scene, error)`, so a one-parameter listener silently binds the scene and every diagnostic
@@ -394,6 +482,11 @@ class CesiumScene3D implements Scene3DCore {
     this.removeMoveEndHandler = undefined;
     this.viewChangedListeners.clear();
     this.removePreRenderHandler();
+    this.removeTileLoadHandler?.();
+    this.removeTileLoadHandler = undefined;
+    // Any elevation model still being read answers into a destroyed scene otherwise; bumping the
+    // sequence makes it a no-op rather than a throw from inside a promise nobody is holding.
+    this.terrainSeq += 1;
     this.beforeRenderListeners.clear();
     this.surfaceListeners.clear();
     // The globe owns the clipping outline and the scene owns the excavation, and both go down
@@ -407,6 +500,7 @@ class CesiumScene3D implements Scene3DCore {
     // The widget takes every batch down with the scene; the map only exists so a source built
     // twice under one id can be found, and it must not outlive the scene it named.
     this.vectorSourceIds.clear();
+    this.groundLineLayouts.clear();
     this.widget.destroy();
   }
 
@@ -701,6 +795,138 @@ class CesiumScene3D implements Scene3DCore {
     this.requestRender();
   }
 
+  // ---- the ground's elevation ----
+
+  async setTerrainSource(source: Scene3DTerrainSource | undefined): Promise<void> {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    const url = source?.url;
+    // Compared against what was last ASKED for rather than against what is drawing. The two differ
+    // for the whole of a read, and that window is where the important case lives: being told to go
+    // back to the bare ellipsoid while a first pyramid is still being read has to call that read
+    // off, and it looks like "no change" to anything comparing against the ellipsoid still in
+    // force. Being told the same thing twice is still free — the second call matches this and
+    // returns without discarding the surface tiles the globe has already loaded.
+    if (url === this.terrainRequestedUrl) {
+      return;
+    }
+    this.terrainRequestedUrl = url;
+    const seq = ++this.terrainSeq;
+
+    if (!url) {
+      this.terrainUrl = undefined;
+      this.widget.scene.terrainProvider = new EllipsoidTerrainProvider();
+      this.afterTerrainChanged();
+      return;
+    }
+
+    // `requestVertexNormals` asks for the per-vertex normals a pre-baked pyramid may carry, which
+    // are what let the ground be lit at all: without them a hillside is a flat wash of basemap
+    // with no relief visible in it, which is most of what attaching an elevation model was for.
+    // A pyramid baked without them simply does not send any and nothing here changes.
+    //
+    // The credit is shown on the scene rather than filed behind the engine's collapsed
+    // "data attribution" control, for the same reason the basemap's is: the licences of the freely
+    // available elevation models ask for visible credit. What the pyramid's own metadata claims is
+    // deliberately not used — the pre-baker writes a placeholder string into it — so an
+    // installation states its own or shows none.
+    let provider: CesiumTerrainProvider;
+    try {
+      provider = await CesiumTerrainProvider.fromUrl(url, {
+        requestVertexNormals: true,
+        credit: source.attribution ? new Credit(source.attribution, true) : undefined,
+      });
+    } catch (error) {
+      // A read that failed put nothing in force, so the request it recorded has to be taken back
+      // with it — otherwise asking for that same model again is mistaken for asking for what is
+      // already there and the retry does nothing at all.
+      if (seq === this.terrainSeq) {
+        this.terrainRequestedUrl = this.terrainUrl;
+      }
+      throw error;
+    }
+    // The scene can have been torn down, or asked for a different model, while this was in the
+    // air. Either way this answer is no longer the one wanted.
+    if (seq !== this.terrainSeq || this.widget.isDestroyed()) {
+      return;
+    }
+    this.terrainUrl = url;
+    this.widget.scene.terrainProvider = provider;
+    this.afterTerrainChanged();
+  }
+
+  hasTerrain(): boolean {
+    return this.terrainUrl !== undefined;
+  }
+
+  groundHeight(longitude: number, latitude: number): number {
+    return this.groundHeightAt(longitude, latitude);
+  }
+
+  /**
+   * What has to happen when the ground stops being one shape and starts being another.
+   *
+   * The excavation's walls stood on the old surface and have to be rebuilt on the new one, and
+   * the scene draws only when asked — changing the globe's elevation model moves nothing and
+   * therefore requests nothing, so a scene at rest would keep showing the ellipsoid until the
+   * viewer happened to touch it.
+   *
+   * Lines that belong on the ground are laid out again for the same reason: nothing replaced them,
+   * and yet where they belong has just moved by the whole height of the landscape.
+   */
+  private afterTerrainChanged(): void {
+    for (const layOut of [...this.groundLineLayouts]) {
+      layOut();
+    }
+    this.refreshCutawayGround();
+    this.requestRender();
+  }
+
+  /**
+   * Rebuilds the excavation when the ground under its rim has moved, and does nothing otherwise.
+   *
+   * Called when elevation data settles rather than when the outline changes, which is the only
+   * moment this can be noticed: the outline is recomputed from the survey after every camera rest
+   * and is compared point by point, so an unchanged cave produces an unchanged outline however
+   * far the ground under it has travelled since it was drawn.
+   */
+  private refreshCutawayGround(): void {
+    const footprint = this.cutawayFootprint;
+    if (this.widget.isDestroyed() || !footprint || !this.cutawayFill) {
+      return;
+    }
+    const tops = this.wallTopsFor(footprint);
+    const moved = tops.some(
+      (top, index) => Math.abs(top - (this.cutawayWallTops[index] ?? 0)) > CUTAWAY_RIM_REFRESH_METERS,
+    );
+    if (!moved) {
+      return;
+    }
+    // How far over the opening a viewer has to be depends on how deep it is, and it just got
+    // deeper by the whole height of the hillside.
+    const center = footprintCenter(footprint);
+    this.cutawayPitchLimit = cutawayPitchLimitDegrees(
+      footprint,
+      this.groundHeightAt(center.longitude, center.latitude),
+    );
+    this.replaceCutawayFill(footprint);
+    this.refreshSurface();
+    this.requestRender();
+  }
+
+  /** Puts a freshly built excavation in the scene in place of the one that is there. */
+  private replaceCutawayFill(footprint: Scene3DCutawayFootprint): void {
+    const { scene } = this.widget;
+    const wasShown = this.cutawayFill?.show === true;
+    if (this.cutawayFill) {
+      scene.primitives.remove(this.cutawayFill);
+    }
+    this.cutawayFill = this.buildCutawayFill(footprint);
+    this.cutawayFill.show = wasShown;
+    scene.primitives.add(this.cutawayFill);
+  }
+
   // ---- the ground surface ----
 
   setSurfaceMode(mode: Scene3DSurfaceMode): void {
@@ -877,34 +1103,128 @@ class CesiumScene3D implements Scene3DCore {
     // Each line's own colour object, with the transparency it asked for, so a fade applied later
     // multiplies that rather than flattening every line to the same value.
     const colors: { color: Color; baseAlpha: number }[] = [];
+    // The lines of this batch that belong on the ground, one draped primitive per colour. There is
+    // one per colour rather than one per line because a fade multiplies a material's colour, which
+    // costs nothing, while rebuilding a draped primitive rebuilds its geometry.
+    const draped: { color: Color; baseAlpha: number; primitive: GroundPolylinePrimitive }[] = [];
+    // The last batch as it was handed over, kept because the ground can change shape underneath
+    // it: attaching an elevation model is exactly what turns "height zero" from the right place
+    // for a ground-clamped line into a hillside's worth of error.
+    let items: readonly Scene3DPolyline[] = [];
     let opacity = 1;
+    let visible = true;
+
+    const addFlat = (item: Scene3DPolyline) => {
+      const color = Color.fromCssColorString(item.color);
+      const baseAlpha = color.alpha;
+      color.alpha = baseAlpha * opacity;
+      colors.push({ color, baseAlpha });
+      collection.add({
+        positions: item.positions.map(toCartesian),
+        width: item.widthPixels,
+        // One material object per line, not one shared between them: clearing the collection
+        // destroys each line's material, so a shared instance would be destroyed once per
+        // line and every line after the first would fail. Lines carrying the same colour are
+        // still drawn in one batch — the renderer groups them by the material's value, not by
+        // its identity — so this costs objects, not draw calls.
+        material: Material.fromType(Material.ColorType, { color }),
+        id: item.id,
+      });
+    };
+
+    const addDraped = (onGround: readonly Scene3DPolyline[]) => {
+      const byColor = new Map<string, Scene3DPolyline[]>();
+      for (const item of onGround) {
+        const group = byColor.get(item.color);
+        if (group) {
+          group.push(item);
+        } else {
+          byColor.set(item.color, [item]);
+        }
+      }
+      for (const [css, group] of byColor) {
+        const color = Color.fromCssColorString(css);
+        const baseAlpha = color.alpha;
+        color.alpha = baseAlpha * opacity;
+        const primitive = new GroundPolylinePrimitive({
+          geometryInstances: group.map(
+            (item) =>
+              new GeometryInstance({
+                // Heights are ignored by this geometry by definition — it is a line laid on
+                // whatever the ground turns out to be — which is precisely why it is the right
+                // shape for data that never had a height of its own.
+                geometry: new GroundPolylineGeometry({
+                  positions: item.positions.map(toCartesian),
+                  width: item.widthPixels,
+                }),
+                id: item.id,
+              }),
+          ),
+          appearance: new PolylineMaterialAppearance({
+            material: Material.fromType(Material.ColorType, { color }),
+          }),
+          show: visible,
+        });
+        draped.push({ color, baseAlpha, primitive });
+        this.widget.scene.groundPrimitives.add(primitive);
+      }
+      this.ensureDrapingReference();
+    };
+
+    const clear = () => {
+      collection.removeAll();
+      colors.length = 0;
+      for (const group of draped) {
+        this.widget.scene.groundPrimitives.remove(group.primitive);
+      }
+      draped.length = 0;
+    };
+
+    /**
+     * Puts the batch into the scene, deciding for each line which of the two shapes draws it where
+     * it belongs.
+     *
+     * Draping is only reached for once the ground actually has a shape. On the bare ellipsoid the
+     * ground IS height zero, which is where a ground-clamped line's positions already are, so the
+     * ordinary batch draws it in exactly the right place — and the draped shape would additionally
+     * pull the engine's terrain-height reference data (a third of a megabyte) into an installation
+     * that has no elevation model at all. The second condition is the browser: draping needs a
+     * depth-texture extension that a few drivers do not publish, and where it is missing the flat
+     * rendering is the honest fallback rather than a reason to drop the line.
+     */
+    const layOut = () => {
+      clear();
+      const drape = this.drapedLinesAvailable && this.terrainUrl !== undefined;
+      const onGround: Scene3DPolyline[] = [];
+      for (const item of items) {
+        if (drape && item.clampToGround) {
+          onGround.push(item);
+        } else {
+          addFlat(item);
+        }
+      }
+      if (onGround.length > 0) {
+        addDraped(onGround);
+      }
+    };
+    this.groundLineLayouts.add(layOut);
+
     return this.registerVectorSource<Scene3DPolyline>(
       id,
       () => {
-        collection.removeAll();
-        colors.length = 0;
+        items = [];
+        clear();
       },
-      (items) => {
-        for (const item of items) {
-          const color = Color.fromCssColorString(item.color);
-          const baseAlpha = color.alpha;
-          color.alpha = baseAlpha * opacity;
-          colors.push({ color, baseAlpha });
-          collection.add({
-            positions: item.positions.map(toCartesian),
-            width: item.widthPixels,
-            // One material object per line, not one shared between them: clearing the collection
-            // destroys each line's material, so a shared instance would be destroyed once per
-            // line and every line after the first would fail. Lines carrying the same colour are
-            // still drawn in one batch — the renderer groups them by the material's value, not by
-            // its identity — so this costs objects, not draw calls.
-            material: Material.fromType(Material.ColorType, { color }),
-            id: item.id,
-          });
+      (next) => {
+        items = next;
+        layOut();
+      },
+      (next) => {
+        visible = next;
+        collection.show = next;
+        for (const group of draped) {
+          group.primitive.show = next;
         }
-      },
-      (visible) => {
-        collection.show = visible;
       },
       (next) => {
         opacity = next;
@@ -916,8 +1236,18 @@ class CesiumScene3D implements Scene3DCore {
           // a survey counted in thousands of components for what is a change of shade.
           entry.color.alpha = entry.baseAlpha * next;
         }
+        for (const group of draped) {
+          group.color.alpha = group.baseAlpha * next;
+        }
       },
-      () => this.widget.scene.primitives.remove(collection),
+      () => {
+        this.groundLineLayouts.delete(layOut);
+        for (const group of draped) {
+          this.widget.scene.groundPrimitives.remove(group.primitive);
+        }
+        draped.length = 0;
+        this.widget.scene.primitives.remove(collection);
+      },
     );
   }
 
@@ -1031,6 +1361,41 @@ class CesiumScene3D implements Scene3DCore {
   }
 
   /**
+   * Starts the one load a draped line needs before it can be drawn, and deals with both endings.
+   *
+   * A line laid on the ground is projected onto it against a coarse worldwide height reference,
+   * which the engine fetches the first time one is drawn. It starts that fetch from inside a
+   * frame, abandons that frame, and asks for no other when the fetch lands — so on a scene that
+   * draws only when it is asked to, the lines would sit invisible until the viewer next touched
+   * the camera, which is indistinguishable from data that never arrived.
+   *
+   * If the reference cannot be fetched at all, nothing can be draped. That is the same position a
+   * browser without the necessary extension is in, so it is answered the same way — the lines go
+   * back into the ordinary batch at the positions they were given, which is where the smooth globe
+   * draws them. Real data drawn a little out of place is very much better than real data silently
+   * not drawn.
+   */
+  private ensureDrapingReference(): void {
+    if (this.drapingReference) {
+      return;
+    }
+    this.drapingReference = GroundPolylinePrimitive.initializeTerrainHeights();
+    void this.drapingReference.then(
+      () => this.requestRender(),
+      () => {
+        this.drapedLinesAvailable = false;
+        if (this.widget.isDestroyed()) {
+          return;
+        }
+        for (const layOut of [...this.groundLineLayouts]) {
+          layOut();
+        }
+        this.requestRender();
+      },
+    );
+  }
+
+  /**
    * The excavation itself: the walls of the shaft and the floor at the bottom of it.
    *
    * Removing ground draws nothing in its place, and the engine's own "what is under the surface"
@@ -1046,10 +1411,10 @@ class CesiumScene3D implements Scene3DCore {
    */
   private buildCutawayFill(footprint: Scene3DCutawayFootprint): Primitive {
     const ring = footprint.ring.map(toCartesian);
-    const wallTops = footprint.ring.map(
-      (position) =>
-        this.groundHeightAt(position.longitude, position.latitude) + CUTAWAY_RIM_OVERLAP_METERS,
-    );
+    const wallTops = this.wallTopsFor(footprint);
+    // Remembered as they are used, so that the next time elevation data settles there is
+    // something to compare against.
+    this.cutawayWallTops = wallTops;
     const floors = footprint.ring.map(() => footprint.floorHeight);
 
     const walls = new GeometryInstance({
@@ -1089,6 +1454,21 @@ class CesiumScene3D implements Scene3DCore {
       allowPicking: false,
       show: false,
     });
+  }
+
+  /**
+   * How high the wall of the excavation stands at each point of the outline: the ground there,
+   * carried a little above it so the rim leaves no hairline of background showing.
+   *
+   * On a bare ellipsoid every one of these is the same number and the rim is a flat disc. With an
+   * elevation model they are ninety-six different numbers and the rim follows the hillside, which
+   * is what an excavation cut into real ground looks like.
+   */
+  private wallTopsFor(footprint: Scene3DCutawayFootprint): number[] {
+    return footprint.ring.map(
+      (position) =>
+        this.groundHeightAt(position.longitude, position.latitude) + CUTAWAY_RIM_OVERLAP_METERS,
+    );
   }
 
   /** What the surface state would be right now, from what was asked for and what is possible. */

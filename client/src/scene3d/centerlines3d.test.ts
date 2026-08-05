@@ -40,6 +40,135 @@ function feature(geometry: unknown, properties: Record<string, unknown> = {}) {
   };
 }
 
+describe('where a survey is drawn once the ground has relief', () => {
+  /** A cave whose top is at 700 m and which drops 100 m, plus the survey's own reported top. */
+  const cave = () =>
+    collection([
+      feature(
+        {
+          type: 'LineString',
+          coordinates: [
+            [25.44, 45.53, 700],
+            [25.441, 45.53, 640],
+            [25.442, 45.531, 600],
+          ],
+        },
+        { topAltitudeM: 700 },
+      ),
+    ]);
+
+  it('puts the survey at the altitude it was surveyed at', () => {
+    // With a hillside drawn, the honest place for a cave is inside it. Anchoring the top to the
+    // ellipsoid — which is the only honest thing to do without relief — would bury the whole cave
+    // eleven hundred metres under its own hillside.
+    const polylines = centerlinePolylines(cave(), { absolute: true, offsetM: 0 });
+
+    expect(polylines.flatMap((line) => line.positions.map((p) => p.height))).toContain(700);
+    expect(polylines.at(-1)!.positions.at(-1)!.height).toBe(600);
+  });
+
+  it('raises the survey by the correction the terrain source needs, and by nothing else', () => {
+    // A source whose tiles were converted to heights above the ellipsoid when they were baked
+    // draws its ground where it really is, so a surveyed altitude — which is measured from sea
+    // level — has to travel the geoid undulation before it will meet that ground.
+    const polylines = centerlinePolylines(cave(), { absolute: true, offsetM: 43.03 });
+
+    expect(polylines[0].positions[0].height).toBeCloseTo(743.03, 6);
+    expect(polylines.at(-1)!.positions.at(-1)!.height).toBeCloseTo(643.03, 6);
+  });
+
+  it('colours the same passage the same way wherever the cave is drawn', () => {
+    // The bands mean metres below the top of the cave and nothing else. Moving the cave from the
+    // ellipsoid onto its hillside must not repaint it, or the same passage would change colour
+    // when an elevation model finished loading.
+    const anchored = centerlinePolylines(cave());
+    const onTerrain = centerlinePolylines(cave(), { absolute: true, offsetM: 43.03 });
+
+    expect(onTerrain.map((line) => line.color)).toEqual(anchored.map((line) => line.color));
+    expect(onTerrain).toHaveLength(anchored.length);
+    // Every drawn height moved by exactly the same amount: the shape of the cave is untouched.
+    const anchoredHeights = anchored.flatMap((line) => line.positions.map((p) => p.height));
+    const terrainHeights = onTerrain.flatMap((line) => line.positions.map((p) => p.height));
+    expect(terrainHeights.map((h, i) => h - anchoredHeights[i] - 743.03)).toEqual(
+      terrainHeights.map(() => 0),
+    );
+  });
+
+  it('moves the chrome anchor with the cave it is pinned to', () => {
+    // The anchor is the survey's highest point, which is where a label about the cave stands. Left
+    // behind at the ellipsoid it would name a cave a kilometre above it.
+    const [line] = centerlinePolylines(cave(), { absolute: true, offsetM: 43.03 });
+    const anchor = (line.id as { anchor?: { height: number } }).anchor;
+
+    expect(anchor?.height).toBeCloseTo(743.03, 6);
+  });
+
+  it('hangs the cave from the surface when nothing says the ground has relief', () => {
+    // The shipped state, and the one to fall back to: a cave placed at its real altitude over a
+    // globe with no hillside on it would float a kilometre above the surface, above the entrance
+    // markers standing on it and above a camera flown down to the ground.
+    expect(centerlinePolylines(cave())[0].positions[0].height).toBe(0);
+  });
+
+  /** The compact representation served for a whole region at once: a plan, and no depths at all. */
+  const flatCave = () =>
+    collection([
+      feature(
+        {
+          type: 'LineString',
+          coordinates: [
+            [22.7, 46.5],
+            [22.701, 46.5],
+            [22.702, 46.501],
+          ],
+        },
+        { hasZ: false, detail: false },
+      ),
+    ]);
+
+  it('lays a survey that arrived without depths on the ground instead of at sea level', () => {
+    // The common case rather than the exception: at any ordinary browsing zoom the server sends
+    // most caves as a flat plan. Its coordinates arrive as pairs, which read as height zero — and
+    // treating that zero as a surveyed altitude while the ground is a real hillside draws the
+    // whole survey an entire hillside below its own entrance markers, which are on the surface.
+    const polylines = centerlinePolylines(flatCave(), { absolute: true, offsetM: 0 });
+
+    expect(polylines).toHaveLength(1);
+    expect(polylines[0].clampToGround).toBe(true);
+    expect(polylines[0].positions.map((p) => p.height)).toEqual([0, 0, 0]);
+  });
+
+  it('does not lift a row without depths by the terrain correction either', () => {
+    // The correction exists to carry a SURVEYED altitude onto an ellipsoidal model's ground. There
+    // is no surveyed altitude here, so applying it would only place the plan forty metres over the
+    // hillside instead of on it.
+    const [line] = centerlinePolylines(flatCave(), { absolute: true, offsetM: 43.03 });
+
+    expect(line.positions.map((p) => p.height)).toEqual([0, 0, 0]);
+    expect(line.clampToGround).toBe(true);
+  });
+
+  it('pins the chrome for a row without depths to the ground rather than to the ellipsoid', () => {
+    const [line] = centerlinePolylines(flatCave(), { absolute: true, offsetM: 43.03 });
+    const anchor = (line.id as { anchor?: { height: number; onGround?: boolean } }).anchor;
+
+    expect(anchor).toMatchObject({ height: 0, onGround: true });
+  });
+
+  it('draws a row without depths in the first band, whatever its coordinates say', () => {
+    // Nothing here is at a depth, so nothing here can be coloured by one.
+    const polylines = centerlinePolylines(flatCave(), { absolute: true, offsetM: 0 });
+
+    expect(polylines.map((line) => line.color)).toEqual([CENTERLINE_DEPTH_BANDS[0].color]);
+  });
+
+  it('keeps a row that does carry depths off the ground, so it is drawn where it was surveyed', () => {
+    const [line] = centerlinePolylines(cave(), { absolute: true, offsetM: 0 });
+
+    expect(line.clampToGround).toBeUndefined();
+  });
+});
+
 describe('centerlinePolylines', () => {
   it('draws every component of a survey as its own line, hanging beneath the surface', () => {
     const polylines = centerlinePolylines(

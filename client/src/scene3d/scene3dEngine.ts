@@ -24,8 +24,8 @@
 //
 // Members are grouped so that an implementation can honestly declare which groups it satisfies.
 // Today's implementation satisfies `Scene3DCore` (lifecycle, imagery, camera, coordinates,
-// picking, vector sources and the ground surface); model loading is declared here and is not
-// implemented yet, so no code claims to provide it.
+// picking, vector sources, the ground surface and its elevation); model loading is declared here
+// and is not implemented yet, so no code claims to provide it.
 
 /** A position on the globe: degrees, plus metres above the WGS84 ellipsoid. */
 export interface Scene3DPosition {
@@ -42,6 +42,20 @@ export interface Scene3DCameraState extends Scene3DPosition {
   /** Angle below the horizon: -90 looks straight down, 0 looks at the horizon. */
   pitch: number;
   roll: number;
+}
+
+/**
+ * A position that may belong on the ground rather than at a height of its own.
+ *
+ * The distinction cannot be recovered from the numbers. A marker dropped onto the ground has no
+ * height until something says how high the ground under it is, and until an elevation model is
+ * loaded that answer is zero everywhere — so an anchor written as "zero" and an anchor written as
+ * "wherever the ground is" are the same object, right up to the moment they stop being. Whatever
+ * projects one of these has to resolve it against the ground first; `height` is what to use when
+ * there is no better answer.
+ */
+export interface Scene3DAnchor extends Scene3DPosition {
+  onGround?: boolean;
 }
 
 /** A screen position in CSS pixels relative to the scene's drawing surface. */
@@ -322,6 +336,26 @@ export interface Scene3DPolyline {
   widthPixels: number;
   /** CSS colour string. */
   color: string;
+  /**
+   * Lays the line on the ground along its whole length, ignoring `position.height`.
+   *
+   * This is the line equivalent of a marker dropped onto the terrain, and it exists for the same
+   * reason: some geometry describes a place on the surface rather than a height above it — the
+   * outline of a karst area, the plan of a cave whose depths were never surveyed — and a height of
+   * its own is exactly what it does not have. While the globe is the bare ellipsoid the two are
+   * the same thing, because the ellipsoid IS the ground and these positions are already on it;
+   * with an elevation model loaded they are a whole hillside apart, which in the Carpathian karst
+   * this application is for is around eleven hundred metres.
+   *
+   * An implementation that cannot drape a line on this browser is expected to fall back to drawing
+   * it at the positions given rather than to drop it: that is the bare-ellipsoid rendering, which
+   * is exactly right until an elevation model is attached and legible even then.
+   *
+   * Where the ground has been cut away, a line that lies on it has nothing left to lie on and is
+   * not drawn across the opening. That is the honest consequence of removing the ground rather
+   * than something to work around.
+   */
+  clampToGround?: boolean;
   /** Round-tripped by reference to `Scene3DPick.id`. */
   id: unknown;
 }
@@ -426,6 +460,49 @@ export interface Scene3DSurface {
   setCutawayFootprint(footprint: Scene3DCutawayFootprint | undefined): void;
 }
 
+// ---- the ground's elevation ---------------------------------------------------
+
+/**
+ * An elevation model for the globe's surface: a pre-baked pyramid of terrain tiles served by this
+ * installation, named by the URL its `layer.json` sits under.
+ *
+ * Deliberately not a layer in the imagery catalog. There is one ground and it has one shape, so
+ * this is not something a viewer chooses between or fades: it is either configured for the
+ * installation or the globe is the smooth reference ellipsoid, which is what an installation that
+ * has not baked one draws.
+ */
+export interface Scene3DTerrainSource {
+  /** Directory holding `layer.json`, with a trailing slash. */
+  url: string;
+  /** Credit the elevation data's licence requires; shown on the scene, not hidden behind a link. */
+  attribution?: string;
+}
+
+export interface Scene3DTerrain {
+  /**
+   * Draws the ground from this elevation model, or with `undefined` from the reference ellipsoid.
+   *
+   * Resolves once the model has been read and the globe is drawing from it; rejects when it could
+   * not be read at all, which the caller is expected to turn into a visible explanation rather
+   * than a globe that quietly has no ground on it. Calling it again with a source already in force
+   * does nothing — attaching one discards every surface tile the globe is holding.
+   */
+  setTerrainSource(source: Scene3DTerrainSource | undefined): Promise<void>;
+  /** True while an elevation model is in force rather than the bare ellipsoid. */
+  hasTerrain(): boolean;
+  /**
+   * Height of the drawn ground at a point, in metres above the ellipsoid, or the ellipsoid itself
+   * where nothing says otherwise.
+   *
+   * The answer is what is on the screen now and not what the elevation model ultimately holds:
+   * before the tiles covering a point have been fetched and refined, the globe answers from a
+   * coarser surface than it will a second later. Callers that place something once must therefore
+   * be prepared to place it again, and callers that place something on every frame get that for
+   * free.
+   */
+  groundHeight(longitude: number, latitude: number): number;
+}
+
 // ---- models (declared, not implemented yet) ----------------------------------
 
 export interface Scene3DModelOptions {
@@ -452,6 +529,7 @@ export interface Scene3DEngine
     Scene3DPicking,
     Scene3DVectorSources,
     Scene3DSurface,
+    Scene3DTerrain,
     Scene3DModels {}
 
 /**
@@ -466,4 +544,5 @@ export type Scene3DCore = Scene3DLifecycle &
   Scene3DCoordinates &
   Scene3DPicking &
   Scene3DVectorSources &
-  Scene3DSurface;
+  Scene3DSurface &
+  Scene3DTerrain;

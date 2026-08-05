@@ -97,6 +97,8 @@ try
         .BindConfiguration(AccessOptions.SectionName);
     builder.Services.AddOptions<MapOptions>()
         .BindConfiguration(MapOptions.SectionName);
+    builder.Services.AddOptions<TerrainOptions>()
+        .BindConfiguration(TerrainOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
     // Credential-guessing protection: per-IP fixed window on the auth surface.
@@ -228,6 +230,15 @@ try
                     "Auth:DefaultPermissionGroups names no existing permission group: {Slug}", unknown);
             }
         }
+    }
+
+    // An elevation model is described by the operator and read by nobody else, so a description
+    // that contradicts itself has no symptom until somebody notices every cave sitting off its
+    // hillside. Said once, at startup, rather than left to be discovered.
+    foreach (var warning in app.Services.GetRequiredService<IOptions<TerrainOptions>>()
+                 .Value.ConfigurationWarnings())
+    {
+        Log.Warning("Terrain configuration: {Warning}", warning);
     }
 
     // `dotnet run -- seed-demo`: load the demo dataset and exit.

@@ -24,6 +24,10 @@ import {
   type CaveData3DHandle,
   type CaveData3DState,
 } from '../../scene3d/caveData3d.ts';
+import {
+  ANCHORED_TO_SURFACE,
+  type Altitude3DPlacement,
+} from '../../scene3d/centerlines3d.ts';
 import { geoJsonBounds } from '../../scene3d/geoJson3d.ts';
 import type { OverlayRect } from '../../scene3d/overlayPlacement.ts';
 import { activePreset, presetCamera, type Camera3DPreset } from '../../scene3d/presets3d.ts';
@@ -35,12 +39,16 @@ import {
   type Scene3DPickPayload,
 } from '../../scene3d/selection3d.ts';
 import type {
+  Scene3DAnchor,
   Scene3DCore,
-  Scene3DPosition,
   Scene3DProjection,
   Scene3DScreenPosition,
   Scene3DSurfaceState,
 } from '../../scene3d/scene3dEngine.ts';
+import {
+  checkTerrainSource,
+  type TerrainSourceProblem,
+} from '../../scene3d/terrainSource3d.ts';
 import type { Scene3DSession } from '../../scene3d/scene3dContext.ts';
 import { attachScene3dHash } from '../../scene3d/urlHash3d.ts';
 import { attachViewSync3d } from '../../scene3d/viewSync3d.ts';
@@ -51,7 +59,7 @@ import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
 import Scene3DCameraControls from './Scene3DCameraControls.tsx';
 import Scene3DLayerPanel from './Scene3DLayerPanel.tsx';
 import Scene3DOverlay from './Scene3DOverlay.tsx';
-import { cutawayPauseMessage } from './surfaceMessages.ts';
+import { cutawayPauseMessage, terrainProblemMessage } from './surfaceMessages.ts';
 import './Scene3DView.css';
 
 export interface Scene3DViewProps {
@@ -373,10 +381,21 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // that is handled by remounting the overlay on the counter below rather than by rebuilding
   // these — a subscription taken on a scene that no longer exists would otherwise be held for
   // ever and no frame of the new one would reach the overlay.
-  const project = useCallback(
-    (position: Scene3DPosition) => engineRef.current?.positionToScreen(position),
-    [],
-  );
+  const project = useCallback((position: Scene3DAnchor) => {
+    const engine = engineRef.current;
+    if (!engine) {
+      return undefined;
+    }
+    // An anchor for something drawn on the ground has no height of its own — nothing that built
+    // it could know one — so the scene is asked where the ground is now. Asked on every frame
+    // rather than once, because "now" changes: elevation tiles refine after the camera arrives,
+    // and an anchor resolved against the coarse surface would sit hundreds of metres off the one
+    // that is finally drawn.
+    const resolved = position.onGround
+      ? { ...position, height: engine.groundHeight(position.longitude, position.latitude) }
+      : position;
+    return engine.positionToScreen(resolved);
+  }, []);
 
   const subscribeFrames = useCallback(
     (listener: () => void) => engineRef.current?.onBeforeRender(listener) ?? (() => {}),
@@ -441,6 +460,88 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     }
   }, [mapConfig, engineVersion]);
 
+  // ---- the ground's elevation ----
+
+  /** Why the configured elevation model is not being drawn, when one is configured and is not. */
+  const [terrainProblem, setTerrainProblem] = useState<TerrainSourceProblem>();
+  /**
+   * Where surveyed altitudes go. It follows what is actually drawn rather than what is configured:
+   * a cave placed at its real altitude over a globe that turned out to have no relief on it would
+   * hang a kilometre above the surface, which is the failure the anchoring exists to prevent.
+   */
+  const [placement, setPlacement] = useState<Altitude3DPlacement>(ANCHORED_TO_SURFACE);
+
+  const terrain = mapConfig?.terrain;
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) {
+      return;
+    }
+    let cancelled = false;
+    setTerrainProblem(undefined);
+
+    if (!terrain) {
+      void engine.setTerrainSource(undefined);
+      setPlacement(ANCHORED_TO_SURFACE);
+      return;
+    }
+
+    // Refusing an elevation model has to take any model already attached down with it, not merely
+    // decline to attach this one. The two states this component holds are a description of what is
+    // actually drawn: saying "the ground is a smooth globe" and placing every cave on a smooth
+    // globe while the globe still has a hillside on it is the one combination that is wrong in
+    // both directions at once — the caves end up a hillside below their own entrance markers, and
+    // the sentence on screen sends the operator to look at the wrong thing entirely.
+    const refuse = (problem: TerrainSourceProblem) => {
+      void engine.setTerrainSource(undefined);
+      setTerrainProblem(problem);
+      setPlacement(ANCHORED_TO_SURFACE);
+    };
+
+    void (async () => {
+      // Looked at before the engine is handed it, and this order is the whole point. A pyramid
+      // served in a form the engine cannot parse produces a globe with no ground, every tile
+      // answering 200 and not one error anywhere — so the only way anybody finds out is to check
+      // first and refuse. Refusing leaves the ordinary smooth globe, which works.
+      const problem = await checkTerrainSource(terrain.url);
+      if (cancelled) {
+        return;
+      }
+      if (problem) {
+        refuse(problem);
+        return;
+      }
+      try {
+        await engine.setTerrainSource({
+          url: terrain.url,
+          ...(terrain.attribution ? { attribution: terrain.attribution } : {}),
+        });
+      } catch {
+        if (!cancelled) {
+          refuse('unreachable');
+        }
+        return;
+      }
+      if (!cancelled) {
+        // Only now, and only because the ground is really there: the correction comes from the
+        // server, which resolved it from what the source says its heights mean.
+        setPlacement({ absolute: true, offsetM: terrain.surveyHeightOffsetM });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [terrain, engineVersion]);
+
+  // Applied through its own effect rather than from the one above, so that a scene rebuilt — or a
+  // second view taking the surface over — comes back with the caves where the ground is instead of
+  // where the ellipsoid is.
+  useEffect(() => {
+    dataRef.current?.setAltitudePlacement(placement);
+  }, [placement, engineVersion, showingHere]);
+
   // Declared after the loader is attached, and keyed on the same counter, so a scene that is
   // rebuilt comes back with the settings the viewer had rather than with the defaults.
   useEffect(() => {
@@ -491,6 +592,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     dataState.withheldCount > 0 ? t('map.centerlinesWithheld', { count: dataState.withheldCount }) : undefined,
     dataState.flatCount > 0 ? t('scene3d.centerlinesFlat', { count: dataState.flatCount }) : undefined,
     surfaceState?.pausedBy ? t(cutawayPauseMessage(surfaceState.pausedBy)) : undefined,
+    // The fourth is not about the data at all: this installation was configured with an elevation
+    // model that cannot be drawn, and the globe a viewer is looking at is the smooth one. Said
+    // here because there is nowhere else it would ever show up.
+    terrainProblem ? t(terrainProblemMessage(terrainProblem)) : undefined,
   ].filter((notice): notice is string => notice !== undefined);
 
   return (
