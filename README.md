@@ -40,6 +40,15 @@ Previous versions:
   You only ever find documents you are allowed to read, and replaced versions of a document
   are searchable only by the people who could replace it — a paragraph removed in a new version
   does not stay findable in the old one.
+- **Read a document without downloading it** — a document has its own page, saying what it is,
+  which version is current, where it is filed and how far reading its text has got, and showing
+  the document itself: PDFs a page at a time as pictures drawn by the server, photos, plain text
+  and Markdown, and audio and video played in the browser. A search hit opens that page at the
+  page the phrase was found on. Nothing is transcoded and no scanned page is invented: where a
+  format cannot be shown, the codec is not one your browser plays, or the file simply holds no
+  text, the page says which of those it is and offers the download — you are never left looking
+  at a blank panel wondering. It works on a phone, and someone allowed to read a protected cave's
+  report can read it there without ever being able to download the file.
 - **Cabinets** — a filing tree documents live in ("Club archive / Bulletins / 1987"), and the
   unit permissions are granted on: one rule can hand a committee the whole archive instead of
   one rule per document. A document can sit on several shelves at once, so there is no

@@ -5,7 +5,6 @@ import { App, AutoComplete, Input, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useNominatim, useSearch, type FeatureKind } from '../../api/hooks.ts';
-import { downloadFile } from '../../api/download.ts';
 import { featureDetailPath } from '../features/featureNavigation.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { flyTo } from '../../map/mapContext.ts';
@@ -39,7 +38,14 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
   const documentOptions: { value: string; label: ReactNode; disabled?: boolean }[] = (
     documents?.items ?? []
   ).map((hit) => ({
-    value: `document:${hit.fileId}`,
+    // The document, not the file that currently carries it: a hit against a superseded
+    // revision still belongs to the same document, and the page is addressed by document.
+    // The matched position rides along only where the format numbers anything — printing a
+    // page number for a file that arrived whole would be this interface inventing a fact.
+    value:
+      hit.division === 'whole'
+        ? `document:${hit.id}`
+        : `document:${hit.id}:${hit.pageNumber}`,
     label: <SearchDocumentHit hit={hit} />,
   }));
 
@@ -121,12 +127,14 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
       return;
     }
     if (value.startsWith('document:')) {
-      // The file itself, because there is nowhere else to send someone yet: a document has no
-      // page of its own in this application. Fetched with the caller's token rather than
-      // linked, since the content route will not answer a plain anchor.
-      const fileId = value.slice('document:'.length);
-      downloadFile(`/api/v1/files/${encodeURIComponent(fileId)}/content`).catch(() =>
-        message.error(t('search.openFailed')),
+      // The document's own page, opened at the passage that matched where there is one to
+      // open at. Searching for a sentence and being handed a file to download was never
+      // reading it — and it threw away the one thing the hit knew.
+      const [, documentId, pageNumber] = value.split(':');
+      navigate(
+        pageNumber === undefined
+          ? `/documents/${encodeURIComponent(documentId)}`
+          : `/documents/${encodeURIComponent(documentId)}?page=${encodeURIComponent(pageNumber)}`,
       );
       return;
     }

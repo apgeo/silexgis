@@ -55,11 +55,15 @@ export default function AppLayout() {
   // "settings" is listed so an unmatched path does not fall through to highlighting the map.
   // It matches no menu item, so nothing lights up — settings is not a sidebar destination.
   const sections = [
-    'dashboard', 'caves', 'features', 'geodata', 'cabinets', 'trip-logs', 'caving-groups', 'cavers',
+    'dashboard', 'caves', 'features', 'geodata', 'cabinets', 'documents', 'trip-logs',
+    'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
     'admin/feature-sets', 'admin/document-types', 'settings',
   ] as const;
-  const selectedKey = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
+  const section = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
+  // A document's own page is not a sidebar destination of its own — documents are reached
+  // through the cabinets they are filed in, so that is what stays lit while one is open.
+  const selectedKey = section === 'documents' ? 'cabinets' : section;
 
   return (
     <Layout style={{ height: '100%' }}>

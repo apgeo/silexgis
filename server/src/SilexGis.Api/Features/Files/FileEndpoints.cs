@@ -71,12 +71,16 @@ public static class FileEndpoints
             .WithSummary("Deletes a superseded (non-current) version of a file's document.");
 
         // Content delivery authenticates via the short-lived token in the URL — browsers
-        // load these ambiently (img/src, geotiff.js) and cannot send bearer headers.
-        // These two routes are on the documented anonymous allow-list.
+        // load these ambiently (img/src, media elements, geotiff.js) and cannot send bearer
+        // headers. Every route mapped below is on the documented anonymous allow-list; adding
+        // one here without adding it there is what makes the unauthenticated surface larger
+        // than the record of it.
         files.MapGet("/{id:guid}/content", ContentAsync).AllowAnonymous()
             .WithSummary("Streams file content (honors Range); token-authenticated.");
         files.MapGet("/{id:guid}/thumbnail", ThumbnailAsync).AllowAnonymous()
             .WithSummary("WebP thumbnail for image files (sizes 160/480/1200); token-authenticated.");
+        files.MapGet("/{id:guid}/pages/{page:int}/render", PageRenderAsync).AllowAnonymous()
+            .WithSummary("WebP picture of one page of a paged document (sizes 160/480/1200/2400); token-authenticated.");
 
         return api;
     }
@@ -298,6 +302,7 @@ public static class FileEndpoints
         DocumentWriteService documents,
         IFileStore fileStore,
         ThumbnailService thumbnails,
+        PageRenderService pages,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -324,11 +329,14 @@ public static class FileEndpoints
             return ToProblem(e);
         }
 
-        // Purge bytes and cached thumbnails after the rows are gone (best-effort; missing files are fine).
+        // Purge bytes and every cached rendering after the rows are gone (best-effort; missing
+        // files are fine). A rendering outliving the file it was drawn from would be a copy of
+        // deleted content nothing knows how to find.
         foreach (var purged in removed)
         {
             await fileStore.DeleteAsync(purged.StoragePath, ct);
             thumbnails.Purge(purged.Id);
+            pages.Purge(purged.Id);
         }
 
         return TypedResults.NoContent();
@@ -551,5 +559,63 @@ public static class FileEndpoints
         }
 
         return TypedResults.PhysicalFile(path, contentType: "image/webp");
+    }
+
+    private static async Task<Results<PhysicalFileHttpResult, ProblemHttpResult>> PageRenderAsync(
+        Guid id,
+        int page,
+        string token,
+        int? size,
+        SilexGisDbContext db,
+        PageRenderService pages,
+        IFileAccessTokenService tokens,
+        CancellationToken ct)
+    {
+        // Either reach opens a rendering, exactly as it does for a thumbnail, and for the same
+        // reason: these bytes are drawn here, they show what the page shows, and they carry
+        // nothing the page did not. That is what makes reading a document in this application
+        // safe to offer to someone who may not have the file — a viewer that reached for the
+        // stored bytes instead would hand over precisely what was being withheld.
+        if (tokens.Validate(token, id) is null)
+        {
+            return ApiProblems.NotFound("file.not_found");
+        }
+
+        var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
+        if (file is null || !PageRenderService.CanRender(file.MimeType))
+        {
+            return ApiProblems.NotFound("file.not_found");
+        }
+
+        // Page numbers are the reader's, so they start at one; the upper bound is only checked
+        // where the file said how many pages it has, since a renderer asked for a page past the
+        // end reports its own failure and there is nothing better to say about it.
+        if (page < 1 || (file.PageCount is int count && page > count))
+        {
+            return ApiProblems.NotFound("file.page_not_found");
+        }
+
+        var effectiveSize = size ?? 1200;
+        if (!PageRenderService.AllowedSizes.Contains(effectiveSize))
+        {
+            return ApiProblems.BadRequest(
+                "file.render_size_unsupported",
+                $"Supported sizes: {string.Join(", ", PageRenderService.AllowedSizes)}.");
+        }
+
+        string? path;
+        try
+        {
+            path = await pages.GetOrCreateAsync(file.Id, file.StoragePath, page, effectiveSize, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // A page that will not draw is a fact about this file, not a fault in the request.
+            return ApiProblems.BadRequest("file.render_failed", "The page could not be drawn.");
+        }
+
+        return path is null
+            ? ApiProblems.NotFound("file.page_not_found")
+            : TypedResults.PhysicalFile(path, contentType: "image/webp");
     }
 }

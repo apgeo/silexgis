@@ -2,6 +2,7 @@
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import '../../i18n';
 
 const cabinets = [
@@ -71,15 +72,22 @@ vi.mock('../../api/hooks.ts', async () => {
   };
 });
 
+// Width is the only thing this flips; jsdom reports none, so the phone layout is only ever
+// reached by saying so.
+let mobile = false;
+vi.mock('../../hooks/useIsMobile.ts', () => ({ useIsMobile: () => mobile }));
+
 const { default: CabinetsPage } = await import('./CabinetsPage.tsx');
 
 afterEach(cleanup);
 
 function renderPage() {
   return render(
-    <App>
-      <CabinetsPage />
-    </App>,
+    <MemoryRouter>
+      <App>
+        <CabinetsPage />
+      </App>
+    </MemoryRouter>,
   );
 }
 
@@ -135,5 +143,25 @@ describe('CabinetsPage', () => {
       documentId: 'd1',
       filed: true,
     });
+  });
+
+  it('stacks the shelf above the documents on a phone instead of beside them, and still opens one', () => {
+    capabilities = { domains: { documents: 'read' } };
+    mobile = false;
+    const { container, unmount } = renderPage();
+    // On a screen with room for both, the tree keeps its own column beside the listing.
+    expect(container.querySelector('.ant-layout-sider')).not.toBeNull();
+    unmount();
+
+    mobile = true;
+    const phone = renderPage();
+    // The same page on a phone: no fixed column eating the width, the shelf folded into a
+    // panel above the documents, and picking one still gets to the documents.
+    expect(phone.container.querySelector('.ant-layout-sider')).toBeNull();
+    expect(phone.container.querySelector('.ant-collapse')).not.toBeNull();
+
+    fireEvent.click(screen.getByText('Surveys (2)'));
+    expect(screen.getByText('Cave survey 2026')).toBeInTheDocument();
+    mobile = false;
   });
 });
