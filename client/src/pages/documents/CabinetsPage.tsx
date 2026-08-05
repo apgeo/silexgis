@@ -4,11 +4,12 @@ import {
   DeleteOutlined, EditOutlined, FolderOpenOutlined, FolderOutlined, PlusOutlined,
 } from '@ant-design/icons';
 import {
-  App, Alert, Breadcrumb, Button, Empty, Flex, Form, Input, Layout, Modal, Popconfirm, Select,
-  Space, Spin, Switch, Table, Tag, Tooltip, Tree, Typography,
+  App, Alert, Breadcrumb, Button, Collapse, Empty, Flex, Form, Input, Layout, Modal, Popconfirm,
+  Select, Space, Spin, Switch, Table, Tag, Tooltip, Tree, Typography,
 } from 'antd';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { ApiError } from '../../api/client.ts';
 import {
   hasAccessAction,
@@ -22,6 +23,7 @@ import {
   type CabinetDocument,
   type CabinetInfo,
 } from '../../api/hooks.ts';
+import { useIsMobile } from '../../hooks/useIsMobile.ts';
 
 /** Bytes as the shortest unit that keeps the number readable. */
 function formatSize(bytes: number | null): string {
@@ -78,6 +80,7 @@ function toTree(cabinets: CabinetInfo[]): DataNode[] {
 export default function CabinetsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  const isMobile = useIsMobile();
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.documents, 'read');
   // One right governs the tree: whoever may write documents may arrange where they live.
@@ -86,6 +89,9 @@ export default function CabinetsPage() {
 
   const { data: cabinets, isPending } = useCabinets(canRead);
   const [selected, setSelected] = useState<string>();
+  // Where the shelf is stacked above the documents rather than beside them, it starts open —
+  // nothing has been picked yet, so the tree is the only thing there is to do.
+  const [shelfOpen, setShelfOpen] = useState(true);
   const [includeSubtree, setIncludeSubtree] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -234,185 +240,207 @@ export default function CabinetsPage() {
     .map((id) => byId.get(id))
     .filter((cabinet): cabinet is CabinetInfo => cabinet !== undefined);
 
-  return (
-    <Layout style={{ height: '100%', background: 'transparent' }}>
-      <Layout.Sider width={280} theme="light" style={{ padding: 16, overflow: 'auto' }}>
-        <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
-          <Typography.Text strong>{t('cabinets.title')}</Typography.Text>
-          {canWrite && (
-            <Button
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setEditing('new');
-                form.resetFields();
-                form.setFieldsValue({ parentId: selected });
-              }}
-            >
-              {t('cabinets.new')}
-            </Button>
-          )}
-        </Flex>
-        {isPending ? (
-          <Spin />
-        ) : treeData.length === 0 ? (
-          <Empty description={t('cabinets.empty')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-        ) : (
-          <Tree
-            showIcon
-            blockNode
-            defaultExpandAll
-            draggable={canWrite}
-            onDrop={onDrop}
-            treeData={treeData}
-            selectedKeys={selected ? [selected] : []}
-            onSelect={(keys) => {
-              setSelected(keys.length > 0 ? String(keys[0]) : undefined);
-              setPage(1);
+  // Built once and hosted twice: beside the documents where there is room for both, and
+  // stacked above them where there is not. One notion of "the shelf" rather than two that
+  // can drift apart.
+  const shelf = (
+    <>
+      <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
+        <Typography.Text strong>{t('cabinets.title')}</Typography.Text>
+        {canWrite && (
+          <Button
+            size="small"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setEditing('new');
+              form.resetFields();
+              form.setFieldsValue({ parentId: selected });
             }}
+          >
+            {t('cabinets.new')}
+          </Button>
+        )}
+      </Flex>
+      {isPending ? (
+        <Spin />
+      ) : treeData.length === 0 ? (
+        <Empty description={t('cabinets.empty')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      ) : (
+        <Tree
+          showIcon
+          blockNode
+          // Dragging a cabinet into another is a desktop act. On a touch screen a drag is how
+          // the page is scrolled, so offering it there is offering a way to refile an archive
+          // by accident; the same move stays available through the parent field when editing.
+          draggable={canWrite && !isMobile}
+          defaultExpandAll
+          onDrop={onDrop}
+          treeData={treeData}
+          selectedKeys={selected ? [selected] : []}
+          onSelect={(keys) => {
+            setSelected(keys.length > 0 ? String(keys[0]) : undefined);
+            setPage(1);
+            // Picking a shelf on a phone is picking what to read next: the tree steps out of
+            // the way rather than leaving the documents pushed off the bottom of the screen.
+            setShelfOpen(false);
+          }}
+        />
+      )}
+    </>
+  );
+
+  const documentsPane = (
+    <>
+      {current === undefined ? (
+        <Empty description={t('cabinets.pickOne')} style={{ marginTop: '15vh' }} />
+      ) : (
+        <>
+          <Breadcrumb
+            style={{ marginBottom: 8 }}
+            items={crumbs.map((cabinet) => ({
+              title:
+                cabinet.id === current.id ? (
+                  cabinet.name
+                ) : (
+                  <Typography.Link onClick={() => setSelected(cabinet.id)}>
+                    {cabinet.name}
+                  </Typography.Link>
+                ),
+            }))}
           />
-        )}
-      </Layout.Sider>
-
-      <Layout.Content style={{ padding: 24, overflow: 'auto' }}>
-        {current === undefined ? (
-          <Empty description={t('cabinets.pickOne')} style={{ marginTop: '15vh' }} />
-        ) : (
-          <>
-            <Breadcrumb
-              style={{ marginBottom: 8 }}
-              items={crumbs.map((cabinet) => ({
-                title:
-                  cabinet.id === current.id ? (
-                    cabinet.name
-                  ) : (
-                    <Typography.Link onClick={() => setSelected(cabinet.id)}>
-                      {cabinet.name}
-                    </Typography.Link>
-                  ),
-              }))}
-            />
-            <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
-              <Typography.Title level={4} style={{ margin: 0 }}>
-                {current.name}
-              </Typography.Title>
-              <Space>
-                <Tooltip title={t('cabinets.includeSubtreeHint')}>
-                  <Space size={6}>
-                    <Switch
-                      size="small"
-                      checked={includeSubtree}
-                      onChange={(checked) => {
-                        setIncludeSubtree(checked);
-                        setPage(1);
-                      }}
-                    />
-                    <Typography.Text type="secondary">{t('cabinets.includeSubtree')}</Typography.Text>
-                  </Space>
-                </Tooltip>
-                {canWrite && (
-                  <Button
-                    icon={<EditOutlined />}
-                    onClick={() => {
-                      setEditing(current);
-                      form.setFieldsValue({
-                        name: current.name,
-                        description: current.description ?? undefined,
-                        parentId: current.parentId ?? undefined,
-                      });
+          <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              {current.name}
+            </Typography.Title>
+            <Space>
+              <Tooltip title={t('cabinets.includeSubtreeHint')}>
+                <Space size={6}>
+                  <Switch
+                    size="small"
+                    checked={includeSubtree}
+                    onChange={(checked) => {
+                      setIncludeSubtree(checked);
+                      setPage(1);
                     }}
-                  >
-                    {t('common.edit')}
-                  </Button>
-                )}
-                {canWrite && (
-                  <Popconfirm
-                    title={t('cabinets.deleteConfirm')}
-                    onConfirm={() => void onDelete(current)}
-                  >
-                    <Button danger icon={<DeleteOutlined />} />
-                  </Popconfirm>
-                )}
-              </Space>
-            </Flex>
-            {current.description && (
-              <Typography.Paragraph type="secondary">{current.description}</Typography.Paragraph>
-            )}
-            <Alert
-              type="info"
-              showIcon
-              style={{ marginBottom: 12 }}
-              message={t('cabinets.filingMovesAccess')}
-            />
+                  />
+                  <Typography.Text type="secondary">{t('cabinets.includeSubtree')}</Typography.Text>
+                </Space>
+              </Tooltip>
+              {canWrite && (
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setEditing(current);
+                    form.setFieldsValue({
+                      name: current.name,
+                      description: current.description ?? undefined,
+                      parentId: current.parentId ?? undefined,
+                    });
+                  }}
+                >
+                  {t('common.edit')}
+                </Button>
+              )}
+              {canWrite && (
+                <Popconfirm
+                  title={t('cabinets.deleteConfirm')}
+                  onConfirm={() => void onDelete(current)}
+                >
+                  <Button danger icon={<DeleteOutlined />} />
+                </Popconfirm>
+              )}
+            </Space>
+          </Flex>
+          {current.description && (
+            <Typography.Paragraph type="secondary">{current.description}</Typography.Paragraph>
+          )}
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={t('cabinets.filingMovesAccess')}
+          />
 
-            <Table<CabinetDocument>
-              scroll={{ x: 'max-content' }}
-              rowKey="id"
-              size="middle"
-              loading={isFetching && !documents}
-              dataSource={documents?.items}
-              locale={{ emptyText: t('cabinets.noDocuments') }}
-              onChange={(pagination) => {
-                setPage(pagination.current ?? 1);
-                setPageSize(pagination.pageSize ?? 20);
-              }}
-              pagination={{
-                current: documents?.page,
-                pageSize: documents?.pageSize,
-                total: documents?.totalItems,
-                showSizeChanger: true,
-              }}
-              columns={[
-                { title: t('documents.title'), dataIndex: 'title', ellipsis: true },
-                {
-                  title: t('documents.visibility'),
-                  dataIndex: 'visibility',
-                  width: 160,
-                  render: (value: CabinetDocument['visibility']) => (
-                    <Tag>{t(`caves.visibilityValues.${value}`)}</Tag>
-                  ),
-                },
-                {
-                  title: t('cabinets.size'),
-                  dataIndex: 'sizeBytes',
-                  width: 110,
-                  align: 'right',
-                  render: (value: number | null) => formatSize(value),
-                },
-                ...(canWrite
-                  ? [
-                      {
-                        title: '',
-                        key: 'actions',
-                        width: 200,
-                        render: (_: unknown, row: CabinetDocument) => (
-                          <Flex gap={8}>
-                            <Button
-                              size="small"
-                              onClick={() => {
-                                setRefiling(row);
-                                setRefileTarget(undefined);
-                              }}
-                            >
-                              {t('cabinets.fileElsewhere')}
-                            </Button>
-                            <Popconfirm
-                              title={t('cabinets.unfileConfirm')}
-                              onConfirm={() => void unfile(row)}
-                            >
-                              <Button size="small" type="text" danger icon={<DeleteOutlined />} />
-                            </Popconfirm>
-                          </Flex>
-                        ),
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          </>
-        )}
-      </Layout.Content>
+          <Table<CabinetDocument>
+            scroll={{ x: 'max-content' }}
+            rowKey="id"
+            size="middle"
+            loading={isFetching && !documents}
+            dataSource={documents?.items}
+            locale={{ emptyText: t('cabinets.noDocuments') }}
+            onChange={(pagination) => {
+              setPage(pagination.current ?? 1);
+              setPageSize(pagination.pageSize ?? 20);
+            }}
+            pagination={{
+              current: documents?.page,
+              pageSize: documents?.pageSize,
+              total: documents?.totalItems,
+              showSizeChanger: true,
+            }}
+            columns={[
+              {
+                title: t('documents.title'),
+                dataIndex: 'title',
+                ellipsis: true,
+                // The title is the way in. A shelf that only lists what is on it, with no
+                // way to open any of it, is a catalogue rather than an archive.
+                render: (value: string, row: CabinetDocument) => (
+                  <Link to={`/documents/${row.id}`}>{value}</Link>
+                ),
+              },
+              {
+                title: t('documents.visibility'),
+                dataIndex: 'visibility',
+                width: 160,
+                render: (value: CabinetDocument['visibility']) => (
+                  <Tag>{t(`caves.visibilityValues.${value}`)}</Tag>
+                ),
+              },
+              {
+                title: t('cabinets.size'),
+                dataIndex: 'sizeBytes',
+                width: 110,
+                align: 'right',
+                render: (value: number | null) => formatSize(value),
+              },
+              ...(canWrite
+                ? [
+                    {
+                      title: '',
+                      key: 'actions',
+                      width: 200,
+                      render: (_: unknown, row: CabinetDocument) => (
+                        <Flex gap={8}>
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setRefiling(row);
+                              setRefileTarget(undefined);
+                            }}
+                          >
+                            {t('cabinets.fileElsewhere')}
+                          </Button>
+                          <Popconfirm
+                            title={t('cabinets.unfileConfirm')}
+                            onConfirm={() => void unfile(row)}
+                          >
+                            <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                          </Popconfirm>
+                        </Flex>
+                      ),
+                    },
+                  ]
+                : []),
+            ]}
+          />
+        </>
+      )}
+    </>
+  );
 
+  const modals = (
+    <>
       <Modal
         title={editing === 'new' ? t('cabinets.new') : t('cabinets.edit')}
         open={editing !== null}
@@ -469,6 +497,46 @@ export default function CabinetsPage() {
             .map((cabinet) => ({ value: cabinet.id, label: cabinet.name }))}
         />
       </Modal>
+    </>
+  );
+
+  if (isMobile) {
+    // One column. A side panel wide enough to read cabinet names in would leave a phone barely
+    // a hundred points for the documents themselves, and the shell already owns this screen's
+    // left edge, so the shelf folds upward from the top instead of into a second drawer.
+    return (
+      <Flex vertical style={{ height: '100%', padding: 12, overflow: 'auto' }}>
+        <Collapse
+          size="small"
+          style={{ marginBottom: 12 }}
+          activeKey={shelfOpen ? ['shelf'] : []}
+          onChange={(keys) => setShelfOpen(keys.length > 0)}
+          items={[
+            {
+              key: 'shelf',
+              // The header names where the reader is when the shelf is folded away, which is
+              // most of the time — otherwise the one thing on screen says nothing.
+              label: current?.name ?? t('cabinets.title'),
+              children: shelf,
+            },
+          ]}
+        />
+        <div style={{ minWidth: 0 }}>{documentsPane}</div>
+        {modals}
+      </Flex>
+    );
+  }
+
+  return (
+    <Layout style={{ height: '100%', background: 'transparent' }}>
+      <Layout.Sider width={280} theme="light" style={{ padding: 16, overflow: 'auto' }}>
+        {shelf}
+      </Layout.Sider>
+
+      <Layout.Content style={{ padding: 24, overflow: 'auto', minWidth: 0 }}>
+        {documentsPane}
+      </Layout.Content>
+      {modals}
     </Layout>
   );
 }

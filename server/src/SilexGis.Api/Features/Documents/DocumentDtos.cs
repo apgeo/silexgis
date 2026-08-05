@@ -49,6 +49,13 @@ public sealed record DocumentDto(
     /// document has already been read-gated.
     /// </summary>
     TextExtractionState TextExtraction,
+
+    /// <summary>
+    /// The language its text was read as, or null when nothing has said. Served because it is
+    /// correctable, and a control that could set it but not show the current value would be
+    /// asking the reader to guess whether detection had run. No disclosure of its own.
+    /// </summary>
+    string? Language,
     string? Author,
     string? Producer,
     DateTimeOffset? ContentCreatedAt,
@@ -72,9 +79,18 @@ public sealed record DocumentDto(
 /// to it or holding a rule that names its content.
 /// </para>
 /// </summary>
+/// <param name="Language">
+/// The language the document is written in, as a language subtag; correcting it re-indexes
+/// every page of every revision under the stemmer that code names. Shares the metadata
+/// carve-out: absent leaves the stored code alone, because the code is detected when the text
+/// is read and a title correction that did not mention it must not undo that. Sending an empty
+/// string — or anything else that is not a language subtag — clears it back to unstated, which
+/// indexes language-neutrally.
+/// </param>
 public sealed record DocumentUpdateRequest(
     string Title,
     long? DocumentTypeId,
     JsonElement? Metadata,
     Visibility Visibility,
-    Guid? CavingGroupId);
+    Guid? CavingGroupId,
+    string? Language);

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import type { AccessDomainName, AccessScopeKind } from '../api/hooks.ts';
+import type { AccessDomainName, AccessScopeKind, SearchDocumentItem } from '../api/hooks.ts';
 import { RESLINK_ANCHOR_KINDS, RESLINK_TARGET_TYPES } from '../components/reslinks/registry.ts';
 import { SEEDED_RELATION_CODES, DIRECTED_RELATION_CODES } from '../components/reslinks/relations.ts';
 import en from './locales/en.json';
@@ -78,6 +78,19 @@ const accessScopeKinds: Record<AccessScopeKind, true> = {
   featureSet: true,
   cabinet: true,
   object: true,
+};
+
+/**
+ * The divisions a content hit can honestly be placed in. "whole" is deliberately absent: it
+ * means the format numbers nothing, and the whole point of the distinction is that such a hit
+ * is shown without a position rather than with an invented one. A label for it would be the
+ * lie the type exists to prevent, so this list must stay one shorter than the server's enum.
+ */
+type NumberedDivision = Exclude<SearchDocumentItem['division'], 'whole'>;
+const numberedDivisions: Record<NumberedDivision, true> = {
+  page: true,
+  sheet: true,
+  slide: true,
 };
 
 // EN and RO must be maintained together.
@@ -180,5 +193,14 @@ describe('i18n locales', () => {
         .filter(({ key }) => typeof lookup(en, key) !== 'string')
         .map(({ key, where }) => `${where}: ${key}`),
     ).toEqual([]);
+  });
+
+  it('names every numbered division a content hit can carry, and no more', () => {
+    const names = Object.keys(numberedDivisions);
+    const enDivisions: Record<string, string> = en.search.divisions;
+    const roDivisions: Record<string, string> = ro.search.divisions;
+    expect(names.filter((name) => !enDivisions[name])).toEqual([]);
+    expect(names.filter((name) => !roDivisions[name])).toEqual([]);
+    expect(Object.keys(enDivisions).sort()).toEqual(names.sort());
   });
 });

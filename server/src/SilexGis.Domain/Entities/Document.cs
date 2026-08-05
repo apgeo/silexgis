@@ -45,6 +45,18 @@ public class Document : IProtectedEntity, ITimestamped, IAuditable
     /// </summary>
     public int? MetadataSchemaVersion { get; set; }
 
+    /// <summary>
+    /// Primary language subtag of the text this document holds, or null when nothing has said.
+    /// It picks the stemmer content search indexes and parses with, which is why it lives on the
+    /// document rather than on a page: a revision replaces the bytes, not the language, and a
+    /// scan and its rendition are the same words twice.
+    /// <para>
+    /// Detected from the text and correctable afterwards, never trusted: an unknown or wrong code
+    /// costs stemming quality, not findability, because the fallback indexes language-neutrally.
+    /// </para>
+    /// </summary>
+    public string? Language { get; set; }
+
     public Guid OwnerUserId { get; set; }
 
     public Guid? CavingGroupId { get; set; }

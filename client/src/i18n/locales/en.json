@@ -363,6 +363,12 @@
     }
   },
   "documents": {
+    "language": "Language",
+    "languageUnknown": "Not known",
+    "languages": {
+      "ro": "Romanian",
+      "en": "English"
+    },
     "metadata": "Document properties",
     "title": "Title",
     "type": "Document kind",
@@ -375,6 +381,26 @@
     "cabinets": "Filed in",
     "pickCabinets": "Not filed anywhere",
     "filingMovesAccess": "A document can sit in several cabinets; each one an access rule names reaches it.",
+    "notFiled": "Not filed in any cabinet.",
+    "open": "Open the document",
+    "download": "Download",
+    "format": "Format",
+    "size": "Size",
+    "version": "Version",
+    "author": "Author",
+    "updated": "Last changed",
+    "viewer": {
+      "title": "The document",
+      "notDisplayable": "Nothing here can show this format yet. Download the file to open it in something that can.",
+      "pageAlt": "Page {{number}}",
+      "pageFailed": "This page could not be drawn. The rest of the document may still read; the file itself is unchanged and can be downloaded.",
+      "pageOf": "Page {{number}} of {{count}}",
+      "previousPage": "Previous page",
+      "nextPage": "Next page",
+      "mediaFailed": "This recording will not play here — its format is not one this browser knows, or the recording is longer than the link that fetches it stays valid. Download it to play it in something else.",
+      "textFailed": "This document's text could not be loaded.",
+      "textTruncated": "Only the first {{kilobytes}} kB are shown here. Download the file to read the rest."
+    },
     "text": "Text",
     "textStates": {
       "notApplicable": "This kind of file holds no text to read.",
@@ -1166,6 +1192,15 @@
   "search": {
     "features": "Features",
     "trips": "Trip logs",
+    "documents": "In document text",
+    "moreDocuments": "Showing {{shown}} of {{total}} matching documents",
+    "noTextLayerHint": "No document text matched. Scanned pages hold no text to search until they are typed up.",
+    "supersededVersion": "version {{number}}, replaced",
+    "divisions": {
+      "page": "page {{number}}",
+      "sheet": "sheet {{number}}",
+      "slide": "slide {{number}}"
+    },
     "openFailed": "Could not open this record."
   },
   "shares": {

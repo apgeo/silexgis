@@ -47,12 +47,20 @@ public sealed record StoredContent(
 /// the caller, which this service deliberately does not have.
 /// </para>
 /// </summary>
+/// <param name="Language">
+/// The document's language code, or null to leave whatever is stored alone — the same carve-out
+/// <see cref="Metadata"/> has, and for the same reason: the language is detected from the text,
+/// and a caller correcting a title must not silently undo that detection by not mentioning it.
+/// Clearing it is still possible and still explicit: any value that is not a language subtag —
+/// an empty string is the obvious one — normalises to "nobody has said".
+/// </param>
 public sealed record DocumentUpdate(
     string Title,
     long? DocumentTypeId,
     string? Metadata,
     Visibility Visibility,
-    Guid? CavingGroupId);
+    Guid? CavingGroupId,
+    string? Language = null);
 
 /// <summary>
 /// The single mutator of a document's derived state: which revision is current, what
@@ -278,8 +286,49 @@ public sealed class DocumentWriteService(SilexGisDbContext db, ITypedPropertiesV
             : TextExtractionState.NoText;
         file.TextExtractionError = null;
 
+        await DetectLanguageAsync(file.DocumentVersionId, pages.Select(p => p.Text), ct);
+
         await db.SaveChangesAsync(ct);
         return true;
+    }
+
+    /// <summary>
+    /// Gives the document behind a revision a language, when the text just read says clearly
+    /// what it is and nothing has said before. Tracked, not saved — the caller commits it with
+    /// the pages, so a document never carries a language for text that was not stored.
+    /// </summary>
+    /// <remarks>
+    /// Reading the whole document is the expensive part and it has just happened, so this is
+    /// where the question is cheapest to ask — and asking it here means the answer is in place
+    /// before anything is searched.
+    /// <para>
+    /// Only a document that has no language is given one. A code already on the row is either a
+    /// correction somebody made or the answer of an earlier reading of the same words, and
+    /// neither is improved by overwriting it from a re-reading — a correction especially, since
+    /// the maintenance sweep re-reads files and would otherwise undo every correction it passed.
+    /// The cost of that rule is that clearing the language deliberately looks exactly like never
+    /// having had one, so a later re-reading will fill it in again.
+    /// </para>
+    /// </remarks>
+    private async Task DetectLanguageAsync(
+        Guid documentVersionId, IEnumerable<string?> pages, CancellationToken ct)
+    {
+        var documentId = await db.DocumentVersions.AsNoTracking()
+            .Where(v => v.Id == documentVersionId)
+            .Select(v => v.DocumentId)
+            .FirstOrDefaultAsync(ct);
+        if (documentId == Guid.Empty)
+        {
+            return;
+        }
+
+        var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == documentId, ct);
+        if (document is null || document.Language is not null)
+        {
+            return;
+        }
+
+        document.Language = LanguageDetection.Detect(pages);
     }
 
     /// <summary>
@@ -347,6 +396,18 @@ public sealed class DocumentWriteService(SilexGisDbContext db, ITypedPropertiesV
         document.Visibility = update.Visibility;
         document.CavingGroupId = update.CavingGroupId;
         document.Metadata = metadata;
+
+        // Mentioned or not mentioned, never "mentioned as nothing": a caller that says nothing
+        // about the language leaves the detected one standing, and one that says something has
+        // it normalised to the stored form. The database re-derives every page's search vector
+        // from the language whenever this column actually changes, so nothing here has to ask
+        // for a reindex - but it does mean an accidental clearing would quietly re-index a
+        // whole document language-neutrally, which is why absence cannot mean clearing.
+        if (update.Language is not null)
+        {
+            document.Language = DocumentLanguage.Normalize(update.Language);
+        }
+
         document.MetadataSchemaVersion =
             await ValidateMetadataAsync(document, type, metadata, rewritten, ct);
 

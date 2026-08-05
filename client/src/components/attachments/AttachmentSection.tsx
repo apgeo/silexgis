@@ -14,6 +14,8 @@ import {
   type AttachmentInfo,
   type AttachmentRole,
 } from '../../api/hooks.ts';
+import { displayableImageUrl } from '../documents/derivativeUrl.ts';
+import OpenDocument from '../documents/OpenDocument.tsx';
 import AttachmentDetails from './AttachmentDetails.tsx';
 import DocumentMetadata from './DocumentMetadata.tsx';
 import FileVersions from './FileVersions.tsx';
@@ -107,6 +109,7 @@ export default function AttachmentSection({
               renderItem={(attachment) => (
                 <List.Item
                   actions={[
+                    <OpenDocument key="open" documentId={attachment.file.documentId} />,
                     ...(canEdit
                       ? [
                           <AttachmentDetails key="details" attachment={attachment} />,
@@ -213,7 +216,11 @@ export default function AttachmentSection({
                 <figure key={attachment.id} style={{ margin: 0, width: 160 }}>
                   <Image
                     src={attachment.file.thumbnailUrl ?? attachment.file.contentUrl}
-                    preview={{ src: attachment.file.contentUrl }}
+                    // Enlarging is not a way past the byte rule: a caller who may not be
+                    // told where a photo was taken is given the largest *rendering*
+                    // instead of the stored bytes, which the original link would have
+                    // answered as a missing file anyway.
+                    preview={{ src: displayableImageUrl(attachment.file) ?? undefined }}
                     width={160}
                     height={120}
                     style={{ objectFit: 'cover', borderRadius: 6 }}
@@ -224,6 +231,7 @@ export default function AttachmentSection({
                       {attachment.caption ?? attachment.file.originalName}
                     </Typography.Text>
                     <Flex align="center">
+                      <OpenDocument documentId={attachment.file.documentId} />
                       {canEdit && <AttachmentDetails attachment={attachment} />}
                       {canEdit && <DocumentMetadata documentId={attachment.file.documentId} />}
                       <FileVersions
@@ -258,6 +266,7 @@ export default function AttachmentSection({
             renderItem={(attachment) => (
               <List.Item
                 actions={[
+                  <OpenDocument key="open" documentId={attachment.file.documentId} />,
                   ...(canEdit
                     ? [
                         <AttachmentDetails key="details" attachment={attachment} />,

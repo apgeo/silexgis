@@ -60,6 +60,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<DocumentPage> DocumentPages => Set<DocumentPage>();
 
+    public DbSet<TextSearchLanguage> TextSearchLanguages => Set<TextSearchLanguage>();
+
     public DbSet<Cabinet> Cabinets => Set<Cabinet>();
 
     public DbSet<CabinetDocument> CabinetDocuments => Set<CabinetDocument>();
@@ -122,6 +124,11 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
     {
         base.OnModelCreating(builder);
 
+        // Each of these is installed because something here calls into it: geometry columns and
+        // their index, the dictionary that folds diacritics inside the text-search parser, and
+        // the path type the cabinet tree is stored as. An extension nobody calls does not belong
+        // in the list — it is a promise to whoever reads the schema that the database is doing
+        // something it is not.
         builder.HasPostgresExtension("postgis");
         builder.HasPostgresExtension("unaccent");
         builder.HasPostgresExtension("ltree");

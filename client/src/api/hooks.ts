@@ -78,6 +78,7 @@ export const queryKeys = {
   featureShares: (id: string) => ['features', id, 'shares'] as const,
   geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
   attachments: (entityType: string, entityId: string) => ['attachments', entityType, entityId] as const,
+  file: (id: string) => ['files', 'detail', id] as const,
   fileVersions: (fileId: string) => ['file-versions', fileId] as const,
   fileConfig: ['file-config'] as const,
   document: (id: string) => ['documents', 'detail', id] as const,
@@ -693,14 +694,23 @@ export async function fetchPhotoFeatures(bbox: string): Promise<EntranceFeatureC
 export type SearchResult = components['schemas']['SearchResultDto'];
 export type SearchFeatureItem = components['schemas']['SearchFeatureItemDto'];
 export type SearchTripItem = components['schemas']['SearchTripItemDto'];
+export type SearchDocumentItem = components['schemas']['SearchDocumentItemDto'];
 
 /**
- * Global search: features of every kind plus trip logs. Results carry no coordinates —
- * navigate to the entity (or fetch it) instead of centering the map from here.
+ * Global search: features of every kind, trip logs, and documents matched by what their text
+ * says. Results carry no coordinates — navigate to the entity (or fetch it) instead of
+ * centering the map from here.
  *
  * Pass `kind` when only one kind can be picked. The server's hit budget is shared across
  * kinds, so filtering the answer here instead would let commoner kinds crowd the wanted
  * one out of the response entirely.
+ *
+ * The document section is the one that is paged, and this hook asks only for its first page:
+ * a search box shows the best few answers, and the total that comes back with them says
+ * honestly how many more there are. The two query parameters that would change that answer —
+ * which page, and whether replaced revisions are searched — are deliberately not passed here,
+ * because they are not in the cache key and a request that varied them would be served the
+ * previous one's rows.
  */
 export function useSearch(q: string, kind?: FeatureKind) {
   return useQuery({
@@ -1107,6 +1117,77 @@ export function useInvalidateHistory() {
 }
 
 /**
+ * One stored file, with delivery URLs minted for this caller.
+ *
+ * The document endpoint says what a document *is*; only this one says how to fetch its
+ * bytes, and how far this caller may reach for them — the original, or renderings only.
+ * Those URLs carry a ten-minute token, so the answer is refreshed well before it lapses,
+ * exactly as the attachment lists do; a long read must never end in a dead link.
+ */
+export function useFile(id: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.file(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/files/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id && enabled,
+    staleTime: 5 * 60_000,
+    refetchInterval: 8 * 60_000,
+  });
+}
+
+/**
+ * How much of a text document is read into the page before the rest is left to a download.
+ *
+ * A log of a season's surveying can be tens of megabytes of plain text, and putting all of it
+ * into a document that has to lay out cannot end well on a phone. The cut is stated to the
+ * reader rather than made silently, because a file that appears to stop halfway through is
+ * indistinguishable from a file that was truncated when it was written.
+ */
+export const maxInlineTextBytes = 512 * 1024;
+
+/**
+ * The text of a file, for the formats that are text.
+ *
+ * Fetched from the same short-lived delivery URL everything else uses, so a caller who may not
+ * have the stored bytes does not get them here either — which for a text file is every caller
+ * who can read the document, since a text file records no position to protect.
+ *
+ * Only the part that will be shown is asked for. The delivery route answers partial requests,
+ * so the cut is made before the bytes cross the network rather than after: pulling a season's
+ * survey log down over a phone connection in order to display its first half-megabyte would
+ * spend the whole file to show a fragment of it. A server that ignored the request and sent
+ * everything is still handled, because the cut is applied here as well.
+ */
+export function useFileText(file: FileInfo | undefined) {
+  return useQuery({
+    queryKey: ['file-text', file?.id ?? '', file?.contentUrl ?? ''] as const,
+    queryFn: async () => {
+      const response = await fetch(file!.contentUrl, {
+        headers: { Range: `bytes=0-${maxInlineTextBytes - 1}` },
+      });
+      if (!response.ok) {
+        throw new ApiError(response.status, 'file.not_found');
+      }
+
+      const bytes = (await response.arrayBuffer()).slice(0, maxInlineTextBytes);
+      // A cut made in bytes can land in the middle of a character — Romanian text is full of
+      // two-byte ones — so the tail is decoded as if more were coming, which drops an
+      // incomplete character instead of showing it as a replacement mark.
+      const text = new TextDecoder('utf-8').decode(bytes, { stream: true });
+      return {
+        // What was cut is a fact about the file, not about what came back: a partial answer is
+        // the same length as a whole one when the file is exactly that long.
+        text,
+        truncated: file!.sizeBytes > maxInlineTextBytes,
+      };
+    },
+    enabled: !!file && file.mayDownloadOriginal,
+    // The bytes of one version never change, so this is refetched only because the URL that
+    // reaches them expires; the key carries that URL, so a renewed one is a new request.
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
  * Upload limits this installation applies. Served rather than compiled in, so a client
  * build cannot disagree with its server and let someone watch a large file transfer only
  * to be refused at the end.
@@ -1186,6 +1267,11 @@ export function useDocument(id: string | undefined, enabled = true) {
  * Visibility and the caving group decide who may read the document when no rule names it,
  * so saving them moves access: the cached lists that were filtered by that answer are
  * dropped along with the document itself.
+ *
+ * `language` shares the metadata carve-out: null leaves the stored code alone, because it is
+ * detected from the document's own text and a title correction is not a statement about it.
+ * An empty string is how it is cleared. Changing it re-indexes every page of the document, so
+ * cached searches are dropped too — they were answered by the previous stemmer.
  */
 export function useUpdateDocument() {
   const invalidateAttachments = useInvalidateAttachments();
@@ -1198,10 +1284,12 @@ export function useUpdateDocument() {
       metadata: Record<string, unknown> | null;
       visibility: Visibility;
       cavingGroupId: string | null;
+      language: string | null;
     }) => unwrap(api.PUT('/api/v1/documents/{id}', { params: { path: { id } }, body })),
     onSuccess: (_result, variables) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.document(variables.id) });
       void queryClient.invalidateQueries({ queryKey: ['cabinets'] });
+      void queryClient.invalidateQueries({ queryKey: ['search'] });
       invalidateAttachments();
     },
   });

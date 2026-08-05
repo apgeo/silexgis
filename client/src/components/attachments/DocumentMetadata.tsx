@@ -1,14 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  CheckCircleOutlined,
-  ExclamationCircleOutlined,
-  FileImageOutlined,
-  MinusCircleOutlined,
-  ProfileOutlined,
-  QuestionCircleOutlined,
-  SyncOutlined,
-} from '@ant-design/icons';
+import { ProfileOutlined } from '@ant-design/icons';
 import { App, Button, Checkbox, Flex, Input, InputNumber, Popover, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
@@ -22,13 +14,20 @@ import {
   useFileDocument,
   useUpdateDocument,
   type CabinetInfo,
-  type TextExtractionState,
   type Visibility,
 } from '../../api/hooks.ts';
+import TextState from '../documents/TextState.tsx';
 import LinksSection from '../reslinks/LinksSection.tsx';
 import { parsePropertiesSchema, type SchemaField } from '../typedProperties/propertiesSchema.ts';
 
 const visibilities: Visibility[] = ['private', 'cavingGroup', 'authenticated', 'public'];
+
+/**
+ * The languages this installation indexes with a stemmer of their own. Anything else — and
+ * "nobody has said" — indexes language-neutrally, which is what clearing the field asks for,
+ * so the list is a list of the choices that change something rather than of world languages.
+ */
+const languages = ['ro', 'en'] as const;
 
 /**
  * A cabinet named by its whole path. Names are unique only among siblings — "1987" sits
@@ -52,42 +51,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
         {label}
       </Typography.Text>
       {children}
-    </Flex>
-  );
-}
-
-/** How each state of the reading is drawn, beside the sentence that names it. */
-const textStates: Record<
-  TextExtractionState,
-  { icon: ReactNode; tone: 'success' | 'secondary' | 'warning' | 'danger' }
-> = {
-  extracted: { icon: <CheckCircleOutlined />, tone: 'success' },
-  pending: { icon: <SyncOutlined spin />, tone: 'secondary' },
-  noText: { icon: <FileImageOutlined />, tone: 'warning' },
-  notApplicable: { icon: <MinusCircleOutlined />, tone: 'secondary' },
-  unsupported: { icon: <QuestionCircleOutlined />, tone: 'secondary' },
-  failed: { icon: <ExclamationCircleOutlined />, tone: 'danger' },
-};
-
-/**
- * Says what happened when the document's text was read, in a sentence rather than a badge.
- *
- * This is stated for every document, including the ones with nothing in them, because the
- * two silences are indistinguishable otherwise: a document nobody has read yet and a
- * scanned one that will never have words both show as a document with no text. Leaving
- * that unsaid is how someone waits for a search result that is never coming.
- */
-function TextState({ state }: { state: TextExtractionState }) {
-  const { t } = useTranslation();
-  const { icon, tone } = textStates[state];
-  return (
-    <Flex gap={6} align="baseline">
-      <Typography.Text type={tone} style={{ fontSize: 12 }}>
-        {icon}
-      </Typography.Text>
-      <Typography.Text type={tone} style={{ fontSize: 12 }}>
-        {t(`documents.textStates.${state}`)}
-      </Typography.Text>
     </Flex>
   );
 }
@@ -124,6 +87,7 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
   const [typeId, setTypeId] = useState<number | null>(null);
   const [visibility, setVisibility] = useState<Visibility>('private');
   const [cavingGroupId, setCavingGroupId] = useState<string | null>(null);
+  const [language, setLanguage] = useState<string | null>(null);
   const [filedIn, setFiledIn] = useState<string[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
 
@@ -135,6 +99,7 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
       setTypeId(document.documentTypeId);
       setVisibility(document.visibility);
       setCavingGroupId(document.cavingGroupId);
+      setLanguage(document.language);
       setFiledIn(document.cabinetIds);
       setValues((document.metadata as Record<string, unknown> | null) ?? {});
     }
@@ -193,6 +158,9 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
         // on a document turned private would leave the club named on a row it no longer
         // decides anything about.
         cavingGroupId: visibility === 'cavingGroup' ? cavingGroupId : null,
+        // An empty string clears the code; null would mean "I am not talking about the
+        // language", which is not what a person who just emptied the control meant.
+        language: language ?? '',
       });
       message.success(t('common.saved'));
       setOpen(false);
@@ -240,6 +208,19 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
           }))}
         />
       </Field>
+      <Field label={t('documents.language')}>
+        <Select
+          value={language}
+          onChange={setLanguage}
+          allowClear
+          onClear={() => setLanguage(null)}
+          placeholder={t('documents.languageUnknown')}
+          options={languages.map((code) => ({
+            value: code,
+            label: t(`documents.languages.${code}`),
+          }))}
+        />
+      </Field>
       {visibility === 'cavingGroup' && (
         <Field label={t('documents.cavingGroup')}>
           <Select
@@ -279,9 +260,8 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
           />
         </Field>
       ))}
-      {/* The document's own relations. This panel is the only place a document is shown in
-          its own right, so its links live here too — behind a count, because the panel is
-          already dense and most documents take part in none. */}
+      {/* The document's own relations, kept behind a count because the panel is already
+          dense and most documents take part in none. */}
       <LinksSection
         entityType="document"
         entityId={documentId}

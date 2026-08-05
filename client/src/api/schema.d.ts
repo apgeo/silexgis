@@ -1291,12 +1291,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Searches features of every kind and trip logs (accent-insensitive). */
+        /** Searches features of every kind, trip logs and document text (accent-insensitive). */
         get: {
             parameters: {
                 query: {
                     q: string;
                     kind?: string;
+                    documentPage?: number;
+                    includeSuperseded?: boolean;
                 };
                 header?: never;
                 path?: never;
@@ -4605,6 +4607,46 @@ export interface paths {
                 header?: never;
                 path: {
                     id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/pages/{page}/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** WebP picture of one page of a paged document (sizes 160/480/1200/2400); token-authenticated. */
+        get: {
+            parameters: {
+                query: {
+                    token: string;
+                    size?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                    page: number;
                 };
                 cookie?: never;
             };
@@ -8373,6 +8415,7 @@ export interface components {
             /** Format: int32 */
             pageCount: null | number;
             textExtraction: components["schemas"]["TextExtractionState"];
+            language: null | string;
             author: null | string;
             producer: null | string;
             /** Format: date-time */
@@ -8415,6 +8458,7 @@ export interface components {
             visibility: components["schemas"]["Visibility"];
             /** Format: uuid */
             cavingGroupId: null | string;
+            language: null | string;
         };
         EffectiveAccessDto: {
             actions: components["schemas"]["AccessAction"];
@@ -9178,6 +9222,8 @@ export interface components {
         ObjectAccessReplaceRequest: {
             entries: components["schemas"]["ObjectAccessEntryWrite"][];
         };
+        /** @enum {unknown} */
+        PageDivision: "whole" | "page" | "sheet" | "slide";
         PagedResultOfAuditEntryDto: {
             items: components["schemas"]["AuditEntryDto"][];
             /** Format: int32 */
@@ -9261,6 +9307,15 @@ export interface components {
         };
         PagedResultOfResLinkDto: {
             items: components["schemas"]["ResLinkDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfSearchDocumentItemDto: {
+            items: components["schemas"]["SearchDocumentItemDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -9504,6 +9559,23 @@ export interface components {
             /** Format: uuid */
             mainMemberId: null | string;
         };
+        SearchDocumentItemDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: uuid */
+            fileId: string;
+            mimeType: string;
+            /** Format: uuid */
+            versionId: string;
+            /** Format: int32 */
+            versionNumber: number;
+            isCurrentVersion: boolean;
+            /** Format: int32 */
+            pageNumber: number;
+            division: components["schemas"]["PageDivision"];
+            snippet: string;
+        };
         SearchFeatureItemDto: {
             /** Format: uuid */
             id: string;
@@ -9514,6 +9586,7 @@ export interface components {
         SearchResultDto: {
             features: components["schemas"]["SearchFeatureItemDto"][];
             trips: components["schemas"]["SearchTripItemDto"][];
+            documents: components["schemas"]["PagedResultOfSearchDocumentItemDto"];
         };
         SearchTripItemDto: {
             /** Format: uuid */

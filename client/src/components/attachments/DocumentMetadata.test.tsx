@@ -33,6 +33,7 @@ const document = {
   // is already on a shelf.
   cabinetIds: [] as string[],
   textExtraction: 'extracted',
+  language: 'ro' as string | null,
 };
 
 const cavingGroups = [{ id: 'cg-1', name: 'Speo Club' }];
@@ -58,6 +59,7 @@ type DocumentUpdate = {
   metadata: Record<string, unknown>;
   visibility: string;
   cavingGroupId: string | null;
+  language: string | null;
 };
 
 const mutateAsync = vi.fn((update: DocumentUpdate) => Promise.resolve(update));
@@ -126,6 +128,54 @@ describe('DocumentMetadata', () => {
     // request, so a title correction must not quietly rewrite who may read the document.
     expect(sent.visibility).toBe('private');
     expect(sent.cavingGroupId).toBeNull();
+    // Same for the detected language. It is sent as read rather than left out, because
+    // leaving it out is how a caller says "leave it alone" and sending nothing at all is
+    // how it would be cleared - a title correction must be neither of those by accident.
+    expect(sent.language).toBe('ro');
+  });
+
+  it('shows the language the text was read as and lets it be corrected', async () => {
+    mutateAsync.mockClear();
+    render(
+      <App>
+        <DocumentMetadata documentId="doc-1" />
+      </App>,
+    );
+    fireEvent.click(screen.getByRole('button'));
+    await screen.findByText('Cave');
+
+    // The detected code is shown, not merely settable: a control that could change the
+    // language but never say what it currently is would leave the reader guessing whether
+    // anything had detected one, and correcting a right answer is worse than leaving it.
+    expect(screen.getByText('Romanian')).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByText('Romanian'));
+    fireEvent.click(await screen.findByTitle('English'));
+    fireEvent.click(screen.getByText('Save'));
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    expect(mutateAsync.mock.calls[0][0].language).toBe('en');
+  });
+
+  it('sends an emptied language as a value rather than as silence', async () => {
+    mutateAsync.mockClear();
+    render(
+      <App>
+        <DocumentMetadata documentId="doc-1" />
+      </App>,
+    );
+    fireEvent.click(screen.getByRole('button'));
+    await screen.findByText('Cave');
+
+    const cleared = screen.getByText('Romanian').closest('.ant-select');
+    fireEvent.mouseDown(cleared!.querySelector('.ant-select-clear')!);
+    fireEvent.click(screen.getByText('Save'));
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    // Not null. Saying nothing about the language is how the rest of the panel avoids undoing
+    // a detection it never asked about, so a person who deliberately emptied the control has
+    // to be able to say so — and an empty string is the way to say it.
+    expect(mutateAsync.mock.calls[0][0].language).toBe('');
   });
 
   it('asks which club a document belongs to only under club visibility, and drops the binding when it leaves', async () => {

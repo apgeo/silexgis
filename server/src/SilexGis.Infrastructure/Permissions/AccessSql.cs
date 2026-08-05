@@ -125,26 +125,88 @@ public static class AccessSql
     {
         RequireAlias(alias);
         var parameters = BaseParameters(ctx);
-        var set = ctx.For(domain, AccessAction.Read);
-        var prefix = "acc_r";
+        var sql = NonFeatureWalk(
+            ctx.For(domain, AccessAction.Read),
+            alias,
+            "acc_r",
+            parameters,
+            reachedByAttachment,
+            withVisibilityArm: true);
+        return (sql, parameters);
+    }
+
+    /// <summary>
+    /// The read fragment and the write fragment over one non-feature table, built over a single
+    /// parameter set — for the statements that must answer both questions about the same row
+    /// without asking the database twice. Content search is one: a superseded revision is
+    /// readable only by someone who could also replace it, and deciding that after the rows come
+    /// back would show through the count, the ranking and the page boundaries even once the rows
+    /// themselves were dropped.
+    /// </summary>
+    /// <remarks>
+    /// Built together for the same reason the feature pair is: both fragments carry the caller
+    /// parameters, and Dapper merges parameter sets by dictionary insert, so two independently
+    /// built sets throw on the first shared name. The write walk drops the visibility arm — being
+    /// allowed to see something has never been a reason to be allowed to change it, and the pure
+    /// evaluator admits visibility for reads alone — while keeping ownership, which does apply to
+    /// every action.
+    /// </remarks>
+    /// <param name="reachedByRead">Ids reached for Read through an attached object, as above.</param>
+    /// <param name="reachedByWrite">
+    /// Ids reached for Write through an attached object. Resolving this costs a walk over every
+    /// world a document's files hang in, so a caller that has not paid for it passes nothing and
+    /// gets the narrower answer: reach can only ever admit, so leaving it out withholds, and
+    /// withholding an old revision from someone who might have been allowed it is the safe side
+    /// of that rule.
+    /// </param>
+    public static (string ReadSql, string WriteSql, DynamicParameters Parameters) ReadAndWriteFragments(
+        AccessContext ctx,
+        AccessDomain domain,
+        string alias,
+        IReadOnlyCollection<Guid>? reachedByRead = null,
+        IReadOnlyCollection<Guid>? reachedByWrite = null)
+    {
+        RequireAlias(alias);
+        var parameters = BaseParameters(ctx);
+        var readSql = NonFeatureWalk(
+            ctx.For(domain, AccessAction.Read), alias, "acc_r", parameters, reachedByRead, withVisibilityArm: true);
+        var writeSql = NonFeatureWalk(
+            ctx.For(domain, AccessAction.Write), alias, "acc_w", parameters, reachedByWrite, withVisibilityArm: false);
+        return (readSql, writeSql, parameters);
+    }
+
+    /// <summary>
+    /// The non-feature walk for one (domain, action) slice as a CASE chain over
+    /// <paramref name="alias"/>, adding this slice's parameters under <paramref name="prefix"/>.
+    /// </summary>
+    private static string NonFeatureWalk(
+        AccessFilterSet set,
+        string alias,
+        string prefix,
+        DynamicParameters parameters,
+        IReadOnlyCollection<Guid>? reachedByAttachment,
+        bool withVisibilityArm)
+    {
         Guid[] reached = reachedByAttachment is null ? [] : [.. reachedByAttachment];
         parameters.Add($"{prefix}_attachment_reach", UuidArray(reached));
         var reachArm = $"OR {alias}.id = ANY(@{prefix}_attachment_reach)";
-        var visibilityArm = $"""
-            OR {alias}.visibility >= {(short)Visibility.Authenticated}
-                   OR ({alias}.visibility = {(short)Visibility.CavingGroup}
-                       AND {alias}.caving_group_id IS NOT NULL
-                       AND {alias}.caving_group_id = ANY(@{CavingGroupIdsParam}))
-                   {reachArm}
-            """;
+        var visibilityArm = withVisibilityArm
+            ? $"""
+                OR {alias}.visibility >= {(short)Visibility.Authenticated}
+                       OR ({alias}.visibility = {(short)Visibility.CavingGroup}
+                           AND {alias}.caving_group_id IS NOT NULL
+                           AND {alias}.caving_group_id = ANY(@{CavingGroupIdsParam}))
+                       {reachArm}
+                """
+            : reachArm;
 
         if (set.IsEmpty)
         {
-            return ($"""
+            return $"""
                 (@{IsFullAdminParam}
                  OR {alias}.owner_user_id = @{UserIdParam}
                  {visibilityArm})
-                """, parameters);
+                """;
         }
 
         parameters.Add($"{prefix}_deny_obj", UuidArray(set.DenyObjectIds));
@@ -194,7 +256,7 @@ public static class AccessSql
                     {visibilityArm}
              END)
             """;
-        return (sql, parameters);
+        return sql;
     }
 
     /// <summary>

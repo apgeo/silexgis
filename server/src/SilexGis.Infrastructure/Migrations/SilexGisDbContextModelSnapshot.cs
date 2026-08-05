@@ -1383,6 +1383,11 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("document_type_id");
 
+                    b.Property<string>("Language")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("language");
+
                     b.Property<string>("Metadata")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -3470,6 +3475,25 @@ namespace SilexGis.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("ck_taggings_one_target", "(feature_id IS NOT NULL AND entity_type IS NULL AND entity_id IS NULL) OR (feature_id IS NULL AND entity_type IS NOT NULL AND entity_id IS NOT NULL)");
                         });
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TextSearchLanguage", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("code");
+
+                    b.Property<string>("Configuration")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("configuration");
+
+                    b.HasKey("Code")
+                        .HasName("pk_text_search_languages");
+
+                    b.ToTable("text_search_languages", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripLog", b =>

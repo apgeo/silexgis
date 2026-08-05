@@ -120,6 +120,7 @@ public static class DependencyInjection
         services.Configure<FilesOptions>(configuration.GetSection(FilesOptions.SectionName));
         services.AddSingleton<IFileStore, LocalFileStore>();
         services.AddSingleton<ThumbnailService>();
+        services.AddSingleton<PageRenderService>();
         services.AddSingleton<IPhotoGeotagReader, MagickPhotoGeotagReader>();
         services.AddSingleton<IContentMetadataReader, ContentMetadataReader>();
         services.AddSingleton<IVectorIO, GdalVectorIO>();

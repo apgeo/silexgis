@@ -4,12 +4,12 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using NPOI.HSSF.UserModel;
-using NPOI.POIFS.FileSystem;
 using Shouldly;
 using SilexGis.Infrastructure.Documents.Extraction;
 using Drawing = DocumentFormat.OpenXml.Drawing;
 using Presentation = DocumentFormat.OpenXml.Presentation;
 using Word = DocumentFormat.OpenXml.Wordprocessing;
+using static SilexGis.Api.Tests.Support.CompoundFileSamples;
 
 namespace SilexGis.Api.Tests;
 
@@ -42,6 +42,8 @@ public class PdfAndOfficeTextExtractorTests
     [InlineData("application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "office-open-xml")]
     [InlineData("application/vnd.ms-excel", "legacy-office")]
+    [InlineData("application/msword", "legacy-office")]
+    [InlineData("application/vnd.ms-powerpoint", "legacy-office")]
     [InlineData("application/x-ole-storage", "legacy-office")]
     public void A_format_is_dispatched_to_the_reader_that_understands_it(
         string mimeType, string extractor)
@@ -52,17 +54,18 @@ public class PdfAndOfficeTextExtractorTests
 
     /// <summary>
     /// A format nothing reads must report itself as such rather than as a file with no text.
-    /// The first two carry a text layer and no reader here implements their body format, which
-    /// is the case worth keeping visible; the third carries none and is never queued at all.
+    /// A photograph is the case: it is never queued, because it carries no text layer to read.
+    /// It is asserted here beside a format that <em>is</em> handled, because "nothing reads this"
+    /// only means anything against a selector that does hand readers back.
     /// </summary>
-    [Theory]
-    [InlineData("application/msword")]
-    [InlineData("application/vnd.ms-powerpoint")]
-    [InlineData("image/jpeg")]
-    public void A_format_no_reader_handles_is_reported_rather_than_silently_empty(string mimeType)
+    [Fact]
+    public void A_format_no_reader_handles_is_reported_rather_than_silently_empty()
     {
-        Selector.For(mimeType).ShouldBeNull();
-        Selector.CanExtract(mimeType).ShouldBeFalse();
+        Selector.For("image/jpeg").ShouldBeNull();
+        Selector.CanExtract("image/jpeg").ShouldBeFalse();
+
+        Selector.For("application/msword").ShouldNotBeNull();
+        Selector.CanExtract("application/msword").ShouldBeTrue();
     }
 
     [Fact]
@@ -189,22 +192,102 @@ public class PdfAndOfficeTextExtractorTests
 
     /// <summary>
     /// A compound file whose name settled nothing is opened and asked what it is. A workbook is
-    /// read; anything else is refused, because reporting it as a document with no text would
-    /// hide a file that becomes readable the day something can read it.
+    /// read; a container holding none of the bodies this reader knows is refused, because
+    /// reporting it as a document with no text would hide a file that becomes readable the day
+    /// something can read it.
     /// </summary>
     [Fact]
-    public async Task A_compound_file_that_is_not_a_workbook_is_refused_rather_than_read_as_empty()
+    public async Task A_compound_file_holding_no_readable_body_is_refused_rather_than_read_as_empty()
     {
         using var workbook = new MemoryStream(LegacyWorkbook());
         var readable = await Selector.For("application/x-ole-storage")!
             .ExtractAsync(workbook, CancellationToken.None);
         readable.Pages[0].Text.ShouldNotBeNull().ShouldContain("Galerii");
 
-        using var wordProcessor = new MemoryStream(CompoundFile("WordDocument"));
+        using var other = new MemoryStream(
+            CompoundFile(("Contents", Encoding.ASCII.GetBytes("no Office body here"))));
 
         await Should.ThrowAsync<NotSupportedException>(
             () => Selector.For("application/x-ole-storage")!
-                .ExtractAsync(wordProcessor, CancellationToken.None));
+                .ExtractAsync(other, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// A word-processor document written by a version too old for the converter behind this
+    /// reader is not a damaged file, and the two are recorded against the file differently: one
+    /// becomes readable the day a better converter arrives, the other only if the file itself is
+    /// replaced. Both answers are asserted here, because the distinction means nothing unless
+    /// both are reachable from the same reader.
+    /// </summary>
+    [Fact]
+    public async Task A_word_processor_version_nothing_converts_is_refused_as_unsupported()
+    {
+        using var tooOld = new MemoryStream(
+            CompoundFile(("WordDocument", WordDocumentStream(Word6Version, encrypted: false))));
+
+        await Should.ThrowAsync<NotSupportedException>(
+            () => Selector.For("application/msword")!
+                .ExtractAsync(tooOld, CancellationToken.None));
+
+        using var damaged = new MemoryStream(
+            CompoundFile(("WordDocument", WordDocumentStream(Word97Version, encrypted: false))));
+
+        var failure = await Should.ThrowAsync<Exception>(
+            () => Selector.For("application/msword")!
+                .ExtractAsync(damaged, CancellationToken.None));
+        failure.ShouldNotBeOfType<NotSupportedException>();
+    }
+
+    /// <summary>
+    /// A locked document is refused before anything tries to parse it. It has to be: the
+    /// converter reads the flag and carries on regardless, so what an encrypted body yields is
+    /// text-shaped rubbish rather than an error — and rubbish quietly entering a search index is
+    /// the one outcome this pipeline exists to prevent. The unlocked file beside it fails for its
+    /// own reasons and, the point of the pairing, not for this one.
+    /// </summary>
+    [Fact]
+    public async Task A_password_protected_document_is_refused_rather_than_read_as_nonsense()
+    {
+        using var locked = new MemoryStream(
+            CompoundFile(("WordDocument", WordDocumentStream(Word97Version, encrypted: true))));
+
+        await Should.ThrowAsync<ProtectedContentException>(
+            () => Selector.For("application/msword")!
+                .ExtractAsync(locked, CancellationToken.None));
+
+        using var unlocked = new MemoryStream(
+            CompoundFile(("WordDocument", WordDocumentStream(Word97Version, encrypted: false))));
+
+        var failure = await Should.ThrowAsync<Exception>(
+            () => Selector.For("application/msword")!
+                .ExtractAsync(unlocked, CancellationToken.None));
+        failure.ShouldNotBeOfType<ProtectedContentException>();
+    }
+
+    /// <summary>
+    /// The same refusal for a presentation, on the evidence the format itself provides: the
+    /// record naming the current revision carries one of two documented values, and one of them
+    /// says the rest of the file is encrypted.
+    /// </summary>
+    [Fact]
+    public async Task A_password_protected_presentation_is_refused_rather_than_read_as_nonsense()
+    {
+        using var locked = new MemoryStream(CompoundFile(
+            ("PowerPoint Document", new byte[64]),
+            ("Current User", CurrentUser(encrypted: true))));
+
+        await Should.ThrowAsync<ProtectedContentException>(
+            () => Selector.For("application/vnd.ms-powerpoint")!
+                .ExtractAsync(locked, CancellationToken.None));
+
+        using var unlocked = new MemoryStream(CompoundFile(
+            ("PowerPoint Document", new byte[64]),
+            ("Current User", CurrentUser(encrypted: false))));
+
+        var failure = await Should.ThrowAsync<Exception>(
+            () => Selector.For("application/vnd.ms-powerpoint")!
+                .ExtractAsync(unlocked, CancellationToken.None));
+        failure.ShouldNotBeOfType<ProtectedContentException>();
     }
 
     /// <summary>
@@ -395,20 +478,6 @@ public class PdfAndOfficeTextExtractorTests
 
         var buffer = new MemoryStream();
         workbook.Write(buffer, leaveOpen: true);
-        return buffer.ToArray();
-    }
-
-    /// <summary>A compound file holding one named stream and nothing a workbook reader wants.</summary>
-    private static byte[] CompoundFile(string streamName)
-    {
-        var compound = new POIFSFileSystem();
-        using (var payload = new MemoryStream(Encoding.ASCII.GetBytes("not a workbook")))
-        {
-            compound.Root.CreateDocument(streamName, payload);
-        }
-
-        var buffer = new MemoryStream();
-        compound.WriteFileSystem(buffer);
         return buffer.ToArray();
     }
 
