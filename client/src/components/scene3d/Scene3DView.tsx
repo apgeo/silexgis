@@ -91,8 +91,11 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // which cannot draw the scene should never be asked to fetch.
   const [webGl2] = useState(supportsWebGl2);
 
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error' | 'contextLost'>('loading');
   const [errorDetail, setErrorDetail] = useState<string>();
+  // Incremented to build the scene again after the browser has taken its graphics context away.
+  // It is a dependency of the effect that owns the scene, so changing it is the rebuild.
+  const [rebuildToken, setRebuildToken] = useState(0);
   // False while another mount in this window is showing the one scene there is.
   const [showingHere, setShowingHere] = useState(true);
 
@@ -108,6 +111,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     let disposed = false;
     let session: Scene3DSession | null = null;
     let unsubscribeRenderError: (() => void) | undefined;
+    let unsubscribeContextLoss: (() => void) | undefined;
     setStatus('loading');
     setErrorDetail(undefined);
 
@@ -133,9 +137,29 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           setErrorDetail(message);
         }
       });
+      // The browser can take the graphics context away for reasons that have nothing to do with
+      // this application — a phone backgrounded and returned to, a driver reset, memory pressure.
+      // The GPU resources do not survive it, so the first answer is to build the scene again;
+      // bumping the token re-runs this whole effect, which is exactly that. Where the camera was
+      // looking is held as plain degrees and metres outside the scene, so the rebuilt one opens
+      // where the old one was and a viewer sees a flicker rather than a loss.
+      unsubscribeContextLoss = session.engine.subscribeContextLoss((state) => {
+        if (disposed) {
+          return;
+        }
+        if (state === 'recovering') {
+          setRebuildToken((token) => token + 1);
+        } else {
+          setStatus('contextLost');
+        }
+      });
       engineRef.current = session.engine;
       setEngineVersion((version) => version + 1);
       setStatus('ready');
+      // Arms the next recovery. Without it a scene that came back cleanly would refuse to come
+      // back from a later, unrelated loss: the guard that stops a rebuild loop cannot tell a
+      // repeat from a new fault until one rebuild has been seen to work.
+      session.engine.reportContextRecovered();
     })().catch((error: unknown) => {
       if (disposed) {
         return;
@@ -147,12 +171,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     return () => {
       disposed = true;
       unsubscribeRenderError?.();
+      unsubscribeContextLoss?.();
       engineRef.current = null;
       session?.release();
       session = null;
       releaseSurface?.();
     };
-  }, [webGl2]);
+  }, [webGl2, rebuildToken]);
 
   const { data: layers } = useMapLayers();
   const [activeBaseId, setActiveBaseId] = useState<number>();
@@ -606,13 +631,31 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       {status === 'error' && (
         <Alert type="error" showIcon message={t('scene3d.startFailed')} description={errorDetail} />
       )}
+      {/* The scene has already been rebuilt once for this and lost the context again, so the view
+          stops rather than flickering: a rebuild loop looks like a frozen application and empties
+          a phone's battery. Reloading is offered as a control because the alternative is a viewer
+          working out for themselves that a page which otherwise looks alive needs it. */}
+      {status === 'contextLost' && (
+        <Alert
+          type="warning"
+          showIcon
+          data-testid="scene3d-context-lost"
+          message={t('scene3d.contextLostTitle')}
+          description={t('scene3d.contextLostHint')}
+          action={
+            <Button size="small" onClick={() => window.location.reload()}>
+              {t('scene3d.contextLostReload')}
+            </Button>
+          }
+        />
+      )}
       {/* The window's drawing surface is moved into this element while this view is showing the
           scene; React never touches what is inside it. */}
       <div
         ref={slotRef}
         className="scene3d-canvas"
         data-testid="scene3d-container"
-        style={{ display: status === 'error' ? 'none' : undefined }}
+        style={{ display: status === 'error' || status === 'contextLost' ? 'none' : undefined }}
       />
       {!showingHere && status !== 'error' && (
         <div className="scene3d-elsewhere" data-testid="scene3d-elsewhere">

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import type { Scene3DContextLossState } from './contextLoss.ts';
+
 // The contract between the application and whatever draws the 3D scene.
 //
 // Exactly one module in this application talks to a 3D engine library, and everything else talks
@@ -115,6 +117,23 @@ export interface Scene3DLifecycle {
    * detail line, never a user-facing sentence — the caller supplies the translated wording.
    */
   subscribeRenderError(listener: (message: string) => void): () => void;
+  /**
+   * Reports that the browser has taken the graphics context away, and whether the scene should be
+   * rebuilt or the viewer told. Returns an unsubscribe function.
+   *
+   * Separate from a render error because it is not the scene's fault and is usually not permanent:
+   * a browser revokes a context on its own initiative — a phone backgrounded and returned to, a
+   * driver reset, memory pressure, too many live contexts across tabs. The GPU resources do not
+   * survive it, so recovery means building a new scene rather than repairing this one.
+   * `recovering` asks the caller to do exactly that; `lost` means that has already been tried and
+   * the viewer should be told, rather than left with a blank globe on a page that looks alive.
+   */
+  subscribeContextLoss(listener: (state: Scene3DContextLossState) => void): () => void;
+  /**
+   * Tells the scene that a rebuild has drawn successfully, which is what arms the next recovery.
+   * Without it a scene that recovered cleanly would refuse to recover from a later, unrelated loss.
+   */
+  reportContextRecovered(): void;
 }
 
 // ---- imagery ----------------------------------------------------------------

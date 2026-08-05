@@ -2349,3 +2349,59 @@ describe("the ground's elevation", () => {
     session.release();
   });
 });
+
+describe('a graphics context the browser takes away', () => {
+  // The drawing surface of the most recently built scene, which is where the browser reports a
+  // lost context — on the canvas itself rather than through the engine.
+  function loseContext(): Event {
+    const widgets = engine.engineState.widgets;
+    const surface = widgets[widgets.length - 1].canvas as unknown as EventTarget;
+    const event = new Event('webglcontextlost', { cancelable: true });
+    surface.dispatchEvent(event);
+    return event;
+  }
+
+  it('cancels the event, because a context is only restorable if the page asks for it', () => {
+    const session = acquire();
+    session.engine.subscribeContextLoss(() => {});
+
+    const event = loseContext();
+
+    // Not politeness: without this the surface is dead for good and no rebuild can get a context
+    // for it again. A test rather than a comment because nothing else would ever fail if it went.
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('asks for a rebuild the first time, and gives up when it happens again straight away', () => {
+    const element = container();
+    const first = acquire(element);
+    const states: string[] = [];
+    first.engine.subscribeContextLoss((state) => states.push(state));
+
+    loseContext();
+    expect(states).toEqual(['recovering']);
+
+    // The rebuild: a new scene in the SAME surface, which is how the real recovery works.
+    first.release();
+    const second = acquire(element);
+    second.engine.subscribeContextLoss((state) => states.push(state));
+    second.engine.reportContextRecovered();
+
+    loseContext();
+
+    // The history has to survive the rebuild, or a machine that cannot hold a context at all
+    // would be rebuilt for ever instead of the viewer being told once.
+    expect(states).toEqual(['recovering', 'lost']);
+  });
+
+  it('stops reporting once the scene is released', () => {
+    const session = acquire();
+    const states: string[] = [];
+    session.engine.subscribeContextLoss((state) => states.push(state));
+
+    session.release();
+    loseContext();
+
+    expect(states).toEqual([]);
+  });
+});

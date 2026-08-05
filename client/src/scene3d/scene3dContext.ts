@@ -48,6 +48,9 @@ import {
   DEFAULT_CAMERA_FLOOR_METERS,
   footprintCenter,
 } from './caveFootprint3d.ts';
+import { createContextLossPolicy } from './contextLoss.ts';
+import type { ContextLossPolicy } from './contextLoss.ts';
+import type { Scene3DContextLossState } from './contextLoss.ts';
 import {
   cameraGroundSampleDistance,
   cameraHeightForZoom,
@@ -193,6 +196,28 @@ const CUTAWAY_FLOOR_COLOR = Color.fromCssColorString('#4a4038');
  * is still a near/far one because the engine only takes the underground colour into account at all
  * when it is given one with a non-zero near value.
  */
+/**
+ * The recovery history of each drawing surface.
+ *
+ * Deliberately not held on the scene. Recovering from a lost graphics context means building a
+ * *new* scene, so a counter living on the scene would be discarded by the very act it is meant to
+ * count: every rebuild would look like a first loss, and a machine that cannot hold a context at
+ * all would flicker for as long as the page was open. The surface outlives the scenes drawn into
+ * it — there is one per window and the rebuild is handed the same element — so it is what the
+ * history belongs to.
+ */
+const contextLossPolicies = new WeakMap<object, ContextLossPolicy>();
+
+function contextLossPolicyFor(surface: object): ContextLossPolicy {
+  const existing = contextLossPolicies.get(surface);
+  if (existing) {
+    return existing;
+  }
+  const created = createContextLossPolicy();
+  contextLossPolicies.set(surface, created);
+  return created;
+}
+
 const UNDERGROUND_COLOR = Color.fromCssColorString('#3a332c');
 const UNDERGROUND_COLOR_ALPHA_BY_DISTANCE = new NearFarScalar(1000, 1, 500000, 1);
 
@@ -201,6 +226,8 @@ class CesiumScene3D implements Scene3DCore {
   private readonly imageryById = new Map<string, ImageryLayer>();
   private readonly renderErrorListeners = new Set<(message: string) => void>();
   private readonly removeRenderErrorHandler: () => void;
+  private readonly contextLossListeners = new Set<(state: Scene3DContextLossState) => void>();
+  private readonly removeContextLostHandler: () => void;
 
   /** Every batch currently in the scene, so a source built twice under one id cannot orphan one. */
   private readonly vectorSourceIds = new Map<string, Scene3DVectorSource<never>>();
@@ -450,6 +477,25 @@ class CesiumScene3D implements Scene3DCore {
     scene.renderError.addEventListener(onRenderError);
     this.removeRenderErrorHandler = () => scene.renderError.removeEventListener(onRenderError);
 
+    // A lost graphics context is reported on the drawing surface itself, not through the engine.
+    //
+    // `preventDefault()` here is not politeness, it is the whole mechanism: the browser only keeps
+    // a context restorable if the page cancels this event. Without it the surface is dead for good
+    // and no amount of rebuilding will get a context for it again. It has to run synchronously in
+    // the handler, which is why the decision about what to do next is taken after it and not
+    // before.
+    const canvas = this.widget.canvas as unknown as EventTarget;
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      const state = contextLossPolicyFor(this.widget.container).recordLoss();
+      for (const listener of this.contextLossListeners) {
+        listener(state);
+      }
+    };
+    canvas.addEventListener('webglcontextlost', onContextLost);
+    this.removeContextLostHandler = () =>
+      canvas.removeEventListener('webglcontextlost', onContextLost);
+
     this.flyToZoom(DEFAULT_LONGITUDE, DEFAULT_LATITUDE, DEFAULT_ZOOM);
   }
 
@@ -496,6 +542,8 @@ class CesiumScene3D implements Scene3DCore {
     this.cutawayFootprint = undefined;
     this.removeRenderErrorHandler();
     this.renderErrorListeners.clear();
+    this.removeContextLostHandler();
+    this.contextLossListeners.clear();
     this.imageryById.clear();
     // The widget takes every batch down with the scene; the map only exists so a source built
     // twice under one id can be found, and it must not outlive the scene it named.
@@ -523,6 +571,17 @@ class CesiumScene3D implements Scene3DCore {
     return () => {
       this.renderErrorListeners.delete(listener);
     };
+  }
+
+  subscribeContextLoss(listener: (state: Scene3DContextLossState) => void): () => void {
+    this.contextLossListeners.add(listener);
+    return () => {
+      this.contextLossListeners.delete(listener);
+    };
+  }
+
+  reportContextRecovered(): void {
+    contextLossPolicyFor(this.widget.container).recordRecovered();
   }
 
   // ---- imagery ----

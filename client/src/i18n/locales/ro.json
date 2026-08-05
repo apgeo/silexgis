@@ -822,7 +822,10 @@
       "south": "Vedere dinspre sud",
       "east": "Vedere dinspre est",
       "west": "Vedere dinspre vest"
-    }
+    },
+    "contextLostTitle": "Vizualizarea 3D s-a oprit",
+    "contextLostHint": "Browserul a eliberat resursele grafice folosite de această vizualizare, de două ori la scurt timp. De obicei, reîncărcarea paginii o restabilește.",
+    "contextLostReload": "Reîncarcă"
   },
   "caveview": {
     "loadError": "Modelul 3D nu a putut fi încărcat"

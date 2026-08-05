@@ -822,7 +822,10 @@
       "south": "View from the south",
       "east": "View from the east",
       "west": "View from the west"
-    }
+    },
+    "contextLostTitle": "The 3D view stopped",
+    "contextLostHint": "The browser released the graphics resources this view was using, twice in quick succession. Reloading the page usually restores it.",
+    "contextLostReload": "Reload"
   },
   "caveview": {
     "loadError": "Failed to load the 3D model"
