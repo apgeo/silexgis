@@ -93,6 +93,18 @@ public sealed class TextExtractionHandler(
             await documents.RecordTextExtractionOutcomeAsync(
                 file.Id, TextExtractionState.Unsupported, null, CancellationToken.None);
         }
+        catch (ProtectedContentException)
+        {
+            // Locked rather than broken, and recorded as a failure because that is what the
+            // states say a protected file is: something worth trying again, since the answer
+            // changes the day an unlocked copy is uploaded over it. Not rethrown — the refusal
+            // is deliberate and complete, and re-delivering the job would only repeat it.
+            await documents.RecordTextExtractionOutcomeAsync(
+                file.Id,
+                TextExtractionState.Failed,
+                "The file is password-protected, so its text cannot be read.",
+                CancellationToken.None);
+        }
         catch (ContentTooLargeException)
         {
             // Nothing is wrong with the file, so it is not called damaged; it simply could not

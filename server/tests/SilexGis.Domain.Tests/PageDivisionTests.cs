@@ -29,6 +29,22 @@ public class PageDivisionTests
             .ShouldBe(PageDivision.Slide);
     }
 
+    /// <summary>
+    /// A legacy presentation is read by converting it into the modern one, so its slides survive
+    /// the reading as separate rows and are as real as any other deck's. A legacy workbook is not
+    /// converted — it is read whole — so the same argument does not reach it, and the two answers
+    /// are asserted together because the difference is the point.
+    /// </summary>
+    [Fact]
+    public void A_legacy_deck_keeps_its_slides_although_a_legacy_workbook_loses_its_sheets()
+    {
+        DocumentPagination.DivisionOf("application/vnd.ms-powerpoint").ShouldBe(PageDivision.Slide);
+        DocumentPagination.NumbersRealDivisions("application/vnd.ms-powerpoint").ShouldBeTrue();
+
+        DocumentPagination.DivisionOf("application/vnd.ms-excel").ShouldBe(PageDivision.Whole);
+        DocumentPagination.NumbersRealDivisions("application/vnd.ms-excel").ShouldBeFalse();
+    }
+
     [Theory]
     // A word processor paginates only once something has chosen a paper size, which is not a
     // fact about the file.
@@ -37,10 +53,12 @@ public class PageDivisionTests
     [InlineData("application/rtf")]
     [InlineData("text/plain")]
     [InlineData("text/markdown")]
-    // The legacy binary formats are read whole however many sheets or slides they hold, so
-    // their one row is the whole file and numbering it would describe rows that do not exist.
+    // A legacy workbook is read whole however many sheets it holds, so its one row is the whole
+    // file and numbering it would describe rows that do not exist. A compound file whose name
+    // settled nothing is worse than that: under the one media type a workbook, a word-processor
+    // document and a presentation all arrive, and only the last of the three has divisions at
+    // all — so the media type alone cannot say what a number would be counting.
     [InlineData("application/vnd.ms-excel")]
-    [InlineData("application/vnd.ms-powerpoint")]
     [InlineData("application/msword")]
     [InlineData("application/x-ole-storage")]
     // Including the spreadsheet and presentation shapes of OpenDocument, which are read whole

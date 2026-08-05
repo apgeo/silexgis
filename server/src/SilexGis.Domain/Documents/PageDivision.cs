@@ -49,13 +49,19 @@ public static class DocumentPagination
     {
         "application/pdf" => PageDivision.Page,
 
-        // Only the modern Open XML pair declares its sheets and slides in a form the reader
-        // walks one by one. The legacy binary formats are read whole, so their text arrives as
-        // one row however many sheets the workbook had, and claiming otherwise here would
-        // describe rows that do not exist.
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => PageDivision.Sheet,
         "application/vnd.openxmlformats-officedocument.presentationml.presentation" => PageDivision.Slide,
 
+        // A legacy presentation is read by converting it to the modern one first, so its slides
+        // survive as separate rows and are as real as any other deck's. A legacy workbook is not:
+        // it is read whole, and its text arrives as one row however many sheets it had, so
+        // calling that row a sheet would describe rows that do not exist.
+        "application/vnd.ms-powerpoint" => PageDivision.Slide,
+
+        // A compound file whose name settled nothing keeps the honest answer. Under that one
+        // media type a workbook is one row, a word-processor document is one row, and a
+        // presentation is one row per slide — so the media type alone cannot say what a number
+        // counts, and the only statement it can make without inventing a fact is none.
         _ => PageDivision.Whole,
     };
 

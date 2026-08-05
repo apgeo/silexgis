@@ -118,10 +118,14 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
     {
         base.OnModelCreating(builder);
 
+        // Each of these is installed because something here calls into it: geometry columns and
+        // their index, the dictionary that folds diacritics inside the text-search parser, and
+        // the path type the cabinet tree is stored as. An extension nobody calls does not belong
+        // in the list — it is a promise to whoever reads the schema that the database is doing
+        // something it is not.
         builder.HasPostgresExtension("postgis");
         builder.HasPostgresExtension("unaccent");
         builder.HasPostgresExtension("ltree");
-        builder.HasPostgresExtension("pg_trgm");
 
         // Identity tables use plain names (users/roles/…), not AspNet* defaults.
         builder.Entity<SilexGisUser>().ToTable("users");

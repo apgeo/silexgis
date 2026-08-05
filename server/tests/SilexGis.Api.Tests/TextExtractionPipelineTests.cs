@@ -354,6 +354,68 @@ public sealed class TextExtractionPipelineTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>
+    /// Two refusals that mean different things, told apart by what is recorded against the file.
+    /// A locked document is the file's own condition and the answer changes the day an unlocked
+    /// copy is uploaded over it, so it is a failure carrying a sentence somebody can act on. A
+    /// format nothing here converts is a gap on this side with nothing wrong with the file, so
+    /// it is the same answer as finding no reader at all and carries no error. Both are asserted
+    /// together because the distinction is the whole point of having two states, and the readable
+    /// document beside them is asserted too: what separates the three is the file, not the path.
+    /// <para>
+    /// Neither refusal is rethrown, and the job rows say so. A handler that threw would leave the
+    /// queue row marked failed and mail the requester about a decision that was deliberate and
+    /// complete.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_locked_document_is_recorded_as_failed_and_an_unconvertible_one_as_unsupported()
+    {
+        var locked = (await UploadAsync(
+                "blocat.doc",
+                CompoundFileSamples.CompoundFile((
+                    CompoundFileSamples.WordStream,
+                    CompoundFileSamples.WordDocumentStream(CompoundFileSamples.Word97Version, encrypted: true))),
+                "application/msword"))
+            .GetProperty("id").GetGuid();
+
+        var tooOld = (await UploadAsync(
+                "vechi.doc",
+                CompoundFileSamples.CompoundFile((
+                    CompoundFileSamples.WordStream,
+                    CompoundFileSamples.WordDocumentStream(CompoundFileSamples.Word6Version, encrypted: false))),
+                "application/msword"))
+            .GetProperty("id").GetGuid();
+
+        var readable = (await UploadAsync("citibil.txt", "raport de teren"u8.ToArray(), "text/plain"))
+            .GetProperty("id").GetGuid();
+
+        // The format was decided from the bytes, so all three took the same route in.
+        var lockedFile = await WaitForExtractionAsync(locked);
+        lockedFile.MimeType.ShouldBe("application/msword");
+        lockedFile.TextExtraction.ShouldBe(TextExtractionState.Failed);
+        lockedFile.TextExtractionError.ShouldNotBeNullOrEmpty();
+
+        var tooOldFile = await WaitForExtractionAsync(tooOld);
+        tooOldFile.MimeType.ShouldBe("application/msword");
+        tooOldFile.TextExtraction.ShouldBe(TextExtractionState.Unsupported);
+        tooOldFile.TextExtractionError.ShouldBeNull();
+
+        var readableFile = await WaitForExtractionAsync(readable);
+        readableFile.TextExtraction.ShouldBe(TextExtractionState.Extracted);
+        readableFile.TextExtractionError.ShouldBeNull();
+
+        // A refusal is an outcome the reading reached, not a job that went wrong. Had either
+        // been rethrown, the queue row would read failed and the requester would have been
+        // mailed about a decision that was deliberate and complete.
+        foreach (var fileId in new[] { locked, tooOld, readable })
+        {
+            var statuses = await JobStatusesAsync(fileId);
+            statuses.ShouldNotBeEmpty();
+            statuses.ShouldAllBe(s => s == ProcessingJobStatus.Succeeded);
+        }
+    }
+
+    /// <summary>
     /// Starting a sweep over the whole archive is an operator's decision, so it takes the same
     /// right the other maintenance sweeps take.
     /// </summary>
@@ -388,6 +450,30 @@ public sealed class TextExtractionPipelineTests : IAsyncLifetime, IDisposable
         await handler.ExecuteAsync(
             new ProcessingJob { Kind = ProcessingJobKinds.TextExtractionBackfill },
             CancellationToken.None);
+    }
+
+    /// <summary>
+    /// How every queue row for this file's reading ended. A list rather than one row because the
+    /// sweep may have queued a second reading of the same file, and the assertion is about all of
+    /// them: a refusal is an outcome, so no reading of this file may have gone wrong.
+    /// </summary>
+    private async Task<List<ProcessingJobStatus>> JobStatusesAsync(Guid fileId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var jobs = await db.ProcessingJobs.AsNoTracking()
+            .Where(j => j.Kind == ProcessingJobKinds.TextExtraction)
+            .Select(j => new { j.Payload, j.Status })
+            .ToListAsync();
+
+        return
+        [
+            .. jobs
+                .Where(j =>
+                    JsonSerializer.Deserialize<TextExtractionPayload>(j.Payload, JsonSerializerOptions.Web)?.FileId
+                        == fileId)
+                .Select(j => j.Status),
+        ];
     }
 
     /// <summary>Whether a reading of this file has been queued by anything other than its upload.</summary>

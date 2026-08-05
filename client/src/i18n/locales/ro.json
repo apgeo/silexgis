@@ -361,6 +361,12 @@
     }
   },
   "documents": {
+    "language": "Limbă",
+    "languageUnknown": "Necunoscută",
+    "languages": {
+      "ro": "Română",
+      "en": "Engleză"
+    },
     "metadata": "Proprietăți document",
     "title": "Titlu",
     "type": "Tip de document",

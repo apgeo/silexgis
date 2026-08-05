@@ -14,6 +14,13 @@ namespace SilexGis.Api.Features.Documents;
 
 public sealed class DocumentUpdateRequestValidator : AbstractValidator<DocumentUpdateRequest>
 {
+    /// <summary>
+    /// Longest language tag accepted on the wire. Wider than the stored code because a caller
+    /// may legitimately send a full tag — "ro-Latn-RO" — which is narrowed to its primary
+    /// subtag on the way in; it is a bound on the request, not a statement about languages.
+    /// </summary>
+    private const int LanguageTagMaxLength = 32;
+
     public DocumentUpdateRequestValidator()
     {
         RuleFor(x => x.Title).NotEmpty().MaximumLength(300);
@@ -30,6 +37,11 @@ public sealed class DocumentUpdateRequestValidator : AbstractValidator<DocumentU
         RuleFor(x => x.Metadata)
             .Must(BeAJsonObjectOrAbsent)
             .WithMessage("Metadata must be a JSON object.");
+
+        // Length only. A code that is not a language subtag is not an error here — it means
+        // "nobody has said", which is a legitimate thing to ask for and is how the field is
+        // cleared. What must not pass is a value too long for the column it is stored in.
+        RuleFor(x => x.Language).MaximumLength(LanguageTagMaxLength);
     }
 
     private static bool BeAJsonObjectOrAbsent(JsonElement? metadata) =>
@@ -142,7 +154,8 @@ public static class DocumentEndpoints
                     request.DocumentTypeId,
                     RawMetadata(request.Metadata),
                     request.Visibility,
-                    request.CavingGroupId),
+                    request.CavingGroupId,
+                    request.Language),
                 ct);
         }
         catch (DocumentWriteException e)
@@ -220,6 +233,7 @@ public static class DocumentEndpoints
             file.Kind,
             file.PageCount,
             file.TextExtraction,
+            document.Language,
             file.Author,
             file.Producer,
             file.ContentCreatedAt,

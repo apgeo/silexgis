@@ -6,6 +6,12 @@
 
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.79" />
+    <!-- Converts the pre-2007 binary Word and PowerPoint formats into the packaged ones so the
+         reader for those can read them. MIT, and on this framework they pull one shared MIT
+         package with no dependencies of its own. Do NOT add the renderer package alongside
+         them: it is not needed here and it carries commercial terms. -->
+    <PackageReference Include="DocSharp.Binary.Doc" Version="0.20.0" />
+    <PackageReference Include="DocSharp.Binary.Ppt" Version="0.20.0" />
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
     <PackageReference Include="JsonSchema.Net" Version="9.4.0" />

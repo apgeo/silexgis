@@ -16,9 +16,9 @@ are a database password, an admin account, and the public URL.
 
 - **Docker path:** Docker Engine with the Compose plugin (`docker compose`). 2 GB RAM is
   comfortable for a small community.
-- **Non-Docker path:** PostgreSQL 15+ with the PostGIS 3.3+, `unaccent`, `ltree` and `pg_trgm`
-  extensions (the last three ship with PostgreSQL itself), the .NET runtime (current LTS), and any
-  static web server (nginx, Caddy, Apache, IIS).
+- **Non-Docker path:** PostgreSQL 15+ with the PostGIS 3.3+, `unaccent` and `ltree` extensions
+  (the last two ship with PostgreSQL itself), the .NET runtime (current LTS), and any static web
+  server (nginx, Caddy, Apache, IIS).
 
 No system GDAL is required on any path — vector import/export and raster conversion run
 in-process.
@@ -296,7 +296,6 @@ policy**:
    CREATE EXTENSION postgis;
    CREATE EXTENSION unaccent;
    CREATE EXTENSION ltree;
-   CREATE EXTENSION pg_trgm;
    ```
    The application creates these itself on first start if the database user is allowed to, so
    this step is a convenience for installations where it is not. Document content search also

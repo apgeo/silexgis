@@ -1176,6 +1176,11 @@ export function useDocument(id: string | undefined, enabled = true) {
  * Visibility and the caving group decide who may read the document when no rule names it,
  * so saving them moves access: the cached lists that were filtered by that answer are
  * dropped along with the document itself.
+ *
+ * `language` shares the metadata carve-out: null leaves the stored code alone, because it is
+ * detected from the document's own text and a title correction is not a statement about it.
+ * An empty string is how it is cleared. Changing it re-indexes every page of the document, so
+ * cached searches are dropped too — they were answered by the previous stemmer.
  */
 export function useUpdateDocument() {
   const invalidateAttachments = useInvalidateAttachments();
@@ -1188,10 +1193,12 @@ export function useUpdateDocument() {
       metadata: Record<string, unknown> | null;
       visibility: Visibility;
       cavingGroupId: string | null;
+      language: string | null;
     }) => unwrap(api.PUT('/api/v1/documents/{id}', { params: { path: { id } }, body })),
     onSuccess: (_result, variables) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.document(variables.id) });
       void queryClient.invalidateQueries({ queryKey: ['cabinets'] });
+      void queryClient.invalidateQueries({ queryKey: ['search'] });
       invalidateAttachments();
     },
   });

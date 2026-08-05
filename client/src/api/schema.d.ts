@@ -7888,6 +7888,7 @@ export interface components {
             /** Format: int32 */
             pageCount: null | number;
             textExtraction: components["schemas"]["TextExtractionState"];
+            language: null | string;
             author: null | string;
             producer: null | string;
             /** Format: date-time */
@@ -7930,6 +7931,7 @@ export interface components {
             visibility: components["schemas"]["Visibility"];
             /** Format: uuid */
             cavingGroupId: null | string;
+            language: null | string;
         };
         EffectiveAccessDto: {
             actions: components["schemas"]["AccessAction"];

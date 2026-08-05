@@ -9,6 +9,17 @@ namespace SilexGis.Infrastructure.Documents.Extraction;
 public sealed class ContentTooLargeException(string message) : Exception(message);
 
 /// <summary>
+/// Raised when a reader recognised the file, found it locked, and stopped rather than reading it.
+/// <para>
+/// Distinct from a parse failure because it is a decision, not an accident: some readers will
+/// happily parse an encrypted body and hand back whatever the scrambled bytes decode as, and
+/// text-shaped rubbish entering a search index is worse than no text at all. A reader that can
+/// tell says so here, and the file is recorded as unread rather than as read-and-empty.
+/// </para>
+/// </summary>
+public sealed class ProtectedContentException(string message) : Exception(message);
+
+/// <summary>
 /// A stream a reader may seek in, and whether this borrowed it or made it. Disposing releases
 /// only what was made here, so the caller's own stream outlives the reading that used it.
 /// </summary>
@@ -20,6 +31,52 @@ internal readonly record struct BorrowedStream(Stream Stream, bool Owned) : IDis
         {
             this.Stream.Dispose();
         }
+    }
+}
+
+/// <summary>
+/// A read-only view of a stream that survives being closed by whoever is handed it.
+/// <para>
+/// Parser libraries disagree about who owns an input stream, and several of them close it when
+/// they are done. That is fine when one reader sees a file, and fatal when two must: a compound
+/// file has to be opened once to find out which application wrote it and again by the reader for
+/// that application, and the second open would be handed a disposed stream. Each reader gets its
+/// own view, seeks it where it needs to start, and closing it costs nothing.
+/// </para>
+/// </summary>
+internal sealed class SharedReadStream(Stream inner) : Stream
+{
+    public override bool CanRead => inner.CanRead;
+
+    public override bool CanSeek => inner.CanSeek;
+
+    public override bool CanWrite => false;
+
+    public override long Length => inner.Length;
+
+    public override long Position
+    {
+        get => inner.Position;
+        set => inner.Position = value;
+    }
+
+    public override void Flush() => inner.Flush();
+
+    public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+
+    public override int Read(Span<byte> buffer) => inner.Read(buffer);
+
+    public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
+
+    public override void SetLength(long value) => throw new NotSupportedException();
+
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    /// <summary>Deliberately does nothing: the stream this views belongs to somebody else.</summary>
+    protected override void Dispose(bool disposing)
+    {
+        // Not even base.Dispose: the base class would mark this view unusable, and the same
+        // underlying stream is about to be viewed again by the next reader.
     }
 }
 

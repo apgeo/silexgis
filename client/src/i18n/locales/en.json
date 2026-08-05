@@ -361,6 +361,12 @@
     }
   },
   "documents": {
+    "language": "Language",
+    "languageUnknown": "Not known",
+    "languages": {
+      "ro": "Romanian",
+      "en": "English"
+    },
     "metadata": "Document properties",
     "title": "Title",
     "type": "Document kind",

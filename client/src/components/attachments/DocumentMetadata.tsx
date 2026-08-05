@@ -30,6 +30,13 @@ import { parsePropertiesSchema, type SchemaField } from '../typedProperties/prop
 const visibilities: Visibility[] = ['private', 'cavingGroup', 'authenticated', 'public'];
 
 /**
+ * The languages this installation indexes with a stemmer of their own. Anything else — and
+ * "nobody has said" — indexes language-neutrally, which is what clearing the field asks for,
+ * so the list is a list of the choices that change something rather than of world languages.
+ */
+const languages = ['ro', 'en'] as const;
+
+/**
  * A cabinet named by its whole path. Names are unique only among siblings — "1987" sits
  * under many archives — so a bare name would be ambiguous away from the tree that gives
  * it context, which is exactly the situation here.
@@ -123,6 +130,7 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
   const [typeId, setTypeId] = useState<number | null>(null);
   const [visibility, setVisibility] = useState<Visibility>('private');
   const [cavingGroupId, setCavingGroupId] = useState<string | null>(null);
+  const [language, setLanguage] = useState<string | null>(null);
   const [filedIn, setFiledIn] = useState<string[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
 
@@ -134,6 +142,7 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
       setTypeId(document.documentTypeId);
       setVisibility(document.visibility);
       setCavingGroupId(document.cavingGroupId);
+      setLanguage(document.language);
       setFiledIn(document.cabinetIds);
       setValues((document.metadata as Record<string, unknown> | null) ?? {});
     }
@@ -192,6 +201,9 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
         // on a document turned private would leave the club named on a row it no longer
         // decides anything about.
         cavingGroupId: visibility === 'cavingGroup' ? cavingGroupId : null,
+        // An empty string clears the code; null would mean "I am not talking about the
+        // language", which is not what a person who just emptied the control meant.
+        language: language ?? '',
       });
       message.success(t('common.saved'));
       setOpen(false);
@@ -236,6 +248,19 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
           options={visibilities.map((value) => ({
             value,
             label: t(`caves.visibilityValues.${value}`),
+          }))}
+        />
+      </Field>
+      <Field label={t('documents.language')}>
+        <Select
+          value={language}
+          onChange={setLanguage}
+          allowClear
+          onClear={() => setLanguage(null)}
+          placeholder={t('documents.languageUnknown')}
+          options={languages.map((code) => ({
+            value: code,
+            label: t(`documents.languages.${code}`),
           }))}
         />
       </Field>
