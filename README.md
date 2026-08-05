@@ -58,6 +58,20 @@ Previous versions:
   features share a single feature model, so any of them can contain another (a karst area
   holding caves, a cave holding its entrances) and be linked to another by a named
   relation. Containment drives breadcrumbs and inherits location protection downwards.
+- **Links between anything, not just between features** — a cave and the report that describes
+  it, a trip and the photographs it produced, two records that turned out to be the same hole:
+  a link names two or more things of any kind — features, documents, trips, cavers, clubs,
+  cabinets, 3D models, saved views — and says how they are related. The wording comes from a
+  list ("Contains", "Documented by", "Duplicate of", …) that an administrator can extend with
+  whatever this archive actually says. A relation that reads one way reads correctly from both
+  ends, so a single link says "Contains" on one page and "Contained in" on the other. A link
+  can point at a part rather than the whole — a page or a run of pages of a document, a moment
+  or a stretch of a recording; other kinds of part (a survey station, a passage of text) are
+  recorded and shown, but choosing one needs a viewer that can select it, and those arrive with
+  their viewers. A link can also name a spot on the map that had no record yet, marking the
+  point as the link is written. Every link has a short address of its own to paste into a
+  message or a report, and it shows each reader only the ends they are allowed to see: a link
+  is never the thing that discloses a protected cave.
 - **Vector import/export** — GPX, KML, Shapefile, GeoJSON, WKT/CSV.
 - **3D survey models** — Therion `.lox` / Survex `.3d` via CaveView.js, plus cave
   centerlines projected on the map.

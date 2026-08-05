@@ -9,7 +9,7 @@ import {
   MoreOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { App, Button, Card, Dropdown, Flex, Tag, Typography } from 'antd';
+import { App, Button, Card, Dropdown, Flex, Tag, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDeleteResLink, useResLinksForTarget, type ResLink } from '../../api/hooks.ts';
@@ -70,6 +70,12 @@ function LinkRow({
   const shown = others.slice(0, MAX_CHIPS);
   const hidden = others.length - shown.length;
 
+  // A link is allowed to hold a single item, but one on its own asserts nothing — so the
+  // row says so quietly rather than rendering a relation phrase with nothing to relate.
+  // The wording stops at what this reader can see: a membership withheld from them leaves
+  // the response entirely, so a row can look like this while the stored link is complete.
+  const lonely = link.members.length === 1;
+
   const copyUrl = async () => {
     try {
       await navigator.clipboard.writeText(linkPageUrl(link.shortCode));
@@ -110,6 +116,11 @@ function LinkRow({
               {t('resLinks.moreMembers', { count: hidden })}
             </Tag>
           </Link>
+        )}
+        {lonely && (
+          <Tooltip title={t('resLinks.incompleteHint')}>
+            <Tag style={{ marginInlineEnd: 0 }}>{t('resLinks.incomplete')}</Tag>
+          </Tooltip>
         )}
       </Flex>
       <Dropdown

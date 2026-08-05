@@ -193,7 +193,19 @@ function CaveCard({ selection }: { selection: EntranceSelection | CaveSelection 
           </Button>
         )}
       </Flex>
-      <LinksSection entityType="feature" entityId={cave.id} variant="compact" canAdd entityTitle={cave.name} />
+      {/* An entrance is a feature in its own right, so the panel links the thing that was
+          actually clicked: a link recorded from an entrance names that entrance, not the
+          cave it belongs to. The id comes from the selection rather than from the loaded
+          entrance, so which entity is being linked never depends on a list arriving. */}
+      <LinksSection
+        entityType="feature"
+        entityId={selection.kind === 'entrance' ? selection.entranceId : cave.id}
+        variant="compact"
+        canAdd
+        entityTitle={
+          selection.kind === 'entrance' ? (entrance?.name ?? t('features.unnamed')) : cave.name
+        }
+      />
     </div>
   );
 }

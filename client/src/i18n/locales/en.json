@@ -18,7 +18,8 @@
     "templates": "Message texts",
     "permissionGroups": "Permission groups",
     "featureSets": "Feature sets",
-    "documentTypes": "Document kinds"
+    "documentTypes": "Document kinds",
+    "relationTypes": "Link relations"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1153,6 +1154,29 @@
         "enum": "choice"
       }
     },
+    "relationTypes": {
+      "title": "Link relations",
+      "intro": "The wording links between items are recorded with. The relations that ship with the product are shown in your language and cannot be changed — other installations read links by them. Anything you add here belongs to this installation and is shown exactly as you write it.",
+      "add": "Add a relation",
+      "edit": "Edit relation",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this relation? Links already recorded with it keep it, so it can only go once none are left.",
+      "name": "Reads as",
+      "nameHint": "How the relation reads from the item it starts at, for example \"Contains\" or \"Surveyed by\".",
+      "code": "Code",
+      "codeHint": "The short name this relation is stored and exchanged under. Keep it stable once links use it.",
+      "directed": "Reads one way",
+      "directedHint": "On when the two ends say different things — one contains the other, one documents the other. Off when both ends read the same, like \"Adjacent to\".",
+      "inverseName": "The other way round",
+      "inverseNameHint": "How the relation reads from the other end, for example \"Contained in\".",
+      "bothWays": "Reads the same from both ends",
+      "description": "Description",
+      "sortOrder": "Sort order",
+      "source": "Where it comes from",
+      "seeded": "Ships with the product",
+      "custom": "Added here",
+      "seededReadOnly": "Not editable"
+    },
     "templates": {
       "title": "Message texts",
       "intro": "The wording of everything the application sends. Leave one alone and it follows the product; rewrite it and your version is used.",
@@ -1233,7 +1257,9 @@
     "signIn": "Sign in"
   },
   "resLinks": {
-    "titleCount": "Links ({{count}})",
+    "titleCount": "Linked items ({{count}})",
+    "incomplete": "Incomplete",
+    "incompleteHint": "Only one item of this link is visible to you. A link says something once it connects two or more — add another item if there is one to add.",
     "addAction": "Link…",
     "moreMembers": "+{{count}}",
     "rowActions": "Link actions",
@@ -1383,6 +1409,8 @@
       "title": "New point",
       "name": "Name",
       "namePlaceholder": "Name for this point (optional)",
+      "altitude": "Altitude (m)",
+      "altitudePlaceholder": "Altitude in metres (optional)",
       "visibility": "Who can see it",
       "visibilityDefault": "Default",
       "audienceDefaultGroup": "By default this point will be visible to members of {{group}}. You can change it here, or later by editing the point.",
@@ -1420,7 +1448,11 @@
       "relationUnknown": "That relation is not one this installation offers.",
       "relationGone": "That relation no longer exists.",
       "duplicateWhole": "This link already names that item as a whole.",
-      "geoPointUnavailable": "Points cannot be created here: the generic feature kind is not installed."
+      "geoPointUnavailable": "Points cannot be created here: the generic feature kind is not installed.",
+      "relationCodeTaken": "Another relation already uses that code.",
+      "relationSeededImmutable": "A relation that ships with the product keeps its code and the way it reads.",
+      "relationSeededUndeletable": "A relation that ships with the product cannot be deleted.",
+      "relationInUse": "Links already record this relation, so it cannot be changed that way or deleted."
     }
   }
 }

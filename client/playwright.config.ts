@@ -11,6 +11,12 @@ import { defineConfig, devices } from '@playwright/test';
 // WebKit is a separate browser download (`npx playwright install webkit`), not just another
 // device profile.
 //
+// One flow needs a second account, and nothing but self-registration mints one, so the API
+// has to be started with SILEXGIS__Auth__OpenRegistration=true — it is off by default. That
+// flow fails rather than skipping without it: the behaviour it covers, an administrator
+// editing a link somebody else recorded, has no other cover, and a skipped test reads as a
+// green run.
+//
 // SILEXGIS_DEV_PORT moves the whole run — the dev server Vite starts and the address the
 // browser is pointed at — so a second checkout can be exercised against its own API and
 // database. It is the same variable the dev server reads, and it must be set together with

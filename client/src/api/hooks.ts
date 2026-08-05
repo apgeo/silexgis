@@ -2439,3 +2439,35 @@ export function useDeleteResLinkMember() {
     onSuccess: invalidate,
   });
 }
+
+/**
+ * Adds a relation to the installation's vocabulary. The whole link prefix is invalidated
+ * rather than only the vocabulary list, because every link row carries its relation inline
+ * and would otherwise keep rendering the wording that was current when it was fetched.
+ */
+export function useCreateResLinkRelationType() {
+  const invalidate = useInvalidateResLinks();
+  return useMutation({
+    mutationFn: (body: ResLinkRelationTypeWrite) =>
+      unwrap(api.POST('/api/v1/reslinks/relation-types', { body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateResLinkRelationType() {
+  const invalidate = useInvalidateResLinks();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: ResLinkRelationTypeWrite }) =>
+      unwrap(api.PATCH('/api/v1/reslinks/relation-types/{id}', { params: { path: { id } }, body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteResLinkRelationType() {
+  const invalidate = useInvalidateResLinks();
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrapVoid(api.DELETE('/api/v1/reslinks/relation-types/{id}', { params: { path: { id } } })),
+    onSuccess: invalidate,
+  });
+}

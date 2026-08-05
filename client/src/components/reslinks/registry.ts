@@ -85,7 +85,9 @@ export type ResLinkTargetType = (typeof RESLINK_TARGET_TYPES)[number];
 /**
  * Six of the nine worlds have no detail page in this client yet; their entries route to
  * null on purpose. A chip for one of them renders without navigation rather than dropping
- * the reader on a list page that is not the thing they clicked.
+ * the reader on a list page that is not the thing they clicked. The count is a fact about
+ * this client, not about the vocabulary: an entry stops routing to null the day the page
+ * it would open is shipped.
  */
 const targetTypes: Record<ResLinkTargetType, TargetTypeEntry> = {
   feature: {
@@ -93,7 +95,11 @@ const targetTypes: Record<ResLinkTargetType, TargetTypeEntry> = {
     labelKey: 'resLinks.targetTypes.feature',
     route: (id) => `/features/${id}`,
   },
-  document: { icon: FileTextOutlined, labelKey: 'resLinks.targetTypes.document', route: null },
+  document: {
+    icon: FileTextOutlined,
+    labelKey: 'resLinks.targetTypes.document',
+    route: (id) => `/documents/${id}`,
+  },
   tripLog: {
     icon: CompassOutlined,
     labelKey: 'resLinks.targetTypes.tripLog',

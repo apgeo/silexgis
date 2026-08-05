@@ -400,6 +400,20 @@ export default function LinkPage() {
         )}
       </Descriptions>
 
+      {/* A link may hold a single item, and one on its own records no relation — so the
+          page says so where the reader can act on it, next to the button that adds the
+          second. Phrased as what is visible here rather than as what is stored: a
+          membership withheld from this reader is absent from the response entirely, so a
+          complete link can legitimately arrive looking like this one. */}
+      {link.members.length === 1 && (
+        <Alert
+          type="info"
+          showIcon
+          message={t('resLinks.incompleteHint')}
+          style={{ marginTop: 16 }}
+        />
+      )}
+
       {editing && (
         <Card size="small" title={t('resLinks.editDetails')} style={{ marginTop: 16 }}>
           <Flex vertical gap={8}>

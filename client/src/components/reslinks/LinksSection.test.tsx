@@ -95,7 +95,7 @@ describe('LinksSection', () => {
       }),
     ]);
 
-    expect(screen.getByText('Links (1)')).toBeInTheDocument();
+    expect(screen.getByText('Linked items (1)')).toBeInTheDocument();
     // The page's own entity is the main member, so the relation reads forward from it.
     expect(screen.getByText('Documented by')).toBeInTheDocument();
     expect(screen.getByText('Survey report')).toBeInTheDocument();
@@ -106,7 +106,7 @@ describe('LinksSection', () => {
 
   it('shows nothing but the add action when the panel counts no links', () => {
     show(0, [], true);
-    expect(screen.queryByText(/^Links \(/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Linked items \(/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Link/ })).toBeInTheDocument();
   });
 
@@ -144,12 +144,25 @@ describe('LinksSection', () => {
 
   it('says so when it counted more links than the page it was given holds', () => {
     show(3, [link()]);
-    expect(screen.getByText('Links (3)')).toBeInTheDocument();
+    expect(screen.getByText('Linked items (3)')).toBeInTheDocument();
     expect(screen.getByText('Showing the first 1 of 3.')).toBeInTheDocument();
 
     cleanup();
     show(1, [link()]);
     expect(screen.queryByText(/Showing the first/)).not.toBeInTheDocument();
+  });
+
+  it('marks a link holding nothing but this entity as incomplete, and leaves a pair alone', () => {
+    show(1, [link({ members: [member({ id: 'self', targetId: 'self', isMain: true })] })]);
+    expect(screen.getByText('Incomplete')).toBeInTheDocument();
+
+    cleanup();
+    show(1, [
+      link({
+        members: [member({ id: 'self', targetId: 'self', isMain: true }), member({ id: 'm2' })],
+      }),
+    ]);
+    expect(screen.queryByText('Incomplete')).not.toBeInTheDocument();
   });
 
   it('collapses members past the fourth into a count that opens the link page', () => {

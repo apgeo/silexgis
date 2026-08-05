@@ -758,8 +758,10 @@ test('surface feature history records edits and restores in the map panel', asyn
   await login(page);
 
   // Selection is by map click at a fixed pixel, so purge any e2e features an earlier
-  // aborted run left stacked on that spot — otherwise the click selects a stale one.
-  await deleteFeatureRows(page, /E2E /);
+  // aborted run left stacked on that spot — otherwise the click selects a stale one. Named
+  // rather than swept: only these two flows draw on this pixel, and sweeping everything
+  // stamped E2E takes live subjects out from under whatever else is running beside this.
+  await deleteFeatureRows(page, /E2E (Hist Feat|Sinkhole) /);
   await page.goto('/');
 
   const toolbar = page.locator('.map-edit-overlay');

@@ -130,6 +130,22 @@ describe('LinkPage', () => {
     expect(screen.getByText(/2026-08-05 .*by you/)).toBeInTheDocument();
   });
 
+  it('says a link holding one item on its own is incomplete, and stops saying it at two', () => {
+    show();
+    expect(screen.getByText(/Only one item of this link is visible to you/)).toBeInTheDocument();
+
+    cleanup();
+    linkState = {
+      data: link({ members: [member(), member({ id: 'm2', targetId: 'f2' })] }),
+      isLoading: false,
+      isError: false,
+    };
+    show();
+    expect(
+      screen.queryByText(/Only one item of this link is visible to you/),
+    ).not.toBeInTheDocument();
+  });
+
   it('says a dead short code leads nowhere instead of showing an empty link', () => {
     linkState = {
       isLoading: false,
@@ -140,7 +156,7 @@ describe('LinkPage', () => {
     expect(screen.getAllByText('This link address does not lead anywhere.').length).toBeGreaterThan(0);
   });
 
-  it('groups members by kind and offers the target the server routed', () => {
+  it('groups members by kind and offers a way in wherever there is one', () => {
     linkState = {
       data: link({
         members: [
@@ -152,6 +168,13 @@ describe('LinkPage', () => {
             sortOrder: 1,
             display: { title: 'Survey report', subtitle: 'Report', route: null, thumbnailUrl: null },
           }),
+          member({
+            id: 'm3',
+            targetType: 'cabinet',
+            targetId: 'c1',
+            sortOrder: 2,
+            display: { title: 'Club archive', subtitle: null, route: null, thumbnailUrl: null },
+          }),
         ],
       }),
       isLoading: false,
@@ -161,10 +184,15 @@ describe('LinkPage', () => {
 
     expect(screen.getByText('Feature')).toBeInTheDocument();
     expect(screen.getByText('Document')).toBeInTheDocument();
-    // The feature has a route; the document has none, so no button pretends it does.
+    expect(screen.getByText('Cabinet')).toBeInTheDocument();
+    // The server routes the feature to the cave page it belongs on; the document is routed by
+    // this client, which ships the page for one and says so. A shelf has a page on neither
+    // side, so no button pretends it does.
     const openButtons = screen.getAllByText('Open');
-    expect(openButtons).toHaveLength(1);
-    expect(openButtons[0].closest('a')).toHaveAttribute('href', '/caves/f1');
+    expect(openButtons.map((button) => button.closest('a')?.getAttribute('href'))).toEqual([
+      '/caves/f1',
+      '/documents/d1',
+    ]);
   });
 
   it('marks an anchor measured against an older version, and says nothing about an exact one', () => {

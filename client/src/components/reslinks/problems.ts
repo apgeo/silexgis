@@ -21,6 +21,11 @@ const byStatusAndCode: Record<string, string> = {
   '404:reslink.relation.not_found': 'resLinks.problems.relationGone',
   '400:reslink.member.duplicate_whole': 'resLinks.problems.duplicateWhole',
   '409:reslink.member.duplicate_whole': 'resLinks.problems.duplicateWhole',
+  // The shipped vocabulary refuses two different things under one code: an edit that would
+  // change a shipped row's identity, and a deletion of a shipped row outright. The status
+  // is what tells them apart, and each deserves its own sentence.
+  '400:reslink.relation.seeded_immutable': 'resLinks.problems.relationSeededImmutable',
+  '409:reslink.relation.seeded_immutable': 'resLinks.problems.relationSeededUndeletable',
 };
 
 const byCode: Record<string, string> = {
@@ -42,6 +47,11 @@ const byCode: Record<string, string> = {
   'reslink.main.not_single': 'resLinks.problems.mainNotSingle',
   'reslink.main.not_allowed_for_relation': 'resLinks.problems.mainNotAllowed',
   'reslink.member.geo_point_unavailable': 'resLinks.problems.geoPointUnavailable',
+  'reslink.relation.code_taken': 'resLinks.problems.relationCodeTaken',
+  // Raised both by an edit that would flip how a relation reads and by a deletion, and the
+  // sentence has to hold for either: what is refused in both cases is changing something
+  // links already depend on.
+  'reslink.relation.in_use': 'resLinks.problems.relationInUse',
   'access.create_forbidden': 'resLinks.problems.createForbidden',
   'acl.forbidden': 'resLinks.problems.forbidden',
   'validation.failed': 'resLinks.problems.validationFailed',

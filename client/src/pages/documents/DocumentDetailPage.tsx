@@ -16,6 +16,7 @@ import { formatSize } from '../../components/attachments/fileFormat.ts';
 import DocumentContent from '../../components/documents/DocumentContent.tsx';
 import DownloadDocument from '../../components/documents/DownloadDocument.tsx';
 import TextState from '../../components/documents/TextState.tsx';
+import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 
 /**
@@ -186,6 +187,14 @@ export default function DocumentDetailPage() {
           <Spin />
         )}
       </Card>
+
+      {/*
+        What this document takes part in, as a section of its own rather than tucked into the
+        editing panel above: the links are as much a fact about the document as its format is,
+        and a reader who may not edit anything here still has every reason to see them. It sits
+        under the document because the document is why the page exists.
+      */}
+      <LinksSection entityType="document" entityId={document.id} canAdd entityTitle={document.title} />
     </div>
   );
 }

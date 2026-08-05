@@ -6,12 +6,17 @@ import { expect, type Page } from '@playwright/test';
 export const adminEmail = 'admin@dev.local';
 export const adminPassword = 'dev-admin-pass-1';
 
-export async function login(page: Page) {
+/**
+ * Signs in, as the demo administrator unless another account is named. A flow that has to
+ * show one person's content to a different person needs a second account, and the sign-in
+ * itself is identical for both — only the credentials differ.
+ */
+export async function login(page: Page, email = adminEmail, password = adminPassword) {
   await page.goto('/');
   // Unauthenticated → OIDC authorize → SPA login page with returnUrl.
   await page.waitForURL(/\/login\?returnUrl=/);
-  await page.getByLabel('Email').fill(adminEmail);
-  await page.getByLabel('Password').fill(adminPassword);
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
   // Authorize completes, callback exchanges the code, workspace renders.
   await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 20_000 });
@@ -22,9 +27,16 @@ export function overlayTreeNode(page: Page, name: string) {
   return page.locator('.layer-composer .ant-tree-treenode').filter({ hasText: name });
 }
 
-/** Removes a surface feature through the registry table — cleanup for flows that save one. */
+/**
+ * Removes a surface feature through the registry table — cleanup for flows that save one.
+ *
+ * The registry shows a page at a time, so the row is narrowed to by name first: whether it
+ * happens to be on the first page is a fact about how many other features sort ahead of it,
+ * not about the one being removed.
+ */
 export async function deleteFeature(page: Page, featureName: string) {
   await page.goto('/features');
+  await page.getByPlaceholder('Search by name').fill(featureName);
   const row = page.getByRole('row', { name: new RegExp(featureName) });
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.getByRole('button', { name: 'delete' }).click();
@@ -39,6 +51,7 @@ export async function deleteFeature(page: Page, featureName: string) {
  */
 export async function centreOnDemoCave(page: Page) {
   await page.goto('/features');
+  await page.getByPlaceholder('Search by name').fill('Peștera Demo Mare');
   const row = page.getByRole('row', { name: /Peștera Demo Mare/ });
   await expect(row).toBeVisible({ timeout: 15_000 });
   // Icon-only antd button: its accessible name is the icon's aria-label.

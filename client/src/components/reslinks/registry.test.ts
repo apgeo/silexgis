@@ -84,9 +84,17 @@ describe('member type registry', () => {
     expect(memberRoute('feature', 'f1', null)).toBe('/features/f1');
   });
 
+  it('routes a document to its own page even though the server names none', () => {
+    expect(
+      memberRoute('document', 'd1', { title: 'Scan', subtitle: null, route: null, thumbnailUrl: null }),
+    ).toBe('/documents/d1');
+  });
+
   it('leaves a chip un-navigable when neither side has a page for it', () => {
-    expect(memberRoute('document', 'd1', { title: 'Scan', subtitle: null, route: null, thumbnailUrl: null })).toBeNull();
     expect(memberRoute('cabinet', 'c1', null)).toBeNull();
+    expect(
+      memberRoute('caver', 'p1', { title: 'Someone', subtitle: null, route: null, thumbnailUrl: null }),
+    ).toBeNull();
   });
 
   it('addresses a link page by its short code', () => {

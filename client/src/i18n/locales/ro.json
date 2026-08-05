@@ -18,7 +18,8 @@
     "templates": "Texte mesaje",
     "permissionGroups": "Grupuri de permisiuni",
     "featureSets": "Seturi de elemente",
-    "documentTypes": "Tipuri de documente"
+    "documentTypes": "Tipuri de documente",
+    "relationTypes": "Relații între elemente"
   },
   "dashboard": {
     "title": "Panou de bord",
@@ -1153,6 +1154,29 @@
         "enum": "alegere"
       }
     },
+    "relationTypes": {
+      "title": "Relații între elemente",
+      "intro": "Formulările cu care sunt înregistrate legăturile dintre elemente. Relațiile care vin odată cu produsul sunt afișate în limba dumneavoastră și nu pot fi modificate — alte instalări citesc legăturile după ele. Ce adăugați aici aparține acestei instalări și este afișat exact așa cum îl scrieți.",
+      "add": "Adaugă o relație",
+      "edit": "Editare relație",
+      "delete": "Șterge",
+      "deleteConfirm": "Ștergeți această relație? Legăturile deja înregistrate cu ea o păstrează, așa că poate fi ștearsă abia când nu mai există niciuna.",
+      "name": "Se citește ca",
+      "nameHint": "Cum se citește relația dinspre elementul de la care pornește, de exemplu „Conține” sau „Cartat de”.",
+      "code": "Cod",
+      "codeHint": "Numele scurt sub care este stocată și schimbată această relație. Păstrați-l neschimbat odată ce legăturile o folosesc.",
+      "directed": "Se citește într-un singur sens",
+      "directedHint": "Activat când cele două capete spun lucruri diferite — unul îl conține pe celălalt, unul îl documentează pe celălalt. Dezactivat când ambele capete se citesc la fel, ca „Vecin cu”.",
+      "inverseName": "În sens invers",
+      "inverseNameHint": "Cum se citește relația dinspre celălalt capăt, de exemplu „Conținut în”.",
+      "bothWays": "Se citește la fel din ambele capete",
+      "description": "Descriere",
+      "sortOrder": "Ordine",
+      "source": "De unde provine",
+      "seeded": "Vine cu produsul",
+      "custom": "Adăugată aici",
+      "seededReadOnly": "Nu poate fi editată"
+    },
     "templates": {
       "title": "Texte mesaje",
       "intro": "Textul a tot ce trimite aplicația. Dacă îl lăsați neschimbat, urmează produsul; dacă îl rescrieți, se folosește versiunea dumneavoastră.",
@@ -1233,7 +1257,9 @@
     "signIn": "Autentificare"
   },
   "resLinks": {
-    "titleCount": "Legături ({{count}})",
+    "titleCount": "Elemente legate ({{count}})",
+    "incomplete": "Incompletă",
+    "incompleteHint": "Doar un element al acestei legături îți este vizibil. O legătură spune ceva abia când unește două sau mai multe — adaugă încă un element, dacă există unul de adăugat.",
     "addAction": "Leagă…",
     "moreMembers": "+{{count}}",
     "rowActions": "Acțiuni pentru legătură",
@@ -1383,6 +1409,8 @@
       "title": "Punct nou",
       "name": "Nume",
       "namePlaceholder": "Nume pentru acest punct (opțional)",
+      "altitude": "Altitudine (m)",
+      "altitudePlaceholder": "Altitudinea în metri (opțional)",
       "visibility": "Cine îl poate vedea",
       "visibilityDefault": "Implicit",
       "audienceDefaultGroup": "Implicit, acest punct va fi vizibil membrilor {{group}}. Poți schimba asta aici, sau mai târziu editând punctul.",
@@ -1420,7 +1448,11 @@
       "relationUnknown": "Acea relație nu este una oferită de această instalare.",
       "relationGone": "Acea relație nu mai există.",
       "duplicateWhole": "Această legătură numește deja acel element în întregime.",
-      "geoPointUnavailable": "Punctele nu pot fi create aici: tipul generic de element nu este instalat."
+      "geoPointUnavailable": "Punctele nu pot fi create aici: tipul generic de element nu este instalat.",
+      "relationCodeTaken": "O altă relație folosește deja acest cod.",
+      "relationSeededImmutable": "O relație care vine cu produsul își păstrează codul și felul în care se citește.",
+      "relationSeededUndeletable": "O relație care vine cu produsul nu poate fi ștearsă.",
+      "relationInUse": "Există deja legături înregistrate cu această relație, așa că nu poate fi modificată astfel și nici ștearsă."
     }
   }
 }

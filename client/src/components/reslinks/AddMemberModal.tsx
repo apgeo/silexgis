@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useState } from 'react';
-import { App, Alert, AutoComplete, Checkbox, Flex, Input, Select, Tooltip, Typography } from 'antd';
+import {
+  App,
+  Alert,
+  AutoComplete,
+  Checkbox,
+  Flex,
+  Input,
+  InputNumber,
+  Select,
+  Tooltip,
+  Typography,
+} from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   useAddResLinkMember,
@@ -76,6 +87,10 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
   const [relationTypeId, setRelationTypeId] = useState<number | null>(null);
   const [relationDirected, setRelationDirected] = useState(false);
   const [point, setPoint] = useState<[number, number] | null>(null);
+  // Kept apart from the picked position rather than folded into it: the map picker deals in
+  // lon/lat and is shared with flows that have no notion of height, so height is stated
+  // beside it and travels with the point only when someone actually knew one.
+  const [altitude, setAltitude] = useState<number | null>(null);
   const [pointName, setPointName] = useState('');
   const [pointVisibility, setPointVisibility] = useState<Visibility | 'default'>('default');
 
@@ -94,6 +109,7 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
       setRelationTypeId(null);
       setRelationDirected(false);
       setPoint(null);
+      setAltitude(null);
       setPointName('');
       setPointVisibility('default');
       // A directed link needs exactly one main member, and the one the user is standing on
@@ -182,7 +198,7 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
           newGeoPoint: {
             lon: point![0],
             lat: point![1],
-            z: null,
+            z: altitude,
             name: pointName.trim() === '' ? null : pointName.trim(),
             visibility: pointVisibility === 'default' ? null : pointVisibility,
           },
@@ -407,6 +423,15 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
           <Flex vertical gap={8}>
             <Typography.Text strong>{t('resLinks.point.title')}</Typography.Text>
             <PointField value={point} onChange={setPoint} />
+            {/* Optional, and left empty rather than guessed: a height nobody measured is
+                worse than none at all, and the map does not need one to show the point. */}
+            <InputNumber<number>
+              value={altitude}
+              onChange={setAltitude}
+              placeholder={t('resLinks.point.altitudePlaceholder')}
+              aria-label={t('resLinks.point.altitude')}
+              style={{ width: '100%' }}
+            />
             <Input
               value={pointName}
               onChange={(event) => setPointName(event.target.value)}

@@ -261,7 +261,10 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
         </Field>
       ))}
       {/* The document's own relations, kept behind a count because the panel is already
-          dense and most documents take part in none. */}
+          dense and most documents take part in none. This panel travels with an attachment
+          row on a feature's page, where the document has no section of its own; on the
+          document's own page the same links stand as a full card, and this stays a compact
+          echo of it rather than the only way in. */}
       <LinksSection
         entityType="document"
         entityId={documentId}

@@ -254,6 +254,35 @@ describe('AddMemberModal', () => {
     expect(deleteLink).not.toHaveBeenCalled();
   });
 
+  it('sends a stated altitude with the new point, and nothing at all when none was given', async () => {
+    open();
+    fireEvent.mouseDown(screen.getByLabelText('Which item'));
+    fireEvent.click(screen.getAllByText('Mark a new point on the map').at(-1)!);
+    fireEvent.click(screen.getByText('pick-a-point'));
+    fireEvent.change(screen.getByLabelText('Altitude (m)'), { target: { value: '1250' } });
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await vi.waitFor(() => expect(addMember).toHaveBeenCalled());
+    expect(addMember.mock.calls[0][0].body.newGeoPoint).toMatchObject({
+      lon: 25.6,
+      lat: 45.65,
+      z: 1250,
+    });
+
+    // A height nobody entered is absent, not zero — sea level is a measurement, and the
+    // point would carry it as one.
+    cleanup();
+    addMember.mockClear();
+    open();
+    fireEvent.mouseDown(screen.getByLabelText('Which item'));
+    fireEvent.click(screen.getAllByText('Mark a new point on the map').at(-1)!);
+    fireEvent.click(screen.getByText('pick-a-point'));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await vi.waitFor(() => expect(addMember).toHaveBeenCalled());
+    expect(addMember.mock.calls[0][0].body.newGeoPoint.z).toBeNull();
+  });
+
   it('does not leave a half-built link behind when the point cannot be made', async () => {
     addMember.mockRejectedValue(new Error('refused'));
     open();

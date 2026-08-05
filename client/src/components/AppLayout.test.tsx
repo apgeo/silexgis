@@ -7,10 +7,14 @@ import AppLayout from './AppLayout.tsx';
 
 let mobile = false;
 let capabilities: Record<string, string> | undefined;
+// The rank the relation vocabulary is gated on, which no capability answer expresses:
+// membership of the protected group is what the server resolves it from.
+let permissionGroups: { slug: string }[] = [];
 
 vi.mock('../hooks/useIsMobile.ts', () => ({ useIsMobile: () => mobile }));
 vi.mock('../api/hooks.ts', () => ({
   useMe: () => ({ data: { avatarUrl: null } }),
+  useMyPermissionGroups: () => ({ data: permissionGroups }),
   useCapabilities: () => ({ data: capabilities ? { domains: capabilities } : undefined }),
   // The real helper, inlined: the mock replaces the module wholesale.
   hasAccessAction: (actions: string | undefined, flag: string) =>
@@ -38,6 +42,7 @@ const zeroWidthTrigger = () => document.querySelector('.ant-layout-sider-zero-wi
 beforeEach(() => {
   mobile = false;
   capabilities = undefined;
+  permissionGroups = [];
 });
 
 afterEach(cleanup);
@@ -86,5 +91,18 @@ describe('AppLayout nav gating', () => {
     expect(screen.queryByText('Message texts')).toBeNull();
     expect(screen.queryByText('Messaging')).toBeNull();
     expect(screen.queryByText('Feature sets')).toBeNull();
+  });
+
+  it('offers the relation vocabulary to the rank that can write it, not to a domain right', () => {
+    // Every domain right there is, and still not the rank: the vocabulary is not a
+    // resource domain, so no amount of domain access earns the page.
+    capabilities = { permissionGroups: 'read, write', taxonomies: 'read, write', audit: 'read' };
+    renderShell();
+    expect(screen.queryByText('Link relations')).toBeNull();
+
+    cleanup();
+    permissionGroups = [{ slug: 'full-administrators' }];
+    renderShell();
+    expect(screen.getByText('Link relations')).toBeInTheDocument();
   });
 });
