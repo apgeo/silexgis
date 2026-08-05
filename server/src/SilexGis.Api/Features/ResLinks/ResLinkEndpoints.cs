@@ -78,6 +78,8 @@ public static class ResLinkEndpoints
             .WithSummary("Links incident to one target, sibling members resolved; the total doubles as the badge count.");
         links.MapGet("/targets/search", SearchTargetsAsync)
             .WithSummary("Picker feed: readable targets of one type matching a query, as uniform rows.");
+        links.MapGet("/point-default", PointDefaultAsync)
+            .WithSummary("The audience a new GPS point takes when the request names none, for this caller.");
         links.MapPost("/", CreateAsync).WithValidation<ResLinkCreateRequest>()
             .WithSummary("Creates a link with its initial members (at least one).");
         links.MapGet("/{idOrCode}", GetAsync)
@@ -442,16 +444,30 @@ public static class ResLinkEndpoints
                 ? new Point(new CoordinateZ(point.Lon, point.Lat, z))
                 : new Point(point.Lon, point.Lat);
             geom.SRID = 4326;
+
+            // Audience when the request states none — the shared rule, so what the form
+            // told the user before they placed the point is what the point gets. A caller
+            // who belongs to several clubs has no single one to mean and lands on the
+            // signed-in audience; they pick a club by editing the feature afterwards.
+            var (defaultVisibility, ownClubId) = ResLinkRules.DefaultPointAudience(ctx.CavingGroupIds);
+            var visibility = point.Visibility ?? defaultVisibility;
+
+            // A club-visible row with no club named is a band that admits nobody, so a
+            // point that ends up club-visible names the creator's club. Binding to a club
+            // one is a member of is what the binding guard admits anyway, and the id here
+            // comes from that very membership list. An explicit club-visible request from
+            // a caller with no single club names none — the binding guard is what refuses
+            // or admits that, not this line.
+            var clubBinding = visibility == Visibility.CavingGroup ? ownClubId : null;
+
             newPoint = new Feature
             {
                 Name = string.IsNullOrWhiteSpace(point.Name) ? null : point.Name.Trim(),
                 FeatureTypeId = pointType.Id,
                 Geom = geom,
                 OwnerUserId = ctx.UserId,
-                // Public by deliberate default: the point exists to be seen by whoever
-                // sees the link; the caller narrows it here or later by editing the
-                // feature like any other.
-                Visibility = point.Visibility ?? Visibility.Public,
+                Visibility = visibility,
+                CavingGroupId = clubBinding,
             };
 
             try
@@ -813,6 +829,42 @@ public static class ResLinkEndpoints
         var hits = await targets.Of(parsedType)
             .SearchAsync(ctx, q.Trim(), Math.Clamp(limit ?? 20, 1, 50), ct);
         return TypedResults.Ok(hits.ToList());
+    }
+
+    /// <summary>
+    /// What a new GPS point's audience resolves to for this caller when they state no
+    /// visibility of their own — the same rule the member-add path applies, answered
+    /// before the point exists so a form can name the audience rather than recite the
+    /// rule. The group's name travels with its id because a notice that says "your
+    /// group" and a reader who belongs to one they forgot about are not the same thing.
+    /// </summary>
+    /// <remarks>
+    /// Says nothing the caller does not already know: it reports only their own
+    /// membership, and only when it is the single one that decides the default. A group
+    /// they belong to is one they can already list from their own profile.
+    /// </remarks>
+    private static async Task<Results<Ok<ResLinkPointDefaultDto>, UnauthorizedHttpResult>> PointDefaultAsync(
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var (visibility, groupId) = ResLinkRules.DefaultPointAudience(ctx.CavingGroupIds);
+        if (groupId is null)
+        {
+            return TypedResults.Ok(new ResLinkPointDefaultDto(visibility, null, null));
+        }
+
+        var name = await db.CavingGroups.AsNoTracking()
+            .Where(group => group.Id == groupId.Value)
+            .Select(group => group.Name)
+            .FirstOrDefaultAsync(ct);
+        return TypedResults.Ok(new ResLinkPointDefaultDto(visibility, groupId, name));
     }
 
     // ---- shared pieces --------------------------------------------------------------

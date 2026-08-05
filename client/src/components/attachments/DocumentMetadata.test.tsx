@@ -75,6 +75,11 @@ vi.mock('../../api/hooks.ts', () => ({
   useFileDocument: () => ({ mutateAsync: fileAsync, isPending: false }),
   hasAccessAction: (actions: string | null | undefined, flag: string) =>
     (actions ?? '').split(',').map((a) => a.trim()).includes(flag),
+  // The panel also shows the document's own relations; a document with none of them is the
+  // case every assertion below is written against.
+  useResLinksForTarget: () => ({ data: { items: [], page: 1, pageSize: 50, totalItems: 0 } }),
+  useMe: () => ({ data: { id: 'me' } }),
+  useDeleteResLink: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 const { default: DocumentMetadata } = await import('./DocumentMetadata.tsx');

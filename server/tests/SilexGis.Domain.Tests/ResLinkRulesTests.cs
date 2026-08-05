@@ -407,6 +407,36 @@ public class ResLinkRulesTests
         MainMarkerProblem(related, memberCount: 2, mainCount: 1).ShouldBe(MainNotAllowedCode);
     }
 
+    // ---- audience of a point minted alongside a member ------------------------------
+
+    [Fact]
+    public void A_new_point_takes_the_one_group_its_creator_belongs_to()
+    {
+        var group = Guid.CreateVersion7();
+        DefaultPointAudience([group]).ShouldBe((Visibility.CavingGroup, group));
+    }
+
+    [Fact]
+    public void A_new_point_widens_to_every_signed_in_reader_with_no_single_group_to_mean()
+    {
+        // No membership, and several memberships, land in the same place: a group-visible
+        // row that names no group would admit nobody, and no membership outranks another.
+        DefaultPointAudience([]).ShouldBe((Visibility.Authenticated, (Guid?)null));
+        DefaultPointAudience([Guid.CreateVersion7(), Guid.CreateVersion7()])
+            .ShouldBe((Visibility.Authenticated, (Guid?)null));
+    }
+
+    [Fact]
+    public void A_new_point_is_never_public_and_never_private_by_default()
+    {
+        foreach (var groups in new[] { Array.Empty<Guid>(), [Guid.CreateVersion7()], new[] { Guid.CreateVersion7(), Guid.CreateVersion7() } })
+        {
+            var (visibility, _) = DefaultPointAudience(groups);
+            visibility.ShouldNotBe(Visibility.Public);
+            visibility.ShouldNotBe(Visibility.Private);
+        }
+    }
+
     // ---- membership floor ---------------------------------------------------------
 
     [Fact]

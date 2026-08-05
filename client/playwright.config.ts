@@ -10,11 +10,20 @@ import { defineConfig, devices } from '@playwright/test';
 //
 // WebKit is a separate browser download (`npx playwright install webkit`), not just another
 // device profile.
+//
+// SILEXGIS_DEV_PORT moves the whole run — the dev server Vite starts and the address the
+// browser is pointed at — so a second checkout can be exercised against its own API and
+// database. It is the same variable the dev server reads, and it must be set together with
+// SILEXGIS_DEV_API_TARGET; setting only one would drive this checkout's SPA against the
+// other's data. Unset, this is the ordinary local run on :5173.
+const devPort = process.env.SILEXGIS_DEV_PORT ?? '5173';
+const baseURL = `http://localhost:${devPort}`;
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 60_000,
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL,
     trace: 'retain-on-failure',
   },
   projects: [
@@ -22,7 +31,7 @@ export default defineConfig({
       // The pre-existing run, unchanged: Playwright's default desktop chromium viewport.
       // Each project pins its own file, so a new spec runs nowhere until it is named here.
       name: 'desktop',
-      testMatch: /(smoke|settings|permission-groups)\.spec\.ts/,
+      testMatch: /(smoke|settings|permission-groups|reslinks)\.spec\.ts/,
     },
     {
       // Pixel 7: 412x915 CSS px, touch enabled, coarse pointer, chromium.
@@ -42,7 +51,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run dev',
-    url: 'http://localhost:5173',
+    url: baseURL,
     reuseExistingServer: true,
     timeout: 60_000,
   },

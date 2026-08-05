@@ -114,10 +114,18 @@ public sealed record ResLinkUpdateRequest(
     Guid? MainMemberId);
 
 /// <summary>The GPS-point convenience: a new caller-owned generic point feature created
-/// and joined as a whole member in one transaction. Visibility defaults to Public —
-/// deliberately, so the point is visible to whoever sees the link.</summary>
+/// and joined as a whole member in one transaction. Stating no visibility takes the
+/// creator's club when they belong to exactly one, and every signed-in caller otherwise;
+/// the field wins whenever it is set.</summary>
 public sealed record ResLinkNewGeoPointInput(
     double Lon, double Lat, double? Z, string? Name, Visibility? Visibility);
+
+/// <summary>The audience a new GPS point would get for this caller if they name none.
+/// <paramref name="CavingGroupName"/> is set exactly when the default is the caller's own
+/// group, so a form can name the audience instead of reciting both halves of the rule.
+/// </summary>
+public sealed record ResLinkPointDefaultDto(
+    Visibility Visibility, Guid? CavingGroupId, string? CavingGroupName);
 
 /// <summary>Adds a member: EITHER a target reference (type + id) OR
 /// <paramref name="NewGeoPoint"/> — never both. A new point is always a whole member, so

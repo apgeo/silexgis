@@ -18,6 +18,7 @@ import {
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import HistoryPanel, { type HistoryRestore } from '../../components/history/HistoryPanel.tsx';
 import { applyRestore } from '../../components/history/historyModel.ts';
+import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
 import TripFormModal from './TripFormModal.tsx';
 
@@ -176,6 +177,8 @@ export default function TripLogDetailPage() {
           </>
         )}
       </Card>
+
+      <LinksSection entityType="tripLog" entityId={trip.id} canAdd entityTitle={trip.title} />
 
       <AttachmentSection entityType="tripLog" entityId={trip.id} canEdit={canEdit} reportSlot />
 

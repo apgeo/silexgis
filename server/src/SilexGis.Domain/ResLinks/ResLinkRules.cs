@@ -305,6 +305,32 @@ public static class ResLinkRules
     public static string? MainMarkerProblem(ResLinkRelationType? relationType, int memberCount, int mainCount) =>
         MainMarkerProblem(relationType?.Directed ?? false, memberCount, mainCount);
 
+    // ---- audience of a point minted alongside a member ------------------------------
+
+    /// <summary>
+    /// Who a GPS point created as part of joining it to a link is visible to when the
+    /// request names no visibility, and the club such a point binds to. Belonging to
+    /// exactly one caving group means that group; belonging to none — or to several,
+    /// where no membership outranks another and the list carries no meaningful order —
+    /// means every signed-in caller. Never public and never private by accident. A
+    /// group-visible row always names the group it is for, because one that names none
+    /// admits nobody.
+    /// </summary>
+    /// <remarks>
+    /// Lives here rather than at the write because two callers need the same answer: the
+    /// write that applies it, and the read that lets a form name the audience before the
+    /// point is made. A form that guessed instead would be guessing about who can see a
+    /// cave position.
+    /// </remarks>
+    public static (Visibility Visibility, Guid? CavingGroupId) DefaultPointAudience(
+        IReadOnlyList<Guid> cavingGroupIds)
+    {
+        var ownGroupId = cavingGroupIds.Count == 1 ? cavingGroupIds[0] : (Guid?)null;
+        return ownGroupId is null
+            ? (Visibility.Authenticated, null)
+            : (Visibility.CavingGroup, ownGroupId);
+    }
+
     // ---- short code ---------------------------------------------------------------
 
     public const int ShortCodeLength = 8;

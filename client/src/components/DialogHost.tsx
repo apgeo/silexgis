@@ -14,6 +14,8 @@ interface DialogHostProps {
   /** Confirm action; when absent the footer only offers Cancel/close. */
   onOk?: () => void;
   okLoading?: boolean;
+  /** Refuses the confirm while the form is incomplete, instead of ignoring the click. */
+  okDisabled?: boolean;
   width?: number;
   /** Fires after the open/close transition — same contract on Modal and Drawer. */
   afterOpenChange?: (open: boolean) => void;
@@ -35,6 +37,7 @@ export default function DialogHost({
   onCancel,
   onOk,
   okLoading,
+  okDisabled,
   width,
   afterOpenChange,
   children,
@@ -77,7 +80,7 @@ export default function DialogHost({
           <Flex justify="flex-end" gap={8}>
             <Button onClick={onCancel}>{t('common.cancel')}</Button>
             {onOk && (
-              <Button type="primary" loading={okLoading} onClick={onOk}>
+              <Button type="primary" loading={okLoading} disabled={okDisabled} onClick={onOk}>
                 {t('common.ok')}
               </Button>
             )}
@@ -102,7 +105,7 @@ export default function DialogHost({
       onCancel={onCancel}
       onOk={onOk}
       confirmLoading={okLoading}
-      okButtonProps={onOk ? undefined : { style: { display: 'none' } }}
+      okButtonProps={onOk ? { disabled: okDisabled } : { style: { display: 'none' } }}
       afterOpenChange={afterOpenChange}
       width={width}
       destroyOnHidden

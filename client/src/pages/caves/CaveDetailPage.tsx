@@ -45,6 +45,7 @@ import AttachmentSection from '../../components/attachments/AttachmentSection.ts
 import HistoryPanel, { type HistoryRestore } from '../../components/history/HistoryPanel.tsx';
 import { applyRestore } from '../../components/history/historyModel.ts';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
+import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
 import CenterlineSection from './CenterlineSection.tsx';
@@ -301,6 +302,9 @@ export default function CaveDetailPage() {
           <TagChips entityType="feature" entityId={id} canEdit={canEdit} />
         </div>
       )}
+
+      {/* A cave is a feature to the link vocabulary — the same identity its map row carries. */}
+      {id && <LinksSection entityType="feature" entityId={id} canAdd entityTitle={cave.name} />}
 
       {id && <SurveyModelSection caveId={id} canEdit={canEdit} />}
 

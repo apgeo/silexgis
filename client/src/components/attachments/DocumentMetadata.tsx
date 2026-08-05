@@ -25,6 +25,7 @@ import {
   type TextExtractionState,
   type Visibility,
 } from '../../api/hooks.ts';
+import LinksSection from '../reslinks/LinksSection.tsx';
 import { parsePropertiesSchema, type SchemaField } from '../typedProperties/propertiesSchema.ts';
 
 const visibilities: Visibility[] = ['private', 'cavingGroup', 'authenticated', 'public'];
@@ -278,6 +279,16 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
           />
         </Field>
       ))}
+      {/* The document's own relations. This panel is the only place a document is shown in
+          its own right, so its links live here too — behind a count, because the panel is
+          already dense and most documents take part in none. */}
+      <LinksSection
+        entityType="document"
+        entityId={documentId}
+        variant="compact"
+        canAdd
+        entityTitle={title}
+      />
       <Button
         type="primary"
         size="small"

@@ -870,7 +870,7 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
     // ---- the GPS-point convenience ---------------------------------------------------
 
     [Fact]
-    public async Task A_new_gps_point_is_born_public_owned_by_the_caller_and_linked_in_one_act()
+    public async Task A_new_gps_point_is_born_for_signed_in_readers_owned_by_the_caller_and_linked_in_one_act()
     {
         var caveId = await CreateCaveAsync(owner, "Spring Cave", "authenticated");
         var linkId = await CreateLinkAsync(owner, Member("feature", caveId));
@@ -894,7 +894,8 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
         member.GetProperty("display").GetProperty("title").GetString().ShouldBe(pointName);
         var pointId = member.GetProperty("targetId").GetGuid();
 
-        // Born public: a viewer with no rule anywhere reads the feature itself.
+        // The creator belongs to no club here, so the point opens to signed-in callers:
+        // a viewer with no rule anywhere reads the feature itself.
         (await viewer.GetAsync($"/api/v1/features/{pointId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // And it is an ordinary caller-owned feature — owner trio and coordinates intact.
@@ -903,7 +904,8 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             var feature = await db.Features.AsNoTracking().SingleAsync(f => f.Id == pointId);
             feature.OwnerUserId.ShouldBe(ownerId);
-            feature.Visibility.ShouldBe(Visibility.Public);
+            feature.Visibility.ShouldBe(Visibility.Authenticated);
+            feature.CavingGroupId.ShouldBeNull();
             var point = feature.Geom.ShouldBeOfType<Point>();
             point.X.ShouldBe(25.5, 1e-9);
             point.Y.ShouldBe(45.5, 1e-9);
@@ -927,6 +929,89 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
         var privateId = (await ReadJsonAsync(privatePoint)).GetProperty("targetId").GetGuid();
         (await viewer.GetAsync($"/api/v1/features/{privateId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await owner.GetAsync($"/api/v1/features/{privateId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task A_new_gps_point_takes_the_creators_club_when_they_have_exactly_one()
+    {
+        var caveId = await CreateCaveAsync(owner, "Club Cave", "authenticated");
+        var linkId = await CreateLinkAsync(owner, Member("feature", caveId));
+
+        // Founding a club enrolls the founder in it, so the creator now belongs to one.
+        var clubId = await CreateCavingGroupAsync($"Point Club {Guid.NewGuid():N}"[..24]);
+
+        // Stating no visibility hands the point to the creator's club, named on the row —
+        // a club band with no club would admit nobody at all.
+        var pointId = await AddGeoPointAsync(owner, linkId, 25.51, 45.51, sortOrder: 1, visibility: null);
+        await AssertPointAudienceAsync(pointId, Visibility.CavingGroup, clubId);
+
+        // …and the club is who reads it: an outsider with no rule anywhere does not, the
+        // same account does the moment it joins.
+        (await viewer.GetAsync($"/api/v1/features/{pointId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            await RosterHelper.AddMemberAsync(
+                scope.ServiceProvider.GetRequiredService<SilexGisDbContext>(), clubId, viewerId);
+        }
+
+        (await viewer.GetAsync($"/api/v1/features/{pointId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Asking for the club band explicitly names the same club — the switch on the form
+        // cannot produce a point nobody can read.
+        var askedId = await AddGeoPointAsync(owner, linkId, 25.52, 45.52, sortOrder: 2, visibility: "cavingGroup");
+        await AssertPointAudienceAsync(askedId, Visibility.CavingGroup, clubId);
+
+        // A second membership leaves no single club to mean, so the default widens to
+        // every signed-in caller rather than picking one of them.
+        _ = await CreateCavingGroupAsync($"Other Club {Guid.NewGuid():N}"[..24]);
+        var widerId = await AddGeoPointAsync(owner, linkId, 25.53, 45.53, sortOrder: 3, visibility: null);
+        await AssertPointAudienceAsync(widerId, Visibility.Authenticated, null);
+
+        // The explicit field still wins over either default.
+        var privateId = await AddGeoPointAsync(owner, linkId, 25.54, 45.54, sortOrder: 4, visibility: "private");
+        await AssertPointAudienceAsync(privateId, Visibility.Private, null);
+    }
+
+    [Fact]
+    public async Task The_form_is_told_the_audience_a_new_point_will_actually_get()
+    {
+        // A form has to name the audience before the point exists, and the fact it needs —
+        // the caller's own roster memberships — is published nowhere else, so it is asked
+        // for here and must answer exactly what the write then applies.
+        var beforeAny = await owner.GetAsync("/api/v1/reslinks/point-default");
+        beforeAny.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var before = await ReadJsonAsync(beforeAny);
+        before.GetProperty("visibility").GetString().ShouldBe("authenticated");
+        before.GetProperty("cavingGroupId").ValueKind.ShouldBe(JsonValueKind.Null);
+        // Nothing to name: the notice says "everyone signed in" rather than inventing a group.
+        before.GetProperty("cavingGroupName").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var clubName = $"Notice Club {Guid.NewGuid():N}"[..24];
+        var clubId = await CreateCavingGroupAsync(clubName);
+
+        var afterOne = await ReadJsonAsync(await owner.GetAsync("/api/v1/reslinks/point-default"));
+        afterOne.GetProperty("visibility").GetString().ShouldBe("cavingGroup");
+        afterOne.GetProperty("cavingGroupId").GetGuid().ShouldBe(clubId);
+        afterOne.GetProperty("cavingGroupName").GetString().ShouldBe(clubName);
+
+        // What it promised is what the point gets — the same rule answers both.
+        var caveId = await CreateCaveAsync(owner, "Notice Cave", "authenticated");
+        var linkId = await CreateLinkAsync(owner, Member("feature", caveId));
+        var pointId = await AddGeoPointAsync(owner, linkId, 25.57, 45.57, sortOrder: 1, visibility: null);
+        await AssertPointAudienceAsync(pointId, Visibility.CavingGroup, clubId);
+
+        // A second membership leaves no single group to mean, and the notice widens with it.
+        _ = await CreateCavingGroupAsync($"Second Club {Guid.NewGuid():N}"[..24]);
+        var afterTwo = await ReadJsonAsync(await owner.GetAsync("/api/v1/reslinks/point-default"));
+        afterTwo.GetProperty("visibility").GetString().ShouldBe("authenticated");
+        afterTwo.GetProperty("cavingGroupId").ValueKind.ShouldBe(JsonValueKind.Null);
+        var widened = await AddGeoPointAsync(owner, linkId, 25.58, 45.58, sortOrder: 2, visibility: null);
+        await AssertPointAudienceAsync(widened, Visibility.Authenticated, null);
+
+        // It reports the caller's own membership and nothing else, so it takes an account.
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync("/api/v1/reslinks/point-default")).StatusCode
+            .ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -1643,6 +1728,38 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>Mints a GPS point as a new member and returns the feature's id.</summary>
+    private static async Task<Guid> AddGeoPointAsync(
+        HttpClient client, Guid linkId, double lon, double lat, int sortOrder, string? visibility)
+    {
+        var response = await client.PostAsJsonAsync($"/api/v1/reslinks/{linkId}/members", new
+        {
+            targetType = (string?)null,
+            targetId = (Guid?)null,
+            newGeoPoint = new { lon, lat, z = (double?)null, name = $"Point {sortOrder}", visibility },
+            isMain = false,
+            sortOrder,
+            note = (string?)null,
+            anchorKind = "whole",
+            anchor = (object?)null,
+            anchorFileId = (Guid?)null,
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("targetId").GetGuid();
+    }
+
+    /// <summary>The audience a minted point actually carries, read off the row.</summary>
+    private async Task AssertPointAudienceAsync(Guid featureId, Visibility expected, Guid? expectedCavingGroupId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var feature = await db.Features.AsNoTracking().SingleAsync(f => f.Id == featureId);
+        feature.OwnerUserId.ShouldBe(ownerId);
+        feature.Visibility.ShouldBe(expected);
+        feature.CavingGroupId.ShouldBe(expectedCavingGroupId);
     }
 
     private async Task<Guid> CreateCavingGroupAsync(string name)

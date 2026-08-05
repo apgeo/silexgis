@@ -29,6 +29,7 @@ import {
 } from '../../stores/workspaceStore.ts';
 import HistoryPanel, { type HistoryRestore } from '../history/HistoryPanel.tsx';
 import { applyFeatureRestore } from '../history/historyModel.ts';
+import LinksSection from '../reslinks/LinksSection.tsx';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
 
@@ -192,6 +193,7 @@ function CaveCard({ selection }: { selection: EntranceSelection | CaveSelection 
           </Button>
         )}
       </Flex>
+      <LinksSection entityType="feature" entityId={cave.id} variant="compact" canAdd entityTitle={cave.name} />
     </div>
   );
 }
@@ -372,6 +374,15 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
           </>
         )}
       </Flex>
+      <LinksSection
+        entityType="feature"
+        entityId={feature.id}
+        variant="compact"
+        canAdd
+        // The same name this panel puts at its top: a nameless feature still has to read as
+        // something in the sentence a link is composed from.
+        entityTitle={feature.name ?? featureType?.name ?? t('features.unnamed')}
+      />
       <HistoryPanel
         entityType="feature"
         entityId={feature.id}
