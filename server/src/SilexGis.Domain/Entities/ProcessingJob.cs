@@ -62,4 +62,23 @@ public static class ProcessingJobKinds
     /// files that predate the readers, and files a newer reader should look at again.
     /// </summary>
     public const string TextExtractionBackfill = "text-extraction-backfill";
+
+    /// <summary>
+    /// Delete records of people reading files that are past the retention window. Scheduled.
+    /// </summary>
+    public const string AccessHistoryPrune = "access-history-prune";
+
+    /// <summary>
+    /// Turn an office-suite document into a portable one, stored beside the upload, so a
+    /// picture of each of its pages can be drawn. Only ever queued where the optional
+    /// conversion service is deployed.
+    /// </summary>
+    public const string DocumentConversion = "document-conversion";
+
+    /// <summary>
+    /// Queue a conversion for every office document that has no portable copy and could have
+    /// one. The route back for an installation that has just deployed a converter, and for a
+    /// document whose own attempt did not finish.
+    /// </summary>
+    public const string DocumentConversionBackfill = "document-conversion-backfill";
 }

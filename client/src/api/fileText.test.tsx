@@ -23,6 +23,9 @@ const file: FileInfo = {
   contentUrl: '/api/v1/files/f9/content?token=t',
   thumbnailUrl: null,
   mayDownloadOriginal: true,
+  pagesUrl: null,
+  pageCount: null,
+  conversion: 'notApplicable',
 };
 
 /** A provider with a cache of its own, built once so a re-render does not empty it. */

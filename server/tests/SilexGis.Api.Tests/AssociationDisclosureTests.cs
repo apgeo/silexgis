@@ -163,7 +163,83 @@ public sealed class AssociationDisclosureTests : IAsyncLifetime, IDisposable
         (await AttachmentIdsAsync(reader, protectedCaveId)).ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task The_change_timeline_names_the_attached_document_under_the_same_rule_as_every_other_surface()
+    {
+        // The timeline is a second way of asking "what is attached to this cave", and an
+        // audit row keeps its diff long after the attachment listing has been filtered. It
+        // has to answer the way the listing answers, in all four states — otherwise the
+        // pairing the other surfaces withhold is readable from the history page.
+        var caveId = await CreateProtectedCaveAsync();
+        var noteFileId = await UploadAsync("survey-notes.txt", "notes"u8.ToArray(), "text/plain");
+        await AttachAsync(noteFileId, caveId, caption: "sump survey");
+
+        // Default: the event is there — somebody attached something, and when — while what
+        // they attached and what they called it are not.
+        var withheld = await AttachmentEventAsync(reader, caveId);
+        Names(withheld).ShouldBeFalse();
+        Redacted(withheld).ShouldBe(["FileId", "Caption"]);
+
+        // The owner may place the cave exactly, so nothing is taken from their timeline. This
+        // is the leg that stops an empty or broken fixture from reading as a passing assertion.
+        var owned = await AttachmentEventAsync(owner, caveId);
+        Names(owned).ShouldBeTrue();
+        Redacted(owned).ShouldBeEmpty();
+
+        await SetRevealAsync(true);
+
+        // With the setting on, the same caller is told which document it is — the timeline
+        // reads the installation's answer rather than keeping one of its own.
+        Names(await AttachmentEventAsync(reader, caveId)).ShouldBeTrue();
+
+        // …and the position is still refused, which is what the setting does not touch.
+        var seenCave = await ReadJsonAsync(await reader.GetAsync($"/api/v1/caves/{caveId}"));
+        seenCave.GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
+
+        // The carve-out the setting may not open: a photo stamped with where it was taken,
+        // named beside this cave, places the cave. On a fresh protected cave so the assertion
+        // is about the photo and not about the note above.
+        var photoCaveId = await CreateProtectedCaveAsync();
+        var photoFileId = await UploadAsync("entrance.jpg", GeotaggedJpeg(45.53127, 25.44721), "image/jpeg");
+        await AttachAsync(photoFileId, photoCaveId, caption: "entrance");
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.StoredFiles.AsNoTracking().FirstAsync(f => f.Id == photoFileId)).Geom.ShouldNotBeNull();
+        }
+
+        var carveOut = await AttachmentEventAsync(reader, photoCaveId);
+        Names(carveOut).ShouldBeFalse();
+        Redacted(carveOut).ShouldBe(["FileId", "Caption"]);
+        Names(await AttachmentEventAsync(owner, photoCaveId)).ShouldBeTrue();
+    }
+
     // ---- helpers ----
+
+    /// <summary>The creation event of the attachment on this cave's own timeline.</summary>
+    private static async Task<JsonElement> AttachmentEventAsync(HttpClient client, Guid caveId)
+    {
+        var history = await ReadJsonAsync(
+            await client.GetAsync($"/api/v1/history?entityType=feature&entityId={caveId}"));
+        var events = history.GetProperty("items").EnumerateArray()
+            .Where(e => e.GetProperty("entityType").GetString() == "Attachment")
+            .ToList();
+        events.Count.ShouldBe(1);
+        return events[0];
+    }
+
+    /// <summary>Whether the row still says which document it is about.</summary>
+    private static bool Names(JsonElement e)
+    {
+        var changes = e.GetProperty("changes");
+        return changes.ValueKind == JsonValueKind.Object
+            && changes.TryGetProperty("FileId", out _)
+            && changes.TryGetProperty("Caption", out _);
+    }
+
+    private static string[] Redacted(JsonElement e) =>
+        [.. e.GetProperty("redactedProperties").EnumerateArray().Select(x => x.GetString()!)];
 
     /// <summary>
     /// Flips the installation's setting. The row lives in a database shared with every other
@@ -207,7 +283,7 @@ public sealed class AssociationDisclosureTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> AttachAsync(Guid fileId, Guid caveId)
+    private async Task<Guid> AttachAsync(Guid fileId, Guid caveId, string? caption = null)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/attachments/", new
         {
@@ -215,6 +291,7 @@ public sealed class AssociationDisclosureTests : IAsyncLifetime, IDisposable
             entityType = "feature",
             entityId = caveId,
             role = "document",
+            caption,
             sortOrder = 0,
         });
         var payload = await response.Content.ReadAsStringAsync();

@@ -30,6 +30,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
+    public DbSet<FileAccessEvent> FileAccessEvents => Set<FileAccessEvent>();
+
     public DbSet<Feature> Features => Set<Feature>();
 
     public DbSet<Cave> Caves => Set<Cave>();

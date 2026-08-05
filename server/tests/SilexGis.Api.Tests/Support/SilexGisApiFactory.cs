@@ -9,7 +9,14 @@ using SilexGis.Domain.Messaging;
 namespace SilexGis.Api.Tests.Support;
 
 /// <summary>Boots the real application against the test PostGIS container (migrations + seed run on start).</summary>
-public sealed class SilexGisApiFactory(string connectionString, IDictionary<string, string?>? settings = null)
+/// <param name="configureServices">
+/// Replaces a service with a test double where the real one talks to something that is not
+/// there — an optional external service, for instance. Everything else stays the real wiring.
+/// </param>
+public sealed class SilexGisApiFactory(
+    string connectionString,
+    IDictionary<string, string?>? settings = null,
+    Action<IServiceCollection>? configureServices = null)
     : WebApplicationFactory<Program>
 {
     /// <summary>
@@ -48,6 +55,7 @@ public sealed class SilexGisApiFactory(string connectionString, IDictionary<stri
             services.AddScoped<CapturingSmsSender>();
             services.AddScoped<ISmsSender>(sp => sp.GetRequiredService<CapturingSmsSender>());
             services.AddScoped<ISmsDelivery>(sp => sp.GetRequiredService<CapturingSmsSender>());
+            configureServices?.Invoke(services);
         });
     }
 }

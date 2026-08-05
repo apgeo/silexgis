@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Metadata;
@@ -314,7 +315,10 @@ public sealed class DocumentModelTests : IAsyncLifetime, IDisposable
                 staleScope.ServiceProvider.GetRequiredService<DbContextOptions<SilexGisDbContext>>())
                 .AddInterceptors(hold).Options);
 
-        var stale = Task.Run(() => new DocumentWriteService(staleDb, new JsonSchemaPropertiesValidator()).AddVersionAsync(
+        var stale = Task.Run(() => new DocumentWriteService(
+            staleDb,
+            new JsonSchemaPropertiesValidator(),
+            staleScope.ServiceProvider.GetRequiredService<IDocumentConverter>()).AddVersionAsync(
             v1VersionId,
             new StoredContent("stale/held.txt", "stale.txt", "text/plain", 3, new string('b', 64), FileKind.Document),
             ownerId));

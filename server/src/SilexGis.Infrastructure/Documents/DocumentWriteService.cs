@@ -78,7 +78,8 @@ public sealed record DocumentUpdate(
 /// because a demotion that committed without its replacement would leave a document with
 /// no current version at all.
 /// </summary>
-public sealed class DocumentWriteService(SilexGisDbContext db, ITypedPropertiesValidator metadataValidator)
+public sealed class DocumentWriteService(
+    SilexGisDbContext db, ITypedPropertiesValidator metadataValidator, IDocumentConverter converter)
 {
     /// <summary>A document's metadata does not conform to its kind's schema.</summary>
     public const string MetadataInvalidCode = "document.metadata_invalid";
@@ -152,7 +153,17 @@ public sealed class DocumentWriteService(SilexGisDbContext db, ITypedPropertiesV
     /// same content in another encoding, not a new revision, so nothing about the version
     /// sequence moves. Tracked, not saved.
     /// </summary>
-    public StoredFile AddFile(Guid documentVersionId, StoredContent content)
+    /// <param name="convertedFromFileId">
+    /// The uploaded file this one is a converted copy of, when that is what it is. Its text is
+    /// read like any other portable document's, because that reading is what counts the pages
+    /// and puts each page's words on the page they are actually on — which is the whole reason
+    /// the copy exists. What the copy is deliberately kept out of is content search: whether a
+    /// document can be found must not depend on whether an optional service happens to be
+    /// deployed here, so searching keeps looking at the words read out of the upload itself,
+    /// which every installation reads the same way.
+    /// </param>
+    public StoredFile AddFile(
+        Guid documentVersionId, StoredContent content, Guid? convertedFromFileId = null)
     {
         ArgumentNullException.ThrowIfNull(content);
 
@@ -176,6 +187,7 @@ public sealed class DocumentWriteService(SilexGisDbContext db, ITypedPropertiesV
             ContentModifiedAt = facts.ContentModifiedAt,
             DurationSeconds = facts.DurationSeconds >= 0 ? facts.DurationSeconds : null,
             Codec = Trim(facts.Codec, CodecMaxLength),
+            ConvertedFromFileId = convertedFromFileId,
         };
         db.StoredFiles.Add(file);
 
@@ -211,7 +223,73 @@ public sealed class DocumentWriteService(SilexGisDbContext db, ITypedPropertiesV
             });
         }
 
+        QueueConversion(file, convertedFromFileId);
         return file;
+    }
+
+    /// <summary>
+    /// Marks a format that has no pages of its own for conversion into one that does, and
+    /// queues the work — or records, without queuing anything, that this installation has no
+    /// converter.
+    /// <para>
+    /// The state is written either way, and that is the point of it. "Nothing here can lay this
+    /// document out" is a fact about the installation, not about the document, and an interface
+    /// that cannot tell the two apart shows a perfectly good file as a broken one.
+    /// </para>
+    /// </summary>
+    private void QueueConversion(StoredFile file, Guid? convertedFromFileId)
+    {
+        // A converted copy is never itself converted, and a format that paginates itself has
+        // nothing to gain.
+        if (convertedFromFileId is not null || !ConvertibleFormats.CanConvert(file.MimeType))
+        {
+            return;
+        }
+
+        if (!converter.IsConfigured)
+        {
+            file.Conversion = ConversionState.Unavailable;
+            return;
+        }
+
+        file.Conversion = ConversionState.Pending;
+        db.ProcessingJobs.Add(new ProcessingJob
+        {
+            Kind = ProcessingJobKinds.DocumentConversion,
+            Payload = JsonSerializer.Serialize(
+                new DocumentConversionPayload(file.Id), JsonSerializerOptions.Web),
+
+            // Deliberately nobody, for the same reason a reading names nobody: an upload is not
+            // a request for a mail saying a background task finished.
+            RequestedBy = null,
+        });
+    }
+
+    /// <summary>
+    /// Records how converting a file ended, and — when it produced one — the copy it produced.
+    /// Saves. Returns false when the file has since been deleted, which is an ordinary outcome
+    /// for queued work rather than a failure of anything.
+    /// </summary>
+    public async Task<bool> RecordConversionOutcomeAsync(
+        Guid fileId,
+        ConversionState state,
+        StoredContent? converted,
+        CancellationToken ct)
+    {
+        var file = await db.StoredFiles.FirstOrDefaultAsync(f => f.Id == fileId, ct);
+        if (file is null)
+        {
+            return false;
+        }
+
+        if (converted is not null)
+        {
+            AddFile(file.DocumentVersionId, converted, convertedFromFileId: file.Id);
+        }
+
+        file.Conversion = state;
+        await db.SaveChangesAsync(CancellationToken.None);
+        return true;
     }
 
     /// <summary>

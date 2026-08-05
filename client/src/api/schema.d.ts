@@ -1471,6 +1471,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/document-conversion-backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enqueues a sweep that makes a readable copy of every office document that has none yet; requires Execute on the Jobs domain. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProcessingJobDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/export/caves": {
         parameters: {
             query?: never;
@@ -5735,6 +5771,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access-history/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documents you have taken a copy of, newest first. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfFileAccessEventDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access-history/documents/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Who has taken a copy of this document; requires Read on the Audit domain, or being the document's owner. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfFileAccessEventDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/objects/{entityType}/{id}/access": {
         parameters: {
             query?: never;
@@ -7996,6 +8112,8 @@ export interface components {
             userId: string;
             token: string;
         };
+        /** @enum {unknown} */
+        ConversionState: "notApplicable" | "pending" | "converted" | "unavailable" | "failed" | "deferred";
         DashboardActivityItemDto: {
             kind: components["schemas"]["DashboardActivityKind"];
             /** Format: uuid */
@@ -8455,6 +8573,20 @@ export interface components {
             cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
+        FileAccessEventDto: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            at: string;
+            /** Format: uuid */
+            userId: null | string;
+            userName: null | string;
+            /** Format: uuid */
+            fileId: string;
+            /** Format: uuid */
+            documentId: string;
+            documentTitle: null | string;
+        };
         FileConfigDto: {
             /** Format: int64 */
             maxUploadBytes: number;
@@ -8479,6 +8611,10 @@ export interface components {
             contentUrl: string;
             thumbnailUrl: null | string;
             mayDownloadOriginal: boolean;
+            pagesUrl: null | string;
+            /** Format: int32 */
+            pageCount: null | number;
+            conversion: components["schemas"]["ConversionState"];
         };
         /** @enum {unknown} */
         FileKind: "image" | "document" | "survey" | "raster" | "vector" | "model" | "other" | "audio" | "video";
@@ -8953,6 +9089,15 @@ export interface components {
         };
         PagedResultOfFeatureListItemDto: {
             items: components["schemas"]["FeatureListItemDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfFileAccessEventDto: {
+            items: components["schemas"]["FileAccessEventDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */

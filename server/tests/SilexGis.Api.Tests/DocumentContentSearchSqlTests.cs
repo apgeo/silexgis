@@ -40,6 +40,9 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable
     private Guid docEnglish;   // en, openly visible, one page, a word processor file
     private Guid docRevised;   // private, two revisions; the removed name is in the old one
 
+    private Guid englishUpload; // the office file somebody put here
+    private Guid englishCopy;   // the portable copy a converter made of it, same words again
+
     public DocumentContentSearchSqlTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
 
@@ -72,11 +75,20 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable
         // Titled to sort ahead of the Romanian report, so the ordering test can only pass
         // because relevance decided it — the tie-break would have put this one first.
         docEnglish = Seed(db, $"Anexa {suffix}", ownerId, Visibility.Authenticated, "en");
-        var englishFile = AddVersion(
+        englishUpload = AddVersion(
             db, docEnglish, 1, current: true,
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-        AddPage(db, englishFile, 1,
+        AddPage(db, englishUpload, 1,
             $"The surveying teams explored the passages and mapped them. {nonce}");
+
+        // An office document has no pages of its own, so an installation running the optional
+        // converter holds a portable copy of it beside the upload — and that copy is read for
+        // text like any other file, so the same words are stored twice. The copy carries one
+        // word of its own so that "the copy is not searched" can be asserted directly rather
+        // than inferred from which file a shared word resolved to.
+        englishCopy = AddConvertedCopy(
+            db, englishUpload,
+            $"The surveying teams explored the passages and mapped them. Redistilled. {nonce}");
 
         // The retraction case: version one names the landowner, version two does not.
         docRevised = Seed(db, $"Revised {suffix}", ownerId, Visibility.Private, "en");
@@ -146,6 +158,32 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable
         // nothing a reader would recognise and the result says so rather than saying "page 1".
         var word = (await SearchAsync(ownerId, "surveying")).ShouldHaveSingleItem();
         word.Division.ShouldBe(PageDivision.Whole);
+    }
+
+    [Fact]
+    public async Task A_copy_made_only_so_a_page_could_be_drawn_is_not_a_second_thing_to_find()
+    {
+        // Fixture proof: the copy really is there, really is derived from the upload, and really
+        // has a page with words in it — so the silence below is the query's doing.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var copy = await db.StoredFiles.AsNoTracking().SingleAsync(f => f.Id == englishCopy);
+            copy.ConvertedFromFileId.ShouldBe(englishUpload);
+            (await db.DocumentPages.AsNoTracking().CountAsync(p => p.FileId == englishCopy)).ShouldBe(1);
+        }
+
+        // The document is found by its own words, once, and the hit names the file somebody
+        // actually put here — not the copy this installation happened to make of it.
+        var hit = (await SearchAsync(ownerId, "surveying")).ShouldHaveSingleItem();
+        hit.DocumentId.ShouldBe(docEnglish);
+        hit.FileId.ShouldBe(englishUpload);
+        hit.FileId.ShouldNotBe(englishCopy);
+
+        // And a word that exists only inside the copy finds nothing at all. Whether an optional
+        // service is deployed here decides how a document can be shown; it must not decide what
+        // the archive contains, or two installations of the same version disagree about that.
+        (await SearchAsync(ownerId, "redistilled")).ShouldBeEmpty();
     }
 
     [Fact]
@@ -297,6 +335,30 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable
         };
         db.StoredFiles.Add(file);
         return file.Id;
+    }
+
+    /// <summary>
+    /// The portable copy an optional converter makes of an office document: a second file on
+    /// the same revision, marked as derived from the upload, with a page of its own.
+    /// </summary>
+    private static Guid AddConvertedCopy(SilexGisDbContext db, Guid uploadFileId, string text)
+    {
+        var upload = db.StoredFiles.Local.First(f => f.Id == uploadFileId);
+        var digest = Guid.NewGuid().ToString("N");
+        var copy = new StoredFile
+        {
+            DocumentVersionId = upload.DocumentVersionId,
+            ConvertedFromFileId = upload.Id,
+            StoragePath = $"test/{upload.Id:N}-converted",
+            OriginalName = $"{upload.Id:N}.pdf",
+            MimeType = "application/pdf",
+            Sha256 = digest + digest,
+            SizeBytes = 1,
+            TextExtraction = TextExtractionState.Extracted,
+        };
+        db.StoredFiles.Add(copy);
+        AddPage(db, copy.Id, 1, text);
+        return copy.Id;
     }
 
     private static void AddPage(SilexGisDbContext db, Guid fileId, int pageNumber, string text) =>

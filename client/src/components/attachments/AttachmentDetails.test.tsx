@@ -45,6 +45,9 @@ const attachment: AttachmentInfo = {
     contentUrl: '/c/file-1',
     mayDownloadOriginal: true,
     thumbnailUrl: null,
+  pagesUrl: null,
+  pageCount: null,
+  conversion: 'notApplicable',
   },
 };
 

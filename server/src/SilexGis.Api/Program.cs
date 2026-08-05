@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.DataProtection;
 using SilexGis.Api.Features.About;
 using SilexGis.Api.Features.Admin;
 using SilexGis.Api.Features.Attachments;
+using SilexGis.Api.Features.AccessHistory;
 using SilexGis.Api.Features.Audit;
 using SilexGis.Api.Features.Cabinets;
 using SilexGis.Api.Features.Caves;
@@ -216,6 +217,7 @@ try
     api.MapTripLogEndpoints();
     api.MapTagEndpoints();
     api.MapAuditEndpoints();
+    api.MapAccessHistoryEndpoints();
     api.MapHistoryEndpoints();
     api.MapObjectAccessEndpoints();
     api.MapPermissionGroupEndpoints();

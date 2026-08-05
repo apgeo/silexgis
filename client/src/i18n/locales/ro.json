@@ -390,6 +390,10 @@
     "viewer": {
       "title": "Documentul",
       "notDisplayable": "Nimic de aici nu știe încă să afișeze acest format. Descarcă fișierul ca să-l deschizi cu ceva care poate.",
+      "conversionPending": "Documentul se pregătește pentru citit aici. Între timp îl poți descărca sau poți reveni peste puțin timp.",
+      "conversionUnavailable": "Această instalare nu poate pagina documente de birou, așa că nu are pagini de arătat. Fișierul în sine este în regulă — descarcă-l ca să-l deschizi într-un editor de text.",
+      "conversionDeferred": "Copia care poate fi citită aici nu a putut fi făcută acum — serviciul care o face nu a răspuns. Fișierul este în regulă; descarcă-l sau roagă un administrator să pornească trecerea de conversie.",
+      "conversionFailed": "Documentul nu a putut fi paginat pentru citit aici. Descarcă-l ca să-l deschizi într-un editor de text.",
       "pageAlt": "Pagina {{number}}",
       "pageFailed": "Această pagină nu a putut fi desenată. Restul documentului poate fi citit în continuare; fișierul în sine este neatins și poate fi descărcat.",
       "pageOf": "Pagina {{number}} din {{count}}",

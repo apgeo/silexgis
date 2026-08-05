@@ -6,6 +6,8 @@ are a database password, an admin account, and the public URL.
 
 - [Quick start (Docker)](#quick-start-docker)
 - [Enabling HTTPS](#enabling-https)
+- [Encryption at rest](#encryption-at-rest)
+- [Showing Word and Excel files](#showing-word-and-excel-files)
 - [Backups](#backups)
 - [Upgrades](#upgrades)
 - [External login providers](#external-login-providers)
@@ -78,6 +80,152 @@ to the `https://` address. Allow request bodies at least as large as
 IIS's `maxAllowedContentLength` both default well below that, and an upload refused at the
 proxy fails with an error the application never sees and cannot explain.
 
+## Encryption at rest
+
+**SilexGIS does not encrypt anything it stores.** Uploaded files, the thumbnails and page
+pictures derived from them, the text read out of documents, and every database row are written
+in the clear. Encrypting them where they sit is the operator's job, and this section says how to
+do it and what it buys you.
+
+That is a deliberate position, not an omission, and it is worth understanding before you decide
+whether this installation is a suitable home for the data you are about to put in it.
+
+### Why the application does not do it
+
+Encrypting inside the application would have to keep its key on the same machine as the bytes it
+protects — in practice in a directory beside them. Anyone able to read the files could read the
+key, so it would defend against nothing that a stolen disk does not already defend against, while
+adding a permanent way to lose the whole archive: lose that key and every stored file is gone,
+with no recovery and no partial answer. It would also cost real things that work today — files
+are handed to the imaging and mapping libraries by path, and downloads are streamed straight off
+disk with resumable byte ranges — and it would still leave the database, the derived pictures and
+the search text in the clear unless each of those was solved separately.
+
+Encryption at the volume or disk layer, by contrast, covers all of it at once, is a solved and
+audited problem on every operating system, and puts key custody where the person who owns the
+machine can actually manage it.
+
+### What to do instead
+
+**1. Encrypt the storage the volumes live on.** All application state is in three Docker volumes
+(`silexgis-db`, `silexgis-files`, `silexgis-keys`), which on a default Linux install live under
+`/var/lib/docker/volumes`. Encrypting the filesystem or block device that holds that path covers
+the database, the uploads and the keys in one step:
+
+- **Bare metal / VPS you install yourself:** put the filesystem on a LUKS volume
+  (`cryptsetup luksFormat`), or install the operating system with full-disk encryption
+  selected. The passphrase or key file must be supplied at boot and must not live on the
+  encrypted device.
+- **Cloud provider:** select the provider's encrypted-volume option for the disk that carries
+  `/var/lib/docker` (or the whole instance). This is usually a checkbox at volume-creation time
+  and cannot be turned on afterwards without moving the data.
+- **Storing files elsewhere:** if `SILEXGIS__Files__Root` points at a mount of your own rather
+  than the bundled volume, that mount is the thing to encrypt, and the database volume still
+  needs covering separately.
+
+**2. Encrypt the backups.** `deploy/scripts/backup.sh` writes plain `db.sql.gz` and
+`files.tar.gz`. A backup is the copy most likely to end up somewhere you do not control, so
+encrypt it before it leaves the host and keep the passphrase somewhere other than the backup
+medium:
+
+```bash
+cd deploy
+sh scripts/backup.sh
+age -r age1yourrecipientkey... -o backups/<timestamp>/db.sql.gz.age    backups/<timestamp>/db.sql.gz
+age -r age1yourrecipientkey... -o backups/<timestamp>/files.tar.gz.age backups/<timestamp>/files.tar.gz
+shred -u backups/<timestamp>/db.sql.gz backups/<timestamp>/files.tar.gz
+```
+
+`gpg --encrypt --recipient …` works the same way. To restore, decrypt back to the original two
+file names first — `scripts/restore.sh` expects them.
+
+**3. Turn on HTTPS.** Encryption at rest does nothing for data crossing the network, and TLS is
+off by default here. See [Enabling HTTPS](#enabling-https).
+
+**4. Keep host access short.** Volume encryption protects a disk that is switched off. While the
+stack is running the volumes are mounted and readable by anyone with root on the host or access
+to the Docker socket, so the list of people holding either is the real access-control boundary.
+
+### What this does and does not protect
+
+Disk or volume encryption protects data when the machine is off or the storage has left your
+hands: a stolen or seized server, a decommissioned or resold drive, a disk image copied by
+someone at the hosting provider, an unencrypted backup found on a shelf.
+
+It protects against none of the following, and nothing at the storage layer can:
+
+- Anyone with root on a running host, or access to the Docker socket. The volumes are mounted
+  and in the clear while the service is up.
+- A compromise of the application itself, which by definition can read what it stores.
+- A SilexGIS account holding more rights than it should. Access control inside the application
+  is a separate matter, managed through permission groups and access entries.
+- Anyone who is legitimately given a copy of a file.
+
+### Two things stored in the clear that may surprise you
+
+- **The data-protection keys** in `/data/keys` are stored unencrypted. They protect sign-in
+  cookies, file-download links and confirmation e-mails — all short-lived — so losing them logs
+  everyone out and invalidates outstanding download links, and nothing more. They are
+  deliberately excluded from backups for that reason. Anyone who can read them can forge a
+  download link or a session, so the directory deserves the same care as the files themselves.
+- **Secrets saved through the admin settings pages** — the outgoing-mail password and the SMS
+  gateway's authorisation header — are stored as plain text in the database. The interface never
+  sends them back to a browser, but they are readable in the database and therefore in any
+  unencrypted database dump. Configuring them as `SILEXGIS__Mail__Password` /
+  `SILEXGIS__Sms__AuthHeader` environment variables keeps them out of the database instead — but
+  only for as long as nobody saves that section from the admin page, because a saved section is
+  stored whole and from then on takes precedence over the environment. Pick one place for these
+  and stay there.
+
+## Showing Word and Excel files
+
+Word, Excel, PowerPoint and OpenDocument files are stored, searched and downloaded like
+everything else, but the browser cannot show them page by page the way it shows a PDF. That
+is not a gap in the reader: those formats have no pages until something decides a paper size
+and a font, which takes a whole office suite.
+
+SilexGIS can use one if you give it one. Start the converter alongside the stack and every
+such upload gets a PDF copy stored next to it — the original file is never altered — and the
+document then reads page by page in the browser, with real page numbers.
+
+```bash
+cd deploy
+# in .env:
+#   SILEXGIS__Conversion__Enabled=true
+#   SILEXGIS__Conversion__Url=http://convert:3000
+docker compose -f docker-compose.yml -f docker-compose.convert.yml up -d
+```
+
+The converter is [Gotenberg](https://gotenberg.dev/) (MIT-licensed) by default; set
+`SILEXGIS_CONVERT_IMAGE` to pin a different tag. It publishes no port and is reachable only
+from inside the stack, which is deliberate — it is a headless office suite that opens
+whatever it is handed.
+
+**It is entirely optional.** Without it nothing breaks: those documents are still stored,
+still found by content search, still downloadable, and the document page says plainly that
+this installation cannot lay them out rather than showing an empty panel or claiming the file
+is damaged. Whether a document can be *found* never depends on the converter — the words are
+read out of the uploaded file either way, by a reader every installation has.
+
+Notes worth knowing before you turn it on:
+
+- **Conversion happens at upload time**, in the background. Files uploaded *before* you
+  enabled it are not converted by that alone — start the sweep once after enabling it
+  (`POST /api/v1/jobs/document-conversion-backfill`, which needs the job-execution right) and
+  every document that could have a readable copy and has none gets one. The sweep is safe to
+  run as often as you like, and does nothing at all while no converter is configured.
+- It costs disk. A converted copy is a second file, typically of similar size to the original.
+- A document the converter cannot open is recorded as a conversion failure and stays
+  downloadable. The upload itself is never touched by any of this.
+- If the converter is restarting or busy when a document arrives, that document is recorded as
+  *not converted yet* rather than as one this installation cannot lay out — the two sentences
+  are different and the page says the right one. Nothing retries on its own, deliberately, so
+  that the failure is visible in the jobs list; the same sweep above picks the document up once
+  the converter is answering again.
+- Turning it off again: stop the `convert` service **and** remove
+  `SILEXGIS__Conversion__Enabled` from `.env`, or uploads keep queuing conversions for a
+  service that is no longer there.
+
 ## Backups
 
 `deploy/scripts/backup.sh` dumps the database and the uploaded-files volume:
@@ -100,6 +248,9 @@ A cron example that keeps nightly backups:
 ```
 15 3 * * *  cd /opt/silexgis/deploy && sh scripts/backup.sh >> /var/log/silexgis-backup.log 2>&1
 ```
+
+Both outputs are unencrypted. If a copy leaves the host — offsite, object storage, a USB disk —
+encrypt it first; see [Encryption at rest](#encryption-at-rest).
 
 ## Browsing the database
 
@@ -358,6 +509,12 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB) |
 | `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys (must persist across restarts) |
-| `SILEXGIS__FeatureIntegrity__Interval` | `24:00:00` | how often a background pass re-checks the map data for internal inconsistencies; findings go to the log and the admin jobs list. `00:00:00` turns the schedule off |
+| `SILEXGIS__Conversion__Enabled` | `false` | use a document-conversion service so office documents can be read page by page. Needs the converter overlay running; without it those documents are still stored, searched and downloaded |
+| `SILEXGIS__Conversion__Url` | — | where that service is, e.g. `http://convert:3000` |
+| `SILEXGIS__Conversion__TimeoutSeconds` | `120` | how long one conversion may take before it is given up on |
+| `SILEXGIS__AccessHistory__Retention` | `365.00:00:00` | how long the record of who downloaded which document is kept. `00:00:00` switches the record off entirely and the next sweep deletes everything already held |
+| `SILEXGIS__AccessHistory__CollapseWindow` | `01:00:00` | within this window, the same person fetching the same file again is the same reading and adds no row |
+| `SILEXGIS__AccessHistory__SweepInterval` | `1.00:00:00` | how often the pass that deletes expired access-history rows is queued. `00:00:00` turns the schedule off, and nothing is then deleted. Note the leading `1.` — a day is written `d.hh:mm:ss`, and `24:00:00` on its own means twenty-four **days** |
+| `SILEXGIS__FeatureIntegrity__Interval` | `1.00:00:00` | how often a background pass re-checks the map data for internal inconsistencies; findings go to the log and the admin jobs list. `00:00:00` turns the schedule off |
 
 Secrets belong only in the environment / `.env`, never in the repository.

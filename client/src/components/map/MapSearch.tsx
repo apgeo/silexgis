@@ -40,12 +40,18 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
   ).map((hit) => ({
     // The document, not the file that currently carries it: a hit against a superseded
     // revision still belongs to the same document, and the page is addressed by document.
-    // The matched position rides along only where the format numbers anything — printing a
-    // page number for a file that arrived whole would be this interface inventing a fact.
+    //
+    // The matched position rides along only where it indexes the pictures the reader will
+    // actually be shown, which is only a document that paginates itself. A sheet or a slide is
+    // a real division and is named as one beside the hit, but the pictures of an office
+    // document are drawn from a converted copy that paginates it afresh — a workbook whose
+    // first sheet prints across ten pages puts sheet three nowhere near page three — so
+    // carrying that number into the viewer would open a page with nothing to do with the hit.
+    // Better to open the document and let the reader look than to send them somewhere wrong.
     value:
-      hit.division === 'whole'
-        ? `document:${hit.id}`
-        : `document:${hit.id}:${hit.pageNumber}`,
+      hit.division === 'page'
+        ? `document:${hit.id}:${hit.pageNumber}`
+        : `document:${hit.id}`,
     label: <SearchDocumentHit hit={hit} />,
   }));
 

@@ -184,7 +184,13 @@ public static class DocumentContentSql
                 JOIN files f ON f.id = p.file_id
                 JOIN document_versions v ON v.id = f.document_version_id
                 JOIN documents d ON d.id = v.document_id
-                WHERE ({indexable})
+                -- A copy something converted so a page of it could be drawn is not searched.
+                -- Its words are the same words as the upload's, read a second time, and
+                -- matching them would make whether a document is findable depend on whether an
+                -- optional service happens to be deployed here — which would let two
+                -- installations running the same version disagree about what exists.
+                WHERE f.converted_from_file_id IS NULL
+                  AND ({indexable})
                   AND ({exact})
                   AND {versionArm}
                   AND {readSql}

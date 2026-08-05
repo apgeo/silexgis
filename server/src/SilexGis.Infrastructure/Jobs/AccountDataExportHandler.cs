@@ -171,6 +171,7 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
             }
 
             await WriteEntryAsync(archive, "content.json", await ContentInventoryAsync(userId, ct), ct);
+            await WriteEntryAsync(archive, "reading.json", await ReadingHistoryAsync(userId, ct), ct);
             await WriteReadmeAsync(archive, ct);
         }
 
@@ -213,6 +214,21 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
             .ToListAsync(ct),
     };
 
+    /// <summary>
+    /// The record this installation holds of the user having taken a copy of a document.
+    /// It is data about them rather than about the documents, so a request for a copy of
+    /// their own data owes it to them even though nobody asked for it to be collected.
+    /// Identifiers, times and titles only — the documents themselves are not reproduced,
+    /// for the same reason the rest of this archive names records rather than copying them.
+    /// </summary>
+    private async Task<object> ReadingHistoryAsync(Guid userId, CancellationToken ct) =>
+        await (from read in db.FileAccessEvents.AsNoTracking()
+               join document in db.Documents.AsNoTracking() on read.DocumentId equals document.Id
+               where read.UserId == userId
+               orderby read.Id descending
+               select new { read.At, read.DocumentId, document.Title, read.FileId })
+            .ToListAsync(ct);
+
     private static async Task WriteEntryAsync(ZipArchive archive, string name, object value, CancellationToken ct)
     {
         var entry = archive.CreateEntry(name, CompressionLevel.Optimal);
@@ -235,6 +251,7 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
               caver.json          your entry in the roster of people
               caving-groups.json  the caving groups you belong to
               content.json      what you have authored: identifiers, names and dates
+              reading.json      when you took a copy of a document, and which one
 
             The records you authored are not reproduced here in full. Use the export options on
             the caves, features and trip pages for those — they apply the rules that protect

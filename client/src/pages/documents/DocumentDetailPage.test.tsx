@@ -61,6 +61,11 @@ let fileInfo = {
   contentUrl: '/api/v1/files/file-1/content?token=full',
   thumbnailUrl: null as string | null,
   mayDownloadOriginal: true,
+  // The server names the file whose pages are drawn and how many there are; a portable
+  // document draws its own.
+  pagesUrl: '/api/v1/files/file-1/content?token=full' as string | null,
+  pageCount: 42 as number | null,
+  conversion: 'notApplicable',
 };
 
 let rights = 'read, write';
@@ -176,6 +181,9 @@ describe('DocumentDetailPage', () => {
       kind: 'image',
       thumbnailUrl: '/api/v1/files/file-1/thumbnail?size=480&token=full',
       mayDownloadOriginal: true,
+      // A picture is not paged, whatever else it is.
+      pagesUrl: null,
+      pageCount: 1,
     };
 
     doc = photo;
@@ -223,6 +231,8 @@ describe('DocumentDetailPage', () => {
       contentUrl: '/api/v1/files/file-1/content?token=full',
       thumbnailUrl: null,
       mayDownloadOriginal: true,
+      pagesUrl: '/api/v1/files/file-1/content?token=full',
+      pageCount: 42,
     };
 
     for (const narrow of [false, true]) {

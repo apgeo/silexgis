@@ -118,6 +118,18 @@ public static class DependencyInjection
         this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<FilesOptions>(configuration.GetSection(FilesOptions.SectionName));
+
+        // Laying an office document out needs an office suite, which is a service of its own
+        // and far more machinery than a small installation should have to run. It is optional,
+        // off unless the operator deploys it, and the converter reports that plainly instead of
+        // being absent from the container — so every caller can say "nothing here can do this"
+        // rather than crash or stay silent.
+        services.Configure<Documents.Conversion.ConversionOptions>(
+            configuration.GetSection(Documents.Conversion.ConversionOptions.SectionName));
+        services.AddHttpClient(Documents.Conversion.HttpDocumentConverter.HttpClientName);
+        services.AddSingleton<Domain.Documents.IDocumentConverter,
+            Documents.Conversion.HttpDocumentConverter>();
+
         services.AddSingleton<IFileStore, LocalFileStore>();
         services.AddSingleton<ThumbnailService>();
         services.AddSingleton<PageRenderService>();
@@ -149,11 +161,19 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, FeatureIntegrityVerifyHandler>();
         services.AddScoped<IProcessingJobHandler, TextExtractionHandler>();
         services.AddScoped<IProcessingJobHandler, TextExtractionBackfillHandler>();
+        services.AddScoped<IProcessingJobHandler, AccessHistoryPruneHandler>();
+        services.AddScoped<IProcessingJobHandler, DocumentConversionHandler>();
+        services.AddScoped<IProcessingJobHandler, DocumentConversionBackfillHandler>();
         services.AddHostedService<ProcessingJobWorker>();
 
         services.Configure<FeatureIntegrityOptions>(
             configuration.GetSection(FeatureIntegrityOptions.SectionName));
         services.AddHostedService<FeatureIntegrityScheduler>();
+
+        services.Configure<AccessHistoryOptions>(
+            configuration.GetSection(AccessHistoryOptions.SectionName));
+        services.AddScoped<FileAccessRecorder>();
+        services.AddHostedService<AccessHistoryScheduler>();
         return services;
     }
 }

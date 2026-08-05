@@ -390,6 +390,10 @@
     "viewer": {
       "title": "The document",
       "notDisplayable": "Nothing here can show this format yet. Download the file to open it in something that can.",
+      "conversionPending": "This document is being prepared for reading here. Download it in the meantime, or come back shortly.",
+      "conversionUnavailable": "This installation cannot lay out office documents, so there are no pages to show. The file itself is fine — download it to open it in a word processor.",
+      "conversionDeferred": "The readable copy of this document could not be made just now — the service that makes them did not answer. Nothing is wrong with the file; download it, or ask an administrator to run the conversion sweep.",
+      "conversionFailed": "This document could not be laid out for reading here. Download it to open it in a word processor.",
       "pageAlt": "Page {{number}}",
       "pageFailed": "This page could not be drawn. The rest of the document may still read; the file itself is unchanged and can be downloaded.",
       "pageOf": "Page {{number}} of {{count}}",

@@ -8,6 +8,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -66,6 +67,7 @@ public static class HistoryEndpoints
         IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         FeatureProtection protection,
+        IAppSettingsService settings,
         string? entityType,
         Guid? entityId,
         int? page,
@@ -123,11 +125,25 @@ public static class HistoryEndpoints
 
         var hidden = await protection.RedactedLinkTargetIdsAsync(ctx, involved, ct);
 
+        // Whether an attachment row may name what it points at is the association rule's
+        // answer, not this page's. It needs one fact the audit row does not carry — whether
+        // the document behind the attachment has coordinates of its own — so that is looked
+        // up for the attachment rows on this page, and the installation's setting is read
+        // once beside it.
+        var carriesOwnPosition = await GeotaggedFileIdsAsync(db, parsed.Select(x => x.Row), ct);
+        var revealAssociations = (await settings.GetProtectionAsync(ct)).RevealProtectedAssociations;
+
         var items = parsed.Select(r =>
         {
-            var governingHidden = GoverningFeatureId(r.Row) is { } governing && hidden.Contains(governing);
+            var governing = GoverningFeatureId(r.Row);
+            var governingHidden = governing is { } id && hidden.Contains(id);
+            var associationHidden = r.Row.EntityType == nameof(Attachment)
+                && AssociationProtection.IsWithheld(
+                    new FeatureAssociation(governing, carriesOwnPosition.Contains(r.Row.EntityId!)),
+                    exactViewOfTarget: !governingHidden,
+                    revealAssociations);
             var (changes, redacted) = HistoryProtection.Redact(
-                r.Row.EntityType!, r.Changes, governingHidden, hidden.Contains);
+                r.Row.EntityType!, r.Changes, governingHidden, hidden.Contains, associationHidden);
             return new HistoryEventDto(
                 r.Row.Id, r.Row.At, r.Row.UserId, r.UserName, r.Row.Action,
                 r.Row.EntityType!, r.Row.EntityId!,
@@ -231,6 +247,42 @@ public static class HistoryEndpoints
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Of the attachment rows on this page, the ids of those whose file carries a capture
+    /// point of its own. Resolved from the attachment as it stands now rather than from the
+    /// diff, because most rows never mention the file at all — a caption edit does not — and
+    /// what matters is the document the pairing would place today.
+    /// </summary>
+    /// <remarks>
+    /// An attachment that no longer exists, or whose file is gone, is reported as carrying a
+    /// position. That is the closed direction: the pairing stays withheld, which is where the
+    /// timeline was before it could ask this question at all.
+    /// </remarks>
+    private static async Task<HashSet<string>> GeotaggedFileIdsAsync(
+        SilexGisDbContext db, IEnumerable<AuditEntry> rows, CancellationToken ct)
+    {
+        var attachmentIds = rows
+            .Where(r => r.EntityType == nameof(Attachment))
+            .Select(r => ParseGuid(r.EntityId))
+            .OfType<Guid>()
+            .Distinct()
+            .ToList();
+        if (attachmentIds.Count == 0)
+        {
+            return [];
+        }
+
+        var plain = await db.Attachments.AsNoTracking()
+            .Where(a => attachmentIds.Contains(a.Id))
+            .Join(db.StoredFiles.AsNoTracking(), a => a.FileId, f => f.Id, (a, f) => new { a.Id, f.Geom })
+            .Where(x => x.Geom == null)
+            .Select(x => x.Id)
+            .ToListAsync(ct);
+
+        var resolved = plain.Select(id => id.ToString()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return [.. attachmentIds.Select(id => id.ToString()).Where(id => !resolved.Contains(id))];
     }
 
     private static Guid? ParseGuid(string? value) => Guid.TryParse(value, out var g) ? g : null;

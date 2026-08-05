@@ -444,7 +444,13 @@ public static class FileEndpoints
         // second is asked for separately before the bytes that answer it are offered.
         var mayHaveOriginal = (await photos.DisclosableIdsAsync(ctx, [subject.File.Id], ct))
             .Contains(subject.File.Id);
-        return TypedResults.Ok(subject.File.ToDto(subject.Version, tokens, mayHaveOriginal));
+
+        // The copy something made of this file so its pages could be drawn, where one exists.
+        // It is looked up here rather than in listings: this is the response a reader's screen
+        // is built from, and it is the only one that has to know how to show the document.
+        var rendition = await db.StoredFiles.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.ConvertedFromFileId == id, ct);
+        return TypedResults.Ok(subject.File.ToDto(subject.Version, tokens, mayHaveOriginal, rendition));
     }
 
     private static async Task<Results<Ok<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -491,14 +497,16 @@ public static class FileEndpoints
         SilexGisDbContext db,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
+        FileAccessRecorder accessHistory,
         CancellationToken ct)
     {
-        // Nothing here can re-decide anything: the token carries no identity, so a URL that
-        // was handed out is a decision already taken. All this route does is honour how far
-        // that decision went — a token minted for renderings only opens no original, and it
-        // says so the same way an unknown file does, because whether these bytes exist is
-        // part of what was being kept back.
-        if (tokens.Validate(token, id) != FileDelivery.Full)
+        // Nothing here can re-decide anything: a URL that was handed out is a decision
+        // already taken, and the token carries no right this route could re-weigh. All it
+        // does is honour how far that decision went — a token minted for renderings only
+        // opens no original, and it says so the same way an unknown file does, because
+        // whether these bytes exist is part of what was being kept back.
+        var grant = tokens.Validate(token, id);
+        if (grant?.Delivery != FileDelivery.Full)
         {
             return ApiProblems.NotFound("file.not_found"); // expired/tampered tokens don't disclose existence
         }
@@ -508,6 +516,13 @@ public static class FileEndpoints
         {
             return ApiProblems.NotFound("file.not_found");
         }
+
+        // Handing over the stored bytes is the event worth recording: this is the one route
+        // that gives out what was uploaded rather than something drawn from it. Recorded
+        // after the refusals, so a rejected request leaves no trace of a read that did not
+        // happen, and against the person the token was minted for — the only identity a
+        // route browsers reach ambiently can have.
+        await accessHistory.RecordAsync(id, grant.UserId, ct);
 
         return TypedResults.PhysicalFile(
             fileStore.GetAbsolutePath(file.StoragePath),

@@ -22,6 +22,9 @@ const photo: FileInfo = {
   contentUrl: '/api/v1/files/f1/content?token=t',
   thumbnailUrl: '/api/v1/files/f1/thumbnail?size=480&token=t',
   mayDownloadOriginal: true,
+  pagesUrl: null,
+  pageCount: null,
+  conversion: 'notApplicable',
 };
 
 const report: FileInfo = {
@@ -33,6 +36,8 @@ const report: FileInfo = {
   kind: 'document',
   contentUrl: '/api/v1/files/f2/content?token=t',
   thumbnailUrl: null,
+  pagesUrl: '/api/v1/files/f2/content?token=t',
+  pageCount: 3,
 };
 
 const recording: FileInfo = {
@@ -76,7 +81,7 @@ describe('DocumentContent', () => {
   it('draws a paged document page by page and never fetches the document itself', () => {
     render(
       <App>
-        <DocumentContent file={report} pageCount={12} initialPage={5} />
+        <DocumentContent file={{ ...report, pageCount: 12 }} initialPage={5} />
       </App>,
     );
 
@@ -90,7 +95,7 @@ describe('DocumentContent', () => {
     // it was never given, so the page is shown and the count is not claimed.
     render(
       <App>
-        <DocumentContent file={report} pageCount={null} />
+        <DocumentContent file={{ ...report, pageCount: null }} />
       </App>,
     );
 
@@ -102,7 +107,13 @@ describe('DocumentContent', () => {
     render(
       <App>
         <DocumentContent
-          file={{ ...report, mimeType: 'application/vnd.ms-excel', originalName: 'sheet.xls' }}
+          file={{
+            ...report,
+            mimeType: 'application/vnd.ms-excel',
+            originalName: 'sheet.xls',
+            pagesUrl: null,
+            pageCount: null,
+          }}
         />
       </App>,
     );
@@ -111,6 +122,52 @@ describe('DocumentContent', () => {
     expect(screen.getByRole('link', { name: /Download/ }).getAttribute('href')).toContain(
       '/content',
     );
+  });
+
+  it('blames the installation, not the document, when no converter is deployed here', () => {
+    // The same office document twice, once where nothing can lay it out and once where
+    // something has. The first must not read as a damaged file: it is a perfectly good
+    // document and the gap is on this side, which is a different sentence and has to be
+    // shown as one. The second proves the branch is reachable at all.
+    const spreadsheet: FileInfo = {
+      ...report,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      originalName: 'inventory.xlsx',
+      pagesUrl: null,
+      pageCount: null,
+      conversion: 'unavailable',
+    };
+
+    render(
+      <App>
+        <DocumentContent file={spreadsheet} />
+      </App>,
+    );
+    expect(screen.getByText(/cannot lay out office documents/)).toBeTruthy();
+    expect(screen.queryByText(/Nothing here can show this format yet/)).toBeNull();
+    expect(screen.getByRole('link', { name: /Download/ }).getAttribute('href')).toContain(
+      '/content',
+    );
+
+    cleanup();
+    render(
+      <App>
+        <DocumentContent
+          file={{
+            ...spreadsheet,
+            conversion: 'converted',
+            // The pages belong to the copy something made of it, not to the upload.
+            pagesUrl: '/api/v1/files/converted/content?token=t',
+            pageCount: 4,
+          }}
+        />
+      </App>,
+    );
+    expect(sources().some((src) => src.includes('/api/v1/files/converted/pages/1/render'))).toBe(
+      true,
+    );
+    expect(screen.getByText('Page 1 of 4')).toBeTruthy();
+    expect(screen.queryByText(/cannot lay out office documents/)).toBeNull();
   });
 
   it('plays a recording where the browser can, and says what happened where it cannot', () => {
@@ -167,7 +224,7 @@ describe('DocumentContent', () => {
   it('says a page would not draw rather than leaving a broken picture, and keeps the rest reachable', () => {
     render(
       <App>
-        <DocumentContent file={report} pageCount={12} initialPage={5} />
+        <DocumentContent file={{ ...report, pageCount: 12 }} initialPage={5} />
       </App>,
     );
 
@@ -189,7 +246,7 @@ describe('DocumentContent', () => {
   it('tries a page again once the delivery link is renewed rather than writing it off', () => {
     const { rerender } = render(
       <App>
-        <DocumentContent file={report} pageCount={12} initialPage={5} />
+        <DocumentContent file={{ ...report, pageCount: 12 }} initialPage={5} />
       </App>,
     );
 
@@ -202,8 +259,12 @@ describe('DocumentContent', () => {
     rerender(
       <App>
         <DocumentContent
-          file={{ ...report, contentUrl: '/api/v1/files/f2/content?token=renewed' }}
-          pageCount={12}
+          file={{
+            ...report,
+            pageCount: 12,
+            contentUrl: '/api/v1/files/f2/content?token=renewed',
+            pagesUrl: '/api/v1/files/f2/content?token=renewed',
+          }}
           initialPage={5}
         />
       </App>,

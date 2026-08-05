@@ -26,10 +26,17 @@ import DownloadDocument from './DownloadDocument.tsx';
  */
 export default function PagedDocumentView({
   file,
+  pagesUrl,
   pageCount,
   initialPage = 1,
 }: {
   file: FileInfo;
+  /**
+   * Delivery URL of the file whose pages are drawn — this file when it paginates itself, and
+   * the portable copy something made of it when it does not. The server names it; nothing
+   * here works it out from a media type.
+   */
+  pagesUrl: string;
   pageCount: number | null;
   initialPage?: number;
 }) {
@@ -49,7 +56,7 @@ export default function PagedDocumentView({
     setPage(Math.min(Math.max(initialPage, 1), pageCount ?? Number.MAX_SAFE_INTEGER));
   }, [initialPage, pageCount]);
 
-  const src = pageRenderUrl(file, page, 1200);
+  const src = pageRenderUrl(pagesUrl, page, 1200);
 
   return (
     <Flex vertical gap={12} align="center" style={{ width: '100%', minWidth: 0 }}>
@@ -70,7 +77,7 @@ export default function PagedDocumentView({
           // The page is fetched afresh whenever the delivery URL is renewed, which is what
           // keeps a long read from ending on a page that will not load.
           src={src}
-          preview={{ src: pageRenderUrl(file, page, 2400) }}
+          preview={{ src: pageRenderUrl(pagesUrl, page, 2400) }}
           alt={t('documents.viewer.pageAlt', { number: page })}
           onError={() => setUndrawable(src)}
           // The picture is drawn wide enough to read on a desktop; on a narrow screen it

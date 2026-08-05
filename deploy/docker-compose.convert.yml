@@ -1,0 +1,41 @@
+# Document-conversion overlay: turns Word, Excel, PowerPoint and OpenDocument files into
+# PDFs so the application can draw a picture of each page of them.
+#
+# Entirely optional, and off unless you start it. Without it those formats are stored,
+# searched and downloaded exactly as before — they simply have no page to look at in the
+# browser, and the application says so rather than showing an empty panel.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.convert.yml up -d
+#
+# Requires in .env (both, or the application will not queue any conversions):
+#   SILEXGIS__Conversion__Enabled=true
+#   SILEXGIS__Conversion__Url=http://convert:3000
+#
+# Optional in .env:
+#   SILEXGIS_CONVERT_IMAGE=gotenberg/gotenberg:8    # pin a different tag
+#   SILEXGIS__Conversion__TimeoutSeconds=120        # long documents take a while
+#
+# The converter joins `silexgis_default` and publishes no port, so it is reachable from the
+# application and from nowhere else. It is worth knowing that it is a headless office suite:
+# it opens whatever it is handed, so leaving it reachable from outside Docker would be
+# handing strangers a document parser.
+#
+# Stop it again with:
+#   docker compose -f docker-compose.yml -f docker-compose.convert.yml stop convert
+# and remove SILEXGIS__Conversion__Enabled from .env, or the application will keep queuing
+# conversions for a service that is no longer there.
+name: silexgis
+
+services:
+  convert:
+    image: ${SILEXGIS_CONVERT_IMAGE:-gotenberg/gotenberg:8}
+    restart: unless-stopped
+    # No published ports on purpose — see the note above.
+    command:
+      - gotenberg
+      - --api-timeout=300s
+      # Nothing here needs a browser: this converts office documents, and the web-rendering
+      # engines are a much larger attack surface for a capability the application never uses.
+      - --chromium-disable-javascript=true
+      - --chromium-allow-list=^$$

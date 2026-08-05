@@ -33,6 +33,18 @@ const hits = [
     division: 'whole',
     snippet: 'sifonul [[terminal]]',
   },
+  {
+    id: 'doc-sheet',
+    title: 'Inventar',
+    fileId: 'file-sheet',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    versionId: 'ver-3',
+    versionNumber: 1,
+    isCurrentVersion: true,
+    pageNumber: 3,
+    division: 'sheet',
+    snippet: 'sifonul [[terminal]] în coloana a treia',
+  },
 ];
 
 vi.mock('../../api/hooks.ts', () => ({
@@ -78,5 +90,18 @@ describe('MapSearch', () => {
     // A text file is stored as one page row, but it has no pages — saying "page 1" would be
     // this interface inventing a fact the file never stated.
     expect(pick('Notiță')).toBe('/documents/doc-whole');
+  });
+
+  it('carries no page for a division that does not index the pictures a reader is shown', () => {
+    // A worksheet is a real division and the hit says so in its label — but the pages drawn for
+    // a spreadsheet come from a copy that paginated it afresh, where sheet three may start on
+    // page forty. Sending the reader to "page 3" of that copy would open a page unrelated to
+    // what they searched for, so the document is opened at its beginning instead.
+    expect(pick('Inventar')).toBe('/documents/doc-sheet');
+    cleanup();
+
+    // Paired with the case that does index them, so a rule that simply stopped carrying page
+    // numbers at all could not pass this.
+    expect(pick('Raport de tură')).toBe('/documents/doc-paged?page=7');
   });
 });

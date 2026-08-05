@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using SilexGis.Api.Common;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Files;
 
 namespace SilexGis.Api.Features.Files;
 
@@ -18,6 +19,22 @@ namespace SilexGis.Api.Features.Files;
 /// following the link — the URL itself stays present and answers as a missing file, which
 /// is what every other withheld thing answers.
 /// </param>
+/// <param name="PagesUrl">
+/// The delivery URL of the file whose pages can be drawn, or null when nothing here has pages
+/// to draw. It is this file for a portable document, and its converted copy for an office
+/// document that has one — which is why the server names it rather than leaving a client to
+/// work out from a media type which file to ask about. A page picture is fetched by asking this
+/// URL's route for a page, carrying the token it already has.
+/// </param>
+/// <param name="PageCount">
+/// How many pages the thing <paramref name="PagesUrl"/> draws actually has, once something has
+/// counted them. Null means nobody has counted yet, which is not the same as one page.
+/// </param>
+/// <param name="Conversion">
+/// How far turning this file into something with pages has got. The state a client has to act
+/// on is the one that says this installation has no converter: the document is fine, nothing
+/// here can lay it out, and that sentence is different from every failure sentence.
+/// </param>
 public sealed record FileDto(
     Guid Id,
     Guid DocumentId,
@@ -31,7 +48,10 @@ public sealed record FileDto(
     DateTimeOffset CreatedAt,
     string ContentUrl,
     string? ThumbnailUrl,
-    bool MayDownloadOriginal);
+    bool MayDownloadOriginal,
+    string? PagesUrl,
+    int? PageCount,
+    ConversionState Conversion);
 
 /// <summary>
 /// Upload limits this installation applies. Published so a client checks a file before
@@ -68,11 +88,31 @@ internal static class FileMapping
     /// caller's right to place what the photo shows must not hand out the original — while
     /// everything without a position of its own is unaffected, whatever this says.
     /// </param>
+    /// <param name="rendition">
+    /// The converted copy of this file, where one has been produced. Passed in rather than
+    /// looked up here: which file's pages can be drawn is a fact the response has to state, and
+    /// a mapping that fetched it would issue a query per row of every listing.
+    /// </param>
     public static FileDto ToDto(
-        this StoredFile f, DocumentVersion version, IFileAccessTokenService tokens, bool mayHaveOriginal = false)
+        this StoredFile f,
+        DocumentVersion version,
+        IFileAccessTokenService tokens,
+        bool mayHaveOriginal = false,
+        StoredFile? rendition = null)
     {
         var delivery = f.Geom is null || mayHaveOriginal ? FileDelivery.Full : FileDelivery.DerivativesOnly;
         var token = tokens.CreateToken(f.Id, delivery);
+
+        // A portable document draws its own pages; anything else draws them only through the
+        // copy something made of it. Both cases end in a delivery URL for one file, which is
+        // what a client needs and all it needs.
+        var pagesFile = PageRenderService.CanRender(f.MimeType) ? f
+            : rendition is not null && PageRenderService.CanRender(rendition.MimeType) ? rendition
+            : null;
+        var pagesUrl = pagesFile is null ? null
+            : pagesFile.Id == f.Id ? ContentUrl(f.Id, token)
+            : ContentUrl(pagesFile.Id, tokens.CreateToken(pagesFile.Id, delivery));
+
         return new FileDto(
             f.Id,
             version.DocumentId,
@@ -88,7 +128,10 @@ internal static class FileMapping
             f.Kind == FileKind.Image
                 ? $"/api/v1/files/{f.Id}/thumbnail?size=480&token={Uri.EscapeDataString(token)}"
                 : null,
-            delivery == FileDelivery.Full);
+            delivery == FileDelivery.Full,
+            pagesUrl,
+            (pagesFile ?? f).PageCount,
+            f.Conversion);
     }
 
     public static string ContentUrl(Guid fileId, string token) =>

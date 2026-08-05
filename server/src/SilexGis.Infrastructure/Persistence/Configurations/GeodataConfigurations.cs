@@ -41,6 +41,17 @@ public sealed class StoredFileConfiguration : IEntityTypeConfiguration<StoredFil
         // over a table that grows with every upload the installation ever takes.
         builder.HasIndex(x => x.TextExtraction);
 
+        builder.Property(x => x.Conversion).HasConversion<short>();
+        // A converted copy points at the upload it came from, and a version holds at most one
+        // copy of any upload — the unique index is what makes a re-delivered conversion job
+        // unable to produce a second one. Deleting the upload takes its copy with it: a copy of
+        // something that is gone is not a document, it is an orphan nobody can name.
+        builder.HasOne<StoredFile>().WithMany().HasForeignKey(x => x.ConvertedFromFileId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(x => x.ConvertedFromFileId)
+            .IsUnique()
+            .HasFilter("converted_from_file_id is not null");
+
         // Bytes belong to a document revision; deleting the revision takes them with it.
         builder.HasOne<DocumentVersion>().WithMany().HasForeignKey(x => x.DocumentVersionId)
             .OnDelete(DeleteBehavior.Cascade);

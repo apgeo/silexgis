@@ -8,8 +8,32 @@ import MediaDocumentView from './MediaDocumentView.tsx';
 import PagedDocumentView from './PagedDocumentView.tsx';
 import TextDocumentView from './TextDocumentView.tsx';
 
-/** Formats whose pages are drawn on the server, page by page. */
-const pagedFormats = ['application/pdf'];
+/**
+ * What to say about a document nothing can draw pages of, when the reason is worth saying.
+ *
+ * Only one of these is about the document. "Nothing here can lay this format out" is a fact
+ * about this installation — laying out a word-processor document needs an office suite, which
+ * is an optional service a small site is not expected to run — and telling someone their file
+ * is broken when the truth is that nobody deployed the converter is the mistake this exists to
+ * prevent. "The attempt did not finish" is narrower still: it is about this one document on
+ * this one occasion, and saying it as either of the other two would be wrong in both
+ * directions. Null means there is nothing useful to add beyond the format not being
+ * displayable.
+ */
+function conversionMessage(conversion: FileInfo['conversion']): string | null {
+  switch (conversion) {
+    case 'pending':
+      return 'documents.viewer.conversionPending';
+    case 'unavailable':
+      return 'documents.viewer.conversionUnavailable';
+    case 'deferred':
+      return 'documents.viewer.conversionDeferred';
+    case 'failed':
+      return 'documents.viewer.conversionFailed';
+    default:
+      return null;
+  }
+}
 
 /**
  * Whether a format's bytes are text a person can read directly. A delimited table and a set
@@ -38,11 +62,9 @@ function isText(mimeType: string): boolean {
  */
 export default function DocumentContent({
   file,
-  pageCount = null,
   initialPage,
 }: {
   file: FileInfo;
-  pageCount?: number | null;
   initialPage?: number;
 }) {
   const { t } = useTranslation();
@@ -63,8 +85,18 @@ export default function DocumentContent({
     }
   }
 
-  if (pagedFormats.includes(file.mimeType)) {
-    return <PagedDocumentView file={file} pageCount={pageCount} initialPage={initialPage} />;
+  // Which file's pages can be drawn is the server's statement, not a guess made here from a
+  // media type: an office document has no pages of its own, and where something has converted
+  // one into a portable copy the pages — and the page numbers — belong to that copy.
+  if (file.pagesUrl !== null && file.pagesUrl !== undefined) {
+    return (
+      <PagedDocumentView
+        file={file}
+        pagesUrl={file.pagesUrl}
+        pageCount={file.pageCount ?? null}
+        initialPage={initialPage}
+      />
+    );
   }
 
   // A recording is played by the browser from the stored bytes, since there is no rendering of
@@ -80,15 +112,18 @@ export default function DocumentContent({
     return <TextDocumentView file={file} />;
   }
 
+  const conversion = conversionMessage(file.conversion);
   return (
     <Empty
       image={Empty.PRESENTED_IMAGE_SIMPLE}
       description={
         <Flex vertical gap={8} align="center">
           <Typography.Text type="secondary">
-            {file.mayDownloadOriginal
-              ? t('documents.viewer.notDisplayable')
-              : t('attachments.originalWithheld')}
+            {!file.mayDownloadOriginal
+              ? t('attachments.originalWithheld')
+              : conversion !== null
+                ? t(conversion)
+                : t('documents.viewer.notDisplayable')}
           </Typography.Text>
           <DownloadDocument file={file} />
         </Flex>

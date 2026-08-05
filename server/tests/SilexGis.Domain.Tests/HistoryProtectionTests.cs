@@ -32,7 +32,7 @@ public class HistoryProtectionTests
             ("Geom", "POINT (25 45)", "POINT (26 46)"),
             ("UpdatedAt", "t1", "t2"));
 
-        var result = HistoryProtection.Redact("Feature:Cave", changes, governingHidden: true, NoLinkHidden);
+        var result = HistoryProtection.Redact("Feature:Cave", changes, governingHidden: true, NoLinkHidden, associationHidden: false);
 
         result.Changes!.ContainsKey("Name").ShouldBeTrue();
         result.Changes.ContainsKey("ClosestAddress").ShouldBeFalse();
@@ -49,7 +49,7 @@ public class HistoryProtectionTests
     {
         var changes = Changes(("ClosestAddress", "Str. X", "Str. Y"));
 
-        var result = HistoryProtection.Redact("Feature:Cave", changes, governingHidden: false, NoLinkHidden);
+        var result = HistoryProtection.Redact("Feature:Cave", changes, governingHidden: false, NoLinkHidden, associationHidden: false);
 
         result.Changes!.ContainsKey("ClosestAddress").ShouldBeTrue();
         result.Redacted.ShouldBeEmpty();
@@ -64,7 +64,7 @@ public class HistoryProtectionTests
             ("Altitude", "100", "200"),
             ("PositionQuality", "Gps", "Estimated"));
 
-        var result = HistoryProtection.Redact("Feature:CaveEntrance", changes, governingHidden: true, NoLinkHidden);
+        var result = HistoryProtection.Redact("Feature:CaveEntrance", changes, governingHidden: true, NoLinkHidden, associationHidden: false);
 
         result.Changes!.ContainsKey("Name").ShouldBeTrue();
         result.Redacted.ShouldBe(["Geom", "Altitude", "PositionQuality"], ignoreOrder: true);
@@ -78,7 +78,7 @@ public class HistoryProtectionTests
             ("Geom", null, "MULTILINESTRING ((25 45, 26 46))"),
             ("Name", null, "Survey A"));
 
-        var result = HistoryProtection.Redact("Feature:Centerline", changes, governingHidden: true, NoLinkHidden);
+        var result = HistoryProtection.Redact("Feature:Centerline", changes, governingHidden: true, NoLinkHidden, associationHidden: false);
 
         result.Changes.ShouldBeNull();
         result.Redacted.ShouldContain("Geom");
@@ -90,7 +90,7 @@ public class HistoryProtectionTests
     {
         var changes = Changes(("Geom", "POINT (25 45)", "POINT (26 46)"), ("Name", "a", "b"));
 
-        var result = HistoryProtection.Redact("Feature:Generic", changes, governingHidden: true, NoLinkHidden);
+        var result = HistoryProtection.Redact("Feature:Generic", changes, governingHidden: true, NoLinkHidden, associationHidden: false);
 
         result.Changes!.ContainsKey("Name").ShouldBeTrue();
         result.Redacted.ShouldBe(["Geom"]);
@@ -106,7 +106,7 @@ public class HistoryProtectionTests
             ("ToId", null, hidden.ToString()),
             ("Note", null, "spring connection"));
 
-        var result = HistoryProtection.Redact("FeatureLink", changes, governingHidden: false, id => id == hidden);
+        var result = HistoryProtection.Redact("FeatureLink", changes, governingHidden: false, id => id == hidden, associationHidden: false);
 
         result.Changes!.ContainsKey("ToId").ShouldBeFalse();
         result.Changes.ContainsKey("FromId").ShouldBeTrue(); // that endpoint is not hidden
@@ -119,7 +119,7 @@ public class HistoryProtectionTests
     {
         var changes = Changes(("FromId", null, Guid.NewGuid().ToString()), ("ToId", null, Guid.NewGuid().ToString()));
 
-        var result = HistoryProtection.Redact("FeatureLink", changes, governingHidden: false, _ => false);
+        var result = HistoryProtection.Redact("FeatureLink", changes, governingHidden: false, _ => false, associationHidden: false);
 
         result.Changes!.Count.ShouldBe(2);
         result.Redacted.ShouldBeEmpty();
@@ -131,34 +131,43 @@ public class HistoryProtectionTests
         var hiddenCave = Guid.NewGuid();
         var changes = Changes(("CaveId", hiddenCave.ToString(), null));
 
-        var result = HistoryProtection.Redact("TripLogCave", changes, governingHidden: false, id => id == hiddenCave);
+        var result = HistoryProtection.Redact("TripLogCave", changes, governingHidden: false, id => id == hiddenCave, associationHidden: false);
 
         result.Changes.ShouldBeNull(); // only prop, removed → empty → null
         result.Redacted.ShouldBe(["CaveId"]);
     }
 
+    /// <summary>
+    /// An attachment row names the document it pairs with exactly when the association rule
+    /// says the pairing may be disclosed — and that is the only thing that decides it here.
+    ///
+    /// Both halves are asserted over the same row with the same protected ancestry, so the
+    /// withheld case cannot pass on a build that had simply stopped looking at the flag, and
+    /// the disclosed case cannot pass on one that had stopped redacting. This is where the
+    /// timeline stopped having an opinion of its own: it used to withhold whenever the
+    /// feature's location was hidden, whatever the installation had chosen and whatever the
+    /// document behind the attachment was.
+    /// </summary>
     [Fact]
-    public void Attachment_names_no_document_in_a_protected_features_timeline()
+    public void Attachment_names_its_document_exactly_when_the_association_may_be_disclosed()
     {
         var fileId = Guid.NewGuid().ToString();
 
-        // Hidden: the event stays — something was attached — while which document it was does
-        // not, because that pairing is exactly what the live surfaces decline to disclose.
+        JsonObject Row() => Changes(
+            ("FileId", null, fileId), ("Caption", null, "Entrance from the north"), ("SortOrder", null, "0"));
+
+        // Withheld: the event stays — something was attached — while which document it was
+        // does not.
         var hidden = HistoryProtection.Redact(
-            "Attachment",
-            Changes(("FileId", null, fileId), ("Caption", null, "Entrance from the north"), ("SortOrder", null, "0")),
-            governingHidden: true,
-            NoLinkHidden);
+            "Attachment", Row(), governingHidden: true, NoLinkHidden, associationHidden: true);
         hidden.Redacted.Order().ShouldBe(["Caption", "FileId"]);
         hidden.Changes!.ContainsKey("FileId").ShouldBeFalse();
         hidden.Changes.ContainsKey("SortOrder").ShouldBeTrue();
 
-        // And a caller who may place the feature exactly reads the whole row.
+        // Disclosed, with the location still protected: the pairing is a name, and naming it
+        // is a decision the association rule takes, not this one.
         var shown = HistoryProtection.Redact(
-            "Attachment",
-            Changes(("FileId", null, fileId), ("Caption", null, "Entrance from the north"), ("SortOrder", null, "0")),
-            governingHidden: false,
-            NoLinkHidden);
+            "Attachment", Row(), governingHidden: true, NoLinkHidden, associationHidden: false);
         shown.Redacted.ShouldBeEmpty();
         shown.Changes!.Count.ShouldBe(3);
     }
@@ -166,7 +175,7 @@ public class HistoryProtectionTests
     [Fact]
     public void Null_changes_pass_through()
     {
-        var result = HistoryProtection.Redact("Feature:Cave", null, governingHidden: true, NoLinkHidden);
+        var result = HistoryProtection.Redact("Feature:Cave", null, governingHidden: true, NoLinkHidden, associationHidden: false);
 
         result.Changes.ShouldBeNull();
         result.Redacted.ShouldBeEmpty();

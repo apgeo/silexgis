@@ -29,21 +29,22 @@ export const pageRenderSizes = [160, 480, 1200, 2400] as const;
 export type PageRenderSize = (typeof pageRenderSizes)[number];
 
 /**
- * The URL one page of a paged document is drawn at, built from the delivery URL that came
- * with the file.
+ * The URL one page of a paged document is drawn at, built from the delivery URL of the file
+ * whose pages those are.
  *
  * The page is drawn on the server, which is why this is a URL and not a renderer: the one
  * machine that has to be able to draw the page is the one that already holds the file, and
  * what comes back is a picture rather than the document — so it is served to a caller who
  * may not have the stored bytes, exactly as a photo's rendering is. The token that signs
  * how far this caller may reach is carried over unchanged; nothing here decides anything.
+ *
+ * It takes that URL rather than the file, because the file whose pages are drawn is not
+ * always the file being looked at: an office document has no pages of its own, and where
+ * something has converted one into a portable copy the pages belong to the copy. Which file
+ * that is, is the server's statement, not a guess made here from a media type.
  */
-export function pageRenderUrl(
-  file: { contentUrl: string },
-  page: number,
-  size: PageRenderSize,
-): string {
-  const [path, query] = file.contentUrl.split('?');
+export function pageRenderUrl(pagesUrl: string, page: number, size: PageRenderSize): string {
+  const [path, query] = pagesUrl.split('?');
   const params = new URLSearchParams(query ?? '');
   params.set('size', String(size));
   return `${path.replace(/\/content$/, `/pages/${page}/render`)}?${params.toString()}`;

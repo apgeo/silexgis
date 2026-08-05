@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260805113938_AccessHistory")]
+    partial class AccessHistory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3130,14 +3133,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("content_modified_at");
 
-                    b.Property<short>("Conversion")
-                        .HasColumnType("smallint")
-                        .HasColumnName("conversion");
-
-                    b.Property<Guid?>("ConvertedFromFileId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("converted_from_file_id");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -3217,11 +3212,6 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_files");
-
-                    b.HasIndex("ConvertedFromFileId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_files_converted_from_file_id")
-                        .HasFilter("converted_from_file_id is not null");
 
                     b.HasIndex("DocumentVersionId")
                         .HasDatabaseName("ix_files_document_version_id");
@@ -4530,12 +4520,6 @@ namespace SilexGis.Infrastructure.Migrations
 
             modelBuilder.Entity("SilexGis.Domain.Entities.StoredFile", b =>
                 {
-                    b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
-                        .WithMany()
-                        .HasForeignKey("ConvertedFromFileId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .HasConstraintName("fk_files_files_converted_from_file_id");
-
                     b.HasOne("SilexGis.Domain.Entities.DocumentVersion", null)
                         .WithMany()
                         .HasForeignKey("DocumentVersionId")

@@ -278,7 +278,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
 
         var hiddenTarget = HistoryProtection.Redact(
             nameof(FeatureLink), LinkChanges(visibleId, protectedId), governingHidden: false,
-            id => id == protectedId);
+            id => id == protectedId, associationHidden: false);
         var hiddenTargetChanges = hiddenTarget.Changes;
         hiddenTarget.Redacted.ShouldContain(nameof(FeatureLink.ToId));
         hiddenTargetChanges.ShouldNotBeNull();
@@ -289,7 +289,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
         // Redaction runs in both directions — the source endpoint discloses just as much.
         var hiddenSource = HistoryProtection.Redact(
             nameof(FeatureLink), LinkChanges(protectedId, visibleId), governingHidden: false,
-            id => id == protectedId);
+            id => id == protectedId, associationHidden: false);
         var hiddenSourceChanges = hiddenSource.Changes;
         hiddenSource.Redacted.ShouldContain(nameof(FeatureLink.FromId));
         hiddenSourceChanges.ShouldNotBeNull();
@@ -298,7 +298,7 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
         // Same row, nothing hidden: the removal is driven by the protection predicate, not
         // by the property name.
         var visible = HistoryProtection.Redact(
-            nameof(FeatureLink), LinkChanges(visibleId, protectedId), governingHidden: false, _ => false);
+            nameof(FeatureLink), LinkChanges(visibleId, protectedId), governingHidden: false, _ => false, associationHidden: false);
         var visibleChanges = visible.Changes;
         visible.Redacted.ShouldBeEmpty();
         visibleChanges.ShouldNotBeNull();

@@ -83,6 +83,25 @@ public class StoredFile : ITimestamped, IAuditable
     /// </summary>
     public string? TextExtractionError { get; set; }
 
+    /// <summary>
+    /// How far turning this file into a portable document — so its pages can be drawn — has
+    /// got. Only ever left the resting state for a format that has no pagination of its own;
+    /// a portable document already has pages and a picture has nothing to convert.
+    /// </summary>
+    public ConversionState Conversion { get; set; } = ConversionState.NotApplicable;
+
+    /// <summary>
+    /// The uploaded file this one was converted from, when it is a converted copy rather than
+    /// something a person uploaded. Null for everything a person uploaded, which is almost
+    /// every row.
+    /// <para>
+    /// The direction is deliberate: the copy points at the original, so the original is never
+    /// touched to record that a copy exists. An upload is immutable, and a derived file is
+    /// stored beside it exactly as a page of read-out text is stored beside it.
+    /// </para>
+    /// </summary>
+    public Guid? ConvertedFromFileId { get; set; }
+
     /// <summary>Author embedded in the file's own metadata, not the account that uploaded it.</summary>
     public string? Author { get; set; }
 

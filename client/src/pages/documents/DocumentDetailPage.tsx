@@ -180,7 +180,6 @@ export default function DocumentDetailPage() {
         {file ? (
           <DocumentContent
             file={file}
-            pageCount={document.pageCount}
             initialPage={Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1}
           />
         ) : (

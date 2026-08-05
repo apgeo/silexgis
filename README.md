@@ -96,8 +96,17 @@ cp .env.example .env          # set the DB password, admin account and public UR
 docker compose up -d          # → http://localhost:8080
 ```
 
-See **[docs/INSTALL.md](docs/INSTALL.md)** for HTTPS, backups, upgrades, external login
-providers, and the non-Docker (Linux/Windows) install path.
+See **[docs/INSTALL.md](docs/INSTALL.md)** for HTTPS, encryption at rest, backups, upgrades,
+external login providers, and the non-Docker (Linux/Windows) install path.
+
+Word, Excel and OpenDocument files are stored, searched and downloaded out of the box, but
+have no pages to show in the browser — those formats have none until something lays them out.
+An optional converter service gives them real pages; see
+[Showing Word and Excel files](docs/INSTALL.md#showing-word-and-excel-files).
+
+SilexGIS stores uploaded files and database rows unencrypted, and expects the operator to
+encrypt the volume or disk beneath them. What that protects against, what it does not, and how
+to set it up is in [Encryption at rest](docs/INSTALL.md#encryption-at-rest).
 
 ## Repository layout
 

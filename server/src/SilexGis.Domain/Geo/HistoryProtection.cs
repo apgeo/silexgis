@@ -63,12 +63,11 @@ public static class HistoryProtection
     private static readonly string[] EntranceSensitive =
         [nameof(Feature.Geom), nameof(CaveEntrance.Altitude), nameof(CaveEntrance.PositionQuality)];
 
-    // Which document is attached to a feature is the association, and a caller who may not
-    // place that feature is not told it. The live surfaces decide this case by case — an
-    // installation can choose to reveal the plain ones — but an audit row carries neither the
-    // installation's choice nor whether the document behind it has coordinates of its own, so
-    // the timeline names no document at all. Strictly more restrictive than the live answer,
-    // which is the only direction a timeline may differ in.
+    // Which document is attached to a feature is the association, and whether a caller is
+    // told it is decided by one rule that lives beside this one. The timeline does not
+    // re-derive that decision — a second copy of it is how one surface comes to disagree
+    // with the others — it is handed the answer and removes the pairing when the answer is
+    // that the pairing is withheld.
     private static readonly string[] AttachmentSensitive =
         [nameof(Attachment.FileId), nameof(Attachment.Caption)];
 
@@ -97,8 +96,19 @@ public static class HistoryProtection
     /// Predicate over a referenced feature id: whether a locating link to it must be hidden
     /// (for rows that merely reference a protected feature — feature links, trip cave-links).
     /// </param>
+    /// <param name="associationHidden">
+    /// Whether the caller is kept from being told what this row's attachment points at, as
+    /// the association rule decides it — which weighs the installation's reveal setting and
+    /// whether the document behind the attachment carries coordinates of its own. Passed in
+    /// rather than derived here, so the timeline and the live surfaces cannot come to
+    /// different answers about the same pairing. Ignored for every other entity type.
+    /// </param>
     public static RedactionResult Redact(
-        string entityType, JsonObject? changes, bool governingHidden, Func<Guid, bool> linkTargetHidden)
+        string entityType,
+        JsonObject? changes,
+        bool governingHidden,
+        Func<Guid, bool> linkTargetHidden,
+        bool associationHidden)
     {
         if (changes is null)
         {
@@ -154,7 +164,7 @@ public static class HistoryProtection
         }
         else if (entityType == nameof(Attachment))
         {
-            if (governingHidden)
+            if (associationHidden)
             {
                 RemoveNamed(changes, AttachmentSensitive, redacted);
             }

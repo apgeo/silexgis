@@ -14,7 +14,7 @@ describe('thumbnailAtSize', () => {
 
 describe('pageRenderUrl', () => {
   it('asks for a picture of the page rather than for the document', () => {
-    const url = pageRenderUrl({ contentUrl: '/api/v1/files/abc/content?token=sig.ned' }, 7, 1200);
+    const url = pageRenderUrl('/api/v1/files/abc/content?token=sig.ned', 7, 1200);
     const query = new URLSearchParams(url.split('?')[1]);
     expect(url.split('?')[0]).toBe('/api/v1/files/abc/pages/7/render');
     // The stored file is not what a viewer fetches, at any size and under any spelling.
