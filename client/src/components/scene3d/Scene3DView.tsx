@@ -4,7 +4,11 @@ import { LayoutOutlined } from '@ant-design/icons';
 import { Alert, Button, Popover, Result, Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { useMapConfig, useMapLayers } from '../../api/hooks.ts';
+import { useFeatureTypes, useMapConfig, useMapLayers } from '../../api/hooks.ts';
+import {
+  onFeatureTypeCatalogChanged,
+  setFeatureTypeCatalog,
+} from '../../map/featureTypeCatalog.ts';
 import { baseImageryLayerId, syncBaseImagery } from '../../scene3d/baseImagery3d.ts';
 import {
   applyCamera3D,
@@ -21,10 +25,22 @@ import {
   type CaveData3DState,
 } from '../../scene3d/caveData3d.ts';
 import { geoJsonBounds } from '../../scene3d/geoJson3d.ts';
+import type { OverlayRect } from '../../scene3d/overlayPlacement.ts';
 import { activePreset, presetCamera, type Camera3DPreset } from '../../scene3d/presets3d.ts';
 import { claimSceneSurface, sceneSurfaceElement } from '../../scene3d/sceneSurface.ts';
-import { pickPayload, selectionFromPick } from '../../scene3d/selection3d.ts';
-import type { Scene3DCore, Scene3DProjection, Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
+import {
+  pickMatchesSelection,
+  pickPayload,
+  selectionFromPick,
+  type Scene3DPickPayload,
+} from '../../scene3d/selection3d.ts';
+import type {
+  Scene3DCore,
+  Scene3DPosition,
+  Scene3DProjection,
+  Scene3DScreenPosition,
+  Scene3DSurfaceState,
+} from '../../scene3d/scene3dEngine.ts';
 import type { Scene3DSession } from '../../scene3d/scene3dContext.ts';
 import { attachScene3dHash } from '../../scene3d/urlHash3d.ts';
 import { attachViewSync3d } from '../../scene3d/viewSync3d.ts';
@@ -34,6 +50,7 @@ import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.
 import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
 import Scene3DCameraControls from './Scene3DCameraControls.tsx';
 import Scene3DLayerPanel from './Scene3DLayerPanel.tsx';
+import Scene3DOverlay from './Scene3DOverlay.tsx';
 import { cutawayPauseMessage } from './surfaceMessages.ts';
 import './Scene3DView.css';
 
@@ -132,6 +149,17 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const { data: layers } = useMapLayers();
   const [activeBaseId, setActiveBaseId] = useState<number>();
 
+  // What each kind of surface feature is called, which is how a feature drawn here gets named in
+  // a tooltip. The flat map fills the same catalog when it opens; this view has to fill it as
+  // well, because a session that goes straight to the 3D route never opens the flat map and would
+  // otherwise show every feature as unnamed.
+  const { data: featureTypes } = useFeatureTypes();
+  useEffect(() => {
+    if (featureTypes) {
+      setFeatureTypeCatalog(featureTypes);
+    }
+  }, [featureTypes]);
+
   useEffect(() => {
     if (layers && activeBaseId === undefined) {
       const initial = layers.find((l) => l.isDefault && l.isBase) ?? layers.find((l) => l.isBase);
@@ -210,6 +238,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       setDataState(next);
       // Whether there is a cave to frame changes with every load, and only the loader knows.
       setCaveFramable(data.caveBounds() !== undefined);
+      // The callout holds what it was handed when the thing was clicked, and a load replaces every
+      // one of those with a freshly composed name at wherever the thing now is. Without this, a
+      // feature renamed or moved from the panel beside the scene leaves the callout stating the
+      // old name at the old place while the panel next to it states the new one. Kept rather than
+      // dropped when the thing is no longer among what is drawn: that is what the camera moving
+      // away from it looks like, and it is not a reason to take a label down.
+      setPicked((current) => (current ? (data.currentPick(current) ?? current) : current));
     });
 
     // Both views keep each other in step over the workspace bus, in references and degrees rather
@@ -228,12 +263,20 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       const selection = selectionFromPick(pick);
       useWorkspaceStore.getState().setSelection(selection);
       sync.publishSelection(selection);
+      // Kept alongside the selection rather than derived from it: the callout names and points at
+      // the thing that was clicked, and the store holds a bare reference with no name and no
+      // position in it. A click on empty ground takes the callout down, which is what clicking
+      // away means everywhere else.
+      setPicked(pickPayload(pick));
     });
 
-    // Hover only changes the cursor here. The scene throttles the hit test to one per drawn frame,
-    // so this costs a pointer-shaped answer per frame and nothing else.
+    // Hover changes the cursor and names what is under the pointer. The scene throttles the hit
+    // test to one per drawn frame and answers nothing at all on a touch device, so this costs one
+    // shallow state write per frame while the pointer is over something and nothing otherwise.
     const unsubscribeHover = engine.onHover((pick) => {
-      surface.style.cursor = pickPayload(pick) ? 'pointer' : '';
+      const payload = pickPayload(pick);
+      surface.style.cursor = payload ? 'pointer' : '';
+      setHovered(payload && pick?.screen ? { payload, screen: pick.screen } : undefined);
     });
 
     // Editing or deleting a feature invalidates what is drawn here. The write happens in the
@@ -241,6 +284,16 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // announces and this view refetches the ground it is showing — otherwise a deleted marker
     // stays on screen, and stays clickable, until the camera next moves.
     const unsubscribeChanges = onSurfaceFeaturesChanged(() => data.reload());
+
+    // What each kind of feature is called is composed into the drawn items as they are built, so
+    // features drawn before the catalog answered carry no type name at all — an unnamed sinkhole
+    // ends up called "surface features" in every label about it, and stays that way until the
+    // camera happens to move. The catalog is a separate request that can answer after the features
+    // do, so this reloads them when it lands. The flat map has no equivalent because it composes
+    // the same label at the moment the pointer stops on something, by which time the catalog is
+    // there; here the label has to be attached to the item, because a hit test runs once per drawn
+    // frame and cannot go looking things up.
+    const unsubscribeCatalog = onFeatureTypeCatalogChanged(() => data.reload());
 
     // The same panel's "zoom to" buttons: while this view is on screen, they move this camera.
     // The two camera members are what lets a saved view remember, and restore, a place underground
@@ -278,6 +331,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       detachHash?.();
       unsubscribeView();
       detachCamera();
+      unsubscribeCatalog();
       unsubscribeChanges();
       unsubscribeClick();
       unsubscribeHover();
@@ -288,9 +342,67 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       setDataState(EMPTY_CAVE_DATA_3D_STATE);
       setCaveFramable(false);
       setCamera(undefined);
+      setHovered(undefined);
+      setPicked(undefined);
       surface.style.cursor = '';
     };
   }, [engineVersion, syncUrlHash, showingHere]);
+
+  // ---- what the chrome over the scene names ----
+
+  /** What the pointer rests on and where it is; both change together or not at all. */
+  const [hovered, setHovered] = useState<{
+    payload: Scene3DPickPayload;
+    screen: Scene3DScreenPosition;
+  }>();
+  /** What was picked in this scene, until it is dismissed or the selection moves on. */
+  const [picked, setPicked] = useState<Scene3DPickPayload>();
+  const selection = useWorkspaceStore((s) => s.selection);
+
+  useEffect(() => {
+    // The callout comes down when the selection is no longer what it is about — which covers
+    // selecting something on the flat map, in a table, or in another window, none of which this
+    // view hears about any other way. Dismissing it by hand does not clear the selection: the
+    // detail panel beside the scene is still showing the thing, and closing a label is not
+    // deselecting.
+    setPicked((current) => (pickMatchesSelection(current, selection) ? current : undefined));
+  }, [selection]);
+
+  // Both read the scene through the ref rather than closing over it, so they never go stale and
+  // never change identity. What has to notice a scene being rebuilt is the *subscription*, and
+  // that is handled by remounting the overlay on the counter below rather than by rebuilding
+  // these — a subscription taken on a scene that no longer exists would otherwise be held for
+  // ever and no frame of the new one would reach the overlay.
+  const project = useCallback(
+    (position: Scene3DPosition) => engineRef.current?.positionToScreen(position),
+    [],
+  );
+
+  const subscribeFrames = useCallback(
+    (listener: () => void) => engineRef.current?.onBeforeRender(listener) ?? (() => {}),
+    [],
+  );
+
+  const dismissPicked = useCallback(() => setPicked(undefined), []);
+
+  // ---- keeping the chrome out of the chrome's way ----
+
+  const layerControlsRef = useRef<HTMLDivElement>(null);
+  const cameraControlsRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * The patch of the view the scene's own controls stand in, so a callout pinned to a cave near
+   * that corner is put somewhere else rather than over the buttons.
+   *
+   * Measured rather than written down: the two groups change size and corner between a mouse and a
+   * finger, and a copy of those numbers here would go stale the first time either stylesheet moved.
+   * Both are positioned against the same box the overlay covers, so what they report is already in
+   * the coordinates the placement works in.
+   */
+  const controlsArea = useCallback(
+    () => boundingRectOf([layerControlsRef.current, cameraControlsRef.current]),
+    [],
+  );
 
   const applyPreset = useCallback((preset: Camera3DPreset) => {
     const engine = engineRef.current;
@@ -402,8 +514,23 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           <Typography.Text type="secondary">{t('scene3d.showingElsewhere')}</Typography.Text>
         </div>
       )}
+      {/* Over the scene, under nothing: what the pointer is on and what was picked, drawn as
+          elements rather than into the canvas so they are translated, themed and readable. */}
+      {status === 'ready' && showingHere && (
+        <Scene3DOverlay
+          key={engineVersion}
+          hovered={hovered?.payload}
+          hoveredAt={hovered?.screen}
+          selected={picked}
+          project={project}
+          subscribeFrames={subscribeFrames}
+          onDismissSelection={dismissPicked}
+          controlsArea={controlsArea}
+        />
+      )}
       {status === 'ready' && showingHere && camera && (
         <Scene3DCameraControls
+          containerRef={cameraControlsRef}
           activePreset={activePreset(camera)}
           onPreset={applyPreset}
           projection={camera.projection}
@@ -417,7 +544,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           installation whose catalog is unreadable — or merely slow — must not lose the controls
           this view is driven by along with it. */}
       {status === 'ready' && showingHere && (
-        <div className="scene3d-controls">
+        <div className="scene3d-controls" ref={layerControlsRef}>
           <Popover
             trigger="click"
             placement="bottomRight"
@@ -463,4 +590,32 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       </div>
     </div>
   );
+}
+
+/**
+ * The smallest box holding all of these elements, in the coordinates of the box they are
+ * positioned against, or nothing when none of them is on screen.
+ *
+ * Offsets rather than a client rectangle: everything here is positioned against the same element
+ * the overlay covers, so its offsets are already measured from the corner the overlay measures
+ * from, and reading them costs no extra conversion and no knowledge of where the page has been
+ * scrolled to.
+ */
+function boundingRectOf(elements: readonly (HTMLElement | null)[]): OverlayRect | undefined {
+  let left = Number.POSITIVE_INFINITY;
+  let top = Number.POSITIVE_INFINITY;
+  let right = Number.NEGATIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
+  for (const element of elements) {
+    if (!element || element.offsetWidth === 0 || element.offsetHeight === 0) {
+      continue;
+    }
+    left = Math.min(left, element.offsetLeft);
+    top = Math.min(top, element.offsetTop);
+    right = Math.max(right, element.offsetLeft + element.offsetWidth);
+    bottom = Math.max(bottom, element.offsetTop + element.offsetHeight);
+  }
+  return Number.isFinite(left)
+    ? { leftPixels: left, topPixels: top, widthPixels: right - left, heightPixels: bottom - top }
+    : undefined;
 }

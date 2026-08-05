@@ -18,6 +18,7 @@ import {
   type CenterlineLoad3DState,
 } from './centerlines3d.ts';
 import { mapZoomFor } from './pseudoZoom.ts';
+import { pickPayload, samePickTarget, type Scene3DPickPayload } from './selection3d.ts';
 import { boundsToBbox } from './viewBounds3d.ts';
 import type {
   Scene3DBounds,
@@ -125,6 +126,18 @@ export interface CaveData3DHandle {
    * withheld it at this zoom, or the camera is nowhere near one.
    */
   caveBounds(caveId?: string): Scene3DBounds | undefined;
+  /**
+   * The payload now drawn for the same thing this one named, if it is still in the scene.
+   *
+   * Chrome pinned to a pick keeps the payload it was handed at the moment of the click, and every
+   * load mints new ones — with the name recomposed and the anchor taken from wherever the thing
+   * now is. Without a way back from the old payload to the new, a feature renamed or moved from
+   * the panel beside the scene leaves a label stating the old name at the old place while
+   * everything else on screen states the new one. Nothing when the thing is no longer drawn, which
+   * is the ordinary consequence of the camera moving away from it rather than a reason to take a
+   * label down.
+   */
+  currentPick(payload: Scene3DPickPayload): Scene3DPickPayload | undefined;
   /** Applies the installation's published limits; a partial update leaves the rest alone. */
   setLimits(limits: Partial<CaveData3DLimits>): void;
   /**
@@ -191,6 +204,12 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
   let detached = false;
   let drawnCenterlines: readonly Scene3DPolyline[] = [];
   let drawnCenter = { longitude: 0, latitude: 0 };
+  // Everything else that was put into the scene, kept only so a piece of chrome pinned to one of
+  // them can find its own thing again after a reload replaced it. The arrays are the ones already
+  // handed to the renderer, so this is four references rather than a second copy of the data.
+  let drawnEntrances: readonly Scene3DMarker[] = [];
+  let drawnFeatures: readonly Scene3DMarker[] = [];
+  let drawnFeatureLines: readonly Scene3DPolyline[] = [];
 
   const publish = (next: Partial<CaveData3DState>) => {
     state = { ...state, ...next };
@@ -256,7 +275,8 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       if (seq !== requestSeq || detached) {
         return;
       }
-      entrances.replace(entranceMarkers(collection, zoom));
+      drawnEntrances = entranceMarkers(collection, zoom);
+      entrances.replace(drawnEntrances);
     } catch {
       // As above.
     }
@@ -271,8 +291,10 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       if (seq !== requestSeq || detached) {
         return;
       }
-      features.replace(surfaceFeatureMarkers(collection));
-      featureLines.replace(surfaceFeatureLines(collection));
+      drawnFeatures = surfaceFeatureMarkers(collection);
+      drawnFeatureLines = surfaceFeatureLines(collection);
+      features.replace(drawnFeatures);
+      featureLines.replace(drawnFeatureLines);
     } catch {
       // As above.
     }
@@ -326,6 +348,17 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
         ? caveCenterlines(drawnCenterlines, caveId)
         : nearestCaveCenterlines(drawnCenterlines, drawnCenter);
       return centerlineBounds(lines);
+    },
+    currentPick(payload) {
+      for (const batch of [drawnEntrances, drawnFeatures, drawnFeatureLines, drawnCenterlines]) {
+        for (const item of batch) {
+          const current = pickPayload({ id: item.id });
+          if (current && samePickTarget(current, payload)) {
+            return current;
+          }
+        }
+      }
+      return undefined;
     },
     setLimits(next) {
       const merged = { ...limits, ...next };

@@ -23,6 +23,7 @@ import {
   OrthographicFrustum,
   PerInstanceColorAppearance,
   PerspectiveFrustum,
+  Plane,
   PolygonGeometry,
   PolygonHierarchy,
   PolylineCollection,
@@ -110,6 +111,13 @@ const NEAR_PLANE_METERS = 0.5;
 /** Fallback vertical field of view when the frustum is not the perspective one (60°, the default). */
 const DEFAULT_FOVY_RADIANS = Math.PI / 3;
 
+/**
+ * Furthest from the ellipsoid a reported ground height is believed, in metres. Comfortably outside
+ * the range the earth's own surface occupies — about 11 km down and 9 km up — and inside the tens
+ * of kilometres a coarse tile's chord reports. See `groundHeightAt`.
+ */
+const GROUND_HEIGHT_LIMIT_METERS = 12_000;
+
 /** A point box gets this zoom instead of an unframeable rectangle — the 2D map's `fit` maximum. */
 const POINT_FIT_ZOOM = 17;
 
@@ -180,6 +188,8 @@ class CesiumScene3D implements Scene3DCore {
   private readonly clickListeners = new Set<(pick: Scene3DPick | null) => void>();
   private readonly hoverListeners = new Set<(pick: Scene3DPick | null) => void>();
   private inputHandler: ScreenSpaceEventHandler | undefined;
+  /** Takes down the listeners this module puts on the drawing surface itself. */
+  private removeSurfaceListeners: (() => void) | undefined;
   private hoverFrame: number | undefined;
   private hoverPosition: Cartesian2 | undefined;
 
@@ -203,6 +213,7 @@ class CesiumScene3D implements Scene3DCore {
   private cutawayPitchLimit = 0;
   private readonly cutawayAvailable: boolean;
   private readonly removePreRenderHandler: () => void;
+  private readonly beforeRenderListeners = new Set<() => void>();
 
   constructor(container: HTMLElement) {
     this.widget = new CesiumWidget(container, {
@@ -217,11 +228,51 @@ class CesiumScene3D implements Scene3DCore {
       // Draw only when something changed. Measured: a still 3D view draws zero frames and costs
       // no battery, which is what makes the view affordable on a phone.
       requestRenderMode: true,
+      // The two settings that decide whether the line above means anything, both pinned here
+      // rather than left to the library's defaults because both happen to *be* the defaults and a
+      // future version quietly changing either would turn an idle view into a permanent redraw
+      // with no visible symptom at all — the view would look identical and the battery would go.
+      //
+      // A non-zero render-time change makes the scene redraw whenever simulation time has advanced
+      // that far, and a running clock is what advances it. Zero and stopped together are what make
+      // "nothing is happening" mean no frames rather than sixty a second. Measured on this scene:
+      // zero frames drawn in three seconds and zero in ten, at rest, with the camera parked on its
+      // descent floor, and with the ground cut away — the three states whose per-frame work could
+      // have kept asking for another frame.
+      maximumRenderTimeChange: 0,
+      shouldAnimate: false,
       // No `terrainProvider`: the default smooth ellipsoid needs no terrain server, so a stock
       // deployment shows a working globe with nothing to install or pre-bake.
+      //
+      // No sky. The engine's default is a star field cube, a sun, a moon and an atmosphere shell,
+      // and this view looks at the ground: at the distances a cave is read from, the sky is a few
+      // pixels along the top edge or nothing at all. Turning it off is worth roughly 2% of a frame
+      // — small enough to be inside this machine's run-to-run spread and not the reason — but it
+      // also stops six star-field faces and a moon texture, 865 KiB together, being downloaded and
+      // uploaded to the graphics card on every cold start. That is the reason, and it is a
+      // measured byte count rather than a frame rate.
+      //
+      // These skip creation rather than hide the objects: an object that exists and is hidden
+      // still fetched its textures.
+      skyBox: false,
+      skyAtmosphere: false,
+      // Full-screen multisampling, which the engine defaults to four samples of. Measured on this
+      // scene, at 1280x800 with 3100 survey lines drawn: four samples 124.9 fps / 8.01 ms a frame,
+      // one sample 164.7 fps / 6.07 ms — a third of the frame budget spent on edge smoothing.
+      // What replaces it is below: a post-pass that costs nothing measurable here and puts most of
+      // the smoothing back.
+      msaaSamples: 1,
     });
 
     const { scene } = this.widget;
+
+    // The cheap half of the trade above. Measured in the same run, alternated five times: one
+    // sample without it 164.7 fps, one sample with it 164.9 — no cost this instrument can see,
+    // against multisampling's third of a frame. It matters here because a survey is drawn as
+    // two-pixel lines at every angle, which is the worst case for an unsmoothed edge.
+    //
+    // The engine ships this switched off, so this is a change rather than a restatement.
+    scene.postProcessStages.fxaa.enabled = true;
 
     // Draw the cave data over the terrain rather than letting the mountain hide it. Measured
     // against the alternatives (a see-through globe, and cutting a hole in the terrain): this is
@@ -260,12 +311,39 @@ class CesiumScene3D implements Scene3DCore {
     this.cutawayAvailable = ClippingPolygonCollection.isSupported(scene);
     this.surfaceState = this.surfaceStateNow();
 
+    // Settings measured on this scene and deliberately LEFT AS THEY ARE, recorded so the next
+    // person does not spend the afternoon rediscovering them:
+    //
+    //   * Distance fog. Turning it off measured +0.8% of a frame against 8.8% of drift between the
+    //     two readings either side of it — indistinguishable from noise. It also raises the detail
+    //     the globe asks for at distance, so switching it off would buy nothing and fetch more
+    //     tiles.
+    //   * The ground atmosphere. Two independent passes disagreed about its SIGN: +22.8% in one
+    //     and -8.9% in the other, on the same machine within the hour. Its effect is not
+    //     separable from run-to-run variance here, and changing a setting on evidence that cannot
+    //     decide which way it points is guessing with extra steps.
+    //   * Globe detail (`maximumScreenSpaceError`). Doubling it measured +4.3%, paid for with a
+    //     visibly coarser basemap. Not worth it at the distances a survey is read from.
+    //   * Resolution scale. Halving it measured +33%, and it is not taken: the engine already
+    //     ignores a phone's device pixel ratio and draws at CSS resolution, so this view is not
+    //     short of fill rate — it would trade a blurred image for headroom it does not need. The
+    //     library default that ignores the pixel ratio is the cheap one and must not be overridden.
+    //   * Antialiasing on the whole surface is dealt with above.
+
     // The depth clamp and the surface mode both depend on where the camera is, and the camera can
     // move without anything in this application being told. This runs on drawn frames only, and a
     // camera that moves always draws.
+    //
+    // Chrome pinned to a place on the globe is repositioned from the same event, fanned out the
+    // way render errors and camera rests are: the scene keeps one listener, and a frame that is
+    // never drawn costs the overlay nothing, which is exactly the property drawing on demand
+    // exists to buy.
     const onPreRender = () => {
       this.clampCameraDepth();
       this.refreshSurface();
+      for (const listener of [...this.beforeRenderListeners]) {
+        listener();
+      }
     };
     scene.preRender.addEventListener(onPreRender);
     this.removePreRenderHandler = () => scene.preRender.removeEventListener(onPreRender);
@@ -306,6 +384,8 @@ class CesiumScene3D implements Scene3DCore {
       window.cancelAnimationFrame(this.hoverFrame);
       this.hoverFrame = undefined;
     }
+    this.removeSurfaceListeners?.();
+    this.removeSurfaceListeners = undefined;
     this.inputHandler?.destroy();
     this.inputHandler = undefined;
     this.clickListeners.clear();
@@ -314,6 +394,7 @@ class CesiumScene3D implements Scene3DCore {
     this.removeMoveEndHandler = undefined;
     this.viewChangedListeners.clear();
     this.removePreRenderHandler();
+    this.beforeRenderListeners.clear();
     this.surfaceListeners.clear();
     // The globe owns the clipping outline and the scene owns the excavation, and both go down
     // with the widget below; only the references to them are this object's to drop.
@@ -334,6 +415,13 @@ class CesiumScene3D implements Scene3DCore {
       return;
     }
     this.widget.scene.requestRender();
+  }
+
+  onBeforeRender(listener: () => void): () => void {
+    this.beforeRenderListeners.add(listener);
+    return () => {
+      this.beforeRenderListeners.delete(listener);
+    };
   }
 
   subscribeRenderError(listener: (message: string) => void): () => void {
@@ -707,7 +795,31 @@ class CesiumScene3D implements Scene3DCore {
   // ---- coordinates ----
 
   positionToScreen(position: Scene3DPosition): Scene3DScreenPosition | undefined {
-    const screen = SceneTransforms.worldToWindowCoordinates(this.widget.scene, toCartesian(position));
+    // Guarded, unlike most read-only members, because of who calls it: chrome pinned to the globe
+    // asks on every drawn frame and again whenever the window changes size, and a resize arriving
+    // between the widget's teardown and the observer's is ordinary rather than exotic. A destroyed
+    // widget has no scene at all — the property is undefined, not a destroyed object — so this
+    // would fail inside the library rather than answer "nowhere".
+    if (this.widget.isDestroyed()) {
+      return undefined;
+    }
+    const { scene } = this.widget;
+    const world = toCartesian(position);
+    // Behind the camera means there is no answer, and this has to be decided here because the
+    // library only decides it under a converging frustum. Under a box one, where screen position
+    // does not depend on distance at all, it hands back an ordinary-looking pixel for a point that
+    // is behind the viewer and is drawn nowhere — typically the middle of the view, which is the
+    // most convincing place for a label about something that is not there. Reaching that is
+    // ordinary rather than exotic in this application: take the perspective out of the view, then
+    // descend past the cave, and every marker above is behind you.
+    const inFront = Plane.getPointDistance(
+      Plane.fromPointNormal(scene.camera.positionWC, scene.camera.directionWC),
+      world,
+    );
+    if (!(inFront > 0)) {
+      return undefined;
+    }
+    const screen = SceneTransforms.worldToWindowCoordinates(scene, world);
     return screen ? { x: screen.x, y: screen.y } : undefined;
   }
 
@@ -1124,9 +1236,27 @@ class CesiumScene3D implements Scene3DCore {
     });
   }
 
-  /** Height of the drawn ground at a point, or the ellipsoid where no elevation model says. */
+  /**
+   * Height of the drawn ground at a point, or the ellipsoid where no elevation model says.
+   *
+   * The answer is bounded because the globe does not only answer about the ground: it answers from
+   * whatever surface tile it is holding, and for a moment after the camera arrives somewhere new
+   * that is a very coarse one. A coarse tile's mesh is a flat chord across many degrees of a curved
+   * planet, and the middle of a chord that wide sits TENS OF KILOMETRES below the surface it stands
+   * for — measured here, -35,966 m under a camera that was 900 m over a cave. Taken as terrain, it
+   * makes the camera believe it is 37 km up, which is a different map zoom: the view then asks the
+   * server for a region's worth of aggregated data, and because nothing moves the camera afterwards
+   * it never asks again. A view opened on a shared position sits there naming "a few entrances in
+   * this area" over ground it is close enough to name each of them on.
+   *
+   * The earth's own ground runs from about eleven kilometres below the ellipsoid to about nine
+   * above it. Anything outside that is the globe describing a tile rather than the ground, and for
+   * that the ellipsoid is the better answer — no elevation model is wanted here, only a refusal to
+   * believe an impossible one.
+   */
   private groundHeightAt(longitude: number, latitude: number): number {
-    return this.widget.scene.globe.getHeight(Cartographic.fromDegrees(longitude, latitude)) ?? 0;
+    const height = this.widget.scene.globe.getHeight(Cartographic.fromDegrees(longitude, latitude));
+    return height !== undefined && Math.abs(height) <= GROUND_HEIGHT_LIMIT_METERS ? height : 0;
   }
 
   /** Builds the pointer handler the first time anything subscribes, and not before. */
@@ -1134,7 +1264,8 @@ class CesiumScene3D implements Scene3DCore {
     if (this.inputHandler || this.widget.isDestroyed()) {
       return;
     }
-    const handler = new ScreenSpaceEventHandler(this.widget.canvas);
+    const surface = this.widget.canvas;
+    const handler = new ScreenSpaceEventHandler(surface);
 
     handler.setInputAction((event: { position: Cartesian2 }) => {
       // A click is worth a depth read: knowing where on the ground it landed is what lets a
@@ -1149,7 +1280,33 @@ class CesiumScene3D implements Scene3DCore {
       this.scheduleHoverPick(event.endPosition);
     }, ScreenSpaceEventType.MOUSE_MOVE);
 
+    // The pointer leaving the drawing surface has to be reported, and the engine's own handler
+    // cannot do it: every one of its pointer listeners is bound to that surface, so the moment the
+    // pointer is off it no further move arrives and the last thing hovered stays the last thing
+    // hovered for ever. What that looks like is a name pinned over the middle of the scene, and a
+    // pointer cursor stuck on it, after the viewer has moved onto a label, onto the controls, onto
+    // the browser's own chrome or into another window entirely — until they happen to come back
+    // over empty ground. Reported as a hover that found nothing, which is the same answer as
+    // moving onto empty ground and needs no second path through the callers.
+    const onPointerLeave = () => this.clearHover();
+    surface.addEventListener('pointerleave', onPointerLeave);
+    this.removeSurfaceListeners = () => surface.removeEventListener('pointerleave', onPointerLeave);
+
     this.inputHandler = handler;
+  }
+
+  /** Says the pointer is over nothing, and forgets any hit test still waiting for a frame. */
+  private clearHover(): void {
+    if (this.hoverFrame !== undefined) {
+      // Otherwise the pick queued from the last move inside the surface lands after this and puts
+      // the name straight back.
+      window.cancelAnimationFrame(this.hoverFrame);
+      this.hoverFrame = undefined;
+    }
+    this.hoverPosition = undefined;
+    for (const listener of [...this.hoverListeners]) {
+      listener(null);
+    }
   }
 
   /**
@@ -1200,15 +1357,14 @@ class CesiumScene3D implements Scene3DCore {
       | { id?: unknown }
       | undefined;
     const id = picked?.id;
-    const ground = includeGround
-      ? this.screenToPosition({ x: windowPosition.x, y: windowPosition.y })
-      : undefined;
+    const screen: Scene3DScreenPosition = { x: windowPosition.x, y: windowPosition.y };
+    const ground = includeGround ? this.screenToPosition(screen) : undefined;
     if (id !== undefined && id !== null) {
-      return ground ? { id, position: ground } : { id };
+      return ground ? { id, position: ground, screen } : { id, screen };
     }
     // The hit test never reports the globe itself, so "did this land on the ground?" is a
     // separate question and only the depth read can answer it.
-    return ground ? { id: undefined, position: ground } : null;
+    return ground ? { id: undefined, position: ground, screen } : null;
   }
 
   /**

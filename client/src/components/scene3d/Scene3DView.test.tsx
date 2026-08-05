@@ -3,6 +3,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import {
+  getFeatureTypeNameByCode,
+  setFeatureTypeCatalog,
+} from '../../map/featureTypeCatalog.ts';
+import type { FeatureType } from '../../api/hooks.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera, viewFlyTo } from '../../workspace/viewCamera.ts';
 
@@ -12,12 +17,13 @@ vi.mock('cesium', () => import('../../scene3d/cesiumTestDouble.ts'));
 vi.mock('../../api/hooks.ts', () => ({
   useMapLayers: () => ({ data: mapLayers }),
   useMapConfig: () => ({ data: undefined }),
+  useFeatureTypes: () => ({ data: featureTypes }),
   fetchCenterlineFeatures: (...args: unknown[]) => {
     centerlineRequests.push(args);
     return Promise.resolve(centerlineResponse);
   },
   fetchEntranceFeatures: () => Promise.resolve(emptyCollection),
-  fetchMapFeatures: () => Promise.resolve(emptyCollection),
+  fetchMapFeatures: () => Promise.resolve(featureResponse),
 }));
 
 const engine = await import('../../scene3d/cesiumTestDouble.ts');
@@ -25,6 +31,8 @@ const { useWorkspaceStore } = await import('../../stores/workspaceStore.ts');
 const { default: Scene3DView } = await import('./Scene3DView.tsx');
 
 let mapLayers: unknown[] | undefined;
+/** What each kind of surface feature is called; this view fills the catalog the labels read. */
+const featureTypes = [{ id: 3, code: 'sinkhole', name: 'Sinkhole', symbolFile: null }];
 let centerlineRequests: unknown[][] = [];
 const emptyCollection = { type: 'FeatureCollection', features: [] };
 let centerlineResponse: unknown = {
@@ -34,6 +42,22 @@ let centerlineResponse: unknown = {
   detail: false,
   flatCount: 0,
 };
+/** What the cross-kind overlay answers with; a test that edits a feature changes it in place. */
+let featureResponse: unknown = emptyCollection;
+
+/** One surface feature, whose name an edit beside the scene can change. */
+function featureCollection(name: string) {
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [25.5, 45.5] },
+        properties: { id: 'f1', name },
+      },
+    ],
+  };
+}
 
 /** Makes the browser look like one that can run the scene, or one that cannot. */
 function withWebGl2(available: boolean) {
@@ -64,6 +88,7 @@ beforeEach(() => {
   engine.engineState.reset();
   mapLayers = undefined;
   centerlineRequests = [];
+  featureResponse = emptyCollection;
   centerlineResponse = {
     type: 'FeatureCollection',
     features: [],
@@ -239,6 +264,116 @@ describe('Scene3DView', () => {
     expect(useWorkspaceStore.getState().selection).toBeNull();
   });
 
+  it('names what was picked over the scene, and takes the name down when the pick is dismissed', async () => {
+    withWebGl2(true);
+    renderView();
+    await waitFor(() => expect(engine.engineState.eventHandlers).toHaveLength(1));
+
+    const handler = engine.engineState.eventHandlers[0];
+    const scene = engine.engineState.widgets[0].scene;
+    scene.pickResult = {
+      id: {
+        kind: 'entrance',
+        entranceId: 'e1',
+        caveId: 'cave-1',
+        label: 'Intrarea Mică',
+        anchor: { longitude: 25, latitude: 45, height: 0 },
+      },
+    };
+    act(() => handler.raise('leftClick', { position: new engine.Cartesian2(10, 20) }));
+
+    expect(await screen.findByTestId('scene3d-callout')).toHaveTextContent('Intrarea Mică');
+
+    fireEvent.click(screen.getByTestId('scene3d-callout-close'));
+    await waitFor(() => expect(screen.queryByTestId('scene3d-callout')).toBeNull());
+    // Closing a label is not deselecting: the detail panel beside the scene is still showing it.
+    expect(useWorkspaceStore.getState().selection).toEqual({
+      kind: 'entrance',
+      entranceId: 'e1',
+      caveId: 'cave-1',
+    });
+  });
+
+  it('takes the name down when the selection moves on somewhere else entirely', async () => {
+    withWebGl2(true);
+    renderView();
+    await waitFor(() => expect(engine.engineState.eventHandlers).toHaveLength(1));
+
+    const handler = engine.engineState.eventHandlers[0];
+    const scene = engine.engineState.widgets[0].scene;
+    scene.pickResult = {
+      id: {
+        kind: 'entrance',
+        entranceId: 'e1',
+        caveId: 'cave-1',
+        label: 'Intrarea Mică',
+        anchor: { longitude: 25, latitude: 45, height: 0 },
+      },
+    };
+    act(() => handler.raise('leftClick', { position: new engine.Cartesian2(10, 20) }));
+    expect(await screen.findByTestId('scene3d-callout')).toBeInTheDocument();
+
+    // Selecting on the flat map, in a table, or in another window reaches this view only as a
+    // change of selection — there is no other signal, and without acting on it the callout would
+    // sit over the scene naming something the viewer has moved on from.
+    act(() => useWorkspaceStore.setState({ selection: { kind: 'cave', caveId: 'cave-9' } }));
+
+    await waitFor(() => expect(screen.queryByTestId('scene3d-callout')).toBeNull());
+  });
+
+  it('learns what each kind of feature is called, without the flat map being opened first', async () => {
+    withWebGl2(true);
+    renderView();
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+
+    // The flat map fills the same catalog when it opens. A session that goes straight to the 3D
+    // route never opens it, and without this every feature here would be named as its kind alone
+    // or not at all.
+    await waitFor(() => expect(getFeatureTypeNameByCode('sinkhole')).toBe('Sinkhole'));
+  });
+
+  it('names what the pointer is resting on, once the scene has drawn a frame', async () => {
+    withWebGl2(true);
+    renderView();
+    await waitFor(() => expect(engine.engineState.eventHandlers).toHaveLength(1));
+
+    const handler = engine.engineState.eventHandlers[0];
+    const scene = engine.engineState.widgets[0].scene;
+    scene.pickResult = { id: { kind: 'feature', featureId: 'f1', label: 'Dolina Demo' } };
+    // Hover is throttled to one hit test per drawn frame, so the move alone answers nothing.
+    handler.raise('mouseMove', { endPosition: new engine.Cartesian2(40, 50) });
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    });
+
+    expect(await screen.findByTestId('scene3d-hover-tooltip')).toHaveTextContent('Dolina Demo');
+  });
+
+  it('stops naming what the pointer was on once the pointer has left the scene', async () => {
+    withWebGl2(true);
+    renderView();
+    await waitFor(() => expect(engine.engineState.eventHandlers).toHaveLength(1));
+
+    const handler = engine.engineState.eventHandlers[0];
+    const widget = engine.engineState.widgets[0];
+    widget.scene.pickResult = { id: { kind: 'feature', featureId: 'f1', label: 'Dolina Demo' } };
+    handler.raise('mouseMove', { endPosition: new engine.Cartesian2(40, 50) });
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    });
+    expect(await screen.findByTestId('scene3d-hover-tooltip')).toBeInTheDocument();
+
+    // Nothing else can say so. The scene's pointer listeners are on its own drawing surface, so
+    // once the pointer is off it — onto the callout, onto the controls, onto the browser's own
+    // chrome, into another window — no further move ever arrives, and the last name stays pinned
+    // over the middle of the scene with the pointer cursor stuck under it.
+    act(() => {
+      widget.canvas.dispatchEvent(new Event('pointerleave'));
+    });
+
+    await waitFor(() => expect(screen.queryByTestId('scene3d-hover-tooltip')).toBeNull());
+  });
+
   it('answers the shared panel\'s "zoom to" with its own camera while it is on screen', async () => {
     withWebGl2(true);
     renderView();
@@ -300,6 +435,58 @@ describe('Scene3DView', () => {
     surfaceFeaturesChanged();
 
     await waitFor(() => expect(centerlineRequests).toHaveLength(2));
+  });
+
+  it('draws the features again once it learns what their types are called', async () => {
+    withWebGl2(true);
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+
+    // What a feature is called is composed into the item as it is built, so anything drawn before
+    // the taxonomy answered carries no type name at all — an unnamed sinkhole ends up labelled
+    // "surface features" wherever it is named, and stays that way until the camera happens to
+    // move. The taxonomy is a request of its own and can perfectly well answer after the features
+    // do, all the more so on a cold load of this route where the scene is a megabyte of engine.
+    // Only the three fields the catalog reads are given; the rest of what the taxonomy endpoint
+    // serves has no bearing on what a feature is called.
+    act(() =>
+      setFeatureTypeCatalog([
+        { id: 4, code: 'cave', name: 'Cave', symbolFile: null } as FeatureType,
+      ]),
+    );
+
+    await waitFor(() => expect(centerlineRequests).toHaveLength(2));
+  });
+
+  it('shows the name a picked feature has now, not the one it had when it was clicked', async () => {
+    withWebGl2(true);
+    featureResponse = featureCollection('Doline veche');
+    renderView();
+    await waitFor(() => expect(engine.engineState.eventHandlers).toHaveLength(1));
+
+    const handler = engine.engineState.eventHandlers[0];
+    const scene = engine.engineState.widgets[0].scene;
+    scene.pickResult = {
+      id: {
+        kind: 'feature',
+        featureId: 'f1',
+        label: 'Doline veche',
+        anchor: { longitude: 25.5, latitude: 45.5, height: 0 },
+      },
+    };
+    act(() => handler.raise('leftClick', { position: new engine.Cartesian2(10, 20) }));
+    expect(await screen.findByTestId('scene3d-callout')).toHaveTextContent('Doline veche');
+
+    // Renamed in the panel beside the scene, which announces and this refetches. The callout holds
+    // the payload it was handed at the moment of the click, and every item in the scene has just
+    // been replaced by one carrying the new name — so without finding its own thing again among
+    // them it would state the old name beside a panel stating the new one.
+    featureResponse = featureCollection('Doline nouă');
+    act(() => surfaceFeaturesChanged());
+
+    await waitFor(() =>
+      expect(screen.getByTestId('scene3d-callout')).toHaveTextContent('Doline nouă'),
+    );
   });
 
   it('reports a failure to start in the application\'s own words', async () => {

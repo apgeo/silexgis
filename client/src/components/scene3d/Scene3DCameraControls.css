@@ -1,7 +1,13 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 /* The camera presets, stacked down the right edge under the layer control. Vertical rather than
    horizontal so the row of buttons never grows into the middle of the scene on a narrow panel,
-   which is where the caves are. */
+   which is where the caves are.
+
+   The offset clears the layer control above it at the size that control has when a mouse is
+   driving it. That is not an assumption: this strip is only ever drawn for a hovering pointer —
+   anything coarse gets the folded layout below — and the layer control only grows to a
+   finger-sized target for a coarse one, so the two sizes cannot meet. Whoever changes which
+   pointer gets which layout has to revisit this number with it. */
 .scene3d-camera-controls {
   position: absolute;
   top: 44px;
@@ -15,4 +21,45 @@
 .scene3d-camera-controls .ant-btn {
   min-width: 28px;
   padding-inline: 4px;
+}
+
+/* Folded to one button on a narrow screen or under a finger. It sits beside the layer control
+   rather than under it, because at that size a second row of chrome down the edge is a second
+   thing standing over the scene. */
+.scene3d-camera-controls-compact {
+  top: 8px;
+  right: 52px;
+}
+
+/* The one button a finger has to hit out here gets a finger-sized target, the same forty pixels
+   the rest of this application uses. The buttons inside the panel are full-width rows and are
+   already comfortably larger than that. */
+.scene3d-camera-controls-compact .ant-btn {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+}
+
+.scene3d-camera-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* Wide enough for the longest preset caption, and never wider than the phone it is on. */
+  width: min(220px, calc(100vw - 64px));
+  /* Nor taller than it. Seven finger-sized rows come to more than the height of a phone held
+     sideways, and without a limit the last of them is simply off the bottom of the screen with
+     nothing to say so — the panel has to give way, not the target size. */
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+
+.scene3d-camera-menu .ant-btn {
+  height: 40px;
+  /* A flex item in a column shrinks along the column by default, so capping the panel's height
+     squeezes the rows instead of scrolling them: held sideways there is room for about five of the
+     seven, and all seven survive at 26px each — a size no finger can be expected to hit, arrived at
+     silently. Refusing to shrink is what makes the overflow above take effect. */
+  flex-shrink: 0;
+  /* Captions rather than glyphs here, so they are read left-aligned like a menu. */
+  text-align: start;
 }

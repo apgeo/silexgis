@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, test } from '@playwright/test';
-import { login } from './helpers.ts';
+import {
+  countScene3dDrawCalls,
+  entranceToPick,
+  login,
+  openScene3d,
+  openScene3dAt,
+  scene3dSurface,
+  waitForScene3dQuiet,
+  watchScene3dDrawing,
+} from './helpers.ts';
 
 // The engine's own hosted services are the one thing a unit test cannot rule out: it runs against
 // a stand-in for the library, so it can only show that this application configures the real one
@@ -117,6 +126,88 @@ test('the scene opens beside the flat map, sharing the one scene this window has
   // The map keeps the address bar while the scene is only a panel beside it: one window has one
   // hash, and two writers would overwrite each other on every camera move.
   await expect.poll(() => page.url(), { timeout: 30_000 }).not.toMatch(/#3d\//);
+});
+
+test('a standing-still scene draws nothing at all', async ({ page }) => {
+  await watchScene3dDrawing(page);
+  await login(page);
+  await openScene3d(page);
+
+  // Measured against the real renderer, because this is the one thing the unit tests cannot show:
+  // they drive a stand-in, so they can only prove the scene was CONFIGURED to draw on demand. What
+  // this proves is that nothing in the running application asks it to. Two things here run before
+  // every drawn frame — the camera's descent clamp and the surface-mode check — and either of them
+  // asking for a redraw from inside one would keep the scene drawing for ever, at full rate,
+  // looking on screen exactly like it working. That is the whole of the battery case on a phone,
+  // and it is invisible without counting.
+  await waitForScene3dQuiet(page);
+
+  // Ten seconds and not one draw. The window is long because what it is looking for is a trickle
+  // rather than a burst.
+  expect(await countScene3dDrawCalls(page, 10_000)).toBe(0);
+});
+
+test('turning the camera draws, and then it stops again', async ({ page }) => {
+  await watchScene3dDrawing(page);
+  await login(page);
+  await openScene3d(page);
+  await waitForScene3dQuiet(page);
+
+  // The counterpart of the test above, and the reason that one is not merely a test that the
+  // renderer is broken: a scene that never drew anything at all would pass it too.
+  const box = (await scene3dSurface(page).boundingBox())!;
+  const drawing = countScene3dDrawCalls(page, 2_000);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  for (let step = 1; step <= 10; step += 1) {
+    await page.mouse.move(box.x + box.width / 2 - step * 10, box.y + box.height / 2);
+  }
+  await page.mouse.up();
+  expect(await drawing).toBeGreaterThan(0);
+
+  // And it goes quiet again rather than running on. The drag settles the camera, which reloads the
+  // cave data for where it now points, so this waits for that rather than for a fixed time.
+  await waitForScene3dQuiet(page);
+  expect(await countScene3dDrawCalls(page, 5_000)).toBe(0);
+});
+
+test('picking an entrance in the scene names it over the scene, and lets go of it', async ({
+  page,
+}) => {
+  await login(page);
+
+  // The camera is put directly over a real entrance, looking straight down, so the entrance sits
+  // in the middle of the view by construction and the click needs no projection to find it. "Frame
+  // the cave" cannot be used for this against seeded data: the demo caves have entrances but no
+  // surveys, so there is no drawn geometry to frame and the control is correctly disabled — and
+  // the middle of the opening view is empty Carpathian hillside.
+  const entrance = await entranceToPick(page);
+  await openScene3dAt(page, entrance.lat, entrance.lon);
+
+  // Nothing is picked until something is, so the scene starts with no callout over it.
+  await expect(page.getByTestId('scene3d-callout')).toHaveCount(0);
+
+  const box = (await scene3dSurface(page).boundingBox())!;
+  await expect(async () => {
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.getByTestId('scene3d-callout')).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+
+  // The name over the scene is the name the flat map would give the same entrance, which is the
+  // whole point of composing it in one place.
+  await expect(page.getByTestId('scene3d-callout')).toContainText(entrance.name);
+
+  // Reachable and dismissible from the keyboard — which the flat map's own hover chip is not. This
+  // one is a thing a viewer acts on rather than a label that follows the pointer, so it is a
+  // deliberate improvement on the flat map rather than a copy of it.
+  const callout = page.getByTestId('scene3d-callout');
+  await callout.focus();
+  await expect(callout).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('scene3d-callout')).toHaveCount(0);
+
+  // Dismissing the label is not deselecting: the detail panel is still showing what was picked.
+  await expect(page.getByText('Click a feature on the map to see details.')).toHaveCount(0);
 });
 
 test('a browser without WebGL 2 is told why, rather than shown a dead canvas', async ({

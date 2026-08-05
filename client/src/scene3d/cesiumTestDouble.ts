@@ -31,6 +31,13 @@ export interface FakeWidgetOptions {
   baseLayer?: unknown;
   showRenderLoopErrors?: boolean;
   requestRenderMode?: boolean;
+  /** Zero, together with a stopped clock, is what makes an idle scene draw no frames at all. */
+  maximumRenderTimeChange?: number;
+  shouldAnimate?: boolean;
+  /** `false` skips creating the star field, sun and moon rather than hiding them. */
+  skyBox?: unknown;
+  skyAtmosphere?: unknown;
+  msaaSamples?: number;
   terrainProvider?: unknown;
   terrain?: unknown;
 }
@@ -172,12 +179,98 @@ export const Rectangle = {
   },
 };
 
+/** Metres per degree of latitude, near enough for a stand-in that never leaves one country. */
+const METERS_PER_DEGREE = 111320;
+
 export const SceneTransforms = {
-  worldToWindowCoordinates(_scene: unknown, position: FakeCartesian3) {
-    // Enough to tell "on screen" from "behind the camera" apart in a test.
-    return position.height < 0
-      ? undefined
-      : new Cartesian2(position.longitudeDegrees, position.latitudeDegrees);
+  /**
+   * Where a position lands on the screen, modelled as a camera looking straight down.
+   *
+   * The three behaviours this exists to reproduce are the ones the contract warns callers about,
+   * and each of them has caught something:
+   *
+   *   * the answer MOVES with the camera, so a test can show that chrome pinned to the globe
+   *     follows the scene rather than sitting where it was first placed;
+   *   * a point off the sides of the view projects to a pixel OUTSIDE the drawing surface rather
+   *     than to nothing, because the real library tests no bounds and whatever places chrome from
+   *     this has to do it itself;
+   *   * the origin is the TOP LEFT — the real library flips the y axis as its last statement, and
+   *     a stand-in that did not would let a tooltip ship upside down.
+   *
+   * Nothing undergroud is unprojectable here. That matters more than it sounds: the previous
+   * stand-in answered "behind the camera" for anything below the ellipsoid, which is where this
+   * application's whole subject matter lives, so every test of a cave label would have agreed that
+   * cave labels cannot be drawn.
+   *
+   * What it does NOT model: tilt, roll, the curve of the globe, or a perspective camera's
+   * convergence. Under a box frustum how much ground is on screen is the frustum's width and
+   * nothing else, which is exact; under a perspective one the width is taken from the height, which
+   * is exact only looking straight down. Anything that depends on tilt has to be tested against
+   * the real engine.
+   */
+  worldToWindowCoordinates(scene: FakeScene | undefined, position: FakeCartesian3) {
+    if (!scene) {
+      return undefined;
+    }
+    const { camera } = scene;
+    const eye = camera.positionWC;
+    const orthographic = camera.frustum instanceof OrthographicFrustum;
+    const widthPixels = 1200;
+    const heightPixels = 800;
+
+    if (!orthographic && position.height > eye.height) {
+      // A nadir camera's "behind" is above it. A box frustum has no behind at all, which is why
+      // the real library never answers undefined under one.
+      return undefined;
+    }
+
+    const groundWidthMeters = orthographic
+      ? (camera.frustum as OrthographicFrustum).width
+      : 2 * Math.max(eye.height, 1) * Math.tan(Math.PI / 6);
+    const metersPerPixel = groundWidthMeters / widthPixels;
+    if (!(metersPerPixel > 0)) {
+      return undefined;
+    }
+
+    const east =
+      (position.longitudeDegrees - eye.longitudeDegrees) *
+      METERS_PER_DEGREE *
+      Math.cos((eye.latitudeDegrees * Math.PI) / 180);
+    const north = (position.latitudeDegrees - eye.latitudeDegrees) * METERS_PER_DEGREE;
+    const bearing = camera.heading; // radians, as the real camera reports it
+    // Turning the compass one way turns the world under it the other.
+    const screenRight = east * Math.cos(bearing) - north * Math.sin(bearing);
+    const screenUp = north * Math.cos(bearing) + east * Math.sin(bearing);
+
+    return new Cartesian2(
+      widthPixels / 2 + screenRight / metersPerPixel,
+      heightPixels / 2 - screenUp / metersPerPixel,
+    );
+  },
+};
+
+/** The only direction this stand-in's camera ever looks; see `FakeCamera.directionWC`. */
+const STRAIGHT_DOWN = { straightDown: true } as const;
+
+/**
+ * The plane through a point, facing a direction — used to ask which side of the camera something
+ * is on.
+ *
+ * Only the camera's own plane is ever built from this, and this stand-in's camera only ever looks
+ * straight down, so the arithmetic reduces to comparing heights: a point below the camera is in
+ * front of it, a point above it is behind. It refuses any other direction rather than answering
+ * something plausible, because a caller that started asking about a tilted camera would need a
+ * stand-in that models tilt and would otherwise get a confident wrong answer.
+ */
+export const Plane = {
+  fromPointNormal(point: FakeCartesian3, normal: unknown) {
+    if (normal !== STRAIGHT_DOWN) {
+      throw new Error('this stand-in only models the plane of a camera looking straight down');
+    }
+    return { height: point.height };
+  },
+  getPointDistance(plane: { height: number }, point: FakeCartesian3) {
+    return plane.height - point.height;
   },
 };
 
@@ -440,6 +533,16 @@ interface FakeViewOptions {
 class FakeCamera {
   frustum: PerspectiveFrustum | OrthographicFrustum = new PerspectiveFrustum();
   positionWC: FakeCartesian3 = { longitudeDegrees: 0, latitudeDegrees: 0, height: 0 };
+  /**
+   * Which way the camera looks, which in this stand-in is always straight down.
+   *
+   * It is the same simplification the projection below makes — nothing here models tilt — and it
+   * is enough for the one thing it is used for: deciding whether a position is in front of the
+   * camera or behind it. Looking down, "in front" is "lower than the camera", which is exactly the
+   * distinction that decides whether a label about a cave entrance can be drawn at all once the
+   * viewer has descended past it.
+   */
+  readonly directionWC = STRAIGHT_DOWN;
   heading = 0;
   pitch = 0;
   private rollRadians = 0;
@@ -740,6 +843,12 @@ class FakeScene {
   readonly preRender = new FakeEvent();
   /** What the graphics context admits to, fixed when the scene is built, as the real one is. */
   readonly context = { webgl2: engineState.webgl2 };
+  /**
+   * The full-screen passes. Only edge smoothing is modelled, and only because the engine ships it
+   * switched off while this scene switches it on — a default the tests have to be able to see
+   * being changed rather than merely restated.
+   */
+  readonly postProcessStages = { fxaa: { enabled: false } };
   renderRequests = 0;
   pickedPosition: FakeCartesian3 | undefined = undefined;
   /** What the next hit test answers with; the real one returns undefined when it finds nothing. */
@@ -788,12 +897,20 @@ export class CesiumWidget {
     return this.liveScene as FakeScene;
   }
 
-  readonly canvas = {
+  /**
+   * The element the scene draws into.
+   *
+   * A real event target rather than a bag of numbers, because the scene module puts a listener of
+   * its own on it — the engine's pointer handler only reports moves *inside* the surface, so
+   * leaving it is something only the element itself can tell anyone about. A plain object would
+   * make that listener unattachable here and the behaviour untestable.
+   */
+  readonly canvas = Object.assign(new EventTarget(), {
     clientWidth: 1200,
     width: 1200,
     clientHeight: 800,
     height: 800,
-  } as unknown as HTMLCanvasElement;
+  }) as unknown as HTMLCanvasElement;
   readonly container: Element;
   destroyCount = 0;
   private destroyed = false;

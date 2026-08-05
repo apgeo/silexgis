@@ -29,11 +29,75 @@ describe('entranceMarkers', () => {
     );
 
     expect(markers).toHaveLength(1);
-    expect(markers[0].id).toEqual({ kind: 'entrance', entranceId: 'entrance-1', caveId: 'cave-1' });
+    expect(markers[0].id).toMatchObject({
+      kind: 'entrance',
+      entranceId: 'entrance-1',
+      caveId: 'cave-1',
+    });
     expect(markers[0].position).toEqual({ longitude: 25.4472, latitude: 45.5312, height: 0 });
     expect(markers[0].image).toBe(entranceIcon(false).image);
     // Entrances are surface things; a survey altitude on the row must not float them off it.
     expect(markers[0].clampToGround).toBe(true);
+  });
+
+  it('carries the name and the place chrome over the scene needs, so nothing is looked up on hover', () => {
+    // Hover asks its question once per drawn frame. Anything the answer needs has to be in the
+    // payload already, because a fetch or a lookup back from a graphics object to a database row
+    // at that rate is not affordable — and the loader is the only place that has both.
+    const markers = entranceMarkers(
+      collection([
+        point(25.4472, 45.5312, {
+          id: 'entrance-1',
+          caveId: 'cave-1',
+          name: 'Intrarea Mică',
+          caveName: 'Peștera Demo',
+        }),
+      ]),
+      14,
+    );
+
+    expect(markers[0].id).toMatchObject({
+      label: 'Intrarea Mică — Peștera Demo',
+      anchor: { longitude: 25.4472, latitude: 45.5312, height: 0 },
+    });
+  });
+
+  it('anchors chrome where the marker is drawn, not at the altitude it was surveyed at', () => {
+    // Every marker here is dropped onto the ground, so a row's altitude is not where its marker
+    // ends up. Anchoring to the surveyed altitude is not a cosmetic error: with the camera nine
+    // hundred metres up looking down, an entrance recorded at 952 m is FIFTY METRES BEHIND the
+    // camera, the projection correctly answers that it is nowhere on screen, and the label
+    // silently never appears — with the marker plainly visible underneath where it should have
+    // been. Found exactly that way, against real seeded data.
+    const markers = entranceMarkers(
+      collection([
+        {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [25.4472, 45.5312, 952] },
+          properties: { id: 'e', caveId: 'c', name: 'Main entrance' },
+        },
+      ]),
+      14,
+    );
+
+    expect(markers[0].clampToGround).toBe(true);
+    expect((markers[0].id as { anchor: { height: number } }).anchor.height).toBe(0);
+  });
+
+  it('leaves the name off an entrance that has none rather than carrying an empty one', () => {
+    const markers = entranceMarkers(
+      collection([point(25, 45, { id: 'e', caveId: 'c' })]),
+      14,
+    );
+
+    expect(markers[0].id).not.toHaveProperty('label');
+  });
+
+  it('gives a cluster the place it stands and no name, because a patch of ground has none', () => {
+    const markers = entranceMarkers(collection([point(25, 45.5, { cluster: true, count: 7 })]), 7);
+
+    expect(markers[0].id).not.toHaveProperty('label');
+    expect(markers[0].id).toMatchObject({ anchor: { longitude: 25, latitude: 45.5, height: 0 } });
   });
 
   it('marks an entrance the server would only place approximately', () => {
@@ -66,7 +130,13 @@ describe('entranceMarkers', () => {
     // ground and a different set of caves.
     const markers = entranceMarkers(collection([point(25.0, 45.5, { cluster: true, count: 7 })]), 7);
 
-    expect(markers[0].id).toEqual({ kind: 'cluster', lon: 25.0, lat: 45.5, count: 7, zoom: 7 });
+    expect(markers[0].id).toMatchObject({
+      kind: 'cluster',
+      lon: 25.0,
+      lat: 45.5,
+      count: 7,
+      zoom: 7,
+    });
   });
 
   it('places a cluster exactly where the server put it', () => {
@@ -106,7 +176,7 @@ describe('surfaceFeatureMarkers', () => {
     expect(markers).toHaveLength(1);
     expect(markers[0].image).toBe('/feature_symbols/sinkhole.png');
     expect(markers[0].scale).toBe(0.5);
-    expect(markers[0].id).toEqual({ kind: 'feature', featureId: 'feature-1' });
+    expect(markers[0].id).toMatchObject({ kind: 'feature', featureId: 'feature-1' });
   });
 
   it('falls back to a dot for a type with no symbol', () => {
@@ -135,7 +205,13 @@ describe('surfaceFeatureMarkers', () => {
     );
 
     expect(markers).toHaveLength(2);
-    expect(markers[0].id).toBe(markers[1].id);
+    // Selecting either one selects the same feature — that is what a multi-part feature is — but
+    // each carries where it stands, so a label about the one that was clicked sits on it rather
+    // than jumping to the first of them.
+    const [first, second] = markers.map((marker) => marker.id as Record<string, unknown>);
+    expect(first.featureId).toBe(second.featureId);
+    expect(first.anchor).toEqual({ longitude: 25, latitude: 45, height: 0 });
+    expect(second.anchor).toEqual({ longitude: 25.1, latitude: 45.1, height: 0 });
   });
 
   it('ignores a protected row served without geometry', () => {
@@ -171,7 +247,7 @@ describe('surfaceFeatureLines', () => {
 
     expect(lines).toHaveLength(1);
     expect(lines[0].color).toBe(surfaceFeaturePalette.line);
-    expect(lines[0].id).toEqual({ kind: 'feature', featureId: 'fault-1' });
+    expect(lines[0].id).toMatchObject({ kind: 'feature', featureId: 'fault-1' });
   });
 
   it('draws an area as its outline, with no fill to hide the cave underneath', () => {

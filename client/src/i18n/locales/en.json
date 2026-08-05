@@ -801,6 +801,8 @@
     "depthLegendBand": "{{meters}} m",
     "showingElsewhere": "The 3D scene is open in another panel of this window.",
     "fitCave": "Frame the cave in view",
+    "cameraTitle": "Camera",
+    "closeCallout": "Close",
     "projectionOrthographic": "Remove perspective",
     "projectionOrthographicHint": "Remove perspective, so distances read the same near and far",
     "projectionPerspectiveHint": "Put perspective back",

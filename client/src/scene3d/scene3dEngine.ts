@@ -81,6 +81,21 @@ export interface Scene3DLifecycle {
    */
   requestRender(): void;
   /**
+   * Fires immediately before each frame the scene actually draws, with the camera already moved to
+   * where that frame will be seen from. Returns an unsubscribe function.
+   *
+   * It exists for chrome pinned to a place in the world — a label over a cave entrance has to be
+   * repositioned on every frame of a drag and every frame of an animated flight, and there is no
+   * other moment at which that is both necessary and sufficient. Doing it from an animation frame
+   * loop instead would work and would also destroy the property that makes this view affordable on
+   * a phone: a still scene draws nothing, so a listener here costs nothing while nothing is
+   * happening, whereas a loop of one's own runs at the display's refresh rate for ever.
+   *
+   * The corollary is that it is silent while the scene is idle, so it must never be the only thing
+   * that positions something: whatever it drives has to be placed once when it appears as well.
+   */
+  onBeforeRender(listener: () => void): () => void;
+  /**
    * Reports that rendering has stopped because the graphics context failed (a lost GPU context, a
    * driver reset). Returns an unsubscribe function. The message is engine text for a diagnostic
    * detail line, never a user-facing sentence — the caller supplies the translated wording.
@@ -218,7 +233,22 @@ export interface Scene3DCamera {
 // ---- coordinates ------------------------------------------------------------
 
 export interface Scene3DCoordinates {
-  /** Screen pixel for a position, or undefined when it is behind the camera or off-screen. */
+  /**
+   * Screen pixel for a position, measured from the top left of the drawing surface.
+   *
+   * Undefined means the question has no answer at all: the position is behind the camera. That
+   * must hold under every projection — a renderer whose box frustum places a point from where it
+   * is sideways alone will happily answer with an ordinary-looking pixel, usually near the middle
+   * of the view, for something the viewer has already descended past, and chrome placed from it
+   * would name a cave that is nowhere on the screen.
+   *
+   * It does **not** mean "not visible". A point off the sides of the screen projects to a pixel
+   * outside the surface rather than to nothing, and a point on the far side of the globe projects
+   * to an ordinary pixel because no occlusion is tested — which is right rather than a
+   * shortcoming, since the cave data is drawn without depth testing too, so a marker there is
+   * drawn and a label naming it agrees with what is on the screen. Anything placing chrome from
+   * this still has to decide for itself what is within the surface.
+   */
   positionToScreen(position: Scene3DPosition): Scene3DScreenPosition | undefined;
   /** Where a screen pixel meets the ground, or undefined when it points at the sky. */
   screenToPosition(screen: Scene3DScreenPosition): Scene3DPosition | undefined;
@@ -237,6 +267,14 @@ export interface Scene3DCoordinates {
 export interface Scene3DPick {
   id: unknown;
   position?: Scene3DPosition;
+  /**
+   * The pixel the hit test was made at — where the pointer was, not where the thing it found is.
+   *
+   * A tooltip that follows the pointer needs it and cannot recover it: the item's own position
+   * projects to the middle of an icon the pointer is merely somewhere within, and a hit test
+   * reaches several pixels further than that again.
+   */
+  screen?: Scene3DScreenPosition;
 }
 
 export interface Scene3DPicking {

@@ -5,9 +5,31 @@
 .scene3d-layer-panel {
   display: flex;
   flex-direction: column;
-  width: 240px;
-  max-height: 60vh;
+  /* Its own width, up to whatever the window can actually hold: on a phone a fixed 240 px plus the
+     popover's own padding overflows a 390 px screen, and the panel then hangs off the edge with
+     its sliders half unreachable. */
+  width: min(240px, calc(100vw - 48px));
+  /* Roomier on a short screen than the 60vh a desktop panel can afford, because a phone's list is
+     the same length inside a viewport half the height. */
+  max-height: min(60vh, 420px);
   overflow-y: auto;
+}
+
+/* A finger needs more of a switch and more of a slider handle than a cursor does. Both are antd's
+   own controls, so this widens the target without restyling them. */
+@media (hover: none), (pointer: coarse) {
+  .scene3d-layer-panel {
+    max-height: 65vh;
+  }
+
+  .scene3d-layer-row {
+    padding-block: 2px;
+  }
+
+  .scene3d-layer-panel .ant-slider {
+    /* antd's slider has an 8 px rail and a 14 px handle; the padding is what a finger aims at. */
+    padding-block: 8px;
+  }
 }
 
 .scene3d-layer-rows {

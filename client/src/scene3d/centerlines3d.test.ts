@@ -256,10 +256,38 @@ describe('centerlinePolylines', () => {
     );
 
     expect(polylines[0].id).toBe(polylines[1].id);
-    expect(polylines[0].id).toEqual({
+    expect(polylines[0].id).toMatchObject({
       kind: 'centerline',
       caveId: 'cave-1',
       centerlineId: 'line-1',
+    });
+  });
+
+  it('stands the survey it names at its highest point, on the geometry as it is drawn', () => {
+    // Chrome about a cave has to be pinned somewhere, and the top is the one place that is on the
+    // survey, is the least buried part of it, and does not move as the viewer pans and the server
+    // sends a different slice of a long cave. It is stated against the same anchoring the lines
+    // are drawn with, so it sits on a line rather than a kilometre above one.
+    const polylines = centerlinePolylines(
+      collection([
+        feature({
+          type: 'MultiLineString',
+          coordinates: [
+            [
+              [25.44, 45.53, 640],
+              [25.441, 45.53, 620],
+            ],
+            [
+              [25.45, 45.54, 700],
+              [25.451, 45.54, 660],
+            ],
+          ],
+        }),
+      ]),
+    );
+
+    expect(polylines[0].id).toMatchObject({
+      anchor: { longitude: 25.45, latitude: 45.54, height: 0 },
     });
   });
 

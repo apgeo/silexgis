@@ -94,6 +94,23 @@ function anchorAltitude(
   return Number.isFinite(top) ? top : 0;
 }
 
+/**
+ * The highest surveyed point of a cave, at its recorded altitude, or nothing when no geometry
+ * arrived. The caller re-states it against the same anchor the drawn lines are anchored to, so
+ * whatever is pinned there sits on a line rather than a kilometre above one.
+ */
+function highestPosition(components: Scene3DPosition[][]): Scene3DPosition | undefined {
+  let highest: Scene3DPosition | undefined;
+  for (const positions of components) {
+    for (const position of positions) {
+      if (!highest || position.height > highest.height) {
+        highest = position;
+      }
+    }
+  }
+  return highest;
+}
+
 /** Which band a drawn height falls in. Drawn heights are metres below the survey's own top. */
 function depthBandIndex(height: number): number {
   const depth = -height;
@@ -192,9 +209,23 @@ export function centerlinePolylines(collection: unknown): Scene3DPolyline[] {
     if (!centerlineId || !caveId) {
       continue; // Not a row this application can act on; drawing an unselectable line is worse.
     }
-    const id: CenterlinePick = { kind: 'centerline', caveId, centerlineId };
     const components = lineStrings(feature);
     const anchor = anchorAltitude(properties, components);
+    // Where chrome about this survey is pinned. One payload is shared by every line of a cave, so
+    // it stands at one place rather than at each of them, and the highest surveyed point is the
+    // honest choice: it is on the geometry, it is the shallowest part of it — so a label there is
+    // the least buried it can be — and it is drawn at the surface, which is where the eye already
+    // is. The name is the survey's own; a cave is usually surveyed under its own name, and it is
+    // the only name this response carries.
+    const label = stringProperty(properties, 'name');
+    const top = highestPosition(components);
+    const id: CenterlinePick = {
+      kind: 'centerline',
+      caveId,
+      centerlineId,
+      ...(label ? { label } : {}),
+      ...(top ? { anchor: { ...top, height: top.height - anchor } } : {}),
+    };
     for (const positions of components) {
       // A flat row arrives at height zero throughout and its anchor is zero too, so it stays on
       // the surface, in one piece, in the first band's colour.

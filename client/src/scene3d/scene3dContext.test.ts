@@ -62,6 +62,43 @@ describe('scene configuration', () => {
     expect(engine.engineState.widgetOptions.at(-1)!.requestRenderMode).toBe(true);
   });
 
+  it('leaves nothing that would ask for a frame while the view is standing still', async () => {
+    acquire();
+    const options = engine.engineState.widgetOptions.at(-1)!;
+
+    // These two are what make "draw on demand" mean anything. A non-zero render-time change makes
+    // the scene redraw whenever simulation time has moved that far, and a running clock is what
+    // moves it — so either one alone turns an idle view into a permanent redraw. Both happen to be
+    // the library's own defaults, which is exactly why they are pinned and asserted: a version
+    // that changed either would cost every phone its battery and look identical doing it.
+    expect(options.maximumRenderTimeChange).toBe(0);
+    expect(options.shouldAnimate).toBe(false);
+  });
+
+  it('spends its frame budget on the survey rather than on smoothing the whole surface', async () => {
+    acquire();
+    const options = engine.engineState.widgetOptions.at(-1)!;
+    const { scene } = engine.engineState.widgets.at(-1)!;
+
+    // Measured on this scene: the engine's four samples cost a third of the frame, and the
+    // post-pass that replaces them costs nothing this instrument could see. The pair is asserted
+    // together because taking either one on its own is a bad trade — samples alone loses the
+    // smoothing, the post-pass alone pays twice for it.
+    expect(options.msaaSamples).toBe(1);
+    expect(scene.postProcessStages.fxaa.enabled).toBe(true);
+  });
+
+  it('builds no sky, which this view never looks at', async () => {
+    acquire();
+    const options = engine.engineState.widgetOptions.at(-1)!;
+
+    // False rather than hidden, and that is the point of the assertion: an object that exists and
+    // is switched off has already downloaded its textures. These skip creating the star field, the
+    // sun, the moon and the atmosphere, and with them 865 KiB fetched on every cold start.
+    expect(options.skyBox).toBe(false);
+    expect(options.skyAtmosphere).toBe(false);
+  });
+
   it('replaces the engine failure panel rather than showing its untranslated one', async () => {
     acquire();
     expect(engine.engineState.widgetOptions.at(-1)!.showRenderLoopErrors).toBe(false);
@@ -391,6 +428,26 @@ describe('camera', () => {
     session.release();
   });
 
+  it('does not believe a ground height the earth does not have', async () => {
+    const session = acquire();
+
+    session.engine.flyToZoom(25.3, 45.7, 14);
+    const overSeaLevel = session.engine.getPseudoZoom();
+
+    // The globe answers about the ground from whatever surface tile it is holding, and just after
+    // the camera arrives somewhere new that is a coarse one whose flat mesh runs tens of kilometres
+    // under the curve it stands for. Believed, it makes a camera nine hundred metres over a cave
+    // report a zoom thirty-seven kilometres up — a wide-area request, answered with counts instead
+    // of names, that nothing afterwards corrects because nothing afterwards moves the camera.
+    engine.engineState.widgets[0].scene.globe.terrainHeight = -35_966;
+    expect(session.engine.getPseudoZoom()).toBeCloseTo(overSeaLevel, 6);
+
+    // A height the earth does have is still honoured, in both directions.
+    engine.engineState.widgets[0].scene.globe.terrainHeight = -400;
+    expect(session.engine.getPseudoZoom()).toBeLessThan(overSeaLevel);
+    session.release();
+  });
+
   it('says how high to be for a map zoom, which is the inverse of the zoom it reports', async () => {
     const session = acquire();
 
@@ -467,17 +524,122 @@ describe('camera', () => {
 });
 
 describe('coordinates', () => {
-  it('converts a position to a screen pixel, and reports nothing when it is off screen', async () => {
+  it('puts what the camera is over in the middle, and moves it when the camera moves', async () => {
     const session = acquire();
+    const { longitude, latitude, height } = session.engine.getCamera();
 
-    expect(session.engine.positionToScreen({ longitude: 10, latitude: 20, height: 0 })).toEqual({
-      x: 10,
-      y: 20,
+    const middle = session.engine.positionToScreen({ longitude, latitude, height: 0 })!;
+    expect(middle.x).toBeCloseTo(600, 6);
+    expect(middle.y).toBeCloseTo(400, 6);
+
+    // East is to the right and level with it, on a camera looking straight down and facing north.
+    const east = session.engine.positionToScreen({ longitude: longitude + 0.01, latitude, height: 0 })!;
+    expect(east.x).toBeGreaterThan(middle.x);
+    expect(east.y).toBeCloseTo(middle.y, 6);
+
+    // North is UP the screen. That is the axis flip the engine applies as its very last step, and
+    // it is what anything placed from this would otherwise ship upside down.
+    const north = session.engine.positionToScreen({ longitude, latitude: latitude + 0.01, height: 0 })!;
+    expect(north.y).toBeLessThan(middle.y);
+
+    // The same place seen from somewhere else is somewhere else on the screen. Without this a
+    // label pinned to a cave would sit where it was first drawn while the viewer flew away.
+    session.engine.setCamera({
+      longitude: longitude + 0.02,
+      latitude,
+      height,
+      heading: 0,
+      pitch: -90,
+      roll: 0,
     });
+    expect(session.engine.positionToScreen({ longitude, latitude, height: 0 })!.x).toBeLessThan(
+      middle.x,
+    );
+    session.release();
+  });
+
+  it('places a position underground, which is where this application looks', async () => {
+    const session = acquire();
+    const { longitude, latitude } = session.engine.getCamera();
+
+    // Not a formality. Everything this view exists to show is below the surface, so a projection
+    // that treated "below the ellipsoid" as unanswerable would make every cave label unplaceable
+    // while every test of one still passed.
+    expect(session.engine.positionToScreen({ longitude, latitude, height: -800 })).toBeDefined();
+    session.release();
+  });
+
+  it('reports nothing for a position behind the camera', async () => {
+    const session = acquire();
+    const camera = session.engine.getCamera();
+
     expect(
-      session.engine.positionToScreen({ longitude: 10, latitude: 20, height: -1 }),
+      session.engine.positionToScreen({
+        longitude: camera.longitude,
+        latitude: camera.latitude,
+        height: camera.height + 1000,
+      }),
     ).toBeUndefined();
     session.release();
+  });
+
+  it('reports nothing for a position behind the camera without perspective either', async () => {
+    const session = acquire();
+    const camera = session.engine.getCamera();
+    session.engine.setProjection('orthographic');
+
+    // A box frustum places a point from where it is sideways and from nothing else, so the library
+    // answers with an ordinary-looking pixel — usually the middle of the view — for something that
+    // is behind the viewer and drawn nowhere at all. Under perspective the same question is
+    // answered with nothing, and the rest of this application is written against that answer, so
+    // the two projections have to agree: otherwise taking the perspective out of the view and
+    // descending past a cave leaves its name pinned in the middle of an empty screen.
+    expect(
+      session.engine.positionToScreen({
+        longitude: camera.longitude,
+        latitude: camera.latitude,
+        height: camera.height + 1000,
+      }),
+    ).toBeUndefined();
+
+    // And it still answers for what is in front of the camera, which is the whole of the view.
+    expect(
+      session.engine.positionToScreen({
+        longitude: camera.longitude,
+        latitude: camera.latitude,
+        height: 0,
+      }),
+    ).toBeDefined();
+    session.release();
+  });
+
+  it('answers with a pixel off the surface, not with nothing, for a position out of view', async () => {
+    const session = acquire();
+    const camera = session.engine.getCamera();
+
+    // The engine tests no bounds. That is why the contract says so and why chrome placing itself
+    // from this has to check for itself; a test expecting undefined here would enshrine a promise
+    // the library does not make.
+    const far = session.engine.positionToScreen({
+      longitude: camera.longitude + 20,
+      latitude: camera.latitude,
+      height: 0,
+    });
+    expect(far).toBeDefined();
+    expect(far!.x).toBeGreaterThan(1200);
+    session.release();
+  });
+
+  it('answers nothing rather than failing once the scene has been torn down', async () => {
+    const session = acquire();
+    const scene = session.engine;
+    session.release();
+
+    // Chrome pinned to the globe asks on every drawn frame and again on every resize, and a resize
+    // arriving between the scene's teardown and the observer's is ordinary rather than exotic. A
+    // destroyed widget has no scene at all, so without the guard this fails inside the library.
+    expect(() => scene.positionToScreen({ longitude: 25, latitude: 45, height: 0 })).not.toThrow();
+    expect(scene.positionToScreen({ longitude: 25, latitude: 45, height: 0 })).toBeUndefined();
   });
 
   it('converts a screen pixel to the ground under it', async () => {
@@ -616,6 +778,72 @@ describe('being told the camera moved', () => {
     session.release();
 
     expect(camera.moveEnd.listeners.size).toBe(0);
+  });
+});
+
+describe('being told a frame is about to be drawn', () => {
+  it('reports every drawn frame, and stops when the listener goes', async () => {
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    let frames = 0;
+
+    const unsubscribe = session.engine.onBeforeRender(() => {
+      frames += 1;
+    });
+    scene.render();
+    scene.render();
+    expect(frames).toBe(2);
+
+    unsubscribe();
+    scene.render();
+    expect(frames).toBe(2);
+    session.release();
+  });
+
+  it('costs nothing while nothing is being drawn', async () => {
+    const session = acquire();
+    let frames = 0;
+
+    session.engine.onBeforeRender(() => {
+      frames += 1;
+    });
+
+    // The whole reason chrome pinned to the globe hangs off this event rather than off an
+    // animation-frame loop of its own: an idle scene draws nothing, so an idle scene costs the
+    // chrome nothing. A loop would run at the display's refresh rate for ever and undo the one
+    // property that makes this view affordable on a phone.
+    expect(frames).toBe(0);
+    session.release();
+  });
+
+  it('asks the scene for no extra frames of its own', async () => {
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    session.engine.onBeforeRender(() => {});
+    const before = scene.renderRequests;
+
+    scene.render();
+    scene.render();
+
+    // A listener that requested a redraw from inside a redraw would keep the scene drawing for
+    // ever, which is the failure this whole arrangement exists to avoid and which looks identical
+    // on screen to it working.
+    expect(scene.renderRequests).toBe(before);
+    session.release();
+  });
+
+  it('lets go of its listeners when the scene is torn down', async () => {
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    let frames = 0;
+    session.engine.onBeforeRender(() => {
+      frames += 1;
+    });
+
+    session.release();
+
+    expect(scene.preRender.listeners.size).toBe(0);
+    expect(frames).toBe(0);
   });
 });
 
@@ -1395,6 +1623,22 @@ describe('picking', () => {
     session.release();
   });
 
+  it('reports the pixel the hit test was made at, which is where the pointer was', async () => {
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    scene.pickResult = { id: { kind: 'entrance' } };
+    const screens: ({ x: number; y: number } | undefined)[] = [];
+
+    session.engine.onClick((pick) => screens.push(pick?.screen));
+    clickAt(10, 20);
+
+    // A tooltip that follows the pointer cannot recover this from anything else it is given: the
+    // item's own position projects to the middle of an icon the pointer is merely somewhere
+    // within, and the hit test reaches several pixels further out again.
+    expect(screens[0]).toEqual({ x: 10, y: 20 });
+    session.release();
+  });
+
   it('reaches further for a finger than for a cursor', async () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('coarse') }));
     const session = acquire();
@@ -1434,6 +1678,7 @@ describe('picking', () => {
     expect(picks[0]).toEqual({
       id: undefined,
       position: { longitude: 25, latitude: 45, height: 900 },
+      screen: { x: 10, y: 20 },
     });
     session.release();
   });
@@ -1493,6 +1738,74 @@ describe('picking', () => {
     expect(scene.pickCalls[0].x).toBe(19);
     expect(hovers).toHaveLength(1);
     session.release();
+  });
+
+  it('says the pointer is over nothing once it has left the drawing surface', async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const session = acquire();
+    const widget = engine.engineState.widgets[0];
+    widget.scene.pickResult = { id: { kind: 'entrance', entranceId: 'e1', caveId: 'c1' } };
+    const hovers: unknown[] = [];
+    session.engine.onHover((pick) => hovers.push(pick));
+
+    engine.engineState.eventHandlers[0].raise('mouseMove', {
+      endPosition: new engine.Cartesian2(3, 4),
+    });
+    frames[0](0);
+    expect(hovers).toHaveLength(1);
+    expect(hovers[0]).not.toBeNull();
+
+    // The engine's pointer listeners are all on the drawing surface, so once the pointer is off it
+    // no further move ever arrives: without this the last thing hovered stays named on the screen,
+    // and the pointer cursor stays with it, while the viewer is somewhere else entirely.
+    widget.canvas.dispatchEvent(new Event('pointerleave'));
+
+    expect(hovers).toHaveLength(2);
+    expect(hovers[1]).toBeNull();
+    session.release();
+  });
+
+  it('drops a hit test still waiting for a frame when the pointer leaves', async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const cancelled: number[] = [];
+    vi.stubGlobal('cancelAnimationFrame', (handle: number) => cancelled.push(handle));
+    const session = acquire();
+    const widget = engine.engineState.widgets[0];
+    widget.scene.pickResult = { id: { kind: 'entrance', entranceId: 'e1', caveId: 'c1' } };
+    const hovers: unknown[] = [];
+    session.engine.onHover((pick) => hovers.push(pick));
+
+    // The move that leaves the surface is also a move, so a hit test is already queued for the
+    // next frame when the pointer goes. Left to run, it would put the name straight back.
+    engine.engineState.eventHandlers[0].raise('mouseMove', {
+      endPosition: new engine.Cartesian2(3, 4),
+    });
+    widget.canvas.dispatchEvent(new Event('pointerleave'));
+
+    expect(cancelled).toEqual([1]);
+    expect(hovers).toEqual([null]);
+    session.release();
+  });
+
+  it('takes its listener off the drawing surface when the scene goes', async () => {
+    const session = acquire();
+    const widget = engine.engineState.widgets[0];
+    const hovers: unknown[] = [];
+    session.engine.onHover((pick) => hovers.push(pick));
+
+    session.release();
+    widget.canvas.dispatchEvent(new Event('pointerleave'));
+
+    // A listener left on an element that outlives the scene runs against a destroyed one.
+    expect(hovers).toHaveLength(0);
   });
 
   it('does not read the depth buffer on hover, which is the expensive half of a click', async () => {

@@ -622,3 +622,85 @@ describe('layers a viewer turns off and fades', () => {
     handle.detach();
   });
 });
+
+/** One surface feature, with a name and a place both of which an edit can change. */
+function featureCollection(name: string, at: [number, number] = [25.5, 45.5]) {
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: at },
+        properties: { id: 'feature-1', name },
+      },
+    ],
+  };
+}
+
+describe('finding a pick again after the scene has reloaded', () => {
+  it('hands back the payload now drawn for the same feature, with the name it now has', async () => {
+    responses.features = () => Promise.resolve(featureCollection('Doline veche'));
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(calls.features).toHaveLength(1));
+
+    const picked = handle.currentPick({ kind: 'feature', featureId: 'feature-1' })!;
+    expect(picked.label).toBe('Doline veche');
+
+    // Renamed from the panel beside the scene, which announces and this refetches. Without a way
+    // back from the payload a label is holding to the one now drawn, it would go on stating the
+    // old name beside a panel stating the new one.
+    responses.features = () => Promise.resolve(featureCollection('Doline nouă'));
+    handle.reload();
+    await vi.waitFor(() => expect(calls.features).toHaveLength(2));
+
+    expect(handle.currentPick(picked)!.label).toBe('Doline nouă');
+    handle.detach();
+  });
+
+  it('hands back where the thing now is, not where it was when it was clicked', async () => {
+    responses.features = () => Promise.resolve(featureCollection('Doline', [25.5, 45.5]));
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(calls.features).toHaveLength(1));
+    const picked = handle.currentPick({ kind: 'feature', featureId: 'feature-1' })!;
+
+    responses.features = () => Promise.resolve(featureCollection('Doline', [25.6, 45.7]));
+    handle.reload();
+    await vi.waitFor(() => expect(calls.features).toHaveLength(2));
+
+    expect(handle.currentPick(picked)!.anchor).toEqual({
+      longitude: 25.6,
+      latitude: 45.7,
+      height: 0,
+    });
+    handle.detach();
+  });
+
+  it('finds an entrance and a survey line as well as a feature', async () => {
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(calls.entrances).toHaveLength(1));
+
+    expect(
+      handle.currentPick({ kind: 'entrance', entranceId: 'entrance-1', caveId: 'cave-1' }),
+    ).toBeDefined();
+    expect(
+      handle.currentPick({ kind: 'centerline', caveId: 'cave-1', centerlineId: 'line-1' }),
+    ).toBeDefined();
+    handle.detach();
+  });
+
+  it('answers nothing for something that is no longer drawn', async () => {
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(calls.entrances).toHaveLength(1));
+
+    // The ordinary consequence of the camera moving away from it. Whoever asked decides what that
+    // means; it is not by itself a reason to take a label down.
+    expect(
+      handle.currentPick({ kind: 'entrance', entranceId: 'gone', caveId: 'cave-1' }),
+    ).toBeUndefined();
+    handle.detach();
+  });
+});

@@ -1,8 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
+import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import Scene3DCameraControls, { type Scene3DCameraControlsProps } from './Scene3DCameraControls.tsx';
+
+// The two hooks that decide which layout this component draws. Mocked rather than driven by a
+// viewport size and a media query, which is how the rest of this application tests its phone
+// layouts.
+vi.mock('../../hooks/useIsMobile.ts', () => ({ useIsMobile: vi.fn(() => false) }));
+vi.mock('../../hooks/useCoarsePointer.ts', () => ({ useCoarsePointer: vi.fn(() => false) }));
+
+beforeEach(() => {
+  vi.mocked(useIsMobile).mockReturnValue(false);
+  vi.mocked(useCoarsePointer).mockReturnValue(false);
+});
 
 function renderControls(overrides: Partial<Scene3DCameraControlsProps> = {}) {
   const props: Scene3DCameraControlsProps = {
@@ -85,6 +98,82 @@ describe('Scene3DCameraControls', () => {
   it('offers nothing to frame when there is no cave drawn', () => {
     const props = renderControls({ fitDisabled: true });
 
+    expect(screen.getByTestId('scene3d-fit-cave')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('scene3d-fit-cave'));
+    expect(props.onFitCave).not.toHaveBeenCalled();
+  });
+});
+
+describe('Scene3DCameraControls under a finger on a wide screen', () => {
+  beforeEach(() => {
+    // A phone turned sideways, or a tablet: wide enough for the desktop layout, and with no
+    // hovering pointer to open a tooltip or the precision to hit a twenty-four-pixel button.
+    vi.mocked(useIsMobile).mockReturnValue(false);
+    vi.mocked(useCoarsePointer).mockReturnValue(true);
+  });
+
+  it('folds the strip away rather than offering seven glyphs to a finger', () => {
+    renderControls();
+
+    // Out on the scene each of those seven is a single letter whose only caption is a tooltip, and
+    // a tooltip opens on hover — which this viewer does not have. Width alone would give them the
+    // strip, because their screen is wide.
+    expect(screen.getByTestId('scene3d-camera-trigger')).toBeInTheDocument();
+    expect(screen.queryByTestId('scene3d-preset-north')).toBeNull();
+  });
+
+  it('captions every control in words there too', () => {
+    renderControls();
+
+    fireEvent.click(screen.getByTestId('scene3d-camera-trigger'));
+
+    expect(screen.getByTestId('scene3d-preset-north')).toHaveTextContent('View from the north');
+    expect(screen.getByTestId('scene3d-projection-toggle')).not.toHaveTextContent('');
+  });
+});
+
+describe('Scene3DCameraControls at phone width', () => {
+  beforeEach(() => {
+    // Width is one of the two axes this component branches on, and the environment resolves it
+    // through antd's responsive observer, so it is mocked rather than driven by a viewport size.
+    vi.mocked(useIsMobile).mockReturnValue(true);
+  });
+
+  it('leaves one button over the scene instead of a column of seven', () => {
+    renderControls();
+
+    // Seven small buttons down the right edge take a quarter of a phone's height and stand over
+    // the very thing they control.
+    expect(screen.getByTestId('scene3d-camera-trigger')).toBeInTheDocument();
+    expect(screen.queryByTestId('scene3d-preset-north')).toBeNull();
+  });
+
+  it('captions every control in words, because a finger cannot hover to read a tooltip', () => {
+    renderControls();
+
+    fireEvent.click(screen.getByTestId('scene3d-camera-trigger'));
+
+    // On a touch device the tooltips explaining the glyphs never appear at all, so out on the
+    // scene the strip would be seven unlabelled buttons. In the panel they are captioned.
+    expect(screen.getByTestId('scene3d-preset-north')).toHaveTextContent('View from the north');
+    expect(screen.getByTestId('scene3d-fit-cave')).toHaveTextContent('Frame the cave in view');
+  });
+
+  it('drives the same camera the desktop strip does', () => {
+    const props = renderControls();
+
+    fireEvent.click(screen.getByTestId('scene3d-camera-trigger'));
+    fireEvent.click(screen.getByTestId('scene3d-preset-west'));
+    expect(props.onPreset).toHaveBeenCalledWith('west');
+
+    fireEvent.click(screen.getByTestId('scene3d-projection-toggle'));
+    expect(props.onProjectionChange).toHaveBeenCalledWith('orthographic');
+  });
+
+  it('still refuses to frame a cave that is not drawn', () => {
+    const props = renderControls({ fitDisabled: true });
+
+    fireEvent.click(screen.getByTestId('scene3d-camera-trigger'));
     expect(screen.getByTestId('scene3d-fit-cave')).toBeDisabled();
     fireEvent.click(screen.getByTestId('scene3d-fit-cave'));
     expect(props.onFitCave).not.toHaveBeenCalled();

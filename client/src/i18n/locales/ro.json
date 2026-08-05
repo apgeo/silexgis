@@ -801,6 +801,8 @@
     "depthLegendBand": "{{meters}} m",
     "showingElsewhere": "Scena 3D este deschisă în alt panou al acestei ferestre.",
     "fitCave": "Încadrează peștera din vedere",
+    "cameraTitle": "Cameră",
+    "closeCallout": "Închide",
     "projectionOrthographic": "Elimină perspectiva",
     "projectionOrthographicHint": "Elimină perspectiva, astfel încât distanțele să se citească la fel aproape și departe",
     "projectionPerspectiveHint": "Reactivează perspectiva",

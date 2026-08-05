@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { entranceLabel, surfaceFeatureLabel } from '../map/featureLabels.ts';
 import { surfaceFeaturePalette } from '../map/markerPalette.ts';
 import {
   featuresOf,
@@ -10,9 +11,16 @@ import {
 } from './geoJson3d.ts';
 import { clusterIcon, entranceIcon, surfaceFeatureIcon } from './markerIcons3d.ts';
 import type { ClusterPick, EntrancePick, FeaturePick } from './selection3d.ts';
-import type { Scene3DMarker, Scene3DPolyline } from './scene3dEngine.ts';
+import type { Scene3DMarker, Scene3DPolyline, Scene3DPosition } from './scene3dEngine.ts';
 
 // Entrances, clusters and surface features as scene items.
+//
+// Every marker here is dropped onto the ground, so the altitude a row carries is not where the
+// marker ends up: an entrance recorded at 952 m is drawn on the surface underneath that point.
+// Chrome pinned to a marker therefore has to be anchored to where it is DRAWN and not to where it
+// was surveyed. The difference is not cosmetic — with the camera nine hundred metres up looking
+// down, an anchor at the recorded altitude is fifty metres BEHIND the camera, the projection
+// correctly answers that it is nowhere on the screen, and the label silently never appears.
 //
 // Two things about clusters are load-bearing and neither is negotiable here. They are produced by
 // the server, which sums entrances over a grid cell and reports the cell rather than its members;
@@ -45,12 +53,15 @@ export function entranceMarkers(collection: unknown, zoom: number): Scene3DMarke
       const count = typeof properties.count === 'number' ? properties.count : 0;
       const icon = clusterIcon(count);
       for (const position of positions) {
+        // No name: a cluster is a count over a patch of ground, and the patch has no name. What
+        // chrome says about one is built from the count, in the viewer's own language.
         const id: ClusterPick = {
           kind: 'cluster',
           lon: position.longitude,
           lat: position.latitude,
           count,
           zoom,
+          anchor: drawnOnTheGround(position),
         };
         markers.push({ position, clampToGround: true, image: icon.image, scale: icon.scale, id });
       }
@@ -63,8 +74,18 @@ export function entranceMarkers(collection: unknown, zoom: number): Scene3DMarke
       continue;
     }
     const icon = entranceIcon(properties.approximate === true);
-    const id: EntrancePick = { kind: 'entrance', entranceId, caveId };
+    const label = entranceLabel(properties);
     for (const position of positions) {
+      // A payload per position rather than one shared across them, because each carries where it
+      // is: a feature with several points is several markers, and chrome pinned to one of them
+      // must sit on the one that was picked and not on the first of them.
+      const id: EntrancePick = {
+        kind: 'entrance',
+        entranceId,
+        caveId,
+        anchor: drawnOnTheGround(position),
+        ...(label ? { label } : {}),
+      };
       markers.push({ position, clampToGround: true, image: icon.image, scale: icon.scale, id });
     }
   }
@@ -75,14 +96,15 @@ export function entranceMarkers(collection: unknown, zoom: number): Scene3DMarke
 export function surfaceFeatureMarkers(collection: unknown): Scene3DMarker[] {
   const markers: Scene3DMarker[] = [];
   for (const feature of featuresOf(collection)) {
-    const id = featurePayload(feature);
-    if (!id) {
+    const payload = featurePayload(feature);
+    if (!payload) {
       continue;
     }
     const properties = propertiesOf(feature);
     const symbol = properties.symbol;
     const icon = surfaceFeatureIcon(typeof symbol === 'string' ? symbol : null);
     for (const position of pointPositions(feature)) {
+      const id: FeaturePick = { ...payload, anchor: drawnOnTheGround(position) };
       markers.push({ position, clampToGround: true, image: icon.image, scale: icon.scale, id });
     }
   }
@@ -104,13 +126,17 @@ export function surfaceFeatureMarkers(collection: unknown): Scene3DMarker[] {
 export function surfaceFeatureLines(collection: unknown): Scene3DPolyline[] {
   const polylines: Scene3DPolyline[] = [];
   for (const feature of featuresOf(collection)) {
-    const id = featurePayload(feature);
-    if (!id) {
+    const payload = featurePayload(feature);
+    if (!payload) {
       continue;
     }
     for (const positions of lineStrings(feature)) {
+      const flattened = positions.map((position) => ({ ...position, height: 0 }));
+      // One end of the line rather than its middle: the middle of a fracture line kilometres long
+      // is a place nothing was drawn near, while an end is a point on the line itself.
+      const id: FeaturePick = flattened.length > 0 ? { ...payload, anchor: flattened[0] } : payload;
       polylines.push({
-        positions: positions.map((position) => ({ ...position, height: 0 })),
+        positions: flattened,
         widthPixels: FEATURE_LINE_WIDTH_PIXELS,
         color: surfaceFeaturePalette.line,
         id,
@@ -123,7 +149,32 @@ export function surfaceFeatureLines(collection: unknown): Scene3DPolyline[] {
 /** Matches the flat map's 2.5 px stroke for the same overlay, rounded to whole screen pixels. */
 const FEATURE_LINE_WIDTH_PIXELS = 3;
 
+/**
+ * Where a marker dropped onto the ground actually is, for chrome to be pinned to.
+ *
+ * Zero here is the ellipsoid — the smooth mathematical figure of the earth — and not the ground.
+ * On the featureless globe a stock deployment draws, those are the same surface and this is exact.
+ *
+ * With an elevation model loaded they are not, and the error is neither small nor a matter of
+ * slope: a marker dropped onto the ground goes to the terrain height, so the anchor ends up the
+ * WHOLE of that height below it. In the Carpathian karst this application is for that is around
+ * 1100 m, on flat ground and on a cliff alike. With the camera a couple of kilometres up looking
+ * down, an anchor a kilometre under its own marker projects hundreds of pixels off the bottom of
+ * the view and the label is not drawn at all; further out it is drawn visibly detached from the
+ * thing it names. Whatever attaches an elevation model has to resolve these anchors against the
+ * drawn ground — sampling the height at the point, as the excavated ground already does — rather
+ * than leaving them at zero.
+ */
+function drawnOnTheGround(position: Scene3DPosition): Scene3DPosition {
+  return { ...position, height: 0 };
+}
+
 function featurePayload(feature: GeoJsonFeatureLike): FeaturePick | undefined {
-  const featureId = stringProperty(propertiesOf(feature), 'id');
-  return featureId ? { kind: 'feature', featureId } : undefined;
+  const properties = propertiesOf(feature);
+  const featureId = stringProperty(properties, 'id');
+  if (!featureId) {
+    return undefined;
+  }
+  const label = surfaceFeatureLabel(properties);
+  return { kind: 'feature', featureId, ...(label ? { label } : {}) };
 }

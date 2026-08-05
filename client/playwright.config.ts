@@ -26,9 +26,30 @@ export default defineConfig({
     },
     {
       // Pixel 7: 412x915 CSS px, touch enabled, coarse pointer, chromium.
+      //
+      // The 3D scene has its own file here rather than sharing the flat map's: a scene is one
+      // drawing context per window and the specs that drive it have to stand alone, and naming it
+      // separately is also the only way to see at a glance that the phone layout of the 3D view is
+      // covered at all. Spelled out rather than left to `mobile\.spec\.ts` matching it by accident.
       name: 'mobile-android',
       use: { ...devices['Pixel 7'] },
-      testMatch: /mobile\.spec\.ts/,
+      testMatch: /(mobile|scene3d-mobile)\.spec\.ts/,
+    },
+    {
+      // The same phone turned sideways: 863x360 CSS px, touch enabled, coarse pointer.
+      //
+      // A second orientation rather than a second device, because the axis it covers is one the
+      // portrait run cannot: sideways the viewport is WIDER than the breakpoint that selects a
+      // phone layout, while the pointer is still a finger. Everything that has to be sized or
+      // captioned for a finger is chosen on the pointer and everything about how much room there
+      // is is chosen on the width, and only a device where those two disagree can show that the
+      // right one was used for each. A tablet is the same case; this is the cheapest instance of
+      // it, needing no extra profile beyond one already in the suite.
+      //
+      // Only the 3D scene, whose controls are what this covers.
+      name: 'mobile-android-landscape',
+      use: { ...devices['Pixel 7 landscape'] },
+      testMatch: /scene3d-mobile\.spec\.ts/,
     },
     {
       // iPhone 14 on WebKit — a smoke project, not a second editing gate. It exists for the

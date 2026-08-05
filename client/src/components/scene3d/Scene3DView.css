@@ -13,6 +13,16 @@
   background: #e8ecef;
 }
 
+/* Touch devices answer a press-and-hold over a canvas with their own callout menu and a text
+   selection magnifier, both of which fight the drag that turns the camera. The flat map suppresses
+   the same two over its canvas for the same reason. */
+@media (hover: none), (pointer: coarse) {
+  .scene3d-canvas {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+}
+
 /* The window's single drawing surface, moved into whichever panel is showing the scene. It is
    sized here rather than by whoever borrows it, so a new place to show the scene cannot forget to
    give it a height and end up with a working scene nobody can see. */
@@ -69,6 +79,15 @@ html[data-theme='dark'] .scene3d-canvas .cesium-widget-credits {
   top: 8px;
   right: 8px;
   z-index: 5;
+}
+
+/* A finger-sized target for the one control that opens the layers, matching the camera button
+   beside it and the forty pixels the rest of this application gives a touch target. */
+@media (hover: none), (pointer: coarse) {
+  .scene3d-controls .ant-btn {
+    width: 40px;
+    height: 40px;
+  }
 }
 
 /* Quiet notices about what the server held back, over the bottom-right of the scene. Kept out of
