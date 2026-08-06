@@ -15,8 +15,8 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    [Migration("20260803073811_Cabinets")]
-    partial class Cabinets
+    [Migration("20260805164255_BackfillDocumentAccessEntries")]
+    partial class BackfillDocumentAccessEntries
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -1386,6 +1386,11 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("document_type_id");
 
+                    b.Property<string>("Language")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("language");
+
                     b.Property<string>("Metadata")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1430,6 +1435,77 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("documents", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.DocumentComment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Anchor")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("anchor");
+
+                    b.Property<Guid?>("AnchorFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("anchor_file_id");
+
+                    b.Property<short>("AnchorKind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("anchor_kind");
+
+                    b.Property<Guid?>("AuthorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("author_id");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("body");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<DateTimeOffset?>("EditedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("edited_at");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_document_comments");
+
+                    b.HasIndex("AnchorFileId")
+                        .HasDatabaseName("ix_document_comments_anchor_file_id");
+
+                    b.HasIndex("AuthorId")
+                        .HasDatabaseName("ix_document_comments_author_id");
+
+                    b.HasIndex("ParentId")
+                        .HasDatabaseName("ix_document_comments_parent_id");
+
+                    b.HasIndex("DocumentId", "CreatedAt")
+                        .HasDatabaseName("ix_document_comments_document_id_created_at");
+
+                    b.ToTable("document_comments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_document_comments_anchor_payload", "(anchor_kind = 0 AND anchor IS NULL AND anchor_file_id IS NULL) OR (anchor_kind <> 0 AND anchor IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_document_comments_body", "length(btrim(body)) > 0");
+                        });
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.DocumentPage", b =>
                 {
                     b.Property<long>("Id")
@@ -1438,6 +1514,15 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Extractor")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("extractor");
+
+                    b.Property<int?>("ExtractorVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("extractor_version");
 
                     b.Property<Guid>("FileId")
                         .HasColumnType("uuid")
@@ -2140,6 +2225,48 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_feature_types_code");
 
                     b.ToTable("feature_types", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.FileAccessEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<Guid>("FileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("file_id");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_file_access_log");
+
+                    b.HasIndex("At")
+                        .HasDatabaseName("ix_file_access_log_at");
+
+                    b.HasIndex("DocumentId", "At")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_file_access_log_document_id_at");
+
+                    b.HasIndex("UserId", "At")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_file_access_log_user_id_at");
+
+                    b.ToTable("file_access_log", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Geofile", b =>
@@ -3006,6 +3133,14 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("content_modified_at");
 
+                    b.Property<short>("Conversion")
+                        .HasColumnType("smallint")
+                        .HasColumnName("conversion");
+
+                    b.Property<Guid?>("ConvertedFromFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("converted_from_file_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -3070,12 +3205,26 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(300)")
                         .HasColumnName("storage_path");
 
+                    b.Property<short>("TextExtraction")
+                        .HasColumnType("smallint")
+                        .HasColumnName("text_extraction");
+
+                    b.Property<string>("TextExtractionError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("text_extraction_error");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id")
                         .HasName("pk_files");
+
+                    b.HasIndex("ConvertedFromFileId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_files_converted_from_file_id")
+                        .HasFilter("converted_from_file_id is not null");
 
                     b.HasIndex("DocumentVersionId")
                         .HasDatabaseName("ix_files_document_version_id");
@@ -3087,6 +3236,9 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("Sha256")
                         .HasDatabaseName("ix_files_sha256");
+
+                    b.HasIndex("TextExtraction")
+                        .HasDatabaseName("ix_files_text_extraction");
 
                     b.ToTable("files", null, t =>
                         {
@@ -3247,6 +3399,25 @@ namespace SilexGis.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("ck_taggings_one_target", "(feature_id IS NOT NULL AND entity_type IS NULL AND entity_id IS NULL) OR (feature_id IS NULL AND entity_type IS NOT NULL AND entity_id IS NOT NULL)");
                         });
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TextSearchLanguage", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("code");
+
+                    b.Property<string>("Configuration")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("configuration");
+
+                    b.HasKey("Code")
+                        .HasName("pk_text_search_languages");
+
+                    b.ToTable("text_search_languages", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripLog", b =>
@@ -4061,6 +4232,34 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_documents_users_owner_user_id");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.DocumentComment", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("AnchorFileId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_document_comments_stored_files_anchor_file_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_document_comments_users_author_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.Document", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_document_comments_documents_document_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.DocumentComment", null)
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_document_comments_document_comments_parent_id");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.DocumentPage", b =>
                 {
                     b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
@@ -4334,6 +4533,12 @@ namespace SilexGis.Infrastructure.Migrations
 
             modelBuilder.Entity("SilexGis.Domain.Entities.StoredFile", b =>
                 {
+                    b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("ConvertedFromFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_files_files_converted_from_file_id");
+
                     b.HasOne("SilexGis.Domain.Entities.DocumentVersion", null)
                         .WithMany()
                         .HasForeignKey("DocumentVersionId")

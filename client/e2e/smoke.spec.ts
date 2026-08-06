@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, test, type Page } from '@playwright/test';
-import { centreOnDemoCave, deleteFeature, login, overlayTreeNode } from './helpers.ts';
+import { centreOnDemoCave, deleteFeature, gotoRoute, login, overlayTreeNode } from './helpers.ts';
 
 test('login, map workspace and cave registry work end to end', async ({ page }) => {
   await login(page);
@@ -131,7 +131,7 @@ test('cave add on map: place a new cave with its entrance by clicking the canvas
   ).toContainText('1');
 
   // Clean up from the registry (entrances cascade).
-  await page.goto('/caves');
+  await gotoRoute(page, '/caves');
   await page.getByText(caveName).click();
   await page.locator('button', { hasText: 'Delete' }).click();
   await page.getByRole('button', { name: 'OK' }).click();
@@ -313,7 +313,7 @@ test('dialog placement flip: cave-add continues as a side panel with values inta
   await expect(page.locator('.ant-modal').getByText(/New cave here/)).toBeVisible();
   await page.locator('.ant-modal').getByRole('button', { name: 'Cancel' }).click();
 
-  await page.goto('/caves');
+  await gotoRoute(page, '/caves');
   await page.getByText(caveName).click();
   await page.locator('button', { hasText: 'Delete' }).click();
   await page.getByRole('button', { name: 'OK' }).click();
@@ -329,7 +329,7 @@ test('cave photo attachment round-trip', async ({ page }) => {
   await login(page);
 
   // Any visible demo cave works; the gallery lives on the detail page.
-  await page.goto('/caves');
+  await gotoRoute(page, '/caves');
   await page.getByText('Peștera Demo Mare').click();
   await expect(page.getByText('Photos & documents')).toBeVisible({ timeout: 15_000 });
 
@@ -453,7 +453,7 @@ test('cave centerline: upload, computed length and map overlay toggle', async ({
   await expect(page.getByText(/Showing (passage outlines|full survey detail)/)).toBeVisible({ timeout: 15_000 });
 
   // Clean up: delete the centerline, then the cave.
-  await page.goto('/caves');
+  await gotoRoute(page, '/caves');
   await page.getByText(caveName).click();
   await card.getByRole('button', { name: 'delete' }).click();
   await page.getByRole('button', { name: 'OK' }).click();
@@ -515,7 +515,7 @@ test('caving groups and per-object permission grants', async ({ page }) => {
   await page.keyboard.press('Escape');
 
   // Grant the caving group Read on a cave through the permissions modal.
-  await page.goto('/caves');
+  await gotoRoute(page, '/caves');
   await page.getByText('Peștera Demo Mare').click();
   await page.getByRole('button', { name: /Permissions/ }).click();
   const modal = page.getByRole('dialog');
@@ -576,7 +576,7 @@ test('trip log with participants, tags and the audit trail', async ({ page }) =>
   await expect(page.getByRole('cell', { name: 'TripLog' }).first()).toBeVisible({ timeout: 15_000 });
 
   // Cleanup: delete the trip from its detail page.
-  await page.goto('/trip-logs');
+  await gotoRoute(page, '/trip-logs');
   await page.getByText(title).click();
   await page.getByRole('button', { name: /Delete/ }).click();
   await page.getByRole('button', { name: 'OK' }).click();
@@ -831,7 +831,7 @@ async function editFeatureDescription(page: Page, value: string) {
 
 test('cave attachment file versioning', async ({ page }) => {
   await login(page);
-  await page.goto('/caves');
+  await gotoRoute(page, '/caves');
   await page.getByText('Peștera Demo Mare').click();
   await expect(page.getByText('Photos & documents')).toBeVisible({ timeout: 15_000 });
 
@@ -859,7 +859,7 @@ test('cave attachment file versioning', async ({ page }) => {
 
 test('cave attachment details: caption, document date and tags persist', async ({ page }) => {
   await login(page);
-  await page.goto('/caves');
+  await gotoRoute(page, '/caves');
   await page.getByText('Peștera Demo Mare').click();
   await expect(page.getByText('Photos & documents')).toBeVisible({ timeout: 15_000 });
 

@@ -10,7 +10,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "format": "prettier --write src",
-    "generate:api": "openapi-typescript http://localhost:5080/openapi/v1.json -o src/api/schema.d.ts",
+    "generate:api": "node scripts/generate-api.mjs",
     "preview": "vite preview",
     "lint:deps": "depcruise src"
   },

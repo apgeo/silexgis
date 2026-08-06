@@ -13,8 +13,27 @@ export async function login(page: Page) {
   await page.getByLabel('Email').fill(adminEmail);
   await page.getByLabel('Password').fill(adminPassword);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  // Authorize completes, callback exchanges the code, workspace renders.
-  await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 20_000 });
+  // Authorize completes, callback exchanges the code, workspace renders. The wait is generous
+  // because signing in is a redirect chain through the server and then a first paint of the
+  // map, and every worker in the run starts with one: on a machine running the whole suite in
+  // parallel this is the slowest moment of any test, and a tighter bound fails tests that have
+  // nothing wrong with them.
+  await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 45_000 });
+}
+
+/**
+ * Goes to a route by address and waits until the application is really on it.
+ *
+ * Reaching a route this way is a full sign-in round trip: the session is held in memory, so a
+ * hard navigation drops it and the application fetches a new one through the authorization
+ * server before it renders anything. Looking for a row before that round trip has finished
+ * looks for it on the redirect pages, where it will never be — and because a click waits for
+ * its target, the test does not fail at the mistake. It hangs until its whole time is gone and
+ * then blames the row.
+ */
+export async function gotoRoute(page: Page, path: string) {
+  await page.goto(path);
+  await page.waitForURL((url) => url.pathname === path, { timeout: 60_000 });
 }
 
 /** A named overlay row in the layer composer tree (left dock). */

@@ -73,6 +73,9 @@ let rights = 'read, write';
 vi.mock('../../api/hooks.ts', () => ({
   useDocument: () => ({ data: doc, isPending: false, isError: false }),
   useFile: () => ({ data: fileInfo }),
+  // Refetching the file once its text has been read is the query cache's business, and it has
+  // its own test; here the page only has to survive calling it.
+  useRefreshFileWhenTextRead: () => undefined,
   useDocumentTypes: () => ({ data: documentTypes }),
   useCabinets: () => ({ data: cabinets }),
   useCan: (_domain: string, action: string) =>

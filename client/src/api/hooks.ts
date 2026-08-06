@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { useEffect, useRef } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clusterCellBbox } from '../geo/cluster.ts';
 import { api, ApiError } from './client.ts';
@@ -1118,6 +1119,36 @@ export function useFile(id: string | undefined, enabled = true) {
     staleTime: 5 * 60_000,
     refetchInterval: 8 * 60_000,
   });
+}
+
+/**
+ * Fetches a file again once the words in it have been read.
+ *
+ * How many pages a document has is discovered by the same pass that reads its text, and it is
+ * the file — not the document — that carries the number. Only the document is watched while
+ * that work is in flight; the file above is cached for minutes. Without this, someone who has
+ * just uploaded a report is shown its first page and no way to reach the rest, until a refetch
+ * happens to come round or they reload by hand.
+ *
+ * The refetch is tied to the moment the reading finishes rather than to the text being read,
+ * so opening a document whose words were read long ago still costs one request, not two.
+ */
+export function useRefreshFileWhenTextRead(
+  fileId: string | undefined,
+  textExtraction: string | undefined,
+) {
+  const queryClient = useQueryClient();
+  const wasReading = useRef(false);
+  useEffect(() => {
+    if (textExtraction === 'pending') {
+      wasReading.current = true;
+      return;
+    }
+    if (wasReading.current && fileId !== undefined) {
+      wasReading.current = false;
+      void queryClient.invalidateQueries({ queryKey: queryKeys.file(fileId) });
+    }
+  }, [fileId, textExtraction, queryClient]);
 }
 
 /**

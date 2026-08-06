@@ -1,0 +1,5 @@
+Note de teren, Peștera Demo Mare.
+
+Galeria principală continuă spre nord-est aproximativ 40 m, cu o strâmtoare la capăt.
+Curent de aer slab, constant. Cuvânt de control pentru vizualizatorul de text:
+textviewerdemo

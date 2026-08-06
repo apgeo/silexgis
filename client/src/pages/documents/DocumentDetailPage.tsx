@@ -9,6 +9,7 @@ import {
   useDocument,
   useDocumentTypes,
   useFile,
+  useRefreshFileWhenTextRead,
 } from '../../api/hooks.ts';
 import DocumentMetadata from '../../components/attachments/DocumentMetadata.tsx';
 import FileVersions from '../../components/attachments/FileVersions.tsx';
@@ -48,6 +49,10 @@ export default function DocumentDetailPage() {
   // reach for the bytes. Two requests rather than one because the second mints a token.
   const { data: file } = useFile(document?.currentFileId);
   const { data: types } = useDocumentTypes();
+
+  // The page count arrives with the reading, and it is the file that carries it: without this
+  // a reader who has just uploaded a report sees its first page and no way to the rest.
+  useRefreshFileWhenTextRead(document?.currentFileId, document?.textExtraction);
 
   const mayWrite = useCan('documents', 'write');
   const mayReadDocuments = useCan('documents', 'read');

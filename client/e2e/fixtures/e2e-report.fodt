@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.text">
+ <office:automatic-styles>
+  <style:style style:name="BreakBefore" style:family="paragraph" style:parent-style-name="Standard">
+   <style:paragraph-properties fo:break-before="page"/>
+  </style:style>
+ </office:automatic-styles>
+ <office:body>
+  <office:text>
+   <text:p>Raport de explorare pentru Peștera Demo Mare.</text:p>
+   <text:p>Prima pagina descrie intrarea si accesul.</text:p>
+   <text:p text:style-name="BreakBefore">Pagina a doua: sifonul terminal hidrogeologiedemo.</text:p>
+   <text:p>Galeria principala masoara 412 metri.</text:p>
+  </office:text>
+ </office:body>
+</office:document>

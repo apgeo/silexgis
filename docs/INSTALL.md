@@ -331,6 +331,21 @@ which needs the job-execution right). It is safe to run as often as you like —
 already been read by the current reader costs one query and nothing else — and it is how you
 pick up an improved reader after a later upgrade.
 
+Two things about the schema step itself are worth knowing before you take it. It arrives as a
+single migration on top of the one every earlier release shipped, so an installation that has
+been running a **released** version upgrades in place: every stored file becomes a version of a
+document, keeping its own identifier and the version chain it was already in, and the accounts
+that could upload before can still upload afterwards. Nothing is deleted and nothing is moved
+on disk.
+
+An installation that has been tracking an **unreleased development branch** of this feature is
+the exception. The development history was rewritten into that single step, so its identifier
+is one such a database has never seen while the tables it creates are already there, and
+starting the new build against it will fail — repeatedly, because migration runs on start.
+There is no upgrade path across that rewrite: recreate the database (or restore the backup you
+took before switching to the development branch) and load your data again. A released
+installation is never in this position.
+
 ## External login providers
 
 Sign-in with Google, GitHub, or any OpenID Connect provider is optional and off by default —

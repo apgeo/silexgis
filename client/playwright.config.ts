@@ -10,11 +10,21 @@ import { defineConfig, devices } from '@playwright/test';
 //
 // WebKit is a separate browser download (`npx playwright install webkit`), not just another
 // device profile.
+// Follows the dev server's port, which is itself overridable so two checkouts can run side
+// by side. Reusing an already-running server on the default port is a convenience that turns
+// into a trap when the server belongs to another checkout.
+const baseURL = `http://localhost:${process.env.SILEXGIS_DEV_PORT ?? 5173}`;
+
 export default defineConfig({
   testDir: './e2e',
-  timeout: 60_000,
+  // Every test here signs in through the real authorization server and then waits on a real
+  // server doing real work, so what a flow costs depends on how many of its siblings are doing
+  // the same thing at the same moment. A bound tight enough to fail a healthy test on a busy
+  // machine teaches everyone to re-run the suite until it agrees with them, which is worse than
+  // no bound at all; this one is loose enough that a failure means something is wrong.
+  timeout: 120_000,
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL,
     trace: 'retain-on-failure',
   },
   projects: [
@@ -22,7 +32,7 @@ export default defineConfig({
       // The pre-existing run, unchanged: Playwright's default desktop chromium viewport.
       // Each project pins its own file, so a new spec runs nowhere until it is named here.
       name: 'desktop',
-      testMatch: /(smoke|settings|permission-groups)\.spec\.ts/,
+      testMatch: /(smoke|settings|permission-groups|documents)\.spec\.ts/,
     },
     {
       // Pixel 7: 412x915 CSS px, touch enabled, coarse pointer, chromium.
@@ -42,7 +52,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run dev',
-    url: 'http://localhost:5173',
+    url: baseURL,
     reuseExistingServer: true,
     timeout: 60_000,
   },

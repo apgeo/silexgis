@@ -1,0 +1,31 @@
+{
+  /* The end-to-end suite and the browser configuration that runs it. They were type-checked by
+     nothing until now: the application project covers `src` and the tooling project covers the
+     bundler configuration, so a spec could name a role that does not exist or hold a promise it
+     never awaited and the check would still be green. They need their own project rather than a
+     wider `include` on either existing one, because they are the only files here that use both
+     Node globals and the DOM — Node because they run outside a browser, the DOM because the
+     callbacks handed to `evaluate` run inside one. */
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "module": "nodenext",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["playwright.config.ts", "e2e"]
+}

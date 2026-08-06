@@ -29,6 +29,11 @@ namespace SilexGis.Infrastructure.Migrations
             // failing closed there refuses an upload rather than disclosing anything.
             // Anything already written against documents means the question has been
             // answered for that group, so it is skipped entirely.
+            //
+            // It stays a step of its own rather than joining the schema step before it,
+            // because it is the only part of this work whose subject is an installation's
+            // policy rather than its tables: it has to remain possible to say that this one
+            // carry-over has run, or has not.
             migrationBuilder.Sql(
                 """
                 INSERT INTO access_entries (

@@ -15,8 +15,8 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    [Migration("20260805085338_DocumentComments")]
-    partial class DocumentComments
+    [Migration("20260805163953_DocumentManagement")]
+    partial class DocumentManagement
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -2227,6 +2227,48 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("feature_types", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.FileAccessEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<Guid>("FileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("file_id");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_file_access_log");
+
+                    b.HasIndex("At")
+                        .HasDatabaseName("ix_file_access_log_at");
+
+                    b.HasIndex("DocumentId", "At")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_file_access_log_document_id_at");
+
+                    b.HasIndex("UserId", "At")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_file_access_log_user_id_at");
+
+                    b.ToTable("file_access_log", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.Geofile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3091,6 +3133,14 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("content_modified_at");
 
+                    b.Property<short>("Conversion")
+                        .HasColumnType("smallint")
+                        .HasColumnName("conversion");
+
+                    b.Property<Guid?>("ConvertedFromFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("converted_from_file_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -3170,6 +3220,11 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_files");
+
+                    b.HasIndex("ConvertedFromFileId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_files_converted_from_file_id")
+                        .HasFilter("converted_from_file_id is not null");
 
                     b.HasIndex("DocumentVersionId")
                         .HasDatabaseName("ix_files_document_version_id");
@@ -4478,6 +4533,12 @@ namespace SilexGis.Infrastructure.Migrations
 
             modelBuilder.Entity("SilexGis.Domain.Entities.StoredFile", b =>
                 {
+                    b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("ConvertedFromFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_files_files_converted_from_file_id");
+
                     b.HasOne("SilexGis.Domain.Entities.DocumentVersion", null)
                         .WithMany()
                         .HasForeignKey("DocumentVersionId")
