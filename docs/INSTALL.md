@@ -47,7 +47,9 @@ The first start creates the database schema, seeds taxonomies, default map layer
 built-in permission groups, and creates the admin account as a member of **Full
 Administrators**. Sign in at `SILEXGIS_PUBLIC_URL` with the admin credentials.
 
-To load a small demo dataset (2 caves, entrances, features, a geofile and a raster):
+To load a small demo dataset (2 caves, entrances, features, a geofile and a raster, plus a
+two-shelf archive holding a survey report and a link joining that report to the cave it
+describes):
 
 ```bash
 docker compose exec api dotnet SilexGis.Api.dll seed-demo

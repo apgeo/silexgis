@@ -47,6 +47,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
@@ -299,7 +300,11 @@ try
             return;
         }
 
-        await DemoSeeder.SeedAsync(db, admins[0].Id);
+        await DemoSeeder.SeedAsync(
+            db,
+            admins[0].Id,
+            scope.ServiceProvider.GetRequiredService<DocumentWriteService>(),
+            scope.ServiceProvider.GetRequiredService<IFileStore>());
         Log.Information("Demo data seeded (owner: {Email})", admins[0].Email);
         return;
     }
