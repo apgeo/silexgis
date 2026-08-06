@@ -8,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -284,6 +286,134 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable
         });
         response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    [Fact]
+    public async Task A_wall_mesh_is_placed_in_the_world_by_the_conversion_it_queues()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+
+        // A mesh in a projected national grid — coordinates that say where they are, in a system
+        // the file itself has no way to name.
+        using var form = BuildForm("Walls.stl", ProjectedStl());
+        form.Add(new StringContent("32635"), "sourceEpsg");
+        form.Add(new StringContent("1100"), "originHeightM");
+
+        var created = await owner.PostAsync($"/api/v1/caves/{caveId}/survey-models", form);
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var model = JsonDocument.Parse(await created.Content.ReadAsStringAsync()).RootElement;
+        model.GetProperty("format").GetString().ShouldBe("stl");
+        // Nothing is drawable yet, and the response says so rather than implying otherwise.
+        model.GetProperty("status").GetString().ShouldBe("pending");
+        model.GetProperty("meshUrl").ValueKind.ShouldBe(JsonValueKind.Null);
+        var id = model.GetProperty("id").GetGuid();
+
+        await RunQueuedMeshJobsAsync();
+
+        var converted = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{id}");
+        converted.GetProperty("status").GetString().ShouldBe("ready");
+        converted.GetProperty("meshUrl").GetString().ShouldNotBeNullOrEmpty();
+        // Read as zone 35N these coordinates are in the Romanian Carpathians. Read as its western
+        // neighbour they are in Serbia, which is why the system is declared rather than guessed.
+        converted.GetProperty("anchorLongitude").GetDouble().ShouldBe(25.209, tolerance: 0.01);
+        converted.GetProperty("anchorLatitude").GetDouble().ShouldBe(45.519, tolerance: 0.01);
+        converted.GetProperty("anchorHeightM").GetDouble().ShouldBe(1100);
+        converted.GetProperty("triangleCount").GetInt32().ShouldBe(2);
+
+        // The converted mesh is delivered by the same signed, anonymous URL as everything else.
+        using var anonymous = factory.CreateClient();
+        var glb = await anonymous.GetByteArrayAsync(converted.GetProperty("meshUrl").GetString()!);
+        Encoding.ASCII.GetString(glb, 0, 4).ShouldBe("glTF");
+    }
+
+    [Fact]
+    public async Task A_wall_mesh_with_nothing_to_place_it_by_is_refused()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+
+        // No coordinate system and no position: there is no answer to where this cave is, and
+        // storing it anyway would leave a model that nothing can ever draw.
+        using var form = BuildForm("Walls.stl", ProjectedStl());
+        form.Add(new StringContent("1100"), "originHeightM");
+
+        var refused = await owner.PostAsync($"/api/v1/caves/{caveId}/survey-models", form);
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await refused.Content.ReadAsStringAsync()).ShouldContain("survey_model.origin_invalid");
+    }
+
+    [Fact]
+    public async Task A_wall_mesh_that_cannot_be_read_says_why_instead_of_staying_silent()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+
+        using var form = BuildForm("Walls.stl", FakeLox()); // not an STL at all
+        form.Add(new StringContent("25.4472"), "originLongitude");
+        form.Add(new StringContent("45.5312"), "originLatitude");
+        form.Add(new StringContent("1100"), "originHeightM");
+        var id = JsonDocument.Parse(
+                await (await owner.PostAsync($"/api/v1/caves/{caveId}/survey-models", form))
+                    .Content.ReadAsStringAsync())
+            .RootElement.GetProperty("id").GetGuid();
+
+        await RunQueuedMeshJobsAsync(expectFailure: true);
+
+        var failed = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{id}");
+        failed.GetProperty("status").GetString().ShouldBe("failed");
+        // The reason is the uploader's to act on — this is a file they can re-export.
+        failed.GetProperty("processingError").GetString().ShouldNotBeNullOrEmpty();
+    }
+
+    /// <summary>Runs whatever the upload queued, the way the background worker would.</summary>
+    private async Task RunQueuedMeshJobsAsync(bool expectFailure = false)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
+            .Single(h => h.Kind == ProcessingJobKinds.SurveyMesh);
+
+        var queued = await db.ProcessingJobs
+            .Where(j => j.Kind == ProcessingJobKinds.SurveyMesh && j.Status == ProcessingJobStatus.Queued)
+            .ToListAsync();
+
+        foreach (var job in queued)
+        {
+            try
+            {
+                await handler.ExecuteAsync(job, CancellationToken.None);
+            }
+            catch (Exception) when (expectFailure)
+            {
+                // The handler records the reason on the model and rethrows so the worker can retry
+                // it; what this test is checking is the record it left behind.
+            }
+        }
+    }
+
+    /// <summary>Two triangles in UTM zone 35N, over Piatra Craiului.</summary>
+    private static byte[] ProjectedStl()
+    {
+        (float X, float Y, float Z)[][] triangles =
+        [
+            [(359994, 5042094, 0), (360292, 5042094, 0), (359994, 5042171, 0)],
+            [(360292, 5042094, 0), (360292, 5042171, 0), (359994, 5042171, 0)],
+        ];
+
+        var bytes = new byte[84 + (triangles.Length * 50)];
+        BitConverter.TryWriteBytes(bytes.AsSpan(80), triangles.Length);
+        for (var t = 0; t < triangles.Length; t++)
+        {
+            for (var corner = 0; corner < 3; corner++)
+            {
+                // Twelve bytes of exporter face normal are left zero; the reader recomputes it.
+                var at = 84 + (t * 50) + 12 + (corner * 12);
+                BitConverter.TryWriteBytes(bytes.AsSpan(at), triangles[t][corner].X);
+                BitConverter.TryWriteBytes(bytes.AsSpan(at + 4), triangles[t][corner].Y);
+                BitConverter.TryWriteBytes(bytes.AsSpan(at + 8), triangles[t][corner].Z);
+            }
+        }
+
+        return bytes;
     }
 
     /// <summary>Opaque bytes are fine — the server stores survey files without parsing them.</summary>
