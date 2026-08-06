@@ -6,6 +6,7 @@ import { displayableImageUrl } from './derivativeUrl.ts';
 import DownloadDocument from './DownloadDocument.tsx';
 import MediaDocumentView from './MediaDocumentView.tsx';
 import PagedDocumentView from './PagedDocumentView.tsx';
+import PdfDocumentView from './PdfDocumentView.tsx';
 import TextDocumentView from './TextDocumentView.tsx';
 
 /**
@@ -42,6 +43,24 @@ function conversionMessage(conversion: FileInfo['conversion']): string | null {
 function isText(mimeType: string): boolean {
   return mimeType.startsWith('text/');
 }
+
+/** Whether the bytes are a portable document the browser can be made to lay out itself. */
+function isPdf(mimeType: string): boolean {
+  return mimeType.split(';')[0].trim().toLowerCase() === 'application/pdf';
+}
+
+/**
+ * Above this, a portable document is read as pictures of its pages rather than laid out here.
+ *
+ * Laying one out in the browser means holding the whole file in memory, because the alternative
+ * — letting the renderer fetch its own byte ranges as the reader moves — asks for them under a
+ * delivery link that expires part-way through a long read, and a document that stops arriving in
+ * the middle is worse than one that was never laid out. So the trade is made on size, at a bound
+ * a phone can hold: a survey report is a few megabytes and reads with selectable text, while a
+ * scanned volume is drawn a page at a time by the server, which is what that path is for and
+ * costs the reader nothing but the selection.
+ */
+export const maxBrowserPdfBytes = 64 * 1024 * 1024;
 
 /**
  * The document itself, shown where it can be shown and named honestly where it cannot.
@@ -83,6 +102,15 @@ export default function DocumentContent({
         </Flex>
       );
     }
+  }
+
+  // A portable document is read in the browser when the caller may have its bytes anyway: the
+  // words are then real text rather than part of a picture, so they can be selected, copied,
+  // found with the browser's own search and read aloud. A caller the bytes are withheld from
+  // falls through to the page pictures below, which show the same page and disclose nothing
+  // more than it does — displaying is never a way around who may have a file.
+  if (isPdf(file.mimeType) && file.mayDownloadOriginal && file.sizeBytes <= maxBrowserPdfBytes) {
+    return <PdfDocumentView file={file} initialPage={initialPage} />;
   }
 
   // Which file's pages can be drawn is the server's statement, not a guess made here from a

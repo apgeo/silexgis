@@ -82,6 +82,9 @@ public static class FileEndpoints
         files.MapGet("/{id:guid}/pages/{page:int}/render", PageRenderAsync).AllowAnonymous()
             .WithSummary("WebP picture of one page of a paged document (sizes 160/480/1200/2400); token-authenticated.");
 
+        files.MapGet("/{id:guid}/pages/{page:int}/text", PageTextAsync).AllowAnonymous()
+            .WithSummary("Extracted text of one page, as the search index holds it; token-authenticated.");
+
         return api;
     }
 
@@ -493,7 +496,7 @@ public static class FileEndpoints
 
     private static async Task<Results<PhysicalFileHttpResult, ProblemHttpResult>> ContentAsync(
         Guid id,
-        string token,
+        string? token,
         SilexGisDbContext db,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
@@ -533,7 +536,7 @@ public static class FileEndpoints
 
     private static async Task<Results<PhysicalFileHttpResult, ProblemHttpResult>> ThumbnailAsync(
         Guid id,
-        string token,
+        string? token,
         int? size,
         SilexGisDbContext db,
         ThumbnailService thumbnails,
@@ -579,7 +582,7 @@ public static class FileEndpoints
     private static async Task<Results<PhysicalFileHttpResult, ProblemHttpResult>> PageRenderAsync(
         Guid id,
         int page,
-        string token,
+        string? token,
         int? size,
         SilexGisDbContext db,
         PageRenderService pages,
@@ -632,5 +635,54 @@ public static class FileEndpoints
         return path is null
             ? ApiProblems.NotFound("file.page_not_found")
             : TypedResults.PhysicalFile(path, contentType: "image/webp");
+    }
+
+    /// <summary>
+    /// The words of one page, exactly as the reader that produced the search index recorded
+    /// them.
+    /// </summary>
+    /// <remarks>
+    /// This is the stream a durable text selection is measured against: a quote captured in a
+    /// browser means nothing until it is found in the text the server itself holds, and a
+    /// selection that stored a browser's own offsets would break the first time anything
+    /// re-read the file. So the offsets are computed against this, and a selection whose words
+    /// are not in it is refused rather than stored pointing somewhere else.
+    /// <para>
+    /// It is guarded exactly as the page picture beside it, and for the same reason: the
+    /// picture already shows every one of these words to whoever may open it, so handing them
+    /// over as characters discloses nothing the drawing did not. A page nothing has read yet
+    /// answers "not found" rather than empty text — the difference between "there are no words
+    /// here" and "nobody has looked" is the whole of what a caller needs to know.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<PageTextDto>, ProblemHttpResult>> PageTextAsync(
+        Guid id,
+        int page,
+        string? token,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        CancellationToken ct)
+    {
+        if (tokens.Validate(token, id) is null)
+        {
+            return ApiProblems.NotFound("file.not_found");
+        }
+
+        if (page < 1)
+        {
+            return ApiProblems.NotFound("file.page_not_found");
+        }
+
+        var row = await db.DocumentPages.AsNoTracking()
+            .Where(p => p.FileId == id && p.PageNumber == page)
+            .Select(p => new { p.Text, p.Extractor })
+            .FirstOrDefaultAsync(ct);
+
+        if (row is null || row.Extractor is null)
+        {
+            return ApiProblems.NotFound("file.page_text_not_read");
+        }
+
+        return TypedResults.Ok(new PageTextDto(page, row.Text ?? string.Empty));
     }
 }

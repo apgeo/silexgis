@@ -28,6 +28,7 @@
     "ol": "^10.9.0",
     "ol-mapbox-style": "^13.4.1",
     "openapi-fetch": "^0.17.0",
+    "pdfjs-dist": "^6.2.108",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-i18next": "^17.0.8",

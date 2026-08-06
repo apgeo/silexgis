@@ -1,0 +1,100 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+
+/*
+ * Geometry for the transparent text runs the PDF library lays over a drawn page.
+ *
+ * These rules are not decoration — they are the contract that makes a selection land on the
+ * words that are drawn underneath. The library positions each run by setting custom properties
+ * on it (`--font-height`, `--scale-x`, `--rotate`) and expects the stylesheet to turn those
+ * into a size and a transform; without that, every run collapses to the top-left corner and a
+ * drag across the page selects the whole document in the wrong order.
+ *
+ * They are written here rather than pulled from the library's own stylesheet because that
+ * sheet is 160 kB of viewer chrome — annotation widgets, form fields, a toolbar, embedded
+ * images — for an application that uses none of it and dresses its own controls. What is kept
+ * is the text-layer block from that sheet, faithful to it, and nothing else. If the library's
+ * layout contract changes, this is the file that has to change with it.
+ */
+
+.textLayer {
+  /* The layer's own painting must not follow the page's dark/light theme: the runs are
+     invisible and only the selection highlight is seen, which is drawn by the browser. */
+  color-scheme: only light;
+
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 0;
+
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.textLayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.textLayer .markedContent {
+  display: contents;
+}
+
+/* A run the library marked as a picture rather than words: it is there so a right-click
+   reaches the image, and selecting it would put nothing in the clipboard. */
+.textLayer span[role='img'] {
+  user-select: none;
+  cursor: default;
+}
+
+/* The runs are transparent, so the highlight is the only thing a reader sees of their own
+   selection; the text stays transparent under it so the drawn glyphs show through. */
+.textLayer ::selection {
+  background: rgb(0 0 255 / 0.25);
+  background: color-mix(in srgb, AccentColor, transparent 50%);
+  color: transparent;
+}
+
+.textLayer br::selection {
+  background: transparent;
+}
+
+/* An empty element the library keeps past the last run: dragging beyond the end of the text
+   extends the selection to it rather than escaping the layer. */
+.textLayer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+}
+
+.textLayer.selecting .endOfContent {
+  top: 0;
+}

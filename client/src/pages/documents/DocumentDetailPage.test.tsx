@@ -31,7 +31,7 @@ let doc = {
   cabinetIds: ['cab-2'],
   currentFileId: 'file-1',
   currentVersionNumber: 2,
-  mimeType: 'application/pdf',
+  mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   sizeBytes: 3 * 1024 * 1024,
   kind: 'document',
   pageCount: 42,
@@ -50,8 +50,8 @@ let doc = {
 let fileInfo = {
   id: 'file-1',
   documentId: 'doc-1',
-  originalName: 'ridicare.pdf',
-  mimeType: 'application/pdf',
+  originalName: 'ridicare.docx',
+  mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   sizeBytes: 3 * 1024 * 1024,
   sha256: 'abc',
   kind: 'document',
@@ -61,11 +61,12 @@ let fileInfo = {
   contentUrl: '/api/v1/files/file-1/content?token=full',
   thumbnailUrl: null as string | null,
   mayDownloadOriginal: true,
-  // The server names the file whose pages are drawn and how many there are; a portable
-  // document draws its own.
-  pagesUrl: '/api/v1/files/file-1/content?token=full' as string | null,
+  // The server names the file whose pages are drawn and how many there are. An office
+  // document has no pages of its own, so this is the portable copy something made of it —
+  // which is why the strip below is what draws it.
+  pagesUrl: '/api/v1/files/file-2/content?token=full' as string | null,
   pageCount: 42 as number | null,
-  conversion: 'notApplicable',
+  conversion: 'converted',
 };
 
 let rights = 'read, write';
@@ -163,7 +164,9 @@ describe('DocumentDetailPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Ridicare topografică' })).toBeInTheDocument();
     expect(screen.getByText('Survey report')).toBeInTheDocument();
-    expect(screen.getByText('application/pdf')).toBeInTheDocument();
+    expect(
+      screen.getByText('application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+    ).toBeInTheDocument();
     expect(screen.getByText('3.0 MB')).toBeInTheDocument();
 
     // The whole path, because a shelf named "1987" sits under many archives.
@@ -271,7 +274,16 @@ describe('DocumentDetailPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('reads on a phone: the same controls, named rather than revealed, and nothing that needs a hover', () => {
+  /**
+   * A portable document the caller may have the bytes of is laid out in the browser instead of
+   * being shown as pictures of its pages, so its words are text: selectable, copyable, findable
+   * with the browser's own search and reachable by a screen reader.
+   *
+   * What is asserted here is the choice, not the rendering — laying a PDF out needs a canvas
+   * and a worker, neither of which exists under this test's DOM. The rendering itself is driven
+   * in a real browser by the end-to-end suite, which is the only place it can be.
+   */
+  it('reads a portable document in the browser rather than as pictures of its pages', () => {
     rights = 'read';
     doc = { ...doc, mimeType: 'application/pdf', kind: 'document', textExtraction: 'extracted' };
     fileInfo = {
@@ -279,11 +291,39 @@ describe('DocumentDetailPage', () => {
       originalName: 'ridicare.pdf',
       mimeType: 'application/pdf',
       kind: 'document',
+      mayDownloadOriginal: true,
+      pagesUrl: '/api/v1/files/file-1/content?token=full',
+      conversion: 'notApplicable',
+    };
+    renderPage();
+
+    expect(
+      screen.getByText('Select text on the page to copy it, or to point a link at the passage.'),
+    ).toBeInTheDocument();
+    // And nothing asked the server to draw the page, which is the half that would otherwise
+    // pass unnoticed: both viewers show a page, only one of them shows words.
+    const drawn = screen.getAllByRole('img').map((image) => image.getAttribute('src') ?? '');
+    expect(drawn.some((src) => src.includes('/pages/1/render'))).toBe(false);
+  });
+
+  it('reads on a phone: the same controls, named rather than revealed, and nothing that needs a hover', () => {
+    rights = 'read';
+    // Spelled out rather than inherited: these fixtures are module-level and every test before
+    // this one may have moved them, and which viewer is chosen is decided from exactly these
+    // fields — the strip is what this test is about.
+    const office = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    doc = { ...doc, mimeType: office, kind: 'document', textExtraction: 'extracted' };
+    fileInfo = {
+      ...fileInfo,
+      originalName: 'ridicare.docx',
+      mimeType: office,
+      kind: 'document',
       contentUrl: '/api/v1/files/file-1/content?token=full',
       thumbnailUrl: null,
       mayDownloadOriginal: true,
-      pagesUrl: '/api/v1/files/file-1/content?token=full',
+      pagesUrl: '/api/v1/files/file-2/content?token=full',
       pageCount: 42,
+      conversion: 'converted',
     };
 
     for (const narrow of [false, true]) {

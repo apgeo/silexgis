@@ -41,6 +41,18 @@ const cesiumOutputDir = `cesiumStatic/${cesiumVersion}`;
 /** Public path the engine resolves its runtime files against; no trailing slash. */
 const cesiumBaseUrl = `/${cesiumOutputDir}`;
 
+// The PDF renderer reads two data tables it does not bundle: character maps for documents that
+// address their glyphs by a published encoding, and metrics for the standard fonts a PDF is
+// allowed to name without carrying. Some image encodings are decoded by a compiled module it
+// loads the same way. All three are copied out of the installed package for the same reason as
+// above — an installation that fetched them from a vendor's network would show nothing on one
+// that cannot reach it, and would tell that vendor which documents are being read.
+const pdfjsSource = 'node_modules/pdfjs-dist';
+const pdfjsAssetTrees = ['cmaps', 'standard_fonts', 'wasm'];
+const pdfjsStripDepth = pdfjsSource.split('/').length;
+const pdfjsVersion = createRequire(import.meta.url)('pdfjs-dist/package.json').version as string;
+const pdfjsOutputDir = `pdfjsStatic/${pdfjsVersion}`;
+
 /**
  * Fails the build if the engine's runtime files did not land where the engine will look for them.
  *
@@ -49,16 +61,21 @@ const cesiumBaseUrl = `/${cesiumOutputDir}`;
  * and a 200 status, so the engine reports no error, the network panel shows no error, and the
  * only symptom is a black globe.
  */
-function assertCesiumAssetsCopied(): Plugin {
-  const probe = path.join('Assets', 'approximateTerrainHeights.json');
+function assertRuntimeAssetsCopied(): Plugin {
+  const probes: [string, string][] = [
+    [cesiumOutputDir, path.join('Assets', 'approximateTerrainHeights.json')],
+    [pdfjsOutputDir, path.join('standard_fonts', 'LiberationSans-Regular.ttf')],
+  ];
   return {
-    name: 'silexgis:assert-cesium-assets-copied',
+    name: 'silexgis:assert-runtime-assets-copied',
     apply: 'build',
     closeBundle(this: { environment?: { config?: { build?: { outDir?: string } } } }) {
       const outDir = this.environment?.config?.build?.outDir ?? 'dist';
-      const expected = path.join(outDir, cesiumOutputDir, probe);
-      if (!existsSync(expected)) {
-        throw new Error(`3D engine runtime files are missing from the build output: ${expected}`);
+      for (const [dir, probe] of probes) {
+        const expected = path.join(outDir, dir, probe);
+        if (!existsSync(expected)) {
+          throw new Error(`Runtime files are missing from the build output: ${expected}`);
+        }
       }
     },
   };
@@ -68,13 +85,20 @@ export default defineConfig({
   plugins: [
     react(),
     viteStaticCopy({
-      targets: cesiumAssetTrees.map((tree) => ({
-        src: `${cesiumSource}/${tree}`,
-        dest: cesiumOutputDir,
-        rename: { stripBase: cesiumStripDepth },
-      })),
+      targets: [
+        ...cesiumAssetTrees.map((tree) => ({
+          src: `${cesiumSource}/${tree}`,
+          dest: cesiumOutputDir,
+          rename: { stripBase: cesiumStripDepth },
+        })),
+        ...pdfjsAssetTrees.map((tree) => ({
+          src: `${pdfjsSource}/${tree}`,
+          dest: pdfjsOutputDir,
+          rename: { stripBase: pdfjsStripDepth },
+        })),
+      ],
     }),
-    assertCesiumAssetsCopied(),
+    assertRuntimeAssetsCopied(),
   ],
   define: {
     // The engine reads this bare global to find the files copied above. Replaced at build time
@@ -83,6 +107,13 @@ export default defineConfig({
     // resolves against the hashed bundle directory, where nothing is: every request then returns
     // the SPA's index.html with a 200, so the failure looks like a blank globe and no errors.
     CESIUM_BASE_URL: JSON.stringify(cesiumBaseUrl),
+    // The PDF renderer is told where its tables are the same way, and for the same reason: it
+    // resolves them while loading, and a missing one is answered by the single-page fallback
+    // with HTML and a 200, so a document would silently lose its accented characters rather
+    // than report anything. Trailing slashes are required — the library appends file names.
+    PDFJS_CMAP_URL: JSON.stringify(`/${pdfjsOutputDir}/cmaps/`),
+    PDFJS_STANDARD_FONT_URL: JSON.stringify(`/${pdfjsOutputDir}/standard_fonts/`),
+    PDFJS_WASM_URL: JSON.stringify(`/${pdfjsOutputDir}/wasm/`),
   },
   server: {
     port: devPort,

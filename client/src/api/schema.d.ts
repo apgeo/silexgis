@@ -4635,8 +4635,8 @@ export interface paths {
         /** Streams file content (honors Range); token-authenticated. */
         get: {
             parameters: {
-                query: {
-                    token: string;
+                query?: {
+                    token?: string;
                 };
                 header?: never;
                 path: {
@@ -4673,8 +4673,8 @@ export interface paths {
         /** WebP thumbnail for image files (sizes 160/480/1200); token-authenticated. */
         get: {
             parameters: {
-                query: {
-                    token: string;
+                query?: {
+                    token?: string;
                     size?: number;
                 };
                 header?: never;
@@ -4712,8 +4712,8 @@ export interface paths {
         /** WebP picture of one page of a paged document (sizes 160/480/1200/2400); token-authenticated. */
         get: {
             parameters: {
-                query: {
-                    token: string;
+                query?: {
+                    token?: string;
                     size?: number;
                 };
                 header?: never;
@@ -4731,6 +4731,47 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/pages/{page}/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Extracted text of one page, as the search index holds it; token-authenticated. */
+        get: {
+            parameters: {
+                query?: {
+                    token?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                    page: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PageTextDto"];
+                    };
                 };
             };
         };
@@ -9694,6 +9735,11 @@ export interface components {
             pageSize: number;
             /** Format: int32 */
             totalItems: number;
+        };
+        PageTextDto: {
+            /** Format: int32 */
+            page: number;
+            text: string;
         };
         ParentEdgeRequest: {
             /** Format: uuid */

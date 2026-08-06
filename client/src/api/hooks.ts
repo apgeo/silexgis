@@ -1229,6 +1229,40 @@ export function useFileText(file: FileInfo | undefined) {
 }
 
 /**
+ * The words of one page as the server read them — the text a durable selection is measured
+ * against.
+ *
+ * It is asked for one page at a time and only when something needs it, because that is the
+ * shape of the question: a reader who selects a sentence on page nine is asking about page
+ * nine, and pulling a two-hundred-page report's text to answer it would spend the document to
+ * place one phrase. The delivery URL carries the token, so this is the same permission that
+ * opens the page picture beside it, exercised the same way.
+ *
+ * A page nothing has read yet answers 404, which is a real answer and not an error to retry:
+ * the reading happens in a background job, and until it has run there is nothing to match a
+ * quote against.
+ */
+export function usePageText(pagesUrl: string | null | undefined, page: number | null) {
+  return useQuery({
+    queryKey: ['page-text', pagesUrl ?? '', page ?? 0] as const,
+    queryFn: async () => {
+      const [path, query] = pagesUrl!.split('?');
+      const url = `${path.replace(/\/content$/, `/pages/${page}/text`)}?${query ?? ''}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new ApiError(response.status, 'file.page_text_not_read');
+      }
+      return (await response.json()) as { page: number; text: string };
+    },
+    enabled: !!pagesUrl && page !== null && page >= 1,
+    retry: false,
+    // One version's pages never change; the key carries the delivery URL, so a renewed token
+    // is a new request rather than a stale answer.
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
  * Upload limits this installation applies. Served rather than compiled in, so a client
  * build cannot disagree with its server and let someone watch a large file transfer only
  * to be refused at the end.

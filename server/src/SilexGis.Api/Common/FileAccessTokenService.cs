@@ -58,9 +58,10 @@ public interface IFileAccessTokenService
 
     /// <summary>
     /// What the token opens for this file and who it was minted for, or null when it is
-    /// not a valid token for that file.
+    /// not a valid token for that file — including when there is no token at all, which is
+    /// the ordinary case of somebody typing a delivery route into a browser.
     /// </summary>
-    FileAccessGrant? Validate(string token, Guid fileId);
+    FileAccessGrant? Validate(string? token, Guid fileId);
 }
 
 /// <summary>
@@ -91,8 +92,13 @@ public sealed class FileAccessTokenService : IFileAccessTokenService
         protector.Protect(
             Payload(fileId, delivery, currentUser.UserId), DateTimeOffset.UtcNow.Add(Lifetime));
 
-    public FileAccessGrant? Validate(string token, Guid fileId)
+    public FileAccessGrant? Validate(string? token, Guid fileId)
     {
+        if (string.IsNullOrEmpty(token))
+        {
+            return null;
+        }
+
         string plain;
         try
         {

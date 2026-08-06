@@ -196,6 +196,71 @@ test('a content search finds the document by a word inside it and opens it there
   await removeReport(page);
 });
 
+/**
+ * A portable document is laid out in the browser, so its words are words rather than part of
+ * a picture of the page.
+ *
+ * This is the one property nothing below a browser can check. Under jsdom there is no canvas,
+ * no worker and no layout, so a test there proves only that some elements were created; what
+ * decides whether a reader can drag across a sentence is where the runs land on the screen,
+ * which only a real engine produces. So the assertions are: the runs exist, they carry the
+ * words the file carries, they cover the page rather than collapsing into its corner, and a
+ * selection over them yields the sentence and not the whole document.
+ */
+test('the words of a portable document can be selected on the page', async ({ page }) => {
+  await login(page);
+  await uploadReport(page);
+
+  const viewer = page.locator('.ant-card', { hasText: 'The document' });
+  await expect(viewer.getByText('Page 1 of 2')).toBeVisible({ timeout: 60_000 });
+
+  const layer = page.getByTestId('pdf-text-layer');
+  await expect(layer).toBeVisible({ timeout: 30_000 });
+
+  // The runs are laid out over the drawing, at the same size, and each is sized by the scale
+  // the page was drawn at. A layer that never received that scale still contains every word:
+  // the runs collapse to zero-height nothings in the corner, the drawing underneath is
+  // unaffected, and the page looks perfectly correct while nothing on it can be selected.
+  const geometry = await layer.evaluate((el) => {
+    const canvas = el.parentElement?.querySelector('canvas');
+    const runs = Array.from(el.querySelectorAll('span'));
+    const box = runs.map((run) => run.getBoundingClientRect());
+    return {
+      runs: runs.length,
+      words: runs.map((run) => run.textContent ?? '').join(' ').trim().length,
+      layer: [el.clientWidth, el.clientHeight],
+      canvas: canvas ? [canvas.clientWidth, canvas.clientHeight] : null,
+      widestRun: Math.max(0, ...box.map((r) => r.width)),
+      tallestRun: Math.max(0, ...box.map((r) => r.height)),
+    };
+  });
+  expect(geometry.runs).toBeGreaterThan(0);
+  expect(geometry.words).toBeGreaterThan(40);
+  expect(geometry.canvas).toEqual(geometry.layer);
+  // Sized against the page, not collapsed: a run has to be tall enough to put a caret in and
+  // wide enough to cover a good part of the line it describes.
+  expect(geometry.tallestRun).toBeGreaterThan(5);
+  expect(geometry.widestRun).toBeGreaterThan(geometry.layer[0] * 0.2);
+
+  // And the runs carry the file's own words: selecting one gives back text, not an empty
+  // string, which is what a layer of positioned but wordless elements would give.
+  const selected = await layer.evaluate((el) => {
+    const run = Array.from(el.querySelectorAll('span')).find((s) => (s.textContent ?? '').trim().length > 8);
+    if (!run) {
+      return null;
+    }
+    const range = document.createRange();
+    range.selectNodeContents(run);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return selection.toString();
+  });
+  expect(selected?.trim().length ?? 0).toBeGreaterThan(8);
+
+  await removeReport(page);
+});
+
 test('filing a document in a cabinet says so on both sides', async ({ page }) => {
   const cabinetName = `E2E Cabinet ${Date.now()}`;
   await login(page);

@@ -27,17 +27,26 @@ const photo: FileInfo = {
   conversion: 'notApplicable',
 };
 
+/**
+ * An office document that something has converted, which is what the server-drawn page strip
+ * exists for: the file has no pages of its own, so the pages — and their numbers — belong to
+ * the portable copy, and its delivery URL is what the strip draws from.
+ *
+ * A portable document the caller may have the bytes of takes the other branch and is laid out
+ * in the browser; that choice has a test of its own below.
+ */
 const report: FileInfo = {
   ...photo,
   id: 'f2',
   documentId: 'd2',
-  originalName: 'report.pdf',
-  mimeType: 'application/pdf',
+  originalName: 'report.docx',
+  mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   kind: 'document',
   contentUrl: '/api/v1/files/f2/content?token=t',
   thumbnailUrl: null,
   pagesUrl: '/api/v1/files/f2/content?token=t',
   pageCount: 3,
+  conversion: 'converted',
 };
 
 const recording: FileInfo = {
@@ -55,7 +64,46 @@ function sources(): string[] {
   return screen.getAllByRole('img').map((image) => image.getAttribute('src') ?? '');
 }
 
+/** A portable document, whose two branches turn on how far this caller may reach. */
+const portable: FileInfo = {
+  ...report,
+  id: 'f4',
+  documentId: 'd4',
+  originalName: 'report.pdf',
+  mimeType: 'application/pdf',
+  contentUrl: '/api/v1/files/f4/content?token=t',
+  pagesUrl: '/api/v1/files/f4/content?token=t',
+  conversion: 'notApplicable',
+};
+
 describe('DocumentContent', () => {
+  it('lays a portable document out in the browser when the caller may have its bytes', () => {
+    render(
+      <App>
+        <DocumentContent file={portable} />
+      </App>,
+    );
+
+    // Nothing asked the server to draw a page: the words on screen are text rather than part
+    // of a picture, which is the whole difference between the two viewers.
+    expect(sources().some((src) => src.includes('/pages/'))).toBe(false);
+    expect(screen.getByText(/Select text on the page/i)).toBeTruthy();
+  });
+
+  it('falls back to pictures of the pages for a caller the bytes are withheld from', () => {
+    // The same document, one right fewer. Laying it out in the browser needs the file itself,
+    // so a caller who may not have it is shown the pages the server drew — which show what the
+    // pages show and nothing more. Displaying is never a way around who may have a file.
+    render(
+      <App>
+        <DocumentContent file={{ ...portable, mayDownloadOriginal: false }} />
+      </App>,
+    );
+
+    expect(sources().some((src) => src.includes('/pages/1/render'))).toBe(true);
+    expect(screen.queryByText(/Select text on the page/i)).toBeNull();
+  });
+
   it('shows a photo from the rendering when the original is withheld, and from the file when it is not', () => {
     // The same photo, one right fewer. A caller who may not place what it shows must not be
     // handed the stored bytes by the screen that displays it — those still carry the fix the

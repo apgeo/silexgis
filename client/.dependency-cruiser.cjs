@@ -2,8 +2,8 @@
 /**
  * Module-boundary rules for the client (checked in CI via `npm run lint:deps`):
  * the generated API client stays isolated, map and 3D scene modules stay UI-free,
- * the 3D engine library stays behind its one module, and page slices don't reach
- * into each other's internals.
+ * the 3D engine and PDF libraries each stay behind their one module, and page slices
+ * don't reach into each other's internals.
  */
 module.exports = {
   forbidden: [
@@ -37,6 +37,18 @@ module.exports = {
       severity: 'error',
       from: { pathNot: '^src/scene3d/scene3dContext\\.ts$' },
       to: { path: '^node_modules/(cesium|@cesium)/' },
+    },
+    {
+      name: 'pdfjs-only-in-the-pdf-module',
+      comment:
+        'Only src/pdf/pdfEngine.ts may import the PDF rendering library; everything else goes '
+        + 'through PdfView and the small contract beside it, so the library stays replaceable '
+        + 'and its weight stays out of bundles that show no PDF. Type-only imports count, and '
+        + 'so does its stylesheet. Test files are excluded from this graph, so a test may '
+        + 'import the library to stand in for it.',
+      severity: 'error',
+      from: { pathNot: '^src/pdf/pdfEngine\\.ts$' },
+      to: { path: '^node_modules/pdfjs-dist/' },
     },
     {
       name: 'page-slices-stay-isolated',

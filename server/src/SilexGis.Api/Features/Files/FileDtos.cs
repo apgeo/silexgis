@@ -60,6 +60,13 @@ public sealed record FileDto(
 /// </summary>
 public sealed record FileConfigDto(long MaxUploadBytes);
 
+/// <summary>
+/// The extracted words of one page. The text is what a reader wrote into the search index,
+/// character for character — a selection is measured against this, so anything that
+/// normalised it here would move every offset composed from it.
+/// </summary>
+public sealed record PageTextDto(int Page, string Text);
+
 /// <summary>One revision of a document (newest first). Superseded ones are editor-only.</summary>
 public sealed record FileVersionDto(
     Guid Id,
