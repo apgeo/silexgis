@@ -34,12 +34,17 @@ export default function TextRangeAnchorEditor({ value, onChange, target }: Ancho
   // page on screen by the time the answer comes back.
   const { data: pageText, isFetching, isError } = usePageText(file?.pagesUrl, captured?.page ?? null);
 
+  // A cleared selection is not a retracted anchor. Reading on means clicking somewhere — into
+  // the note field to say why these belong together, onto the page to turn it — and every one
+  // of those collapses the browser's selection. Treating that as "never mind" would throw the
+  // passage away at the exact moment the reader moved on to the next field, silently, leaving
+  // a form that refuses to submit and does not say what changed. A passage is replaced by
+  // selecting another one, and by nothing else.
   const onSelect = useCallback((selection: CapturedQuote | null) => {
-    setCaptured(selection);
-    if (selection === null) {
-      onChange(null);
+    if (selection !== null) {
+      setCaptured(selection);
     }
-  }, [onChange]);
+  }, []);
 
   useEffect(() => {
     if (captured === null || pageText === undefined) {

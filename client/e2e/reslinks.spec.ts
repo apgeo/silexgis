@@ -746,3 +746,87 @@ test('the Romanian interface renders link wording with its numbers and names in 
   await deleteLinkRow(page, 'Falia Demo');
   await deleteFeature(page, anchorName);
 });
+
+/**
+ * A link anchored at a passage, composed the way a reader composes one: open the document in
+ * the dialog, drag across a sentence, and record it.
+ *
+ * This is the one flow that cannot be checked below a browser at all. The anchor's offsets are
+ * into the text the **server** read out of the file, and the words come from a layer a real
+ * rendering engine lays over a real drawing — so a test with no canvas and no worker can only
+ * assert that some elements exist. What is asserted here is the whole round trip: the words are
+ * selectable, the editor finds them in the server's text, the payload the server accepts is
+ * composed from both halves, and the recorded link reads back as pointing at that page.
+ *
+ * It leans on the demo report `seed-demo` files, the way the other flows lean on the demo cave:
+ * a document with real text in it is not something a browser test can conjure.
+ */
+test('a link is anchored at a passage selected in a document', async ({ page }) => {
+  const stamp = Date.now();
+  const anchorName = `E2E Quote Anchor ${stamp}`;
+  const note = `E2E quote ${stamp}`;
+  await login(page);
+
+  await createPointFeature(page, anchorName);
+  const featureUrl = await openFeature(page, anchorName);
+
+  await page.getByRole('button', { name: 'Link…' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('Record a link')).toBeVisible();
+  await pickOption(page, dialog.getByRole('combobox', { name: 'Relation' }), 'Related to');
+
+  // The other member is a document, so the kind of item has to be said before the picker can
+  // find one — it searches one world at a time.
+  await pickOption(page, dialog.getByRole('combobox', { name: 'Kind of item' }), 'Document');
+  await pickExistingItem(page, dialog, '1987 survey report', '1987');
+
+  // Now the part of it: a passage rather than the whole document. This option was disabled
+  // until the viewer that can express it existed, so its being choosable is itself the change.
+  await pickOption(page, dialog.getByRole('combobox', { name: 'What it points at' }), 'A passage of text');
+
+  // The document is laid out inside the dialog. Its words are real text, which is what makes
+  // the next step possible at all.
+  const layer = dialog.getByTestId('pdf-text-layer');
+  await expect(layer).toBeVisible({ timeout: 60_000 });
+
+  const selected = await layer.evaluate((el) => {
+    const run = Array.from(el.querySelectorAll('span'))
+      .find((span) => (span.textContent ?? '').includes('widens into a chamber'));
+    if (!run) {
+      return null;
+    }
+    const range = document.createRange();
+    range.selectNodeContents(run);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    // The editor reads a settled selection rather than every change, so a drag does not send
+    // the server every prefix of the phrase being dragged over.
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    return selection.toString();
+  });
+  expect(selected).toContain('widens into a chamber');
+
+  // The editor echoes back what it captured, with the page it was found on — which it can only
+  // know by having located those words in the text the server holds.
+  // Scoped to the editor's own confirmation rather than to the dialog: the same words are on
+  // the page behind it, which is the point, and matching either would prove nothing.
+  const captured = dialog.locator('.ant-alert-title').filter({ hasText: /^Page 1: / });
+  await expect(captured).toBeVisible({ timeout: 30_000 });
+  await expect(captured).toContainText('widens into a chamber');
+
+  await dialog.getByLabel('Note').fill(note);
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await accepted(page, 'Saved.');
+
+  // Recorded, and reading back as a part rather than as the whole document: the server took
+  // the payload, which it refuses outright without both the quote and the offsets.
+  const card = linksCard(page);
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await expect(card.getByText('1987 survey report')).toBeVisible();
+  await expect(card.getByText('quote, p. 1')).toBeVisible({ timeout: 15_000 });
+
+  await page.goto(featureUrl);
+  await deleteLinkRow(page, '1987 survey report');
+  await deleteFeature(page, anchorName);
+});
