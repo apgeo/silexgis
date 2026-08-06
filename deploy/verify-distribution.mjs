@@ -8,9 +8,10 @@
 //   --down       stop and remove the stack after a successful verify (default: leave it up)
 //   --no-cache   build without the layer cache (a clean-room build)
 //
-// Exit code 0 = the web front answered, the API health endpoint answered, and the proxy in
-// front of the API accepts a body as large as the configured upload limit while still
-// refusing one that is genuinely too large; non-zero otherwise.
+// Exit code 0 = the web front answered, the API health endpoint answered, every module script
+// in the build is served as JavaScript, and the proxy in front of the API accepts a body as
+// large as the configured upload limit while still refusing one that is genuinely too large;
+// non-zero otherwise.
 
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -141,6 +142,46 @@ async function checkProxyBodyLimit(port, maxUploadBytes) {
   console.log('ok (refused)');
 }
 
+/**
+ * Every module script in the build is served as JavaScript.
+ *
+ * Strict MIME checking applies to module scripts and to nothing else: a browser refuses one
+ * whose declared type is not a JavaScript type, however valid the bytes are. The web server's
+ * bundled type map does not cover every extension a bundler emits, so a module can go out as
+ * `application/octet-stream` — and the failure appears **only in this image**, because the
+ * development server declares types for itself. Nothing shows up in a network log but a 200,
+ * and whatever the module was for silently never starts.
+ *
+ * The file list is read out of the running container rather than guessed, so a bundler that
+ * starts emitting a different extension is covered the day it does.
+ */
+async function checkModuleScriptTypes(port) {
+  process.stdout.write('Checking module scripts are served as JavaScript ');
+  const listed = execSync(
+    `${compose} exec -T web sh -c "find /usr/share/nginx/html -name '*.mjs' -type f"`,
+    { cwd: deployDir, encoding: 'utf8' },
+  );
+  const paths = listed
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace('/usr/share/nginx/html', ''))
+    .filter(Boolean);
+
+  if (paths.length === 0) {
+    console.log('ok (the build emits none)');
+    return;
+  }
+
+  for (const path of paths) {
+    const res = await fetch(`http://localhost:${port}${path}`);
+    const type = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+    if (!['text/javascript', 'application/javascript'].includes(type)) {
+      console.log('failed');
+      throw new Error(`${path} is served as "${type || 'nothing'}"; a browser will refuse it as a module`);
+    }
+  }
+  console.log(`ok (${paths.length})`);
+}
+
 async function main() {
   if (!existsSync(join(deployDir, '.env'))) {
     console.error('deploy/.env is missing — copy .env.example to .env and set the passwords first.');
@@ -160,6 +201,7 @@ async function main() {
   // The API applies migrations on first boot, so the health endpoint can lag the container.
   await waitFor(`http://localhost:${port}/health/ready`, { label: 'API (/health/ready via web proxy)' });
   await waitFor(`http://localhost:${port}/`, { label: 'web front (SPA index)' });
+  await checkModuleScriptTypes(port);
   await checkProxyBodyLimit(port, maxUploadBytes);
 
   console.log(`\n✅ Distribution is up and healthy at http://localhost:${port}`);
