@@ -92,6 +92,12 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<Tagging> Taggings => Set<Tagging>();
 
+    public DbSet<ResLinkRelationType> ResLinkRelationTypes => Set<ResLinkRelationType>();
+
+    public DbSet<ResLink> ResLinks => Set<ResLink>();
+
+    public DbSet<ResLinkMember> ResLinkMembers => Set<ResLinkMember>();
+
     public DbSet<PermissionGroup> PermissionGroups => Set<PermissionGroup>();
 
     public DbSet<PermissionGroupMember> PermissionGroupMembers => Set<PermissionGroupMember>();

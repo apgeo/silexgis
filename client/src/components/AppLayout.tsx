@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
+  ApartmentOutlined,
   CarOutlined,
   DashboardOutlined,
   DatabaseOutlined,
@@ -24,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { hasAccessAction, useCapabilities, useMe, type AccessDomainName } from '../api/hooks.ts';
 import { useAuth } from '../auth/auth.tsx';
+import { useIsFullAdmin } from './reslinks/permissions.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 
 /** Application shell: slim header + collapsible icon sidebar (off-canvas on phones). */
@@ -51,6 +53,10 @@ export default function AppLayout() {
   // route-level guard on purpose: the server refuses, the nav simply doesn't offer.
   const { data: capabilities } = useCapabilities();
   const can = (domain: AccessDomainName) => hasAccessAction(capabilities?.domains[domain], 'read');
+  // The relation vocabulary is not a resource domain — it is installation-wide wording
+  // every domain's links read from — so the rank, not a domain right, decides who is
+  // offered the page that authors it.
+  const isFullAdmin = useIsFullAdmin();
 
   // "settings" is listed so an unmatched path does not fall through to highlighting the map.
   // It matches no menu item, so nothing lights up — settings is not a sidebar destination.
@@ -58,7 +64,7 @@ export default function AppLayout() {
     'dashboard', 'caves', 'features', 'geodata', 'cabinets', 'documents', 'trip-logs',
     'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
-    'admin/feature-sets', 'admin/document-types', 'settings',
+    'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'settings',
   ] as const;
   const section = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
   // A document's own page is not a sidebar destination of its own — documents are reached
@@ -176,6 +182,9 @@ export default function AppLayout() {
               // what every document of that kind may say, which is administration.
               ...(hasAccessAction(capabilities?.domains.taxonomies, 'write')
                 ? [{ key: 'admin/document-types', icon: <ProfileOutlined />, label: t('nav.documentTypes') }]
+                : []),
+              ...(isFullAdmin
+                ? [{ key: 'admin/relation-types', icon: <ApartmentOutlined />, label: t('nav.relationTypes') }]
                 : []),
             ]}
           />

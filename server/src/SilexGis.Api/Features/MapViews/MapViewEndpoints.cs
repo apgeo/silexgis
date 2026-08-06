@@ -188,6 +188,10 @@ public static class MapViewEndpoints
             return ApiProblems.NotFound("map_view.not_found");
         }
 
+        // Resource-link members naming the view have no FK; they go with it.
+        await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.MapView && m.EntityId == view.Id)
+            .ExecuteDeleteAsync(ct);
         db.MapViews.Remove(view);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();

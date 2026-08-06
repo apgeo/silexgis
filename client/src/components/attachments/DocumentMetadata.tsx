@@ -17,6 +17,7 @@ import {
   type Visibility,
 } from '../../api/hooks.ts';
 import TextState from '../documents/TextState.tsx';
+import LinksSection from '../reslinks/LinksSection.tsx';
 import { parsePropertiesSchema, type SchemaField } from '../typedProperties/propertiesSchema.ts';
 
 const visibilities: Visibility[] = ['private', 'cavingGroup', 'authenticated', 'public'];
@@ -259,6 +260,18 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
           />
         </Field>
       ))}
+      {/* The document's own relations, kept behind a count because the panel is already
+          dense and most documents take part in none. This panel travels with an attachment
+          row on a feature's page, where the document has no section of its own; on the
+          document's own page the same links stand as a full card, and this stays a compact
+          echo of it rather than the only way in. */}
+      <LinksSection
+        entityType="document"
+        entityId={documentId}
+        variant="compact"
+        canAdd
+        entityTitle={title}
+      />
       <Button
         type="primary"
         size="small"

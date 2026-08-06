@@ -18,7 +18,8 @@
     "templates": "Texte mesaje",
     "permissionGroups": "Grupuri de permisiuni",
     "featureSets": "Seturi de elemente",
-    "documentTypes": "Tipuri de documente"
+    "documentTypes": "Tipuri de documente",
+    "relationTypes": "Relații între elemente"
   },
   "dashboard": {
     "title": "Panou de bord",
@@ -96,6 +97,8 @@
     "save": "Salvează",
     "ok": "OK",
     "cancel": "Anulează",
+    "edit": "Editează",
+    "back": "Înapoi",
     "saved": "Salvat.",
     "saveFailed": "Operația a eșuat. Încercați din nou.",
     "deleted": "Șters.",
@@ -317,7 +320,7 @@
     "primary": "Principal",
     "children": "Elemente conținute",
     "noChildren": "Niciun element conținut",
-    "links": "Legături",
+    "links": "Elemente înrudite",
     "editLinks": "Editează legăturile",
     "addLink": "Adaugă",
     "linkKind": "Tip legătură",
@@ -1168,6 +1171,29 @@
         "enum": "alegere"
       }
     },
+    "relationTypes": {
+      "title": "Relații între elemente",
+      "intro": "Formulările cu care sunt înregistrate legăturile dintre elemente. Relațiile care vin odată cu produsul sunt afișate în limba dumneavoastră și nu pot fi modificate — alte instalări citesc legăturile după ele. Ce adăugați aici aparține acestei instalări și este afișat exact așa cum îl scrieți.",
+      "add": "Adaugă o relație",
+      "edit": "Editare relație",
+      "delete": "Șterge",
+      "deleteConfirm": "Ștergeți această relație? Legăturile deja înregistrate cu ea o păstrează, așa că poate fi ștearsă abia când nu mai există niciuna.",
+      "name": "Se citește ca",
+      "nameHint": "Cum se citește relația dinspre elementul de la care pornește, de exemplu „Conține” sau „Cartat de”.",
+      "code": "Cod",
+      "codeHint": "Numele scurt sub care este stocată și schimbată această relație. Păstrați-l neschimbat odată ce legăturile o folosesc.",
+      "directed": "Se citește într-un singur sens",
+      "directedHint": "Activat când cele două capete spun lucruri diferite — unul îl conține pe celălalt, unul îl documentează pe celălalt. Dezactivat când ambele capete se citesc la fel, ca „Vecin cu”.",
+      "inverseName": "În sens invers",
+      "inverseNameHint": "Cum se citește relația dinspre celălalt capăt, de exemplu „Conținut în”.",
+      "bothWays": "Se citește la fel din ambele capete",
+      "description": "Descriere",
+      "sortOrder": "Ordine",
+      "source": "De unde provine",
+      "seeded": "Vine cu produsul",
+      "custom": "Adăugată aici",
+      "seededReadOnly": "Nu poate fi editată"
+    },
     "templates": {
       "title": "Texte mesaje",
       "intro": "Textul a tot ce trimite aplicația. Dacă îl lăsați neschimbat, urmează produsul; dacă îl rescrieți, se folosește versiunea dumneavoastră.",
@@ -1246,5 +1272,204 @@
     "sharedNotFound": "Acest link partajat nu există sau a fost revocat.",
     "loginRequired": "Autentifică-te pentru a vedea această înregistrare partajată.",
     "signIn": "Autentificare"
+  },
+  "resLinks": {
+    "titleCount": "Elemente legate ({{count}})",
+    "incomplete": "Incompletă",
+    "incompleteHint": "Doar un element al acestei legături îți este vizibil. O legătură spune ceva abia când unește două sau mai multe — adaugă încă un element, dacă există unul de adăugat.",
+    "addAction": "Leagă…",
+    "moreMembers": "+{{count}}",
+    "rowActions": "Acțiuni pentru legătură",
+    "openPage": "Deschide pagina legăturii",
+    "copyUrl": "Copiază adresa legăturii",
+    "urlCopied": "Adresa legăturii a fost copiată",
+    "edit": "Editează legătura",
+    "delete": "Șterge legătura",
+    "deleteConfirm": "Ștergi această legătură? Nimic din ce leagă nu se șterge odată cu ea.",
+    "restricted": "Element restricționat",
+    "restrictedHint": "Legătura numește ceva ce nu ai voie să citești.",
+    "mainMember": "Membru principal",
+    "mainMemberPlaceholder": "Elementul din care se citește relația",
+    "showingFirst": "Se afișează primele {{count}} din {{total}}.",
+    "targetTypes": {
+      "feature": "Element",
+      "document": "Document",
+      "tripLog": "Jurnal de tură",
+      "caver": "Speolog",
+      "cavingGroup": "Grup de speologie",
+      "mapView": "Vedere salvată",
+      "surveyModel": "Model topo 3D",
+      "geofile": "Fișier de geodate",
+      "cabinet": "Dulap",
+      "unknown": "Element"
+    },
+    "anchors": {
+      "part": "parte",
+      "quote": "citat",
+      "quoteOnPage": "citat, p. {{page}}",
+      "page": "p. {{page}}",
+      "pageRange": "p. {{from}}–{{to}}",
+      "region": "regiune",
+      "station": "stația {{station}}",
+      "stationRange": "stațiile {{from}}→{{to}}",
+      "survey": "poligonala {{survey}}",
+      "surveyRange": "poligonalele {{from}}→{{to}}",
+      "modelPoint": "punct",
+      "waypoint": "punctul {{index}}",
+      "waypointNamed": "punctul {{name}}",
+      "waypointRange": "punctele {{from}}–{{to}}"
+    },
+    "anchorStates": {
+      "reanchored": "Măsurat pe o versiune mai veche, regăsit în cea curentă",
+      "degraded": "Măsurat pe o versiune mai veche — arătat pe întreaga resursă",
+      "unresolvable": "Această parte nu mai există în resursă"
+    },
+    "relations": {
+      "unspecified": "În legătură cu",
+      "same-object": {
+        "name": "Același obiect cu"
+      },
+      "related-to": {
+        "name": "În legătură cu"
+      },
+      "contains": {
+        "name": "Conține",
+        "inverse": "Conținut în"
+      },
+      "documents": {
+        "name": "Documentat de",
+        "inverse": "Documentează"
+      },
+      "derived-from": {
+        "name": "Sursă pentru",
+        "inverse": "Derivat din"
+      },
+      "adjacent-to": {
+        "name": "Adiacent cu"
+      },
+      "duplicate-of": {
+        "name": "Original al",
+        "inverse": "Duplicat al"
+      },
+      "needs-clarification": {
+        "name": "Necesită clarificare"
+      }
+    },
+    "members": "Elemente",
+    "noVisibleMembers": "Nimic din această legătură nu îți este vizibil.",
+    "memberType": "Tipul elementului",
+    "memberSource": "Care element",
+    "pickExisting": "Alege ceva ce există deja",
+    "newPointOnMap": "Marchează un punct nou pe hartă",
+    "target": "Element",
+    "searchPlaceholder": "Scrie cel puțin două litere pentru căutare…",
+    "anchorKind": "Spre ce arată",
+    "anchorKindPending": "Indicarea acestui tip de fragment vine odată cu vizualizatorul care îl poate selecta.",
+    "note": "Notă",
+    "notePlaceholder": "De ce stau împreună (opțional)",
+    "markAsMain": "Acesta este elementul din care se citește relația",
+    "mainNeedsDirected": "Doar o relație care se citește într-un singur sens are un element de pornire.",
+    "mainAlreadySet": "Această legătură se citește deja dintr-unul din elementele ei; schimbă asta în pagina legăturii.",
+    "newMember": "elementul nou",
+    "thisItem": "acest element",
+    "createTitle": "Înregistrează o legătură",
+    "addMemberTitle": "Adaugă un element",
+    "relation": "Relație",
+    "relationPlaceholder": "Cum sunt legate (opțional)",
+    "directionNeedsMain": "Această relație se citește într-un singur sens; marchează elementul din care pornește.",
+    "directionPreview": "De la {{main}}: {{forward}} · în sens invers: {{inverse}}",
+    "description": "Descriere",
+    "descriptionPlaceholder": "Ce consemnează această legătură (opțional)",
+    "editDetails": "Editează legătura",
+    "doneEditing": "Gata",
+    "linkAddress": "Adresă",
+    "created": "Consemnată",
+    "createdByYou": "{{when}}, de tine",
+    "createdBy": "{{when}}, de {{who}}",
+    "openTarget": "Deschide",
+    "setMain": "Citește relația din acesta",
+    "moveUp": "Mută mai sus",
+    "moveDown": "Mută mai jos",
+    "removeMember": "Scoate din legătură",
+    "removeMemberConfirm": "Scoți acest element din legătură?",
+    "anchorKinds": {
+      "whole": "Întregul",
+      "textRange": "Un fragment de text",
+      "page": "O pagină",
+      "pageRange": "Un interval de pagini",
+      "imageRegion": "O regiune dintr-o imagine",
+      "timePoint": "Un moment din înregistrare",
+      "timeRange": "Un interval din înregistrare",
+      "modelStation": "O stație topografică",
+      "modelStationRange": "Un șir de stații topografice",
+      "modelSurvey": "O ridicare topografică",
+      "modelSurveyRange": "Un șir de ridicări topografice",
+      "modelPoint": "Un punct din model",
+      "waypoint": "Un punct de traseu",
+      "waypointRange": "Un șir de puncte de traseu"
+    },
+    "anchorEditors": {
+      "page": "Pagina",
+      "fromPage": "Prima pagină",
+      "toPage": "Ultima pagină",
+      "seconds": "Secunde",
+      "start": "De la (secunde)",
+      "end": "Până la (secunde)",
+      "pageRequired": "Dă un număr de pagină de cel puțin 1.",
+      "pageRangeRequired": "Dă ambele numere de pagină, fiecare de cel puțin 1.",
+      "pageRangeBackwards": "Ultima pagină nu poate fi înaintea primei.",
+      "timeRequired": "Dă un timp în secunde, cel puțin 0.",
+      "timeRangeRequired": "Dă ambele timpuri în secunde, fiecare cel puțin 0.",
+      "timeRangeBackwards": "Sfârșitul trebuie să fie după început; pentru o clipă folosește un singur moment."
+    },
+    "point": {
+      "title": "Punct nou",
+      "name": "Nume",
+      "namePlaceholder": "Nume pentru acest punct (opțional)",
+      "altitude": "Altitudine (m)",
+      "altitudePlaceholder": "Altitudinea în metri (opțional)",
+      "visibility": "Cine îl poate vedea",
+      "visibilityDefault": "Implicit",
+      "audienceDefaultGroup": "Implicit, acest punct va fi vizibil membrilor {{group}}. Poți schimba asta aici, sau mai târziu editând punctul.",
+      "audienceDefaultAuthenticated": "Implicit, acest punct va fi vizibil tuturor utilizatorilor autentificați. Poți schimba asta aici, sau mai târziu editând punctul.",
+      "audienceUnknown": "Nu s-a putut afla cui i-ar fi vizibil implicit acest punct. Alege mai sus o audiență pentru a fi sigur.",
+      "audience": {
+        "private": "Doar tu vei putea vedea acest punct.",
+        "cavingGroup": "Membrii clubului tău speologic vor vedea acest punct — asta funcționează dacă faci parte din exact un club; altfel doar tu îl vei vedea până când numești un club editând punctul.",
+        "authenticated": "Toți utilizatorii autentificați vor putea vedea acest punct.",
+        "public": "Oricine va putea vedea acest punct, inclusiv vizitatorii neautentificați."
+      }
+    },
+    "problems": {
+      "signedOut": "Sesiunea ta s-a încheiat. Autentifică-te și încearcă din nou.",
+      "forbidden": "Nu ai voie să faci asta.",
+      "createForbidden": "Nu ai voie să creezi elemente aici.",
+      "validationFailed": "Ceva din formular nu este acceptat. Verifică valorile și încearcă din nou.",
+      "linkGone": "Această legătură nu mai există.",
+      "codeUnresolved": "Această adresă de legătură nu duce nicăieri.",
+      "typeUnknown": "Aplicația a cerut un tip de element pe care serverul nu îl cunoaște.",
+      "targetGone": "Acel element nu poate fi găsit, sau nu ai dreptul să îl citești.",
+      "targetInvalid": "Acel element nu poate face parte dintr-o legătură.",
+      "typeNotLinkable": "Acest tip de element nu poate face parte dintr-o legătură.",
+      "anchorKindNotAllowed": "Acel tip de element nu poate fi indicat în acest fel.",
+      "anchorInvalid": "Fragmentul indicat nu este descris într-un fel acceptat de server.",
+      "anchorFileInvalid": "Fișierul spre care arată nu aparține acelui element.",
+      "anchorPinRequired": "Indicarea unei regiuni are nevoie de fișierul față de care este măsurată.",
+      "memberLimit": "Această legătură are deja atâtea elemente câte poate ține.",
+      "lastMember": "O legătură păstrează cel puțin un element; șterge legătura în schimb.",
+      "mainRequired": "O relație care se citește într-un singur sens are nevoie de elementul din care pornește.",
+      "mainNotSingle": "Exact un element poate fi cel din care se citește relația.",
+      "mainNotAllowed": "Această relație se citește la fel în ambele sensuri, deci niciun element nu este cel de pornire.",
+      "mainNotAMember": "Elementul din care ar trebui citită relația nu face parte din această legătură.",
+      "memberGone": "Acel element nu mai face parte din această legătură.",
+      "relationUnknown": "Acea relație nu este una oferită de această instalare.",
+      "relationGone": "Acea relație nu mai există.",
+      "duplicateWhole": "Această legătură numește deja acel element în întregime.",
+      "geoPointUnavailable": "Punctele nu pot fi create aici: tipul generic de element nu este instalat.",
+      "relationCodeTaken": "O altă relație folosește deja acest cod.",
+      "relationSeededImmutable": "O relație care vine cu produsul își păstrează codul și felul în care se citește.",
+      "relationSeededUndeletable": "O relație care vine cu produsul nu poate fi ștearsă.",
+      "relationInUse": "Există deja legături înregistrate cu această relație, așa că nu poate fi modificată astfel și nici ștearsă."
+    }
   }
 }

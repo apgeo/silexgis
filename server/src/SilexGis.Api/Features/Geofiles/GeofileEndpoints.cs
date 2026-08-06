@@ -245,9 +245,14 @@ public static class GeofileEndpoints
         }
 
         // Polymorphic attachment rows have no FK to the geofile — clean them up in the
-        // same transaction as the entity.
+        // same transaction as the entity. Resource-link members follow the same
+        // convention: a dead target must not linger in links as a permanent
+        // restricted-looking member.
         await db.Attachments
             .Where(a => a.EntityType == AttachedEntityType.Geofile && a.EntityId == geofile.Id)
+            .ExecuteDeleteAsync(ct);
+        await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.Geofile && m.EntityId == geofile.Id)
             .ExecuteDeleteAsync(ct);
 
         // Imported features cascade with the geofile row; the upload goes explicitly. The

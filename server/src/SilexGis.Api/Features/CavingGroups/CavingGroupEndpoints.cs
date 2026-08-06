@@ -253,6 +253,10 @@ public static class CavingGroupEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         db.AccessEntries.RemoveRange(anchoredEntries);
         db.PermissionGroupMembers.RemoveRange(trusteeRows);
+        // Resource-link members naming the group have no FK; they go with it.
+        await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.CavingGroup && m.EntityId == id)
+            .ExecuteDeleteAsync(ct);
         db.CavingGroups.Remove(cavingGroup);
         await db.SaveChangesAsync(ct);
         if (!await fullAdminGuard.AnyLiveFullAdminAsync(ct))

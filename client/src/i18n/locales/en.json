@@ -18,7 +18,8 @@
     "templates": "Message texts",
     "permissionGroups": "Permission groups",
     "featureSets": "Feature sets",
-    "documentTypes": "Document kinds"
+    "documentTypes": "Document kinds",
+    "relationTypes": "Link relations"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -96,6 +97,8 @@
     "save": "Save",
     "ok": "OK",
     "cancel": "Cancel",
+    "edit": "Edit",
+    "back": "Back",
     "saved": "Saved.",
     "saveFailed": "The operation failed. Please try again.",
     "deleted": "Deleted.",
@@ -317,7 +320,7 @@
     "primary": "Primary",
     "children": "Contained features",
     "noChildren": "No contained features",
-    "links": "Links",
+    "links": "Related features",
     "editLinks": "Edit links",
     "addLink": "Add",
     "linkKind": "Link kind",
@@ -1168,6 +1171,29 @@
         "enum": "choice"
       }
     },
+    "relationTypes": {
+      "title": "Link relations",
+      "intro": "The wording links between items are recorded with. The relations that ship with the product are shown in your language and cannot be changed — other installations read links by them. Anything you add here belongs to this installation and is shown exactly as you write it.",
+      "add": "Add a relation",
+      "edit": "Edit relation",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this relation? Links already recorded with it keep it, so it can only go once none are left.",
+      "name": "Reads as",
+      "nameHint": "How the relation reads from the item it starts at, for example \"Contains\" or \"Surveyed by\".",
+      "code": "Code",
+      "codeHint": "The short name this relation is stored and exchanged under. Keep it stable once links use it.",
+      "directed": "Reads one way",
+      "directedHint": "On when the two ends say different things — one contains the other, one documents the other. Off when both ends read the same, like \"Adjacent to\".",
+      "inverseName": "The other way round",
+      "inverseNameHint": "How the relation reads from the other end, for example \"Contained in\".",
+      "bothWays": "Reads the same from both ends",
+      "description": "Description",
+      "sortOrder": "Sort order",
+      "source": "Where it comes from",
+      "seeded": "Ships with the product",
+      "custom": "Added here",
+      "seededReadOnly": "Not editable"
+    },
     "templates": {
       "title": "Message texts",
       "intro": "The wording of everything the application sends. Leave one alone and it follows the product; rewrite it and your version is used.",
@@ -1246,5 +1272,204 @@
     "sharedNotFound": "This shared link does not exist or was revoked.",
     "loginRequired": "Sign in to view this shared record.",
     "signIn": "Sign in"
+  },
+  "resLinks": {
+    "titleCount": "Linked items ({{count}})",
+    "incomplete": "Incomplete",
+    "incompleteHint": "Only one item of this link is visible to you. A link says something once it connects two or more — add another item if there is one to add.",
+    "addAction": "Link…",
+    "moreMembers": "+{{count}}",
+    "rowActions": "Link actions",
+    "openPage": "Open link page",
+    "copyUrl": "Copy link address",
+    "urlCopied": "Link address copied",
+    "edit": "Edit link",
+    "delete": "Delete link",
+    "deleteConfirm": "Delete this link? Nothing it connects is deleted with it.",
+    "restricted": "Restricted item",
+    "restrictedHint": "This link names something you may not read.",
+    "mainMember": "Main member",
+    "mainMemberPlaceholder": "Which item the relation reads from",
+    "showingFirst": "Showing the first {{count}} of {{total}}.",
+    "targetTypes": {
+      "feature": "Feature",
+      "document": "Document",
+      "tripLog": "Trip log",
+      "caver": "Caver",
+      "cavingGroup": "Caving group",
+      "mapView": "Saved view",
+      "surveyModel": "3D survey model",
+      "geofile": "Geodata file",
+      "cabinet": "Cabinet",
+      "unknown": "Item"
+    },
+    "anchors": {
+      "part": "part",
+      "quote": "quote",
+      "quoteOnPage": "quote, p. {{page}}",
+      "page": "p. {{page}}",
+      "pageRange": "pp. {{from}}–{{to}}",
+      "region": "region",
+      "station": "station {{station}}",
+      "stationRange": "stations {{from}}→{{to}}",
+      "survey": "survey {{survey}}",
+      "surveyRange": "surveys {{from}}→{{to}}",
+      "modelPoint": "point",
+      "waypoint": "waypoint {{index}}",
+      "waypointNamed": "waypoint {{name}}",
+      "waypointRange": "waypoints {{from}}–{{to}}"
+    },
+    "anchorStates": {
+      "reanchored": "Measured against an older version, found again in the current one",
+      "degraded": "Measured against an older version — shown on the whole resource",
+      "unresolvable": "This part is no longer in the resource"
+    },
+    "relations": {
+      "unspecified": "Related",
+      "same-object": {
+        "name": "Same object as"
+      },
+      "related-to": {
+        "name": "Related to"
+      },
+      "contains": {
+        "name": "Contains",
+        "inverse": "Contained in"
+      },
+      "documents": {
+        "name": "Documented by",
+        "inverse": "Documents"
+      },
+      "derived-from": {
+        "name": "Source of",
+        "inverse": "Derived from"
+      },
+      "adjacent-to": {
+        "name": "Adjacent to"
+      },
+      "duplicate-of": {
+        "name": "Original of",
+        "inverse": "Duplicate of"
+      },
+      "needs-clarification": {
+        "name": "Needs clarification"
+      }
+    },
+    "members": "Members",
+    "noVisibleMembers": "Nothing in this link is visible to you.",
+    "memberType": "Kind of item",
+    "memberSource": "Which item",
+    "pickExisting": "Pick something that already exists",
+    "newPointOnMap": "Mark a new point on the map",
+    "target": "Item",
+    "searchPlaceholder": "Type at least two letters to search…",
+    "anchorKind": "What it points at",
+    "anchorKindPending": "Pointing at this kind of part arrives with the viewer that can select it.",
+    "note": "Note",
+    "notePlaceholder": "Why these belong together (optional)",
+    "markAsMain": "This is the item the relation reads from",
+    "mainNeedsDirected": "Only a relation that reads one way has an item it reads from.",
+    "mainAlreadySet": "This link already reads from one of its items; change that on the link page.",
+    "newMember": "the new item",
+    "thisItem": "this item",
+    "createTitle": "Record a link",
+    "addMemberTitle": "Add an item",
+    "relation": "Relation",
+    "relationPlaceholder": "How they are related (optional)",
+    "directionNeedsMain": "This relation reads one way; mark which item it reads from.",
+    "directionPreview": "From {{main}}: {{forward}} · the other way round: {{inverse}}",
+    "description": "Description",
+    "descriptionPlaceholder": "What this link records (optional)",
+    "editDetails": "Edit this link",
+    "doneEditing": "Done",
+    "linkAddress": "Address",
+    "created": "Recorded",
+    "createdByYou": "{{when}}, by you",
+    "createdBy": "{{when}}, by {{who}}",
+    "openTarget": "Open",
+    "setMain": "Read the relation from this one",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "removeMember": "Remove from link",
+    "removeMemberConfirm": "Remove this item from the link?",
+    "anchorKinds": {
+      "whole": "The whole thing",
+      "textRange": "A passage of text",
+      "page": "A page",
+      "pageRange": "A range of pages",
+      "imageRegion": "A region of an image",
+      "timePoint": "A moment in the recording",
+      "timeRange": "A stretch of the recording",
+      "modelStation": "A survey station",
+      "modelStationRange": "A run of survey stations",
+      "modelSurvey": "A survey",
+      "modelSurveyRange": "A run of surveys",
+      "modelPoint": "A point in the model",
+      "waypoint": "A waypoint",
+      "waypointRange": "A run of waypoints"
+    },
+    "anchorEditors": {
+      "page": "Page",
+      "fromPage": "First page",
+      "toPage": "Last page",
+      "seconds": "Seconds",
+      "start": "From (seconds)",
+      "end": "To (seconds)",
+      "pageRequired": "Give a page number of 1 or more.",
+      "pageRangeRequired": "Give both page numbers, each 1 or more.",
+      "pageRangeBackwards": "The last page cannot come before the first.",
+      "timeRequired": "Give a time in seconds, 0 or more.",
+      "timeRangeRequired": "Give both times in seconds, each 0 or more.",
+      "timeRangeBackwards": "The end must come after the start; use a single moment for an instant."
+    },
+    "point": {
+      "title": "New point",
+      "name": "Name",
+      "namePlaceholder": "Name for this point (optional)",
+      "altitude": "Altitude (m)",
+      "altitudePlaceholder": "Altitude in metres (optional)",
+      "visibility": "Who can see it",
+      "visibilityDefault": "Default",
+      "audienceDefaultGroup": "By default this point will be visible to members of {{group}}. You can change it here, or later by editing the point.",
+      "audienceDefaultAuthenticated": "By default this point will be visible to everyone signed in. You can change it here, or later by editing the point.",
+      "audienceUnknown": "Who this point would be visible to by default could not be checked. Choose an audience above to be certain.",
+      "audience": {
+        "private": "Only you will be able to see this point.",
+        "cavingGroup": "Members of your caving club will see this point — this works when you belong to exactly one club; otherwise only you will see it until you name a club by editing the point.",
+        "authenticated": "Everyone signed in will be able to see this point.",
+        "public": "Anyone will be able to see this point, including visitors who are not signed in."
+      }
+    },
+    "problems": {
+      "signedOut": "You are signed out. Sign in and try again.",
+      "forbidden": "You are not allowed to do that.",
+      "createForbidden": "You are not allowed to create features here.",
+      "validationFailed": "Something in the form is not accepted. Check the values and try again.",
+      "linkGone": "This link no longer exists.",
+      "codeUnresolved": "This link address does not lead anywhere.",
+      "typeUnknown": "This client asked for a kind of item the server does not know.",
+      "targetGone": "That item cannot be found, or you may not read it.",
+      "targetInvalid": "That item cannot take part in a link.",
+      "typeNotLinkable": "This kind of item cannot take part in a link.",
+      "anchorKindNotAllowed": "That kind of item cannot be pointed at that way.",
+      "anchorInvalid": "The part you pointed at is not described in a way the server accepts.",
+      "anchorFileInvalid": "The file this points into does not belong to that item.",
+      "anchorPinRequired": "Pointing at a region needs the file it is measured against.",
+      "memberLimit": "This link already holds as many items as it can.",
+      "lastMember": "A link keeps at least one item; delete the link instead.",
+      "mainRequired": "A relation that reads one way needs the item it reads from.",
+      "mainNotSingle": "Exactly one item can be the one the relation reads from.",
+      "mainNotAllowed": "This relation reads the same both ways, so no item is the one it reads from.",
+      "mainNotAMember": "The item the relation should read from is not in this link.",
+      "memberGone": "That item is no longer part of this link.",
+      "relationUnknown": "That relation is not one this installation offers.",
+      "relationGone": "That relation no longer exists.",
+      "duplicateWhole": "This link already names that item as a whole.",
+      "geoPointUnavailable": "Points cannot be created here: the generic feature kind is not installed.",
+      "relationCodeTaken": "Another relation already uses that code.",
+      "relationSeededImmutable": "A relation that ships with the product keeps its code and the way it reads.",
+      "relationSeededUndeletable": "A relation that ships with the product cannot be deleted.",
+      "relationInUse": "Links already record this relation, so it cannot be changed that way or deleted."
+    }
   }
 }

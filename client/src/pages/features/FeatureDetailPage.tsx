@@ -27,6 +27,7 @@ import FeatureEditModal, { type FeatureAttributeValues } from '../../components/
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import HistoryPanel from '../../components/history/HistoryPanel.tsx';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
+import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
 import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
@@ -327,6 +328,7 @@ export default function FeatureDetailPage() {
 
       <HierarchyCard featureId={id} canEdit={canEdit} />
       <LinksCard featureId={id} canEdit={canEdit} />
+      <LinksSection entityType="feature" entityId={id} canAdd entityTitle={displayName} />
 
       {envelope.kind === 'generic' && (
         <>

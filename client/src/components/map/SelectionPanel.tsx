@@ -29,6 +29,7 @@ import {
 } from '../../stores/workspaceStore.ts';
 import HistoryPanel, { type HistoryRestore } from '../history/HistoryPanel.tsx';
 import { applyFeatureRestore } from '../history/historyModel.ts';
+import LinksSection from '../reslinks/LinksSection.tsx';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
 
@@ -192,6 +193,19 @@ function CaveCard({ selection }: { selection: EntranceSelection | CaveSelection 
           </Button>
         )}
       </Flex>
+      {/* An entrance is a feature in its own right, so the panel links the thing that was
+          actually clicked: a link recorded from an entrance names that entrance, not the
+          cave it belongs to. The id comes from the selection rather than from the loaded
+          entrance, so which entity is being linked never depends on a list arriving. */}
+      <LinksSection
+        entityType="feature"
+        entityId={selection.kind === 'entrance' ? selection.entranceId : cave.id}
+        variant="compact"
+        canAdd
+        entityTitle={
+          selection.kind === 'entrance' ? (entrance?.name ?? t('features.unnamed')) : cave.name
+        }
+      />
     </div>
   );
 }
@@ -372,6 +386,15 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
           </>
         )}
       </Flex>
+      <LinksSection
+        entityType="feature"
+        entityId={feature.id}
+        variant="compact"
+        canAdd
+        // The same name this panel puts at its top: a nameless feature still has to read as
+        // something in the sentence a link is composed from.
+        entityTitle={feature.name ?? featureType?.name ?? t('features.unnamed')}
+      />
       <HistoryPanel
         entityType="feature"
         entityId={feature.id}

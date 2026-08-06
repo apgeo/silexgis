@@ -322,6 +322,18 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
                 }
             }
 
+            // Resource-link members share the pair convention (their feature targets have
+            // a real cascade FK, so only the typed pair needs the net).
+            foreach (var orphan in await db.ResLinkMembers
+                         .Where(m => m.EntityType == type)
+                         .Select(m => new { m.Id, m.EntityId })
+                         .ToListAsync(ct))
+            {
+                if (!ids.Contains(orphan.EntityId!.Value))
+                {
+                    problems.Add(new IntegrityProblem("res_link_member_orphan", orphan.Id, $"{type} {orphan.EntityId} missing"));
+                }
+            }
         }
 
         await CheckAsync(AttachedEntityType.TripLog, db.TripLogs.Select(x => x.Id));
@@ -330,6 +342,10 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
         await CheckAsync(AttachedEntityType.GeoreferencedMap, db.GeoreferencedMaps.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.MapView, db.MapViews.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.StoredFile, db.StoredFiles.Select(x => x.Id));
+        await CheckAsync(AttachedEntityType.Document, db.Documents.Select(x => x.Id));
+        await CheckAsync(AttachedEntityType.SurveyModel, db.SurveyModels.Select(x => x.Id));
+        await CheckAsync(AttachedEntityType.Caver, db.Cavers.Select(x => x.Id));
+        await CheckAsync(AttachedEntityType.Cabinet, db.Cabinets.Select(x => x.Id));
 
         return problems;
     }

@@ -274,7 +274,12 @@ public static class SurveyModelEndpoints
             return stale;
         }
 
-        // The stored file is immutable and may be referenced elsewhere; only the model row goes.
+        // The stored file is immutable and may be referenced elsewhere; only the model
+        // row goes — plus the resource-link members that named it, which have no FK to
+        // clean themselves up by.
+        await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.SurveyModel && m.EntityId == model.Id)
+            .ExecuteDeleteAsync(ct);
         db.SurveyModels.Remove(model);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();

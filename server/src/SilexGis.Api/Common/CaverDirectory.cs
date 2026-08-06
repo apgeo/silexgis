@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Profiles;
@@ -19,6 +20,14 @@ namespace SilexGis.Api.Common;
 /// </remarks>
 public static class CaverDirectory
 {
+    /// <summary>
+    /// Who keeps the roster: Write over the caver domain. One definition on purpose —
+    /// every disclosure of an account-less person's contact details or of roster
+    /// remarks, wherever a caver surfaces, defers to this and never re-derives it.
+    /// </summary>
+    public static bool CanKeepRoster(AccessContext? ctx) =>
+        AccessEvaluator.Decide(ctx, AccessDomain.Cavers, AccessAction.Write, null).Allowed;
+
     /// <summary>Display labels for roster rows, trip participants and credits.</summary>
     public static async Task<Dictionary<Guid, string>> ResolveLabelsAsync(
         SilexGisDbContext db, UserContext? user, IEnumerable<Guid> caverIds, CancellationToken ct)

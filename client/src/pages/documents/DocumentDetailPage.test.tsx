@@ -70,6 +70,32 @@ let fileInfo = {
 
 let rights = 'read, write';
 
+// One link naming this document and a cave, so the page's own links section has something
+// to render. The section itself is exercised by its own tests; here it only has to prove
+// that this page carries it.
+const links = [
+  {
+    id: 'l1',
+    shortCode: 'Ab3xY9Zq',
+    relationType: {
+      id: 1, code: 'documents', name: 'Documents', description: null, sortOrder: 40,
+      directed: true, inverseName: 'Documented by', seeded: true,
+    },
+    description: null,
+    createdBy: 'someone-else',
+    createdAt: '2026-02-03T11:00:00Z',
+    updatedAt: '2026-02-03T11:00:00Z',
+    members: [
+      { id: 'm1', targetType: 'document', targetId: 'doc-1', isMain: true, sortOrder: 0,
+        note: null, anchorKind: 'whole', anchor: null, anchorFileId: null, anchorState: 'exact',
+        display: { title: 'Ridicare topografică', subtitle: null, route: null, thumbnailUrl: null } },
+      { id: 'm2', targetType: 'feature', targetId: 'f1', isMain: false, sortOrder: 1,
+        note: null, anchorKind: 'whole', anchor: null, anchorFileId: null, anchorState: 'exact',
+        display: { title: 'Peștera Demo Mare', subtitle: null, route: '/caves/f1', thumbnailUrl: null } },
+    ],
+  },
+];
+
 vi.mock('../../api/hooks.ts', () => ({
   useDocument: () => ({ data: doc, isPending: false, isError: false }),
   useFile: () => ({ data: fileInfo }),
@@ -80,6 +106,10 @@ vi.mock('../../api/hooks.ts', () => ({
   useCabinets: () => ({ data: cabinets }),
   useCan: (_domain: string, action: string) =>
     rights.split(',').map((a) => a.trim()).includes(action),
+  useResLinksForTarget: () => ({ data: { items: links, page: 1, pageSize: 200, totalItems: 1 } }),
+  useDeleteResLink: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useMe: () => ({ data: { id: 'me' } }),
+  useMyPermissionGroups: () => ({ data: [] }),
 }));
 
 // The properties panel and the version chain are exercised by their own tests; here they
@@ -172,6 +202,24 @@ describe('DocumentDetailPage', () => {
     expect(screen.getByText('versions-readonly')).toBeInTheDocument();
     // Reading is untouched by not being able to write.
     expect(screen.getByRole('heading', { name: 'Ridicare topografică' })).toBeInTheDocument();
+  });
+
+  it('carries the document\'s links as a section of its own, for a reader who cannot write', () => {
+    // The properties panel is write-gated and is the other place these links appear; with
+    // that right withheld, the section on the page is the only one left — which is exactly
+    // the reader this assertion is about.
+    rights = 'read';
+    renderPage();
+
+    expect(screen.queryByText('document-properties')).not.toBeInTheDocument();
+    expect(screen.getByText('Linked items (1)')).toBeInTheDocument();
+    // The other end is named and reachable; the document itself is not repeated as a chip
+    // on its own page.
+    expect(screen.getByRole('link', { name: /Peștera Demo Mare/ })).toHaveAttribute(
+      'href',
+      '/caves/f1',
+    );
+    expect(screen.getByText('Documented by')).toBeInTheDocument();
   });
 
   it('shows a photo from a rendering, and never the original, when the caller may not place it', () => {

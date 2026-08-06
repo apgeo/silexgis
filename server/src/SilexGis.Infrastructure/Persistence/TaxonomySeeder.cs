@@ -39,6 +39,7 @@ public static class TaxonomySeeder
             ("other", "Other"));
 
         await SeedLinkKindsAsync(db, ct);
+        await SeedResLinkRelationTypesAsync(db, ct);
         await SeedFeatureTypesAsync(db, ct);
         await SeedDocumentTypesAsync(db, ct);
 
@@ -84,6 +85,31 @@ public static class TaxonomySeeder
             if (!existing.Contains(code))
             {
                 db.LinkKinds.Add(new LinkKind { Code = code, Name = name, Locating = locating, SortOrder = sort });
+            }
+        }
+    }
+
+    // Directed is semantics-bearing: a directed relation requires exactly one main member
+    // once a link has two or more, an undirected one forbids the marker. The rows come
+    // from the shared seed list so the admin surface refusing to touch seeded codes and
+    // this insert can never disagree about which codes those are.
+    private static async Task SeedResLinkRelationTypesAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var existing = await db.ResLinkRelationTypes.Select(x => x.Code).ToHashSetAsync(ct);
+        var sort = 0;
+        foreach (var seed in Domain.ResLinks.ResLinkRelationTypeSeeds.All)
+        {
+            sort += 10;
+            if (!existing.Contains(seed.Code))
+            {
+                db.ResLinkRelationTypes.Add(new ResLinkRelationType
+                {
+                    Code = seed.Code,
+                    Name = seed.Name,
+                    Directed = seed.Directed,
+                    InverseName = seed.InverseName,
+                    SortOrder = sort,
+                });
             }
         }
     }

@@ -33,8 +33,10 @@ const MessageTemplatesPage = lazy(() => import('./pages/admin/MessageTemplatesPa
 const PermissionGroupsPage = lazy(() => import('./pages/admin/permissionGroups/PermissionGroupsPage.tsx'));
 const FeatureSetsPage = lazy(() => import('./pages/admin/FeatureSetsPage.tsx'));
 const DocumentTypesPage = lazy(() => import('./pages/admin/DocumentTypesPage.tsx'));
+const RelationTypesPage = lazy(() => import('./pages/admin/RelationTypesPage.tsx'));
 const CabinetsPage = lazy(() => import('./pages/documents/CabinetsPage.tsx'));
 const DocumentDetailPage = lazy(() => import('./pages/documents/DocumentDetailPage.tsx'));
+const LinkPage = lazy(() => import('./pages/links/LinkPage.tsx'));
 const CavingGroupsPage = lazy(() => import('./pages/cavingGroups/CavingGroupsPage.tsx'));
 const CaversPage = lazy(() => import('./pages/cavers/CaversPage.tsx'));
 const SharedViewPage = lazy(() => import('./pages/SharedViewPage.tsx'));
@@ -92,8 +94,11 @@ const router = createBrowserRouter([
           { path: '/admin/permission-groups', element: <Loadable><PermissionGroupsPage /></Loadable> },
           { path: '/admin/feature-sets', element: <Loadable><FeatureSetsPage /></Loadable> },
           { path: '/admin/document-types', element: <Loadable><DocumentTypesPage /></Loadable> },
+          { path: '/admin/relation-types', element: <Loadable><RelationTypesPage /></Loadable> },
           { path: '/cabinets', element: <Loadable><CabinetsPage /></Loadable> },
           { path: '/documents/:id', element: <Loadable><DocumentDetailPage /></Loadable> },
+          // A link's own page, reached by the short code someone pasted into a chat.
+          { path: '/links/:code', element: <Loadable><LinkPage /></Loadable> },
           { path: '/caving-groups', element: <Loadable><CavingGroupsPage /></Loadable> },
           { path: '/cavers', element: <Loadable><CaversPage /></Loadable> },
           {

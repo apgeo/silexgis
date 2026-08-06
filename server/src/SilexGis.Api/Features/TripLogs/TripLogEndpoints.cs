@@ -238,6 +238,9 @@ public static class TripLogEndpoints
         await db.Taggings
             .Where(x => x.EntityType == AttachedEntityType.TripLog && x.EntityId == trip.Id)
             .ExecuteDeleteAsync(ct);
+        await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.TripLog && m.EntityId == trip.Id)
+            .ExecuteDeleteAsync(ct);
         db.TripLogs.Remove(trip);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();

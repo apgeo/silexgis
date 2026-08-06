@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import type { AccessDomainName, AccessScopeKind, SearchDocumentItem } from '../api/hooks.ts';
+import { RESLINK_ANCHOR_KINDS, RESLINK_TARGET_TYPES } from '../components/reslinks/registry.ts';
+import { SEEDED_RELATION_CODES, DIRECTED_RELATION_CODES } from '../components/reslinks/relations.ts';
 import en from './locales/en.json';
 import ro from './locales/ro.json';
 
@@ -10,6 +12,26 @@ function flattenKeys(value: object, prefix = ''): string[] {
       ? flattenKeys(child, `${prefix}${key}.`)
       : [`${prefix}${key}`],
   );
+}
+
+/**
+ * Every source file's text, read through the bundler rather than the filesystem so this
+ * stays inside the app's own module world (the browser type project has no `node:fs`).
+ */
+const sourceText = import.meta.glob('../**/*.{ts,tsx}', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+
+function lookup(locale: object, key: string): unknown {
+  return key
+    .split('.')
+    .reduce<unknown>(
+      (node, part) =>
+        typeof node === 'object' && node !== null ? (node as Record<string, unknown>)[part] : undefined,
+      locale,
+    );
 }
 
 /**
@@ -104,6 +126,73 @@ describe('i18n locales', () => {
     expect(kinds.filter((kind) => !enScopes[kind])).toEqual([]);
     expect(kinds.filter((kind) => !roScopes[kind])).toEqual([]);
     expect(Object.keys(enScopes).sort()).toEqual(kinds.sort());
+  });
+
+  // A link chip labels its target by type. An unnamed type would render as a raw lookup
+  // key beside the title, in both languages, on every surface links appear on.
+  it('every link target type is named in both locales', () => {
+    const expected = [...RESLINK_TARGET_TYPES, 'unknown'].sort();
+    for (const locale of [en, ro]) {
+      expect(Object.keys(locale.resLinks.targetTypes).sort()).toEqual(expected);
+    }
+  });
+
+  // The picker names every anchor kind, including the ones whose editor has not shipped —
+  // they are listed disabled, and a disabled row with a raw lookup key for a label would
+  // say nothing about what is coming.
+  it('every anchor kind is named in both locales', () => {
+    const expected = [...RESLINK_ANCHOR_KINDS].sort();
+    for (const locale of [en, ro]) {
+      expect(Object.keys(locale.resLinks.anchorKinds).sort()).toEqual(expected);
+    }
+  });
+
+  // Relation wording is translated by code for the vocabulary that ships with the app;
+  // only the rows an installation adds itself are shown as stored.
+  it('every shipped relation code has wording, and every directed one reads both ways', () => {
+    const shipped: readonly string[] = SEEDED_RELATION_CODES;
+    for (const locale of [en, ro]) {
+      const relations = locale.resLinks.relations as unknown as Record<
+        string,
+        { name?: string; inverse?: string } | string
+      >;
+      for (const code of SEEDED_RELATION_CODES) {
+        const wording = relations[code];
+        expect(typeof wording === 'object' && Boolean(wording.name), code).toBe(true);
+        const inverse = typeof wording === 'object' ? wording.inverse : undefined;
+        expect(Boolean(inverse), code).toBe(DIRECTED_RELATION_CODES.includes(code));
+      }
+      // The reverse direction: wording left behind for a code the app no longer ships.
+      expect(
+        Object.keys(relations).filter((key) => key !== 'unspecified' && !shipped.includes(key)),
+      ).toEqual([]);
+    }
+  });
+
+  /**
+   * A key that was never added is not a crash and not a blank: the translator falls back to
+   * the key itself, so the screen quietly reads "common.back" where a word belongs. Nothing
+   * else here catches that — the two files can agree perfectly and still be missing a key the
+   * code asks for. Only literal calls are checked; keys built from a template are covered by
+   * the exhaustiveness tests above, which is why those exist.
+   */
+  it('every translation key the code asks for by name exists', () => {
+    const asked = Object.entries(sourceText)
+      .filter(([file]) => !file.includes('.test.'))
+      .flatMap(([file, text]) =>
+        [...text.matchAll(/\bt\(\s*'([\w.]+)'/g)].map((match) => ({
+          key: match[1],
+          where: file.replace('../', ''),
+        })),
+      );
+    // A guard on the reader itself: if the pattern ever stops matching, an empty result would
+    // pass this test silently while checking nothing.
+    expect(asked.length).toBeGreaterThan(200);
+    expect(
+      asked
+        .filter(({ key }) => typeof lookup(en, key) !== 'string')
+        .map(({ key, where }) => `${where}: ${key}`),
+    ).toEqual([]);
   });
 
   it('names every numbered division a content hit can carry, and no more', () => {

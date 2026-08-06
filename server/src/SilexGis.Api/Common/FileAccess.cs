@@ -23,7 +23,10 @@ public readonly record struct AttachmentTarget(AttachedEntityType? EntityType, G
 /// Wire vocabulary of polymorphic target types: "feature" (any feature id, whatever its
 /// kind) plus the camelCase non-feature entity names ("tripLog", "cavingGroup", "geofile",
 /// "georeferencedMap", "mapView", "storedFile"). Parsed case-insensitively so
-/// query-string values behave like the camelCase JSON enum convention.
+/// query-string values behave like the camelCase JSON enum convention. The underlying
+/// enum is shared with other polymorphic-pair consumers (resource links speak a wider
+/// set); attachments and taggings accept only the names above — anything else, later
+/// enum values included, reads as unknown here.
 /// </summary>
 public static class AttachmentTargets
 {
@@ -43,7 +46,7 @@ public static class AttachmentTargets
             return true;
         }
 
-        if (Enum.TryParse<AttachedEntityType>(value, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed))
+        if (Enum.TryParse<AttachedEntityType>(value, ignoreCase: true, out var parsed) && IsAttachable(parsed))
         {
             entityType = parsed;
             return true;
@@ -51,6 +54,16 @@ public static class AttachmentTargets
 
         return false;
     }
+
+    // Deliberately an allow-set rather than Enum.IsDefined: appending a value to the
+    // shared enum must never quietly widen what attachments and taggings accept.
+    private static bool IsAttachable(AttachedEntityType type) => type switch
+    {
+        AttachedEntityType.TripLog or AttachedEntityType.CavingGroup or AttachedEntityType.Geofile
+            or AttachedEntityType.GeoreferencedMap or AttachedEntityType.MapView
+            or AttachedEntityType.StoredFile => true,
+        _ => false,
+    };
 
     /// <summary>Wire name of a stored target row (feature FK XOR polymorphic pair).</summary>
     public static string NameOf(Guid? featureId, AttachedEntityType? entityType) =>

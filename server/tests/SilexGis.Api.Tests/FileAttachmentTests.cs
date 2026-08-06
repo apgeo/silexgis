@@ -165,6 +165,32 @@ public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
             (await ReadCodeAsync(write)).ShouldBe("validation.failed");
         }
 
+        // Entity types the shared enum defines for resource links (documents, survey
+        // models, cavers, cabinets, and the reserved comment kind) are not attachment or
+        // tagging vocabulary: they must read exactly like unknown names on reads and
+        // writes alike, so appending to the enum never widens what these tables accept.
+        foreach (var reserved in new[] { "document", "surveyModel", "caver", "cabinet", "comment" })
+        {
+            var listing = await owner.GetAsync($"/api/v1/attachments/?entityType={reserved}&entityId={caveId}");
+            listing.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await ReadCodeAsync(listing)).ShouldBe("attachment.entity_type_unknown");
+
+            var tagListing = await owner.GetAsync($"/api/v1/taggings/?entityType={reserved}&entityId={caveId}");
+            tagListing.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await ReadCodeAsync(tagListing)).ShouldBe("tagging.entity_type_unknown");
+
+            var write = await AttachAsync(owner, fileId, reserved, caveId);
+            write.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await ReadCodeAsync(write)).ShouldBe("validation.failed");
+
+            var tagWrite = await owner.PostAsJsonAsync("/api/v1/taggings/", new
+            {
+                tagName = $"rsv-{Guid.NewGuid():N}"[..16], entityType = reserved, entityId = caveId,
+            });
+            tagWrite.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await ReadCodeAsync(tagWrite)).ShouldBe("validation.failed");
+        }
+
         // A file is a tag target but never an attachment target — allowing it would let the
         // polymorphic access resolver recurse file → attachment → file without bound.
         var fileTarget = await AttachAsync(owner, fileId, "storedFile", fileId);

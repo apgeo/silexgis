@@ -3058,6 +3058,211 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("processing_jobs", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.ResLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<long?>("RelationTypeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("relation_type_id");
+
+                    b.Property<string>("ShortCode")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("short_code");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_res_links");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_res_links_created_by");
+
+                    b.HasIndex("RelationTypeId")
+                        .HasDatabaseName("ix_res_links_relation_type_id");
+
+                    b.HasIndex("ShortCode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_res_links_short_code");
+
+                    b.ToTable("res_links", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ResLinkMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AddedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("added_by");
+
+                    b.Property<string>("Anchor")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("anchor");
+
+                    b.Property<Guid?>("AnchorFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("anchor_file_id");
+
+                    b.Property<short>("AnchorKind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("anchor_kind");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("EntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entity_id");
+
+                    b.Property<short?>("EntityType")
+                        .HasColumnType("smallint")
+                        .HasColumnName("entity_type");
+
+                    b.Property<Guid?>("FeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("feature_id");
+
+                    b.Property<bool>("IsMain")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_main");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<Guid>("ResLinkId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("res_link_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_res_link_members");
+
+                    b.HasIndex("AddedBy")
+                        .HasDatabaseName("ix_res_link_members_added_by");
+
+                    b.HasIndex("AnchorFileId")
+                        .HasDatabaseName("ix_res_link_members_anchor_file_id");
+
+                    b.HasIndex("FeatureId")
+                        .HasDatabaseName("ix_res_link_members_feature_id")
+                        .HasFilter("feature_id IS NOT NULL");
+
+                    b.HasIndex("ResLinkId")
+                        .HasDatabaseName("ix_res_link_members_res_link_id");
+
+                    b.HasIndex("EntityType", "EntityId")
+                        .HasDatabaseName("ix_res_link_members_entity_type_entity_id");
+
+                    b.HasIndex("ResLinkId", "FeatureId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_res_link_members_whole_feature")
+                        .HasFilter("feature_id IS NOT NULL AND anchor_kind = 0");
+
+                    b.HasIndex("ResLinkId", "EntityType", "EntityId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_res_link_members_whole_entity")
+                        .HasFilter("entity_type IS NOT NULL AND anchor_kind = 0");
+
+                    b.HasIndex(new[] { "ResLinkId" }, "ix_res_link_members_main")
+                        .IsUnique()
+                        .HasDatabaseName("ix_res_link_members_main")
+                        .HasFilter("is_main");
+
+                    b.ToTable("res_link_members", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_res_link_members_anchor_payload", "(anchor_kind = 0 AND anchor IS NULL) OR (anchor_kind <> 0 AND anchor IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_res_link_members_one_target", "(feature_id IS NOT NULL AND entity_type IS NULL AND entity_id IS NULL) OR (feature_id IS NULL AND entity_type IS NOT NULL AND entity_id IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ResLinkRelationType", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("Directed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("directed");
+
+                    b.Property<string>("InverseName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("inverse_name");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_res_link_relation_types");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_res_link_relation_types_code");
+
+                    b.ToTable("res_link_relation_types", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.RockType", b =>
                 {
                     b.Property<long>("Id")
@@ -4526,6 +4731,49 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_permission_group_members_permission_groups_permission_group");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ResLink", b =>
+                {
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_res_links_users_created_by");
+
+                    b.HasOne("SilexGis.Domain.Entities.ResLinkRelationType", null)
+                        .WithMany()
+                        .HasForeignKey("RelationTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_res_links_res_link_relation_types_relation_type_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ResLinkMember", b =>
+                {
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("AddedBy")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_res_link_members_users_added_by");
+
+                    b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("AnchorFileId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_res_link_members_stored_files_anchor_file_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
+                        .WithMany()
+                        .HasForeignKey("FeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_res_link_members_features_feature_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.ResLink", null)
+                        .WithMany()
+                        .HasForeignKey("ResLinkId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_res_link_members_res_links_res_link_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.StoredFile", b =>

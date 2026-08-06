@@ -12,9 +12,13 @@ namespace SilexGis.Domain.Geo;
 /// place anything, so the rule leaves it alone.
 /// </param>
 /// <param name="DocumentCarriesItsOwnPosition">
-/// Whether the document behind the association has coordinates of its own — a photo's
-/// capture point read from its EXIF. Not "coordinates about the feature": coordinates the
-/// document itself is stamped with.
+/// Whether the association itself puts exact coordinates in front of the caller — a
+/// photo's capture point read from its EXIF, or, for a resource-link membership, a
+/// sibling member of the same link that shows this caller exact coordinates. Not
+/// "coordinates about the feature": coordinates the association's own content carries.
+/// The resource-link mapping deliberately feeds its sibling fact through this arm so the
+/// one written rule decides both worlds — tune the arm's meaning only with that second
+/// consumer in view.
 /// </param>
 public readonly record struct FeatureAssociation(Guid? TargetFeatureId, bool DocumentCarriesItsOwnPosition);
 
@@ -43,13 +47,17 @@ public readonly record struct FeatureAssociation(Guid? TargetFeatureId, bool Doc
 /// One pairing the setting does not open: a document stamped with coordinates of its own
 /// placed next to a feature's name is not a name at all, it is the position, to within
 /// however far the photographer stood from the entrance. That association stays withheld
-/// whatever the setting says.
+/// whatever the setting says. Resource-link memberships ride the same arm with a widened
+/// fact: there "the document carries its own position" means "a sibling member of the
+/// same link shows this caller exact coordinates", which is the same pairing spelled
+/// n-ary.
 /// </para>
 /// <para>
 /// This is the only place the rule is written. Everything that can emit an association —
-/// the document panel, the feature side, list metadata, search results, exports — asks
-/// here rather than reasoning about protection for itself, because a second copy of this
-/// reasoning is how one of those paths ends up disagreeing with the others.
+/// the document panel, the feature side, list metadata, search results, exports, and the
+/// resource-link membership reads — asks here rather than reasoning about protection for
+/// itself, because a second copy of this reasoning is how one of those paths ends up
+/// disagreeing with the others.
 /// </para>
 /// </remarks>
 public static class AssociationProtection

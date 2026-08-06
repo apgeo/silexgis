@@ -71,6 +71,18 @@ public static class HistoryProtection
     private static readonly string[] AttachmentSensitive =
         [nameof(Attachment.FileId), nameof(Attachment.Caption)];
 
+    // A resource-link membership rooted at a feature is the same association stated the
+    // other way around: which links name a guarded feature is what the live link reads
+    // withhold from callers without exact view. Those reads can weigh the installation's
+    // reveal setting and the link's sibling members; an audit row carries neither, so a
+    // hidden timeline keeps the event — a membership changed — and names no link at all.
+    // The note and the adder travel with the membership they describe, and the anchor
+    // fields join them as defence in depth (a feature membership is whole-only today, but
+    // a payload can quote and a pin can route, so neither may outlive that rule here).
+    private static readonly string[] ResLinkMemberSensitive =
+        [nameof(ResLinkMember.ResLinkId), nameof(ResLinkMember.Note), nameof(ResLinkMember.AddedBy),
+         nameof(ResLinkMember.Anchor), nameof(ResLinkMember.AnchorFileId)];
+
     private static readonly string FeatureCave = FeatureAudit.TypeName(FeatureKind.Cave);
     private static readonly string FeatureEntrance = FeatureAudit.TypeName(FeatureKind.CaveEntrance);
     private static readonly string FeatureCenterline = FeatureAudit.TypeName(FeatureKind.Centerline);
@@ -167,6 +179,13 @@ public static class HistoryProtection
             if (associationHidden)
             {
                 RemoveNamed(changes, AttachmentSensitive, redacted);
+            }
+        }
+        else if (entityType == nameof(ResLinkMember))
+        {
+            if (governingHidden)
+            {
+                RemoveNamed(changes, ResLinkMemberSensitive, redacted);
             }
         }
         else if (entityType == nameof(TripLogCave))

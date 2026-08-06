@@ -10,10 +10,22 @@ import { defineConfig, devices } from '@playwright/test';
 //
 // WebKit is a separate browser download (`npx playwright install webkit`), not just another
 // device profile.
-// Follows the dev server's port, which is itself overridable so two checkouts can run side
-// by side. Reusing an already-running server on the default port is a convenience that turns
-// into a trap when the server belongs to another checkout.
-const baseURL = `http://localhost:${process.env.SILEXGIS_DEV_PORT ?? 5173}`;
+//
+// One flow needs a second account, and nothing but self-registration mints one, so the API
+// has to be started with SILEXGIS__Auth__OpenRegistration=true — it is off by default. That
+// flow fails rather than skipping without it: the behaviour it covers, an administrator
+// editing a link somebody else recorded, has no other cover, and a skipped test reads as a
+// green run.
+//
+// SILEXGIS_DEV_PORT moves the whole run — the dev server Vite starts and the address the
+// browser is pointed at — so a second checkout can be exercised against its own API and
+// database. It is the same variable the dev server reads, and it must be set together with
+// SILEXGIS_API_TARGET; setting only one would drive this checkout's SPA against the other's
+// data. Unset, this is the ordinary local run on :5173. Reusing an already-running server on
+// the default port is a convenience that turns into a trap when the server belongs to
+// another checkout.
+const devPort = process.env.SILEXGIS_DEV_PORT ?? '5173';
+const baseURL = `http://localhost:${devPort}`;
 
 export default defineConfig({
   testDir: './e2e',
@@ -32,7 +44,7 @@ export default defineConfig({
       // The pre-existing run, unchanged: Playwright's default desktop chromium viewport.
       // Each project pins its own file, so a new spec runs nowhere until it is named here.
       name: 'desktop',
-      testMatch: /(smoke|settings|permission-groups|documents)\.spec\.ts/,
+      testMatch: /(smoke|settings|permission-groups|documents|reslinks)\.spec\.ts/,
     },
     {
       // Pixel 7: 412x915 CSS px, touch enabled, coarse pointer, chromium.

@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 /** Dialogs whose modal-vs-side-panel placement the user can choose. */
-export type DialogKind = 'cave-add' | 'feature-edit' | 'entrance-edit';
+export type DialogKind = 'cave-add' | 'feature-edit' | 'entrance-edit' | 'reslink-add-member';
 
 export type DialogPlacement = 'modal' | 'drawer';
 
