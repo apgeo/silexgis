@@ -13,13 +13,19 @@ import {
   type CaveListParams,
 } from '../../api/hooks.ts';
 import CaveViewPanel from '../../components/caveview/CaveViewPanel.tsx';
+import Scene3DView from '../../components/scene3d/Scene3DView.tsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { publish, subscribe } from '../../workspace/workspaceBus.ts';
 
 /**
  * A single panel rendered chrome-less for pop-out windows (multi-monitor work).
  * Interactions publish references over the workspace bus; the main window's map
- * reacts. Panels: the cave registry and the 3D survey viewer.
+ * reacts. Panels: the cave registry, the survey-model viewer and the 3D scene.
+ *
+ * `viewer3d` and `scene3d` are two different things and neither replaces the other: the first is
+ * the survey-model viewer, which reads a cave's own `.lox`/`.3d` file and knows nothing about
+ * where in the world it is; the second is the geographic scene, with terrain, basemaps and every
+ * cave in view at once. The ids say which is which, and the titles say it to the viewer.
  */
 export default function PanelPage() {
   const { t } = useTranslation();
@@ -30,6 +36,8 @@ export default function PanelPage() {
       return <RegistryPanel />;
     case 'viewer3d':
       return <Viewer3dPanel />;
+    case 'scene3d':
+      return <Scene3dScenePanel />;
     default:
       return (
         <Flex align="center" justify="center" style={{ height: '100vh' }}>
@@ -37,6 +45,31 @@ export default function PanelPage() {
         </Flex>
       );
   }
+}
+
+/**
+ * The geographic 3D scene in a window of its own — the multi-monitor arrangement the whole
+ * two-way sync exists for: the flat map on one screen, the same ground in three dimensions on the
+ * other, each following the other's selection and extent over the bus.
+ *
+ * A pop-out is a separate window with its own copy of every module, so "one scene per window"
+ * holds here without anything being arranged: this window's scene is simply not the other's.
+ *
+ * It writes no URL hash. The window is opened by name and reused, so its address is machinery
+ * rather than something anybody shares; the shareable position is the one the 3D route keeps.
+ */
+function Scene3dScenePanel() {
+  const { t } = useTranslation();
+  return (
+    <Flex vertical style={{ height: '100vh' }}>
+      <Typography.Title level={5} style={{ margin: 0, padding: '8px 12px' }}>
+        {t('panel.scene3dTitle')}
+      </Typography.Title>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <Scene3DView />
+      </div>
+    </Flex>
+  );
 }
 
 /**

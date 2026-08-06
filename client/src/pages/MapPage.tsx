@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import BackgroundLayerChooser from '@terrestris/react-geo/dist/BackgroundLayerChooser/BackgroundLayerChooser';
 import GeoLocationButton from '@terrestris/react-geo/dist/Button/GeoLocationButton/GeoLocationButton';
 import ScaleCombo from '@terrestris/react-geo/dist/Field/ScaleCombo/ScaleCombo';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
-import { App, Button, Drawer, Tabs, Tooltip } from 'antd';
+import { App, Button, Drawer, Spin, Tabs, Tooltip } from 'antd';
 import {
   AimOutlined,
   BorderVerticleOutlined,
@@ -12,8 +12,10 @@ import {
   ExportOutlined,
   EyeInvisibleOutlined,
   EyeOutlined,
+  GlobalOutlined,
   LeftOutlined,
   RightOutlined,
+  SelectOutlined,
 } from '@ant-design/icons';
 import type { EventsKey } from 'ol/events';
 import type BaseLayer from 'ol/layer/Base';
@@ -46,7 +48,6 @@ import {
   SURFACE_FEATURE_LAYER_ID,
   attachSurfaceFeatureLoader,
   createSurfaceFeatureLayer,
-  reloadSurfaceFeatures,
   setFeatureTypeSymbols,
   setSelectedSurfaceFeature,
 } from '../map/featureLayer.ts';
@@ -56,6 +57,10 @@ import { PHOTO_LAYER_ID, attachPhotoLoader, createPhotoLayer, setPhotosEnabled }
 import { attachPhotoPopup } from '../map/photoPopup.ts';
 import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
+import { attachViewSync2d, type ViewSync2dHandle } from '../map/viewSync2d.ts';
+import { hasScene3dHash } from '../scene3d/urlHash3d.ts';
+import { surfaceFeaturesChanged } from '../workspace/surfaceFeatureRefresh.ts';
+import { applyViewCamera3d, setActiveViewCamera } from '../workspace/viewCamera.ts';
 import { subscribe } from '../workspace/workspaceBus.ts';
 import { RASTER_LAYER_PREFIX, syncRasterLayers } from '../map/rasterLayers.ts';
 import { setRasterSwipeActive, setRasterSwipeFraction } from '../map/rasterSwipe.ts';
@@ -64,6 +69,7 @@ import { attachUrlHash, hasMapHash } from '../map/urlHash.ts';
 import {
   applyPendingOverlayOrder,
   findOverlayLayer,
+  fitGeoJsonGeometry,
   flyTo,
   getOverlayGroup,
   getWorkspaceMap,
@@ -76,6 +82,11 @@ import { attachSelection } from '../map/selection.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import './MapPage.css';
+
+// Loaded only when a viewer opens the 3D pane, the same way the 3D route loads it: the scene
+// module and its runtime assets are about a megabyte, and a session that never opens the pane must
+// not pay for it.
+const Scene3DView = lazy(() => import('../components/scene3d/Scene3DView.tsx'));
 
 /** Map workspace v1: fixed resizable panes on desktop, drawers on phones. */
 export default function MapPage() {
@@ -91,6 +102,11 @@ export default function MapPage() {
   // dock-toggle buttons drive whichever one is mounted.
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
+  // The 3D scene as a pane beside the map, off until asked for. Off is the honest default: it is
+  // a second renderer with a graphics context of its own, and most visits to the map do not want
+  // one. Opening it is what makes the two-way sync visible — the point of having both on screen.
+  const [scene3dOpen, setScene3dOpen] = useState(false);
+  const syncRef = useRef<ViewSync2dHandle | null>(null);
   const { data: layers } = useMapLayers();
   const { data: mapConfig } = useMapConfig();
   const { data: featureTypes } = useFeatureTypes();
@@ -171,7 +187,22 @@ export default function MapPage() {
     const detachGeofileLoader = attachGeofileLoader(map);
     const detachPhotoLoader = attachPhotoLoader(map);
     const detachPhotoPopup = attachPhotoPopup(map);
-    const detachSelection = attachSelection(map, setSelection);
+    // The map's end of the two-way sync with the 3D scene: it announces the ground it is showing
+    // and follows the ground the scene reports, in degrees rather than in cameras. The selection
+    // is read back out of the store as well as written into it, because the panels beside this map
+    // change it without announcing anything and the protocol has to compare an arriving pick
+    // against what this window is really showing.
+    const sync = attachViewSync2d(map, {
+      current: () => useWorkspaceStore.getState().selection,
+      set: setSelection,
+    });
+    syncRef.current = sync;
+    const detachSelection = attachSelection(map, (picked) => {
+      setSelection(picked);
+      // Announced as well as stored: a popped-out window has a store of its own that this one
+      // cannot reach, and the scene beside it may be in that window rather than this one.
+      sync.publishSelection(picked);
+    });
     const detachHover = attachHoverTooltip(map);
     const detachUrlHash = attachUrlHash(map);
     const detachContextMenu = attachContextMenu(map, setContextTarget);
@@ -179,7 +210,14 @@ export default function MapPage() {
     const moveKey = map.on('movestart', () => setContextTarget(null));
     const controller = new MapEditController(map);
     setEditController(controller);
+    // While this page is on screen it owns the camera the shared detail panel drives. The panel is
+    // also mounted beside the 3D scene, which has a camera of its own, so it asks for whichever
+    // view is showing rather than reaching for this map directly.
+    const detachCamera = setActiveViewCamera({ flyTo, fitGeometry: fitGeoJsonGeometry });
     return () => {
+      sync.detach();
+      syncRef.current = null;
+      detachCamera();
       controller.dispose();
       setEditController(null);
       detachLoader();
@@ -271,14 +309,14 @@ export default function MapPage() {
     };
   }, []);
 
-  // Pop-out windows publish picks over the workspace bus; the main map follows.
+  // Pop-out windows ask the main map to go somewhere. Selection arrives through the view sync
+  // above instead, which drops the map's own echo and compares by value, so a pick made here does
+  // not come back as a change.
   useEffect(() => subscribe((event) => {
-    if (event.kind === 'selection') {
-      setSelection(event.selection);
-    } else if (event.kind === 'fly-to') {
+    if (event.kind === 'fly-to') {
       flyTo(event.lon, event.lat, event.zoom ?? 15);
     }
-  }), [setSelection]);
+  }), []);
 
   const { data: savedViews } = useMapViews();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -317,7 +355,9 @@ export default function MapPage() {
     }
     sessionStorage.setItem('silexgis.homeApplied', '1');
     // An explicit view request and a shareable position in the URL both outrank the home view.
-    if (requestedViewId || hasMapHash()) {
+    // A 3D position counts: arriving on a shared 3D link and then opening the map must not have
+    // the home view quietly take the position the link was sent for.
+    if (requestedViewId || hasMapHash() || hasScene3dHash()) {
       return;
     }
     const home = savedViews.find((v) => v.isHome);
@@ -326,6 +366,16 @@ export default function MapPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on first data
   }, [savedViews, requestedViewId]);
+
+  // A scene opening beside the map starts on the ground the map is showing rather than on its own
+  // default view of the Carpathians. It is said once, when the pane opens, rather than being
+  // republished on a timer: the scene subscribes as it starts, and the sync remembers the last
+  // thing said so a view that arrives afterwards still hears it.
+  useEffect(() => {
+    if (scene3dOpen) {
+      syncRef.current?.announce();
+    }
+  }, [scene3dOpen]);
 
   // Highlight follows the workspace selection (also when set from the features table).
   useEffect(() => {
@@ -514,6 +564,14 @@ export default function MapPage() {
     if (!ui) {
       return;
     }
+    // A view that remembers a 3D camera places both views itself, so this map's restored position
+    // is not news for anybody: announced, it would send the scene off to frame this map's box and
+    // undo the camera the same document restores a few lines below. A view that remembers no
+    // camera — every view saved before the scene existed — still announces, because then the map
+    // is the only thing the document knows about and the scene has nothing better to go on.
+    if (ui.camera3d) {
+      syncRef.current?.muteUntilSettled();
+    }
     setTreeNonce((n) => n + 1);
     if (ui.overlayOrder.length > 0) {
       // Geofile/raster layers may not exist yet; the sync effects re-apply this.
@@ -557,8 +615,13 @@ export default function MapPage() {
     resetBaseOpacity(ui.baseOpacity);
     setTagFilter(ui.tagFilter);
     setMapTagFilter(ui.tagFilter);
+    // A view saved from a session that had the scene open remembers where its camera stood. It
+    // goes to whichever view is on screen, which is nothing at all when no scene is mounted — the
+    // camera then stays in the document for the next time one is, rather than being staged for a
+    // scene the viewer has not opened.
+    applyViewCamera3d(ui.camera3d);
     reloadEntrances();
-    reloadSurfaceFeatures();
+    surfaceFeaturesChanged();
   };
 
   // Dock contents, hosted either by a resizable pane (desktop) or a drawer (phone).
@@ -585,7 +648,7 @@ export default function MapPage() {
         setTagFilter(slug);
         setMapTagFilter(slug);
         reloadEntrances();
-        reloadSurfaceFeatures();
+        surfaceFeaturesChanged();
       }}
       centerlinesVisible={centerlinesVisible}
       mapConfig={mapConfig}
@@ -750,12 +813,31 @@ export default function MapPage() {
                 from the cave detail page. */}
             {!isMobile && (
               <>
+                <Tooltip title={scene3dOpen ? t('map.hideScene3d') : t('map.showScene3d')}>
+                  <Button
+                    size="small"
+                    type={scene3dOpen ? 'primary' : 'default'}
+                    icon={<GlobalOutlined />}
+                    aria-label={scene3dOpen ? t('map.hideScene3d') : t('map.showScene3d')}
+                    aria-pressed={scene3dOpen}
+                    onClick={() => setScene3dOpen((open) => !open)}
+                    data-testid="map-scene3d-toggle"
+                  />
+                </Tooltip>
                 <Tooltip title={t('panel.popOut')}>
                   <Button
                     size="small"
                     icon={<ExportOutlined />}
                     onClick={() => window.open('/panel/registry', 'silexgis-registry', 'popup,width=900,height=700')}
                     data-testid="map-popout-registry"
+                  />
+                </Tooltip>
+                <Tooltip title={t('panel.popOutScene3d')}>
+                  <Button
+                    size="small"
+                    icon={<SelectOutlined />}
+                    onClick={() => window.open('/panel/scene3d', 'silexgis-scene3d', 'popup,width=1100,height=800')}
+                    data-testid="map-popout-scene3d"
                   />
                 </Tooltip>
                 <Tooltip title={t('panel.popOut3d')}>
@@ -794,6 +876,17 @@ export default function MapPage() {
           />
         </div>
       </Panel>
+      {/* The 3D scene beside the map rather than instead of it. Rendered only while it is open,
+          so the graphics context exists exactly as long as the pane does: a collapsed pane keeps
+          its children mounted, which would leave a drawing surface alive at zero width. */}
+      {!isMobile && scene3dOpen && <Separator className="map-workspace-handle" />}
+      {!isMobile && scene3dOpen && (
+        <Panel defaultSize="34%" minSize="20%" className="map-workspace-panel">
+          <Suspense fallback={<Spin style={{ margin: 48 }} />}>
+            <Scene3DView />
+          </Suspense>
+        </Panel>
+      )}
       {!isMobile && <Separator className="map-workspace-handle" />}
       {!isMobile && (
         <Panel

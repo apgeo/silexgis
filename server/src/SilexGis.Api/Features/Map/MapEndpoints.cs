@@ -16,16 +16,32 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Features.Map;
 
 /// <summary>
-/// A GeoJSON FeatureCollection plus the two things the centerline overlay needs to explain
-/// itself: how many centerlines the request's limits kept back, and whether what it did return
-/// is full detail or the splay-free skeleton. Both are GeoJSON foreign members, so a plain
-/// GeoJSON reader still parses the collection.
+/// A GeoJSON FeatureCollection plus the three things the centerline overlay needs to explain
+/// itself: how many centerlines the request's limits kept back, whether what it did return is
+/// full detail or the splay-free skeleton, and — for a caller that asked for altitudes — how
+/// many of the served centerlines could not carry any. All are GeoJSON foreign members, so a
+/// plain GeoJSON reader still parses the collection.
 /// </summary>
 public sealed record CenterlineFeatureCollection(
     string Type,
     IReadOnlyList<GeoFeature> Features,
     int WithheldCount,
-    bool Detail);
+    bool Detail,
+    int FlatCount);
+
+/// <summary>
+/// The elevation model the 3D scene should draw its ground from, when this installation has one.
+/// Absent — not an empty object — when it does not, which is the shipped state.
+/// </summary>
+/// <param name="Url">Where the tile pyramid is served from; <c>layer.json</c> sits directly under it.</param>
+/// <param name="Attribution">Credit line the elevation data's licence requires, if any.</param>
+/// <param name="SurveyHeightOffsetM">
+/// Metres to add to a surveyed altitude before drawing it against this source's ground. Resolved
+/// from the source's declared vertical datum on the server, so the client is handed an answer
+/// rather than a datum it could apply backwards, and so swapping the source cannot leave a stale
+/// correction behind. Zero for a source whose heights are already the kind a survey carries.
+/// </param>
+public sealed record TerrainSourceDto(string Url, string? Attribution, double SurveyHeightOffsetM);
 
 /// <summary>Map rendering limits published to the client.</summary>
 public sealed record MapConfigDto(
@@ -33,7 +49,8 @@ public sealed record MapConfigDto(
     int CenterlineMaxPaths,
     int CenterlineMaxPathsLimit,
     int CenterlineGateZoom,
-    int ClusterMaxZoom);
+    int ClusterMaxZoom,
+    TerrainSourceDto? Terrain);
 
 /// <summary>
 /// GeoJSON layer endpoints for the map workspace. Always visibility-filtered; protected
@@ -71,7 +88,7 @@ public static class MapEndpoints
             .WithSummary("Trip-log geometries as GeoJSON for the given bbox and date range.");
         api.MapGet("/map/cave-centerlines", CaveCenterlinesAsync)
             .WithTags("Map")
-            .WithSummary("Cave centerlines as GeoJSON for the given bbox and zoom; splay-free below the detail zoom, protected caves' lines omitted.");
+            .WithSummary("Cave centerlines as GeoJSON for the given bbox and zoom; splay-free below the detail zoom, protected caves' lines omitted. z=true opts in to altitudes, which the flat display skeleton cannot carry.");
         api.MapGet("/map/config", MapConfigAsync)
             .WithTags("Map")
             .WithSummary("Client-relevant map rendering limits for this installation.");
@@ -85,10 +102,17 @@ public static class MapEndpoints
     /// The rendering limits the client needs in order to ask for the right thing: which zoom
     /// switches the centerline overlay to full detail, and how much it may request. Serving them
     /// rather than hard-coding them keeps a client build from disagreeing with its server.
+    ///
+    /// <para>
+    /// The elevation model rides along here for the same reason and one more: the client is built
+    /// once and deployed everywhere, so it cannot carry a terrain URL, and this is already the
+    /// request the 3D view makes before it draws anything.
+    /// </para>
     /// </summary>
     private static async Task<Results<Ok<MapConfigDto>, UnauthorizedHttpResult>> MapConfigAsync(
         IUserContextAccessor userAccessor,
         IOptions<MapOptions> mapOptions,
+        IOptions<TerrainOptions> terrainOptions,
         CancellationToken ct)
     {
         if (await userAccessor.GetAsync(ct) is null)
@@ -97,12 +121,19 @@ public static class MapEndpoints
         }
 
         var options = mapOptions.Value;
+        var terrain = terrainOptions.Value;
         return TypedResults.Ok(new MapConfigDto(
             options.CenterlineDetailZoom,
             options.CenterlineMaxPaths,
             options.CenterlineMaxPathsLimit,
             options.CenterlineGateZoom,
-            ClusterMaxZoom));
+            ClusterMaxZoom,
+            terrain.IsConfigured
+                ? new TerrainSourceDto(
+                    terrain.ResolvedUrl,
+                    string.IsNullOrWhiteSpace(terrain.Attribution) ? null : terrain.Attribution.Trim(),
+                    terrain.SurveyHeightOffsetM)
+                : null));
     }
 
     /// <summary>
@@ -261,12 +292,25 @@ public static class MapEndpoints
     /// exactly are omitted entirely and never counted — a centerline IS the cave's exact
     /// location.
     /// </para>
+    /// <para>
+    /// <c>z=true</c> opts in to altitudes. It is off by default because a flat map does not use
+    /// the third ordinate and paying for it would make every pan heavier for no visible gain.
+    /// Altitudes are not always available: the stored display skeleton is flat by construction,
+    /// so an overview row — including a detail request that fell back to the skeleton on the path
+    /// budget — comes back without them. Those rows are still served rather than dropped, each
+    /// one carrying <c>hasZ: false</c>, and <c>flatCount</c> totals them for a caller that would
+    /// rather zoom in than draw a cave at sea level. A row that does carry altitudes also reports
+    /// <c>topAltitudeM</c>, the highest altitude of the whole centerline: the served geometry is
+    /// cut to the viewport, so the payload alone cannot say where the cave meets the ground, and a
+    /// figure read off it would change every time the viewer panned.
+    /// </para>
     /// </summary>
     private static async Task<Results<Ok<CenterlineFeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> CaveCenterlinesAsync(
         string bbox,
         int? zoom,
         int? detailZoom,
         int? maxPaths,
+        bool? z,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
@@ -302,11 +346,13 @@ public static class MapEndpoints
         var exactViewIds = await protection.ExactViewIdsAsync(ctx, idsInView, ct);
         var eligibleIds = idsInView.Where(exactViewIds.Contains).ToList();
 
+        var withZ = z == true;
         var rows = await CenterlineMapSql.QueryAsync(
             db,
             ctx,
             box,
             detail: effectiveZoom >= effectiveDetailZoom,
+            withZ: withZ,
             maxPaths: effectiveMaxPaths,
             gateActive: effectiveZoom < options.CenterlineGateZoom,
             gatePaths: options.CenterlineGatePaths,
@@ -328,7 +374,7 @@ public static class MapEndpoints
             var geometry = new GeoJsonGeometry(
                 document.RootElement.GetProperty("type").GetString() ?? "MultiLineString",
                 document.RootElement.GetProperty("coordinates").Clone());
-            features.Add(new GeoFeature("Feature", geometry, new Dictionary<string, object?>
+            var properties = new Dictionary<string, object?>
             {
                 ["id"] = row.Id,
                 ["caveId"] = row.CaveId,
@@ -336,17 +382,36 @@ public static class MapEndpoints
                 ["lengthM"] = row.LengthM,
                 ["paths"] = row.Paths,
                 ["detail"] = row.Detail,
-            }));
+            };
+            if (withZ)
+            {
+                // Only when altitudes were asked for. A request that did not ask gets exactly the
+                // payload it got before, down to the property set.
+                properties["hasZ"] = row.HasZ;
+                if (row.HasZ && row.TopZ is { } topZ)
+                {
+                    // The top of the whole survey, which the served geometry cannot be asked for:
+                    // at detail zoom it is cut to the viewport, so its own highest point moves as
+                    // the viewer pans. A caller drawing the survey against a surface needs a
+                    // figure that holds still, and this is the only place one can come from.
+                    properties["topAltitudeM"] = topZ;
+                }
+            }
+
+            features.Add(new GeoFeature("Feature", geometry, properties));
         }
 
         // What was actually served, not what was asked for: a cave whose full detail would not
         // fit the budget is sent as its skeleton instead, and saying "full detail" then would be
-        // a lie the user can see through.
+        // a lie the user can see through. The flat count works the same way, and is zero unless
+        // altitudes were requested — without the request every row is flat by design, so counting
+        // them would say nothing.
         return TypedResults.Ok(new CenterlineFeatureCollection(
             "FeatureCollection",
             features,
             rows.Count(r => r.Withheld),
-            rows.Any(r => r.Included && r.Detail)));
+            rows.Any(r => r.Included && r.Detail),
+            withZ ? rows.Count(r => r.Included && !r.HasZ) : 0));
     }
 
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> TripLogsAsync(

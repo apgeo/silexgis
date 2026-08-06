@@ -4,6 +4,7 @@
   },
   "nav": {
     "map": "Hartă",
+    "map3d": "Vizualizare 3D",
     "dashboard": "Panou de bord",
     "caves": "Peșteri",
     "features": "Elemente",
@@ -141,6 +142,8 @@
     "swipeCompare": "Compară rasterul cu harta de dedesubt (glisor)",
     "hideChrome": "Ascunde barele de instrumente ale hărții",
     "showChrome": "Arată barele de instrumente ale hărții",
+    "showScene3d": "Arată scena 3D lângă hartă",
+    "hideScene3d": "Ascunde scena 3D",
     "unsavedEdits": "{{count}} modificări nesalvate",
     "contextAdd": "Adaugă fenomen",
     "contextNewCave": "Peșteră nouă aici",
@@ -877,8 +880,55 @@
     "registryTitle": "Registrul peșterilor",
     "popOut": "Deschide registrul într-o fereastră separată",
     "popOut3d": "Deschide fereastra 3D",
+    "popOutScene3d": "Deschide scena 3D într-o fereastră separată",
     "viewer3dTitle": "Vizualizator 3D",
-    "viewer3dEmpty": "Selectează o peșteră cu model 3D pentru a-l afișa aici."
+    "viewer3dEmpty": "Selectează o peșteră cu model 3D pentru a-l afișa aici.",
+    "scene3dTitle": "Scena 3D"
+  },
+  "scene3d": {
+    "unsupportedTitle": "Acest browser nu poate afișa vizualizarea 3D",
+    "unsupportedHint": "Vizualizarea 3D are nevoie de WebGL 2, pe care acest browser sau driverul său grafic nu îl oferă. Încearcă un browser actualizat sau folosește în continuare harta 2D.",
+    "openFlatMap": "Deschide harta 2D",
+    "startFailed": "Vizualizarea 3D nu a putut fi pornită",
+    "centerlinesFlat": "{{count}} poligonale desenate la suprafață — pentru ele nu au fost disponibile adâncimi topografiate.",
+    "surfaceTitle": "Terenul de deasupra peșterii",
+    "surfaceOverlay": "Arată peștera prin el",
+    "surfaceOverlayHint": "Poligonația este desenată peste teren și rămâne vizibilă din orice unghi. Cât de adâncă este o galerie se vede din culoarea liniei, nu din ce o acoperă.",
+    "surfaceCutaway": "Decupează-l",
+    "surfaceCutawayHint": "Terenul de deasupra peșterii este decupat, astfel încât poligonația se vede printr-o deschidere în suprafață.",
+    "cutawayUnsupported": "Acest browser nu poate decupa terenul. Peștera este arătată prin el.",
+    "cutawayNoCave": "Nu este încărcată nicio poligonație în jurul căreia să se decupeze. Peștera este arătată prin teren.",
+    "cutawayPaused": "De aici deschiderea se vede din profil — înclină vederea în jos spre peșteră pentru a privi în ea.",
+    "cutawayUnderground": "Vederea este sub suprafață, unde nu mai există teren între tine și peșteră. Urcă înapoi deasupra ei pentru a privi în jos, prin deschidere.",
+    "terrainUnreachable": "Datele de altitudine ale acestei instalări nu au putut fi accesate, așa că terenul este afișat ca un glob neted. Verifică dacă directorul cu teren este servit la adresa configurată.",
+    "terrainMalformed": "Adresa configurată pentru datele de altitudine nu conține un set de dale de teren, așa că terenul este afișat ca un glob neted. Verifică dacă piramida generată, împreună cu layer.json, este servită acolo.",
+    "terrainEncodingMismatch": "Dalele de altitudine sunt servite cu o compresie care nu corespunde conținutului lor, așa că terenul este afișat ca un glob neted. Serverul web trebuie să declare exact codificarea în care sunt fișierele de pe disc și nimic altceva.",
+    "depthLegend": "Adâncimea sub partea de sus a peșterii",
+    "depthLegendBand": "{{meters}} m",
+    "showingElsewhere": "Scena 3D este deschisă în alt panou al acestei ferestre.",
+    "fitCave": "Încadrează peștera din vedere",
+    "cameraTitle": "Cameră",
+    "closeCallout": "Închide",
+    "projectionOrthographic": "Elimină perspectiva",
+    "projectionOrthographicHint": "Elimină perspectiva, astfel încât distanțele să se citească la fel aproape și departe",
+    "projectionPerspectiveHint": "Reactivează perspectiva",
+    "presetGlyph": {
+      "top": "⌖",
+      "north": "N",
+      "south": "S",
+      "east": "E",
+      "west": "V"
+    },
+    "preset": {
+      "top": "Privire verticală (plan)",
+      "north": "Vedere dinspre nord",
+      "south": "Vedere dinspre sud",
+      "east": "Vedere dinspre est",
+      "west": "Vedere dinspre vest"
+    },
+    "contextLostTitle": "Vizualizarea 3D s-a oprit",
+    "contextLostHint": "Browserul a eliberat resursele grafice folosite de această vizualizare, de două ori la scurt timp. De obicei, reîncărcarea paginii o restabilește.",
+    "contextLostReload": "Reîncarcă"
   },
   "caveview": {
     "loadError": "Modelul 3D nu a putut fi încărcat"

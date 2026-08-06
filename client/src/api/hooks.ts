@@ -677,18 +677,23 @@ export function useMapConfig() {
 }
 
 /**
- * Imperative fetch used by the OpenLayers centerline loader (not a hook). The zoom decides
+ * Imperative fetch used by the map centerline loaders (not a hook). The zoom decides
  * whether the server sends the splay-free skeleton or clipped full detail; `detailZoom` and
  * `maxPaths` carry the viewer's own overrides, which the server bounds.
+ *
+ * `z` opts into surveyed altitudes. It costs a larger payload and is answered per row — the
+ * stored display skeleton is a flat shape by construction, so a row served from it comes back
+ * without them and the response counts how many did. The flat map leaves it off.
  */
 export async function fetchCenterlineFeatures(
   bbox: string,
   zoom: number,
   detailZoom?: number,
   maxPaths?: number,
+  z?: boolean,
 ): Promise<CenterlineFeatureCollection> {
   return unwrap(api.GET('/api/v1/map/cave-centerlines', {
-    params: { query: { bbox, zoom, detailZoom, maxPaths } },
+    params: { query: { bbox, zoom, detailZoom, maxPaths, z } },
   }));
 }
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { create } from 'zustand';
+import type { Scene3DSurfaceMode } from '../scene3d/scene3dEngine.ts';
 
 // Workspace UI state: serializable, carries references (ids),
 // never entity payloads — panels fetch their own data through TanStack Query.
@@ -51,6 +52,19 @@ interface WorkspaceState {
   overlayOpacity: Record<string, number>;
   setOverlayOpacity: (key: string, opacity: number) => void;
   /**
+   * Whether each built-in vector overlay is drawn, keyed exactly as `overlayOpacity` is. A
+   * missing key means shown, so nothing has to enumerate the overlays to start from a sane view.
+   */
+  overlayVisible: Record<string, boolean>;
+  setOverlayVisible: (key: string, visible: boolean) => void;
+  /**
+   * How the 3D scene draws the ground over a cave: 'overlay' shows the survey through it,
+   * 'cutaway' removes the ground above the cave instead. Session state rather than a stored
+   * preference — it belongs to the view being worked in, not to the browser.
+   */
+  scene3dSurfaceMode: Scene3DSurfaceMode;
+  setScene3dSurfaceMode: (mode: Scene3DSurfaceMode) => void;
+  /**
    * Per-base-layer opacity (0..1), keyed by catalog id. Only the active base is visible
    * at a time, but each base remembers its own value so switching restores it. A missing
    * key means fully opaque.
@@ -88,6 +102,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   overlayOpacity: {},
   setOverlayOpacity: (key, opacity) =>
     set((state) => ({ overlayOpacity: { ...state.overlayOpacity, [key]: opacity } })),
+  overlayVisible: {},
+  setOverlayVisible: (key, visible) =>
+    set((state) => ({ overlayVisible: { ...state.overlayVisible, [key]: visible } })),
+  scene3dSurfaceMode: 'overlay',
+  setScene3dSurfaceMode: (scene3dSurfaceMode) => set({ scene3dSurfaceMode }),
   baseOpacity: {},
   setBaseOpacity: (id, opacity) =>
     set((state) => ({ baseOpacity: { ...state.baseOpacity, [id]: opacity } })),

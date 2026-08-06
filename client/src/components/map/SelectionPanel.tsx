@@ -17,9 +17,9 @@ import {
   type FeatureUpdate,
 } from '../../api/hooks.ts';
 import { formatLonLat } from '../../geo/coords.ts';
-import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
-import { fitGeoJsonGeometry, flyTo } from '../../map/mapContext.ts';
 import { getMapTagFilter } from '../../map/mapFilters.ts';
+import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
+import { viewFitGeometry, viewFlyTo } from '../../workspace/viewCamera.ts';
 import {
   useWorkspaceStore,
   type CaveSelection,
@@ -102,7 +102,7 @@ function ClusterCard({ selection }: { selection: ClusterSelection }) {
         icon={<AimOutlined />}
         size="small"
         style={{ marginBottom: 8 }}
-        onClick={() => flyTo(selection.lon, selection.lat, selection.zoom + 2)}
+        onClick={() => viewFlyTo(selection.lon, selection.lat, selection.zoom + 2)}
       >
         {t('map.zoomHere')}
       </Button>
@@ -115,7 +115,7 @@ function ClusterCard({ selection }: { selection: ClusterSelection }) {
             style={{ justifyContent: 'flex-start' }}
             onClick={() => {
               setSelection({ kind: 'entrance', entranceId: entrance.id, caveId: entrance.caveId });
-              flyTo(entrance.lon, entrance.lat, 15);
+              viewFlyTo(entrance.lon, entrance.lat, 15);
             }}
           >
             {entrance.name ?? t('features.unnamed')}
@@ -187,7 +187,7 @@ function CaveCard({ selection }: { selection: EntranceSelection | CaveSelection 
           <Button
             icon={<AimOutlined />}
             size="small"
-            onClick={() => flyTo(entrance.geom.coordinates[0], entrance.geom.coordinates[1], 16)}
+            onClick={() => viewFlyTo(entrance.geom.coordinates[0], entrance.geom.coordinates[1], 16)}
           >
             {t('map.zoomTo')}
           </Button>
@@ -301,7 +301,7 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
           visibility: values.visibility,
         },
       });
-      reloadSurfaceFeatures();
+      surfaceFeaturesChanged();
       setEditing(false);
       message.success(t('common.saved'));
     } catch {
@@ -312,7 +312,7 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
   const onDelete = async () => {
     try {
       await deleteFeatureM.mutateAsync(feature.id);
-      reloadSurfaceFeatures();
+      surfaceFeaturesChanged();
       setSelection(null);
       message.success(t('common.deleted'));
     } catch {
@@ -364,7 +364,7 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
           <Button
             icon={<AimOutlined />}
             size="small"
-            onClick={() => fitGeoJsonGeometry(feature.geometry!)}
+            onClick={() => viewFitGeometry(feature.geometry!)}
           >
             {t('map.zoomTo')}
           </Button>
@@ -408,7 +408,7 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
                     id: feature.id,
                     body: applyFeatureRestore(writeDto(), event.changes, props),
                   });
-                  reloadSurfaceFeatures();
+                  surfaceFeaturesChanged();
                 },
               } satisfies HistoryRestore)
             : undefined

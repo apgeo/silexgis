@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { fromLonLat, toLonLat } from 'ol/proj';
+import { normalizeCamera3DState, type Camera3DState } from '../scene3d/camera3d.ts';
+import { viewCamera3dState } from '../workspace/viewCamera.ts';
 import { getOverlayOrder, getWorkspaceMap } from './mapContext.ts';
 
 /**
@@ -7,6 +9,13 @@ import { getOverlayOrder, getWorkspaceMap } from './mapContext.ts';
  * restore a workspace: camera, base layer, overlay toggles and filters.
  */
 export interface ViewConfig {
+  /**
+   * Never bumped. Everything added since the first release is an optional field with a documented
+   * default, and the reader rejects any other version outright — so raising this number would make
+   * every view saved from that moment unopenable by anything already deployed, and every view
+   * saved before it unopenable by the new code. The version is there to reject a document that is
+   * not one of these at all, not to track additions.
+   */
   configVersion: 1;
   center: [number, number]; // lon/lat
   zoom: number;
@@ -31,6 +40,15 @@ export interface ViewConfig {
    * prefixed ones). Added after v1 shipped; older saved views omit it (default order).
    */
   overlayOrder?: string[];
+  /**
+   * Where the 3D scene's camera stood, in degrees and metres. Added after v1 shipped; older saved
+   * views omit it, and so does any view saved while no 3D view was on screen — both mean "this
+   * view says nothing about the scene", and opening one leaves the scene's camera alone.
+   *
+   * Written down rather than stored as whatever the renderer holds, for the same reason the
+   * document has a version at all: a saved view outlives the code that saved it.
+   */
+  camera3d?: Camera3DState;
 }
 
 /** UI state the map page owns; the camera lives on the OL map itself. */
@@ -47,15 +65,24 @@ export interface WorkspaceUiState {
   overlayOpacity: Record<string, number>;
   baseOpacity: Record<number, number>;
   overlayOrder: string[];
+  /** The 3D camera the view carried, if any; applied to the 3D view on screen, if there is one. */
+  camera3d?: Camera3DState;
 }
 
-// The stacking order is read straight off the OL overlay group, so capture
-// callers don't pass it.
-export function captureViewConfig(ui: Omit<WorkspaceUiState, 'overlayOrder'>): ViewConfig {
+// The stacking order is read straight off the OL overlay group, and the 3D camera off whichever
+// view is on screen, so capture callers pass neither. The 3D camera in particular must not be
+// passed in: the page assembling this state is the flat map's, which has no way of knowing whether
+// a scene is mounted beside it, and a stale camera saved from a scene closed ten minutes ago would
+// be restored as confidently as a live one.
+export function captureViewConfig(
+  ui: Omit<WorkspaceUiState, 'overlayOrder' | 'camera3d'>,
+): ViewConfig {
   const view = getWorkspaceMap().getView();
   const center = toLonLat(view.getCenter() ?? [0, 0]);
+  const camera3d = viewCamera3dState();
   return {
     configVersion: 1,
+    ...(camera3d ? { camera3d } : {}),
     center: [Number(center[0].toFixed(6)), Number(center[1].toFixed(6))],
     zoom: Math.round((view.getZoom() ?? 8) * 100) / 100,
     baseLayerId: ui.baseLayerId,
@@ -96,6 +123,10 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     overlayOpacity: parsed.overlayOpacity ?? {},
     baseOpacity: parsed.baseOpacity ?? {},
     overlayOrder: parsed.overlayOrder ?? [],
+    // Checked field by field rather than trusted: the document is client-owned and the server
+    // stores it without looking inside, so a hand-edited or older-shaped camera block has to read
+    // as "this view says nothing about the scene" instead of taking a camera somewhere impossible.
+    camera3d: normalizeCamera3DState(parsed.camera3d) ?? undefined,
   };
 }
 

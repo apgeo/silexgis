@@ -1,14 +1,38 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
-import type { WorkspaceSelection } from '../../stores/workspaceStore.ts';
+import { useWorkspaceStore, type WorkspaceSelection } from '../../stores/workspaceStore.ts';
+import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
+import { setActiveViewCamera, type ViewCameraTarget } from '../../workspace/viewCamera.ts';
+import SelectionPanel from './SelectionPanel.tsx';
+
+// What this panel does to the rest of the application, rather than what it renders.
+//
+// The same instance is mounted beside the flat map and beside the 3D scene, so every side effect
+// it has must reach whichever view is on screen. Reaching for the flat map's own modules — its
+// camera, its overlay's refetch — is the defect these tests exist to prevent: that map is a
+// module-level object that exists whether or not it is mounted, so the command is accepted in
+// silence, the button the viewer pressed appears to do nothing, and the write they made goes on
+// being drawn in the view they are actually looking at.
+//
+// The other half is which entity the panel records a link against, which is decided from the
+// selection and not from whatever the panel happens to have loaded.
+
+const clusterEntrances = {
+  features: [
+    {
+      geometry: { type: 'Point', coordinates: [25.104, 45.203] },
+      properties: { id: 'entrance-a', caveId: 'cave-1', name: 'Gura Mare', approximate: false },
+    },
+  ],
+};
 
 const cave = {
   id: 'cave-1',
-  name: 'Peștera Demo Mare',
+  name: 'Peștera de Test',
   caveTypeId: null,
   region: null,
   surveyedLength: null,
@@ -19,47 +43,62 @@ const cave = {
 };
 
 const entrances = [
-  { id: 'entrance-1', name: 'Intrarea de sus', approximate: false, geom: { coordinates: [25.6, 45.65] } },
-  { id: 'entrance-2', name: 'Intrarea de jos', approximate: false, geom: { coordinates: [25.61, 45.66] } },
+  { id: 'entrance-a', name: 'Gura Mare', approximate: false, geom: { type: 'Point', coordinates: [25.11, 45.21] } },
+  { id: 'entrance-b', name: 'Intrarea de jos', approximate: false, geom: { type: 'Point', coordinates: [25.12, 45.22] } },
 ];
 
-let selection: WorkspaceSelection | null = null;
+const featureGeometry = { type: 'LineString', coordinates: [[25.1, 45.2], [25.2, 45.3]] };
 
-vi.mock('../../stores/workspaceStore.ts', () => ({
-  useWorkspaceStore: (select: (state: unknown) => unknown) =>
-    select({ selection, setSelection: vi.fn() }),
-}));
+const featureEnvelope = {
+  kind: 'generic',
+  feature: {
+    id: 'feature-1',
+    name: 'Fracture',
+    featureTypeCode: 'fracture',
+    geometry: featureGeometry,
+    description: null,
+    properties: {},
+    parents: [],
+    locationProtected: false,
+    cavingGroupId: null,
+    visibility: 'public',
+    omittedLocation: false,
+    approximateLocation: false,
+  },
+};
+
+const deleteFeature = vi.fn().mockResolvedValue(undefined);
+const updateFeature = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('../../api/hooks.ts', () => ({
   useCave: () => ({ data: cave, isPending: false }),
-  useEntrances: () => ({ data: entrances }),
   useCaveTypes: () => ({ data: [] }),
-  useClusterEntrances: () => ({ data: [] }),
-  useFeature: () => ({ data: undefined, isPending: true }),
-  useFeatureTypes: () => ({ data: [] }),
-  useDeleteFeature: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useUpdateFeature: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useCan: () => false,
+  useClusterEntrances: () => ({ data: clusterEntrances, isPending: false }),
+  useEntrances: () => ({ data: entrances }),
+  useFeature: () => ({ data: featureEnvelope, isPending: false }),
+  useFeatureTypes: () => ({
+    data: [{ id: 1, code: 'fracture', name: 'Fracture', propertiesSchema: null }],
+  }),
+  useCan: () => true,
+  useDeleteFeature: () => ({ mutateAsync: deleteFeature, isPending: false }),
+  useUpdateFeature: () => ({ mutateAsync: updateFeature, isPending: false }),
 }));
 
-// The map modules reach for a live OpenLayers map; the panel's own behaviour is what is
-// under test, so they are stubbed at their boundary.
-vi.mock('../../map/mapContext.ts', () => ({ flyTo: vi.fn(), fitGeoJsonGeometry: vi.fn() }));
-vi.mock('../../map/featureLayer.ts', () => ({ reloadSurfaceFeatures: vi.fn() }));
-vi.mock('../../map/mapFilters.ts', () => ({ getMapTagFilter: () => null }));
+// Both pull in stacks of their own and neither is what these tests are about.
+vi.mock('../history/HistoryPanel.tsx', () => ({ default: () => null }));
+vi.mock('../features/FeatureEditModal.tsx', () => ({ default: () => null }));
 
 /** The links panel is mounted, not rendered here: what it is mounted *for* is the point. */
-const mounted = vi.fn();
+const linksMounted = vi.fn();
 vi.mock('../reslinks/LinksSection.tsx', () => ({
   default: (props: { entityType: string; entityId: string; entityTitle?: string | null }) => {
-    mounted(props);
+    linksMounted(props);
     return <div data-testid="links-section" />;
   },
 }));
 
-const { default: SelectionPanel } = await import('./SelectionPanel.tsx');
-
-function show() {
+function renderPanel(selection: WorkspaceSelection) {
+  useWorkspaceStore.getState().setSelection(selection);
   return render(
     <MemoryRouter>
       <App>
@@ -69,34 +108,100 @@ function show() {
   );
 }
 
-describe('SelectionPanel', () => {
-  beforeEach(() => {
-    mounted.mockReset();
+function recorder() {
+  return { flyTo: vi.fn(), fitGeometry: vi.fn() } satisfies ViewCameraTarget;
+}
+
+let camera: ReturnType<typeof recorder>;
+let detachCamera: () => void;
+
+beforeEach(() => {
+  camera = recorder();
+  detachCamera = setActiveViewCamera(camera);
+  deleteFeature.mockClear();
+  linksMounted.mockReset();
+});
+
+afterEach(() => {
+  detachCamera();
+  cleanup();
+  useWorkspaceStore.getState().setSelection(null);
+});
+
+describe('the shared detail panel', () => {
+  it('moves the camera of the view on screen when a cluster asks to be zoomed into', () => {
+    renderPanel({ kind: 'cluster', lon: 25.1, lat: 45.2, count: 7, zoom: 8 });
+
+    fireEvent.click(screen.getByRole('button', { name: /Zoom here/ }));
+
+    // Two levels in from the zoom the cell was summed at, which is what opens it.
+    expect(camera.flyTo).toHaveBeenCalledWith(25.1, 45.2, 10);
   });
 
-  afterEach(cleanup);
+  it('moves it to a cluster member the viewer picks out of the list', () => {
+    renderPanel({ kind: 'cluster', lon: 25.1, lat: 45.2, count: 7, zoom: 8 });
+
+    fireEvent.click(screen.getByRole('button', { name: /Gura Mare/ }));
+
+    expect(useWorkspaceStore.getState().selection).toEqual({
+      kind: 'entrance',
+      entranceId: 'entrance-a',
+      caveId: 'cave-1',
+    });
+    expect(camera.flyTo).toHaveBeenCalledWith(25.104, 45.203, 15);
+  });
+
+  it('moves it to a cave entrance', async () => {
+    renderPanel({ kind: 'entrance', entranceId: 'entrance-a', caveId: 'cave-1' });
+
+    fireEvent.click(await screen.findByRole('button', { name: /Zoom to/ }));
+
+    expect(camera.flyTo).toHaveBeenCalledWith(25.11, 45.21, 16);
+  });
+
+  it('frames a feature geometry in it rather than in a map that may not be showing', () => {
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Zoom to/ }));
+
+    expect(camera.fitGeometry).toHaveBeenCalledWith(featureGeometry);
+  });
+
+  it('announces a delete so every view drawing that feature stops drawing it', async () => {
+    const heard = vi.fn();
+    const stopListening = onSurfaceFeaturesChanged(heard);
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Delete/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(deleteFeature).toHaveBeenCalledWith('feature-1'));
+    // Not "the map's overlay refetched": a view the writer never heard of has to hear about it,
+    // or a deleted feature stays on screen and stays clickable.
+    await waitFor(() => expect(heard).toHaveBeenCalledTimes(1));
+    expect(useWorkspaceStore.getState().selection).toBeNull();
+    stopListening();
+  });
 
   it('links the entrance that was clicked, not the cave it belongs to', () => {
-    selection = { kind: 'entrance', entranceId: 'entrance-2', caveId: 'cave-1' };
-    show();
+    renderPanel({ kind: 'entrance', entranceId: 'entrance-b', caveId: 'cave-1' });
 
     // An entrance is a feature in its own right: a link recorded from here has to name it,
     // or every entrance of a cave would silently record links against the same entity.
-    expect(mounted).toHaveBeenCalledWith(
+    expect(linksMounted).toHaveBeenCalledWith(
       expect.objectContaining({
         entityType: 'feature',
-        entityId: 'entrance-2',
+        entityId: 'entrance-b',
         entityTitle: 'Intrarea de jos',
       }),
     );
   });
 
   it('links the cave itself when the cave, and not one of its entrances, is selected', () => {
-    selection = { kind: 'cave', caveId: 'cave-1' };
-    show();
+    renderPanel({ kind: 'cave', caveId: 'cave-1' });
 
-    expect(mounted).toHaveBeenCalledWith(
-      expect.objectContaining({ entityId: 'cave-1', entityTitle: 'Peștera Demo Mare' }),
+    expect(linksMounted).toHaveBeenCalledWith(
+      expect.objectContaining({ entityId: 'cave-1', entityTitle: 'Peștera de Test' }),
     );
     expect(screen.getByTestId('links-section')).toBeInTheDocument();
   });

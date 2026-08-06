@@ -152,6 +152,13 @@ todo.txt
 /CLAUDE.md
 /AGENTS.md
 
+# Elevation data an operator downloaded or baked. The terrain script's documented examples use
+# relative directories, so running one of them from here would otherwise drop tens of thousands
+# of tiles and hundreds of megabytes of GeoTIFF into the working tree.
+/dem/
+/terrain/
+*.terrain
+
 # .NET
 bin/
 obj/

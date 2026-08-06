@@ -7,7 +7,14 @@ import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Circle as CircleStyle, Fill, Icon, Stroke, Style } from 'ol/style';
 import { fetchMapFeatures, type FeatureType } from '../api/hooks.ts';
+import { onSurfaceFeaturesChanged } from '../workspace/surfaceFeatureRefresh.ts';
+import {
+  getFeatureTypeSymbol,
+  onFeatureTypeCatalogChanged,
+  setFeatureTypeCatalog,
+} from './featureTypeCatalog.ts';
 import { getMapTagFilter } from './mapFilters.ts';
+import { featureSymbolUrl, surfaceFeaturePalette as palette } from './markerPalette.ts';
 
 // The cross-kind features overlay. The layer id keeps its historical string:
 // saved views persist overlay ids (visibility, opacity, stacking), and renaming
@@ -22,31 +29,18 @@ export function getSurfaceFeatureSource(): VectorSource {
   return source;
 }
 
-// Feature-type catalog lookups, fed from /feature-types by the map page.
-// Server-loaded features carry `symbol` and `typeCode` in their properties;
-// the by-id maps cover freshly drawn (unsaved) features, which only know the
-// featureTypeId the palette armed. Names back the hover tooltip and lists.
-let symbolByTypeId = new globalThis.Map<number, string>();
-let nameByTypeId = new globalThis.Map<number, string>();
-let nameByTypeCode = new globalThis.Map<string, string>();
+// Feature-type names and symbols live in a catalog of their own, free of any drawing library,
+// because the 3D scene needs the same answers and is loaded as a separate chunk — reaching them
+// through this layer would put OpenLayers in it. This layer only has to redraw when they change.
 const iconCache = new globalThis.Map<string, Icon>();
 
+onFeatureTypeCatalogChanged(() => source.changed()); // restyle loaded features with the fresh names
+
 export function setFeatureTypeSymbols(types: FeatureType[]): void {
-  symbolByTypeId = new globalThis.Map(
-    types.filter((t) => t.symbolFile).map((t) => [Number(t.id), t.symbolFile!]),
-  );
-  nameByTypeId = new globalThis.Map(types.map((t) => [Number(t.id), t.name]));
-  nameByTypeCode = new globalThis.Map(types.map((t) => [t.code, t.name]));
-  source.changed(); // restyle already-loaded features with the fresh catalog
+  setFeatureTypeCatalog(types);
 }
 
-export function getFeatureTypeName(featureTypeId: unknown): string | undefined {
-  return nameByTypeId.get(Number(featureTypeId));
-}
-
-export function getFeatureTypeNameByCode(typeCode: unknown): string | undefined {
-  return typeof typeCode === 'string' ? nameByTypeCode.get(typeCode) : undefined;
-}
+export { getFeatureTypeName, getFeatureTypeNameByCode } from './featureTypeCatalog.ts';
 
 // Selection highlight: the styling reads this id so the highlight survives
 // bbox reloads (features are recreated, the id is stable).
@@ -64,13 +58,6 @@ export function createSurfaceFeatureLayer(): VectorLayer {
   const layer = new VectorLayer({ source, style: featureStyle });
   layer.set('id', SURFACE_FEATURE_LAYER_ID);
   return layer;
-}
-
-let activeReload: (() => void) | undefined;
-
-/** Forces a refetch of the current extent (e.g. after saving edits). */
-export function reloadSurfaceFeatures(): void {
-  activeReload?.();
 }
 
 /** Bbox loading on moveend (debounced), stale responses discarded; returns a detach fn. */
@@ -112,22 +99,15 @@ export function attachSurfaceFeatureLoader(map: Map): () => void {
 
   map.on('moveend', onMoveEnd);
   void load();
-  activeReload = () => void load();
+  // A write elsewhere in the application invalidates this extent, and this layer is not the only
+  // view of those features any more, so the news is subscribed to rather than delivered here.
+  const unsubscribeChanges = onSurfaceFeaturesChanged(() => void load());
   return () => {
     map.un('moveend', onMoveEnd);
     window.clearTimeout(timer);
-    activeReload = undefined;
+    unsubscribeChanges();
   };
 }
-
-const palette = {
-  point: '#7a5c1e',
-  line: '#8c4a2f',
-  fill: 'rgba(140, 74, 47, 0.15)',
-  stroke: '#ffffff',
-  highlight: '#1677ff',
-  highlightHalo: 'rgba(22, 119, 255, 0.25)',
-};
 
 function featureStyle(feature: FeatureLike): Style | Style[] {
   const geometryType = feature.getGeometry()?.getType();
@@ -150,11 +130,11 @@ function featureStyle(feature: FeatureLike): Style | Style[] {
     // Server rows carry their symbol file; pending locally drawn features only
     // carry the armed featureTypeId, resolved through the catalog instead.
     const symbolProp = feature.get('symbol') as string | null | undefined;
-    const symbol = symbolProp ?? symbolByTypeId.get(Number(feature.get('featureTypeId')));
+    const symbol = symbolProp ?? getFeatureTypeSymbol(feature.get('featureTypeId'));
     if (symbol) {
       let icon = iconCache.get(symbol);
       if (!icon) {
-        icon = new Icon({ src: `/feature_symbols/${symbol}`, scale: 0.5 });
+        icon = new Icon({ src: featureSymbolUrl(symbol), scale: 0.5 });
         iconCache.set(symbol, icon);
       }
       return [...halo, new Style({ image: icon })];

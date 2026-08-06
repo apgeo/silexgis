@@ -81,6 +81,15 @@ Previous versions:
 - **Vector import/export** — GPX, KML, Shapefile, GeoJSON, WKT/CSV.
 - **3D survey models** — Therion `.lox` / Survex `.3d` via CaveView.js, plus cave
   centerlines projected on the map.
+- **3D view** — the configured base layers draped on a globe, on a page that is downloaded
+  only when it is opened. Needs WebGL 2; a browser without it gets an explanation rather
+  than a dead canvas. No vendor terrain, imagery or geocoding service is contacted and the
+  3D engine is served by your own installation; the basemap is whichever base layers you
+  configured, so an air-gapped install needs one it can reach.
+- **Real relief, if you want it** — that globe is a smooth sphere out of the box, needing no
+  elevation server and nothing downloaded. An operator who wants the caves under actual
+  hillsides bakes free elevation data into a tile pyramid in one documented step and serves it
+  as static files from the same installation. Everyone who does not is unaffected.
 - **Trips, tags, saved & shareable map views**, and **multi-window** pop-out panels.
 - **Share links** — hand out a revocable link to one feature and what it contains, either
   public or sign-in-only. A share never reveals a protected location.
@@ -127,7 +136,8 @@ to set it up is in [Encryption at rest](docs/INSTALL.md#encryption-at-rest).
 ```
 server/   ASP.NET Core API (.NET solution: Api / Domain / Infrastructure + tests)
 client/   React + TypeScript SPA (Vite, Ant Design, OpenLayers)
-deploy/   Docker Compose, TLS overlay, reverse-proxy configs, backup/restore scripts
+deploy/   Docker Compose, TLS and terrain overlays, reverse-proxy configs, backup/restore
+          and terrain pre-bake scripts
 docs/     Installation and operations documentation
 ```
 

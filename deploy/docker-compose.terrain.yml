@@ -1,0 +1,33 @@
+# Terrain overlay: draws the 3D globe's ground from an elevation model you baked yourself,
+# instead of from the smooth reference ellipsoid.
+#
+# Usage:
+#   node deploy/terrain.mjs fetch --bbox 22,45,26,48 --out ./dem
+#   node deploy/terrain.mjs bake  --in ./dem --out /srv/silexgis/terrain
+#   docker compose -f docker-compose.yml -f docker-compose.terrain.yml up -d
+#
+# Requires in .env (the bake command prints the exact lines for what it just produced):
+#   SILEXGIS_TERRAIN_DIR=/srv/silexgis/terrain      # host directory holding layer.json
+#   SILEXGIS__Terrain__Url=/terrain/
+#   SILEXGIS__Terrain__HeightDatum=Orthometric      # or Ellipsoidal, matching the bake
+#   SILEXGIS__Terrain__GeoidHeightM=0               # the local geoid undulation, if Ellipsoidal
+#   SILEXGIS__Terrain__Attribution=...              # the elevation data's required credit
+#
+# The SILEXGIS__Terrain__* lines need no mapping here: the api service already passes the whole
+# of .env through. This file exists solely to put the baked tiles where the web service can
+# serve them, which is the one thing an environment variable cannot do.
+#
+# Nothing about this overlay changes the base stack. Left off, `docker compose up` is exactly
+# what it was: no extra service, no extra image, no download, no pre-baking.
+name: silexgis
+
+services:
+  web:
+    volumes:
+      # Read-only, and mounted rather than copied into the image: a country's worth of elevation
+      # tiles is hundreds of megabytes that would otherwise be rebuilt into the image on every
+      # deploy, and they are data an operator produced rather than part of the application.
+      #
+      # The directory this lands on is served by the /terrain/ block in the web image's nginx
+      # configuration, which states the serving rule these tiles must be served under.
+      - ${SILEXGIS_TERRAIN_DIR:?set SILEXGIS_TERRAIN_DIR in .env (the directory holding layer.json)}:/usr/share/nginx/html/terrain:ro

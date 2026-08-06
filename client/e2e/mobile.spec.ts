@@ -81,6 +81,10 @@ test('desktop-only chrome steps aside and the save cluster outlives the tool str
   // Pop-out windows and the jump-to-scale combo are meaningless/clutter at this width.
   await expect(page.getByTestId('map-popout-registry')).toHaveCount(0);
   await expect(page.getByTestId('map-popout-viewer3d')).toHaveCount(0);
+  await expect(page.getByTestId('map-popout-scene3d')).toHaveCount(0);
+  // A second renderer beside the map is a desktop arrangement: there is no width to split here,
+  // and the 3D view keeps its own full-screen route for a phone.
+  await expect(page.getByTestId('map-scene3d-toggle')).toHaveCount(0);
   await expect(page.locator('.map-scale-overlay')).toHaveCount(0);
   // Locate-me stays: it is more useful on a phone than anywhere else.
   await expect(page.locator('.map-popout-overlay')).toBeVisible();

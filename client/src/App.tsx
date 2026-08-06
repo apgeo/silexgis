@@ -17,6 +17,7 @@ import LegacySecurityRedirect from './pages/settings/LegacySecurityRedirect.tsx'
 // demand, keeping the initial bundle to the shell + auth. Login/callback stay eager —
 // they are tiny and always needed first.
 const MapPage = lazy(() => import('./pages/MapPage.tsx'));
+const Scene3DPage = lazy(() => import('./pages/Scene3DPage.tsx'));
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage.tsx'));
 const CaveListPage = lazy(() => import('./pages/caves/CaveListPage.tsx'));
 const CaveFormPage = lazy(() => import('./pages/caves/CaveFormPage.tsx'));
@@ -78,6 +79,7 @@ const router = createBrowserRouter([
           // page; "/map" is the map's dedicated path, which never dispatches.
           { index: true, element: <LandingRoute map={<Loadable><MapPage /></Loadable>} /> },
           { path: '/map', element: <Loadable><MapPage /></Loadable> },
+          { path: '/map3d', element: <Loadable><Scene3DPage /></Loadable> },
           { path: '/dashboard', element: <Loadable><DashboardPage /></Loadable> },
           { path: '/caves', element: <Loadable><CaveListPage /></Loadable> },
           { path: '/caves/new', element: <Loadable><CaveFormPage /></Loadable> },

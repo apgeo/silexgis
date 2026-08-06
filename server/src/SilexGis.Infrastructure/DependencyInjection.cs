@@ -51,6 +51,7 @@ public static class DependencyInjection
         // One typed-property validator serves every kind-keyed schema in the system
         // (feature properties, document metadata) — the knowledge has a single home.
         services.AddSingleton<ITypedPropertiesValidator, Metadata.JsonSchemaPropertiesValidator>();
+        services.AddSingleton<Geodata.ICrsRegistry, Geodata.ProjCrsRegistry>();
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
         services.AddScoped<Documents.DocumentWriteService>();

@@ -4,7 +4,7 @@ import View from 'ol/View';
 import { ScaleLine, defaults as defaultControls } from 'ol/control';
 import GeoJSON from 'ol/format/GeoJSON';
 import LayerGroup from 'ol/layer/Group';
-import { fromLonLat } from 'ol/proj';
+import { fromLonLat, transformExtent } from 'ol/proj';
 
 // The workspace map is a module-level singleton living OUTSIDE React state;
 // components attach/detach the DOM target and subscribe to events.
@@ -143,6 +143,46 @@ export function fitExtent(extent: [number, number, number, number]): void {
     // as the map gets a size (it acquires one when the map page mounts).
     map.once('change:size', fit);
   }
+}
+
+/**
+ * The ground box the map is showing, in degrees, west/south/east/north — or undefined before it
+ * has been laid out, when it is showing nothing at all.
+ */
+export function mapLonLatExtent(): [number, number, number, number] | undefined {
+  const map = getWorkspaceMap();
+  const size = map.getSize();
+  if (!size) {
+    return undefined;
+  }
+  return transformExtent(map.getView().calculateExtent(size), 'EPSG:3857', 'EPSG:4326') as [
+    number,
+    number,
+    number,
+    number,
+  ];
+}
+
+/**
+ * Frames a box given in degrees, but only while the map is actually on screen.
+ *
+ * Deliberately not `fitExtent`, which waits for the map to be laid out and fits as soon as it is.
+ * That is right for "show me this feature", which is a thing the viewer asked for and should still
+ * happen when they arrive at the map. It is wrong for keeping two views in step: the flat map is a
+ * module-level object that exists whether or not it is mounted, so an extent that arrived while
+ * the viewer was in the 3D view would be held and then applied, minutes later, over wherever they
+ * had since navigated to.
+ */
+export function fitLonLatExtent(bounds: [number, number, number, number]): void {
+  const map = getWorkspaceMap();
+  if (!map.getSize()) {
+    return;
+  }
+  map.getView().fit(transformExtent(bounds, 'EPSG:4326', 'EPSG:3857'), {
+    padding: [60, 60, 60, 60],
+    maxZoom: 17,
+    duration: 500,
+  });
 }
 
 /** Fits the view to a GeoJSON geometry (EPSG:4326) — points get a sane close-up zoom. */

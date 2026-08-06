@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { userManager } from '../auth/auth.tsx';
 
 // CaveView.js is not published on npm — upstream ships a prebuilt browser bundle that
 // exposes the `CV2` global and fetches its web workers/assets at runtime relative to the
@@ -76,4 +77,89 @@ export function loadCaveView(): Promise<Cv2Namespace> {
     document.head.appendChild(script);
   });
   return pending;
+}
+
+// ---- CRS lookup rewrite ----
+//
+// A Survex .3d file names its coordinate system in the header, and the bundle resolves that name
+// by fetching `https://epsg.io/{code}.proj4` while parsing. Two things are wrong with that for a
+// self-hosted application: it is an uncontrolled outbound request that tells a third party which
+// surveys are being opened, and on an installation with no route out it does not merely lose the
+// georeferencing — the bundle mishandles a rejected fetch and the whole load fails. The bundle
+// hard-codes only a handful of systems (Web Mercator, WGS84 and British National Grid among
+// them); Romanian Stereo70, EPSG:31700, is not one, so it is exactly the case that breaks here.
+//
+// The vendored bundle is never edited, and the class that issues the request is internal to it,
+// so there is nothing to subclass or override. What is reachable is the fetch it calls: wrap it,
+// rewrite that one URL shape to our own offline-resolving endpoint, and forward everything else
+// untouched — the survey download, the bundle's workers and its assets all go through the same
+// function.
+const EPSG_IO_PROJ4 = /^\/(\d+)\.proj4$/;
+
+let installedFetch: typeof globalThis.fetch | null = null;
+let originalFetch: typeof globalThis.fetch | null = null;
+let holders = 0;
+
+/**
+ * Routes the vendored viewer's CRS lookups to this installation instead of epsg.io, for as long
+ * as the returned release function has not been called. Reference-counted: several viewer panels
+ * can be open at once (the pop-out window is a separate realm with its own count), and React's
+ * development double-invoke acquires and releases twice.
+ *
+ * A lookup issued after the last panel is released — a parse still finishing during teardown —
+ * escapes to epsg.io as before. Holding the wrapper for the lifetime of the page would close
+ * that window, at the cost of leaving a global patched for a viewer nobody has open; the request
+ * only happens while a survey is being parsed, so the window is small and the trade favours
+ * putting the global back.
+ */
+export function acquireCrsRewrite(): () => void {
+  if (holders === 0) {
+    originalFetch = globalThis.fetch;
+    installedFetch = async (input, init) => {
+      const forward = originalFetch!;
+      const srid = crsCodeOf(input);
+      if (srid === null) return forward(input, init);
+
+      // The bundle treats a rejected fetch as a crash but a non-ok response as "no CRS", so
+      // every failure here has to arrive as a Response. An unknown code degrades to an
+      // unreferenced survey, which is what would have happened anyway.
+      try {
+        const user = await userManager.getUser();
+        return await forward(`/api/v1/crs/${srid}.proj4`, {
+          headers: user?.access_token ? { Authorization: `Bearer ${user.access_token}` } : undefined,
+        });
+      } catch {
+        return new Response(null, { status: 503, statusText: 'CRS lookup unavailable' });
+      }
+    };
+    globalThis.fetch = installedFetch;
+  }
+  holders += 1;
+
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    holders -= 1;
+    // Only put back what we replaced. Anything that wrapped our wrapper in the meantime owns the
+    // global now, and restoring underneath it would silently drop that layer.
+    if (holders === 0 && globalThis.fetch === installedFetch && originalFetch) {
+      globalThis.fetch = originalFetch;
+      installedFetch = null;
+      originalFetch = null;
+    }
+  };
+}
+
+/** The EPSG code of an epsg.io PROJ.4 request, or null for every other request. */
+function crsCodeOf(input: RequestInfo | URL): string | null {
+  const raw = input instanceof Request ? input.url : input.toString();
+  let url: URL;
+  try {
+    url = new URL(raw, window.location.origin);
+  } catch {
+    return null;
+  }
+  if (url.hostname !== 'epsg.io') return null;
+  return EPSG_IO_PROJ4.exec(url.pathname)?.[1] ?? null;
 }

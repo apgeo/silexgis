@@ -38,6 +38,12 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # The deployment scripts are plain Node with no toolchain of their own, so they are
+      # exercised by the runner built into Node. The pattern is quoted because Node expands it
+      # itself; letting a shell do it would behave differently on different runners.
+      - name: Test the deployment scripts
+        run: node --test "deploy/**/*.test.mjs"
+        working-directory: ${{ github.workspace }}
 
   docker:
     runs-on: ubuntu-latest

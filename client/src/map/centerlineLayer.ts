@@ -6,6 +6,7 @@ import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Stroke, Style } from 'ol/style';
 import { fetchCenterlineFeatures, type MapConfig } from '../api/hooks.ts';
+import { centerlinePalette } from './markerPalette.ts';
 
 export const CENTERLINE_LAYER_ID = 'centerlines';
 
@@ -19,10 +20,10 @@ const format = new GeoJSON();
  * bases) is worth its cost only close in, where there are far fewer components on screen.
  */
 const detailStyle = [
-  new Style({ stroke: new Stroke({ color: 'rgba(255, 255, 255, 0.7)', width: 4 }) }),
-  new Style({ stroke: new Stroke({ color: '#7a1f1f', width: 2, lineDash: [6, 4] }) }),
+  new Style({ stroke: new Stroke({ color: centerlinePalette.casing, width: 4 }) }),
+  new Style({ stroke: new Stroke({ color: centerlinePalette.line, width: 2, lineDash: [6, 4] }) }),
 ];
-const overviewStyle = new Style({ stroke: new Stroke({ color: '#7a1f1f', width: 2 }) });
+const overviewStyle = new Style({ stroke: new Stroke({ color: centerlinePalette.line, width: 2 }) });
 
 /** Limits used until the server's own are loaded; overridden by /map/config. */
 const fallbackLimits = { detailZoom: 18, maxPaths: 25000 };

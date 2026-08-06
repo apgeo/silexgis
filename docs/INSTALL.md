@@ -8,6 +8,7 @@ are a database password, an admin account, and the public URL.
 - [Enabling HTTPS](#enabling-https)
 - [Encryption at rest](#encryption-at-rest)
 - [Showing Word and Excel files](#showing-word-and-excel-files)
+- [Terrain (optional)](#terrain-optional)
 - [Backups](#backups)
 - [Upgrades](#upgrades)
 - [External login providers](#external-login-providers)
@@ -234,6 +235,157 @@ Notes worth knowing before you turn it on:
 - Turning it off again: stop the `convert` service **and** remove
   `SILEXGIS__Conversion__Enabled` from `.env`, or uploads keep queuing conversions for a
   service that is no longer there.
+
+## Terrain (optional)
+
+By default the 3D view draws the globe as a smooth mathematical sphere. That needs nothing
+installed, nothing downloaded and no elevation server — it is what `docker compose up` gives you,
+and if real relief is not wanted, **nothing in this section applies and nothing changes.**
+
+To put the caves under real hillsides, you bake elevation data into a tile pyramid once and serve
+it as static files. It is entirely local afterwards: no account, no key, and no request leaves
+your installation while somebody is looking at a cave.
+
+You need Docker (for the pre-baker) and Node 18+ (for the script). Budget roughly **45 MB of
+download and 40 MB of tiles per 1°×1° cell**, and about **6 minutes** of one machine's time per
+cell at full detail. Romania is about 30 cells.
+
+### 1. Download the elevation data
+
+```bash
+node deploy/terrain.mjs fetch --bbox 22,46,23,47 --out ./dem
+```
+
+The box is `west,south,east,north` in degrees. This pulls Copernicus DEM GLO-30 from the AWS
+open-data bucket — free for any use including commercial, attribution required, no account and no
+key. Cells that are entirely sea are simply not published, and are reported and skipped.
+
+Each cell is written under a temporary name and moved into place only once all of it has arrived
+and its length has been checked, so re-running skips the cells that are finished and re-fetches
+only the one an interruption caught in the middle. Nothing that stops a run part way — a closed
+terminal, a dropped link, a disk that filled — can leave behind a fragment that a later run
+mistakes for a finished cell.
+
+### 2. Bake the pyramid
+
+```bash
+node deploy/terrain.mjs bake --in ./dem --out /srv/silexgis/terrain
+```
+
+This runs `gaia3d/mago-3d-terrainer` (MPL-2.0; the image carries its own Java) and writes a static
+tile pyramid. Add `--max-depth 9` for a quick first run — every extra level roughly quadruples
+both the tile count and the time. The pre-baker asks for a good deal of memory; give Docker 8 GB
+or more before baking a large area.
+
+When it finishes it verifies what it produced and **prints the exact `.env` lines for it**. Paste
+those into `deploy/.env` rather than writing them by hand — the vertical datum in particular is
+not a thing to guess at (see below).
+
+You can re-run the verification at any time, and it is worth re-running on the machine that will
+actually serve the files, after they have been copied there:
+
+```bash
+node deploy/terrain.mjs check --dir /srv/silexgis/terrain
+```
+
+It reads every tile, and refuses a pyramid that is empty, cut short, or missing whole levels it
+says it holds — the shapes a bake that ran out of disk or a copy that was interrupted leave
+behind. None of those announces itself while somebody is looking at it: the missing tiles answer
+`404` and the ground is quietly drawn from the coarser level above them, which is the wrong
+heights presented as the right ones.
+
+### 3. Serve it
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.terrain.yml up -d
+```
+
+The overlay mounts your terrain directory read-only into the web service, which serves it at
+`/terrain/`. Nothing else about the stack changes: no new service, no new image, no new port.
+
+**Not using Docker?** Uncomment the `location /terrain/` block in `deploy/nginx/silexgis.conf`,
+point its `alias` at the baked directory, and set the same `SILEXGIS__Terrain__*` variables for
+the API.
+
+### The one serving rule
+
+**Whatever your web server declares a tile's encoding to be, it must describe the bytes on disk,
+exactly.**
+
+This is worth stating on its own because getting it wrong has practically no symptom. Terrain
+tiles are a binary mesh format, and a browser handed one whose declared encoding is wrong carries
+on as though nothing had happened: every request answers `200 OK`, no request fails, and the only
+real sign is a globe with no ground on it. Measured on this stack, serving compressed tiles
+without saying so raised **no error and no warning** — two ordinary log lines, which anyone whose
+console is filtered to errors, as most are, never sees — while every sampled height came back
+empty.
+
+The shipped configuration is already correct — the pre-baker writes uncompressed tiles and the
+`/terrain/` block declares no encoding — so this only matters if you change something.
+
+If you want the tiles compressed (worth roughly 60% over the wire), **gzip each tile into a
+sibling `.gz` file and keep the original**:
+
+```bash
+find /srv/silexgis/terrain -name '*.terrain' -exec gzip -k {} \;
+```
+
+`gzip_static` then serves whichever of the two the browser can accept and labels it itself, which
+is the only way to get the pairing right that cannot also get it wrong. **Never gzip a tile in
+place**, and never add a `Content-Encoding` header by hand.
+
+If the tiles cannot be used, the 3D view says so on screen and falls back to the smooth globe
+rather than showing an empty one. `node deploy/terrain.mjs check` reports the same thing from the
+files themselves.
+
+### Re-baking later
+
+Elevation tiles are cached hard by browsers, for a week, because they are large and they normally
+never change. Re-baking is the case where they do — extending coverage, or switching the vertical
+datum — and it has to be able to reach a viewer who was looking at the old ones yesterday.
+
+**`bake` handles this for you: it stamps the pyramid with a version derived from the tiles
+themselves, and that version is on the end of every tile URL a browser requests.** Change any
+tile and every address changes, so nothing stale can be reused; re-bake tiles that come out
+identical and the caches stay warm. `check` prints the version, so you can confirm it moved.
+
+Two things to keep in mind:
+
+- **Bake through the script, not by calling the pre-baker directly.** The pre-baker writes the
+  same constant version into every pyramid it has ever produced. With that, a browser that saw
+  any earlier pyramid at your address keeps drawing it from its own cache — not one request
+  reaches your server, nothing errors, and if what you changed was the datum, every cave is now
+  forty metres off its hillside. `check` warns if it finds an unstamped pyramid.
+- **If you serve the tiles yourself, do not cache `layer.json` the way you cache the tiles.** It
+  is where the version comes from, so a browser that does not re-read it keeps building the old
+  addresses. The shipped configuration sets `no-cache` on it and a week on everything else.
+
+### Which heights your tiles hold
+
+Cave survey altitudes are heights above sea level. A globe draws every terrain tile as a height
+above the WGS84 ellipsoid, whatever the numbers in it actually meant — so the same surveyed
+altitude needs a different correction depending on the elevation model, and getting it wrong
+moves **every cave about forty metres** off its hillside with nothing on screen to say so.
+
+That is why the datum is declared per source rather than assumed:
+
+| `SILEXGIS__Terrain__HeightDatum` | Use it when | Correction applied |
+|---|---|---|
+| `Orthometric` (default) | The tiles hold heights above sea level. This is what an unconverted elevation model holds, Copernicus included, and what most hosted terrain services publish. | none — the tiles and the survey already agree |
+| `Ellipsoidal` | The tiles were converted when they were baked (`--datum ellipsoidal`). | surveyed altitudes are raised by `SILEXGIS__Terrain__GeoidHeightM` |
+
+Baking with the default leaves the heights as they came, which is the simpler and safer of the
+two: terrain and survey are then consistent with each other without any correction at all. Baking
+with `--datum ellipsoidal` is geodetically truer and then requires `SILEXGIS__Terrain__GeoidHeightM`
+to be set to the local geoid undulation — measured values over Romanian karst run **+39 m to
++45 m**, about **+43** in the Apuseni. Leaving it at zero with an ellipsoidal bake puts every cave
+that far below its hillside; the API says so in its log at startup, and so does the bake command.
+
+### Attribution
+
+Copernicus GLO-30 requires a credit, and the pre-baker writes a placeholder into the pyramid's own
+metadata rather than a real one. `bake` replaces it, and also prints the credit as
+`SILEXGIS__Terrain__Attribution`, which is what the 3D view shows on screen. Keep it.
 
 ## Backups
 
@@ -530,6 +682,10 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Auth__DefaultPermissionGroups` | *(empty)* | comma-separated permission-group slugs (e.g. `editors`) every new account joins at registration or first external sign-in |
 | `SILEXGIS__Map__CenterlineDetailZoom` | `18` | zoom at which cave centerlines switch from passage outlines to full survey detail |
 | `SILEXGIS__Map__CenterlineMaxPaths` | `25000` | line budget per centerline request; over it, outlines are served instead |
+| `SILEXGIS__Terrain__Url` | *(empty)* | where the baked elevation tiles are served from, e.g. `/terrain/`. Empty means the 3D view draws a smooth globe, which needs nothing installed. See [Terrain](#terrain-optional) |
+| `SILEXGIS__Terrain__HeightDatum` | `Orthometric` | what the tile heights are measured from: `Orthometric` (above sea level) or `Ellipsoidal` (converted when baked). Wrong here puts every cave about 40 m off its hillside |
+| `SILEXGIS__Terrain__GeoidHeightM` | `0` | the local geoid undulation in metres, used **only** with `Ellipsoidal`. +39 to +45 over Romanian karst |
+| `SILEXGIS__Terrain__Attribution` | *(empty)* | credit the elevation data's licence requires; shown on the 3D scene |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB) |
 | `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys (must persist across restarts) |

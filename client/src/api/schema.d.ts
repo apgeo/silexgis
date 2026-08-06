@@ -969,6 +969,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/crs/{srid}.proj4": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** PROJ.4 definition of one EPSG code as plain text, resolved offline. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    srid: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/shared/features/{token}": {
         parameters: {
             query?: never;
@@ -1176,7 +1212,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Cave centerlines as GeoJSON for the given bbox and zoom; splay-free below the detail zoom, protected caves' lines omitted. */
+        /** Cave centerlines as GeoJSON for the given bbox and zoom; splay-free below the detail zoom, protected caves' lines omitted. z=true opts in to altitudes, which the flat display skeleton cannot carry. */
         get: {
             parameters: {
                 query: {
@@ -1184,6 +1220,7 @@ export interface paths {
                     zoom?: number;
                     detailZoom?: number;
                     maxPaths?: number;
+                    z?: boolean;
                 };
                 header?: never;
                 path?: never;
@@ -8584,6 +8621,8 @@ export interface components {
             /** Format: int32 */
             withheldCount: number;
             detail: boolean;
+            /** Format: int32 */
+            flatCount: number;
         };
         /** @enum {unknown} */
         CenterlineSource: "uploaded" | "extracted";
@@ -9314,6 +9353,7 @@ export interface components {
             centerlineGateZoom: number;
             /** Format: int32 */
             clusterMaxZoom: number;
+            terrain: null | components["schemas"]["TerrainSourceDto"];
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";
@@ -10122,6 +10162,12 @@ export interface components {
             description: null | string;
             /** Format: int32 */
             sortOrder: number;
+        };
+        TerrainSourceDto: {
+            url: string;
+            attribution: null | string;
+            /** Format: double */
+            surveyHeightOffsetM: number;
         };
         TestMessageRequest: {
             recipient: string;

@@ -18,9 +18,9 @@ import {
   type FeatureListParams,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
-import { reloadSurfaceFeatures } from '../../map/featureLayer.ts';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
+import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 
 const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
 const featureKinds: FeatureKind[] = ['generic', 'cave', 'caveEntrance', 'centerline'];
@@ -55,7 +55,7 @@ export default function FeatureListPage() {
   const onDelete = async (id: string) => {
     try {
       await deleteFeature.mutateAsync(id);
-      reloadSurfaceFeatures();
+      surfaceFeaturesChanged();
       message.success(t('common.deleted'));
     } catch {
       message.error(t('common.saveFailed'));

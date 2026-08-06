@@ -1,0 +1,98 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Chrome pinned to places in the scene: what the pointer is on, and what was picked. */
+
+/* Covers the scene without taking anything from it. Pointer events are handed back only by the
+   callout below, which is the one piece a viewer acts on — everything else here must let a click
+   through to the globe underneath, or the scene would stop responding wherever a label sat. */
+.scene3d-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* Below the scene's own controls, deliberately. The callout below takes pointer events back, and
+     it is pinned to a place in the world rather than to a corner — so it goes wherever that place
+     goes, including on top of the layer and camera buttons. Whichever of the two is higher here
+     both hides the other and takes its presses; a label partly behind a button is recoverable,
+     while a button that looks pressable and silently is not is the view refusing to work. The
+     placement arithmetic keeps them apart in the first place wherever it can; this decides what
+     happens when it cannot. */
+  z-index: 4;
+}
+
+/* Both pieces are positioned by a transform from the top-left corner, so they must start there
+   rather than wherever the flow would put them. */
+.scene3d-overlay-tooltip,
+.scene3d-overlay-callout {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Hidden until something has placed it, so it cannot appear in the corner for one frame. */
+  visibility: hidden;
+}
+
+/* The same dark chip the flat map draws over its own canvas, so a name reads the same in both
+   views. It is already dark in both themes on purpose: it is drawn over map imagery, not over the
+   application's own background, and imagery is bright whichever theme the chrome is in. */
+.scene3d-overlay-tooltip {
+  max-width: min(60%, 320px);
+  padding: 2px 8px;
+  overflow: hidden;
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 4px;
+}
+
+.scene3d-overlay-callout {
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+  max-width: min(70%, 320px);
+  padding: 6px 6px 6px 10px;
+  color: rgba(0, 0, 0, 0.88);
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+}
+
+/* The colour the flat map highlights a selected feature in, carried over as the callout's edge so
+   the two views agree about what "this one is selected" looks like. */
+.scene3d-overlay-callout {
+  border-left: 3px solid #1677ff;
+}
+
+.scene3d-overlay-callout:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+.scene3d-overlay-callout-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.scene3d-overlay-callout-kind {
+  font-size: 12px;
+}
+
+html[data-theme='dark'] .scene3d-overlay-callout {
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* A finger needs a bigger target than a cursor, and the close button is the only thing here it
+   has to hit. The same forty pixels the rest of this application gives a touch target. */
+@media (hover: none), (pointer: coarse) {
+  .scene3d-overlay-callout {
+    padding: 8px 8px 8px 12px;
+  }
+
+  .scene3d-overlay-callout .ant-btn {
+    width: 40px;
+    height: 40px;
+  }
+}

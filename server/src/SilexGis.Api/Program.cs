@@ -15,6 +15,7 @@ using SilexGis.Api.Features.Attachments;
 using SilexGis.Api.Features.AccessHistory;
 using SilexGis.Api.Features.Audit;
 using SilexGis.Api.Features.Cabinets;
+using SilexGis.Api.Features.Crs;
 using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Dashboard;
 using SilexGis.Api.Features.Documents;
@@ -122,6 +123,8 @@ try
         .BindConfiguration(AccessOptions.SectionName);
     builder.Services.AddOptions<MapOptions>()
         .BindConfiguration(MapOptions.SectionName);
+    builder.Services.AddOptions<TerrainOptions>()
+        .BindConfiguration(TerrainOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
     // One resolver per resource-link target world; the directory is what the link
@@ -210,6 +213,7 @@ try
     api.MapEntranceEndpoints();
     api.MapSurveyModelEndpoints();
     api.MapCenterlineEndpoints();
+    api.MapCrsEndpoints();
     api.MapFeatureEndpoints();
     api.MapFeatureHierarchyEndpoints();
     api.MapFeatureLinkEndpoints();
@@ -271,6 +275,15 @@ try
                     "Auth:DefaultPermissionGroups names no existing permission group: {Slug}", unknown);
             }
         }
+    }
+
+    // An elevation model is described by the operator and read by nobody else, so a description
+    // that contradicts itself has no symptom until somebody notices every cave sitting off its
+    // hillside. Said once, at startup, rather than left to be discovered.
+    foreach (var warning in app.Services.GetRequiredService<IOptions<TerrainOptions>>()
+                 .Value.ConfigurationWarnings())
+    {
+        Log.Warning("Terrain configuration: {Warning}", warning);
     }
 
     // `dotnet run -- seed-demo`: load the demo dataset and exit.

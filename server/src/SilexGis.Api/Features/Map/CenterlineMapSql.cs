@@ -13,6 +13,10 @@ namespace SilexGis.Api.Features.Map;
 /// One row of the centerline map query: the chosen representation already clipped, simplified
 /// and serialised by PostGIS. <see cref="GeoJson"/> is null when the row did not make the cut,
 /// in which case it still reports why so the client can say how much is not being shown.
+/// <see cref="HasZ"/> reports what the served geometry actually carries — a caller that asked
+/// for altitudes can be handed a flat representation (see the query), and must be told.
+/// <see cref="TopZ"/> describes the whole centerline rather than the part being served, which is
+/// why it cannot be read off the payload.
 /// </summary>
 public sealed record CenterlineMapRow(
     Guid Id,
@@ -23,6 +27,8 @@ public sealed record CenterlineMapRow(
     bool Detail,
     bool Included,
     bool Withheld,
+    bool HasZ,
+    double? TopZ,
     string? GeoJson);
 
 /// <summary>
@@ -78,6 +84,7 @@ public static class CenterlineMapSql
         AccessContext ctx,
         Bbox box,
         bool detail,
+        bool withZ,
         int maxPaths,
         bool gateActive,
         int gatePaths,
@@ -91,6 +98,7 @@ public static class CenterlineMapSql
         parameters.Add("east", box.East);
         parameters.Add("north", box.North);
         parameters.Add("detail", detail);
+        parameters.Add("with_z", withZ);
         parameters.Add("max_paths", maxPaths);
         parameters.Add("gate_active", gateActive);
         parameters.Add("gate_paths", gatePaths);
@@ -111,6 +119,32 @@ public static class CenterlineMapSql
         // skeleton is stored flat. The clip box is the viewport, so a stroke whose line leaves
         // the screen still has a coordinate to run to.
         //
+        // The altitude-preserving variant (@with_z) cannot use that clip at all. Fed a 3D
+        // geometry, ST_ClipByBox2D neither errors nor drops the Z flag: it keeps Z on the
+        // vertices it passes through and writes NaN on every vertex it creates at the box
+        // boundary. ST_AsGeoJSON then emits a literal NaN, which is not valid JSON, so the
+        // response would fail to parse. Two alternatives were measured on an 80,000-component
+        // survey geometry with a box covering a quarter of its extent:
+        //
+        //   ST_CollectionExtract(ST_Intersection(geom, box), 2)  ~215-250 ms, Z interpolated
+        //   ST_Collect over ST_Dump(geom) filtered by `&&`        ~70-85 ms,  Z exact
+        //   (the 2D clip above, for scale)                        ~60-68 ms,  no Z
+        //
+        // The per-component filter wins twice. It costs a fraction of the intersection, and it
+        // never cuts a component, so every altitude it returns is one a surveyor measured rather
+        // than one interpolated along a shot. Its price is over-reach: a component crossing the
+        // viewport edge comes back whole, and `&&` is a bounding-box test so a diagonal shot
+        // whose box meets the viewport is kept even if its line does not. Survey exports are one
+        // short shot per component, which makes both effects negligible; a single long imported
+        // polyline is the bad case, and the existing 2D clip already accepts over-reach at the
+        // edge for the same drawing reason. ST_Intersection has a second problem the filter does
+        // not: a component that merely touches the box yields a point, turning the result into a
+        // GEOMETRYCOLLECTION whose GeoJSON has no `coordinates` member at all.
+        //
+        // ST_Collect returns NULL when nothing matches, whereas the 2D clip returns an empty
+        // geometry — hence the COALESCE, without which an off-screen cave would be indistinguishable
+        // from a gated one and would wrongly fall back to its skeleton.
+        //
         // The budget is a running total over the cheapest rows first: with several caves in
         // view, the small ones all get drawn and the one that would blow the request is the one
         // reported as withheld.
@@ -124,6 +158,18 @@ public static class CenterlineMapSql
                        CASE
                            WHEN @gate_active AND COALESCE(c.skeleton_path_count, c.path_count) > @gate_paths
                                THEN NULL
+                           WHEN @detail AND @with_z
+                               THEN CASE
+                                        -- Whole centerline inside the viewport: nothing to clip,
+                                        -- and skipping the dump is the cheapest branch there is.
+                                        WHEN f.geom @ ST_MakeEnvelope(@west, @south, @east, @north, 4326)
+                                            THEN f.geom
+                                        ELSE COALESCE(
+                                            (SELECT ST_Collect(d.geom)
+                                             FROM ST_Dump(f.geom) d
+                                             WHERE d.geom && ST_MakeEnvelope(@west, @south, @east, @north, 4326)),
+                                            ST_SetSRID('MULTILINESTRING EMPTY'::geometry, 4326))
+                                    END
                            WHEN @detail
                                THEN ST_ClipByBox2D(
                                     ST_Force2D(f.geom),
@@ -132,8 +178,32 @@ public static class CenterlineMapSql
                        CASE
                            WHEN @gate_active AND COALESCE(c.skeleton_path_count, c.path_count) > @gate_paths
                                THEN NULL
-                           ELSE COALESCE(c.skeleton, ST_Force2D(f.geom))
-                       END AS overview_g
+                           -- The stored skeleton is a typed 2D column and cannot carry altitude,
+                           -- so an overview row is flat even under @with_z. It is still served —
+                           -- blanking the overlay at exactly the zooms where the skeleton is the
+                           -- only affordable representation would be worse — and the row reports
+                           -- what it carries so the caller is never left guessing. When there is
+                           -- no stored skeleton the survey geometry IS the overview, and under
+                           -- @with_z it keeps its altitudes.
+                           ELSE COALESCE(
+                               c.skeleton,
+                               CASE WHEN @with_z THEN f.geom ELSE ST_Force2D(f.geom) END)
+                       END AS overview_g,
+                       -- The highest altitude in the WHOLE centerline, not in the part being
+                       -- served. A caller drawing a survey against a globe has to know where the
+                       -- cave meets the ground, and the payload cannot tell it: at detail zoom the
+                       -- geometry is cut to the viewport, so the highest point within it changes
+                       -- as the viewer pans and anchoring to that would slide the whole survey up
+                       -- and down. The guards keep this free: it is asked only of rows that will
+                       -- carry altitudes at all, so a row served from the flat stored skeleton
+                       -- never pulls the survey geometry out of storage to answer it, and a gated
+                       -- row — which is served no geometry — is not asked either.
+                       CASE
+                           WHEN @with_z
+                                AND NOT (@gate_active AND COALESCE(c.skeleton_path_count, c.path_count) > @gate_paths)
+                                AND (@detail OR c.skeleton IS NULL)
+                               THEN ST_ZMax(f.geom)
+                       END AS top_z
                 FROM features f
                 JOIN centerlines c ON c.id = f.id
                 WHERE f.deleted_at IS NULL
@@ -150,7 +220,7 @@ public static class CenterlineMapSql
             -- alternative — dropping it — would blank an overlay that had been perfectly usable
             -- one zoom level out, which is worse than showing less of it.
             chosen AS MATERIALIZED (
-                SELECT id, cave_id, name, length_m, gated,
+                SELECT id, cave_id, name, length_m, gated, top_z,
                        COALESCE(detail_paths > 0 AND detail_paths <= @max_paths, false) AS detail,
                        CASE WHEN detail_paths > 0 AND detail_paths <= @max_paths THEN detail_g
                             -- An empty clip at detail zoom means the cave is off-screen; falling
@@ -161,8 +231,12 @@ public static class CenterlineMapSql
                 FROM counted
             ),
             sized AS MATERIALIZED (
-                SELECT id, cave_id, name, length_m, gated, detail, g,
-                       CASE WHEN g IS NULL THEN 0 ELSE ST_NumGeometries(g) END AS paths
+                SELECT id, cave_id, name, length_m, gated, detail, g, top_z,
+                       CASE WHEN g IS NULL THEN 0 ELSE ST_NumGeometries(g) END AS paths,
+                       -- Asked of the geometry itself rather than inferred from which branch
+                       -- produced it: an uploaded 2D survey is stored with a zero Z ordinate,
+                       -- and a row that predates that rule has none at all.
+                       COALESCE(ST_NDims(g) = 3, false) AS has_z
                 FROM chosen
             ),
             ranked AS MATERIALIZED (
@@ -179,6 +253,8 @@ public static class CenterlineMapSql
                    detail AS "Detail",
                    (NOT gated AND paths > 0 AND running <= @max_paths) AS "Included",
                    (gated OR (paths > 0 AND running > @max_paths)) AS "Withheld",
+                   has_z AS "HasZ",
+                   top_z AS "TopZ",
                    CASE WHEN NOT gated AND paths > 0 AND running <= @max_paths
                         THEN ST_AsGeoJSON(ST_Simplify(g, @tolerance), 15)
                    END AS "GeoJson"

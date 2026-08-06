@@ -1,0 +1,56 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Scene beside its detail panel. A fixed-width dock rather than a draggable split: the scene's
+   own controls sit over the scene and fold away when they are not in use, so the dock holds one
+   thing at one width and there is nothing for a viewer to trade width against. */
+.scene3d-page {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+.scene3d-page-scene {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.scene3d-page-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 320px;
+  padding: 12px;
+  overflow-y: auto;
+  border-left: 1px solid rgba(5, 5, 5, 0.06);
+}
+
+.scene3d-page-dock-title {
+  display: block;
+}
+
+html[data-theme='dark'] .scene3d-page-dock {
+  border-left-color: rgba(253, 253, 253, 0.12);
+}
+
+/* Narrow viewports put the panel under the scene instead of beside it: 320 px of dock on a phone
+   would leave the scene too small to navigate, which is the part that cannot be scrolled to. */
+@media (max-width: 767px) {
+  .scene3d-page {
+    flex-direction: column;
+  }
+
+  .scene3d-page-scene {
+    flex: 1 1 60%;
+  }
+
+  .scene3d-page-dock {
+    flex: 0 0 auto;
+    max-height: 40%;
+    border-top: 1px solid rgba(5, 5, 5, 0.06);
+    border-left: none;
+  }
+
+  html[data-theme='dark'] .scene3d-page-dock {
+    border-top-color: rgba(253, 253, 253, 0.12);
+  }
+}

@@ -2,6 +2,7 @@
 import {
   ApartmentOutlined,
   CarOutlined,
+  CodeSandboxOutlined,
   DashboardOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
@@ -61,7 +62,7 @@ export default function AppLayout() {
   // "settings" is listed so an unmatched path does not fall through to highlighting the map.
   // It matches no menu item, so nothing lights up — settings is not a sidebar destination.
   const sections = [
-    'dashboard', 'caves', 'features', 'geodata', 'cabinets', 'documents', 'trip-logs',
+    'map3d', 'dashboard', 'caves', 'features', 'geodata', 'cabinets', 'documents', 'trip-logs',
     'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
     'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'settings',
@@ -144,6 +145,7 @@ export default function AppLayout() {
             }}
             items={[
               { key: 'map', icon: <EnvironmentOutlined />, label: t('nav.map') },
+              { key: 'map3d', icon: <CodeSandboxOutlined />, label: t('nav.map3d') },
               { key: 'dashboard', icon: <DashboardOutlined />, label: t('nav.dashboard') },
               { key: 'caves', icon: <TableOutlined />, label: t('nav.caves') },
               { key: 'features', icon: <GoldOutlined />, label: t('nav.features') },

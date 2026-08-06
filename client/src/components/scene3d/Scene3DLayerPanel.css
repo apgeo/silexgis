@@ -1,0 +1,87 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Layout for the scene's layer controls. The rows follow the flat map's layer panel — the
+   layer's name on its own line with a compact opacity slider indented beneath it — so the two
+   views read as one product rather than as two applications that both draw caves. */
+.scene3d-layer-panel {
+  display: flex;
+  flex-direction: column;
+  /* Its own width, up to whatever the window can actually hold: on a phone a fixed 240 px plus the
+     popover's own padding overflows a 390 px screen, and the panel then hangs off the edge with
+     its sliders half unreachable. */
+  width: min(240px, calc(100vw - 48px));
+  /* Roomier on a short screen than the 60vh a desktop panel can afford, because a phone's list is
+     the same length inside a viewport half the height. */
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+}
+
+/* A finger needs more of a switch and more of a slider handle than a cursor does. Both are antd's
+   own controls, so this widens the target without restyling them. */
+@media (hover: none), (pointer: coarse) {
+  .scene3d-layer-panel {
+    max-height: 65vh;
+  }
+
+  .scene3d-layer-row {
+    padding-block: 2px;
+  }
+
+  .scene3d-layer-panel .ant-slider {
+    /* antd's slider has an 8 px rail and a 14 px handle; the padding is what a finger aims at. */
+    padding-block: 8px;
+  }
+}
+
+.scene3d-layer-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.scene3d-layer-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.scene3d-layer-row .scene3d-layer-opacity {
+  margin: 0 8px 0 24px;
+}
+
+.scene3d-surface-hint {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+/* The key to the colours the survey is drawn in, indented under the layer it belongs to the same
+   way that layer's fade is. */
+.scene3d-depth-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 8px 0 24px;
+}
+
+.scene3d-depth-caption {
+  font-size: 11px;
+}
+
+.scene3d-depth-bands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 11px;
+}
+
+.scene3d-depth-band {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.scene3d-depth-swatch {
+  width: 12px;
+  height: 4px;
+  border-radius: 2px;
+}
