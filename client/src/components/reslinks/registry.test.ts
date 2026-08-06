@@ -263,9 +263,9 @@ describe('relation phrasing', () => {
     }
   });
 
-  it('can compose exactly the four numeric anchors, and the whole resource', () => {
+  it('can compose the numeric anchors, a text selection, and the whole resource', () => {
     const composable = RESLINK_ANCHOR_KINDS.filter(canComposeAnchor).sort();
-    expect(composable).toEqual(['page', 'pageRange', 'timePoint', 'timeRange', 'whole']);
+    expect(composable).toEqual(['page', 'pageRange', 'textRange', 'timePoint', 'timeRange', 'whole']);
   });
 
   it('mirrors the server rules for the anchors it can compose', () => {
@@ -284,6 +284,13 @@ describe('relation phrasing', () => {
     // Strictly forward: a zero-length span is what a single moment is for.
     expect(anchorProblem('timeRange', { start: 0, end: 1 }, t)).toBeNull();
     expect(anchorProblem('timeRange', { start: 5, end: 5 }, t)).not.toBeNull();
+
+    // A text selection needs both halves: the words, and where they were found in the text the
+    // server read. A quote with no offsets is a payload the server refuses.
+    expect(anchorProblem('textRange', { quote: 'a passage', start: 10, end: 19 }, t)).toBeNull();
+    expect(anchorProblem('textRange', { quote: 'a passage' }, t)).not.toBeNull();
+    expect(anchorProblem('textRange', { quote: '', start: 10, end: 19 }, t)).not.toBeNull();
+    expect(anchorProblem('textRange', { quote: 'a passage', start: 19, end: 19 }, t)).not.toBeNull();
 
     // A kind with no editor has no client-side rule to apply, and must not invent one.
     expect(anchorProblem('imageRegion', null, t)).toBeNull();

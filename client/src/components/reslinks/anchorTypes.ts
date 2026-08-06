@@ -7,10 +7,19 @@
  * would make the pair import each other.
  */
 
-/** Props an anchor editor is driven with — the plain value/onChange pair a form field uses. */
+/**
+ * Props an anchor editor is driven with — the plain value/onChange pair a form field uses,
+ * plus what is being anchored.
+ *
+ * The numeric editors ignore the target entirely: a page number is a page number. A selector
+ * that has to *show* the resource to let someone point inside it cannot, so the target travels
+ * with every editor rather than being threaded to the one that happens to need it today.
+ */
 export interface AnchorEditorProps {
   value: unknown;
   onChange: (anchor: unknown) => void;
+  /** What the member points at, or undefined before one has been chosen. */
+  target?: { targetType: string; targetId: string };
 }
 
 /**

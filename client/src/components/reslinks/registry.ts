@@ -22,9 +22,11 @@ import {
   TimePointAnchorEditor,
   TimeRangeAnchorEditor,
 } from './anchorEditors.tsx';
+import TextRangeAnchorEditor from './TextRangeAnchorEditor.tsx';
 import {
   validatePageAnchor,
   validatePageRangeAnchor,
+  validateTextRangeAnchor,
   validateTimePointAnchor,
   validateTimeRangeAnchor,
 } from './anchorRules.ts';
@@ -185,8 +187,8 @@ const anchorKinds: Record<AnchorKind, AnchorKindEntry> = {
         ? t('resLinks.anchors.quote')
         : t('resLinks.anchors.quoteOnPage', { page });
     },
-    editor: null,
-    validate: null,
+    editor: TextRangeAnchorEditor,
+    validate: validateTextRangeAnchor,
   },
   page: {
     summary: (anchor, t) => {

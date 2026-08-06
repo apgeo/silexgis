@@ -41,6 +41,20 @@ export function validateTimePointAnchor(anchor: unknown, t: TFunction): string |
   return secondsFrom(anchor, 't') === null ? t('resLinks.anchorEditors.timeRequired') : null;
 }
 
+export function validateTextRangeAnchor(anchor: unknown, t: TFunction): string | null {
+  const quote = typeof anchor === 'object' && anchor !== null
+    ? (anchor as Record<string, unknown>).quote
+    : undefined;
+  const start = readAnchorNumber(anchor, 'start');
+  const end = readAnchorNumber(anchor, 'end');
+  if (typeof quote !== 'string' || quote.length === 0 || start === null || end === null) {
+    return t('resLinks.anchorEditors.textRequired');
+  }
+  // End is exclusive, so an empty range selects nothing — the server refuses it for that
+  // reason, and this says so before the round trip.
+  return end <= start ? t('resLinks.anchorEditors.textEmpty') : null;
+}
+
 export function validateTimeRangeAnchor(anchor: unknown, t: TFunction): string | null {
   const start = secondsFrom(anchor, 'start');
   const end = secondsFrom(anchor, 'end');

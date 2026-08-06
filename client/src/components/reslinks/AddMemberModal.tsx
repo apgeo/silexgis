@@ -498,7 +498,13 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
 
         {AnchorEditor && (
           <Flex vertical gap={4}>
-            <AnchorEditor value={anchor} onChange={setAnchor} />
+            <AnchorEditor
+              value={anchor}
+              onChange={setAnchor}
+              // A selector that has to show the resource needs to know which resource; the
+              // numeric editors ignore this.
+              target={targetId === null ? undefined : { targetType, targetId }}
+            />
             {anchorMessage && <Typography.Text type="danger">{anchorMessage}</Typography.Text>}
           </Flex>
         )}
