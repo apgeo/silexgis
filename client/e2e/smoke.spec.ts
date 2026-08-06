@@ -353,6 +353,39 @@ test('cave photo attachment round-trip', async ({ page }) => {
   await expect(page.getByText('e2e-photo.png')).not.toBeVisible();
 });
 
+/**
+ * Every control on the cave page that is supposed to ask for a file actually asks for one.
+ *
+ * The existing tests reach past these controls: they set files on the hidden input directly,
+ * which is the right way to test what happens to an upload, and which passes just as happily
+ * when the visible trigger has stopped opening anything. That failure is invisible from
+ * everywhere else — nothing throws, nothing is logged, and the page looks correct — so it is
+ * checked here for what it is: pressing the thing a person presses, and requiring the browser
+ * to raise a file chooser.
+ */
+test('the cave page controls that ask for a file open a file chooser', async ({ page }) => {
+  await login(page);
+
+  await gotoRoute(page, '/caves');
+  await page.getByText('Peștera Demo Mare').click();
+  await expect(page.getByText('Photos & documents')).toBeVisible({ timeout: 15_000 });
+
+  const triggers = [
+    page.getByRole('button', { name: 'Upload model' }),
+    page.getByRole('button', { name: 'Upload centerline' }),
+    page.locator('.ant-upload-drag').first(),
+  ];
+
+  for (const trigger of triggers) {
+    await expect(trigger).toBeVisible({ timeout: 15_000 });
+    // Playwright intercepts the chooser rather than letting the operating system draw it, so
+    // the event arriving is the assertion; nothing is chosen and no upload follows.
+    const chooser = page.waitForEvent('filechooser', { timeout: 10_000 });
+    await trigger.click();
+    await chooser;
+  }
+});
+
 test('pop-out registry drives the main map across windows', async ({ page, context }) => {
   await login(page);
 

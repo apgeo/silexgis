@@ -46,7 +46,7 @@ export default function HistoryPanel({
           items={events.map((event) => ({
             key: event.id,
             color: ACTION_COLOR[event.action] ?? 'gray',
-            children: <HistoryEventItem event={event} restore={restore} />,
+            content: <HistoryEventItem event={event} restore={restore} />,
           }))}
         />
       )}
