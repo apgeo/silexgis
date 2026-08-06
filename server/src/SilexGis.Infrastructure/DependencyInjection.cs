@@ -51,6 +51,8 @@ public static class DependencyInjection
         services.AddSingleton<Domain.Features.IFeaturePropertiesValidator,
             Features.JsonSchemaFeaturePropertiesValidator>();
         services.AddSingleton<Geodata.ICrsRegistry, Geodata.ProjCrsRegistry>();
+        services.AddSingleton<Geodata.ICoordinateProjector, Geodata.ProjCoordinateProjector>();
+        services.AddSingleton<Surveys.SurveyMeshConverter>();
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
 
@@ -120,6 +122,7 @@ public static class DependencyInjection
         services.AddSingleton<RasterCogService>();
         services.AddScoped<IProcessingJobHandler, GeofileImportHandler>();
         services.AddScoped<IProcessingJobHandler, RasterCogHandler>();
+        services.AddScoped<IProcessingJobHandler, SurveyMeshHandler>();
         services.AddScoped<IProcessingJobHandler, PhotoGeoBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, AccountDataExportHandler>();
         services.AddScoped<IProcessingJobHandler, FeatureIntegrityVerifyHandler>();
