@@ -72,10 +72,15 @@ function toTree(cabinets: CabinetInfo[]): DataNode[] {
  * The filing tree and what is on the selected shelf.
  *
  * A cabinet is a security anchor as much as a folder: rules can be scoped to one, so
- * moving a cabinet or filing a document into it moves access. That is why the count on a
- * cabinet (how full the shelf is) and the length of its listing (what is on it for you)
- * can legitimately differ, and why every write here is gated on the right to write
- * documents rather than on some separate notion of folder administration.
+ * moving a cabinet or filing a document into it moves access. That is why every write here
+ * is gated on the right to write documents rather than on some separate notion of folder
+ * administration.
+ *
+ * The count drawn on a cabinet and the listing beside it come from the same read rule and
+ * count the same documents — a number larger than the list would say exactly how much the
+ * list had withheld. Both mean the documents filed directly on that cabinet, which is what
+ * the listing shows until the subtree switch below is turned on; with it on the listing
+ * reaches further than the label, and is the only time the two differ.
  */
 export default function CabinetsPage() {
   const { t } = useTranslation();

@@ -72,6 +72,18 @@ public class DocumentCommentRulesTests
     }
 
     [Fact]
+    public void Posting_asks_for_an_account_and_for_nothing_else()
+    {
+        // Any signed-in member may join the discussion on a document they can open: posting
+        // is not a right that has to be granted, so the rule admits an ordinary account the
+        // same as the one that uploaded the file.
+        DocumentCommentRules.MayPost(Guid.CreateVersion7()).ShouldBeTrue();
+        // The single refusal is a caller with no account behind them, because a remark is
+        // stored attributed and audited under a named account.
+        DocumentCommentRules.MayPost(Guid.Empty).ShouldBeFalse();
+    }
+
+    [Fact]
     public void Deletion_reaches_the_author_and_the_full_administrator_and_nobody_else()
     {
         var author = Guid.CreateVersion7();

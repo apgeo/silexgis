@@ -207,6 +207,15 @@ this installation cannot lay them out rather than showing an empty panel or clai
 is damaged. Whether a document can be *found* never depends on the converter — the words are
 read out of the uploaded file either way, by a reader every installation has.
 
+What the converter does change is how precisely a match can be pointed at. Where a readable
+copy exists, a content hit is read off that copy, so the page a search result names is the
+page the browser opens — including for Word and OpenDocument files, which otherwise have no
+page numbers at all. The uploaded file is still searched as well, so nothing a copy leaves out
+(a deck's speaker notes, a hidden worksheet, a cell clipped at the column boundary) becomes
+unfindable the day you turn the converter on. Without a converter, a match in a spreadsheet or
+a presentation still says which sheet or slide it is in, and a match in a Word file opens the
+document at its beginning.
+
 Notes worth knowing before you turn it on:
 
 - **Conversion happens at upload time**, in the background. Files uploaded *before* you

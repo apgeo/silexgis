@@ -83,6 +83,19 @@ describe('DocumentComments', () => {
     expect(screen.getByText('Reply')).toBeTruthy();
   });
 
+  it('offers the composer to a reader the server allowed nothing else on', () => {
+    // Posting asks for nothing beyond a signed-in account, so the box is there for a caller
+    // the server refused every per-comment right to — the same caller who gets no Edit and
+    // no Delete still gets somewhere to write.
+    items = [comment({ mayEdit: false, mayDelete: false })];
+    draw();
+    expect(screen.queryByText('Edit')).toBeNull();
+    expect(
+      screen.getByLabelText('Write a remark about this document'),
+    ).toBeTruthy();
+    expect(screen.getAllByText('Post').length).toBeGreaterThan(0);
+  });
+
   it('renders a remark containing markup as the characters that were typed, never as elements', () => {
     // The one place in this application where prose one member typed is shown to another.
     items = [comment({ body: '<img src=x onerror=alert(1)>\nsecond line' })];

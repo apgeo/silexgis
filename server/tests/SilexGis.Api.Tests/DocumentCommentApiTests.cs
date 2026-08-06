@@ -257,6 +257,38 @@ public sealed class DocumentCommentApiTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task Posting_asks_only_that_the_document_can_be_read_and_never_that_it_can_be_changed()
+    {
+        var documentId = await UploadDocumentAsync("survey-notes.txt", "notes"u8.ToArray());
+
+        // A Viewer holds nothing over documents; the one rule naming them hands over Read
+        // and nothing else, so whatever they manage here they manage on reading alone.
+        await GrantAsync(readerId, AccessEffect.Allow, AccessAction.Read, AccessScopeKind.Object, documentId);
+
+        var starter = await CommentAsync(reader, documentId, "The passage in the sketch is the one below the pitch.");
+        var replied = await reader.PostAsJsonAsync(
+            $"/api/v1/documents/{documentId}/comments/",
+            new { parentId = starter, body = "Agreed — same trip." });
+        replied.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // And the fixture is genuinely without write: the same caller in the same state
+        // cannot change one word of the document they just wrote a remark on.
+        var changed = await reader.PutAsJsonAsync(
+            $"/api/v1/documents/{documentId}",
+            new
+            {
+                title = "Renamed by a commenter",
+                documentTypeId = (long?)null,
+                metadata = (object?)null,
+                visibility = "private",
+                cavingGroupId = (Guid?)null,
+                language = (string?)null,
+            });
+        changed.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await ReadCodeAsync(changed)).ShouldBe("document.write_forbidden");
+    }
+
+    [Fact]
     public async Task A_deny_over_one_document_takes_its_conversation_with_it()
     {
         var denied = await UploadDocumentAsync("minutes.txt", "minutes"u8.ToArray());

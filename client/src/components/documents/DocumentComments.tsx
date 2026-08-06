@@ -33,6 +33,14 @@ const MAX_BODY = 4000;
  * that rule has an administrator branch in it and lives on the server, which re-asks it
  * before acting whatever this panel drew.
  *
+ * The composer, by contrast, is offered to everyone this panel is drawn for, and that is the
+ * rule rather than an oversight: posting asks for nothing beyond a signed-in account, so any
+ * member who can open a document may join the discussion on it, whether or not they may
+ * change the document itself. The panel only ever renders behind the signed-in part of the
+ * application, so "is there an account" is already answered before it mounts; hiding or
+ * disabling the box would therefore be a second, weaker copy of a rule the server holds, and
+ * would tell members who are entitled to write that they are not.
+ *
  * Every control is a permanently visible button rather than something revealed by hovering,
  * because the same panel is used on a phone where there is no hover.
  */

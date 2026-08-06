@@ -94,6 +94,12 @@ public sealed class DocumentCommentUpdateRequestValidator : AbstractValidator<Do
 /// own idea of who may open it.
 /// </para>
 /// <para>
+/// Posting is open to any signed-in caller who can reach the document: reaching it is the
+/// whole test, and no right over the document — write, share, ownership — is asked for on
+/// top. Editing and deleting stay narrow, and both are asked of the comment rules rather
+/// than decided here.
+/// </para>
+/// <para>
 /// Nothing here distinguishes "no such document" from "not yours", and nothing counts rows
 /// the caller could not list: the count and the page come out of the same authorised query,
 /// so a number can never disagree with what is beside it.
@@ -118,7 +124,9 @@ public static class DocumentCommentEndpoints
         comments.MapGet("/", ListAsync)
             .WithSummary("The remarks written on a document, oldest first; requires read of the document.");
         comments.MapPost("/", CreateAsync).WithValidation<DocumentCommentCreateRequest>()
-            .WithSummary("Writes a remark on a document; requires read of the document.");
+            .WithSummary(
+                "Writes a remark on a document; any signed-in caller who may read the document may post, "
+                + "and no right over the document itself is required.");
         comments.MapPut("/{id:guid}", UpdateAsync).WithValidation<DocumentCommentUpdateRequest>()
             .WithSummary("Rewrites a remark; its author only.");
         comments.MapDelete("/{id:guid}", DeleteAsync)
@@ -187,17 +195,20 @@ public static class DocumentCommentEndpoints
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var user = await userAccessor.GetAsync(ct);
-        if (ctx is null || user is null)
+        if (ctx is null || user is null || !DocumentCommentRules.MayPost(user.UserId))
         {
+            // Posting asks for nothing beyond a signed-in account, so the only caller this
+            // refuses is one there is no account to attribute the remark to.
             return TypedResults.Unauthorized();
         }
 
         var document = await ReadableDocumentAsync(db, access, ctx, documentId, ct);
         if (document is null)
         {
-            // Writing on a document is a right of the people who may read it: a discussion
-            // nobody but the editors could join would not be a discussion. Refusing for
-            // being unreadable therefore reads the same as refusing for not existing.
+            // Whether the document can be reached at all is the prior question, and it is
+            // the only one posting asks: a discussion nobody but the editors could join
+            // would not be a discussion. Refusing for being unreachable therefore reads the
+            // same as refusing for not existing.
             return ApiProblems.NotFound(DocumentNotFoundCode);
         }
 

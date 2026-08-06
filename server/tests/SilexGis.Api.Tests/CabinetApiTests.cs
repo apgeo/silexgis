@@ -198,6 +198,47 @@ public sealed class CabinetApiTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_shelf_label_counts_what_its_listing_shows_for_a_caller_scoped_to_a_cabinet()
+    {
+        var archive = await CreateCabinetAsync($"Counted {Guid.NewGuid():N}"[..24]);
+        var restricted = await CreateCabinetAsync("Restricted", archive);
+
+        var open = await UploadDocumentAsync("counted-open.txt");
+        var alsoOpen = await UploadDocumentAsync("counted-open-2.txt");
+        var secret = await UploadDocumentAsync("counted-secret.txt");
+        foreach (var (cabinet, document) in new[] { (archive, open), (archive, alsoOpen), (restricted, secret) })
+        {
+            (await owner.PutAsync($"/api/v1/cabinets/{cabinet}/documents/{document}", null))
+                .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        }
+
+        // A cabinet-scoped rule is the only kind that makes the read walk ask about filings at
+        // all, so it is the only caller for whom the count and the listing are computed the
+        // hard way. A Viewer holding nothing, or an Editor who reads past everything, would
+        // exercise neither.
+        await GrantAsync(readerId, AccessEffect.Allow, AccessAction.Read, AccessScopeKind.Cabinet, archive);
+        await GrantAsync(readerId, AccessEffect.Deny, AccessAction.Read, AccessScopeKind.Cabinet, restricted);
+
+        // The positive: the allow reaches both documents on the archive, and the number drawn
+        // on the shelf says two because that is what opening the shelf shows.
+        (await ListedIdsAsync(reader, archive)).Count.ShouldBe(2);
+        (await TreeCountAsync(reader, archive)).ShouldBe(2);
+        (await CabinetCountAsync(reader, archive)).ShouldBe(2);
+
+        // The negative, built explicitly rather than inherited from a default: the deny names
+        // the shelf, so its one document is neither listed nor counted. A count taken over
+        // everything filed would have read one here and stated exactly what was withheld.
+        (await ListedIdsAsync(reader, restricted)).ShouldBeEmpty();
+        (await TreeCountAsync(reader, restricted)).ShouldBe(0);
+        (await CabinetCountAsync(reader, restricted)).ShouldBe(0);
+
+        // And the fixture really does hold that document, so the zero above is the rule and
+        // not an empty shelf.
+        (await ListedIdsAsync(owner, restricted)).ShouldContain(secret);
+        (await TreeCountAsync(owner, restricted)).ShouldBe(1);
+    }
+
+    [Fact]
     public async Task Filing_takes_rights_on_the_document_and_on_the_cabinet_alike()
     {
         var archive = await CreateCabinetAsync($"Guarded {Guid.NewGuid():N}"[..24]);
@@ -487,6 +528,23 @@ public sealed class CabinetApiTests : IAsyncLifetime, IDisposable
         var page = await client.GetFromJsonAsync<JsonElement>(
             $"/api/v1/cabinets/{cabinetId}/documents?includeSubtree={includeSubtree.ToString().ToLowerInvariant()}");
         return [.. page.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid())];
+    }
+
+    /// <summary>The count this cabinet carries in the whole-tree response.</summary>
+    private static async Task<int> TreeCountAsync(HttpClient client, Guid cabinetId)
+    {
+        var tree = await client.GetFromJsonAsync<JsonElement>("/api/v1/cabinets");
+        return tree.EnumerateArray()
+            .Single(c => c.GetProperty("id").GetGuid() == cabinetId)
+            .GetProperty("documentCount")
+            .GetInt32();
+    }
+
+    /// <summary>The count the same cabinet carries when fetched on its own.</summary>
+    private static async Task<int> CabinetCountAsync(HttpClient client, Guid cabinetId)
+    {
+        var cabinet = await client.GetFromJsonAsync<JsonElement>($"/api/v1/cabinets/{cabinetId}");
+        return cabinet.GetProperty("documentCount").GetInt32();
     }
 
     private async Task<List<Guid>> FiledInAsync(Guid documentId)

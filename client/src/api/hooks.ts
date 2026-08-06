@@ -1441,8 +1441,11 @@ export interface CabinetDocumentParams {
 }
 
 /**
- * What is on a shelf for this caller. The cabinet's own `documentCount` says how full it
- * is; this list says what of it you may read, so the two can legitimately differ.
+ * What is on a shelf for this caller. The cabinet's own `documentCount` is decided by the
+ * same read rule as this listing and counts the same documents, so a shelf's label and its
+ * contents agree. The one case where they are answering different questions is
+ * `includeSubtree`: the count is always the documents filed directly on the cabinet, while
+ * that switch asks the listing for everything below it as well.
  */
 export function useCabinetDocuments(id: string | undefined, params: CabinetDocumentParams = {}) {
   return useQuery({

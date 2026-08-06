@@ -1,4 +1,5 @@
-# Normalize line endings: LF in repo and on checkout (cross-platform rule, see .claude/CLAUDE.md)
+# Normalize line endings: LF in the repository and on checkout. The project builds and runs on
+# both Windows and Linux, so a file must not change content depending on which one checked it out.
 * text=auto eol=lf
 
 # Windows-only files keep CRLF

@@ -25,10 +25,19 @@ public sealed record SearchTripItemDto(Guid Id, string Title, DateOnly TripDate)
 /// <summary>
 /// A document whose text matches, quoted at the stretch that matched it.
 /// </summary>
+/// <param name="FileId">
+/// The file somebody uploaded — what a reader downloads, whatever this installation had to make
+/// of it in order to draw its pages.
+/// </param>
 /// <param name="Division">
-/// What <paramref name="PageNumber"/> counts. Only a PDF has pages, a spreadsheet has sheets and
-/// a presentation slides; everything else arrives as one row however long it is, and says so
-/// here rather than letting an interface announce "page 1 of 1" about a forty-page report.
+/// What <paramref name="PageNumber"/> counts, and it counts divisions of the artifact this
+/// installation draws pages from, so that the number and the picture shown for it are the same
+/// thing. That is the upload itself where the format paginates: a PDF has pages, a spreadsheet
+/// read as it stands has sheets and a presentation slides. Where an optional converter has laid
+/// an office document out into a portable copy, the words were read off that copy and the number
+/// is one of its pages. Where nothing numbers anything the whole text arrives as one row however
+/// long it is, and this says so rather than letting an interface announce "page 1 of 1" about a
+/// forty-page report.
 /// </param>
 /// <param name="Snippet">
 /// The matching stretch of that division, matched words wrapped in <c>[[</c>…<c>]]</c>. Markers
@@ -218,12 +227,23 @@ public static class SearchEndpoints
         // exactly what the rules had withheld. The other two sections publish no total because
         // they have none — they are budgets, not pages.
         //
-        // Reach through an attached object is deliberately not resolved for this query, the same
-        // trade the cabinet listing makes: resolving it is a walk over every world a document's
-        // files hang in, and it would be paid on every keystroke of a search box. The consequence
-        // is stated rather than hidden — a document a caller can only reach because it hangs off
-        // a cave they may read is not found by its text, though fetching it by id still works.
+        // Reach through an attached object is part of the document read rule, so it is part of
+        // this query too: a document found by opening the cave it hangs off must also be found by
+        // a phrase in it, or the archive answers two different questions depending on which door
+        // was used. It is resolved before the statement and passed into it, never applied to the
+        // rows afterwards — a filter over results would leave the total, the ranking and the page
+        // boundaries computed over documents the caller never sees.
+        //
+        // The question is narrowed to the documents that match the words, that no earlier band of
+        // the rule already admits, and whose file hangs on something at all — everything else is
+        // an answer already known to be no. What remains scales with how much of the archive
+        // matched and is withheld, not with the twenty rows returned, so a common word typed by a
+        // caller who may read almost nothing is the expensive case and stays expensive: capping it
+        // would make whether a document is found depend on how many others happened to match.
         var page = Math.Max(1, documentPage ?? 1);
+        var withheldMatches = await DocumentContentSql.WithheldMatchIdsAsync(
+            db, ctx, term, includeSuperseded ?? false, ct);
+        var reached = await DocumentAccessRules.ReachedByAttachmentAsync(db, ctx, withheldMatches, ct);
         var contentHits = await DocumentContentSql.SearchAsync(
             db,
             ctx,
@@ -231,7 +251,7 @@ public static class SearchEndpoints
             DocumentPageSize,
             (page - 1) * DocumentPageSize,
             includeSuperseded ?? false,
-            reachedByAttachment: null,
+            reached,
             ct);
 
         var documents = new PagedResult<SearchDocumentItemDto>(

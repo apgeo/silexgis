@@ -157,10 +157,11 @@ public sealed class DocumentWriteService(
     /// The uploaded file this one is a converted copy of, when that is what it is. Its text is
     /// read like any other portable document's, because that reading is what counts the pages
     /// and puts each page's words on the page they are actually on — which is the whole reason
-    /// the copy exists. What the copy is deliberately kept out of is content search: whether a
-    /// document can be found must not depend on whether an optional service happens to be
-    /// deployed here, so searching keeps looking at the words read out of the upload itself,
-    /// which every installation reads the same way.
+    /// the copy exists, and which is why content search prefers those pages to the upload's own
+    /// once they exist: a match has to be reported against the same artifact the reader is shown
+    /// pictures of, or its page number points into a pagination nobody drew. Where no converter
+    /// is deployed there is no copy and nothing changes, so what varies between installations is
+    /// how precisely a match can be pointed at, never whether the document is found.
     /// </param>
     public StoredFile AddFile(
         Guid documentVersionId, StoredContent content, Guid? convertedFromFileId = null)

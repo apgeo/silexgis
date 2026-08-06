@@ -146,7 +146,8 @@ todo.txt
 .dev_var_notes
 .code-workspace
 
-# AI specification & agent docs — private for now (see .claude/AGENTS.md before publishing)
+# Specification and planning documents — private working material, deliberately untracked.
+# Review the contents before ever publishing them.
 .claude/
 /CLAUDE.md
 /AGENTS.md

@@ -46,8 +46,9 @@ public static class CabinetEndpoints
         var cabinets = api.MapGroup("/cabinets").WithTags("Cabinets");
 
         cabinets.MapGet("/", ListAsync)
-            .WithSummary("The whole filing tree, each cabinet with its ancestry and size.");
-        cabinets.MapGet("/{id:guid}", GetAsync).WithSummary("One cabinet.");
+            .WithSummary("The whole filing tree, each cabinet with its ancestry and how many documents filed directly on it the caller may read.");
+        cabinets.MapGet("/{id:guid}", GetAsync)
+            .WithSummary("One cabinet, with how many documents filed directly on it the caller may read.");
         cabinets.MapGet("/{id:guid}/documents", ListDocumentsAsync)
             .WithSummary("Documents filed in a cabinet that the caller may read.");
         cabinets.MapPost("/", CreateAsync).WithValidation<CabinetWriteRequest>()
@@ -79,7 +80,9 @@ public static class CabinetEndpoints
             return TypedResults.Unauthorized();
         }
 
-        return TypedResults.Ok(await Project(db.Cabinets.AsNoTracking().OrderBy(c => c.Name), db).ToListAsync(ct));
+        var reached = await ReachOverAsync(db, ctx, FiledOn(db, db.Cabinets.AsNoTracking().Select(c => c.Id)), ct);
+        return TypedResults.Ok(
+            await ProjectAsync(db.Cabinets.AsNoTracking().OrderBy(c => c.Name), db, ctx, reached, ct));
     }
 
     private static async Task<Results<Ok<CabinetDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
@@ -91,22 +94,29 @@ public static class CabinetEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var cabinet = await Project(db.Cabinets.AsNoTracking().Where(c => c.Id == id), db).FirstOrDefaultAsync(ct);
+        var cabinet = await ProjectOneAsync(db, ctx, id, ct);
         return cabinet is null ? ApiProblems.NotFound(NotFoundCode) : TypedResults.Ok(cabinet);
     }
 
     /// <summary>
-    /// What is on this shelf for this caller. The listing is filtered by the document read
-    /// rule, cabinet rules included, so the count on the cabinet and the length of this
-    /// list can legitimately differ.
+    /// What is on this shelf for this caller. The listing is filtered by the whole document
+    /// read rule — the caller's entries, ownership, the read audience, cabinet rules, and
+    /// reach through an object the document's file hangs on — so it answers the same
+    /// question as fetching any one of these documents by name.
     /// </summary>
     /// <remarks>
-    /// Reach through an attached object is deliberately not resolved here: it is a
-    /// per-document walk over every world a file is attached in, and paying it for a whole
-    /// shelf would make listing a cabinet cost more than reading it. The consequence is
-    /// stated rather than hidden — a document a caller can only reach because it hangs off
-    /// a cave they may read is not listed among that cabinet's contents, though fetching it
-    /// by id still works.
+    /// <para>
+    /// Reach is resolved before the query rather than by dropping rows after it, because
+    /// resolving it afterwards would leave the total beside the rows counting documents the
+    /// caller was not shown — which is how a number ends up announcing what a list withheld.
+    /// </para>
+    /// <para>
+    /// It is asked only about the documents nothing else already admits and whose file hangs
+    /// on something, since it can only widen and has nothing to say about the rest. That is a
+    /// narrowing and not a bound: it scales with how much of the shelf is withheld from this
+    /// caller, not with the page being shown, so a shelf holding a great many attached
+    /// documents none of which this caller's entries admit is walked in full to answer.
+    /// </para>
     /// </remarks>
     private static async Task<Results<Ok<PagedResult<CabinetDocumentDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListDocumentsAsync(
         Guid id,
@@ -135,9 +145,12 @@ public static class CabinetEndpoints
             : db.Cabinets.AsNoTracking().Where(c => c.Id == id).Select(c => c.Id);
 
         var (p, size) = Paging.Normalize(page, pageSize);
-        var documents = db.Documents.AsNoTracking()
-            .VisibleTo(ctx, AccessDomain.Documents, null, (db.CabinetDocuments, db.Cabinets))
-            .Where(d => db.CabinetDocuments.Any(m => m.DocumentId == d.Id && shelves.Contains(m.CabinetId)))
+        var filed = db.Documents.AsNoTracking()
+            .Where(d => db.CabinetDocuments.Any(m => m.DocumentId == d.Id && shelves.Contains(m.CabinetId)));
+        var reached = await ReachOverAsync(db, ctx, filed, ct);
+
+        var documents = filed
+            .VisibleTo(ctx, AccessDomain.Documents, reached, (db.CabinetDocuments, db.Cabinets))
             .OrderBy(d => d.Title)
             .ThenBy(d => d.Id)
             .Select(d => new
@@ -211,7 +224,7 @@ public static class CabinetEndpoints
 
         return TypedResults.Created(
             $"/api/v1/cabinets/{cabinet.Id}",
-            await Project(db.Cabinets.AsNoTracking().Where(c => c.Id == cabinet.Id), db).FirstAsync(ct));
+            (await ProjectOneAsync(db, ctx, cabinet.Id, ct))!);
     }
 
     /// <summary>
@@ -280,7 +293,7 @@ public static class CabinetEndpoints
             return ApiProblems.BadRequest(e.Code, e.Message);
         }
 
-        return TypedResults.Ok(await Project(db.Cabinets.AsNoTracking().Where(c => c.Id == id), db).FirstAsync(ct));
+        return TypedResults.Ok((await ProjectOneAsync(db, ctx, id, ct))!);
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
@@ -440,12 +453,105 @@ public static class CabinetEndpoints
             c => c.ParentId == parentId && c.Name == name && (excludingId == null || c.Id != excludingId),
             ct);
 
-    private static IQueryable<CabinetDto> Project(IQueryable<Cabinet> source, SilexGisDbContext db) =>
-        source.Select(c => new CabinetDto(
-            c.Id,
-            c.ParentId,
-            c.Name,
-            c.Description,
-            c.AncestorIds,
-            db.CabinetDocuments.Count(m => m.CabinetId == c.Id)));
+    /// <summary>
+    /// The cabinets, each with how many documents this caller may read on it — the same
+    /// question, under the same rule, as the listing that opens when the shelf is clicked.
+    /// A count and the list it sits beside must come from one rule: a number larger than
+    /// what the list shows states exactly how much was withheld, and one smaller than it
+    /// reads as a defect.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It counts documents filed <em>directly</em> on the cabinet, which is what the listing
+    /// beside it shows by default. Asking for the subtree is a different question, and the
+    /// listing has a switch for it; the number on the tree keeps answering the one the tree
+    /// is drawn from, so a shelf's label and a shelf's contents describe the same shelf.
+    /// </para>
+    /// <para>
+    /// The counting is one grouped statement over the filings rather than a count per
+    /// cabinet, because the per-cabinet form makes the whole access walk a correlated
+    /// subplan and runs it once per row of a tree that is fetched on every documents page.
+    /// </para>
+    /// <para>
+    /// The refusal to delete a cabinet that still holds something is deliberately NOT this
+    /// number — it asks the membership table outright. Administration is about what is
+    /// filed, not about what the administrator happens to be allowed to read, and a
+    /// refusal explained by a count that read zero would look like a bug.
+    /// </para>
+    /// </remarks>
+    private static async Task<List<CabinetDto>> ProjectAsync(
+        IQueryable<Cabinet> source,
+        SilexGisDbContext db,
+        AccessContext ctx,
+        IReadOnlyCollection<Guid> reached,
+        CancellationToken ct)
+    {
+        var shelves = await source
+            .Select(c => new { c.Id, c.ParentId, c.Name, c.Description, c.AncestorIds })
+            .ToListAsync(ct);
+        if (shelves.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = shelves.Select(c => c.Id).ToList();
+        var readable = db.Documents.AsNoTracking()
+            .VisibleTo(ctx, AccessDomain.Documents, reached, (db.CabinetDocuments, db.Cabinets))
+            .Select(d => d.Id);
+        var counts = await db.CabinetDocuments.AsNoTracking()
+            .Where(m => ids.Contains(m.CabinetId) && readable.Contains(m.DocumentId))
+            .GroupBy(m => m.CabinetId)
+            .Select(g => new { CabinetId = g.Key, Filed = g.Count() })
+            .ToDictionaryAsync(x => x.CabinetId, x => x.Filed, ct);
+
+        return
+        [
+            .. shelves.Select(c => new CabinetDto(
+                c.Id,
+                c.ParentId,
+                c.Name,
+                c.Description,
+                c.AncestorIds,
+                counts.GetValueOrDefault(c.Id))),
+        ];
+    }
+
+    /// <summary>
+    /// Which of the given documents this caller reaches only because their file hangs on
+    /// something they may read. Asked before the query that uses it, so the answer is a
+    /// term of that query rather than a filter over its results — and asked only about the
+    /// documents no entry, ownership or read audience has already admitted, since reach can
+    /// only ever widen and so has nothing to say about the rest.
+    /// <para>
+    /// On the whole tree the candidate set is every filed document this caller's entries do
+    /// not admit, which on a large archive is most of it. The walk it feeds settles in a
+    /// fixed number of queries however many candidates there are, but it holds them in
+    /// memory while it does, and this is a tree the documents pages fetch on every visit.
+    /// Bounding it is not possible without making the answer depend on how many other
+    /// documents happened to be withheld, which would be a worse thing to be.
+    /// </para>
+    /// </summary>
+    private static Task<IReadOnlyCollection<Guid>> ReachOverAsync(
+        SilexGisDbContext db, AccessContext ctx, IQueryable<Document> candidates, CancellationToken ct)
+    {
+        var admitted = candidates
+            .VisibleTo(ctx, AccessDomain.Documents, null, (db.CabinetDocuments, db.Cabinets))
+            .Select(d => d.Id);
+        return DocumentAccessRules.ReachedByAttachmentAsync(
+            db, ctx, candidates.Where(d => !admitted.Contains(d.Id)).Select(d => d.Id), ct);
+    }
+
+    /// <summary>One cabinet with its count, under the same rule the whole tree uses.</summary>
+    private static async Task<CabinetDto?> ProjectOneAsync(
+        SilexGisDbContext db, AccessContext ctx, Guid id, CancellationToken ct)
+    {
+        var shelf = db.Cabinets.AsNoTracking().Where(c => c.Id == id);
+        var reached = await ReachOverAsync(db, ctx, FiledOn(db, shelf.Select(c => c.Id)), ct);
+        return (await ProjectAsync(shelf, db, ctx, reached, ct)).FirstOrDefault();
+    }
+
+    /// <summary>The documents filed directly on any of the given cabinets.</summary>
+    private static IQueryable<Document> FiledOn(SilexGisDbContext db, IQueryable<Guid> cabinetIds) =>
+        db.Documents.AsNoTracking()
+            .Where(d => db.CabinetDocuments.Any(m => m.DocumentId == d.Id && cabinetIds.Contains(m.CabinetId)));
 }

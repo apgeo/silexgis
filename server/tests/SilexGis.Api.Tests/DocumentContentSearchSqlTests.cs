@@ -37,8 +37,9 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable
     private Guid writerId;     // Read and Write on the revised document
 
     private Guid docRomanian;  // ro, private to the owner, two pages, a PDF
-    private Guid docEnglish;   // en, openly visible, one page, a word processor file
+    private Guid docEnglish;   // en, openly visible, one page, a word processor file, laid out
     private Guid docRevised;   // private, two revisions; the removed name is in the old one
+    private Guid docUnlaid;    // private, a word processor file no converter ever laid out
 
     private Guid englishUpload; // the office file somebody put here
     private Guid englishCopy;   // the portable copy a converter made of it, same words again
@@ -78,17 +79,29 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable
         englishUpload = AddVersion(
             db, docEnglish, 1, current: true,
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        // "Unexported" stands for everything a rendering leaves behind — a deck's speaker notes,
+        // a hidden worksheet, a wide cell clipped at the column boundary. It is in the upload and
+        // deliberately not in the copy.
         AddPage(db, englishUpload, 1,
-            $"The surveying teams explored the passages and mapped them. {nonce}");
+            $"The surveying teams explored the passages and mapped them. Unexported. {nonce}");
 
         // An office document has no pages of its own, so an installation running the optional
         // converter holds a portable copy of it beside the upload — and that copy is read for
-        // text like any other file, so the same words are stored twice. The copy carries one
-        // word of its own so that "the copy is not searched" can be asserted directly rather
-        // than inferred from which file a shared word resolved to.
+        // text like any other file, so most words are stored twice. The copy carries one word of
+        // its own so that "which artifact did this hit come out of" can be asserted directly
+        // rather than inferred from which file a shared word resolved to.
         englishCopy = AddConvertedCopy(
             db, englishUpload,
             $"The surveying teams explored the passages and mapped them. Redistilled. {nonce}");
+
+        // The same format on an installation running no converter: an upload with nothing beside
+        // it. It is what makes every statement about the copy a statement about the copy rather
+        // than about the format, and what proves an installation without one is unaffected.
+        docUnlaid = Seed(db, $"Bivouac {suffix}", ownerId, Visibility.Private, "en");
+        var unlaidUpload = AddVersion(
+            db, docUnlaid, 1, current: true,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        AddPage(db, unlaidUpload, 1, $"The bivouac stood beside the sump. {nonce}");
 
         // The retraction case: version one names the landowner, version two does not.
         docRevised = Seed(db, $"Revised {suffix}", ownerId, Visibility.Private, "en");
@@ -143,7 +156,7 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable
         var hits = await SearchAsync(ownerId, string.Empty);
 
         hits.Select(h => h.DocumentId).ShouldContain(docRomanian);
-        hits.Count.ShouldBe(3);
+        hits.Count.ShouldBe(4);
         hits[0].DocumentId.ShouldBe(docRomanian);
         hits.Select(h => h.Rank).ShouldBe(hits.Select(h => h.Rank).OrderByDescending(r => r));
     }
@@ -154,17 +167,22 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable
         var pdf = (await SearchAsync(ownerId, "pestera")).ShouldHaveSingleItem();
         pdf.Division.ShouldBe(PageDivision.Page);
 
-        // A word-processor file arrives as one row whatever its length, so its number counts
-        // nothing a reader would recognise and the result says so rather than saying "page 1".
-        var word = (await SearchAsync(ownerId, "surveying")).ShouldHaveSingleItem();
-        word.Division.ShouldBe(PageDivision.Whole);
+        // A word-processor file has no pages of its own, so where nothing has laid it out its
+        // whole text arrives as one row and the result says so rather than saying "page 1".
+        var unlaid = (await SearchAsync(ownerId, "bivouac")).ShouldHaveSingleItem();
+        unlaid.Division.ShouldBe(PageDivision.Whole);
+
+        // The same format, on an installation that did lay it out: the words were read off the
+        // copy that gets drawn, so the number counts real pages of the thing the reader sees.
+        var laidOut = (await SearchAsync(ownerId, "surveying")).ShouldHaveSingleItem();
+        laidOut.Division.ShouldBe(PageDivision.Page);
     }
 
     [Fact]
-    public async Task A_copy_made_only_so_a_page_could_be_drawn_is_not_a_second_thing_to_find()
+    public async Task A_hit_is_read_off_the_same_artifact_whose_pages_are_drawn()
     {
         // Fixture proof: the copy really is there, really is derived from the upload, and really
-        // has a page with words in it — so the silence below is the query's doing.
+        // has a page of its own — so what follows is the query's doing and not an empty database.
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -173,17 +191,113 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable
             (await db.DocumentPages.AsNoTracking().CountAsync(p => p.FileId == englishCopy)).ShouldBe(1);
         }
 
-        // The document is found by its own words, once, and the hit names the file somebody
-        // actually put here — not the copy this installation happened to make of it.
+        // A word that exists only inside the copy finds the document: the copy is read for text
+        // like any other file, and its pages are the pages the reader is shown pictures of.
+        var fromCopy = (await SearchAsync(ownerId, "redistilled")).ShouldHaveSingleItem();
+        fromCopy.DocumentId.ShouldBe(docEnglish);
+
+        // Where both artifacts carry the word the copy answers, because a hit reported against
+        // any other pagination would point at a page nobody drew. The document is still found
+        // once, and the hit names the file somebody actually put here — the copy is how the
+        // document is drawn, never what a reader downloads.
         var hit = (await SearchAsync(ownerId, "surveying")).ShouldHaveSingleItem();
         hit.DocumentId.ShouldBe(docEnglish);
         hit.FileId.ShouldBe(englishUpload);
         hit.FileId.ShouldNotBe(englishCopy);
+        hit.MimeType.ShouldContain("wordprocessingml");
+    }
 
-        // And a word that exists only inside the copy finds nothing at all. Whether an optional
-        // service is deployed here decides how a document can be shown; it must not decide what
-        // the archive contains, or two installations of the same version disagree about that.
+    [Fact]
+    public async Task Words_only_the_upload_carries_still_find_the_document()
+    {
+        // Fixture proof: the copy is really there and really has been read, so the upload is not
+        // standing merely because nothing was ever laid out.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.DocumentPages.AsNoTracking().CountAsync(p => p.FileId == englishCopy)).ShouldBe(1);
+        }
+
+        // A rendering is not a superset of what it was rendered from: printing a deck to a
+        // portable document drops its speaker notes, a hidden worksheet never appears, and a wide
+        // cell is clipped at the column boundary. Had the copy's existence retired the upload's
+        // own words, deploying the optional converter would have quietly made all of that
+        // unfindable — the same archive answering fewer questions than the day before.
+        var onlyInUpload = (await SearchAsync(ownerId, "unexported")).ShouldHaveSingleItem();
+        onlyInUpload.DocumentId.ShouldBe(docEnglish);
+        onlyInUpload.FileId.ShouldBe(englishUpload);
+
+        // And the hit is named after the artifact that matched, which is the upload — a word
+        // processor file numbers no divisions, so the honest answer is that this number counts
+        // nothing, and the interface opens the document at its beginning rather than at a page
+        // of a pagination this match knows nothing about.
+        onlyInUpload.Division.ShouldBe(PageDivision.Whole);
+
+        // The positive leg, in the same test: a word both artifacts carry is still answered by
+        // the copy, whose pages are the ones drawn.
+        (await SearchAsync(ownerId, "surveying")).ShouldHaveSingleItem()
+            .Division.ShouldBe(PageDivision.Page);
+    }
+
+    [Fact]
+    public async Task A_copy_that_read_to_nothing_leaves_the_upload_standing()
+    {
+        // The positive leg: while the copy has words, they answer.
+        (await SearchAsync(ownerId, "redistilled")).ShouldHaveSingleItem().DocumentId.ShouldBe(docEnglish);
+
+        // A portable document whose text layer yields nothing — outlined type, or fonts encoded
+        // so nothing can read them back — still gets a row per page, and is recorded as read.
+        // Those rows are pages, they are simply pages of no words, and a document must not
+        // become unfindable because the copy of it happened to be one of those.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.DocumentPages.Where(p => p.FileId == englishCopy)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.Text, string.Empty));
+        }
+
+        var stillFound = (await SearchAsync(ownerId, "surveying")).ShouldHaveSingleItem();
+        stillFound.DocumentId.ShouldBe(docEnglish);
+        stillFound.FileId.ShouldBe(englishUpload);
+        stillFound.Division.ShouldBe(PageDivision.Whole);
+
+        // Nothing invented in the other direction either: the copy's own word went with its text.
         (await SearchAsync(ownerId, "redistilled")).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task An_upload_stands_where_nothing_has_laid_it_out_yet()
+    {
+        // The positive leg: with the copy read, the copy's own word finds the document.
+        (await SearchAsync(ownerId, "redistilled")).ShouldHaveSingleItem().DocumentId.ShouldBe(docEnglish);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.DocumentPages.Where(p => p.FileId == englishCopy).ExecuteDeleteAsync();
+        }
+
+        // A conversion whose reading has not finished — or failed — must not make a document
+        // briefly unfindable, so the upload's own words stand until the copy has some.
+        (await SearchAsync(ownerId, "redistilled")).ShouldBeEmpty();
+        var waiting = (await SearchAsync(ownerId, "surveying")).ShouldHaveSingleItem();
+        waiting.DocumentId.ShouldBe(docEnglish);
+        waiting.FileId.ShouldBe(englishUpload);
+        waiting.Division.ShouldBe(PageDivision.Whole);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.StoredFiles.Where(f => f.Id == englishCopy).ExecuteDeleteAsync();
+        }
+
+        // And with no copy at all — an installation running no converter — the answer is exactly
+        // the one that installation has always had. What an optional service changes is how
+        // precisely a match can be pointed at, never whether the document is found.
+        var noConverter = (await SearchAsync(ownerId, "surveying")).ShouldHaveSingleItem();
+        noConverter.DocumentId.ShouldBe(docEnglish);
+        noConverter.FileId.ShouldBe(englishUpload);
+        noConverter.Division.ShouldBe(PageDivision.Whole);
     }
 
     [Fact]
@@ -191,8 +305,8 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable
     {
         // Positive leg first, so a query that found nothing for anybody could not pass this.
         var owner = await SearchAsync(ownerId, string.Empty);
-        owner.Count.ShouldBe(3);
-        owner[0].TotalDocuments.ShouldBe(3);
+        owner.Count.ShouldBe(4);
+        owner[0].TotalDocuments.ShouldBe(4);
 
         // The stranger holds no entry over documents and is in no club, so the two private
         // documents are genuinely out of reach rather than merely filtered late — and the
@@ -238,7 +352,7 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable
     public async Task Paging_walks_the_same_ranking_and_reports_the_same_total()
     {
         var all = await SearchAsync(ownerId, string.Empty);
-        all.Count.ShouldBe(3);
+        all.Count.ShouldBe(4);
 
         var first = await SearchAsync(ownerId, string.Empty, limit: 1);
         var second = await SearchAsync(ownerId, string.Empty, limit: 1, offset: 1);
@@ -247,8 +361,8 @@ public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable
         second.ShouldHaveSingleItem().DocumentId.ShouldBe(all[1].DocumentId);
 
         // The total describes the whole result, not the slice, and is the same on every page.
-        first[0].TotalDocuments.ShouldBe(3);
-        second[0].TotalDocuments.ShouldBe(3);
+        first[0].TotalDocuments.ShouldBe(4);
+        second[0].TotalDocuments.ShouldBe(4);
     }
 
     [Fact]

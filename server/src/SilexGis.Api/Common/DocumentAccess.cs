@@ -119,6 +119,112 @@ public static class DocumentAccessRules
     }
 
     /// <summary>
+    /// Which of a set of candidate documents this caller reaches through an object the
+    /// document's current file hangs on — the batch form of the fact
+    /// <see cref="CanReadAsync"/> resolves one document at a time.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It exists so that a listing and a search can hand the answer to the query that
+    /// decides which rows exist, instead of fetching rows and dropping some afterwards.
+    /// Dropping afterwards is not a narrower listing, it is a listing whose count, ranking
+    /// and page boundaries were computed over rows the caller never sees — which discloses
+    /// them as surely as printing them would.
+    /// </para>
+    /// <para>
+    /// The set it returns only ever widens what the query admits: it is handed to the walk
+    /// as the attachment built-in, which sits on the same arm as ownership and the read
+    /// audience, below every entry. A document denied by a rule stays denied even if it
+    /// appears here, so the candidate set may safely be wider than the answer.
+    /// </para>
+    /// <para>
+    /// Candidates are narrowed to the documents where the question can have a positive
+    /// answer at all — the ones whose current file hangs on something, plus the ones whose
+    /// revision this caller uploaded — because everything else costs a walk over every
+    /// world a file can hang in for an answer that is already known to be no.
+    /// </para>
+    /// </remarks>
+    public static Task<IReadOnlyCollection<Guid>> ReachedByAttachmentAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        IQueryable<Guid> candidateDocumentIds,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(candidateDocumentIds);
+        return ReachedAsync(
+            db,
+            ctx,
+            db.DocumentVersions.AsNoTracking()
+                .Where(v => v.IsCurrent && candidateDocumentIds.Contains(v.DocumentId)),
+            ct);
+    }
+
+    /// <summary>
+    /// The same question over an id set already in hand — for a caller that had to compute
+    /// its candidates in a statement of its own rather than as a subquery.
+    /// </summary>
+    public static Task<IReadOnlyCollection<Guid>> ReachedByAttachmentAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        IReadOnlyCollection<Guid> candidateDocumentIds,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(candidateDocumentIds);
+        if (candidateDocumentIds.Count == 0)
+        {
+            return Task.FromResult<IReadOnlyCollection<Guid>>([]);
+        }
+
+        var ids = candidateDocumentIds.Distinct().ToList();
+        return ReachedAsync(
+            db,
+            ctx,
+            db.DocumentVersions.AsNoTracking().Where(v => v.IsCurrent && ids.Contains(v.DocumentId)),
+            ct);
+    }
+
+    private static async Task<IReadOnlyCollection<Guid>> ReachedAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        IQueryable<DocumentVersion> currentVersions,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+
+        // The file a document serves is the first of its current revision, which is the row
+        // attachments point at — spelled here the way every other read of it is spelled, so
+        // this cannot come to disagree with the one-document walk about which file decides.
+        var pairs = await currentVersions
+            .Select(v => new
+            {
+                v.DocumentId,
+                v.UploadedBy,
+                CurrentFileId = db.StoredFiles.AsNoTracking()
+                    .Where(f => f.DocumentVersionId == v.Id)
+                    .OrderBy(f => f.CreatedAt)
+                    .ThenBy(f => f.Id)
+                    .Select(f => (Guid?)f.Id)
+                    .FirstOrDefault(),
+            })
+            .Where(x => x.CurrentFileId != null
+                && (x.UploadedBy == ctx.UserId
+                    || db.Attachments.AsNoTracking().Any(a => a.FileId == x.CurrentFileId)))
+            .Select(x => new { x.DocumentId, FileId = x.CurrentFileId!.Value })
+            .ToListAsync(ct);
+
+        if (pairs.Count == 0)
+        {
+            return [];
+        }
+
+        var readable = await FileAccessRules.ReadableFileIdsAsync(
+            db, ctx, [.. pairs.Select(p => p.FileId)], ct);
+        return [.. pairs.Where(p => readable.Contains(p.FileId)).Select(p => p.DocumentId).Distinct()];
+    }
+
+    /// <summary>
     /// Read of a document. <paramref name="content"/> is the file the document currently
     /// serves, or null when it serves none — a document with nothing behind it is
     /// reachable only through its own rules, its owner and its visibility.

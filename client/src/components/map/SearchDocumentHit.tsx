@@ -8,12 +8,14 @@ const { Text } = Typography;
 
 /**
  * One content hit: the document that matched, the stretch of it that matched, and — only
- * where the format actually numbers something — which division that stretch came from.
+ * where something actually numbers a division — which division that stretch came from.
  *
- * The division is not decoration. Text is stored per page, but only a PDF has pages: a
- * spreadsheet has sheets, a presentation has slides, and everything else arrives whole
- * however long it is. Printing "page 1" against a forty-page report would be this interface
- * inventing a fact the file never stated, so a whole-text hit says nothing about position.
+ * The division is not decoration. It describes the artifact whose pages this installation
+ * draws, because that is the artifact the words were read out of: a PDF has pages, and so
+ * does the portable copy a converter makes of a word-processing document, while a workbook
+ * read as it stands has sheets and a deck has slides. Where nothing numbers anything the
+ * whole text arrives as one row however long it is, and printing "page 1" against a
+ * forty-page report would be this interface inventing a fact the file never stated.
  */
 export default function SearchDocumentHit({ hit }: { hit: SearchDocumentItem }) {
   const { t } = useTranslation();

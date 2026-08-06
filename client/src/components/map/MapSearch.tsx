@@ -42,12 +42,12 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
     // revision still belongs to the same document, and the page is addressed by document.
     //
     // The matched position rides along only where it indexes the pictures the reader will
-    // actually be shown, which is only a document that paginates itself. A sheet or a slide is
-    // a real division and is named as one beside the hit, but the pictures of an office
-    // document are drawn from a converted copy that paginates it afresh — a workbook whose
-    // first sheet prints across ten pages puts sheet three nowhere near page three — so
-    // carrying that number into the viewer would open a page with nothing to do with the hit.
-    // Better to open the document and let the reader look than to send them somewhere wrong.
+    // actually be shown — which is what a division of "page" means: the words were read off
+    // the very artifact those pictures are drawn from, whether that is a PDF somebody uploaded
+    // or the portable copy an installation made of an office document. A sheet or a slide is a
+    // real division of the upload and is named as one beside the hit, but nothing has laid
+    // those out into pages here, so there is no page to open at and the document opens at its
+    // beginning. Better to let the reader look than to send them somewhere wrong.
     value:
       hit.division === 'page'
         ? `document:${hit.id}:${hit.pageNumber}`

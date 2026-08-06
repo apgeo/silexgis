@@ -96,8 +96,9 @@ describe('CabinetsPage', () => {
     capabilities = { domains: { documents: 'read' } };
     renderPage();
 
-    // Both cabinets appear, each carrying how full it is — the count is the whole shelf,
-    // not the caller's subset, which is why it is shown on the tree and not on the list.
+    // Both cabinets appear, each carrying how many documents filed on it this caller may
+    // read — the server decides that by the same rule as the listing, so the label on a
+    // shelf and what opens when it is picked describe the same documents.
     expect(screen.getByText('Club archive (3)')).toBeInTheDocument();
     expect(screen.getByText('Surveys (2)')).toBeInTheDocument();
     expect(screen.getByText('Choose a cabinet to see what is filed in it.')).toBeInTheDocument();

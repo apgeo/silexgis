@@ -4905,7 +4905,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Writes a remark on a document; requires read of the document. */
+        /** Writes a remark on a document; any signed-in caller who may read the document may post, and no right over the document itself is required. */
         post: {
             parameters: {
                 query?: never;
@@ -5009,7 +5009,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The whole filing tree, each cabinet with its ancestry and size. */
+        /** The whole filing tree, each cabinet with its ancestry and how many documents filed directly on it the caller may read. */
         get: {
             parameters: {
                 query?: never;
@@ -5069,7 +5069,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One cabinet. */
+        /** One cabinet, with how many documents filed directly on it the caller may read. */
         get: {
             parameters: {
                 query?: never;

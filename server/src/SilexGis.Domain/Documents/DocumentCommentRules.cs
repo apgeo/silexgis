@@ -11,7 +11,9 @@ namespace SilexGis.Domain.Documents;
 /// Reading is deliberately absent from this class. A comment is readable exactly when its
 /// document is, which is a question for the document access rules and must stay a single
 /// question: a comment that answered it separately would become a way of learning that a
-/// document exists without being allowed to see it.
+/// document exists without being allowed to see it. What is <em>not</em> absent is who may
+/// post: that is a decision in its own right and is written down here as <see cref="MayPost"/>
+/// rather than left as an unstated property of the create route.
 /// </para>
 /// </summary>
 public static class DocumentCommentRules
@@ -49,6 +51,23 @@ public static class DocumentCommentRules
             ? [$"a comment is at most {MaxBodyLength} characters"]
             : [];
     }
+
+    /// <summary>
+    /// Whether <paramref name="callerId"/> may write a remark on a document they can reach.
+    /// Posting asks for nothing beyond having an account: any signed-in member may join the
+    /// discussion on a document they are allowed to open, and in particular holding rights
+    /// to change the document is not required. The member who recognises the cave in an
+    /// unlabelled photograph is usually not the person allowed to edit the file it sits in,
+    /// and a discussion only editors could join would not be a discussion.
+    /// <para>
+    /// It is false only for a caller with no account behind them, because every remark is
+    /// attributed to a named account and audited under it — an unattributable remark is not
+    /// a thing this system can store. Whether the document itself is reachable is a separate
+    /// and prior question, answered by the document access rules, and a caller who cannot
+    /// reach it is refused as though it did not exist.
+    /// </para>
+    /// </summary>
+    public static bool MayPost(Guid callerId) => callerId != Guid.Empty;
 
     /// <summary>
     /// Whether <paramref name="callerId"/> may rewrite this comment. Only its author may:
