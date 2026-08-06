@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Globalization;
 using System.Security.Cryptography;
+using System.Text.Json;
 using FluentValidation;
+using NetTopologySuite.Geometries;
+using SilexGis.Infrastructure.Jobs;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
@@ -23,6 +27,28 @@ public sealed record SurveyModelDto(
     DateOnly? SurveyedAt,
     /// <summary>Signed survey-file URL — fetch and hand to the 3D viewer as-is.</summary>
     string ModelUrl,
+    SurveyModelStatus Status,
+    /// <summary>Why conversion failed, when it did; null otherwise.</summary>
+    string? ProcessingError,
+    /// <summary>
+    /// Signed URL of the drawable mesh, once a conversion has produced one. Null for the line-plot
+    /// formats, which the embedded viewer reads from <see cref="ModelUrl"/> directly.
+    /// </summary>
+    string? MeshUrl,
+    /// <summary>
+    /// Where the mesh's own zero point sits, which is what a scene positions it by. Null until a
+    /// conversion has run. This is the cave's location, and reaches no caller who is not already
+    /// entitled to that — the whole record is withheld from the rest.
+    /// </summary>
+    double? AnchorLongitude,
+    double? AnchorLatitude,
+    double? AnchorHeightM,
+    int? TriangleCount,
+    /// <summary>
+    /// The uploaded file's coordinates were too large for the precision it stores them in, so the
+    /// survey lost detail before it arrived. Re-exporting about a local origin recovers it.
+    /// </summary>
+    bool SourcePrecisionLost,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
@@ -41,7 +67,68 @@ public sealed class SurveyModelUpdateRequestValidator : AbstractValidator<Survey
 }
 
 /// <summary>
-/// 3D survey models of a cave (.lox / .3d). They inherit the cave's access control, and
+/// What a wall mesh needs alongside the file, because the file does not carry it.
+///
+/// <para>
+/// Read from the multipart form beside the upload rather than as a later edit: without it the mesh
+/// cannot be placed at all, and a stored model waiting to be told where it is would be a second
+/// unfinished state for every reader of a cave to understand.
+/// </para>
+/// </summary>
+internal sealed record MeshDeclaration(int? SourceEpsg, Point? Origin, double OriginHeightM)
+{
+    /// <summary>Deepest and highest a cave entrance can plausibly sit, in metres.</summary>
+    private const double LowestHeightM = -500;
+    private const double HighestHeightM = 9000;
+
+    public static (MeshDeclaration? Declaration, ProblemHttpResult? Problem) FromForm(IFormCollection form)
+    {
+        var epsgText = form["sourceEpsg"].ToString();
+        int? epsg = null;
+        if (!string.IsNullOrWhiteSpace(epsgText))
+        {
+            if (!int.TryParse(epsgText, CultureInfo.InvariantCulture, out var parsed) || parsed <= 0)
+            {
+                return (null, ApiProblems.BadRequest(
+                    "survey_model.crs_invalid", "The coordinate system must be an EPSG code."));
+            }
+
+            epsg = parsed;
+        }
+
+        if (!TryNumber(form, "originHeightM", out var height)
+            || height < LowestHeightM || height > HighestHeightM)
+        {
+            return (null, ApiProblems.BadRequest(
+                "survey_model.height_invalid",
+                "Give the altitude, in metres, that the file's zero level sits at."));
+        }
+
+        if (epsg is not null)
+        {
+            // The file's own coordinates say where it is; the position is derived from them, so a
+            // second answer here could only contradict the first.
+            return (new MeshDeclaration(epsg, null, height), null);
+        }
+
+        if (!TryNumber(form, "originLongitude", out var lon) || lon is < -180 or > 180
+            || !TryNumber(form, "originLatitude", out var lat) || lat is < -90 or > 90)
+        {
+            return (null, ApiProblems.BadRequest(
+                "survey_model.origin_invalid",
+                "A file in local coordinates needs the position its zero point sits at."));
+        }
+
+        return (new MeshDeclaration(null, new Point(lon, lat) { SRID = 4326 }, height), null);
+    }
+
+    private static bool TryNumber(IFormCollection form, string field, out double value) =>
+        double.TryParse(form[field].ToString(), CultureInfo.InvariantCulture, out value)
+        && double.IsFinite(value);
+}
+
+/// <summary>
+/// 3D survey models of a cave (.lox / .3d / .stl). They inherit the cave's access control, and
 /// because the files carry absolute georeferenced coordinates they are location data:
 /// for a location-protected cave every read path here withholds the records entirely
 /// from callers without exact-location access — same stance as cave-linked rasters,
@@ -108,6 +195,7 @@ public static class SurveyModelEndpoints
     private static async Task<Results<Created<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
         Guid caveId,
         IFormFile file,
+        HttpRequest request,
         SilexGisDbContext db,
         DocumentWriteService documents,
         IFileStore fileStore,
@@ -134,15 +222,30 @@ public static class SurveyModelEndpoints
         }
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (extension is not (".lox" or ".3d"))
+        if (extension is not (".lox" or ".3d" or ".stl"))
         {
             return ApiProblems.BadRequest(
-                "survey_model.format_unsupported", "Upload a Therion .lox or Survex .3d file.");
+                "survey_model.format_unsupported", "Upload a Therion .lox, Survex .3d or .stl file.");
         }
 
         if (file.Length == 0 || file.Length > MaxUploadBytes)
         {
             return ApiProblems.BadRequest("survey_model.size_invalid", "The file is empty or exceeds 100 MB.");
+        }
+
+        // A wall mesh cannot be placed from its own contents, so the declaration comes with it and
+        // is checked before a byte is stored: a model kept without one would be a record nothing
+        // can draw and nobody can finish.
+        MeshDeclaration? declaration = null;
+        if (extension == ".stl")
+        {
+            var read = MeshDeclaration.FromForm(request.Form);
+            if (read.Problem is { } problem)
+            {
+                return problem;
+            }
+
+            declaration = read.Declaration;
         }
 
         string storagePath;
@@ -175,10 +278,34 @@ public static class SurveyModelEndpoints
             CaveFeatureId = caveId,
             Name = name,
             FileId = stored.Id,
-            Format = extension == ".lox" ? SurveyModelFormat.Lox : SurveyModelFormat.Survex3d,
+            Format = extension switch
+            {
+                ".lox" => SurveyModelFormat.Lox,
+                ".3d" => SurveyModelFormat.Survex3d,
+                _ => SurveyModelFormat.Stl,
+            },
         };
 
         db.SurveyModels.Add(model);
+
+        if (declaration is { } mesh)
+        {
+            model.Status = SurveyModelStatus.Pending;
+            model.SourceEpsg = mesh.SourceEpsg;
+            model.AnchorHeightM = mesh.OriginHeightM;
+            // For a local file this is the position the uploader gave; for a projected one it is
+            // left for the conversion to derive from the file's own coordinates. Either way the
+            // conversion reads it back off the row, so what was declared is what is used.
+            model.Anchor = mesh.Origin;
+
+            db.ProcessingJobs.Add(new ProcessingJob
+            {
+                Kind = ProcessingJobKinds.SurveyMesh,
+                Payload = JsonSerializer.Serialize(new SurveyMeshPayload(model.Id), JsonSerializerOptions.Web),
+                RequestedBy = ctx.UserId,
+            });
+        }
+
         await db.SaveChangesAsync(ct);
 
         return TypedResults.Created($"/api/v1/survey-models/{model.Id}", model.ToDto(tokens));
@@ -312,9 +439,22 @@ public static class SurveyModelEndpoints
         m.FileId,
         m.Description,
         m.SurveyedAt,
-        // A survey model is only ever useful as its own bytes, and it holds no capture point
-        // of its own to be careful about — the cave's protection is enforced on the way in.
-        $"/api/v1/files/{m.FileId}/content?token={Uri.EscapeDataString(tokens.CreateToken(m.FileId, FileDelivery.Full))}",
+        FileUrl(tokens, m.FileId),
+        m.Status,
+        m.ProcessingError,
+        m.ConvertedFileId is { } converted ? FileUrl(tokens, converted) : null,
+        m.Anchor?.X,
+        m.Anchor?.Y,
+        m.AnchorHeightM,
+        m.TriangleCount,
+        m.SourcePrecisionLost,
         m.CreatedAt,
         m.UpdatedAt);
+
+    // A survey model is only ever useful as its own bytes — an upload and the mesh converted
+    // from it alike — and neither holds a capture point of its own to be careful about, so both
+    // are signed for the wider reach. The cave's protection is enforced on the way in, which is
+    // where a model that may not be reached at all is refused.
+    private static string FileUrl(IFileAccessTokenService tokens, Guid fileId) =>
+        $"/api/v1/files/{fileId}/content?token={Uri.EscapeDataString(tokens.CreateToken(fileId, FileDelivery.Full))}";
 }

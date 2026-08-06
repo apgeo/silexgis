@@ -52,6 +52,8 @@ public static class DependencyInjection
         // (feature properties, document metadata) — the knowledge has a single home.
         services.AddSingleton<ITypedPropertiesValidator, Metadata.JsonSchemaPropertiesValidator>();
         services.AddSingleton<Geodata.ICrsRegistry, Geodata.ProjCrsRegistry>();
+        services.AddSingleton<Geodata.ICoordinateProjector, Geodata.ProjCoordinateProjector>();
+        services.AddSingleton<Surveys.SurveyMeshConverter>();
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
         services.AddScoped<Documents.DocumentWriteService>();
@@ -157,6 +159,7 @@ public static class DependencyInjection
 
         services.AddScoped<IProcessingJobHandler, GeofileImportHandler>();
         services.AddScoped<IProcessingJobHandler, RasterCogHandler>();
+        services.AddScoped<IProcessingJobHandler, SurveyMeshHandler>();
         services.AddScoped<IProcessingJobHandler, PhotoGeoBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, AccountDataExportHandler>();
         services.AddScoped<IProcessingJobHandler, FeatureIntegrityVerifyHandler>();

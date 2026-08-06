@@ -45,6 +45,9 @@ public static class ProcessingJobKinds
     public const string GeofileImport = "geofile-import";
     public const string RasterCog = "raster-cog";
 
+    /// <summary>Turn an uploaded cave wall mesh into the form the 3D scene draws.</summary>
+    public const string SurveyMesh = "survey-mesh";
+
     /// <summary>Backfill EXIF GPS points onto existing image files that predate geotag capture.</summary>
     public const string PhotoGeoBackfill = "photo-geo-backfill";
 

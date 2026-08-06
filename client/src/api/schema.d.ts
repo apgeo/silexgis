@@ -10167,13 +10167,27 @@ export interface components {
             /** Format: date */
             surveyedAt: null | string;
             modelUrl: string;
+            status: components["schemas"]["SurveyModelStatus"];
+            processingError: null | string;
+            meshUrl: null | string;
+            /** Format: double */
+            anchorLongitude: null | number;
+            /** Format: double */
+            anchorLatitude: null | number;
+            /** Format: double */
+            anchorHeightM: null | number;
+            /** Format: int32 */
+            triangleCount: null | number;
+            sourcePrecisionLost: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
         };
         /** @enum {unknown} */
-        SurveyModelFormat: "lox" | "survex3d";
+        SurveyModelFormat: "lox" | "survex3d" | "stl";
+        /** @enum {unknown} */
+        SurveyModelStatus: "ready" | "pending" | "processing" | "failed";
         SurveyModelUpdateRequest: {
             name: string;
             description: null | string;
