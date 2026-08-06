@@ -55,6 +55,13 @@ export function overlayTreeNode(page: Page, name: string) {
  */
 export async function deleteFeature(page: Page, featureName: string) {
   await page.goto('/features');
+  // The pointer does not move when a page does. Whatever was last clicked leaves the virtual
+  // mouse at those coordinates, and if this page happens to put its export button there, the
+  // menu opens on hover and covers the table underneath — so the row's own delete button is
+  // clicked at, retried against the menu, and the test's clock runs out on a cleanup step that
+  // has nothing to do with what it is cleaning up. Parking the pointer in the corner first is
+  // the whole fix; nothing about the application is involved.
+  await page.mouse.move(0, 0);
   await page.getByPlaceholder('Search by name').fill(featureName);
   const row = page.getByRole('row', { name: new RegExp(featureName) });
   await expect(row).toBeVisible({ timeout: 15_000 });
