@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
+import { test } from './consoleGuard.ts';
 import { deleteFeature, login } from './helpers.ts';
 
 /**
@@ -501,6 +502,7 @@ test('a trip log takes part in links from its own page', async ({ page }) => {
 
 test('an administrator adds a relation, a link records it, and it will not go while it is used', async ({
   page,
+  consoleErrors,
 }) => {
   const stamp = Date.now();
   const anchorName = `E2E Vocab Anchor ${stamp}`;
@@ -511,6 +513,14 @@ test('an administrator adds a relation, a link records it, and it will not go wh
   // is refused a deletion and then allowed one. That is four round-trips to the admin page
   // and back, which needs room when the rest of the suite is running beside it.
   test.slow();
+  // Being refused is the point of this flow, and a browser writes a console error for every
+  // request that failed regardless of how well the page handled the answer — so the refusal this
+  // test exists to prove arrives as one. Declared rather than left to the console sweep, which
+  // would otherwise report the application behaving exactly as this test requires.
+  consoleErrors.allow(
+    /status of 409/,
+    'this flow asserts that a relation in use cannot be deleted; the refusal is the point',
+  );
   await login(page);
 
   await page.goto('/admin/relation-types');

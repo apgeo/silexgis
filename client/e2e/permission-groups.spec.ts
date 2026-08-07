@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
+import { test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
 
 /** Opens an antd select and picks the option with this label (options render in a portal). */

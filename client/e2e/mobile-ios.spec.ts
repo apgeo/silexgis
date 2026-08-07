@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
+import { test } from './consoleGuard.ts';
 import { login, longPressMap } from './helpers.ts';
 
 // Runs in the `mobile-ios-smoke` project only (iPhone 14, WebKit, 390x664).

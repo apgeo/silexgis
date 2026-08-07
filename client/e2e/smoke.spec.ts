@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { expect, test, type Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
+import { test } from './consoleGuard.ts';
 import { centreOnDemoCave, deleteFeature, gotoRoute, login, overlayTreeNode } from './helpers.ts';
 
 test('login, map workspace and cave registry work end to end', async ({ page }) => {
