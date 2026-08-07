@@ -108,6 +108,11 @@
     "conflict": "Altcineva a modificat acest element de când l-ați încărcat. Reîncărcați și reaplicați modificările.",
     "loadFailed": "Nu s-a putut încărca. Încercați din nou."
   },
+  "errorBoundary": {
+    "title": "Ceva nu a funcționat pe acest ecran",
+    "description": "Pagina nu a mai putut fi afișată. De obicei reîncărcarea o aduce înapoi.",
+    "reload": "Reîncarcă pagina"
+  },
   "map": {
     "baseLayers": "Hărți de bază",
     "activeOverlays": "Straturi pe hartă",

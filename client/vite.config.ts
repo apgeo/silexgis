@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /// <reference types="vitest/config" />
-import { existsSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
@@ -81,9 +81,90 @@ function assertRuntimeAssetsCopied(): Plugin {
   };
 }
 
+/**
+ * Takes the error reports the application makes about itself and appends them to a file.
+ *
+ * A route on the development server rather than an endpoint on the API, and that is the whole design.
+ * An ingest route on the API would be an unauthenticated write path in an application where every
+ * other route is authenticated, permission-checked and visibility-filtered — needing an environment
+ * gate, a rate limit, a size cap, a place in the anonymous allow-list and tests for all of it, in
+ * order to carry development diagnostics. Here the guarantee is structural instead: a deployment runs
+ * no development server, so the route does not exist there and nothing about it ships.
+ *
+ * The cost, stated plainly: only browsing through `npm run dev` is covered. Somebody using a packaged
+ * installation reports nothing, and covering them means the API endpoint with all of its consequences.
+ */
+function clientErrorSink(): Plugin {
+  const sinkFile = path.join('.diagnostics', 'browsing-errors.jsonl');
+  // Refuses a body big enough to be a runaway loop rather than a report.
+  const maxBodyBytes = 512 * 1024;
+
+  return {
+    name: 'silexgis:client-error-sink',
+    apply: 'serve',
+    configureServer(server) {
+      const file = path.resolve(server.config.root, sinkFile);
+      mkdirSync(path.dirname(file), { recursive: true });
+
+      server.middlewares.use('/__client-errors', (request, response, next) => {
+        if (request.method !== 'POST') {
+          next();
+          return;
+        }
+        const chunks: Buffer[] = [];
+        let size = 0;
+        let refused = false;
+
+        request.on('data', (chunk: Buffer) => {
+          size += chunk.length;
+          if (size > maxBodyBytes) {
+            refused = true;
+            request.destroy();
+            return;
+          }
+          chunks.push(chunk);
+        });
+
+        request.on('end', () => {
+          if (refused) {
+            response.statusCode = 413;
+            response.end();
+            return;
+          }
+          try {
+            const batch: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+            const records = (Array.isArray(batch) ? batch : [batch]) as Record<string, unknown>[];
+            appendFileSync(file, `${records.map((record) => JSON.stringify(record)).join('\n')}\n`);
+            // Logged as well as written, so an error appears in the terminal already being watched
+            // instead of only in a file somebody has to remember to look at.
+            for (const record of records) {
+              server.config.logger.warn(
+                `  browser error ${String(record.fingerprint)}  ` +
+                  `${String(record.message).split('\n')[0]}` +
+                  `${record.frame ? ` [${String(record.frame)}]` : ''}`,
+              );
+            }
+            response.statusCode = 204;
+          } catch {
+            // A report that cannot be read is not worth failing a development server over.
+            response.statusCode = 400;
+          }
+          response.end();
+        });
+
+        request.on('error', () => {
+          response.statusCode = 400;
+          response.end();
+        });
+      });
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     react(),
+    clientErrorSink(),
     viteStaticCopy({
       targets: [
         ...cesiumAssetTrees.map((tree) => ({

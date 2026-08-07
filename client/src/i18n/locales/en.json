@@ -108,6 +108,11 @@
     "conflict": "Someone else changed this since you loaded it. Reload and reapply your changes.",
     "loadFailed": "Could not load this. Please try again."
   },
+  "errorBoundary": {
+    "title": "Something went wrong on this screen",
+    "description": "The page stopped rendering. Reloading usually gets it back.",
+    "reload": "Reload the page"
+  },
   "map": {
     "baseLayers": "Base layers",
     "activeOverlays": "Map layers",

@@ -1,9 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { createHash } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { test as base, type Page, type TestInfo } from '@playwright/test';
+import {
+  fingerprintOf,
+  normalizeMessage,
+  stripUrls,
+  topAppFrame,
+  withoutEchoes,
+  type ErrorKind,
+  type ErrorRecord,
+} from '../src/diagnostics/errorIdentity.ts';
 
 // Every browser error the suite walks past, recorded.
+//
+// What counts as "the same defect" is NOT decided here. It comes from the application's own
+// diagnostics module, because the application reports its own errors too while somebody is using it —
+// and if these two observers identified a defect even slightly differently, everything seen both ways
+// would be recorded twice and nothing could say whether a defect was new. There is one rule and this
+// imports it.
 //
 // A spec asserts what it was written to assert, so a page that throws while doing it passes as
 // readily as one that does not: nothing in Playwright fails a test because the application
@@ -35,27 +49,14 @@ const gateMode = process.env.SILEXGIS_CONSOLE_GATE === 'enforce' ? 'enforce' : '
  */
 const ALLOWED_EVERYWHERE: { pattern: RegExp; reason: string }[] = [];
 
-/** One error as it happened, with enough of its context to be triaged without a re-run. */
-export interface CapturedError {
-  /** Stable short key for "this defect", so occurrences across runs and specs group together. */
-  fingerprint: string;
-  /** `uncaught` is a throw or a rejection nothing handled; `console` is a call to console.error. */
-  kind: 'uncaught' | 'console';
-  /** Error class where the browser gave one (`TypeError`), otherwise empty. */
-  name: string;
-  message: string;
-  /** The message with per-run detail removed — what the fingerprint is taken over. */
-  normalized: string;
-  /** Top frame in the application's own code, line and column kept, for a human to open. */
-  frame: string;
-  stack: string;
-  /** Address the page was on, which is also how a popup's errors are told from the main page's. */
-  pageUrl: string;
-  project: string;
-  spec: string;
-  test: string;
-  at: string;
-}
+/**
+ * One error as the suite saw it — the shared record shape, with the suite's own fields filled in.
+ *
+ * The same shape the application writes when it reports an error about itself, so that both end up in
+ * one place and group by the same key. `spec`, `test` and `project` are what only this observer knows;
+ * breadcrumbs and a component stack are what only the other one does.
+ */
+export type CapturedError = ErrorRecord;
 
 export interface ConsoleErrorGuard {
   /**
@@ -74,101 +75,14 @@ export interface ConsoleErrorGuard {
   captured(): readonly CapturedError[];
 }
 
-/** Absolute addresses, with Vite's cache-busting query and any trailing line:column removed. */
-function stripUrls(text: string): string {
-  return text.replace(/https?:\/\/[^\s)'"]+/g, (candidate) => {
-    try {
-      return new URL(candidate).pathname.replace(/:\d+:\d+$/, '');
-    } catch {
-      return candidate;
-    }
-  });
-}
-
-/**
- * Identifiers replaced by a placeholder, so the same defect keeps one identity between runs.
- *
- * Every record this application creates is keyed by a generated identifier, and the tests create
- * their own data — so a failing request for one of them names a different address every run. Left
- * in, a defect would look new every single sweep and nothing keeping a record of them could say it
- * had seen it before. A whole path segment of nothing but digits goes the same way: there it is an
- * identifier too. Digits elsewhere are collapsed rather than removed, so two genuinely different
- * errors do not merge into one just by both mentioning a number.
- */
-function collapseIds(text: string): string {
-  return text
-    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '{id}')
-    .replace(/\/\d+(?=\/|:|$)/g, '/{id}')
-    .replace(/\d{4,}/g, '#');
-}
-
-/**
- * The message with everything that differs between two runs of the same defect taken out.
- *
- * Ports differ between checkouts and the development server appends a timestamp to every module it
- * serves, so the same defect would otherwise fingerprint differently on two machines.
- */
-function normalizeMessage(text: string): string {
-  return collapseIds(stripUrls(text)).replace(/\s+/g, ' ').trim();
-}
-
-/**
- * The first frame of the stack that is the application's own code, or the first frame at all.
- *
- * The development server serves the application from `/src/`, and everything it bundles from
- * `/node_modules/`, so the distinction is in the path. It matters because the top frame of a
- * failure inside a library is that library, which is the same for every unrelated defect that
- * happens to end up there — grouping on it would merge them all.
- */
-function topAppFrame(stack: string): string {
-  const frames = stack.split('\n').slice(1);
-  const own = frames.find((frame) => /\/src\//.test(frame));
-  const chosen = own ?? frames[0] ?? '';
-  const url = /https?:\/\/[^\s)'"]+/.exec(chosen);
-  return url ? new URL(url[0]).pathname : chosen.trim();
-}
-
-/**
- * Same defect, same key: the error class, the normalized message, and the file it came from.
- *
- * The file without its line and column, and with identifiers collapsed. Both matter: an edit that
- * moves the code down three lines is not a new defect, and neither is the same failing request
- * asked for a different record.
- */
-function fingerprintOf(name: string, normalized: string, frame: string): string {
-  const file = collapseIds(frame.replace(/:\d+:\d+$/, ''));
-  return createHash('sha1').update(`${name}|${normalized}|${file}`).digest('hex').slice(0, 8);
-}
-
-/**
- * The console lines that are only the browser reporting an error already recorded, removed.
- *
- * One uncaught error produces two records: the thrown error, with its stack, and the line the
- * browser prints about it, which contains the same message and points at nothing useful. Left
- * alone they fingerprint differently — different error class, different frame — so one defect would
- * be filed as two, one of them unlocatable.
- *
- * Done when the test ends rather than as the events arrive, because it must not depend on which of
- * the two the browser raises first, and that order is not something to rely on. A message too short
- * to be distinctive is left alone: matching on it would drop console errors that merely happen to
- * contain the same handful of characters.
- */
-function withoutEchoes(errors: CapturedError[]): CapturedError[] {
-  const thrown = errors
-    .filter((error) => error.kind === 'uncaught' && error.message.length >= 12)
-    .map((error) => error.message);
-  return errors.filter(
-    (error) => error.kind !== 'console' || !thrown.some((message) => error.message.includes(message)),
-  );
-}
-
 /** A page's console and its uncaught errors, recorded into `into`. */
 function watchPage(page: Page, into: CapturedError[], testInfo: TestInfo) {
-  const record = (kind: CapturedError['kind'], name: string, message: string, stack: string) => {
+  const record = (kind: ErrorKind, name: string, message: string, stack: string) => {
     const normalized = normalizeMessage(message);
     const frame = topAppFrame(stack || message);
     into.push({
-      fingerprint: fingerprintOf(name, normalized, frame),
+      fingerprint: fingerprintOf({ kind, name, normalized, frame }),
+      source: 'sweep',
       kind,
       name,
       message,

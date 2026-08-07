@@ -10,8 +10,17 @@ import './i18n';
 import './index.css';
 import App from './App.tsx';
 import { QueryProvider } from './api/QueryProvider.tsx';
+import ErrorBoundary from './components/ErrorBoundary.tsx';
+import { installErrorReporting } from './diagnostics/reporter.ts';
 import { useUiPrefsStore } from './stores/uiPrefsStore.ts';
 import { buildThemeConfig, resolveDark } from './theme.ts';
+
+// Before anything renders, so that a failure while the application is starting up is reported
+// rather than being the one class of failure this never sees. Development only: what it reports to
+// is a route the development server answers, and nothing serves that in a built application.
+if (import.meta.env.DEV) {
+  installErrorReporting();
+}
 
 /** antd locale follows the i18next language (component-internal strings, pickers, …). */
 function Root() {
@@ -46,9 +55,14 @@ function Root() {
     >
       {/* antd App provides the context consumed by App.useApp() (message/modal/notification). */}
       <AntApp style={{ height: '100%' }}>
-        <QueryProvider>
-          <App />
-        </QueryProvider>
+        {/* Inside the providers, so the screen it falls back to is themed and translated like the
+            rest of the application. What it cannot catch is a failure in the component above it,
+            which is only this file's theme and locale plumbing. */}
+        <ErrorBoundary>
+          <QueryProvider>
+            <App />
+          </QueryProvider>
+        </ErrorBoundary>
       </AntApp>
     </ConfigProvider>
   );

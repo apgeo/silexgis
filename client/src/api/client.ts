@@ -2,6 +2,7 @@
 import createClient from 'openapi-fetch';
 import type { paths } from './schema';
 import { userManager } from '../auth/auth.tsx';
+import { recordBreadcrumb } from '../diagnostics/breadcrumbs.ts';
 
 /** Thrown by the unwrap helpers so callers can react to the HTTP status / problem code. */
 export class ApiError extends Error {
@@ -88,3 +89,16 @@ api.use({
     return response;
   },
 });
+
+// What the application asked the server, kept as part of the trail attached to an error report.
+// Development only, and only what a request line would say — method, path, status. It is here rather
+// than around each call because this is the one place every request already passes through, and the
+// answer a request got is very often what explains the error that follows it.
+if (import.meta.env.DEV) {
+  api.use({
+    onResponse({ request, response }) {
+      recordBreadcrumb('api', `${request.method} ${new URL(request.url).pathname} → ${response.status}`);
+      return response;
+    },
+  });
+}
