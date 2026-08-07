@@ -18,7 +18,8 @@ import { test as base, type Page, type TestInfo } from '@playwright/test';
 //     what the sweep finds is still being worked through: a gate that fails the whole suite on
 //     the first day would be turned off on the first day.
 //   enforce — the same, and a test that saw an unexplained error fails. This is where the
-//     default belongs once the catalogue is empty; until then a green run does not mean silence.
+//     default belongs once that backlog is worked through; until then a green run does not mean
+//     silence.
 //
 // What a test EXPECTS to see is declared in the test, with its reason — see `allow` below. What
 // no test should have to declare is in ALLOWED_EVERYWHERE. Nothing else is filtered: an error
@@ -89,8 +90,8 @@ function stripUrls(text: string): string {
  *
  * Every record this application creates is keyed by a generated identifier, and the tests create
  * their own data — so a failing request for one of them names a different address every run. Left
- * in, a defect would be filed as new every single sweep and the catalogue could never say it had
- * seen it. A whole path segment of nothing but digits goes the same way: at that position it is an
+ * in, a defect would look new every single sweep and nothing keeping a record of them could say it
+ * had seen it before. A whole path segment of nothing but digits goes the same way: there it is an
  * identifier too. Digits elsewhere are collapsed rather than removed, so two genuinely different
  * errors do not merge into one just by both mentioning a number.
  */
@@ -214,8 +215,9 @@ function watchPage(page: Page, into: CapturedError[], testInfo: TestInfo) {
  *
  * Specs import `test` from here rather than from Playwright directly. That is a real cost — a
  * new spec that forgets is silently unwatched — and it is the only way Playwright offers to
- * reach every page a test opens. The triage step names any spec that is not importing it, so
- * the omission is visible where it matters rather than at the moment it is made.
+ * reach every page a test opens. The step that groups a run's recorded errors reports any spec
+ * that is not importing this, so the omission surfaces when the errors are read rather than
+ * staying invisible forever.
  */
 export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
   consoleErrors: [

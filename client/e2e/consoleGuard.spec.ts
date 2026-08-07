@@ -15,8 +15,8 @@ import { test } from './consoleGuard.ts';
 // its own. Desktop only — the mechanism is not per-device, and what these assert about how a browser
 // reports a throw is chromium's behaviour.
 //
-// Each test declares the error it makes before it ends, so the suite stays green and nothing here
-// ever reaches the catalogue.
+// Each test declares the error it makes before it ends, so the suite stays green and nothing this
+// file does is ever reported as a defect of the application.
 
 /** Throws inside a task nothing is waiting on, which is what makes it uncaught. */
 async function throwUncaught(page: Page, message: string) {
