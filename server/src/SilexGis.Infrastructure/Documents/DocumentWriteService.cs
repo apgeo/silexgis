@@ -6,6 +6,7 @@ using Npgsql;
 using SilexGis.Domain;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Import;
 using SilexGis.Infrastructure.Documents.Extraction;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Jobs;
@@ -31,7 +32,7 @@ public sealed record StoredContent(
     long SizeBytes,
     string Sha256,
     FileKind Kind,
-    Point? Geom = null,
+    PhotoCapture? Capture = null,
     ContentFacts? Facts = null);
 
 /// <summary>
@@ -172,6 +173,7 @@ public sealed class DocumentWriteService(
         // the metadata bag, because document lists filter and order on them. A format that
         // states none of this leaves them null, which is the honest answer.
         var facts = content.Facts ?? ContentFacts.None;
+        var capture = content.Capture ?? PhotoCapture.None;
         var file = new StoredFile
         {
             DocumentVersionId = documentVersionId,
@@ -181,7 +183,15 @@ public sealed class DocumentWriteService(
             SizeBytes = content.SizeBytes,
             Sha256 = content.Sha256,
             Kind = content.Kind,
-            Geom = content.Geom,
+            Geom = capture.Point,
+            // Only a fix the camera itself recorded arrives here; everything else is somebody
+            // placing the picture later, and the two must stay distinguishable.
+            PositionSource = capture.Point is null ? PhotoPositionSource.None : PhotoPositionSource.Exif,
+            AltitudeMeters = capture.AltitudeMeters,
+            DirectionDegrees = capture.DirectionDegrees,
+            DirectionIsMagnetic = capture.DirectionIsMagnetic,
+            PositionDop = capture.Dop,
+            Metadata = (capture.Exif ?? PhotoExif.None).IntoMetadata(null),
             Author = Trim(facts.Author, NameFactMaxLength),
             Producer = Trim(facts.Producer, NameFactMaxLength),
             ContentCreatedAt = Utc(facts.ContentCreatedAt),

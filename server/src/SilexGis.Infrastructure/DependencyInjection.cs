@@ -57,8 +57,11 @@ public static class DependencyInjection
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
         services.AddScoped<Import.TermRuleSetStore>();
+        services.AddScoped<Import.VisibleProximitySearch>();
         services.AddScoped<Import.ImportCandidateService>();
         services.AddScoped<Import.ImportCommitService>();
+        services.AddScoped<Import.PhotoCandidateService>();
+        services.AddScoped<Import.PhotoCommitService>();
         services.AddScoped<Documents.DocumentWriteService>();
         services.AddScoped<Documents.DocumentTypeWriteService>();
         services.AddScoped<Documents.CabinetWriteService>();

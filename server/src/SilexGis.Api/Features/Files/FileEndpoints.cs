@@ -386,7 +386,7 @@ public static class FileEndpoints
             // Reading EXIF is gated on the sniffed kind, so a photo uploaded under the wrong
             // media type still has its capture location found — and, more importantly, that
             // location is then protected like any other, instead of quietly going unread.
-            format.Kind == FileKind.Image ? geotagReader.TryReadPoint(absolutePath) : null,
+            format.Kind == FileKind.Image ? geotagReader.Read(absolutePath) : null,
             await metadataReader.ReadAsync(absolutePath, format.Kind, ct));
     }
 

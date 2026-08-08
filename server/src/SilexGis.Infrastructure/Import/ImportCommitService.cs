@@ -13,6 +13,35 @@ namespace SilexGis.Infrastructure.Import;
 /// <summary>A candidate that could not be created, and why — reported, never swallowed.</summary>
 public sealed record ImportFailure(long SourceId, string? Name, string Code, string Reason);
 
+/// <summary>
+/// The attachments one line of a batch hung, as the row stores them. A tiny reader with one
+/// home, because both the confirmation that writes them and the undo that takes them down have
+/// to agree about the shape, and a list of ids in a jsonb column is easy to write two ways.
+/// </summary>
+public static class ImportBatchAttachments
+{
+    public static string Write(IEnumerable<Guid> ids) => ImportJson.Serialize(ids);
+
+    public static IReadOnlyList<Guid> Read(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return [];
+        }
+
+        try
+        {
+            return ImportJson.Deserialize<List<Guid>>(json) ?? [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // A line nothing can read is a line whose attachments undo cannot find. Saying so
+            // by leaving them is better than refusing to undo the rest of the batch.
+            return [];
+        }
+    }
+}
+
 /// <summary>What one confirmation did.</summary>
 public sealed record ImportCommitResult(
     ImportBatch Batch, IReadOnlyList<ImportFailure> Failures);
@@ -175,16 +204,23 @@ public sealed class ImportCommitService(
     }
 
     /// <summary>
-    /// Undoes a confirmation: every object it created is soft-deleted, and the batch is
-    /// stamped. Caves that only gained an entrance keep their other entrances and are
-    /// re-mirrored, so reverting an import that added a second entrance to somebody's cave
-    /// leaves that cave exactly as it was.
+    /// Undoes a confirmation: every object it created is soft-deleted, every attachment it hung
+    /// is taken back down, and the batch is stamped. Caves that only gained an entrance keep
+    /// their other entrances and are re-mirrored, so reverting an import that added a second
+    /// entrance to somebody's cave leaves that cave exactly as it was.
+    /// <para>
+    /// One revert serves both kinds of batch. A vector import creates objects and nothing else,
+    /// so taking the objects back is the whole of it; a photo import also hangs pictures on
+    /// things that were already there, and soft-deleting what it created would leave those
+    /// behind — on somebody else's cave, which is precisely the case undo exists for.
+    /// </para>
     /// </summary>
     public async Task RevertAsync(ImportBatch batch, Guid userId, CancellationToken ct = default)
     {
-        var items = await db.ImportBatchItems
-            .Where(i => i.ImportBatchId == batch.Id && i.FeatureId != null)
+        var allItems = await db.ImportBatchItems
+            .Where(i => i.ImportBatchId == batch.Id)
             .ToListAsync(ct);
+        var items = allItems.Where(i => i.FeatureId != null).ToList();
 
         var createdIds = items.Select(i => i.FeatureId!.Value).ToHashSet();
         var caves = await db.CaveEntrances.AsNoTracking()
@@ -200,6 +236,15 @@ public sealed class ImportCommitService(
             // Deleting a cave stamps its entrances with it; asking again for an entrance that
             // is already gone stamps nothing, which is why order does not matter here.
             await writer.SoftDeleteAsync(id, ct);
+        }
+
+        // The pictures themselves are left alone — they were uploaded, not created here, and
+        // an undo that deleted somebody's photographs would be a far larger action than the one
+        // they asked for. Only the hanging comes down.
+        var attachmentIds = allItems.SelectMany(i => ImportBatchAttachments.Read(i.AttachmentIds)).ToList();
+        if (attachmentIds.Count > 0)
+        {
+            await db.Attachments.Where(a => attachmentIds.Contains(a.Id)).ExecuteDeleteAsync(ct);
         }
 
         batch.RevertedAt = DateTimeOffset.UtcNow;

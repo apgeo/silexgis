@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Import;
+
 namespace SilexGis.Domain.Settings;
 
 /// <summary>How the SMTP conversation is secured.</summary>
@@ -165,6 +167,18 @@ public sealed record ImportSettings
     /// same thing rather than merely close to it.
     /// </summary>
     public double DuplicateNameSimilarity { get; init; } = 0.8;
+
+    /// <summary>
+    /// How far a photograph looks for objects already in the registry, in metres, before the
+    /// reviewer changes it. Wider than the vector-file default on purpose: a picture is taken
+    /// from where the photographer stood, which is rarely where the thing they photographed is.
+    /// </summary>
+    public double PhotoProximityRadiusMeters { get; init; } = PhotoImportOptions.DefaultProximityRadiusMeters;
+
+    /// <summary>
+    /// How far apart two photographs can be, in metres, and still be proposed as one place.
+    /// </summary>
+    public double PhotoClusterRadiusMeters { get; init; } = PhotoImportOptions.DefaultClusterRadiusMeters;
 }
 
 /// <summary>

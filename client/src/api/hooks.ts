@@ -90,6 +90,12 @@ export const queryKeys = {
   // choices, so changing a rule set or the duplicate radius is a different question rather
   // than a stale answer to the same one.
   importPreview: (geofileId: string, body: unknown) => ['import-preview', geofileId, body] as const,
+  photoImportSession: ['photo-import-session'] as const,
+  // Same reasoning as the vector preview: the grouping is a pure function of the pictures and
+  // the choices, so changing the clustering radius is a different question rather than a stale
+  // answer to the same one.
+  photoImportPreview: (body: unknown) => ['photo-import-preview', body] as const,
+  photoImportTracks: ['photo-import-tracks'] as const,
   importBatches: (params: ImportBatchListParams) => ['import-batches', 'list', params] as const,
   importBatch: (id: string) => ['import-batches', 'detail', id] as const,
   importProvenance: (featureId: string) => ['import-provenance', featureId] as const,
@@ -2823,6 +2829,137 @@ export function useCommitImport() {
       void queryClient.invalidateQueries({ queryKey: ['caves'] });
       void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
       void queryClient.invalidateQueries({ queryKey: ['import-session'] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Photographs into the registry
+// ---------------------------------------------------------------------------
+
+export type PhotoImportOptions = components['schemas']['PhotoImportOptions'];
+export type PhotoDecision = components['schemas']['PhotoDecision'];
+export type PhotoCandidate = components['schemas']['PhotoCandidateDto'];
+export type PhotoCandidateMember = components['schemas']['PhotoCandidateMemberDto'];
+export type PhotoNearby = components['schemas']['PhotoNearbyDto'];
+export type PhotoPreview = components['schemas']['PhotoPreviewDto'];
+export type PhotoPreviewRequest = components['schemas']['PhotoPreviewRequest'];
+export type PhotoSession = components['schemas']['PhotoSessionDto'];
+export type PhotoTrackOption = components['schemas']['PhotoTrackOptionDto'];
+export type PhotoPosition = components['schemas']['PhotoPositionDto'];
+export type PhotoPositionSource = components['schemas']['PhotoPositionSource'];
+export type PhotoExif = components['schemas']['PhotoExif'];
+export type PositionConfidenceBand = components['schemas']['PositionConfidenceBand'];
+
+export function usePhotoImportSession() {
+  return useQuery({
+    queryKey: queryKeys.photoImportSession,
+    queryFn: () => unwrap(api.GET('/api/v1/photo-import/session')),
+  });
+}
+
+/**
+ * Saves the review as the reviewer works. Deliberately does not invalidate the session query,
+ * for the same reason the vector one does not: the browser already holds what it just sent.
+ */
+export function useSavePhotoImportSession() {
+  return useMutation({
+    mutationFn: (body: {
+      fileIds: string[];
+      options: PhotoImportOptions;
+      decisions: Record<string, PhotoDecision>;
+    }) => unwrap(api.PUT('/api/v1/photo-import/session', { body })),
+  });
+}
+
+/** Groups the drop into places. A POST because the options are a body, but it creates nothing. */
+export function usePhotoImportPreview(body: PhotoPreviewRequest, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.photoImportPreview(body),
+    queryFn: () => unwrap(api.POST('/api/v1/photo-import/preview', { body })),
+    enabled: enabled && body.fileIds.length > 0,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useCommitPhotoImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      options: PhotoImportOptions;
+      fileIds: string[];
+      selection: string[];
+      decisions: Record<string, PhotoDecision>;
+    }) => unwrap(api.POST('/api/v1/photo-import/commit', { body })),
+    onSuccess: () => {
+      // A confirmation creates objects, hangs pictures on them and spends the review that
+      // produced them, so every surface built from any of those goes stale at once.
+      void queryClient.invalidateQueries({ queryKey: ['features'] });
+      void queryClient.invalidateQueries({ queryKey: ['caves'] });
+      void queryClient.invalidateQueries({ queryKey: ['attachments'] });
+      void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
+      void queryClient.invalidateQueries({ queryKey: ['photo-import-session'] });
+    },
+  });
+}
+
+/** Uploaded tracks a picture with no fix of its own can be placed against. */
+export function usePhotoImportTracks(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.photoImportTracks,
+    queryFn: () => unwrap(api.GET('/api/v1/photo-import/tracks')),
+    enabled,
+  });
+}
+
+/**
+ * Gives a picture a position by hand, or forgets one. `replaceRecordedFix` has to be true when
+ * the camera recorded a fix — the server refuses otherwise, so that a drag cannot quietly
+ * replace a measurement.
+ */
+export function useSetPhotoPosition() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      position,
+      replaceRecordedFix,
+    }: {
+      id: string;
+      position: number[] | null;
+      replaceRecordedFix: boolean;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/files/{id}/position', {
+          params: { path: { id } },
+          body: { position, replaceRecordedFix },
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['attachments'] });
+      void queryClient.invalidateQueries({ queryKey: ['photo-import-preview'] });
+    },
+  });
+}
+
+/**
+ * Moves an object to where one of its pictures was taken. An ordinary geometry write: it needs
+ * write access to the object and lands in that object's own history.
+ */
+export function useFeaturePositionFromPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ featureId, fileId }: { featureId: string; fileId: string }) =>
+      unwrap(
+        api.POST('/api/v1/features/{id}/position-from-photo', {
+          params: { path: { id: featureId } },
+          body: { fileId },
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['features'] });
+      void queryClient.invalidateQueries({ queryKey: ['caves'] });
+      void queryClient.invalidateQueries({ queryKey: ['history'] });
     },
   });
 }

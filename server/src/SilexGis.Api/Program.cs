@@ -226,6 +226,7 @@ try
     api.MapGeofileEndpoints();
     api.MapTermRuleEndpoints();
     api.MapStagedImportEndpoints();
+    api.MapPhotoImportEndpoints();
     api.MapImportBatchEndpoints();
     api.MapJobEndpoints();
     api.MapExportEndpoints();

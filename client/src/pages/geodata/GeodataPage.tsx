@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import {
   AimOutlined,
+  CameraOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
@@ -322,10 +323,17 @@ export default function GeodataPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
+      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }} gap={12} wrap>
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('geodata.title')}
         </Typography.Title>
+        <Button
+          icon={<CameraOutlined />}
+          onClick={() => navigate('/geodata/photo-import')}
+          data-testid="photo-import-open"
+        >
+          {t('photoImport.openFromGeodata')}
+        </Button>
       </Flex>
       <Tabs
         // The tab is in the address so a confirmation can send the importer straight to the

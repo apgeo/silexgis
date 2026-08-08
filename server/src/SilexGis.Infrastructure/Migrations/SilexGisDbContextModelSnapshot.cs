@@ -2696,6 +2696,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("skipped_count");
 
+                    b.Property<short>("Source")
+                        .HasColumnType("smallint")
+                        .HasColumnName("source");
+
                     b.Property<Guid?>("TermRuleSetId")
                         .HasColumnType("uuid")
                         .HasColumnName("term_rule_set_id");
@@ -2704,6 +2708,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("term_rule_set_name");
+
+                    b.Property<Guid?>("TripLogId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("trip_log_id");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -2720,6 +2728,9 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("TermRuleSetId")
                         .HasDatabaseName("ix_import_batches_term_rule_set_id");
+
+                    b.HasIndex("TripLogId")
+                        .HasDatabaseName("ix_import_batches_trip_log_id");
 
                     b.ToTable("import_batches", (string)null);
                 });
@@ -2740,6 +2751,13 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<Guid?>("AttachedToFeatureId")
                         .HasColumnType("uuid")
                         .HasColumnName("attached_to_feature_id");
+
+                    b.Property<string>("AttachmentIds")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("attachment_ids")
+                        .HasDefaultValueSql("'[]'::jsonb");
 
                     b.Property<Guid?>("FeatureId")
                         .HasColumnType("uuid")
@@ -2763,6 +2781,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("source_feature_id");
 
+                    b.Property<Guid?>("SourceFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_file_id");
+
                     b.Property<string>("SourceProperties")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -2782,6 +2804,10 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("ImportBatchId")
                         .HasDatabaseName("ix_import_batch_items_import_batch_id");
+
+                    b.HasIndex("SourceFileId")
+                        .HasDatabaseName("ix_import_batch_items_source_file_id")
+                        .HasFilter("source_file_id is not null");
 
                     b.ToTable("import_batch_items", (string)null);
                 });
@@ -3190,6 +3216,55 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("permission_group_members", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.PhotoImportSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Decisions")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("decisions")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<string>("FileIds")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("file_ids")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<string>("Options")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("options")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_photo_import_sessions");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_photo_import_sessions_user_id");
+
+                    b.ToTable("photo_import_sessions", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.ProcessingJob", b =>
                 {
                     b.Property<long>("Id")
@@ -3509,6 +3584,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<double?>("AltitudeMeters")
+                        .HasColumnType("double precision")
+                        .HasColumnName("altitude_meters");
+
                     b.Property<string>("Author")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
@@ -3538,6 +3617,14 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<double?>("DirectionDegrees")
+                        .HasColumnType("double precision")
+                        .HasColumnName("direction_degrees");
+
+                    b.Property<bool>("DirectionIsMagnetic")
+                        .HasColumnType("boolean")
+                        .HasColumnName("direction_is_magnetic");
 
                     b.Property<Guid>("DocumentVersionId")
                         .HasColumnType("uuid")
@@ -3577,6 +3664,14 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<int?>("PageCount")
                         .HasColumnType("integer")
                         .HasColumnName("page_count");
+
+                    b.Property<double?>("PositionDop")
+                        .HasColumnType("double precision")
+                        .HasColumnName("position_dop");
+
+                    b.Property<short>("PositionSource")
+                        .HasColumnType("smallint")
+                        .HasColumnName("position_source");
 
                     b.Property<string>("Producer")
                         .HasMaxLength(255)
@@ -5046,6 +5141,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasForeignKey("TermRuleSetId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_import_batches_term_rule_sets_term_rule_set_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.TripLog", null)
+                        .WithMany()
+                        .HasForeignKey("TripLogId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_import_batches_trip_logs_trip_log_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.ImportBatchItem", b =>
@@ -5068,6 +5169,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_import_batch_items_import_batches_import_batch_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("SourceFileId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_import_batch_items_stored_files_source_file_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.MapView", b =>
@@ -5104,6 +5211,16 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_permission_group_members_permission_groups_permission_group");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.PhotoImportSession", b =>
+                {
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_photo_import_sessions_users_user_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.ResLink", b =>

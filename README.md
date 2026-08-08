@@ -87,6 +87,17 @@ Previous versions:
   within fifty metres, and the whole confirmation comes back out again in one press if the
   mapping turns out to have been wrong. The rules are yours to edit, and to send to another club
   as a file.
+- **Photographs become the places they show** — drop a trip's worth of pictures and the ones taken
+  at the same hole arrive as one candidate with a gallery, not as forty points to reject one at a
+  time. Each place says how it was placed and how much that is worth: the fix the camera recorded,
+  a position worked out by matching the picture's clock against a track you walked (with a
+  camera-clock offset, because a camera left on the wrong zone is out by hours while looking
+  perfectly plausible), or one you gave it by dragging it onto the map. It offers what is already
+  in the registry nearby, so filing a picture on the cave it belongs to is one press. Nothing is
+  created until you confirm, and the whole confirmation — including the pictures it hung on caves
+  that were already there — comes back out again in one press. A picture that recorded which way
+  the camera was facing draws that on the map, which is what turns "somewhere on this slope" into
+  a hole you can walk back to. Nothing is ever written back into the file itself.
 - **3D survey models** — Therion `.lox` / Survex `.3d` via CaveView.js, plus cave
   centerlines projected on the map.
 - **3D view** — the configured base layers draped on a globe, on a page that is downloaded

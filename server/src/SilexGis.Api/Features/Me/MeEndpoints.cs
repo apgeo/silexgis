@@ -153,9 +153,9 @@ public static class MeEndpoints
                 file.Length,
                 sha256,
                 FileKind.Image,
-                // Never read the EXIF capture point of an avatar: for a selfie that point is
-                // the user's home, and stored photo points are published on the map.
-                Geom: null),
+                // Never read the capture facts of an avatar: for a selfie that point is the
+                // user's home, and stored photo points are published on the map.
+                Capture: null),
             Path.GetFileName(file.FileName),
             user.Id,
             user.Id).File;

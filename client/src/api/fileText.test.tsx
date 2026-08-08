@@ -26,6 +26,9 @@ const file: FileInfo = {
   pagesUrl: null,
   pageCount: null,
   conversion: 'notApplicable',
+  contentCreatedAt: null,
+  photo: null,
+  position: null,
 };
 
 /** A provider with a cache of its own, built once so a re-render does not empty it. */

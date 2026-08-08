@@ -53,11 +53,20 @@ public static class DocumentAccessRules
     /// narrow the answer, it would flip it: a rule denying a shelf would go unseen and the
     /// document would list.
     /// </param>
+    /// <param name="reachedByAttachment">
+    /// Whether the caller actually reaches this document through something its file hangs on.
+    /// True by default because the caller that motivated this method is a listing of one
+    /// object's attachments, where reach is known by construction. A caller working over a set
+    /// that is not all attached — a drop of photographs somebody has only just uploaded — has
+    /// to say so per document, from <see cref="ReachedByAttachmentAsync"/>; passing true there
+    /// would not widen the answer, it would invent it.
+    /// </param>
     public static bool AllowedByOwnRulesOrAttachment(
         AccessContext ctx,
         Document document,
         AccessAction action,
-        IReadOnlyDictionary<Guid, Guid[]> cabinetReach)
+        IReadOnlyDictionary<Guid, Guid[]> cabinetReach,
+        bool reachedByAttachment = true)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(cabinetReach);
@@ -68,9 +77,10 @@ public static class DocumentAccessRules
         };
         var decision = AccessEvaluator.Decide(ctx, AccessDomain.Documents, action, facts);
         return AccessEvaluator.AttachmentReachCouldDecide(decision)
-            ? AccessEvaluator
-                .Decide(ctx, AccessDomain.Documents, action, facts with { ReachedByAttachment = true })
-                .Allowed
+            ? reachedByAttachment
+                && AccessEvaluator
+                    .Decide(ctx, AccessDomain.Documents, action, facts with { ReachedByAttachment = true })
+                    .Allowed
             : decision.Allowed;
     }
 

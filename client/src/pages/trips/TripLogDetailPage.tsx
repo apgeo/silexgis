@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { CameraOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { App, Button, Card, Descriptions, Flex, Popconfirm, Spin, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -181,6 +181,20 @@ export default function TripLogDetailPage() {
       <LinksSection entityType="tripLog" entityId={trip.id} canAdd entityTitle={trip.title} />
 
       <AttachmentSection entityType="tripLog" entityId={trip.id} canEdit={canEdit} reportSlot />
+
+      {canEdit && (
+        <Flex justify="flex-end" style={{ marginBottom: 16 }}>
+          {/* "These photographs are from this trip" as the way in, so everything the drop
+              creates is filed under the trip in one action rather than a second pass. */}
+          <Button
+            icon={<CameraOutlined />}
+            onClick={() => navigate(`/geodata/photo-import?tripLogId=${trip.id}`)}
+            data-testid="trip-photo-import"
+          >
+            {t('photoImport.openFromTrip')}
+          </Button>
+        </Flex>
+      )}
 
       <HistoryPanel
         entityType="tripLog"

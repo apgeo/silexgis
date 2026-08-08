@@ -92,12 +92,22 @@ public sealed record AdminSettingsDto(
 
 /// <summary>
 /// How much the installation trusts a vector file to become registry objects on its own, and
-/// how far duplicate detection looks by default.
+/// how far the two importers look around a candidate by default.
 /// </summary>
+/// <param name="PhotoProximityRadiusMeters">
+/// How far a photograph looks for objects already in the registry. Wider than the vector-file
+/// default on purpose: a picture is taken from where the photographer stood, which is rarely
+/// where the thing they photographed is.
+/// </param>
+/// <param name="PhotoClusterRadiusMeters">
+/// How far apart two photographs can be and still be proposed as one place.
+/// </param>
 public sealed record ImportSettingsDto(
     bool AllowCreateWithoutReview,
     double DuplicateRadiusMeters,
-    double DuplicateNameSimilarity);
+    double DuplicateNameSimilarity,
+    double PhotoProximityRadiusMeters,
+    double PhotoClusterRadiusMeters);
 
 /// <summary>A diagnostic send, to prove the channel works before anyone depends on it.</summary>
 public sealed record TestMessageRequest(string Recipient);
@@ -170,6 +180,10 @@ public sealed class ImportSettingsDtoValidator : AbstractValidator<ImportSetting
         // is a ratio and only means anything between the two ends of one.
         RuleFor(x => x.DuplicateRadiusMeters).InclusiveBetween(0, Domain.Import.ImportOptions.MaxDuplicateRadiusMeters);
         RuleFor(x => x.DuplicateNameSimilarity).InclusiveBetween(0, 1);
+        RuleFor(x => x.PhotoProximityRadiusMeters)
+            .InclusiveBetween(0, Domain.Import.PhotoImportOptions.MaxProximityRadiusMeters);
+        RuleFor(x => x.PhotoClusterRadiusMeters)
+            .InclusiveBetween(0, Domain.Import.PhotoImportOptions.MaxClusterRadiusMeters);
     }
 }
 

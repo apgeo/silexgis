@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using NetTopologySuite.Geometries;
+using SilexGis.Domain.Import;
 
 namespace SilexGis.Domain.Entities;
 
@@ -60,7 +61,57 @@ public class StoredFile : ITimestamped, IAuditable
     /// </summary>
     public Point? Geom { get; set; }
 
-    /// <summary>Format-specific metadata (EXIF, dimensions, layer info, …) as jsonb.</summary>
+    /// <summary>
+    /// How <see cref="Geom"/> came to be what it is. Recorded rather than inferred: a position
+    /// somebody placed by hand must survive every later automatic pass over the bytes, and
+    /// somebody about to drag a picture onto the map has to be told when the camera already
+    /// recorded a fix they are about to replace. The point alone answers neither question.
+    /// </summary>
+    public PhotoPositionSource PositionSource { get; set; } = PhotoPositionSource.None;
+
+    /// <summary>
+    /// Capture altitude in metres, as the camera reported it. Kept beside the point rather than
+    /// inside it: the column is 2-D by design, and this number is shown with the picture rather
+    /// than measured against anything.
+    /// </summary>
+    public double? AltitudeMeters { get; set; }
+
+    /// <summary>
+    /// Which way the camera was pointing, in degrees clockwise from north. Worth more than it
+    /// looks: an entrance photograph that says which way the lens faced is what turns "somewhere
+    /// on this slope" into a hole somebody can walk back to.
+    /// </summary>
+    public double? DirectionDegrees { get; set; }
+
+    /// <summary>
+    /// Whether <see cref="DirectionDegrees"/> is measured from magnetic north rather than true.
+    /// Phones record either, and in this part of the world the two differ by enough to matter
+    /// when you are looking for a hole in a forest.
+    /// </summary>
+    public bool DirectionIsMagnetic { get; set; }
+
+    /// <summary>
+    /// The dilution of precision the fix reported: how much the satellite geometry multiplied
+    /// whatever error the receiver had. Carried because a phone under a cliff is tens of metres
+    /// out and nothing on screen would otherwise say so — a bad fix should look uncertain
+    /// rather than authoritative.
+    /// <para>
+    /// Dimensionless, and stored that way. Turning it into metres means assuming a figure for
+    /// the receiver's own error, and a number that reads as a measurement and is not is worse
+    /// than the honest one the file states. <see cref="Geo.PositionConfidence"/> is what turns
+    /// it into something a person can read.
+    /// </para>
+    /// </summary>
+    public double? PositionDop { get; set; }
+
+    /// <summary>
+    /// Format-specific metadata (EXIF, dimensions, layer info, …) as jsonb.
+    /// <para>
+    /// For a photograph this holds what is shown beside the picture and nothing that is queried:
+    /// camera, lens, orientation, exposure. Anything a listing filters or orders on has a column
+    /// of its own instead — a jsonb bag is not indexed for that.
+    /// </para>
+    /// </summary>
     public string Metadata { get; set; } = "{}";
 
     /// <summary>

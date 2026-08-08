@@ -27,6 +27,7 @@ const FeatureDetailPage = lazy(() => import('./pages/features/FeatureDetailPage.
 const SharedFeaturePage = lazy(() => import('./pages/SharedFeaturePage.tsx'));
 const GeodataPage = lazy(() => import('./pages/geodata/GeodataPage.tsx'));
 const ImportWorkspacePage = lazy(() => import('./pages/geodata/ImportWorkspacePage.tsx'));
+const PhotoImportWorkspacePage = lazy(() => import('./pages/geodata/PhotoImportWorkspacePage.tsx'));
 const TermRulesPage = lazy(() => import('./pages/admin/TermRulesPage.tsx'));
 const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
@@ -91,6 +92,7 @@ const router = createBrowserRouter([
           { path: '/features/:id', element: <Loadable><FeatureDetailPage /></Loadable> },
           { path: '/geodata', element: <Loadable><GeodataPage /></Loadable> },
           { path: '/geodata/:geofileId/import', element: <Loadable><ImportWorkspacePage /></Loadable> },
+          { path: '/geodata/photo-import', element: <Loadable><PhotoImportWorkspacePage /></Loadable> },
           { path: '/admin/term-rules', element: <Loadable><TermRulesPage /></Loadable> },
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },

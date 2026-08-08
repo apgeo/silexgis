@@ -64,7 +64,11 @@ export default function ImportBatchesTab() {
             render: (name: string | null, row) => (
               <Flex vertical>
                 <Typography.Link onClick={() => setOpen(row.id)}>
-                  {name ?? t('vectorImport.fileGone')}
+                  {/* A batch made of photographs never had a file to name, so "the file is
+                      gone" would be a lie about it rather than a fact. */}
+                  {row.source === 'photos'
+                    ? t('vectorImport.batchFromPhotos')
+                    : (name ?? t('vectorImport.fileGone'))}
                 </Typography.Link>
                 {row.termRuleSetName && (
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>

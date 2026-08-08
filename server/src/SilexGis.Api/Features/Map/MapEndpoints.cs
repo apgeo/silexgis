@@ -176,7 +176,16 @@ public static class MapEndpoints
                                 where file.Geom != null && file.Kind == FileKind.Image
                                     && file.Geom!.Intersects(polygon)
                                 orderby file.Id
-                                select new { file.Id, file.Geom, file.OriginalName, Document = document })
+                                select new
+                                {
+                                    file.Id,
+                                    file.Geom,
+                                    file.OriginalName,
+                                    file.DirectionDegrees,
+                                    file.DirectionIsMagnetic,
+                                    file.PositionSource,
+                                    Document = document,
+                                })
             .Take(MaxPoints)
             .ToListAsync(ct);
         if (candidates.Count == 0)
@@ -268,6 +277,13 @@ public static class MapEndpoints
                 ["name"] = candidate.OriginalName,
                 ["thumbnailUrl"] = $"/api/v1/files/{candidate.Id}/thumbnail?size=160&token={Uri.EscapeDataString(token)}",
                 ["contentUrl"] = $"/api/v1/files/{candidate.Id}/content?token={Uri.EscapeDataString(token)}",
+                // Which way the camera looked, so the layer can draw it. Carried on the same
+                // terms as the point itself and for the same reason: a bearing without a
+                // position says nothing, and this response only exists for a caller who may
+                // already have the position.
+                ["directionDegrees"] = candidate.DirectionDegrees,
+                ["directionIsMagnetic"] = candidate.DirectionIsMagnetic,
+                ["positionSource"] = candidate.PositionSource.ToString(),
             }));
         }
 

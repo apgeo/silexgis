@@ -1398,6 +1398,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/files/{id}/position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Gives a picture a position by hand, or forgets one; never rewrites the file. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhotoPositionRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoPositionDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/position-from-photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Moves an object to the position one of its pictures records; an ordinary, audited write. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FeaturePositionFromPhotoRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoPositionDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/features/{featureId}/import-provenance": {
         parameters: {
             query?: never;
@@ -4953,6 +5037,182 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-import/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's photo review, resumed where they left it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoSessionDto"];
+                    };
+                };
+            };
+        };
+        /** Saves the photo review as the reviewer works; nothing is created. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhotoSessionWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoSessionDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Groups the drop into places and says what is near each, with nothing committed. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhotoPreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoPreviewDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Creates or files the selected places as one revertible batch. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhotoCommitRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportCommitResultDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-import/tracks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Uploaded tracks a picture with no fix of its own can be placed against. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoTrackOptionDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9794,6 +10054,10 @@ export interface components {
             name: null | string;
             isPrimary: boolean;
         };
+        FeaturePositionFromPhotoRequest: {
+            /** Format: uuid */
+            fileId: string;
+        };
         FeatureSetDto: {
             /** Format: uuid */
             id: string;
@@ -9916,6 +10180,10 @@ export interface components {
             /** Format: int32 */
             pageCount: null | number;
             conversion: components["schemas"]["ConversionState"];
+            /** Format: date-time */
+            contentCreatedAt: null | string;
+            photo: null | components["schemas"]["PhotoExif"];
+            position: null | components["schemas"]["PhotoPositionDto"];
         };
         /** @enum {unknown} */
         FileKind: "image" | "document" | "survey" | "raster" | "vector" | "model" | "other" | "audio" | "video";
@@ -10091,9 +10359,12 @@ export interface components {
         ImportBatchDto: {
             /** Format: uuid */
             id: string;
+            source: components["schemas"]["ImportSource"];
             /** Format: uuid */
             geofileId: null | string;
             geofileName: null | string;
+            /** Format: uuid */
+            tripLogId: null | string;
             /** Format: uuid */
             termRuleSetId: null | string;
             termRuleSetName: null | string;
@@ -10285,7 +10556,13 @@ export interface components {
             duplicateRadiusMeters: number;
             /** Format: double */
             duplicateNameSimilarity: number;
+            /** Format: double */
+            photoProximityRadiusMeters: number;
+            /** Format: double */
+            photoClusterRadiusMeters: number;
         };
+        /** @enum {unknown} */
+        ImportSource: "vectorFile" | "photos";
         /** @enum {unknown} */
         ImportTargetKind: "cave" | "caveEntrance" | "surfaceFeature";
         /** @enum {unknown} */
@@ -10760,6 +11037,205 @@ export interface components {
             pendingPhoneNumber: null | string;
             smsConfigured: boolean;
         };
+        PhotoCandidateDto: {
+            /** Format: uuid */
+            key: string;
+            geom: null | components["schemas"]["GeoJsonGeometry"];
+            positionSource: components["schemas"]["PhotoPositionSource"];
+            members: components["schemas"]["PhotoCandidateMemberDto"][];
+            proposedName: null | string;
+            /** Format: double */
+            altitudeMeters: null | number;
+            /** Format: double */
+            directionDegrees: null | number;
+            directionIsMagnetic: boolean;
+            /** Format: double */
+            dop: null | number;
+            confidence: components["schemas"]["PositionConfidenceBand"];
+            /** Format: double */
+            trackMatchSecondsFromFix: null | number;
+            trackMatchInterpolated: boolean;
+            nearby: components["schemas"]["PhotoNearbyDto"][];
+            decision: null | components["schemas"]["PhotoDecision"];
+        };
+        PhotoCandidateMemberDto: {
+            /** Format: uuid */
+            fileId: string;
+            originalName: string;
+            mimeType: string;
+            kind: components["schemas"]["FileKind"];
+            /** Format: date-time */
+            capturedAt: null | string;
+            positionSource: components["schemas"]["PhotoPositionSource"];
+            /** Format: double */
+            altitudeMeters: null | number;
+            /** Format: double */
+            directionDegrees: null | number;
+            directionIsMagnetic: boolean;
+            /** Format: double */
+            dop: null | number;
+            confidence: components["schemas"]["PositionConfidenceBand"];
+            hasOwnPosition: boolean;
+            thumbnailUrl: null | string;
+        };
+        PhotoCommitRequest: {
+            options: components["schemas"]["PhotoImportOptions"];
+            fileIds: string[];
+            selection: string[];
+            decisions: {
+                [key: string]: components["schemas"]["PhotoDecision"];
+            };
+        };
+        PhotoDecision: {
+            action?: components["schemas"]["ImportDecisionAction"];
+            kind?: null | components["schemas"]["ImportTargetKind"];
+            featureTypeCode?: null | string;
+            caveTypeCode?: null | string;
+            entranceTypeCode?: null | string;
+            name?: null | string;
+            /** Format: uuid */
+            attachToFeatureId?: null | string;
+            keepElevation?: null | boolean;
+            position?: null | number[];
+        };
+        PhotoExif: {
+            cameraMake?: null | string;
+            cameraModel?: null | string;
+            lens?: null | string;
+            /** Format: int32 */
+            orientation?: null | number;
+            /** Format: double */
+            exposureSeconds?: null | number;
+            /** Format: double */
+            fNumber?: null | number;
+            /** Format: int32 */
+            iso?: null | number;
+            /** Format: double */
+            focalLengthMm?: null | number;
+            /** Format: int32 */
+            widthPixels?: null | number;
+            /** Format: int32 */
+            heightPixels?: null | number;
+            isEmpty?: boolean;
+        };
+        PhotoImportOptions: {
+            /** Format: uuid */
+            tripLogId?: null | string;
+            defaultKind?: components["schemas"]["ImportTargetKind"];
+            defaultCaveTypeCode?: null | string;
+            defaultEntranceTypeCode?: null | string;
+            defaultFeatureTypeCode?: null | string;
+            /** Format: double */
+            clusterRadiusMeters?: number;
+            /** Format: double */
+            proximityRadiusMeters?: number;
+            visibility?: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            locationProtected?: boolean;
+            tagIds?: number[];
+            namePrefix?: null | string;
+            elevation?: components["schemas"]["ImportElevationPolicy"];
+            /** Format: uuid */
+            trackGeofileId?: null | string;
+            /** Format: int32 */
+            cameraClockOffsetSeconds?: number;
+            /** Format: int32 */
+            trackMatchToleranceSeconds?: number;
+        };
+        PhotoNearbyDto: {
+            /** Format: uuid */
+            featureId: string;
+            name: null | string;
+            kind: components["schemas"]["FeatureKind"];
+            /** Format: double */
+            distanceMeters: number;
+            /** Format: uuid */
+            caveFeatureId: null | string;
+            caveName: null | string;
+        };
+        PhotoPositionDto: {
+            /** Format: uuid */
+            fileId: string;
+            geom: null | components["schemas"]["GeoJsonGeometry"];
+            positionSource: components["schemas"]["PhotoPositionSource"];
+            /** Format: double */
+            altitudeMeters: null | number;
+            /** Format: double */
+            directionDegrees: null | number;
+            directionIsMagnetic: boolean;
+            /** Format: double */
+            dop: null | number;
+            confidence: components["schemas"]["PositionConfidenceBand"];
+        };
+        PhotoPositionRequest: {
+            position: null | number[];
+            replaceRecordedFix: boolean;
+        };
+        /** @enum {unknown} */
+        PhotoPositionSource: "none" | "exif" | "trackMatch" | "manual";
+        PhotoPreviewDto: {
+            items: components["schemas"]["PhotoCandidateDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+            allKeys: string[];
+            selectableKeys: string[];
+            /** Format: int32 */
+            placedCount: number;
+            /** Format: int32 */
+            unplacedCount: number;
+            /** Format: int32 */
+            photoCount: number;
+            /** Format: int32 */
+            trackFixCount: number;
+            /** Format: date-time */
+            trackFirstFixAt: null | string;
+            /** Format: date-time */
+            trackLastFixAt: null | string;
+            unreadableFileIds: string[];
+        };
+        PhotoPreviewRequest: {
+            options: components["schemas"]["PhotoImportOptions"];
+            fileIds: string[];
+            decisions: null | {
+                [key: string]: components["schemas"]["PhotoDecision"];
+            };
+            /** Format: int32 */
+            page: null | number;
+            /** Format: int32 */
+            pageSize: null | number;
+            placed: null | boolean;
+            search: null | string;
+        };
+        PhotoSessionDto: {
+            fileIds: string[];
+            options: components["schemas"]["PhotoImportOptions"];
+            decisions: {
+                [key: string]: components["schemas"]["PhotoDecision"];
+            };
+            /** Format: date-time */
+            updatedAt: null | string;
+        };
+        PhotoSessionWriteRequest: {
+            fileIds: string[];
+            options: components["schemas"]["PhotoImportOptions"];
+            decisions: {
+                [key: string]: components["schemas"]["PhotoDecision"];
+            };
+        };
+        PhotoTrackOptionDto: {
+            /** Format: uuid */
+            geofileId: string;
+            name: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @enum {unknown} */
+        PositionConfidenceBand: "unknown" | "excellent" | "good" | "moderate" | "poor";
         /** @enum {unknown} */
         PositionQuality: "unknown" | "gps" | "map" | "estimated";
         ProcessingJobDto: {

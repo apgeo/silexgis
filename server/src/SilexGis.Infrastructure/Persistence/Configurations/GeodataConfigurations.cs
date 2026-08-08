@@ -27,6 +27,7 @@ public sealed class StoredFileConfiguration : IEntityTypeConfiguration<StoredFil
         builder.Property(x => x.Kind).HasConversion<short>();
         builder.Property(x => x.Metadata).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
         builder.Property(x => x.Geom).HasColumnType("geometry(Point, 4326)");
+        builder.Property(x => x.PositionSource).HasConversion<short>();
 
         // Facts read out of the bytes get columns of their own rather than a place in the
         // jsonb bag, because document lists filter and order on them.

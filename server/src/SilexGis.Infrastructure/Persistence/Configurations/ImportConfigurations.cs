@@ -69,6 +69,25 @@ public sealed class GeofileImportSessionConfiguration : IEntityTypeConfiguration
     }
 }
 
+public sealed class PhotoImportSessionConfiguration : IEntityTypeConfiguration<PhotoImportSession>
+{
+    public void Configure(EntityTypeBuilder<PhotoImportSession> builder)
+    {
+        builder.ToTable("photo_import_sessions");
+        builder.Property(x => x.Id).ValueGeneratedNever();
+
+        builder.Property(x => x.FileIds).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
+        builder.Property(x => x.Options).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+        builder.Property(x => x.Decisions).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        // One review per person: a drop is a sitting, and starting a new one replaces the last.
+        // The unique index is what makes that true of the database rather than of the handler.
+        builder.HasIndex(x => x.UserId).IsUnique();
+    }
+}
+
 public sealed class ImportBatchConfiguration : IEntityTypeConfiguration<ImportBatch>
 {
     public void Configure(EntityTypeBuilder<ImportBatch> builder)
@@ -78,6 +97,7 @@ public sealed class ImportBatchConfiguration : IEntityTypeConfiguration<ImportBa
 
         builder.Property(x => x.TermRuleSetName).HasMaxLength(200);
         builder.Property(x => x.Mode).HasConversion<short>();
+        builder.Property(x => x.Source).HasConversion<short>();
         builder.Property(x => x.Options).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
 
         // The geofile goes; the batch stays. A batch is the record of what was created from a
@@ -86,6 +106,9 @@ public sealed class ImportBatchConfiguration : IEntityTypeConfiguration<ImportBa
         builder.HasOne<TermRuleSet>().WithMany().HasForeignKey(x => x.TermRuleSetId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.ConfirmedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
+        // Same reasoning as the geofile: deleting the trip a drop was filed under must not
+        // erase the record of what that drop created.
+        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => x.GeofileId);
         builder.HasIndex(x => x.ConfirmedByUserId);
@@ -102,6 +125,7 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
         builder.Property(x => x.RuleName).HasMaxLength(200);
         builder.Property(x => x.Action).HasConversion<short>();
         builder.Property(x => x.SourceProperties).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+        builder.Property(x => x.AttachmentIds).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
 
         builder.HasOne<ImportBatch>().WithMany().HasForeignKey(x => x.ImportBatchId).OnDelete(DeleteBehavior.Cascade);
 
@@ -109,10 +133,17 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
         // which is what makes a reverted batch restorable and auditable.
         builder.HasOne<Feature>().WithMany().HasForeignKey(x => x.FeatureId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<Feature>().WithMany().HasForeignKey(x => x.AttachedToFeatureId).OnDelete(DeleteBehavior.SetNull);
+        // The picture a line was made from goes null rather than taking the line with it: a
+        // batch that says "a cave was created here from a photograph somebody has since
+        // deleted" is still the answer somebody needs.
+        builder.HasOne<StoredFile>().WithMany().HasForeignKey(x => x.SourceFileId).OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => x.ImportBatchId);
         // "Where did this cave come from?" is a lookup by feature, and it is the question the
         // whole table exists to answer.
         builder.HasIndex(x => x.FeatureId).HasFilter("feature_id is not null");
+        // "What did this photograph become?" is the same question asked from the other end, and
+        // it is what the attachment panel asks about every picture it shows.
+        builder.HasIndex(x => x.SourceFileId).HasFilter("source_file_id is not null");
     }
 }

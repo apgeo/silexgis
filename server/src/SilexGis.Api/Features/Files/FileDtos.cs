@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using SilexGis.Api.Common;
+using SilexGis.Api.Features.Import;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Files;
 
 namespace SilexGis.Api.Features.Files;
@@ -35,6 +38,18 @@ namespace SilexGis.Api.Features.Files;
 /// on is the one that says this installation has no converter: the document is fine, nothing
 /// here can lay it out, and that sentence is different from every failure sentence.
 /// </param>
+/// <param name="Photo">
+/// What the picture states about how it was taken — camera, lens, exposure, orientation — and
+/// when it was taken, with the zone the camera recorded. Present for anyone who may read the
+/// file: how a photograph was taken is not a position and is not protected.
+/// </param>
+/// <param name="Position">
+/// Where the picture was taken, and how that was arrived at. Null for anything without a
+/// position <em>and</em> for a caller who may not be given this one — the same answer as
+/// <paramref name="MayDownloadOriginal"/>, decided by the same rule, because a photograph's fix
+/// is a position rather than a fact about one. Splitting it from <paramref name="Photo"/> above
+/// is what lets a viewer be shown the camera and not the coordinates.
+/// </param>
 public sealed record FileDto(
     Guid Id,
     Guid DocumentId,
@@ -51,7 +66,10 @@ public sealed record FileDto(
     bool MayDownloadOriginal,
     string? PagesUrl,
     int? PageCount,
-    ConversionState Conversion);
+    ConversionState Conversion,
+    DateTimeOffset? ContentCreatedAt,
+    PhotoExif? Photo,
+    PhotoPositionDto? Position);
 
 /// <summary>
 /// Upload limits this installation applies. Published so a client checks a file before
@@ -138,8 +156,32 @@ internal static class FileMapping
             delivery == FileDelivery.Full,
             pagesUrl,
             (pagesFile ?? f).PageCount,
-            f.Conversion);
+            f.Conversion,
+            f.ContentCreatedAt,
+            PhotoExifOf(f),
+            // Gated on the same answer as the bytes, and it has to be: the original carries this
+            // fix inside it, so a response that withheld the file and printed its coordinates
+            // beside it would be withholding nothing at all.
+            mayHaveOriginal ? PositionOf(f) : null);
     }
+
+    private static PhotoExif? PhotoExifOf(StoredFile f)
+    {
+        var exif = PhotoExif.FromMetadata(f.Metadata);
+        return exif.IsEmpty ? null : exif;
+    }
+
+    private static PhotoPositionDto? PositionOf(StoredFile f) => f.Geom is null
+        ? null
+        : new PhotoPositionDto(
+            f.Id,
+            GeoJsonGeometry.From(f.Geom),
+            f.PositionSource,
+            f.AltitudeMeters,
+            f.DirectionDegrees,
+            f.DirectionIsMagnetic,
+            f.PositionDop,
+            PositionConfidence.Of(f.PositionDop));
 
     public static string ContentUrl(Guid fileId, string token) =>
         $"/api/v1/files/{fileId}/content?token={Uri.EscapeDataString(token)}";

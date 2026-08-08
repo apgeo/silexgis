@@ -36,6 +36,22 @@ public interface IVectorIO
     /// </param>
     VectorDataset Read(string absolutePath, GeofileFormat format, GeofileSourceOptions? sourceOptions = null);
 
+    /// <summary>
+    /// The timestamped positions a recorded track holds, oldest first, for placing photographs
+    /// by when they were taken.
+    /// </summary>
+    /// <remarks>
+    /// A separate read, and it has to be. The ordinary read deliberately takes a track as one
+    /// aggregate line — which is what draws and what imports as a feature — and a line has no
+    /// times on its vertices. The times only exist on the per-point layer that read skips, so
+    /// answering "where was the photographer at 11:42" means going back to the file.
+    /// <para>
+    /// Empty for a format that records no times, which is most of them: only a track log has a
+    /// clock behind it, and a shapefile of waypoints does not become one by being asked.
+    /// </para>
+    /// </remarks>
+    IReadOnlyList<TrackFix> ReadTrackFixes(string absolutePath, GeofileFormat format);
+
     /// <summary>Serializes features to the given format; returns the file bytes.</summary>
     byte[] Write(ExportFormat format, string layerName, IReadOnlyList<VectorFeature> features);
 }

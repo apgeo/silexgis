@@ -32,6 +32,19 @@ public sealed class GdalVectorIO : IVectorIO
     // GPX datasets expose point/segment layers that duplicate their aggregate layers.
     private static readonly string[] GpxLayers = ["waypoints", "routes", "tracks"];
 
+    /// <summary>
+    /// The per-point layers the aggregate read above skips. They are exactly where the times
+    /// are, which is why placing a photograph by its clock has to look at them.
+    /// </summary>
+    private static readonly string[] GpxPointLayers = ["track_points", "route_points"];
+
+    /// <summary>
+    /// A ceiling on how much of a track log is read for time matching. A unit logging every
+    /// second fills this in about eleven hours, which is a long caving day; beyond it the
+    /// matching is no better and the memory is real.
+    /// </summary>
+    private const int MaxTrackFixes = 40_000;
+
     public VectorDataset Read(string absolutePath, GeofileFormat format, GeofileSourceOptions? sourceOptions = null)
     {
         if (format is GeofileFormat.Wkt or GeofileFormat.Wkb)
@@ -84,6 +97,44 @@ public sealed class GdalVectorIO : IVectorIO
         }
 
         return new VectorDataset(features, sourceSrid);
+    }
+
+    /// <summary>
+    /// The per-point layers a track log carries, with their times. GPX is the only accepted
+    /// format that records one — a KML track's times live in an extension the driver does not
+    /// surface as fields, and a shapefile has no clock at all — so everything else answers with
+    /// nothing rather than with a plausible-looking guess.
+    /// </summary>
+    public IReadOnlyList<TrackFix> ReadTrackFixes(string absolutePath, GeofileFormat format)
+    {
+        if (format != GeofileFormat.Gpx)
+        {
+            return [];
+        }
+
+        using var dataSource = Ogr.Open(absolutePath, 0);
+        if (dataSource is null)
+        {
+            throw new VectorIOException("The file could not be opened as a vector dataset.");
+        }
+
+        var fixes = new List<TrackFix>();
+        for (var i = 0; i < dataSource.GetLayerCount(); i++)
+        {
+            var layer = dataSource.GetLayerByIndex(i);
+            if (!GpxPointLayers.Contains(layer.GetName(), StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            ReadFixes(layer, fixes);
+            if (fixes.Count >= MaxTrackFixes)
+            {
+                break;
+            }
+        }
+
+        return fixes;
     }
 
     public byte[] Write(ExportFormat format, string layerName, IReadOnlyList<VectorFeature> features)
@@ -197,6 +248,94 @@ public sealed class GdalVectorIO : IVectorIO
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Reads one point layer's timestamped positions. Rows without a readable time are skipped
+    /// rather than kept with a guessed one: a fix with no clock behind it cannot place anything,
+    /// and keeping it would only make the index look denser than it is.
+    /// </summary>
+    private static void ReadFixes(Layer layer, List<TrackFix> fixes)
+    {
+        var transform = BuildTransformTo4326(layer.GetSpatialRef());
+        var timeField = layer.GetLayerDefn().GetFieldIndex("time");
+        if (timeField < 0)
+        {
+            return;
+        }
+
+        layer.ResetReading();
+        Feature? feature;
+        while (fixes.Count < MaxTrackFixes && (feature = layer.GetNextFeature()) is not null)
+        {
+            using (feature)
+            {
+                if (!feature.IsFieldSet(timeField))
+                {
+                    continue;
+                }
+
+                var ogrGeometry = feature.GetGeometryRef();
+                if (ogrGeometry is null || ogrGeometry.GetPointCount() < 1)
+                {
+                    continue;
+                }
+
+                if (transform is not null)
+                {
+                    ogrGeometry.Transform(transform);
+                }
+
+                if (ReadFieldTime(feature, timeField) is not { } time)
+                {
+                    continue;
+                }
+
+                fixes.Add(new TrackFix(time, ogrGeometry.GetX(0), ogrGeometry.GetY(0)));
+            }
+        }
+    }
+
+    /// <summary>
+    /// One row's recorded moment. The driver states a GPX time as its own broken-down fields
+    /// with a zone flag; a row it cannot break down is read as text instead, because a merged
+    /// or hand-edited file writes times the field parser refuses and the text is still an
+    /// ISO 8601 instant.
+    /// </summary>
+    private static DateTimeOffset? ReadFieldTime(Feature feature, int field)
+    {
+        feature.GetFieldAsDateTime(
+            field, out var year, out var month, out var day,
+            out var hour, out var minute, out var second, out var timeZone);
+        if (year > 0 && month is >= 1 and <= 12 && day >= 1)
+        {
+            try
+            {
+                // The driver's zone flag: 0 unknown, 1 local, 100 UTC, and every other value an
+                // offset in quarter-hours from UTC counted from 100. An unknown zone is read as
+                // UTC — which is what a GPX writes anyway — and the camera-clock offset is what
+                // corrects a file whose times turn out to be local.
+                var offset = timeZone > 1 ? TimeSpan.FromMinutes((timeZone - 100) * 15) : TimeSpan.Zero;
+                var wholeSeconds = (int)second;
+                return new DateTimeOffset(
+                    year, month, day, hour, minute, Math.Clamp(wholeSeconds, 0, 59), offset);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                // A field set that does not name a real moment — 31 February, hour 25 — is a
+                // damaged row rather than a reason to abandon the track.
+                return null;
+            }
+        }
+
+        var text = feature.GetFieldAsString(field);
+        return DateTimeOffset.TryParse(
+            text,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+            out var parsed)
+            ? parsed
+            : null;
     }
 
     /// <summary>

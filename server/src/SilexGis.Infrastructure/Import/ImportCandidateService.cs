@@ -102,7 +102,7 @@ public sealed record RuleHit(string RuleId, string RuleName, int Count);
 /// scan, not a re-parse, and until a batch is confirmed the registry has not moved.
 /// </para>
 /// </summary>
-public sealed class ImportCandidateService(SilexGisDbContext db, FeatureProtection protection)
+public sealed class ImportCandidateService(SilexGisDbContext db, VisibleProximitySearch proximity)
 {
     /// <summary>
     /// How many rows one scan reads. A file larger than this is still imported and still drawn
@@ -110,9 +110,6 @@ public sealed class ImportCandidateService(SilexGisDbContext db, FeatureProtecti
     /// silently truncated candidate list reads exactly like a complete one.
     /// </summary>
     public const int MaxScanRows = 50_000;
-
-    /// <summary>Kinds duplicate detection compares a candidate against.</summary>
-    private static readonly FeatureKind[] ComparableKinds = [FeatureKind.CaveEntrance, FeatureKind.Generic];
 
     /// <summary>
     /// Every row of the file, classified by the rule set. The whole file rather than a page:
@@ -300,17 +297,10 @@ public sealed class ImportCandidateService(SilexGisDbContext db, FeatureProtecti
     // ---------- duplicate detection ----------
 
     /// <summary>
-    /// The nearest existing feature to each candidate, searched only among features whose
-    /// exact position the caller may see.
-    ///
-    /// <para>
-    /// The filter is two-stage and both stages matter. Visibility decides which rows the
-    /// caller may know exist; exact-location rights decide which of those may have a distance
-    /// measured to them. A protected entrance the caller can read but not locate is dropped
-    /// here, and the cost is real — re-importing near it will offer to create a duplicate. That
-    /// is the correct side to err on: the alternative answers "something is 12 m from this
-    /// point" to anyone who can upload a file.
-    /// </para>
+    /// The nearest existing feature to each candidate. Who may be in the comparison at all is
+    /// decided by <see cref="VisibleProximitySearch"/> — it is a location oracle and has one
+    /// home — and what is left here is only this pipeline's own answer: the single nearest, with
+    /// how alike the two names are.
     /// </summary>
     private async Task<Dictionary<long, DuplicateHint>> NearestVisibleAsync(
         Dictionary<long, Point> points,
@@ -320,72 +310,37 @@ public sealed class ImportCandidateService(SilexGisDbContext db, FeatureProtecti
         CancellationToken ct)
     {
         var hints = new Dictionary<long, DuplicateHint>();
-        if (points.Count == 0 || radiusMeters <= 0)
-        {
-            return hints;
-        }
-
-        // One envelope over the whole page, grown by the radius: the page is a screenful of
-        // rows from one file, so their positions are near each other by construction, and this
-        // turns a per-row proximity query into a single indexed read.
-        var envelope = new Envelope();
-        foreach (var point in points.Values)
-        {
-            envelope.ExpandToInclude(point.EnvelopeInternal);
-        }
-
-        var search = new GeometryFactory(new PrecisionModel(), 4326)
-            .ToGeometry(Geodesy.ExpandedBy(envelope, Math.Min(radiusMeters, ImportOptions.MaxDuplicateRadiusMeters)));
-
-        var nearby = await db.Features.AsNoTracking()
-            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-            .Where(f => f.Geom != null && ComparableKinds.Contains(f.Kind) && f.Geom.Intersects(search))
-            .Select(f => new { f.Id, f.Name, f.Kind, f.Geom })
-            .Take(MaxNearbyFeatures)
-            .ToListAsync(ct);
-        if (nearby.Count == 0)
-        {
-            return hints;
-        }
-
-        var exact = await protection.ExactViewIdsAsync(ctx, [.. nearby.Select(f => f.Id)], ct);
-        var comparable = nearby.Where(f => exact.Contains(f.Id) && f.Geom is not null).ToList();
+        var comparable = await proximity.NearAsync(
+            points.Values,
+            Math.Min(radiusMeters, ImportOptions.MaxDuplicateRadiusMeters),
+            ctx,
+            ct);
         if (comparable.Count == 0)
         {
             return hints;
         }
 
-        // An entrance answers with its cave as well: recognising a waypoint as an entrance
-        // that is already there is one answer, and offering to add it as a *second* entrance
-        // of the cave it belongs to is the other, and both need the cave.
-        var comparableIds = comparable.Select(f => f.Id).ToList();
-        var cavesByEntrance = await db.CaveEntrances.AsNoTracking()
-            .Where(e => comparableIds.Contains(e.Id))
-            .ToDictionaryAsync(e => e.Id, e => e.CaveFeatureId, ct);
-        var caveNames = await CaveNamesAsync(cavesByEntrance.Values, ct);
         var namesBySource = page.ToDictionary(c => c.SourceId, c => c.ProposedName ?? c.SourceName);
-
         foreach (var (sourceId, point) in points)
         {
             var candidateName = namesBySource.GetValueOrDefault(sourceId);
             DuplicateHint? best = null;
             foreach (var feature in comparable)
             {
-                var distance = Geodesy.DistanceMeters(point.Coordinate, feature.Geom!.Coordinate);
+                var distance = Geodesy.DistanceMeters(point.Coordinate, feature.Geom.Coordinate);
                 if (distance > radiusMeters || (best is not null && distance >= best.DistanceMeters))
                 {
                     continue;
                 }
 
-                var caveId = cavesByEntrance.TryGetValue(feature.Id, out var owner) ? owner : (Guid?)null;
                 best = new DuplicateHint(
-                    feature.Id,
+                    feature.FeatureId,
                     feature.Name,
                     feature.Kind,
                     distance,
                     NameSimilarity.Of(candidateName, feature.Name),
-                    caveId,
-                    caveId is { } id ? caveNames.GetValueOrDefault(id) : null);
+                    feature.CaveFeatureId,
+                    feature.CaveName);
             }
 
             if (best is not null)
@@ -395,25 +350,5 @@ public sealed class ImportCandidateService(SilexGisDbContext db, FeatureProtecti
         }
 
         return hints;
-    }
-
-    /// <summary>
-    /// A ceiling on the proximity read. A page's worth of candidates spread over a whole massif
-    /// with a five-kilometre radius could otherwise sweep in every feature an installation has;
-    /// the nearest neighbour of each candidate is still found among the rows nearest the page.
-    /// </summary>
-    private const int MaxNearbyFeatures = 2000;
-
-    private async Task<Dictionary<Guid, string?>> CaveNamesAsync(IEnumerable<Guid> caveIds, CancellationToken ct)
-    {
-        var ids = caveIds.Where(id => id != Guid.Empty).Distinct().ToList();
-        if (ids.Count == 0)
-        {
-            return [];
-        }
-
-        return await db.Features.AsNoTracking()
-            .Where(f => ids.Contains(f.Id))
-            .ToDictionaryAsync(f => f.Id, f => f.Name, ct);
     }
 }

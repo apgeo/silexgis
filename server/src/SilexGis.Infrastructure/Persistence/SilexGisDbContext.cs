@@ -82,6 +82,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<GeofileImportSession> GeofileImportSessions => Set<GeofileImportSession>();
 
+    public DbSet<PhotoImportSession> PhotoImportSessions => Set<PhotoImportSession>();
+
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
 
     public DbSet<ImportBatchItem> ImportBatchItems => Set<ImportBatchItem>();

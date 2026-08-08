@@ -25,6 +25,9 @@ const photo: FileInfo = {
   pagesUrl: null,
   pageCount: null,
   conversion: 'notApplicable',
+  contentCreatedAt: null,
+  photo: null,
+  position: null,
 };
 
 /**
@@ -47,6 +50,9 @@ const report: FileInfo = {
   pagesUrl: '/api/v1/files/f2/content?token=t',
   pageCount: 3,
   conversion: 'converted',
+  contentCreatedAt: null,
+  photo: null,
+  position: null,
 };
 
 const recording: FileInfo = {
@@ -74,6 +80,9 @@ const portable: FileInfo = {
   contentUrl: '/api/v1/files/f4/content?token=t',
   pagesUrl: '/api/v1/files/f4/content?token=t',
   conversion: 'notApplicable',
+  contentCreatedAt: null,
+  photo: null,
+  position: null,
 };
 
 describe('DocumentContent', () => {
@@ -184,6 +193,9 @@ describe('DocumentContent', () => {
       pagesUrl: null,
       pageCount: null,
       conversion: 'unavailable',
+      contentCreatedAt: null,
+      photo: null,
+      position: null,
     };
 
     render(
@@ -204,6 +216,9 @@ describe('DocumentContent', () => {
           file={{
             ...spreadsheet,
             conversion: 'converted',
+            contentCreatedAt: null,
+            photo: null,
+            position: null,
             // The pages belong to the copy something made of it, not to the upload.
             pagesUrl: '/api/v1/files/converted/content?token=t',
             pageCount: 4,

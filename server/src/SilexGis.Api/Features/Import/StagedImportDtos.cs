@@ -134,8 +134,10 @@ public sealed record ImportCommitResultDto(ImportBatchDto Batch, IReadOnlyList<I
 /// <summary>One confirmation, as the history lists it.</summary>
 public sealed record ImportBatchDto(
     Guid Id,
+    ImportSource Source,
     Guid? GeofileId,
     string? GeofileName,
+    Guid? TripLogId,
     Guid? TermRuleSetId,
     string? TermRuleSetName,
     Guid ConfirmedByUserId,

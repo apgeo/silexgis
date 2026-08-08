@@ -20,6 +20,8 @@ import OpenDocument from '../documents/OpenDocument.tsx';
 import AttachmentDetails from './AttachmentDetails.tsx';
 import DocumentMetadata from './DocumentMetadata.tsx';
 import FileVersions from './FileVersions.tsx';
+import PhotoFactsPanel from './PhotoFactsPanel.tsx';
+import PhotoPositionAction from './PhotoPositionAction.tsx';
 import { formatSize } from './fileFormat.ts';
 
 interface AttachmentSectionProps {
@@ -233,6 +235,12 @@ export default function AttachmentSection({
                     </Typography.Text>
                     <Flex align="center">
                       <OpenDocument documentId={attachment.file.documentId} />
+                      <PhotoFactsPanel file={attachment.file} />
+                      <PhotoPositionAction
+                        file={attachment.file}
+                        featureId={entityType === 'feature' ? entityId : undefined}
+                        canEdit={canEdit}
+                      />
                       {canEdit && <AttachmentDetails attachment={attachment} />}
                       {canEdit && <DocumentMetadata documentId={attachment.file.documentId} />}
                       <FileVersions

@@ -250,6 +250,8 @@ public static class AdminSettingsEndpoints
                 AllowCreateWithoutReview = request.AllowCreateWithoutReview,
                 DuplicateRadiusMeters = request.DuplicateRadiusMeters,
                 DuplicateNameSimilarity = request.DuplicateNameSimilarity,
+                PhotoProximityRadiusMeters = request.PhotoProximityRadiusMeters,
+                PhotoClusterRadiusMeters = request.PhotoClusterRadiusMeters,
             },
             ct);
 
@@ -382,7 +384,9 @@ public static class AdminSettingsEndpoints
             new ImportSettingsDto(
                 import.AllowCreateWithoutReview,
                 import.DuplicateRadiusMeters,
-                import.DuplicateNameSimilarity),
+                import.DuplicateNameSimilarity,
+                import.PhotoProximityRadiusMeters,
+                import.PhotoClusterRadiusMeters),
             await emailDelivery.IsConfiguredAsync(ct),
             await smsDelivery.IsConfiguredAsync(ct));
     }

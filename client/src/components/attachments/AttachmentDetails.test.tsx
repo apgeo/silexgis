@@ -48,6 +48,9 @@ const attachment: AttachmentInfo = {
   pagesUrl: null,
   pageCount: null,
   conversion: 'notApplicable',
+  contentCreatedAt: null,
+  photo: null,
+  position: null,
   },
 };
 

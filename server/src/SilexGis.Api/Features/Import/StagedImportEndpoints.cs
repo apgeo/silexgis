@@ -402,8 +402,10 @@ public static class StagedImportEndpoints
 
     internal static ImportBatchDto ToDto(ImportBatch batch, string? geofileName, bool canRevert) => new(
         batch.Id,
+        batch.Source,
         batch.GeofileId,
         geofileName,
+        batch.TripLogId,
         batch.TermRuleSetId,
         batch.TermRuleSetName,
         batch.ConfirmedByUserId,

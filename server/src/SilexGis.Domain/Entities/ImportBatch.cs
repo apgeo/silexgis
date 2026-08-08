@@ -42,6 +42,56 @@ public class GeofileImportSession : ITimestamped
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
+/// <summary>
+/// A photo review in progress: what one person has decided so far about one drop of pictures,
+/// before anything is created.
+///
+/// <para>
+/// The candidates are not stored — they are a reading of the files themselves, grouped into
+/// places by distance, which is what lets the clustering radius be changed without anything
+/// being rewritten. What is kept is only the part that would otherwise be lost: which pictures
+/// are being reviewed, the whole-drop options, and the per-candidate decisions.
+/// </para>
+/// <para>
+/// One review per person. A drop is a sitting rather than a document — starting a new one
+/// replaces the last, because a half-finished review of photographs somebody has moved on from
+/// is worth less than a clear surface.
+/// </para>
+/// </summary>
+public class PhotoImportSession : ITimestamped
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+
+    /// <summary>Whose review this is; there is at most one per person.</summary>
+    public Guid UserId { get; set; }
+
+    /// <summary>The files being reviewed (jsonb array of ids), in the order they were dropped.</summary>
+    public string FileIds { get; set; } = "[]";
+
+    /// <summary>The whole-drop choices (jsonb), in the shape of <see cref="PhotoImportOptions"/>.</summary>
+    public string Options { get; set; } = "{}";
+
+    /// <summary>
+    /// Decisions keyed by candidate (jsonb), where a candidate is named by the lowest file id
+    /// among its pictures. Untouched candidates are absent, so agreeing costs nothing to store.
+    /// </summary>
+    public string Decisions { get; set; } = "{}";
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>What a batch was made from.</summary>
+public enum ImportSource : short
+{
+    /// <summary>An uploaded vector file: waypoints, tracks, a shapefile.</summary>
+    VectorFile = 0,
+
+    /// <summary>Photographs, placed by what the camera recorded or by the person reviewing them.</summary>
+    Photos = 1,
+}
+
 /// <summary>How the objects in a batch came to exist.</summary>
 public enum ImportBatchMode : short
 {
@@ -70,12 +120,23 @@ public class ImportBatch : ITimestamped, IAuditable
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
     /// <summary>
+    /// What this batch was made from. Both kinds revert the same way and appear in the same
+    /// list; what differs is only what a line of it points back at — a row of a vector file, or
+    /// a photograph.
+    /// </summary>
+    public ImportSource Source { get; set; } = ImportSource.VectorFile;
+
+    /// <summary>
     /// The file this came from, while it is still there. A batch outlives the upload it was
     /// made from: "this cave came from a GPX somebody deleted in March" is still the answer
     /// somebody needs, and the options snapshot and the per-item source properties below are
-    /// what keeps the answer useful once the file is gone.
+    /// what keeps the answer useful once the file is gone. Null for a batch made from
+    /// photographs, where the source is the pictures themselves.
     /// </summary>
     public Guid? GeofileId { get; set; }
+
+    /// <summary>The trip a photo drop was filed under, when it named one.</summary>
+    public Guid? TripLogId { get; set; }
 
     /// <summary>The rule set that ran. Null when the set has since been deleted, or none was used.</summary>
     public Guid? TermRuleSetId { get; set; }
@@ -134,6 +195,21 @@ public class ImportBatchItem
 
     /// <summary>The geofile row this came from. Kept even after a re-import replaces those rows.</summary>
     public long? SourceFeatureId { get; set; }
+
+    /// <summary>
+    /// The photograph this came from, for a batch made of pictures. It is the first of the
+    /// candidate's pictures — the one the created object is named and placed by — and the rest
+    /// are found through the attachments the same confirmation made.
+    /// </summary>
+    public Guid? SourceFileId { get; set; }
+
+    /// <summary>
+    /// The attachments this line hung, as a jsonb array of ids. Recorded because undoing a
+    /// batch has to take them down, and soft-deleting the created objects would not: a picture
+    /// hung on somebody else's existing cave, or filed under a trip, survives its own object
+    /// being deleted — which is exactly the case undo exists for.
+    /// </summary>
+    public string AttachmentIds { get; set; } = "[]";
 
     public string? RuleId { get; set; }
 
