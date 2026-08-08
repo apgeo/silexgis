@@ -79,7 +79,7 @@ export default function DocumentDetailPage() {
   if (isError) {
     return (
       <div style={{ padding: 24 }}>
-        <Alert type="error" showIcon message={t('common.loadFailed')} />
+        <Alert type="error" showIcon title={t('common.loadFailed')} />
       </div>
     );
   }
@@ -156,7 +156,15 @@ export default function DocumentDetailPage() {
           {document.author !== null && (
             <Descriptions.Item label={t('documents.author')}>{document.author}</Descriptions.Item>
           )}
-          <Descriptions.Item label={t('documents.updated')}>
+          {/*
+            The last of the narrow facts, and the one that closes their row — everything below
+            is written to take a whole line, and a full-width item that lands mid-row is
+            silently shrunk to whatever is left of it instead. How many narrow facts precede
+            this one varies (the author is only shown when the file states one) and how many
+            fit on a line varies with the screen, so which of them would have been crushed is
+            not something that can be settled by counting: ending the row here is.
+          */}
+          <Descriptions.Item label={t('documents.updated')} span="filled">
             {new Date(document.updatedAt).toLocaleString(i18n.resolvedLanguage)}
           </Descriptions.Item>
           <Descriptions.Item label={t('documents.text')} span={{ xs: 1, sm: 2, md: 3 }}>

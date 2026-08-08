@@ -2,7 +2,7 @@
 import { App } from 'antd';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 
 const documentTypes = [
@@ -157,7 +157,53 @@ const textSentences = [
   'This kind of file holds no text to read.',
 ];
 
+/**
+ * The component library complains, once per distinct complaint and only outside production,
+ * when a page asks it for something it cannot draw as written. Those complaints are the only
+ * warning that a layout is not the one in the source, and they are silent in the browser
+ * unless somebody has the console open — so every test here watches for them.
+ *
+ * It is written across the whole file rather than as one case because the library says each
+ * thing once per process: a complaint raised by the first render is gone by the time a later
+ * case could look for it, so the case that would look for it would pass on a broken page.
+ *
+ * What it caught: the block of facts at the top asks for three columns and gives the two long
+ * entries at the bottom the width of all three. How many short facts precede them varies — the
+ * author line is only drawn when the file names one — so those long entries can begin partway
+ * along a row, and are then silently squeezed into what is left of it instead of taking a line.
+ */
+let antdComplaints: string[] = [];
+
+beforeEach(() => {
+  antdComplaints = [];
+  vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+    const first = String(args[0] ?? '');
+    if (first.includes('[antd:')) {
+      antdComplaints.push(first);
+    }
+  });
+});
+
+afterEach(() => {
+  const complaints = antdComplaints;
+  vi.mocked(console.error).mockRestore();
+  expect(complaints).toEqual([]);
+});
+
 describe('DocumentDetailPage', () => {
+  it('lays the block of facts out in whole rows, whether or not the file names an author', () => {
+    rights = 'read';
+    // Both counts of short facts, because the row the long entries start on depends on it and
+    // only one of the two would have shown the squeeze.
+    for (const author of ['A. Speolog', null]) {
+      doc = { ...doc, author: author as string };
+      renderPage();
+      expect(screen.getByText('Last changed')).toBeInTheDocument();
+      cleanup();
+    }
+    doc = { ...doc, author: 'A. Speolog' };
+  });
+
   it('gives a document its own page: what it is, where it is filed, and what came of reading it', () => {
     rights = 'read, write';
     renderPage();
