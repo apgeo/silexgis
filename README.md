@@ -78,7 +78,15 @@ Previous versions:
   point as the link is written. Every link has a short address of its own to paste into a
   message or a report, and it shows each reader only the ends they are allowed to see: a link
   is never the thing that discloses a protected cave.
-- **Vector import/export** — GPX, KML, Shapefile, GeoJSON, WKT/CSV.
+- **Vector import/export** — GPX, KML, KMZ, Shapefile, GeoJSON, WKT, and a spreadsheet of
+  positions in CSV. A file drawn on the map is only half of it: a review screen turns the
+  waypoints in it into caves, entrances and surface features, proposing what each one is from
+  the club's own naming habits — a waypoint called `P. Ursilor`, `Aven`, `Izbuc` or `Doline` is
+  recognised, and the term is taken back out of the name. Nothing is created until you confirm,
+  the review survives closing the tab, each candidate says whether there is already something
+  within fifty metres, and the whole confirmation comes back out again in one press if the
+  mapping turns out to have been wrong. The rules are yours to edit, and to send to another club
+  as a file.
 - **3D survey models** — Therion `.lox` / Survex `.3d` via CaveView.js, plus cave
   centerlines projected on the map.
 - **3D view** — the configured base layers draped on a globe, on a page that is downloaded
