@@ -112,7 +112,7 @@ export default function EmailSettingsPage() {
         <Alert
           type="info"
           showIcon
-          message={t('settings.emails.pending', { email: me.pendingEmail })}
+          title={t('settings.emails.pending', { email: me.pendingEmail })}
           description={
             <Flex vertical gap={8} align="flex-start">
               <Typography.Text>{t('settings.emails.pendingHint')}</Typography.Text>

@@ -65,7 +65,7 @@ export default function ProfileSettingsPage() {
       <Alert
         type="error"
         showIcon
-        message={t('common.loadFailed')}
+        title={t('common.loadFailed')}
         action={<Button onClick={() => void refetch()}>{t('common.retry')}</Button>}
       />
     );

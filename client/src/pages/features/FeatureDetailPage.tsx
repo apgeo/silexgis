@@ -94,7 +94,7 @@ export default function FeatureDetailPage() {
   if (isError) {
     return (
       <div style={{ padding: 24 }}>
-        <Alert type="error" showIcon message={t('common.loadFailed')} />
+        <Alert type="error" showIcon title={t('common.loadFailed')} />
       </div>
     );
   }
@@ -239,10 +239,10 @@ export default function FeatureDetailPage() {
       </Flex>
 
       {feature.approximateLocation && (
-        <Alert type="warning" showIcon message={t('map.approximate')} style={{ marginBottom: 12 }} />
+        <Alert type="warning" showIcon title={t('map.approximate')} style={{ marginBottom: 12 }} />
       )}
       {feature.omittedLocation && (
-        <Alert type="info" showIcon message={t('features.locationWithheld')} style={{ marginBottom: 12 }} />
+        <Alert type="info" showIcon title={t('features.locationWithheld')} style={{ marginBottom: 12 }} />
       )}
 
       <Card style={{ marginBottom: 16 }}>

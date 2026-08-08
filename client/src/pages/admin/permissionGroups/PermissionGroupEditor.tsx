@@ -60,7 +60,7 @@ export default function PermissionGroupEditor({ group, catalog, open, onClose }:
       }
       open={open}
       onClose={onClose}
-      width={1000}
+      size={1000}
       destroyOnHidden
     >
       <Form

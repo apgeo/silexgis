@@ -188,7 +188,7 @@ export default function CaveDetailPage() {
       )}
 
       {cave.approximateLocation && (
-        <Alert type="warning" showIcon message={t('map.approximate')} style={{ marginBottom: 12 }} />
+        <Alert type="warning" showIcon title={t('map.approximate')} style={{ marginBottom: 12 }} />
       )}
 
       <Card style={{ marginBottom: 16 }}>

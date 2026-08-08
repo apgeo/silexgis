@@ -63,7 +63,7 @@ export default function MessagingSettingsPage() {
     return null;
   }
   if (!canRead) {
-    return <Alert type="error" showIcon message={t('admin.forbidden')} style={{ margin: 16 }} />;
+    return <Alert type="error" showIcon title={t('admin.forbidden')} style={{ margin: 16 }} />;
   }
 
   return (
@@ -325,7 +325,7 @@ function SmsForm({ settings, onSaved }: SectionProps) {
         okText={t('admin.messaging.smsWorking')}
         offText={t('admin.messaging.smsInactive')}
       />
-      <Alert type="info" showIcon message={t('admin.messaging.smsIntro')} />
+      <Alert type="info" showIcon title={t('admin.messaging.smsIntro')} />
 
       <Form form={form} layout="vertical" onFinish={save} requiredMark={false} style={{ maxWidth: 640 }}>
         <Form.Item name="enabled" label={t('admin.messaging.enabled')} valuePropName="checked">
@@ -510,7 +510,7 @@ function ProtectionForm({ settings, onSaved }: SectionProps) {
       <Alert
         type="info"
         showIcon
-        message={t('admin.messaging.protectionIntro')}
+        title={t('admin.messaging.protectionIntro')}
         style={{ marginBottom: 16 }}
       />
       <Form.Item
@@ -529,5 +529,5 @@ function ProtectionForm({ settings, onSaved }: SectionProps) {
 }
 
 function StatusBanner({ configured, okText, offText }: { configured: boolean; okText: string; offText: string }) {
-  return configured ? <Tag color="green">{okText}</Tag> : <Alert type="warning" showIcon message={offText} />;
+  return configured ? <Tag color="green">{okText}</Tag> : <Alert type="warning" showIcon title={offText} />;
 }

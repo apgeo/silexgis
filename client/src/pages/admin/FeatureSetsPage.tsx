@@ -2,9 +2,10 @@
 import { useEffect, useState } from 'react';
 import { DeleteOutlined, GroupOutlined, PlusOutlined } from '@ant-design/icons';
 import {
-  App, Alert, Button, Drawer, Flex, Form, Input, List, Modal, Popconfirm, Select, Spin, Table, Tag,
+  App, Alert, Button, Drawer, Flex, Form, Input, Modal, Popconfirm, Select, Spin, Table, Tag,
   Typography,
 } from 'antd';
+import List from '../../components/List.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   hasAccessAction,
@@ -86,7 +87,7 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
       title={t('featureSets.membersTitle', { name: set.name })}
       open
       onClose={onClose}
-      width={560}
+      size={560}
       destroyOnHidden
       footer={
         <Flex justify="flex-end" gap={8}>
@@ -98,7 +99,7 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
       }
     >
       <Flex vertical gap={12}>
-        <Alert type="info" showIcon message={t('featureSets.membershipMovesAccess')} />
+        <Alert type="info" showIcon title={t('featureSets.membershipMovesAccess')} />
         <Flex gap={8}>
           <Select
             style={{ flex: 1 }}
@@ -171,7 +172,7 @@ export default function FeatureSetsPage() {
     return <Spin style={{ display: 'block', marginTop: '20vh' }} />;
   }
   if (!canRead) {
-    return <Alert type="error" showIcon message={t('admin.forbidden')} style={{ margin: 16 }} />;
+    return <Alert type="error" showIcon title={t('admin.forbidden')} style={{ margin: 16 }} />;
   }
 
   const submit = async () => {

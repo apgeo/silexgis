@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { List, Tag, Typography } from 'antd';
+import { Tag, Typography } from 'antd';
+import List from '../List.tsx';
 import { useTranslation } from 'react-i18next';
 import { explanationReason } from './accessDisplay.ts';
 

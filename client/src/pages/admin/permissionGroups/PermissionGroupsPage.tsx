@@ -39,7 +39,7 @@ export default function PermissionGroupsPage() {
     return <Spin style={{ display: 'block', marginTop: '20vh' }} />;
   }
   if (!canRead) {
-    return <Alert type="error" showIcon message={t('admin.forbidden')} style={{ margin: 16 }} />;
+    return <Alert type="error" showIcon title={t('admin.forbidden')} style={{ margin: 16 }} />;
   }
 
   const onCreate = async () => {

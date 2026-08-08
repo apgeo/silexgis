@@ -165,7 +165,7 @@ export default function PdfView({
   }, [onSelect, publishSelection]);
 
   if (failed) {
-    return <Alert type="warning" showIcon message={t('documents.viewer.pdfFailed')} />;
+    return <Alert type="warning" showIcon title={t('documents.viewer.pdfFailed')} />;
   }
 
   const pageCount = pdf?.pageCount ?? null;

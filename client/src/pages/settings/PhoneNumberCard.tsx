@@ -88,7 +88,7 @@ export default function PhoneNumberCard() {
       }
     >
       <Flex vertical gap={12}>
-        {!status.smsConfigured && <Alert type="info" showIcon message={t('security.smsNotConfigured')} />}
+        {!status.smsConfigured && <Alert type="info" showIcon title={t('security.smsNotConfigured')} />}
 
         {status.confirmed && status.phoneNumber && (
           <Flex gap={8} align="center" wrap>

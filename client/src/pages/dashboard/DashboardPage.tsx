@@ -18,13 +18,13 @@ import {
   Col,
   Empty,
   Flex,
-  List,
   Row,
   Skeleton,
   Statistic,
   Switch,
   Typography,
 } from 'antd';
+import List from '../../components/List.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -101,7 +101,7 @@ export default function DashboardPage() {
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
-          message={t('dashboard.loadFailed')}
+          title={t('dashboard.loadFailed')}
           action={
             <Button size="small" onClick={() => void refetch()}>
               {t('common.retry')}

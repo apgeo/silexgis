@@ -642,7 +642,7 @@ test('an administrator may edit a link somebody else recorded', async ({ page, b
   await expect(userOption).toBeVisible({ timeout: 15_000 });
   await userOption.click();
   await pane.getByRole('button', { name: 'Add' }).click();
-  await expect(pane.locator('.ant-list-item').filter({ hasText: otherName })).toBeVisible({
+  await expect(pane.locator('.silex-list-item').filter({ hasText: otherName })).toBeVisible({
     timeout: 15_000,
   });
   await page.locator('.ant-drawer-close').click();
@@ -698,13 +698,13 @@ test('an administrator may edit a link somebody else recorded', async ({ page, b
     if (!page.isClosed()) {
       await openEditorsMembers();
       await pane
-        .locator('.ant-list-item')
+        .locator('.silex-list-item')
         .filter({ hasText: otherName })
         .getByRole('button')
         .last()
         .click();
       await page.locator('.ant-popconfirm:visible').getByRole('button', { name: 'OK' }).click();
-      await expect(pane.locator('.ant-list-item').filter({ hasText: otherName })).toHaveCount(0, {
+      await expect(pane.locator('.silex-list-item').filter({ hasText: otherName })).toHaveCount(0, {
         timeout: 15_000,
       });
     }

@@ -52,7 +52,7 @@ async function uploadFixture(page: Page, path: string, fileName: string): Promis
 
   // The upload became a document, and the row that carries it offers a way in that is not a
   // download — which was the whole point of the document page existing.
-  const row = page.locator('.ant-list-item', { hasText: fileName }).first();
+  const row = page.locator('.silex-list-item', { hasText: fileName }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.getByRole('button', { name: 'Open the document' }).click();
 
@@ -68,7 +68,7 @@ async function removeFixture(page: Page, fileName: string) {
   await gotoRoute(page, '/caves');
   await page.getByText('Peștera Demo Mare').click();
   await expect(page.getByText('Photos & documents')).toBeVisible({ timeout: 15_000 });
-  const rows = page.locator('.ant-list-item').filter({ hasText: fileName });
+  const rows = page.locator('.silex-list-item').filter({ hasText: fileName });
   for (let remaining = await rows.count(); remaining > 0; remaining--) {
     await rows.first().getByRole('button', { name: 'delete' }).click();
     await page.getByRole('button', { name: 'OK' }).click();

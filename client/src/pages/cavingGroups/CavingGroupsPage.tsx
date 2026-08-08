@@ -8,7 +8,6 @@ import {
   Flex,
   Form,
   Input,
-  List,
   Modal,
   Popconfirm,
   Select,
@@ -16,6 +15,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import List from '../../components/List.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCan,
@@ -61,7 +61,7 @@ function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () 
   };
 
   return (
-    <Drawer title={group.name} open onClose={onClose} width={460}>
+    <Drawer title={group.name} open onClose={onClose} size={460}>
       <Flex gap={8} style={{ marginBottom: 12 }}>
         <Select
           style={{ flex: 1 }}

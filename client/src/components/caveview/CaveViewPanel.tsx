@@ -87,7 +87,7 @@ export default function CaveViewPanel({ fileUrl, fileName, height = 480, onEntra
         <Spin style={{ position: 'absolute', inset: 0, marginTop: 48 }} data-testid="caveview-loading" />
       )}
       {status === 'error' && (
-        <Alert type="error" showIcon message={t('caveview.loadError')} description={errorDetail} />
+        <Alert type="error" showIcon title={t('caveview.loadError')} description={errorDetail} />
       )}
       <div
         id={containerIdRef.current}

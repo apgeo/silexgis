@@ -68,7 +68,7 @@ export default function UnsubscribePage() {
             type="success"
             showIcon
             style={{ marginBottom: 16 }}
-            message={t('unsubscribe.done', {
+            title={t('unsubscribe.done', {
               category: category
                 ? t(`settings.notifications.events.${category}`)
                 : t('unsubscribe.theseMessages'),
@@ -78,7 +78,7 @@ export default function UnsubscribePage() {
         )}
 
         {state === 'failed' && (
-          <Alert type="error" showIcon message={t('unsubscribe.failed')} style={{ marginBottom: 16 }} />
+          <Alert type="error" showIcon title={t('unsubscribe.failed')} style={{ marginBottom: 16 }} />
         )}
 
         {state !== 'working' && (

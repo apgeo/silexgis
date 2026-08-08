@@ -203,8 +203,8 @@ export default function LoginPage() {
         <Typography.Title level={3} style={{ textAlign: 'center' }}>
           {t('app.name')}
         </Typography.Title>
-        {error && <Alert type="error" message={error} style={{ marginBottom: 16 }} />}
-        {notice && <Alert type="success" message={notice} style={{ marginBottom: 16 }} />}
+        {error && <Alert type="error" title={error} style={{ marginBottom: 16 }} />}
+        {notice && <Alert type="success" title={notice} style={{ marginBottom: 16 }} />}
         {unconfirmedEmail && (
           <Button
             block

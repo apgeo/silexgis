@@ -126,7 +126,7 @@ export default function AccountSettingsPage() {
         </Flex>
       </Card>
 
-      <Alert type="info" showIcon message={t('settings.account.noDeletion')} />
+      <Alert type="info" showIcon title={t('settings.account.noDeletion')} />
     </Flex>
   );
 }

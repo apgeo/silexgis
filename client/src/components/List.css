@@ -1,0 +1,40 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Rows of the shared list. Deliberately only what a stylesheet can express and inline styles
+   cannot: the hairline that separates rows without closing the list off at the bottom, and the
+   row height that depends on which size the list around it was drawn at. Its colour comes from
+   the theme, handed in as a custom property, so light and dark both get the right one. */
+.silex-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.silex-list-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-block-end: 1px solid var(--silex-list-split);
+}
+
+.silex-list-item:last-child {
+  border-block-end: none;
+}
+
+.silex-list[data-size='default'] > .silex-list-item {
+  padding-block: 12px;
+}
+
+.silex-list[data-size='small'] > .silex-list-item {
+  padding-block: 8px;
+}
+
+/* The row's contents take the width left over by its controls, and shrink rather than push
+   them off the edge — a long file name is what ellipsis is for. */
+.silex-list-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.silex-list-item-actions {
+  flex-shrink: 0;
+}

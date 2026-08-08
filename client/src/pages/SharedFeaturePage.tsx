@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Descriptions, Flex, List, Spin, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Descriptions, Flex, Spin, Tag, Typography } from 'antd';
+import List from '../components/List.tsx';
 import Map from 'ol/Map';
 import View from 'ol/View';
 import Feature from 'ol/Feature';
@@ -92,7 +93,7 @@ export default function SharedFeaturePage() {
           <Alert
             type="info"
             showIcon
-            message={t('shares.loginRequired')}
+            title={t('shares.loginRequired')}
             action={
               <Link to="/login">
                 <Button size="small" type="primary">
@@ -102,7 +103,7 @@ export default function SharedFeaturePage() {
             }
           />
         ) : (
-          <Alert type="warning" showIcon message={t('shares.sharedNotFound')} />
+          <Alert type="warning" showIcon title={t('shares.sharedNotFound')} />
         )}
       </Flex>
     );
@@ -149,12 +150,12 @@ export default function SharedFeaturePage() {
         <Alert
           type="info"
           showIcon
-          message={t('shares.readOnly')}
+          title={t('shares.readOnly')}
           style={{ marginBottom: 12 }}
         />
 
         {feature.approximateLocation && (
-          <Alert type="warning" showIcon message={t('map.approximate')} style={{ marginBottom: 12 }} />
+          <Alert type="warning" showIcon title={t('map.approximate')} style={{ marginBottom: 12 }} />
         )}
 
         {feature.geometry && (

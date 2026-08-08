@@ -248,7 +248,7 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
               type="warning"
               showIcon
               style={{ marginBottom: 12 }}
-              message={t('permissions.denyHint')}
+              title={t('permissions.denyHint')}
             />
           )}
 

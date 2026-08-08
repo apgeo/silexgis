@@ -159,7 +159,7 @@ function MemberCard({
           {member.display && member.note && <Typography.Text>{member.note}</Typography.Text>}
           {/* How well the anchor still points at what it was measured against. An exact one
               says nothing; the rest are shown rather than silently re-aimed. */}
-          {stateNote && <Alert type="warning" showIcon message={stateNote} />}
+          {stateNote && <Alert type="warning" showIcon title={stateNote} />}
           <Flex gap={8} wrap>
             {route && (
               <Link to={route}>
@@ -409,7 +409,7 @@ export default function LinkPage() {
         <Alert
           type="info"
           showIcon
-          message={t('resLinks.incompleteHint')}
+          title={t('resLinks.incompleteHint')}
           style={{ marginTop: 16 }}
         />
       )}

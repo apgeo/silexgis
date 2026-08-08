@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { DeleteOutlined, DownloadOutlined, FileOutlined, InboxOutlined } from '@ant-design/icons';
 import {
-  App, Button, Card, Empty, Flex, Image, List, Popconfirm, Tooltip, Typography, Upload,
+  App, Button, Card, Empty, Flex, Image, Popconfirm, Tooltip, Typography, Upload,
 } from 'antd';
+import List from '../List.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useAttachments,

@@ -72,7 +72,7 @@ export default function SharedViewPage() {
   if (failed) {
     return (
       <Flex align="center" justify="center" style={{ height: '100vh' }}>
-        <Alert type="warning" showIcon message={t('views.sharedNotFound')} />
+        <Alert type="warning" showIcon title={t('views.sharedNotFound')} />
       </Flex>
     );
   }

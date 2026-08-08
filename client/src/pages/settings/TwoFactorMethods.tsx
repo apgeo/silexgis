@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { KeyOutlined, MailOutlined, MobileOutlined } from '@ant-design/icons';
-import { App, Alert, Button, Card, Flex, Input, List, Popconfirm, QRCode, Tag, Typography } from 'antd';
+import { App, Alert, Button, Card, Flex, Input, Popconfirm, QRCode, Tag, Typography } from 'antd';
+import List from '../../components/List.tsx';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
@@ -198,7 +199,7 @@ export default function TwoFactorMethods({ status }: Props) {
               aria-label={t('security.scanAlt')}
             />
             <Flex vertical gap={12} style={{ flex: '1 1 240px', minWidth: 240 }}>
-              <Alert type="info" showIcon message={t('security.scanHint')} />
+              <Alert type="info" showIcon title={t('security.scanHint')} />
               <Typography.Text type="secondary">{t('security.enterKey')}</Typography.Text>
               <Typography.Text code copyable={{ text: enrollment.sharedKey.replace(/ /g, '') }}>
                 {enrollment.sharedKey}
@@ -237,7 +238,7 @@ export default function TwoFactorMethods({ status }: Props) {
         <Alert
           type="warning"
           showIcon
-          message={t('security.recoveryTitle')}
+          title={t('security.recoveryTitle')}
           description={
             <Typography.Paragraph copyable={{ text: recoveryCodes.join('\n') }} style={{ margin: 0 }}>
               <pre style={{ margin: 0 }}>{recoveryCodes.join('\n')}</pre>

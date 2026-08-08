@@ -8,7 +8,8 @@ import {
   LoginOutlined,
   SafetyOutlined,
 } from '@ant-design/icons';
-import { App, Button, Card, Flex, List, Popconfirm, Tag, Typography } from 'antd';
+import { App, Button, Card, Flex, Popconfirm, Tag, Typography } from 'antd';
+import List from '../../components/List.tsx';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';

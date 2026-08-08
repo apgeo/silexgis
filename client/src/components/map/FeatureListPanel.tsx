@@ -199,7 +199,7 @@ export default function FeatureListPanel() {
         <Alert
           type="info"
           showIcon
-          message={t('map.zoomInForEntrances')}
+          title={t('map.zoomInForEntrances')}
           style={{ margin: '8px 0' }}
         />
       )}

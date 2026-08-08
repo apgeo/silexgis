@@ -629,7 +629,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
         <Spin style={{ position: 'absolute', inset: 0, marginTop: 48 }} data-testid="scene3d-loading" />
       )}
       {status === 'error' && (
-        <Alert type="error" showIcon message={t('scene3d.startFailed')} description={errorDetail} />
+        <Alert type="error" showIcon title={t('scene3d.startFailed')} description={errorDetail} />
       )}
       {/* The scene has already been rebuilt once for this and lost the context again, so the view
           stops rather than flickering: a rebuild loop looks like a frozen application and empties
@@ -640,7 +640,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           type="warning"
           showIcon
           data-testid="scene3d-context-lost"
-          message={t('scene3d.contextLostTitle')}
+          title={t('scene3d.contextLostTitle')}
           description={t('scene3d.contextLostHint')}
           action={
             <Button size="small" onClick={() => window.location.reload()}>

@@ -57,12 +57,12 @@ export default function TextRangeAnchorEditor({ value, onChange, target }: Ancho
   }, [captured, pageText]);
 
   if (documentId === undefined) {
-    return <Alert type="info" showIcon message={t('resLinks.anchorEditors.textNeedsDocument')} />;
+    return <Alert type="info" showIcon title={t('resLinks.anchorEditors.textNeedsDocument')} />;
   }
 
   const readable = file?.mimeType?.startsWith('application/pdf') === true && file.mayDownloadOriginal;
   if (file !== undefined && !readable) {
-    return <Alert type="info" showIcon message={t('resLinks.anchorEditors.textNotSelectable')} />;
+    return <Alert type="info" showIcon title={t('resLinks.anchorEditors.textNotSelectable')} />;
   }
 
   return (
@@ -80,16 +80,16 @@ export default function TextRangeAnchorEditor({ value, onChange, target }: Ancho
 
       {captured !== null && isFetching && <Spin size="small" />}
       {captured !== null && isError && (
-        <Alert type="warning" showIcon message={t('resLinks.anchorEditors.textPageNotRead')} />
+        <Alert type="warning" showIcon title={t('resLinks.anchorEditors.textPageNotRead')} />
       )}
       {captured !== null && !isFetching && !isError && value === null && (
-        <Alert type="warning" showIcon message={t('resLinks.anchorEditors.textNotFound')} />
+        <Alert type="warning" showIcon title={t('resLinks.anchorEditors.textNotFound')} />
       )}
       {isTextRange(value) && (
         <Alert
           type="success"
           showIcon
-          message={t('resLinks.anchorEditors.textCaptured', {
+          title={t('resLinks.anchorEditors.textCaptured', {
             page: value.page,
             quote: truncate(value.quote),
           })}

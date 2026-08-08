@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { CameraOutlined, DeleteOutlined, HomeFilled, LinkOutlined, SaveOutlined } from '@ant-design/icons';
-import { App, Button, Divider, Flex, Input, List, Tooltip, Typography } from 'antd';
+import { App, Button, Divider, Flex, Input, Tooltip, Typography } from 'antd';
+import List from '../List.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCreateMapView,

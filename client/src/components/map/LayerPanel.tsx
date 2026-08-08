@@ -181,7 +181,7 @@ export default function LayerPanel({
               type="info"
               showIcon
               style={{ marginBottom: 8 }}
-              message={t('map.centerlinesWithheld', { count: centerlineLoad.withheldCount })}
+              title={t('map.centerlinesWithheld', { count: centerlineLoad.withheldCount })}
             />
           )}
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>

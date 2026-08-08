@@ -123,7 +123,7 @@ export default function ShareLinksModal({ featureId, open, onClose }: ShareLinks
               type="success"
               showIcon
               style={{ marginBottom: 12 }}
-              message={t('shares.linkReady')}
+              title={t('shares.linkReady')}
               description={
                 <>
                   <Flex gap={8} style={{ marginTop: 4 }}>

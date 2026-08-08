@@ -54,11 +54,11 @@ export default function ConfirmEmailPage() {
         )}
 
         {state === 'confirmed' && (
-          <Alert type="success" showIcon message={t('auth.confirmEmailDone')} style={{ marginBottom: 16 }} />
+          <Alert type="success" showIcon title={t('auth.confirmEmailDone')} style={{ marginBottom: 16 }} />
         )}
 
         {state === 'failed' && (
-          <Alert type="error" showIcon message={t('auth.confirmEmailFailed')} style={{ marginBottom: 16 }} />
+          <Alert type="error" showIcon title={t('auth.confirmEmailFailed')} style={{ marginBottom: 16 }} />
         )}
 
         {state !== 'working' && (

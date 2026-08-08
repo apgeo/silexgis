@@ -62,7 +62,7 @@ export default function NotificationSettingsPage() {
       <Flex vertical gap={16}>
         {!prefs.deliveryConfigured && (
           // Saying so plainly beats letting someone tune settings that cannot reach them.
-          <Alert type="warning" showIcon message={t('settings.notifications.noDelivery')} />
+          <Alert type="warning" showIcon title={t('settings.notifications.noDelivery')} />
         )}
 
         <Card size="small" title={t('settings.notifications.delivery')}>

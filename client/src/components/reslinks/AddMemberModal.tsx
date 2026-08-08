@@ -459,7 +459,7 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
               <Alert
                 type={pointVisibility === 'default' && !pointDefault ? 'warning' : 'info'}
                 showIcon
-                message={audienceNotice}
+                title={audienceNotice}
               />
             )}
           </Flex>

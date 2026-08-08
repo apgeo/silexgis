@@ -171,7 +171,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
   };
 
   if (isFullAdministrators) {
-    return <Alert type="info" showIcon message={t('permissionGroups.fullAdminNoRules')} />;
+    return <Alert type="info" showIcon title={t('permissionGroups.fullAdminNoRules')} />;
   }
 
   return (
@@ -180,7 +180,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
         <Alert
           type="warning"
           showIcon
-          message={t('permissionGroups.previewRequired')}
+          title={t('permissionGroups.previewRequired')}
           action={
             <Button size="small" icon={<EyeOutlined />} onClick={onRequestPreview}>
               {t('permissionGroups.openPreview')}

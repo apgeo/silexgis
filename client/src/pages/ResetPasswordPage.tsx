@@ -62,11 +62,11 @@ export default function ResetPasswordPage() {
           {t('auth.resetPasswordTitle')}
         </Typography.Title>
 
-        {error && <Alert type="error" message={error} style={{ marginBottom: 16 }} />}
+        {error && <Alert type="error" title={error} style={{ marginBottom: 16 }} />}
 
         {done ? (
           <>
-            <Alert type="success" showIcon message={t('auth.resetPasswordDone')} style={{ marginBottom: 16 }} />
+            <Alert type="success" showIcon title={t('auth.resetPasswordDone')} style={{ marginBottom: 16 }} />
             <Link to="/login">
               <Button type="primary" block>
                 {t('auth.signIn')}

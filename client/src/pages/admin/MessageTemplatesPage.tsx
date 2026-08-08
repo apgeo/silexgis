@@ -38,7 +38,7 @@ export default function MessageTemplatesPage() {
     return null;
   }
   if (!canRead) {
-    return <Alert type="error" showIcon message={t('admin.forbidden')} style={{ margin: 16 }} />;
+    return <Alert type="error" showIcon title={t('admin.forbidden')} style={{ margin: 16 }} />;
   }
 
   return (
@@ -142,7 +142,7 @@ function TemplateEditor({ template, locale }: EditorProps) {
 
   return (
     <Form form={form} layout="vertical" onFinish={save} requiredMark={false}>
-      {!current.customised && <Alert type="info" showIcon message={t('admin.templates.usingDefault')} />}
+      {!current.customised && <Alert type="info" showIcon title={t('admin.templates.usingDefault')} />}
 
       {isEmail && (
         <Form.Item

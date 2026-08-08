@@ -17,7 +17,7 @@ export default function TextDocumentView({ file }: { file: FileInfo }) {
   const { data, isPending, isError } = useFileText(file);
 
   if (isError) {
-    return <Alert type="error" showIcon message={t('documents.viewer.textFailed')} />;
+    return <Alert type="error" showIcon title={t('documents.viewer.textFailed')} />;
   }
 
   if (isPending || !data) {
