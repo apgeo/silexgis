@@ -78,6 +78,14 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<ProcessingJob> ProcessingJobs => Set<ProcessingJob>();
 
+    public DbSet<TermRuleSet> TermRuleSets => Set<TermRuleSet>();
+
+    public DbSet<GeofileImportSession> GeofileImportSessions => Set<GeofileImportSession>();
+
+    public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
+
+    public DbSet<ImportBatchItem> ImportBatchItems => Set<ImportBatchItem>();
+
     public DbSet<Attachment> Attachments => Set<Attachment>();
 
     public DbSet<GeoreferencedMap> GeoreferencedMaps => Set<GeoreferencedMap>();

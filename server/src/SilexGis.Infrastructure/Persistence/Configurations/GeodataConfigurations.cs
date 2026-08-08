@@ -76,6 +76,7 @@ public sealed class GeofileConfiguration : IEntityTypeConfiguration<Geofile>
         builder.Property(x => x.ImportStatus).HasConversion<short>();
         builder.Property(x => x.Visibility).HasConversion<short>();
         builder.Property(x => x.Style).HasColumnType("jsonb");
+        builder.Property(x => x.SourceOptions).HasColumnType("jsonb");
         builder.Property(x => x.Bbox).HasColumnType("geometry(Polygon, 4326)");
 
         builder.HasOne<StoredFile>().WithMany().HasForeignKey(x => x.FileId).OnDelete(DeleteBehavior.Restrict);

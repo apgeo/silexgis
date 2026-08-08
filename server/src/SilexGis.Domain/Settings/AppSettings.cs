@@ -141,6 +141,32 @@ public sealed record ProtectionSettings
     public bool RevealProtectedAssociations { get; init; }
 }
 
+/// <summary>How much an installation trusts a vector file to become registry objects on its own.</summary>
+public sealed record ImportSettings
+{
+    /// <summary>
+    /// Let an importer skip the review and have the rules create objects directly.
+    ///
+    /// <para>
+    /// Off, so a fresh installation always reviews. Rules are a guess about somebody's naming
+    /// habits; the first import against a set nobody has tuned is exactly where that guess is
+    /// worst, and the difference between a bad review and a bad auto-import is four hundred
+    /// objects in the registry. Switching it on never widens *who* may create — the importer
+    /// still needs the right to create features — it only removes the step in between.
+    /// </para>
+    /// </summary>
+    public bool AllowCreateWithoutReview { get; init; }
+
+    /// <summary>How far duplicate detection looks around a candidate by default, in metres.</summary>
+    public double DuplicateRadiusMeters { get; init; } = 50;
+
+    /// <summary>
+    /// How alike two names must be, 0 to 1, before duplicate detection calls a nearby object the
+    /// same thing rather than merely close to it.
+    /// </summary>
+    public double DuplicateNameSimilarity { get; init; } = 0.8;
+}
+
 /// <summary>
 /// Section names under which the settings above are stored, one JSON document each. Keys are a
 /// schema contract — renaming one abandons the operator's saved configuration.
@@ -155,5 +181,7 @@ public static class AppSettingSections
 
     public const string Protection = "protection";
 
-    public static IReadOnlyList<string> All { get; } = [Mail, Sms, Security, Protection];
+    public const string Import = "import";
+
+    public static IReadOnlyList<string> All { get; } = [Mail, Sms, Security, Protection, Import];
 }

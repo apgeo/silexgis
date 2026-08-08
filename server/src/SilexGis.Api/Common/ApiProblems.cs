@@ -10,8 +10,8 @@ namespace SilexGis.Api.Common;
 /// </summary>
 public static class ApiProblems
 {
-    public static ProblemHttpResult Forbidden(string code = "acl.forbidden") =>
-        TypedResults.Problem(statusCode: StatusCodes.Status403Forbidden,
+    public static ProblemHttpResult Forbidden(string code = "acl.forbidden", string? detail = null) =>
+        TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status403Forbidden,
             extensions: new Dictionary<string, object?> { ["code"] = code });
 
     public static ProblemHttpResult NotFound(string code) =>

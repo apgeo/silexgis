@@ -24,6 +24,7 @@ using SilexGis.Api.Features.Files;
 using SilexGis.Api.Features.Geofiles;
 using SilexGis.Api.Features.GeoreferencedMaps;
 using SilexGis.Api.Features.History;
+using SilexGis.Api.Features.Import;
 using SilexGis.Api.Features.Jobs;
 using SilexGis.Api.Features.Map;
 using SilexGis.Api.Features.MapViews;
@@ -223,6 +224,9 @@ try
     api.MapSearchEndpoints();
     api.MapDashboardEndpoints();
     api.MapGeofileEndpoints();
+    api.MapTermRuleEndpoints();
+    api.MapStagedImportEndpoints();
+    api.MapImportBatchEndpoints();
     api.MapJobEndpoints();
     api.MapExportEndpoints();
     api.MapFileEndpoints();
@@ -256,6 +260,7 @@ try
         await db.Database.MigrateAsync();
         await TaxonomySeeder.SeedAsync(db);
         await MapLayerSeeder.SeedAsync(db);
+        await TermRuleSeeder.SeedAsync(db);
         // Permission groups must exist before the bootstrap admin joins Full Administrators.
         await PermissionGroupSeeder.SeedAsync(db);
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);

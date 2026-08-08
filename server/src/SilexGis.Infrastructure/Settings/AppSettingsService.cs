@@ -51,6 +51,9 @@ public sealed class AppSettingsService(
     public ValueTask<ProtectionSettings> GetProtectionAsync(CancellationToken ct = default) =>
         GetAsync<ProtectionSettings>(AppSettingSections.Protection, "Protection", ct);
 
+    public ValueTask<ImportSettings> GetImportAsync(CancellationToken ct = default) =>
+        GetAsync<ImportSettings>(AppSettingSections.Import, "Import", ct);
+
     public async Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
         where T : class
     {

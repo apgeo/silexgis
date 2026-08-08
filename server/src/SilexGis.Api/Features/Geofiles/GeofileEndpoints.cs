@@ -7,8 +7,10 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Import;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
@@ -31,6 +33,10 @@ public static class GeofileEndpoints
             .WithSummary("Import status for polling.");
         geofiles.MapPut("/{id:guid}", UpdateAsync).WithValidation<GeofileUpdateRequest>()
             .WithSummary("Metadata update (Write permission); the uploaded file is immutable.");
+        geofiles.MapGet("/{id:guid}/columns", GetColumnsAsync)
+            .WithSummary("Header of a delimited upload, so a wrong coordinate-column guess can be corrected.");
+        geofiles.MapPost("/{id:guid}/reimport", ReimportAsync)
+            .WithSummary("Re-reads the upload, optionally with corrected source options (Write permission).");
         geofiles.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes a geofile with its imported features and stored file.");
 
@@ -42,12 +48,19 @@ public static class GeofileEndpoints
     {
         [".gpx"] = GeofileFormat.Gpx,
         [".kml"] = GeofileFormat.Kml,
+        [".kmz"] = GeofileFormat.Kmz,
         [".geojson"] = GeofileFormat.GeoJson,
         [".json"] = GeofileFormat.GeoJson,
         [".zip"] = GeofileFormat.Shapefile,
+        [".csv"] = GeofileFormat.Csv,
+        [".txt"] = GeofileFormat.Csv,
+        [".tsv"] = GeofileFormat.Csv,
         [".wkt"] = GeofileFormat.Wkt,
         [".wkb"] = GeofileFormat.Wkb,
     };
+
+    /// <summary>Extensions whose real format is decided by looking inside the archive.</summary>
+    private static readonly string[] ArchiveExtensions = [".zip", ".kmz"];
 
     private static async Task<Results<Created<GeofileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
         IFormFile file,
@@ -94,6 +107,13 @@ public static class GeofileEndpoints
         await using (var saved = await fileStore.OpenReadAsync(storagePath, ct))
         {
             sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(saved, ct));
+        }
+
+        // Both zipped formats can arrive under either extension, so the archive itself decides.
+        // A name is a hint; what is inside is the fact.
+        if (ArchiveExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+        {
+            format = ArchiveFormatSniffer.Detect(fileStore.GetAbsolutePath(storagePath)) ?? format;
         }
 
         var name = Path.GetFileNameWithoutExtension(file.FileName);
@@ -219,6 +239,114 @@ public static class GeofileEndpoints
         geofile.Visibility = request.Visibility;
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(geofile.ToDto());
+    }
+
+    /// <summary>
+    /// The header row of a delimited upload. Answering this from the stored file rather than
+    /// from remembered parse state means it still works after a failed import, which is the
+    /// only moment anybody asks it.
+    /// </summary>
+    private static async Task<Results<Ok<GeofileColumnsDto>, ProblemHttpResult>> GetColumnsAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IFileStore fileStore,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var (geofile, problem) = await LoadReadableAsync(id, db, access, accessAccessor, ct);
+        if (problem is not null)
+        {
+            return problem;
+        }
+
+        if (geofile!.Format != GeofileFormat.Csv)
+        {
+            return ApiProblems.BadRequest(
+                "geofile.not_delimited", "Only a delimited upload has columns to choose between.");
+        }
+
+        var file = await db.StoredFiles.AsNoTracking().FirstOrDefaultAsync(f => f.Id == geofile.FileId, ct);
+        if (file is null)
+        {
+            return ApiProblems.NotFound("geofile.not_found");
+        }
+
+        var options = ReadSourceOptions(geofile);
+        try
+        {
+            var columns = DelimitedVectorReader.ReadHeader(
+                fileStore.GetAbsolutePath(file.StoragePath), options?.Delimited?.Delimiter);
+            return TypedResults.Ok(new GeofileColumnsDto(columns));
+        }
+        catch (Exception e) when (e is VectorIOException or IOException)
+        {
+            return ApiProblems.BadRequest("geofile.unreadable", e.Message);
+        }
+    }
+
+    /// <summary>
+    /// Reads the upload again, optionally under corrected source options. The import handler
+    /// already replaces the previous rows, so this is a re-queue rather than a second path —
+    /// and it is what makes a bad coordinate-column guess recoverable without a fresh upload.
+    /// </summary>
+    private static async Task<Results<Ok<GeofileStatusDto>, ProblemHttpResult>> ReimportAsync(
+        Guid id,
+        GeofileReimportRequest? request,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var user = await userAccessor.GetAsync(ct);
+        var geofile = await db.Geofiles.FirstOrDefaultAsync(g => g.Id == id, ct);
+        if (geofile is null || user is null)
+        {
+            return ApiProblems.NotFound("geofile.not_found");
+        }
+
+        if (ctx is null || !(await access.DecideAsync(ctx, AccessAction.Write, geofile, ct)).Allowed)
+        {
+            return (await access.DecideAsync(ctx, AccessAction.Read, geofile, ct)).Allowed
+                ? ApiProblems.Forbidden()
+                : ApiProblems.NotFound("geofile.not_found");
+        }
+
+        if (request?.SourceOptions is { } sourceOptions)
+        {
+            geofile.SourceOptions = ImportJson.Serialize(sourceOptions);
+        }
+
+        geofile.ImportStatus = GeofileImportStatus.Uploaded;
+        geofile.ImportError = null;
+        db.ProcessingJobs.Add(new ProcessingJob
+        {
+            Kind = ProcessingJobKinds.GeofileImport,
+            Payload = JsonSerializer.Serialize(new GeofileImportPayload(geofile.Id), JsonSerializerOptions.Web),
+            RequestedBy = user.UserId,
+        });
+        await db.SaveChangesAsync(ct);
+
+        return TypedResults.Ok(geofile.ToStatusDto());
+    }
+
+    private static GeofileSourceOptions? ReadSourceOptions(Geofile geofile)
+    {
+        if (string.IsNullOrWhiteSpace(geofile.SourceOptions))
+        {
+            return null;
+        }
+
+        try
+        {
+            return ImportJson.Deserialize<GeofileSourceOptions>(geofile.SourceOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(

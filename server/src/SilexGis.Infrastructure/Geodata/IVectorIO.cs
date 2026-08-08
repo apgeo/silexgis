@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using NetTopologySuite.Geometries;
 using SilexGis.Domain;
+using SilexGis.Domain.Import;
 
 namespace SilexGis.Infrastructure.Geodata;
 
@@ -29,7 +30,11 @@ public interface IVectorIO
     /// Reads all vector rows from a file, reprojected to EPSG:4326.
     /// Throws <see cref="VectorIOException"/> with a user-presentable message on bad input.
     /// </summary>
-    VectorDataset Read(string absolutePath, GeofileFormat format);
+    /// <param name="sourceOptions">
+    /// How to read a format that does not describe itself — which columns of a delimited file
+    /// hold the coordinates. Ignored by every other format, which say so themselves.
+    /// </param>
+    VectorDataset Read(string absolutePath, GeofileFormat format, GeofileSourceOptions? sourceOptions = null);
 
     /// <summary>Serializes features to the given format; returns the file bytes.</summary>
     byte[] Write(ExportFormat format, string layerName, IReadOnlyList<VectorFeature> features);

@@ -20,6 +20,8 @@ public interface IAppSettingsService
 
     ValueTask<ProtectionSettings> GetProtectionAsync(CancellationToken ct = default);
 
+    ValueTask<ImportSettings> GetImportAsync(CancellationToken ct = default);
+
     /// <summary>Replaces a section and drops the cached copy across the process.</summary>
     Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
         where T : class;

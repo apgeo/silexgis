@@ -45,6 +45,9 @@ public static class AdminSettingsEndpoints
         admin.MapPut("/protection", SaveProtectionAsync)
             .WithValidation<ProtectionSettingsDto>()
             .WithSummary("Saves what the installation discloses about a protected feature's associations.");
+        admin.MapPut("/import", SaveImportAsync)
+            .WithValidation<ImportSettingsDto>()
+            .WithSummary("Saves whether a vector import may create objects without review, and how far duplicate detection looks.");
         admin.MapPost("/mail/test", TestMailAsync)
             .WithValidation<TestMessageRequest>()
             .WithSummary("Sends a test message to prove the mail server works.");
@@ -221,6 +224,38 @@ public static class AdminSettingsEndpoints
         return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
     }
 
+    private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveImportAsync(
+        ImportSettingsDto request,
+        IAccessContextAccessor accessAccessor,
+        IAppSettingsService settings,
+        IEmailDelivery emailDelivery,
+        ISmsDelivery smsDelivery,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
+        {
+            return ApiProblems.Forbidden("access.forbidden");
+        }
+
+        await settings.SaveAsync(
+            AppSettingSections.Import,
+            new ImportSettings
+            {
+                AllowCreateWithoutReview = request.AllowCreateWithoutReview,
+                DuplicateRadiusMeters = request.DuplicateRadiusMeters,
+                DuplicateNameSimilarity = request.DuplicateNameSimilarity,
+            },
+            ct);
+
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+    }
+
     /// <summary>
     /// Sends a plain diagnostic message rather than a catalogued one: this is proving the transport
     /// works, and routing it through a template the operator may have just broken would confuse the
@@ -310,6 +345,7 @@ public static class AdminSettingsEndpoints
         var sms = await settings.GetSmsAsync(ct);
         var security = await settings.GetSecurityAsync(ct);
         var disclosure = await settings.GetProtectionAsync(ct);
+        var import = await settings.GetImportAsync(ct);
 
         return new AdminSettingsDto(
             new MailSettingsDto(
@@ -343,6 +379,10 @@ public static class AdminSettingsEndpoints
                 security.TwoFactorCodeLifetimeMinutes,
                 security.TwoFactorResendIntervalSeconds),
             new ProtectionSettingsDto(disclosure.RevealProtectedAssociations),
+            new ImportSettingsDto(
+                import.AllowCreateWithoutReview,
+                import.DuplicateRadiusMeters,
+                import.DuplicateNameSimilarity),
             await emailDelivery.IsConfiguredAsync(ct),
             await smsDelivery.IsConfiguredAsync(ct));
     }

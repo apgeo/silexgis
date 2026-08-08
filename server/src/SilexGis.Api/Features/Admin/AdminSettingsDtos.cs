@@ -86,8 +86,18 @@ public sealed record AdminSettingsDto(
     SmsSettingsDto Sms,
     SecuritySettingsDto Security,
     ProtectionSettingsDto Protection,
+    ImportSettingsDto Import,
     bool MailConfigured,
     bool SmsConfigured);
+
+/// <summary>
+/// How much the installation trusts a vector file to become registry objects on its own, and
+/// how far duplicate detection looks by default.
+/// </summary>
+public sealed record ImportSettingsDto(
+    bool AllowCreateWithoutReview,
+    double DuplicateRadiusMeters,
+    double DuplicateNameSimilarity);
 
 /// <summary>A diagnostic send, to prove the channel works before anyone depends on it.</summary>
 public sealed record TestMessageRequest(string Recipient);
@@ -151,6 +161,17 @@ public sealed class SecuritySettingsDtoValidator : AbstractValidator<SecuritySet
 /// rather than being the single exception someone later has to explain.
 /// </summary>
 public sealed class ProtectionSettingsDtoValidator : AbstractValidator<ProtectionSettingsDto>;
+
+public sealed class ImportSettingsDtoValidator : AbstractValidator<ImportSettingsDto>
+{
+    public ImportSettingsDtoValidator()
+    {
+        // The radius bounds a proximity read that runs per page of candidates; the similarity
+        // is a ratio and only means anything between the two ends of one.
+        RuleFor(x => x.DuplicateRadiusMeters).InclusiveBetween(0, Domain.Import.ImportOptions.MaxDuplicateRadiusMeters);
+        RuleFor(x => x.DuplicateNameSimilarity).InclusiveBetween(0, 1);
+    }
+}
 
 public sealed class TestMessageRequestValidator : AbstractValidator<TestMessageRequest>
 {

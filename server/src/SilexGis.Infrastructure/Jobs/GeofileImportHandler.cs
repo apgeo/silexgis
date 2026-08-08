@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Import;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Persistence;
 
@@ -39,7 +40,8 @@ public sealed class GeofileImportHandler(
 
         try
         {
-            var dataset = vectorIO.Read(fileStore.GetAbsolutePath(file.StoragePath), geofile.Format);
+            var dataset = vectorIO.Read(
+                fileStore.GetAbsolutePath(file.StoragePath), geofile.Format, ReadSourceOptions(geofile));
 
             await db.GeofileFeatures.Where(f => f.GeofileId == geofile.Id).ExecuteDeleteAsync(ct);
             await GeodataSql.BulkInsertFeaturesAsync(db, geofile.Id, dataset.Features, ct);
@@ -63,6 +65,29 @@ public sealed class GeofileImportHandler(
             geofile.ImportError = e is VectorIOException ? e.Message : "Import failed unexpectedly.";
             await db.SaveChangesAsync(CancellationToken.None);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// The stored parse options, or none. Unreadable options are treated as absent rather than
+    /// as a failure: the reader's own detection is a working answer, and refusing to read a
+    /// file because a settings blob got mangled would be a worse outcome than reading it the
+    /// way the file describes itself.
+    /// </summary>
+    private static GeofileSourceOptions? ReadSourceOptions(Geofile geofile)
+    {
+        if (string.IsNullOrWhiteSpace(geofile.SourceOptions))
+        {
+            return null;
+        }
+
+        try
+        {
+            return ImportJson.Deserialize<GeofileSourceOptions>(geofile.SourceOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 

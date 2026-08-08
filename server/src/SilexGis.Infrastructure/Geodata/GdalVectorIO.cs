@@ -8,6 +8,7 @@ using OSGeo.GDAL;
 using OSGeo.OGR;
 using OSGeo.OSR;
 using SilexGis.Domain;
+using SilexGis.Domain.Import;
 using Geometry = NetTopologySuite.Geometries.Geometry;
 
 namespace SilexGis.Infrastructure.Geodata;
@@ -31,17 +32,29 @@ public sealed class GdalVectorIO : IVectorIO
     // GPX datasets expose point/segment layers that duplicate their aggregate layers.
     private static readonly string[] GpxLayers = ["waypoints", "routes", "tracks"];
 
-    public VectorDataset Read(string absolutePath, GeofileFormat format)
+    public VectorDataset Read(string absolutePath, GeofileFormat format, GeofileSourceOptions? sourceOptions = null)
     {
         if (format is GeofileFormat.Wkt or GeofileFormat.Wkb)
         {
             return ReadWktLines(absolutePath, format);
         }
 
-        // Zipped shapefiles are read in place through GDAL's zip virtual filesystem.
-        var openPath = format == GeofileFormat.Shapefile
-            ? "/vsizip/" + absolutePath.Replace('\\', '/')
-            : absolutePath;
+        if (format == GeofileFormat.Csv)
+        {
+            return DelimitedVectorReader.Read(absolutePath, sourceOptions?.Delimited);
+        }
+
+        // Zipped shapefiles are read in place through GDAL's zip virtual filesystem; a KMZ is
+        // the same trick pointed at the document inside it. Naming that document explicitly
+        // rather than handing the archive to the driver is deliberate: which KML driver a GDAL
+        // build carries (KML or LIBKML) decides whether an archive opens at all, and this way
+        // the answer does not depend on how the bindings were compiled.
+        var openPath = format switch
+        {
+            GeofileFormat.Shapefile => "/vsizip/" + absolutePath.Replace('\\', '/'),
+            GeofileFormat.Kmz => KmzDocumentPath(absolutePath),
+            _ => absolutePath,
+        };
 
         using var dataSource = Ogr.Open(openPath, 0);
         if (dataSource is null)
@@ -247,6 +260,35 @@ public sealed class GdalVectorIO : IVectorIO
 
         srs.AutoIdentifyEPSG();
         return int.TryParse(srs.GetAuthorityCode(null), out var epsg) ? epsg : null;
+    }
+
+    /// <summary>
+    /// The KML document inside a KMZ, as a path GDAL's zip filesystem can open.
+    /// <c>doc.kml</c> is the conventional name and what Google Earth writes, but an archive
+    /// exported by something else may hold one under any name, so the convention is preferred
+    /// and the first KML found is the fallback.
+    /// </summary>
+    private static string KmzDocumentPath(string absolutePath)
+    {
+        using var archive = OpenKmz(absolutePath);
+        var entry = archive.Entries.FirstOrDefault(e =>
+                string.Equals(e.FullName, "doc.kml", StringComparison.OrdinalIgnoreCase))
+            ?? archive.Entries.FirstOrDefault(e => e.FullName.EndsWith(".kml", StringComparison.OrdinalIgnoreCase))
+            ?? throw new VectorIOException("The archive holds no KML document.");
+
+        return "/vsizip/" + absolutePath.Replace('\\', '/') + "/" + entry.FullName;
+    }
+
+    private static ZipArchive OpenKmz(string absolutePath)
+    {
+        try
+        {
+            return ZipFile.OpenRead(absolutePath);
+        }
+        catch (Exception e) when (e is InvalidDataException or IOException)
+        {
+            throw new VectorIOException("The file is not a readable KMZ archive.", e);
+        }
     }
 
     private static VectorDataset ReadWktLines(string absolutePath, GeofileFormat format)

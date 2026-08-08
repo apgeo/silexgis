@@ -23,6 +23,14 @@ public class Geofile : IProtectedEntity, ITimestamped, IAuditable
     /// <summary>Source SRID when known; imported geometries are always stored in 4326.</summary>
     public int? Srid { get; set; }
 
+    /// <summary>
+    /// How to read a format that does not describe itself (jsonb, shape of
+    /// <see cref="Import.GeofileSourceOptions"/>) — which columns of a delimited file carry the
+    /// coordinates. Kept on the row rather than passed to one import, so correcting a wrong
+    /// guess and reading the file again does not mean uploading it again.
+    /// </summary>
+    public string? SourceOptions { get; set; }
+
     public GeofileImportStatus ImportStatus { get; set; } = GeofileImportStatus.Uploaded;
 
     /// <summary>Human-readable reason when <see cref="ImportStatus"/> is Failed.</summary>

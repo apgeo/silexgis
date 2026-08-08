@@ -56,6 +56,9 @@ public static class DependencyInjection
         services.AddSingleton<Surveys.SurveyMeshConverter>();
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
+        services.AddScoped<Import.TermRuleSetStore>();
+        services.AddScoped<Import.ImportCandidateService>();
+        services.AddScoped<Import.ImportCommitService>();
         services.AddScoped<Documents.DocumentWriteService>();
         services.AddScoped<Documents.DocumentTypeWriteService>();
         services.AddScoped<Documents.CabinetWriteService>();
