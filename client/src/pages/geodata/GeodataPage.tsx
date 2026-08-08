@@ -5,6 +5,7 @@ import {
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
+  ImportOutlined,
   InboxOutlined,
 } from '@ant-design/icons';
 import {
@@ -25,7 +26,7 @@ import {
   Upload,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { downloadFile } from '../../api/download.ts';
 import {
   useCan,
@@ -38,6 +39,7 @@ import {
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
+import ImportBatchesTab from './ImportBatchesTab.tsx';
 import RasterMapsTab from './RasterMapsTab.tsx';
 
 const exportFormats = ['geojson', 'gpx', 'kml', 'csv', 'shapefile'] as const;
@@ -59,6 +61,7 @@ interface EditFormValues {
 export default function GeodataPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { message } = App.useApp();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -77,6 +80,10 @@ export default function GeodataPage() {
 
   const canEdit = useCan('geofiles', 'write');
   const canUpload = useCan('geofiles', 'create');
+  // The review is offered to whoever could act on it. Reading a file and reviewing it are the
+  // same permission; creating from it is the one that matters, and it is checked again on
+  // confirmation — this only decides whether the button is worth showing.
+  const canCreateFeatures = useCan('features', 'create');
 
   const showOnMap = (geofile: GeofileInfo) => {
     setGeofileVisible(geofile.id, true);
@@ -139,7 +146,7 @@ export default function GeodataPage() {
       {canUpload && (
         <Upload.Dragger
           multiple
-          accept=".gpx,.kml,.geojson,.json,.zip,.wkt,.wkb"
+          accept=".gpx,.kml,.kmz,.geojson,.json,.zip,.csv,.tsv,.txt,.wkt,.wkb"
           showUploadList={false}
           customRequest={({ file, onSuccess, onError }) => {
             upload
@@ -238,6 +245,21 @@ export default function GeodataPage() {
                     onClick={() => showOnMap(record)}
                   />
                 </Tooltip>
+                {canCreateFeatures && (
+                  <Tooltip title={t('vectorImport.reviewAndImport')}>
+                    <Button
+                      size="small"
+                      icon={<ImportOutlined />}
+                      // An icon-only button's name would otherwise be the icon's own, which
+                      // says "import" and not what this one imports into. The tooltip is a
+                      // hover affordance and is nobody's accessible name.
+                      aria-label={t('vectorImport.reviewAndImport')}
+                      disabled={record.importStatus !== 'imported'}
+                      data-testid={`geodata-review-${record.id}`}
+                      onClick={() => navigate(`/geodata/${record.id}/import`)}
+                    />
+                  </Tooltip>
+                )}
                 <Dropdown
                   disabled={record.importStatus !== 'imported'}
                   menu={{
@@ -306,9 +328,14 @@ export default function GeodataPage() {
         </Typography.Title>
       </Flex>
       <Tabs
+        // The tab is in the address so a confirmation can send the importer straight to the
+        // list of what it did — and so that list is a place somebody can link to.
+        activeKey={searchParams.get('tab') ?? 'vector'}
+        onChange={(key) => setSearchParams(key === 'vector' ? {} : { tab: key }, { replace: true })}
         items={[
           { key: 'vector', label: t('geodata.tabVector'), children: vectorTab },
           { key: 'raster', label: t('geodata.tabRaster'), children: <RasterMapsTab /> },
+          { key: 'batches', label: t('geodata.tabImports'), children: <ImportBatchesTab /> },
         ]}
       />
     </div>

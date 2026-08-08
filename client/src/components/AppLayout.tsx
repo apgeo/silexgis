@@ -16,6 +16,7 @@ import {
   ProfileOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
+  TagsOutlined,
   TeamOutlined,
   TableOutlined,
   UserOutlined,
@@ -65,7 +66,8 @@ export default function AppLayout() {
     'map3d', 'dashboard', 'caves', 'features', 'geodata', 'cabinets', 'documents', 'trip-logs',
     'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
-    'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'settings',
+    'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'admin/term-rules',
+    'settings',
   ] as const;
   const section = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
   // A document's own page is not a sidebar destination of its own — documents are reached
@@ -187,6 +189,12 @@ export default function AppLayout() {
                 : []),
               ...(isFullAdmin
                 ? [{ key: 'admin/relation-types', icon: <ApartmentOutlined />, label: t('nav.relationTypes') }]
+                : []),
+              // Everyone with something to import has rules of their own to keep, so this is
+              // not an administrator's page — only promoting a set to what a group or the
+              // installation inherits is, and that is refused on the server.
+              ...(hasAccessAction(capabilities?.domains.features, 'create')
+                ? [{ key: 'admin/term-rules', icon: <TagsOutlined />, label: t('nav.termRules') }]
                 : []),
             ]}
           />

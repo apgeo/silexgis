@@ -20,7 +20,8 @@
     "permissionGroups": "Permission groups",
     "featureSets": "Feature sets",
     "documentTypes": "Document kinds",
-    "relationTypes": "Link relations"
+    "relationTypes": "Link relations",
+    "termRules": "Detection rules"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -106,7 +107,9 @@
     "export": "Export",
     "retry": "Retry",
     "conflict": "Someone else changed this since you loaded it. Reload and reapply your changes.",
-    "loadFailed": "Could not load this. Please try again."
+    "loadFailed": "Could not load this. Please try again.",
+    "close": "Close",
+    "reset": "Reset"
   },
   "errorBoundary": {
     "title": "Something went wrong on this screen",
@@ -479,7 +482,7 @@
     "showOnMap": "Show on map",
     "searchPlaceholder": "Search by name…",
     "uploadPrompt": "Click or drag vector files here to upload",
-    "uploadHint": "GPX, KML, GeoJSON, zipped shapefile, WKT — imported in the background.",
+    "uploadHint": "GPX, KML, KMZ, GeoJSON, zipped shapefile, CSV with coordinate columns, WKT — imported in the background.",
     "uploadQueued": "{{name}} uploaded — import queued.",
     "uploadFailed": "Upload failed. Check the file format and try again.",
     "statusValues": {
@@ -509,7 +512,8 @@
       "processing": "Processing…",
       "ready": "Ready",
       "failed": "Failed"
-    }
+    },
+    "tabImports": "Imports"
   },
   "mapEdit": {
     "featureType": "Feature type",
@@ -1200,7 +1204,15 @@
       "needsSms": "Needs an SMS gateway before anyone can use it.",
       "smsWeakest": "The weakest of the three: a number can be moved to another SIM by persuading the mobile operator.",
       "codeLifetime": "Code lifetime (minutes)",
-      "resendInterval": "Wait between codes (seconds)"
+      "resendInterval": "Wait between codes (seconds)",
+      "importTab": "Vector import",
+      "importIntro": "An imported file is reviewed before anything is created. This is where that step can be removed, and how far duplicate detection looks by default.",
+      "allowWithoutReview": "Let a trusted user create objects without reviewing them",
+      "allowWithoutReviewHint": "Off by default. Rules are a guess about somebody’s naming habits, and the first import against a set nobody has tuned is where that guess is worst. Turning this on never widens who may create — the importer still needs the right to create features — it only removes the step in between.",
+      "duplicateRadius": "Look for something already there within",
+      "duplicateRadiusHint": "The starting radius for a new review; the importer can change it. Only objects whose exact position the reviewer may see are ever measured against.",
+      "duplicateSimilarity": "Names count as the same above",
+      "duplicateSimilarityHint": "How alike two names must be, 0 to 1, before a nearby object is called the same thing rather than merely close to it."
     },
     "documentTypes": {
       "title": "Document kinds",
@@ -1272,7 +1284,8 @@
       "name_email_two_factor_code": "Sign-in code by email",
       "name_sms_two_factor_code": "Sign-in code by text",
       "name_sms_verify_phone": "Phone verification code"
-    }
+    },
+    "importSection": "Vector import"
   },
   "unsubscribe": {
     "title": "Notification settings",
@@ -1537,6 +1550,170 @@
       "relationSeededImmutable": "A relation that ships with the product keeps its code and the way it reads.",
       "relationSeededUndeletable": "A relation that ships with the product cannot be deleted.",
       "relationInUse": "Links already record this relation, so it cannot be changed that way or deleted."
+    }
+  },
+  "vectorImport": {
+    "title": "Review and import",
+    "reviewAndImport": "Review and import into the registry",
+    "mapPreview": "Map preview",
+    "dryRun": "What each rule claims",
+    "optionsRules": "Rules and naming",
+    "optionsCreated": "What gets created",
+    "optionsTracks": "Tracks and routes",
+    "optionsMapping": "Which field is which",
+    "ruleSet": "Rule set",
+    "languages": "Languages",
+    "languagesAll": "All the set holds",
+    "languagesHint": "Only terms in these languages take part. Terms marked as belonging to no language always do.",
+    "namePrefix": "Name prefix",
+    "duplicateRadius": "Look for something already there within",
+    "duplicateRadiusHint": "Only objects whose exact position you may see are measured against. A protected cave you cannot locate is not answered about.",
+    "elevation": "GPS altitude",
+    "elevationKeep": "Keep what the file says",
+    "elevationDiscard": "Leave it empty",
+    "locationProtected": "Mark everything created as a protected location",
+    "tracks": "Tracks and routes",
+    "tracksIgnore": "Leave them in the file",
+    "tracksAsLine": "Import as a line feature",
+    "trackKind": "Line feature kind",
+    "mappingAuto": "Work it out",
+    "mapping": {
+      "nameField": "Name",
+      "descriptionField": "Description",
+      "codeField": "Identification code",
+      "elevationField": "Altitude"
+    },
+    "selectAll": "All",
+    "selectNone": "None",
+    "selectInvert": "Invert",
+    "selectedCount": "{{count}} of {{total}} selected",
+    "searchPlaceholder": "Search names…",
+    "filterByRule": "By rule",
+    "filterByKind": "By kind",
+    "onlyWithNearby": "Only ones with something nearby",
+    "geometryAll": "All",
+    "geometry": {
+      "point": "Point",
+      "line": "Track",
+      "area": "Area",
+      "other": "Other"
+    },
+    "fileSummary": "{{candidates}} points · {{matched}} claimed by a rule · {{unmatched}} unclaimed · {{tracks}} tracks · {{areas}} areas",
+    "columns": {
+      "name": "Name",
+      "kind": "Becomes",
+      "type": "Type",
+      "rule": "Rule",
+      "position": "Position",
+      "nearby": "Already there",
+      "decision": "Decision"
+    },
+    "kinds": {
+      "cave": "Cave",
+      "caveEntrance": "Cave entrance",
+      "surfaceFeature": "Surface feature"
+    },
+    "kindNone": "Nothing",
+    "actions": {
+      "create": "Create",
+      "attach": "Already there",
+      "skip": "Skip"
+    },
+    "noRule": "No rule claimed it",
+    "conflict": "Two rules claimed it",
+    "conflictHint": "Also claimed by: {{rules}}. The rule earlier in the set wins.",
+    "nothingNearby": "Nothing nearby",
+    "metresAway": "{{distance}} m away",
+    "itIsThisOne": "It is this one",
+    "secondEntranceOf": "Second entrance of {{cave}}",
+    "unnamed": "Unnamed",
+    "createSelected": "Create {{count}} objects",
+    "createWithoutReview": "Create everything the rules claimed",
+    "commitFailed": "Nothing was created. Check the message and try again.",
+    "fileNotFound": "That file is not available.",
+    "truncatedTitle": "The file is larger than one review reads",
+    "truncated": "The first {{scanned}} of {{total}} rows are shown. Confirm these, then open the review again for the rest.",
+    "resultTitle": "What the import did",
+    "created": "Created",
+    "attached": "Recognised",
+    "skipped": "Skipped",
+    "someFailedTitle": "{{count}} rows could not be created",
+    "someFailed": "Everything else was created. Fix these and confirm them on their own.",
+    "failureReason": "Why",
+    "viewBatches": "See the imports",
+    "batchFile": "File",
+    "batchMode": "How",
+    "batchDetail": "What this import created",
+    "confirmedAt": "Confirmed",
+    "modes": {
+      "reviewed": "Reviewed",
+      "autoCreated": "Without review"
+    },
+    "revert": "Undo",
+    "reverted": "The import was undone.",
+    "revertedTag": "Undone",
+    "revertConfirm": "Delete all {{count}} objects this import created?",
+    "fileGone": "The file has been deleted",
+    "notCreated": "Nothing created",
+    "deletedTag": "Deleted",
+    "elevationPerCandidate": "Decide per candidate",
+    "elevationHint": "The file is the only source. Nothing is taken from an elevation model: a public grid beside a cliff — which is where entrances are — is out by a hundred metres, with nothing on screen to say so.",
+    "keepAltitude": "Keep {{altitude}} m"
+  },
+  "termRules": {
+    "title": "Detection rules",
+    "intro": "What a waypoint called Peștera, P., aven, izbuc, ponor or doline is proposed to become. Order decides: when two rules claim one candidate, the earlier one wins.",
+    "name": "Name",
+    "scope": "Belongs to",
+    "ruleCount": "Rules",
+    "newSet": "New set",
+    "edit": "Edit set",
+    "editCopy": "Edit a copy of your own",
+    "copyOf": "Copy of {{name}}",
+    "export": "Save as a file",
+    "importFile": "Load from a file",
+    "imported": "The file was loaded as a set of your own.",
+    "importFailed": "That file could not be read as a rule set.",
+    "promote": "Make default",
+    "makeInstallationDefault": "Make this what every import starts from",
+    "promoted": "Every import now starts from this set.",
+    "promoteFailed": "Only an administrator can change what everybody inherits.",
+    "deleteConfirm": "Delete this rule set?",
+    "default": "Default",
+    "shipped": "Shipped",
+    "invalid": "The set cannot be saved as written",
+    "orderHint": "Order decides. When two rules claim one candidate, the one higher up wins.",
+    "ruleName": "Rule name",
+    "enabled": "On",
+    "addRule": "Add a rule",
+    "matchMode": "Compare by",
+    "target": "Proposes",
+    "proposedType": "Type",
+    "strip": "Take the term out of the name",
+    "readName": "Read the name",
+    "readDescription": "Read the description",
+    "termsPlaceholder": "Type a term and press Enter",
+    "scopes": {
+      "installation": "The whole installation",
+      "cavingGroup": "A caving group",
+      "user": "You"
+    },
+    "matchModes": {
+      "contains": "Contains",
+      "wholeWord": "Whole word",
+      "prefix": "Starts with",
+      "regex": "Regular expression"
+    },
+    "stripModes": {
+      "none": "Keep it",
+      "leading": "Only from the front",
+      "trailing": "Only from the end",
+      "anywhere": "Wherever it is"
+    },
+    "languages": {
+      "ro": "Romanian terms",
+      "en": "English terms",
+      "any": "Terms in no language"
     }
   }
 }

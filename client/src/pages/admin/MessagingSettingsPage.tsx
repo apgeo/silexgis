@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
-import { EnvironmentOutlined, MailOutlined, MobileOutlined, SafetyOutlined } from '@ant-design/icons';
+import {
+  EnvironmentOutlined,
+  ImportOutlined,
+  MailOutlined,
+  MobileOutlined,
+  SafetyOutlined,
+} from '@ant-design/icons';
 import {
   App,
   Alert,
@@ -26,6 +32,7 @@ import {
   useCapabilities,
   useMe,
   type AdminSettings,
+  type ImportSettings,
   type MailSettingsWrite,
   type ProtectionSettings,
   type SecuritySettings,
@@ -113,6 +120,15 @@ export default function MessagingSettingsPage() {
                 </span>
               ),
               children: <ProtectionForm settings={settings} onSaved={onSaved} />,
+            },
+            {
+              key: 'import',
+              label: (
+                <span>
+                  <ImportOutlined /> {t('admin.messaging.importTab')}
+                </span>
+              ),
+              children: <ImportForm settings={settings} onSaved={onSaved} />,
             },
           ]}
         />
@@ -520,6 +536,70 @@ function ProtectionForm({ settings, onSaved }: SectionProps) {
         extra={t('admin.messaging.revealAssociationsHint')}
       >
         <Switch />
+      </Form.Item>
+      <Button type="primary" htmlType="submit" loading={saving}>
+        {t('common.save')}
+      </Button>
+    </Form>
+  );
+}
+
+/**
+ * How much this installation trusts a vector file to become registry objects on its own.
+ *
+ * Off is the shipped answer and the one to keep unless the club's rules have been tuned and
+ * proved: rules are a guess about somebody's naming habits, and the difference between a bad
+ * review and a bad auto-import is four hundred objects in the registry.
+ */
+function ImportForm({ settings, onSaved }: SectionProps) {
+  const { t } = useTranslation();
+  const { message } = App.useApp();
+  const [form] = Form.useForm<ImportSettings>();
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    form.setFieldsValue(settings.import);
+  }, [settings, form]);
+
+  const save = async (values: ImportSettings) => {
+    setSaving(true);
+    try {
+      const { data, error } = await api.PUT('/api/v1/admin/settings/import', { body: values });
+      if (error !== undefined || !data) {
+        message.error(t('common.saveFailed'));
+        return;
+      }
+      onSaved(data);
+      message.success(t('common.saved'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Form form={form} layout="vertical" onFinish={save} requiredMark={false} style={{ maxWidth: 640 }}>
+      <Alert type="info" showIcon title={t('admin.messaging.importIntro')} style={{ marginBottom: 16 }} />
+      <Form.Item
+        name="allowCreateWithoutReview"
+        label={t('admin.messaging.allowWithoutReview')}
+        valuePropName="checked"
+        extra={t('admin.messaging.allowWithoutReviewHint')}
+      >
+        <Switch />
+      </Form.Item>
+      <Form.Item
+        name="duplicateRadiusMeters"
+        label={t('admin.messaging.duplicateRadius')}
+        extra={t('admin.messaging.duplicateRadiusHint')}
+      >
+        <InputNumber min={0} max={5000} step={5} addonAfter="m" />
+      </Form.Item>
+      <Form.Item
+        name="duplicateNameSimilarity"
+        label={t('admin.messaging.duplicateSimilarity')}
+        extra={t('admin.messaging.duplicateSimilarityHint')}
+      >
+        <InputNumber min={0} max={1} step={0.05} />
       </Form.Item>
       <Button type="primary" htmlType="submit" loading={saving}>
         {t('common.save')}

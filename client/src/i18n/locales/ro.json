@@ -20,7 +20,8 @@
     "permissionGroups": "Grupuri de permisiuni",
     "featureSets": "Seturi de elemente",
     "documentTypes": "Tipuri de documente",
-    "relationTypes": "Relații între elemente"
+    "relationTypes": "Relații între elemente",
+    "termRules": "Reguli de detectare"
   },
   "dashboard": {
     "title": "Panou de bord",
@@ -106,7 +107,9 @@
     "export": "Exportă",
     "retry": "Reîncearcă",
     "conflict": "Altcineva a modificat acest element de când l-ați încărcat. Reîncărcați și reaplicați modificările.",
-    "loadFailed": "Nu s-a putut încărca. Încercați din nou."
+    "loadFailed": "Nu s-a putut încărca. Încercați din nou.",
+    "close": "Închide",
+    "reset": "Resetează"
   },
   "errorBoundary": {
     "title": "Ceva nu a funcționat pe acest ecran",
@@ -479,7 +482,7 @@
     "showOnMap": "Arată pe hartă",
     "searchPlaceholder": "Caută după denumire…",
     "uploadPrompt": "Apăsați sau trageți fișiere vectoriale aici pentru încărcare",
-    "uploadHint": "GPX, KML, GeoJSON, shapefile arhivat (zip), WKT — importate în fundal.",
+    "uploadHint": "GPX, KML, KMZ, GeoJSON, shapefile arhivat, CSV cu coloane de coordonate, WKT — importate în fundal.",
     "uploadQueued": "{{name}} încărcat — importul a fost programat.",
     "uploadFailed": "Încărcarea a eșuat. Verificați formatul fișierului și încercați din nou.",
     "statusValues": {
@@ -509,7 +512,8 @@
       "processing": "Se procesează…",
       "ready": "Gata",
       "failed": "Eșuat"
-    }
+    },
+    "tabImports": "Importuri"
   },
   "mapEdit": {
     "featureType": "Tip de fenomen",
@@ -1200,7 +1204,15 @@
       "needsSms": "Necesită un gateway SMS înainte de a putea fi folosit.",
       "smsWeakest": "Cea mai slabă dintre cele trei: un număr poate fi mutat pe altă cartelă convingând operatorul de telefonie.",
       "codeLifetime": "Valabilitatea codului (minute)",
-      "resendInterval": "Pauză între coduri (secunde)"
+      "resendInterval": "Pauză între coduri (secunde)",
+      "importTab": "Import vectorial",
+      "importIntro": "Un fișier importat este verificat înainte să se creeze ceva. Aici acest pas poate fi eliminat și tot aici se stabilește cât de departe caută implicit detectarea duplicatelor.",
+      "allowWithoutReview": "Permite unui utilizator de încredere să creeze obiecte fără verificare",
+      "allowWithoutReviewHint": "Dezactivat implicit. Regulile sunt o presupunere despre obiceiurile de denumire ale cuiva, iar primul import cu un set pe care nimeni nu l-a ajustat este exact momentul în care presupunerea este cea mai slabă. Activarea nu lărgește cine poate crea — cel care importă are în continuare nevoie de dreptul de a crea elemente — ci doar elimină pasul intermediar.",
+      "duplicateRadius": "Caută ceva deja existent pe o rază de",
+      "duplicateRadiusHint": "Raza de pornire pentru o verificare nouă; cel care importă o poate schimba. Se măsoară doar față de obiectele a căror poziție exactă o poate vedea.",
+      "duplicateSimilarity": "Numele se consideră identice peste",
+      "duplicateSimilarityHint": "Cât de asemănătoare trebuie să fie două nume, de la 0 la 1, pentru ca un obiect din apropiere să fie considerat același lucru, nu doar aproape."
     },
     "documentTypes": {
       "title": "Tipuri de documente",
@@ -1272,7 +1284,8 @@
       "name_email_two_factor_code": "Cod de autentificare prin e-mail",
       "name_sms_two_factor_code": "Cod de autentificare prin SMS",
       "name_sms_verify_phone": "Cod de verificare a telefonului"
-    }
+    },
+    "importSection": "Import vectorial"
   },
   "unsubscribe": {
     "title": "Setări notificări",
@@ -1537,6 +1550,170 @@
       "relationSeededImmutable": "O relație care vine cu produsul își păstrează codul și felul în care se citește.",
       "relationSeededUndeletable": "O relație care vine cu produsul nu poate fi ștearsă.",
       "relationInUse": "Există deja legături înregistrate cu această relație, așa că nu poate fi modificată astfel și nici ștearsă."
+    }
+  },
+  "vectorImport": {
+    "title": "Verifică și importă",
+    "reviewAndImport": "Verifică și importă în registru",
+    "mapPreview": "Previzualizare pe hartă",
+    "dryRun": "Ce revendică fiecare regulă",
+    "optionsRules": "Reguli și denumire",
+    "optionsCreated": "Ce se creează",
+    "optionsTracks": "Trasee și rute",
+    "optionsMapping": "Ce câmp este ce",
+    "ruleSet": "Set de reguli",
+    "languages": "Limbi",
+    "languagesAll": "Tot ce conține setul",
+    "languagesHint": "Participă doar termenii din aceste limbi. Termenii marcați ca aparținând niciunei limbi participă întotdeauna.",
+    "namePrefix": "Prefix pentru nume",
+    "duplicateRadius": "Caută ceva deja existent pe o rază de",
+    "duplicateRadiusHint": "Se măsoară doar față de obiectele a căror poziție exactă o poți vedea. Despre o peșteră protejată pe care nu o poți localiza nu se răspunde.",
+    "elevation": "Altitudinea GPS",
+    "elevationKeep": "Păstrează ce spune fișierul",
+    "elevationDiscard": "Lasă gol",
+    "locationProtected": "Marchează tot ce se creează ca locație protejată",
+    "tracks": "Trasee și rute",
+    "tracksIgnore": "Lasă-le în fișier",
+    "tracksAsLine": "Importă ca element liniar",
+    "trackKind": "Tipul elementului liniar",
+    "mappingAuto": "Determină automat",
+    "mapping": {
+      "nameField": "Nume",
+      "descriptionField": "Descriere",
+      "codeField": "Cod de identificare",
+      "elevationField": "Altitudine"
+    },
+    "selectAll": "Toate",
+    "selectNone": "Niciuna",
+    "selectInvert": "Inversează",
+    "selectedCount": "{{count}} din {{total}} selectate",
+    "searchPlaceholder": "Caută în nume…",
+    "filterByRule": "După regulă",
+    "filterByKind": "După tip",
+    "onlyWithNearby": "Doar cele cu ceva în apropiere",
+    "geometryAll": "Toate",
+    "geometry": {
+      "point": "Punct",
+      "line": "Traseu",
+      "area": "Suprafață",
+      "other": "Altele"
+    },
+    "fileSummary": "{{candidates}} puncte · {{matched}} revendicate de o regulă · {{unmatched}} nerevendicate · {{tracks}} trasee · {{areas}} suprafețe",
+    "columns": {
+      "name": "Nume",
+      "kind": "Devine",
+      "type": "Tip",
+      "rule": "Regulă",
+      "position": "Poziție",
+      "nearby": "Deja existent",
+      "decision": "Decizie"
+    },
+    "kinds": {
+      "cave": "Peșteră",
+      "caveEntrance": "Intrare de peșteră",
+      "surfaceFeature": "Element de suprafață"
+    },
+    "kindNone": "Nimic",
+    "actions": {
+      "create": "Creează",
+      "attach": "Există deja",
+      "skip": "Omite"
+    },
+    "noRule": "Nicio regulă nu a revendicat-o",
+    "conflict": "Două reguli au revendicat-o",
+    "conflictHint": "Revendicată și de: {{rules}}. Câștigă regula aflată mai sus în set.",
+    "nothingNearby": "Nimic în apropiere",
+    "metresAway": "la {{distance}} m",
+    "itIsThisOne": "Este chiar aceasta",
+    "secondEntranceOf": "A doua intrare la {{cave}}",
+    "unnamed": "Fără nume",
+    "createSelected": "Creează {{count}} obiecte",
+    "createWithoutReview": "Creează tot ce au revendicat regulile",
+    "commitFailed": "Nu s-a creat nimic. Verifică mesajul și încearcă din nou.",
+    "fileNotFound": "Fișierul nu este disponibil.",
+    "truncatedTitle": "Fișierul este mai mare decât citește o verificare",
+    "truncated": "Sunt afișate primele {{scanned}} din {{total}} rânduri. Confirmă-le, apoi deschide verificarea din nou pentru restul.",
+    "resultTitle": "Ce a făcut importul",
+    "created": "Create",
+    "attached": "Recunoscute",
+    "skipped": "Omise",
+    "someFailedTitle": "{{count}} rânduri nu au putut fi create",
+    "someFailed": "Restul au fost create. Corectează-le pe acestea și confirmă-le separat.",
+    "failureReason": "De ce",
+    "viewBatches": "Vezi importurile",
+    "batchFile": "Fișier",
+    "batchMode": "Cum",
+    "batchDetail": "Ce a creat acest import",
+    "confirmedAt": "Confirmat",
+    "modes": {
+      "reviewed": "Verificat",
+      "autoCreated": "Fără verificare"
+    },
+    "revert": "Anulează",
+    "reverted": "Importul a fost anulat.",
+    "revertedTag": "Anulat",
+    "revertConfirm": "Ștergi toate cele {{count}} obiecte create de acest import?",
+    "fileGone": "Fișierul a fost șters",
+    "notCreated": "Nu s-a creat nimic",
+    "deletedTag": "Șters",
+    "elevationPerCandidate": "Decide pentru fiecare candidat",
+    "elevationHint": "Fișierul este singura sursă. Nu se preia nimic dintr-un model de elevație: o grilă publică lângă un perete — adică exact acolo unde sunt intrările — greșește cu o sută de metri, fără nimic pe ecran care să o spună.",
+    "keepAltitude": "Păstrează {{altitude}} m"
+  },
+  "termRules": {
+    "title": "Reguli de detectare",
+    "intro": "Ce se propune să devină un punct numit Peștera, P., aven, izbuc, ponor sau dolină. Ordinea decide: când două reguli revendică același candidat, câștigă prima.",
+    "name": "Nume",
+    "scope": "Aparține",
+    "ruleCount": "Reguli",
+    "newSet": "Set nou",
+    "edit": "Editează setul",
+    "editCopy": "Editează o copie proprie",
+    "copyOf": "Copie a {{name}}",
+    "export": "Salvează ca fișier",
+    "importFile": "Încarcă dintr-un fișier",
+    "imported": "Fișierul a fost încărcat ca un set propriu.",
+    "importFailed": "Fișierul nu a putut fi citit ca set de reguli.",
+    "promote": "Fă implicit",
+    "makeInstallationDefault": "Fă din acesta punctul de plecare al oricărui import",
+    "promoted": "Orice import pornește acum de la acest set.",
+    "promoteFailed": "Doar un administrator poate schimba ce moștenesc toți.",
+    "deleteConfirm": "Ștergi acest set de reguli?",
+    "default": "Implicit",
+    "shipped": "Livrat",
+    "invalid": "Setul nu poate fi salvat așa cum este scris",
+    "orderHint": "Ordinea decide. Când două reguli revendică același candidat, câștigă cea de mai sus.",
+    "ruleName": "Numele regulii",
+    "enabled": "Activă",
+    "addRule": "Adaugă o regulă",
+    "matchMode": "Compară prin",
+    "target": "Propune",
+    "proposedType": "Tip",
+    "strip": "Scoate termenul din nume",
+    "readName": "Citește numele",
+    "readDescription": "Citește descrierea",
+    "termsPlaceholder": "Scrie un termen și apasă Enter",
+    "scopes": {
+      "installation": "Întreaga instalare",
+      "cavingGroup": "Un club",
+      "user": "Tu"
+    },
+    "matchModes": {
+      "contains": "Conține",
+      "wholeWord": "Cuvânt întreg",
+      "prefix": "Începe cu",
+      "regex": "Expresie regulată"
+    },
+    "stripModes": {
+      "none": "Păstrează-l",
+      "leading": "Doar de la început",
+      "trailing": "Doar de la sfârșit",
+      "anywhere": "Oriunde s-ar afla"
+    },
+    "languages": {
+      "ro": "Termeni în română",
+      "en": "Termeni în engleză",
+      "any": "Termeni fără limbă"
     }
   }
 }

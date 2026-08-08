@@ -1398,6 +1398,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/features/{featureId}/import-provenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which file, which rule, who confirmed it and when — for one object. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    featureId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportProvenanceDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs/{id}": {
         parameters: {
             query?: never;
@@ -4389,6 +4427,648 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geofiles/{id}/columns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Header of a delimited upload, so a wrong coordinate-column guess can be corrected. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GeofileColumnsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geofiles/{id}/reimport": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-reads the upload, optionally with corrected source options (Write permission). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": null | components["schemas"]["GeofileReimportRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GeofileStatusDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/term-rule-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every rule set, with whether the caller may edit or delete each. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TermRuleSetDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates a set of the caller's own, optionally copied from another. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TermRuleSetCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TermRuleSetDetailDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/term-rule-sets/effective": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The set an import would run for the caller if they named none. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EffectiveTermRuleSetDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/term-rule-sets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One rule set with its rules. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TermRuleSetDetailDto"];
+                    };
+                };
+            };
+        };
+        /** Replaces a set's name, description and rules. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TermRuleSetWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TermRuleSetDetailDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes a set. The shipped one is never deletable. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/term-rule-sets/{id}/scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Moves a set between scopes or makes it a default (administrator). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TermRuleSetScopeRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TermRuleSetDetailDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/term-rule-sets/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The set as a file, for sending to another installation. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/term-rule-sets/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Creates a set of the caller's own from an exported file. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TermRuleSetImportRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TermRuleSetDetailDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geofiles/{geofileId}/import/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's review of this file, resumed where they left it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    geofileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportSessionDto"];
+                    };
+                };
+            };
+        };
+        /** Saves the review as the reviewer works; nothing is created. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    geofileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ImportSessionWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportSessionDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geofiles/{geofileId}/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The dry run: what each rule claims, and the candidate list, with nothing committed. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    geofileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ImportPreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportPreviewDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geofiles/{geofileId}/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Creates the selected candidates as one revertible batch. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    geofileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ImportCommitRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportCommitResultDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Confirmations the caller made, or all of them for an administrator. */
+        get: {
+            parameters: {
+                query?: {
+                    geofileId?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfImportBatchDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-batches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One confirmation with the objects it created, filtered to what the caller may see. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportBatchDetailDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-batches/{id}/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Soft-deletes everything the confirmation created, as one unit. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportBatchDto"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -7994,6 +8674,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Saves whether a vector import may create objects without review, and how far duplicate detection looks. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ImportSettingsDto"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminSettingsDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/mail/test": {
         parameters: {
             query?: never;
@@ -8276,6 +8996,7 @@ export interface components {
             sms: components["schemas"]["SmsSettingsDto"];
             security: components["schemas"]["SecuritySettingsDto"];
             protection: components["schemas"]["ProtectionSettingsDto"];
+            import: components["schemas"]["ImportSettingsDto"];
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
@@ -8375,6 +9096,8 @@ export interface components {
             /** Format: uuid */
             parentId: null | string;
         };
+        /** @enum {unknown} */
+        CandidateGeometry: "point" | "line" | "area" | "other";
         CapabilitiesDto: {
             domains: {
                 [key: string]: components["schemas"]["AccessAction"];
@@ -8719,6 +9442,13 @@ export interface components {
             /** Format: date-time */
             expiresAt: null | string;
         };
+        DelimitedSourceOptions: {
+            delimiter?: null | string;
+            latitudeColumn?: null | string;
+            longitudeColumn?: null | string;
+            elevationColumn?: null | string;
+            wktColumn?: null | string;
+        };
         /** @enum {unknown} */
         DocumentAnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange";
         DocumentCommentCreateRequest: {
@@ -8830,6 +9560,10 @@ export interface components {
         EffectiveAccessDto: {
             actions: components["schemas"]["AccessAction"];
             explain: null | components["schemas"]["AccessExplanationDto"][];
+        };
+        EffectiveTermRuleSetDto: {
+            set: null | components["schemas"]["TermRuleSetDetailDto"];
+            source: null | components["schemas"]["TermRuleScope"];
         };
         EmailChangeRequest: {
             newEmail: string;
@@ -9214,6 +9948,9 @@ export interface components {
             geometry: components["schemas"]["GeoJsonGeometry"];
             properties: Record<string, never>;
         };
+        GeofileColumnsDto: {
+            columns: string[];
+        };
         GeofileDto: {
             /** Format: uuid */
             id: string;
@@ -9230,6 +9967,7 @@ export interface components {
             featureCount: number;
             bbox: null | components["schemas"]["GeoJsonGeometry"];
             style: null | components["schemas"]["JsonElement"];
+            sourceOptions: null | components["schemas"]["GeofileSourceOptions"];
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */
@@ -9241,9 +9979,15 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {unknown} */
-        GeofileFormat: "gpx" | "kml" | "geoJson" | "shapefile" | "wkt" | "wkb";
+        GeofileFormat: "gpx" | "kml" | "geoJson" | "shapefile" | "wkt" | "wkb" | "kmz" | "csv";
         /** @enum {unknown} */
         GeofileImportStatus: "uploaded" | "importing" | "imported" | "failed";
+        GeofileReimportRequest: {
+            sourceOptions: null | components["schemas"]["GeofileSourceOptions"];
+        };
+        GeofileSourceOptions: {
+            delimited?: null | components["schemas"]["DelimitedSourceOptions"];
+        };
         GeofileStatusDto: {
             /** Format: uuid */
             id: string;
@@ -9334,6 +10078,218 @@ export interface components {
         };
         /** Format: binary */
         IFormFile: string;
+        ImportAttributeMapping: {
+            nameField?: null | string;
+            descriptionField?: null | string;
+            codeField?: null | string;
+            elevationField?: null | string;
+        };
+        ImportBatchDetailDto: {
+            batch: components["schemas"]["ImportBatchDto"];
+            items: components["schemas"]["ImportBatchItemDto"][];
+        };
+        ImportBatchDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            geofileId: null | string;
+            geofileName: null | string;
+            /** Format: uuid */
+            termRuleSetId: null | string;
+            termRuleSetName: null | string;
+            /** Format: uuid */
+            confirmedByUserId: string;
+            mode: components["schemas"]["ImportBatchMode"];
+            /** Format: int32 */
+            createdCount: number;
+            /** Format: int32 */
+            attachedCount: number;
+            /** Format: int32 */
+            skippedCount: number;
+            /** Format: date-time */
+            confirmedAt: string;
+            /** Format: date-time */
+            revertedAt: null | string;
+            /** Format: uuid */
+            revertedByUserId: null | string;
+            canRevert: boolean;
+        };
+        ImportBatchItemDto: {
+            /** Format: int64 */
+            id: number;
+            /** Format: uuid */
+            featureId: null | string;
+            featureName: null | string;
+            featureKind: null | components["schemas"]["FeatureKind"];
+            featureDeleted: boolean;
+            /** Format: uuid */
+            attachedToFeatureId: null | string;
+            /** Format: int64 */
+            sourceFeatureId: null | number;
+            ruleId: null | string;
+            ruleName: null | string;
+            action: components["schemas"]["ImportDecisionAction"];
+        };
+        /** @enum {unknown} */
+        ImportBatchMode: "reviewed" | "autoCreated";
+        ImportCandidateDto: {
+            /** Format: int64 */
+            sourceId: number;
+            geometry: components["schemas"]["CandidateGeometry"];
+            sourceName: null | string;
+            sourceDescription: null | string;
+            sourceCode: null | string;
+            /** Format: double */
+            sourceElevation: null | number;
+            ruleId: null | string;
+            ruleName: null | string;
+            conflictingRuleNames: string[];
+            proposedKind: null | components["schemas"]["ImportTargetKind"];
+            proposedCaveTypeCode: null | string;
+            proposedEntranceTypeCode: null | string;
+            proposedFeatureTypeCode: null | string;
+            proposedName: null | string;
+            geom: null | components["schemas"]["GeoJsonGeometry"];
+            duplicate: null | components["schemas"]["ImportDuplicateDto"];
+            decision: null | components["schemas"]["ImportDecision"];
+        };
+        ImportCommitRequest: {
+            options: components["schemas"]["ImportOptions"];
+            selection: number[];
+            decisions: {
+                [key: string]: components["schemas"]["ImportDecision"];
+            };
+            withoutReview: boolean;
+        };
+        ImportCommitResultDto: {
+            batch: components["schemas"]["ImportBatchDto"];
+            failures: components["schemas"]["ImportFailureDto"][];
+        };
+        ImportDecision: {
+            action?: components["schemas"]["ImportDecisionAction"];
+            kind?: null | components["schemas"]["ImportTargetKind"];
+            featureTypeCode?: null | string;
+            caveTypeCode?: null | string;
+            entranceTypeCode?: null | string;
+            name?: null | string;
+            /** Format: uuid */
+            attachToFeatureId?: null | string;
+            keepElevation?: null | boolean;
+        };
+        /** @enum {unknown} */
+        ImportDecisionAction: "create" | "attach" | "skip";
+        ImportDuplicateDto: {
+            /** Format: uuid */
+            featureId: string;
+            name: null | string;
+            kind: components["schemas"]["FeatureKind"];
+            /** Format: double */
+            distanceMeters: number;
+            /** Format: double */
+            nameSimilarity: number;
+            /** Format: uuid */
+            caveFeatureId: null | string;
+            caveName: null | string;
+        };
+        /** @enum {unknown} */
+        ImportElevationPolicy: "keep" | "discard" | "perCandidate";
+        ImportFailureDto: {
+            /** Format: int64 */
+            sourceId: number;
+            name: null | string;
+            code: string;
+            reason: string;
+        };
+        ImportOptions: {
+            /** Format: uuid */
+            termRuleSetId?: null | string;
+            languages?: string[];
+            mapping?: components["schemas"]["ImportAttributeMapping"];
+            elevation?: components["schemas"]["ImportElevationPolicy"];
+            tracks?: components["schemas"]["ImportTrackHandling"];
+            trackFeatureTypeCode?: null | string;
+            visibility?: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            locationProtected?: boolean;
+            tagIds?: number[];
+            namePrefix?: null | string;
+            /** Format: double */
+            duplicateRadiusMeters?: number;
+        };
+        ImportPreviewDto: {
+            items: components["schemas"]["ImportCandidateDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+            filteredSourceIds: number[];
+            selectableSourceIds: number[];
+            /** Format: int32 */
+            candidateCount: number;
+            /** Format: int32 */
+            matchedCount: number;
+            /** Format: int32 */
+            unmatchedCount: number;
+            /** Format: int32 */
+            trackCount: number;
+            /** Format: int32 */
+            areaCount: number;
+            truncated: boolean;
+            /** Format: int32 */
+            fileRowCount: number;
+            /** Format: int32 */
+            scannedRowCount: number;
+            ruleHits: components["schemas"]["RuleHitDto"][];
+            ruleSet: null | components["schemas"]["TermRuleSetDto"];
+        };
+        ImportPreviewRequest: {
+            options: components["schemas"]["ImportOptions"];
+            /** Format: int32 */
+            page: null | number;
+            /** Format: int32 */
+            pageSize: null | number;
+            rule: null | string;
+            kind: null | components["schemas"]["ImportTargetKind"];
+            geometry: null | components["schemas"]["CandidateGeometry"];
+            search: null | string;
+            hasDuplicate: null | boolean;
+        };
+        ImportProvenanceDto: {
+            batch: components["schemas"]["ImportBatchDto"];
+            item: components["schemas"]["ImportBatchItemDto"];
+            sourceProperties: components["schemas"]["JsonElement"];
+        };
+        ImportSessionDto: {
+            /** Format: uuid */
+            geofileId: string;
+            options: components["schemas"]["ImportOptions"];
+            decisions: {
+                [key: string]: components["schemas"]["ImportDecision"];
+            };
+            allowCreateWithoutReview: boolean;
+            /** Format: date-time */
+            updatedAt: null | string;
+        };
+        ImportSessionWriteRequest: {
+            options: components["schemas"]["ImportOptions"];
+            decisions: {
+                [key: string]: components["schemas"]["ImportDecision"];
+            };
+        };
+        ImportSettingsDto: {
+            allowCreateWithoutReview: boolean;
+            /** Format: double */
+            duplicateRadiusMeters: number;
+            /** Format: double */
+            duplicateNameSimilarity: number;
+        };
+        /** @enum {unknown} */
+        ImportTargetKind: "cave" | "caveEntrance" | "surfaceFeature";
+        /** @enum {unknown} */
+        ImportTrackHandling: "ignore" | "importAsLine";
         JsonElement: unknown;
         LinkKindDto: {
             /** Format: int64 */
@@ -9700,6 +10656,15 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfImportBatchDto: {
+            items: components["schemas"]["ImportBatchDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfMemberDto: {
             items: components["schemas"]["MemberDto"][];
             /** Format: int32 */
@@ -9968,6 +10933,12 @@ export interface components {
             /** Format: uuid */
             mainMemberId: null | string;
         };
+        RuleHitDto: {
+            ruleId: string;
+            ruleName: string;
+            /** Format: int32 */
+            count: number;
+        };
         SearchDocumentItemDto: {
             /** Format: uuid */
             id: string;
@@ -10223,6 +11194,82 @@ export interface components {
             /** Format: int32 */
             sortOrder: number;
         };
+        /** @enum {unknown} */
+        TermMatchMode: "contains" | "wholeWord" | "prefix" | "regex";
+        TermRule: {
+            id: string;
+            name: string;
+            enabled?: boolean;
+            matchMode?: components["schemas"]["TermMatchMode"];
+            matchName?: boolean;
+            matchDescription?: boolean;
+            terms?: {
+                [key: string]: string[];
+            };
+            target?: components["schemas"]["ImportTargetKind"];
+            featureTypeCode?: null | string;
+            caveTypeCode?: null | string;
+            entranceTypeCode?: null | string;
+            strip?: components["schemas"]["TermStripMode"];
+        };
+        TermRuleDocument: {
+            /** Format: int32 */
+            version?: number;
+            name?: null | string;
+            description?: null | string;
+            rules?: components["schemas"]["TermRule"][];
+        };
+        /** @enum {unknown} */
+        TermRuleScope: "installation" | "cavingGroup" | "user";
+        TermRuleSetCreateRequest: {
+            name: string;
+            description: null | string;
+            rules: null | components["schemas"]["TermRule"][];
+            /** Format: uuid */
+            copyFromId: null | string;
+        };
+        TermRuleSetDetailDto: {
+            set: components["schemas"]["TermRuleSetDto"];
+            rules: components["schemas"]["TermRule"][];
+        };
+        TermRuleSetDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: null | string;
+            scope: components["schemas"]["TermRuleScope"];
+            /** Format: uuid */
+            ownerUserId: null | string;
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            isDefault: boolean;
+            isSeeded: boolean;
+            /** Format: int32 */
+            ruleCount: number;
+            canEdit: boolean;
+            canDelete: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        TermRuleSetImportRequest: {
+            document: components["schemas"]["TermRuleDocument"];
+            name: null | string;
+        };
+        TermRuleSetScopeRequest: {
+            scope: components["schemas"]["TermRuleScope"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            isDefault: boolean;
+        };
+        TermRuleSetWriteRequest: {
+            name: string;
+            description: null | string;
+            rules: components["schemas"]["TermRule"][];
+        };
+        /** @enum {unknown} */
+        TermStripMode: "none" | "leading" | "trailing" | "anywhere";
         TerrainSourceDto: {
             url: string;
             attribution: null | string;

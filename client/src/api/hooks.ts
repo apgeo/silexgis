@@ -42,6 +42,7 @@ export type MailSettingsWrite = components['schemas']['MailSettingsWriteRequest'
 export type SmsSettingsWrite = components['schemas']['SmsSettingsWriteRequest'];
 export type SecuritySettings = components['schemas']['SecuritySettingsDto'];
 export type ProtectionSettings = components['schemas']['ProtectionSettingsDto'];
+export type ImportSettings = components['schemas']['ImportSettingsDto'];
 export type MessageTemplate = components['schemas']['MessageTemplateDto'];
 export type ResLink = components['schemas']['ResLinkDto'];
 export type ResLinkMember = components['schemas']['ResLinkMemberDto'];
@@ -79,6 +80,19 @@ export const queryKeys = {
   featureLinks: (id: string) => ['features', id, 'links'] as const,
   featureShares: (id: string) => ['features', id, 'shares'] as const,
   geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
+  geofile: (id: string) => ['geofiles', 'detail', id] as const,
+  geofileColumns: (id: string) => ['geofile-columns', id] as const,
+  termRuleSets: ['term-rule-sets', 'list'] as const,
+  termRuleSet: (id: string) => ['term-rule-sets', 'detail', id] as const,
+  effectiveTermRuleSet: ['term-rule-sets', 'effective'] as const,
+  importSession: (geofileId: string) => ['import-session', geofileId] as const,
+  // The options are part of the key: a preview is a pure function of the file and the
+  // choices, so changing a rule set or the duplicate radius is a different question rather
+  // than a stale answer to the same one.
+  importPreview: (geofileId: string, body: unknown) => ['import-preview', geofileId, body] as const,
+  importBatches: (params: ImportBatchListParams) => ['import-batches', 'list', params] as const,
+  importBatch: (id: string) => ['import-batches', 'detail', id] as const,
+  importProvenance: (featureId: string) => ['import-provenance', featureId] as const,
   attachments: (entityType: string, entityId: string) => ['attachments', entityType, entityId] as const,
   file: (id: string) => ['files', 'detail', id] as const,
   fileVersions: (fileId: string) => ['file-versions', fileId] as const,
@@ -2617,5 +2631,292 @@ export function useDeleteResLinkRelationType() {
     mutationFn: (id: number) =>
       unwrapVoid(api.DELETE('/api/v1/reslinks/relation-types/{id}', { params: { path: { id } } })),
     onSuccess: invalidate,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Staged vector import: the club's term rules, the review of a loaded file, and
+// the confirmations it produced.
+// ---------------------------------------------------------------------------
+
+export type TermRuleSetInfo = components['schemas']['TermRuleSetDto'];
+export type TermRuleSetDetail = components['schemas']['TermRuleSetDetailDto'];
+export type TermRule = components['schemas']['TermRule'];
+export type TermRuleDocument = components['schemas']['TermRuleDocument'];
+export type TermRuleSetCreate = components['schemas']['TermRuleSetCreateRequest'];
+export type TermRuleSetWrite = components['schemas']['TermRuleSetWriteRequest'];
+export type TermRuleSetScopeWrite = components['schemas']['TermRuleSetScopeRequest'];
+export type TermRuleSetImport = components['schemas']['TermRuleSetImportRequest'];
+export type TermRuleScope = components['schemas']['TermRuleScope'];
+export type TermMatchMode = components['schemas']['TermMatchMode'];
+export type TermStripMode = components['schemas']['TermStripMode'];
+export type ImportTargetKind = components['schemas']['ImportTargetKind'];
+export type ImportOptions = components['schemas']['ImportOptions'];
+export type ImportDecision = components['schemas']['ImportDecision'];
+export type ImportCandidate = components['schemas']['ImportCandidateDto'];
+export type ImportPreview = components['schemas']['ImportPreviewDto'];
+export type ImportPreviewRequest = components['schemas']['ImportPreviewRequest'];
+export type ImportSession = components['schemas']['ImportSessionDto'];
+export type ImportCommitResult = components['schemas']['ImportCommitResultDto'];
+export type ImportBatch = components['schemas']['ImportBatchDto'];
+export type ImportBatchDetail = components['schemas']['ImportBatchDetailDto'];
+export type ImportProvenance = components['schemas']['ImportProvenanceDto'];
+export type GeofileSourceOptions = components['schemas']['GeofileSourceOptions'];
+
+export function useTermRuleSets() {
+  return useQuery({
+    queryKey: queryKeys.termRuleSets,
+    queryFn: () => unwrap(api.GET('/api/v1/term-rule-sets')),
+  });
+}
+
+/** The set an import starts from when the reviewer names none. */
+export function useEffectiveTermRuleSet() {
+  return useQuery({
+    queryKey: queryKeys.effectiveTermRuleSet,
+    queryFn: () => unwrap(api.GET('/api/v1/term-rule-sets/effective')),
+  });
+}
+
+export function useTermRuleSet(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.termRuleSet(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/term-rule-sets/{id}', { params: { path: { id: id! } } })),
+    enabled: Boolean(id),
+  });
+}
+
+/**
+ * The whole prefix, not one row: which set applies to somebody is derived from all of them,
+ * so promoting one changes what another account's next import starts from.
+ */
+function useInvalidateTermRuleSets() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: ['term-rule-sets'] });
+}
+
+export function useCreateTermRuleSet() {
+  const invalidate = useInvalidateTermRuleSets();
+  return useMutation({
+    mutationFn: (body: TermRuleSetCreate) => unwrap(api.POST('/api/v1/term-rule-sets', { body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateTermRuleSet() {
+  const invalidate = useInvalidateTermRuleSets();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: TermRuleSetWrite }) =>
+      unwrap(api.PUT('/api/v1/term-rule-sets/{id}', { params: { path: { id } }, body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteTermRuleSet() {
+  const invalidate = useInvalidateTermRuleSets();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/term-rule-sets/{id}', { params: { path: { id } } })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useSetTermRuleSetScope() {
+  const invalidate = useInvalidateTermRuleSets();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: TermRuleSetScopeWrite }) =>
+      unwrap(api.POST('/api/v1/term-rule-sets/{id}/scope', { params: { path: { id } }, body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useImportTermRuleSet() {
+  const invalidate = useInvalidateTermRuleSets();
+  return useMutation({
+    mutationFn: (body: TermRuleSetImport) =>
+      unwrap(api.POST('/api/v1/term-rule-sets/import', { body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useImportSession(geofileId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.importSession(geofileId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/geofiles/{geofileId}/import/session', {
+          params: { path: { geofileId: geofileId! } },
+        }),
+      ),
+    enabled: Boolean(geofileId),
+  });
+}
+
+/**
+ * Saves the review as the reviewer works. Deliberately does not invalidate the session
+ * query: the browser already holds what it just sent, and refetching would make every tick
+ * of the table fight the answer coming back.
+ */
+export function useSaveImportSession() {
+  return useMutation({
+    mutationFn: ({
+      geofileId,
+      body,
+    }: {
+      geofileId: string;
+      body: { options: ImportOptions; decisions: Record<string, ImportDecision> };
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/geofiles/{geofileId}/import/session', {
+          params: { path: { geofileId } },
+          body,
+        }),
+      ),
+  });
+}
+
+/** The dry run. A POST because the options are a body, but it creates nothing. */
+export function useImportPreview(
+  geofileId: string | undefined,
+  body: ImportPreviewRequest,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.importPreview(geofileId ?? '', body),
+    queryFn: () =>
+      unwrap(
+        api.POST('/api/v1/geofiles/{geofileId}/import/preview', {
+          params: { path: { geofileId: geofileId! } },
+          body,
+        }),
+      ),
+    enabled: Boolean(geofileId) && enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useCommitImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      geofileId,
+      body,
+    }: {
+      geofileId: string;
+      body: {
+        options: ImportOptions;
+        selection: number[];
+        decisions: Record<string, ImportDecision>;
+        withoutReview: boolean;
+      };
+    }) =>
+      unwrap(
+        api.POST('/api/v1/geofiles/{geofileId}/import/commit', {
+          params: { path: { geofileId } },
+          body,
+        }),
+      ),
+    onSuccess: () => {
+      // A confirmation puts caves, entrances and features into the registry and spends the
+      // review that produced them, so four surfaces go stale at once.
+      void queryClient.invalidateQueries({ queryKey: ['features'] });
+      void queryClient.invalidateQueries({ queryKey: ['caves'] });
+      void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
+      void queryClient.invalidateQueries({ queryKey: ['import-session'] });
+    },
+  });
+}
+
+export interface ImportBatchListParams {
+  geofileId?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export function useImportBatches(params: ImportBatchListParams) {
+  return useQuery({
+    queryKey: queryKeys.importBatches(params),
+    queryFn: () => unwrap(api.GET('/api/v1/import-batches', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useImportBatch(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.importBatch(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/import-batches/{id}', { params: { path: { id: id! } } })),
+    enabled: Boolean(id),
+  });
+}
+
+export function useRevertImportBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST('/api/v1/import-batches/{id}/revert', { params: { path: { id } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
+      void queryClient.invalidateQueries({ queryKey: ['features'] });
+      void queryClient.invalidateQueries({ queryKey: ['caves'] });
+    },
+  });
+}
+
+/**
+ * Where an object came from. Absent for anything nobody imported, which is most of them —
+ * hence no retry: a 404 here is the normal answer, not a failure worth asking again about.
+ */
+export function useImportProvenance(featureId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.importProvenance(featureId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/features/{featureId}/import-provenance', {
+          params: { path: { featureId: featureId! } },
+        }),
+      ),
+    enabled: Boolean(featureId) && enabled,
+    retry: false,
+  });
+}
+
+export function useGeofile(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.geofile(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/geofiles/{id}', { params: { path: { id: id! } } })),
+    enabled: Boolean(id),
+  });
+}
+
+/**
+ * The header of a delimited upload, so a wrong coordinate-column guess can be corrected.
+ * Only a delimited upload has one — callers must not ask about anything else, because the
+ * refusal is a browser console error on every review of a GPX.
+ */
+export function useGeofileColumns(geofileId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.geofileColumns(geofileId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/geofiles/{id}/columns', { params: { path: { id: geofileId! } } })),
+    enabled: Boolean(geofileId) && enabled,
+    retry: false,
+  });
+}
+
+export function useReimportGeofile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, sourceOptions }: { id: string; sourceOptions?: GeofileSourceOptions }) =>
+      unwrap(
+        api.POST('/api/v1/geofiles/{id}/reimport', {
+          params: { path: { id } },
+          body: { sourceOptions: sourceOptions ?? null },
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['geofiles'] });
+      void queryClient.invalidateQueries({ queryKey: ['import-preview'] });
+      void queryClient.invalidateQueries({ queryKey: ['geofile-columns'] });
+    },
   });
 }
