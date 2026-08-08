@@ -184,8 +184,8 @@ public sealed class DocumentWriteService(
             Geom = content.Geom,
             Author = Trim(facts.Author, NameFactMaxLength),
             Producer = Trim(facts.Producer, NameFactMaxLength),
-            ContentCreatedAt = facts.ContentCreatedAt,
-            ContentModifiedAt = facts.ContentModifiedAt,
+            ContentCreatedAt = Utc(facts.ContentCreatedAt),
+            ContentModifiedAt = Utc(facts.ContentModifiedAt),
             DurationSeconds = facts.DurationSeconds >= 0 ? facts.DurationSeconds : null,
             Codec = Trim(facts.Codec, CodecMaxLength),
             ConvertedFromFileId = convertedFromFileId,
@@ -877,4 +877,19 @@ public sealed class DocumentWriteService(
         var trimmed = value.Trim();
         return trimmed.Length > maxLength ? trimmed[..maxLength] : trimmed;
     }
+
+    /// <summary>
+    /// Puts a timestamp a file stated about itself onto the UTC axis the columns hold.
+    /// <para>
+    /// The same instant either way, written differently — but the difference is the whole
+    /// point: the database driver refuses to write a moment carrying any offset other than
+    /// zero into a timestamp column, and a photograph taken anywhere but Greenwich states one.
+    /// A phone that records the zone alongside the shutter time therefore produced an upload
+    /// that stored its bytes, read them correctly, and then failed the transaction — the
+    /// picture was refused for having said when it was taken. Describing an upload is never a
+    /// reason to refuse it, and normalising here rather than in the reader keeps that true for
+    /// every format whose metadata carries a zone, not only the one that first showed it.
+    /// </para>
+    /// </summary>
+    private static DateTimeOffset? Utc(DateTimeOffset? value) => value?.ToUniversalTime();
 }

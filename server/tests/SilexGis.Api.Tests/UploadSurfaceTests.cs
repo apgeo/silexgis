@@ -261,6 +261,28 @@ public sealed class UploadSurfaceTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_photograph_that_states_which_zone_its_clock_was_in_is_still_stored()
+    {
+        // Every phone of the last several years writes the zone alongside the shutter time, and
+        // the columns these facts land in hold an instant on the universal axis — the driver
+        // refuses to write a moment carrying any other offset into one. So a photograph taken
+        // anywhere but Greenwich used to store its bytes, be read correctly, and then fail the
+        // transaction: an upload refused for having said when it was taken, and a 500 rather
+        // than an answer anything could act on.
+        var photo = await UploadAsync(owner, "panorama.jpg", Corpus.ZonedJpeg(), "image/jpeg");
+        var described = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/documents/{photo.GetProperty("documentId").GetGuid()}");
+
+        // The instant it names, not the reading on the camera's own clock: 09:41 three hours
+        // east of Greenwich is 06:41 universal, and storing the former would move the picture
+        // three hours later than it was taken.
+        described.GetProperty("contentCreatedAt").GetDateTimeOffset()
+            .ShouldBe(new DateTimeOffset(2026, 3, 12, 6, 41, 7, TimeSpan.Zero));
+        described.GetProperty("contentModifiedAt").GetDateTimeOffset()
+            .ShouldBe(new DateTimeOffset(2026, 3, 12, 6, 41, 7, TimeSpan.Zero));
+    }
+
+    [Fact]
     public async Task The_upload_limit_is_published_and_enforced_at_the_configured_value()
     {
         // A separate installation, configured with a limit small enough to cross in a test.
@@ -518,6 +540,22 @@ internal static class Corpus
         exif.SetValue(ExifTag.Artist, "A. Popescu");
         exif.SetValue(ExifTag.Software, "SilexCam 2.1");
         exif.SetValue(ExifTag.DateTimeOriginal, "2026:03:12 09:41:07");
+        image.SetProfile(exif);
+        return image.ToByteArray(MagickFormat.Jpeg);
+    }
+
+    /// <summary>
+    /// A photograph that also states which zone its clock was in — what every phone made in
+    /// the last several years writes, and what nothing built inside these tests had before.
+    /// </summary>
+    public static byte[] ZonedJpeg()
+    {
+        using var image = new MagickImage(MagickColors.Sienna, 48, 48);
+        var exif = new ExifProfile();
+        exif.SetValue(ExifTag.DateTimeOriginal, "2026:03:12 09:41:07");
+        exif.SetValue(ExifTag.OffsetTimeOriginal, "+03:00");
+        exif.SetValue(ExifTag.DateTime, "2026:03:12 09:41:07");
+        exif.SetValue(ExifTag.OffsetTime, "+03:00");
         image.SetProfile(exif);
         return image.ToByteArray(MagickFormat.Jpeg);
     }
