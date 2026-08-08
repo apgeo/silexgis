@@ -354,30 +354,46 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
     </Space>
   );
 
+  /*
+    Both dialogs are mounted only once there is something for them to be about, rather than
+    kept mounted and closed.
+
+    Each of them makes a form store on its first render and hands it to a `Form` that lives
+    inside the dialog — which is not rendered while the dialog is shut. Mounted-but-closed,
+    the store therefore exists with nothing attached to it: anything set on it goes nowhere,
+    and the effect that clears one dialog's fields on close spends every render clearing a
+    store no field belongs to. Mounting with the work means the store is made when the fields
+    are, and thrown away with them, so no such gap exists. What it costs is the closing
+    animation on these two: they leave the screen at once instead of fading.
+  */
   const dialogs = (
     <>
-      <CaveAddModal
-        mode={placement?.mode ?? null}
-        lonLat={placement?.lonLat ?? null}
-        onClose={() => setPlacement(null)}
-      />
-      <FeatureEditModal
-        open={pendingFeature !== null}
-        title={t('features.newFeature')}
-        geometryType={pendingGeometryType}
-        withParent
-        initial={{
-          featureTypeId: Number(pendingFeature?.get('featureTypeId') ?? typeId),
-          visibility: 'private',
-        }}
-        onCancel={() => setPendingFeature(null)}
-        onSubmit={(values) => {
-          // Stash on the OL feature; the type also drives the map symbol.
-          pendingFeature?.set('pendingAttrs', values);
-          pendingFeature?.set('featureTypeId', values.featureTypeId);
-          setPendingFeature(null);
-        }}
-      />
+      {placement && (
+        <CaveAddModal
+          mode={placement.mode}
+          lonLat={placement.lonLat}
+          onClose={() => setPlacement(null)}
+        />
+      )}
+      {pendingFeature !== null && (
+        <FeatureEditModal
+          open
+          title={t('features.newFeature')}
+          geometryType={pendingGeometryType}
+          withParent
+          initial={{
+            featureTypeId: Number(pendingFeature.get('featureTypeId') ?? typeId),
+            visibility: 'private',
+          }}
+          onCancel={() => setPendingFeature(null)}
+          onSubmit={(values) => {
+            // Stash on the OL feature; the type also drives the map symbol.
+            pendingFeature.set('pendingAttrs', values);
+            pendingFeature.set('featureTypeId', values.featureTypeId);
+            setPendingFeature(null);
+          }}
+        />
+      )}
     </>
   );
 

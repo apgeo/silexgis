@@ -155,7 +155,7 @@ function CaveCard({ selection }: { selection: EntranceSelection | CaveSelection 
         {cave.name}
       </Typography.Title>
       {cave.approximateLocation && (
-        <Alert type="warning" showIcon message={t('map.approximate')} style={{ marginBottom: 12 }} />
+        <Alert type="warning" showIcon title={t('map.approximate')} style={{ marginBottom: 12 }} />
       )}
       <Descriptions column={1} size="small">
         {typeName && <Descriptions.Item label={t('caves.type')}>{typeName}</Descriptions.Item>}
@@ -326,10 +326,10 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
         {feature.name ?? featureType?.name ?? t('features.unnamed')}
       </Typography.Title>
       {feature.omittedLocation && (
-        <Alert type="warning" showIcon message={t('map.locationWithheld')} style={{ marginBottom: 12 }} />
+        <Alert type="warning" showIcon title={t('map.locationWithheld')} style={{ marginBottom: 12 }} />
       )}
       {!feature.omittedLocation && feature.approximateLocation && (
-        <Alert type="warning" showIcon message={t('map.approximate')} style={{ marginBottom: 12 }} />
+        <Alert type="warning" showIcon title={t('map.approximate')} style={{ marginBottom: 12 }} />
       )}
       <Descriptions column={1} size="small">
         <Descriptions.Item label={t('features.type')}>
@@ -414,22 +414,31 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
             : undefined
         }
       />
-      <FeatureEditModal
-        open={editing}
-        title={t('features.editFeature')}
-        geometryType={geometryType}
-        initial={{
-          name: feature.name,
-          featureTypeId: featureType ? Number(featureType.id) : undefined,
-          description: feature.description,
-          visibility: feature.visibility,
-          locationProtected: feature.locationProtected,
-          properties: (feature.properties ?? {}) as Record<string, unknown>,
-        }}
-        busy={updateFeatureM.isPending}
-        onCancel={() => setEditing(false)}
-        onSubmit={(values) => void onEditSubmit(values)}
-      />
+      {/*
+        Mounted with the edit rather than kept mounted and closed: the editor makes a form
+        store on its first render and gives it to a `Form` that only exists while the dialog
+        is open, so a closed-but-mounted editor holds a store nothing is attached to. Made
+        when the fields are, it never spends time in that state. The cost is that closing
+        removes it at once instead of fading it out.
+      */}
+      {editing && (
+        <FeatureEditModal
+          open
+          title={t('features.editFeature')}
+          geometryType={geometryType}
+          initial={{
+            name: feature.name,
+            featureTypeId: featureType ? Number(featureType.id) : undefined,
+            description: feature.description,
+            visibility: feature.visibility,
+            locationProtected: feature.locationProtected,
+            properties: (feature.properties ?? {}) as Record<string, unknown>,
+          }}
+          busy={updateFeatureM.isPending}
+          onCancel={() => setEditing(false)}
+          onSubmit={(values) => void onEditSubmit(values)}
+        />
+      )}
     </div>
   );
 }

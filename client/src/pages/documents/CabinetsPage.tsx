@@ -68,6 +68,94 @@ function toTree(cabinets: CabinetInfo[]): DataNode[] {
   return roots;
 }
 
+interface CabinetDraft {
+  name: string;
+  description: string | null;
+  parentId: string | null;
+}
+
+/**
+ * Naming a cabinet — a new one, or one being renamed or moved.
+ *
+ * A component of its own, and mounted only while a cabinet is actually being named, because
+ * the form store belongs with the fields it drives. Held by the page instead, it would exist
+ * on every visit to this route with no fields attached to it, and the page would have to seed
+ * it by hand at each of the two places that open this — which is what `initialValues` is for.
+ */
+function CabinetEditModal({
+  editing,
+  cabinets,
+  defaultParentId,
+  busy,
+  onCancel,
+  onSubmit,
+}: {
+  editing: CabinetInfo | 'new';
+  cabinets: CabinetInfo[];
+  defaultParentId?: string;
+  busy: boolean;
+  onCancel: () => void;
+  onSubmit: (draft: CabinetDraft) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [form] = Form.useForm<{ name: string; description?: string; parentId?: string }>();
+
+  const submit = async () => {
+    const values = await form.validateFields();
+    await onSubmit({
+      name: values.name,
+      description: values.description ?? null,
+      parentId: values.parentId ?? null,
+    });
+  };
+
+  return (
+    <Modal
+      title={editing === 'new' ? t('cabinets.new') : t('cabinets.edit')}
+      open
+      onCancel={onCancel}
+      onOk={() => void submit()}
+      confirmLoading={busy}
+      destroyOnHidden
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        requiredMark={false}
+        initialValues={
+          editing === 'new'
+            ? { parentId: defaultParentId }
+            : {
+                name: editing.name,
+                description: editing.description ?? undefined,
+                parentId: editing.parentId ?? undefined,
+              }
+        }
+      >
+        <Form.Item name="name" label={t('cabinets.name')} rules={[{ required: true }, { max: 200 }]}>
+          <Input />
+        </Form.Item>
+        <Form.Item name="description" label={t('cabinets.description')} rules={[{ max: 1000 }]}>
+          <Input.TextArea rows={2} />
+        </Form.Item>
+        <Form.Item name="parentId" label={t('cabinets.parent')}>
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('cabinets.noParent')}
+            // A cabinet cannot sit inside itself; the server refuses a cycle outright,
+            // and offering the option here would only be a way to discover that.
+            options={cabinets
+              .filter((cabinet) => editing === 'new' || cabinet.id !== editing.id)
+              .map((cabinet) => ({ value: cabinet.id, label: cabinet.name }))}
+          />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+}
+
 /**
  * The filing tree and what is on the selected shelf.
  *
@@ -114,7 +202,6 @@ export default function CabinetsPage() {
   const [editing, setEditing] = useState<CabinetInfo | 'new' | null>(null);
   const [refiling, setRefiling] = useState<CabinetDocument | null>(null);
   const [refileTarget, setRefileTarget] = useState<string>();
-  const [form] = Form.useForm<{ name: string; description?: string; parentId?: string }>();
 
   const byId = useMemo(
     () => new Map((cabinets ?? []).map((cabinet) => [cabinet.id, cabinet])),
@@ -127,7 +214,7 @@ export default function CabinetsPage() {
     return <Spin style={{ display: 'block', marginTop: '20vh' }} />;
   }
   if (!canRead) {
-    return <Alert type="error" showIcon message={t('admin.forbidden')} style={{ margin: 16 }} />;
+    return <Alert type="error" showIcon title={t('admin.forbidden')} style={{ margin: 16 }} />;
   }
 
   const failed = (error: unknown, fallback = 'common.saveFailed') => {
@@ -143,13 +230,7 @@ export default function CabinetsPage() {
     message.error(t(code && named[code] ? named[code] : fallback));
   };
 
-  const submit = async () => {
-    const values = await form.validateFields();
-    const body = {
-      name: values.name,
-      description: values.description ?? null,
-      parentId: values.parentId ?? null,
-    };
+  const submit = async (body: CabinetDraft) => {
     try {
       if (editing === 'new') {
         const created = await createCabinet.mutateAsync(body);
@@ -158,7 +239,6 @@ export default function CabinetsPage() {
         await updateCabinet.mutateAsync({ id: editing.id, ...body });
       }
       setEditing(null);
-      form.resetFields();
       message.success(t('common.saved'));
     } catch (error) {
       failed(error);
@@ -256,11 +336,7 @@ export default function CabinetsPage() {
           <Button
             size="small"
             icon={<PlusOutlined />}
-            onClick={() => {
-              setEditing('new');
-              form.resetFields();
-              form.setFieldsValue({ parentId: selected });
-            }}
+            onClick={() => setEditing('new')}
           >
             {t('cabinets.new')}
           </Button>
@@ -334,14 +410,7 @@ export default function CabinetsPage() {
               {canWrite && (
                 <Button
                   icon={<EditOutlined />}
-                  onClick={() => {
-                    setEditing(current);
-                    form.setFieldsValue({
-                      name: current.name,
-                      description: current.description ?? undefined,
-                      parentId: current.parentId ?? undefined,
-                    });
-                  }}
+                  onClick={() => setEditing(current)}
                 >
                   {t('common.edit')}
                 </Button>
@@ -363,7 +432,7 @@ export default function CabinetsPage() {
             type="info"
             showIcon
             style={{ marginBottom: 12 }}
-            message={t('cabinets.filingMovesAccess')}
+            title={t('cabinets.filingMovesAccess')}
           />
 
           <Table<CabinetDocument>
@@ -446,39 +515,16 @@ export default function CabinetsPage() {
 
   const modals = (
     <>
-      <Modal
-        title={editing === 'new' ? t('cabinets.new') : t('cabinets.edit')}
-        open={editing !== null}
-        onCancel={() => {
-          setEditing(null);
-          form.resetFields();
-        }}
-        onOk={() => void submit()}
-        confirmLoading={createCabinet.isPending || updateCabinet.isPending}
-        destroyOnHidden
-      >
-        <Form form={form} layout="vertical" requiredMark={false}>
-          <Form.Item name="name" label={t('cabinets.name')} rules={[{ required: true }, { max: 200 }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="description" label={t('cabinets.description')} rules={[{ max: 1000 }]}>
-            <Input.TextArea rows={2} />
-          </Form.Item>
-          <Form.Item name="parentId" label={t('cabinets.parent')}>
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder={t('cabinets.noParent')}
-              // A cabinet cannot sit inside itself; the server refuses a cycle outright,
-              // and offering the option here would only be a way to discover that.
-              options={(cabinets ?? [])
-                .filter((cabinet) => editing === 'new' || cabinet.id !== editing?.id)
-                .map((cabinet) => ({ value: cabinet.id, label: cabinet.name }))}
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
+      {editing !== null && (
+        <CabinetEditModal
+          editing={editing}
+          cabinets={cabinets ?? []}
+          defaultParentId={selected}
+          busy={createCabinet.isPending || updateCabinet.isPending}
+          onCancel={() => setEditing(null)}
+          onSubmit={submit}
+        />
+      )}
 
       <Modal
         title={t('cabinets.fileElsewhere')}
