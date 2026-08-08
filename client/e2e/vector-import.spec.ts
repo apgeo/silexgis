@@ -80,6 +80,17 @@ test.describe('vector import', () => {
     await expect(page.getByRole('row', { name: new RegExp(springName) })).toHaveCount(0, {
       timeout: 20_000,
     });
+
+    // Cleanup: the dev database persists between runs, so the upload goes too. Undoing the
+    // import took back what it created; the file it was created from is a separate thing.
+    await page.goto('/geodata');
+    const uploads = page.getByRole('row', { name: new RegExp(`e2e-${stamp}`) });
+    await expect(uploads.first()).toBeVisible({ timeout: 20_000 });
+    for (let remaining = await uploads.count(); remaining > 0; remaining--) {
+      await uploads.first().getByRole('button', { name: 'delete' }).click();
+      await page.getByRole('button', { name: 'OK' }).click();
+      await expect(uploads).toHaveCount(remaining - 1, { timeout: 20_000 });
+    }
   });
 
   test('the rules page offers a copy of the shipped set rather than editing it in place', async ({
