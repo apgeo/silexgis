@@ -340,7 +340,16 @@ test('cave photo attachment round-trip', async ({ page }) => {
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
 
   // The gallery renders the thumbnail through the token-authenticated URL.
-  const photo = page.locator('.ant-image img[src*="/thumbnail"]').first();
+  //
+  // Found by its own name rather than by being the first picture in the gallery: this cave is
+  // demonstration data that anybody may add a photograph to, and the first tile is then
+  // somebody else's — whose thumbnail is a perfectly good one of the wrong size, so the
+  // assertion below fails while saying nothing about the upload this test just made.
+  const photo = page
+    .locator('figure')
+    .filter({ hasText: 'e2e-photo' })
+    .locator('img[src*="/thumbnail"]')
+    .first();
   await expect(photo).toBeVisible({ timeout: 15_000 });
   await expect(photo).toHaveJSProperty('naturalWidth', 4); // decoded, not a broken image
 

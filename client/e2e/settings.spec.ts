@@ -72,7 +72,12 @@ test.describe('settings', () => {
     await page.getByLabel('Theme').click();
     // The visible options are .ant-select-item-option with a title; antd's role="option" nodes
     // live in a hidden a11y listbox that holds only two of them.
-    await page.getByTitle('Dark', { exact: true }).click();
+    //
+    // Scoped to the open list, because the closed control carries the same title attribute for
+    // whatever is currently chosen: unscoped, this finds one element or two depending on which
+    // theme the account happens to be on, so it fails on exactly the re-run that follows an
+    // interrupted one — the run where the previous attempt did not reach the reset below.
+    await page.locator('.ant-select-dropdown:visible').getByTitle('Dark', { exact: true }).click();
 
     // Tokens are held in memory, so a reload takes a silent authorize round trip before the
     // page settles. Evaluating during it would run against a context that is about to be torn
@@ -90,7 +95,10 @@ test.describe('settings', () => {
     // Put it back so the next run starts from the default.
     await page.goto('/settings/accessibility');
     await page.getByLabel('Theme').click();
-    await page.getByTitle('Match my system', { exact: true }).click();
+    await page
+      .locator('.ant-select-dropdown:visible')
+      .getByTitle('Match my system', { exact: true })
+      .click();
   });
 
   test('turning notification email off disables the per-category switches', async ({ page }) => {
