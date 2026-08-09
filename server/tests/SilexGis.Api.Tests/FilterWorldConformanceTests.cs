@@ -129,6 +129,44 @@ public sealed class FeatureWorldFixture : WorldFixture
     }
 }
 
+/// <summary>A trip nobody but its owner may see.</summary>
+public sealed class TripLogWorldFixture : WorldFixture
+{
+    public override string World => TripLogFilterWorld.Key;
+
+    public override async Task<FilterNode> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        db.TripLogs.Add(Trip(ownerId, $"Conformance {tag}", Visibility.Private));
+        await db.SaveChangesAsync();
+
+        return new ConditionNode(TripLogFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]);
+    }
+
+    public override async Task<FilterNode> SeedIndistinguishableAsync(
+        SilexGisDbContext db, Guid ownerId, string tag, int count)
+    {
+        var stamp = DateTimeOffset.UtcNow;
+        for (var i = 0; i < count; i++)
+        {
+            var row = Trip(ownerId, $"Paged {tag}", Visibility.Public);
+            row.CreatedAt = stamp;
+            row.UpdatedAt = stamp;
+            db.TripLogs.Add(row);
+        }
+
+        await db.SaveChangesAsync();
+        return new ConditionNode(TripLogFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]);
+    }
+
+    private static TripLog Trip(Guid ownerId, string title, Visibility visibility) => new()
+    {
+        Title = title,
+        TripDate = new DateOnly(2026, 5, 3),
+        OwnerUserId = ownerId,
+        Visibility = visibility,
+    };
+}
+
 /// <summary>
 /// The suite every filterable world passes, or is not shipped.
 /// </summary>
@@ -149,7 +187,8 @@ public sealed class FeatureWorldFixture : WorldFixture
 [Collection(PostgresCollection.Name)]
 public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable
 {
-    private static readonly WorldFixture[] Fixtures = [new FeatureWorldFixture()];
+    private static readonly WorldFixture[] Fixtures =
+        [new FeatureWorldFixture(), new TripLogWorldFixture()];
 
     private readonly SilexGisApiFactory factory;
     private string tag = null!;

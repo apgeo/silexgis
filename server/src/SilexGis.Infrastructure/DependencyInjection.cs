@@ -77,6 +77,7 @@ public static class DependencyInjection
         // order results are shown in, so it is the order a person reads them in rather than an
         // implementation detail. A world added here without a fixture fails the conformance suite.
         services.AddScoped<Filters.IFilterWorld, Filters.FeatureFilterWorld>();
+        services.AddScoped<Filters.IFilterWorld, Filters.TripLogFilterWorld>();
         services.AddScoped<Filters.FilterWorldRegistry>();
 
         return services;

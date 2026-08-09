@@ -85,9 +85,20 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
             "/api/v1/filters/vocabulary", Wire);
 
         body.ShouldNotBeNull();
-        var features = body.Worlds.ShouldHaveSingleItem();
-        features.World.ShouldBe("feature");
+        var features = body.Worlds.Single(w => w.World == "feature");
         features.Fields.Select(f => f.Key).ShouldContain(FeatureFilterFields.Name);
+
+        // Every registered world describes itself here, so a builder needs no list of its own.
+        body.Worlds.Select(w => w.World).ShouldContain("tripLog");
+
+        // What a trip cannot be asked is the load-bearing part: which caves it visited, and who was
+        // on it. Either would answer a question about a row the caller may not read — the count
+        // moves, nothing appears, and they have their answer.
+        var trips = body.Worlds.Single(w => w.World == "tripLog");
+        foreach (var forbidden in new[] { "cave", "caveId", "participant", "participantId", "caver" })
+        {
+            trips.Fields.Select(f => f.Key).ShouldNotContain(forbidden);
+        }
 
         // Published so a builder can stop somebody before they send something it will refuse. The
         // server checks them again regardless — this copy is a courtesy, never the enforcement.
@@ -196,6 +207,35 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
         }
     }
 
+    [Fact]
+    public async Task A_filter_over_two_worlds_answers_for_both_and_still_counts()
+    {
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
+        await SeedAsync(ownerId, Visibility.Public, 2);
+        await SeedTripsAsync(ownerId, Visibility.Public, 3);
+
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-two");
+        var body = await QueryAsync(client, new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope("feature", Named(tag)),
+                new WorldScope("tripLog",
+                    new ConditionNode(TripLogFilterFields.Title, FilterOp.Contains, [new TextValue(tag)])),
+            ],
+        });
+
+        // In the order the document named them, which is the order somebody reads them in.
+        body.Worlds.Select(w => w.World).ShouldBe(["feature", "tripLog"]);
+        body.Worlds[0].Total.ShouldBe(2);
+        body.Worlds[1].Total.ShouldBe(3);
+
+        // Two is where a person is still comparing "how many of these against how many of those",
+        // so the totals are still worth the pass they cost. Whether a wider scope stops counting
+        // cannot be driven from here until a third world is registered.
+        body.Counted.ShouldBeTrue();
+    }
+
     // ---------- describing a choice somebody already made ----------
 
     [Fact]
@@ -286,6 +326,25 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
 
         await db.SaveChangesAsync();
         return ids;
+    }
+
+    private async Task SeedTripsAsync(Guid ownerId, Visibility visibility, int count)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        for (var i = 0; i < count; i++)
+        {
+            db.TripLogs.Add(new TripLog
+            {
+                Title = $"Trip {i} {tag}",
+                TripDate = new DateOnly(2026, 5, 3),
+                OwnerUserId = ownerId,
+                Visibility = visibility,
+            });
+        }
+
+        await db.SaveChangesAsync();
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

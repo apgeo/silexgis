@@ -89,17 +89,24 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
 
         return condition.Field switch
         {
-            FeatureFilterFields.Name => TextLeaf(condition),
-            FeatureFilterFields.Kind => IdLeaf(condition, EnumMatcher<FeatureKind>(f => f.Kind)),
-            FeatureFilterFields.Category => IdLeaf(condition, EnumMatcher<FeatureCategory>(f => f.Category)),
-            FeatureFilterFields.TypeId => LongLeaf(condition, f => f.FeatureTypeId),
+            FeatureFilterFields.Name => FilterLeaves.Text<Feature>(condition, f => f.Name),
+            FeatureFilterFields.Kind =>
+                FilterLeaves.Ids(condition, FilterLeaves.Enum<Feature, FeatureKind>(f => f.Kind)),
+            FeatureFilterFields.Category =>
+                FilterLeaves.Ids(condition, FilterLeaves.Enum<Feature, FeatureCategory>(f => f.Category)),
+            FeatureFilterFields.TypeId => FilterLeaves.Longs<Feature>(condition, f => f.FeatureTypeId),
             FeatureFilterFields.Tag => TagLeaf(condition),
-            FeatureFilterFields.OwnerId => GuidLeaf(condition, f => f.OwnerUserId),
-            FeatureFilterFields.CavingGroupId => GuidLeaf(condition, f => f.CavingGroupId),
-            FeatureFilterFields.Visibility => IdLeaf(condition, EnumMatcher<Visibility>(f => f.Visibility)),
-            FeatureFilterFields.LocationProtected => BooleanLeaf(condition, f => f.LocationProtected),
-            FeatureFilterFields.CreatedAt => InstantLeaf(condition, f => f.CreatedAt),
-            FeatureFilterFields.UpdatedAt => InstantLeaf(condition, f => f.UpdatedAt),
+            // The owner is never null, so it is read through a nullable selector to reach the same
+            // leaf every other identity field uses rather than having one of its own.
+            FeatureFilterFields.OwnerId => FilterLeaves.Guids<Feature>(condition, f => f.OwnerUserId),
+            FeatureFilterFields.CavingGroupId =>
+                FilterLeaves.Guids<Feature>(condition, f => f.CavingGroupId),
+            FeatureFilterFields.Visibility =>
+                FilterLeaves.Ids(condition, FilterLeaves.Enum<Feature, Visibility>(f => f.Visibility)),
+            FeatureFilterFields.LocationProtected =>
+                FilterLeaves.Boolean<Feature>(condition, f => f.LocationProtected),
+            FeatureFilterFields.CreatedAt => FilterLeaves.Instant<Feature>(condition, f => f.CreatedAt),
+            FeatureFilterFields.UpdatedAt => FilterLeaves.Instant<Feature>(condition, f => f.UpdatedAt),
             _ => throw new InvalidOperationException(
                 $"No compiler arm for '{condition.Field}'. A field the vocabulary declares must have "
                 + "one here, or a validated filter would silently match everything."),
@@ -107,38 +114,6 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
     }
 
     // ---------- leaves ----------
-
-    /// <summary>
-    /// Text, compared without regard to case or diacritics.
-    /// </summary>
-    /// <remarks>
-    /// Spelled exactly as the feature list already spells it, so the emitted SQL keeps the shape
-    /// the existing plans were measured against. A handheld writes "Pestera" and a person writes
-    /// "Peștera"; a comparison that told them apart would find neither.
-    /// </remarks>
-    private static Expression<Func<Feature, bool>> TextLeaf(ConditionNode condition)
-    {
-        if (condition.Op is FilterOp.IsEmpty)
-        {
-            return f => f.Name == null || f.Name == string.Empty;
-        }
-
-        if (condition.Op is FilterOp.IsNotEmpty)
-        {
-            return f => f.Name != null && f.Name != string.Empty;
-        }
-
-        var text = ((TextValue)condition.Values[0]).Value;
-        var pattern = condition.Op switch
-        {
-            FilterOp.Contains => $"%{text}%",
-            FilterOp.StartsWith => $"{text}%",
-            _ => text,
-        };
-
-        return f => f.Name != null
-            && EF.Functions.ILike(EF.Functions.Unaccent(f.Name), EF.Functions.Unaccent(pattern));
-    }
 
     /// <summary>
     /// Tags, spelled exactly as the feature list already spells them — an EXISTS over the
@@ -212,153 +187,4 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
             var body = Expression.Equal(selector.Body, Expression.Constant(value));
             return Expression.Lambda<Func<Feature, bool>>(body, selector.Parameters);
         };
-
-    private static Expression<Func<Feature, bool>> IdLeaf(
-        ConditionNode condition, Func<string, Expression<Func<Feature, bool>>> matcher)
-    {
-        var values = condition.Values.OfType<IdValue>().Select(v => v.Value).ToList();
-        if (values.Count == 0)
-        {
-            return _ => false;
-        }
-
-        return values.Select(matcher).Aggregate((left, right) => left.Or(right));
-    }
-
-    private static Expression<Func<Feature, bool>> LongLeaf(
-        ConditionNode condition, Expression<Func<Feature, long?>> selector)
-    {
-        if (condition.Op is FilterOp.IsEmpty or FilterOp.IsNotEmpty)
-        {
-            return NullCheck(selector, condition.Op == FilterOp.IsNotEmpty);
-        }
-
-        var ids = condition.Values.OfType<IdValue>()
-            .Select(v => long.TryParse(v.Value, out var parsed) ? parsed : (long?)null)
-            .Where(v => v is not null)
-            .Select(v => v!.Value)
-            .ToArray();
-
-        var body = Expression.Call(
-            typeof(Enumerable),
-            nameof(Enumerable.Contains),
-            [typeof(long)],
-            Expression.Constant(ids),
-            Expression.Convert(selector.Body, typeof(long)));
-        var notNull = Expression.NotEqual(selector.Body, Expression.Constant(null, typeof(long?)));
-        return Expression.Lambda<Func<Feature, bool>>(
-            Expression.AndAlso(notNull, body), selector.Parameters);
-    }
-
-    private static Expression<Func<Feature, bool>> GuidLeaf(
-        ConditionNode condition, Expression<Func<Feature, Guid?>> selector)
-    {
-        if (condition.Op is FilterOp.IsEmpty or FilterOp.IsNotEmpty)
-        {
-            return NullCheck(selector, condition.Op == FilterOp.IsNotEmpty);
-        }
-
-        var ids = condition.Values.OfType<IdValue>()
-            .Select(v => Guid.TryParse(v.Value, out var parsed) ? parsed : (Guid?)null)
-            .Where(v => v is not null)
-            .Select(v => v!.Value)
-            .ToArray();
-
-        var body = Expression.Call(
-            typeof(Enumerable),
-            nameof(Enumerable.Contains),
-            [typeof(Guid)],
-            Expression.Constant(ids),
-            Expression.Convert(selector.Body, typeof(Guid)));
-        var notNull = Expression.NotEqual(selector.Body, Expression.Constant(null, typeof(Guid?)));
-        return Expression.Lambda<Func<Feature, bool>>(
-            Expression.AndAlso(notNull, body), selector.Parameters);
-    }
-
-    private static Expression<Func<Feature, bool>> BooleanLeaf(
-        ConditionNode condition, Expression<Func<Feature, bool>> selector)
-    {
-        var wanted = ((BooleanValue)condition.Values[0]).Value;
-        var body = Expression.Equal(selector.Body, Expression.Constant(wanted));
-        return Expression.Lambda<Func<Feature, bool>>(body, selector.Parameters);
-    }
-
-    private static Expression<Func<Feature, bool>> InstantLeaf(
-        ConditionNode condition, Expression<Func<Feature, DateTimeOffset>> selector)
-    {
-        if (condition.Op is FilterOp.IsEmpty)
-        {
-            // A timestamp column that is never null: the honest answer is that nothing matches,
-            // rather than an expression the provider cannot translate.
-            return _ => false;
-        }
-
-        if (condition.Op is FilterOp.IsNotEmpty)
-        {
-            return _ => true;
-        }
-
-        var values = condition.Values.OfType<InstantValue>().Select(v => v.Value).ToList();
-        var body = condition.Op switch
-        {
-            FilterOp.LessThan => Expression.LessThan(selector.Body, Expression.Constant(values[0])),
-            FilterOp.GreaterThan => Expression.GreaterThan(selector.Body, Expression.Constant(values[0])),
-            FilterOp.Between => Expression.AndAlso(
-                Expression.GreaterThanOrEqual(selector.Body, Expression.Constant(values[0])),
-                Expression.LessThanOrEqual(selector.Body, Expression.Constant(values[1]))),
-            _ => Expression.Equal(selector.Body, Expression.Constant(values[0])),
-        };
-
-        return Expression.Lambda<Func<Feature, bool>>(body, selector.Parameters);
-    }
-
-    private static Expression<Func<Feature, bool>> NullCheck<T>(
-        Expression<Func<Feature, T>> selector, bool wantNotNull)
-    {
-        var nullConstant = Expression.Constant(null, typeof(T));
-        var body = wantNotNull
-            ? Expression.NotEqual(selector.Body, nullConstant)
-            : Expression.Equal(selector.Body, nullConstant);
-        return Expression.Lambda<Func<Feature, bool>>(body, selector.Parameters);
-    }
-}
-
-/// <summary>
-/// Combining predicates over the same parameter.
-/// </summary>
-/// <remarks>
-/// Written out rather than taken from a library because a filter tree composes predicates in
-/// exactly three ways and each is four lines. The parameter rebinding is the whole content: two
-/// lambdas built separately have different parameter instances, and combining their bodies without
-/// rewriting one would produce an expression the provider cannot translate.
-/// </remarks>
-internal static class PredicateComposition
-{
-    public static Expression<Func<T, bool>> And<T>(
-        this Expression<Func<T, bool>> left, Expression<Func<T, bool>> right) =>
-        Compose(left, right, Expression.AndAlso);
-
-    public static Expression<Func<T, bool>> Or<T>(
-        this Expression<Func<T, bool>> left, Expression<Func<T, bool>> right) =>
-        Compose(left, right, Expression.OrElse);
-
-    public static Expression<Func<T, bool>> Not<T>(this Expression<Func<T, bool>> inner) =>
-        Expression.Lambda<Func<T, bool>>(Expression.Not(inner.Body), inner.Parameters);
-
-    private static Expression<Func<T, bool>> Compose<T>(
-        Expression<Func<T, bool>> left,
-        Expression<Func<T, bool>> right,
-        Func<Expression, Expression, BinaryExpression> join)
-    {
-        var parameter = left.Parameters[0];
-        var rebound = new ParameterRebinder(right.Parameters[0], parameter).Visit(right.Body);
-        return Expression.Lambda<Func<T, bool>>(join(left.Body, rebound), parameter);
-    }
-
-    private sealed class ParameterRebinder(ParameterExpression from, ParameterExpression to)
-        : ExpressionVisitor
-    {
-        protected override Expression VisitParameter(ParameterExpression node) =>
-            node == from ? to : base.VisitParameter(node);
-    }
 }
