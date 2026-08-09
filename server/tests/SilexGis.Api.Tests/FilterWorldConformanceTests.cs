@@ -42,6 +42,20 @@ public abstract class WorldFixture
     public abstract Task<FilterNode> SeedIndistinguishableAsync(
         SilexGisDbContext db, Guid ownerId, string tag, int count);
 
+    /// <summary>
+    /// Creates a row this world's own list endpoint withholds from an ordinary caller, or returns
+    /// null when the world has no such rule.
+    /// </summary>
+    /// <remarks>
+    /// Visibility is not the only thing a list withholds. A feature's protected centreline traces a
+    /// cave's course underground, so it is kept back entirely from somebody without exact view —
+    /// not shown without geometry, not counted. A world that composed only the visibility walk would
+    /// return it, and the filter would quietly be a second way to ask the same question with a more
+    /// generous answer. That happened once here; this is what would have caught it.
+    /// </remarks>
+    public virtual Task<FilterNode?> SeedWithheldAsync(SilexGisDbContext db, Guid ownerId, string tag) =>
+        Task.FromResult<FilterNode?>(null);
+
     /// <summary>A value of the right shape for one of this world's declared fields.</summary>
     public virtual FilterValue[] ValuesFor(FieldDescriptor field, FilterOp op) =>
         ConformanceValues.Default(field, op);
@@ -113,6 +127,35 @@ public sealed class FeatureWorldFixture : WorldFixture
     /// visibility says. Building fixtures by hand means building that too, or the fixture proves
     /// something about a row shape the application never creates.
     /// </remarks>
+    public override async Task<FilterNode?> SeedWithheldAsync(
+        SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        // Public, so the visibility walk lets it straight through — which is the point. What keeps
+        // it back is the centreline rule, and nothing else would.
+        var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var row = Rootless(typeId, ownerId, $"Centreline {tag}", Visibility.Public);
+        row.Kind = FeatureKind.Centerline;
+        // A type belongs to a generic feature and to nothing else; the schema checks both ways.
+        row.FeatureTypeId = null;
+        row.LocationProtected = true;
+        row.IsProtectedEffective = true;
+        // The schema insists a centreline has a course, which is the whole reason it is withheld:
+        // the geometry is the survey, and the survey is where the cave goes.
+        row.Geom = new NetTopologySuite.Geometries.MultiLineString(
+        [
+            new NetTopologySuite.Geometries.LineString(
+            [
+                new NetTopologySuite.Geometries.Coordinate(22.5, 46.5),
+                new NetTopologySuite.Geometries.Coordinate(22.51, 46.51),
+            ]),
+        ])
+        { SRID = 4326 };
+        db.Features.Add(row);
+        await db.SaveChangesAsync();
+
+        return new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
+    }
+
     private static Feature Rootless(long typeId, Guid ownerId, string name, Visibility visibility)
     {
         var id = Guid.NewGuid();
@@ -325,6 +368,40 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable
             // the row without listing it — which is a disclosure with nothing on screen to show it.
             toOutsider.Total.ShouldBe(0, $"{world.World} counted a row it did not return.");
         }
+    }
+
+    [Fact]
+    public async Task No_world_returns_a_row_its_own_list_would_withhold()
+    {
+        // The visibility walk is not the whole rule for every world, and a world that composed only
+        // the walk would answer more generously than the screen it stands beside.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"conf-wh-{tag}@t.local");
+        var outsider = await CallerAsync(GlobalRoles.Viewer, "conf-whout");
+
+        var exercised = 0;
+        foreach (var world in Worlds(scope))
+        {
+            var fixture = Fixtures.Single(f => f.World == world.World);
+            var matching = await fixture.SeedWithheldAsync(db, ownerId, tag);
+            if (matching is null)
+            {
+                continue;
+            }
+
+            exercised++;
+            var answer = await world.QueryAsync(
+                new WorldQuery(outsider, matching, SortKey.Updated, true, null, 0, 20, true), default);
+
+            answer.Hits.ShouldBeEmpty($"{world.World} returned a row its own list withholds.");
+            answer.Total.ShouldBe(0, $"{world.World} counted a row its own list withholds.");
+        }
+
+        // Said out loud rather than left to a silent pass: a run where no world contributed a
+        // fixture proves nothing, and looks exactly like a run where every world passed.
+        exercised.ShouldBeGreaterThan(0, "No world exercised the withholding case.");
     }
 
     [Fact]

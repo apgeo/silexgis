@@ -71,7 +71,7 @@ export function preflight(
       }
 
       for (const value of node.values) {
-        if (value.kind === 'text' && value.value.length > limits.maxTextValueLength) {
+        if (value.type === 'text' && value.value.length > limits.maxTextValueLength) {
           problems.push({
             messageKey: 'filters.problems.textTooLong',
             values: { max: limits.maxTextValueLength },

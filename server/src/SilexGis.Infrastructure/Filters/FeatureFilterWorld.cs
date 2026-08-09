@@ -29,8 +29,37 @@ public sealed class FeatureFilterWorld(SilexGisDbContext db, FeatureProtection p
         AccessContext caller, CancellationToken ct) =>
         ValueTask.FromResult(FeatureFilterFields.Vocabulary);
 
-    protected override IQueryable<Feature> Visible(AccessContext caller) =>
-        db.Features.AsNoTracking().VisibleTo(caller, db.Features, db.FeatureSetMembers);
+    /// <summary>
+    /// What this caller may see: the visibility walk, less any protected centreline they may not
+    /// place exactly.
+    /// </summary>
+    /// <remarks>
+    /// The second half is not a refinement of the first. A centreline traces a cave's course
+    /// underground, so for somebody without exact view the row is withheld altogether — not shown
+    /// without its geometry, not counted, not hinted at by a total that moves. The feature list has
+    /// always done this; leaving it out here would have made the filter a second way to ask the
+    /// same question with a more generous answer, which is the exact failure this whole design is
+    /// arranged to prevent.
+    /// </remarks>
+    protected override async ValueTask<IQueryable<Feature>> VisibleAsync(
+        AccessContext caller, CancellationToken ct)
+    {
+        var visible = db.Features.AsNoTracking().VisibleTo(caller, db.Features, db.FeatureSetMembers);
+
+        var protectedCenterlineIds = await visible
+            .Where(f => f.Kind == FeatureKind.Centerline && f.IsProtectedEffective)
+            .Select(f => f.Id)
+            .ToListAsync(ct);
+        if (protectedCenterlineIds.Count == 0)
+        {
+            return visible;
+        }
+
+        var exact = await protection.ExactViewIdsAsync(caller, protectedCenterlineIds, ct);
+        var withheld = protectedCenterlineIds.Where(id => !exact.Contains(id)).ToArray();
+
+        return withheld.Length == 0 ? visible : visible.Where(f => !withheld.Contains(f.Id));
+    }
 
     protected override Expression<Func<Feature, bool>> HasId(IReadOnlyCollection<Guid> ids) =>
         f => ids.Contains(f.Id);

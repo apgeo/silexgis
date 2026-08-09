@@ -61,11 +61,21 @@ public abstract class FilterWorld<TEntity> : IFilterWorld
     /// The rows this caller may see, before anything they asked for is applied.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This is the world's whole security contribution. It must be the same set the world's own
     /// list endpoint would return to this caller with no filter at all — if the two ever disagree,
     /// the filter has become a second way to ask, with a second answer.
+    /// </para>
+    /// <para>
+    /// Asynchronous because for real worlds it has to be. A feature's visible set excludes
+    /// protected centrelines, which takes a lookup; a document's includes the ones reached through
+    /// an attachment, which takes another. Making this synchronous would push both into the
+    /// caller's filter, where they are not visibility any more and where the next world author has
+    /// no reason to look for them.
+    /// </para>
     /// </remarks>
-    protected abstract IQueryable<TEntity> Visible(AccessContext caller);
+    protected abstract ValueTask<IQueryable<TEntity>> VisibleAsync(
+        AccessContext caller, CancellationToken ct);
 
     /// <summary>
     /// What the caller's conditions mean as one predicate over this world's rows.
@@ -108,7 +118,7 @@ public abstract class FilterWorld<TEntity> : IFilterWorld
     /// </remarks>
     public async ValueTask<WorldPage> QueryAsync(WorldQuery query, CancellationToken ct)
     {
-        var visible = Visible(query.Caller);
+        var visible = await VisibleAsync(query.Caller, ct);
 
         // Named rows are narrowed here, inside the walk, rather than being a condition somebody
         // could write. Both orders give the same rows; only this one makes it impossible to add a

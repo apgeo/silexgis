@@ -27,8 +27,13 @@ public sealed class TripLogFilterWorld(SilexGisDbContext db) : FilterWorld<TripL
         AccessContext caller, CancellationToken ct) =>
         ValueTask.FromResult(TripLogFilterFields.Vocabulary);
 
-    protected override IQueryable<TripLog> Visible(AccessContext caller) =>
-        db.TripLogs.AsNoTracking().VisibleTo(caller, AccessDomain.TripLogs);
+    /// <summary>
+    /// What this caller may see. A trip has no second rule the way a feature does — nothing about
+    /// a trip is withheld from somebody who may read the trip.
+    /// </summary>
+    protected override ValueTask<IQueryable<TripLog>> VisibleAsync(
+        AccessContext caller, CancellationToken ct) =>
+        ValueTask.FromResult(db.TripLogs.AsNoTracking().VisibleTo(caller, AccessDomain.TripLogs));
 
     protected override Expression<Func<TripLog, bool>> HasId(IReadOnlyCollection<Guid> ids) =>
         t => ids.Contains(t.Id);
