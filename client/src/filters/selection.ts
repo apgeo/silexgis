@@ -199,6 +199,30 @@ export function choose(state: SelectorState, id: string, multiple: boolean): Sel
     : { ...state, chosen: [...state.chosen, id] };
 }
 
+/**
+ * The state as it can actually be honoured right now.
+ *
+ * A remembered arrangement outlives the thing it referred to: a caller stops offering a scope, a
+ * world stops declaring a sort, and what was stored months ago now selects nothing. Pruned on the
+ * way out rather than written back, so the person's choice survives if whatever it named returns —
+ * somebody who narrowed to documents, used a screen that has none, and came back should find their
+ * choice where they left it.
+ */
+export function effectiveState(
+  state: SelectorState,
+  offeredScopeIds: readonly string[],
+  availableSorts: readonly SortKey[],
+): SelectorState {
+  const scopes = state.activeScopeIds.filter((id) => offeredScopeIds.includes(id));
+  const sortSurvives = availableSorts.length === 0 || availableSorts.includes(state.sort);
+
+  return {
+    ...state,
+    activeScopeIds: scopes,
+    sort: sortSurvives ? state.sort : (availableSorts[0] ?? state.sort),
+  };
+}
+
 /** Turning a scope button on or off. */
 export function toggleScope(state: SelectorState, scopeId: string): SelectorState {
   return {

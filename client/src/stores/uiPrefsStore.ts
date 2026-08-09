@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { SelectorPrefs } from '../filters/selectorPrefs.ts';
 import type { DensityPref, PanelLayout, PanelPrefs, PanelScope } from './panelPrefs.ts';
 
 export type { DensityPref };
@@ -62,6 +63,16 @@ interface UiPrefsState {
    */
   panels: Partial<Record<PanelScope, PanelPrefs>>;
   setPanelPrefs: (scope: PanelScope, patch: Partial<PanelPrefs>) => void;
+  /**
+   * How each object selector was last arranged, keyed by where it is mounted.
+   *
+   * Per mount, because the picker in the links card and the one in the permissions dialog are used
+   * for different things by the same person — sharing would mean fixing one every time you used
+   * the other. What is kept is how somebody likes to look, never what they searched for: a stored
+   * query would be a record of what a person was looking for, sitting in a browser they may share.
+   */
+  selectors: Record<string, SelectorPrefs>;
+  setSelectorPrefs: (key: string, patch: Partial<SelectorPrefs>) => void;
   /** Named arrangements of the whole workspace — chrome, not place. */
   layouts: PanelLayout[];
   saveLayout: (name: string, mapChromeHidden: boolean) => void;
@@ -98,6 +109,11 @@ export const useUiPrefsStore = create<UiPrefsState>()(
         set({ centerlineDetailZoom: detailZoom, centerlineMaxPaths: maxPaths }),
       appearance: DEFAULT_APPEARANCE,
       setAppearance: (patch) => set((state) => ({ appearance: { ...state.appearance, ...patch } })),
+      selectors: {},
+      setSelectorPrefs: (key, patch) =>
+        set((state) => ({
+          selectors: { ...state.selectors, [key]: { ...state.selectors[key], ...patch } },
+        })),
       panels: {},
       setPanelPrefs: (scope, patch) =>
         set((state) => ({
@@ -138,7 +154,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
     }),
     {
       name: 'silexgis.uiPrefs',
-      version: 3,
+      version: 4,
       // Without a migrate, raising the version makes zustand discard the whole stored blob —
       // wiping everyone's pinned types, landing page and centerline budgets to add one field.
       migrate: (persisted, from) => {
@@ -148,6 +164,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           appearance: from < 2 ? DEFAULT_APPEARANCE : state.appearance,
           panels: from < 3 ? {} : (state.panels ?? {}),
           layouts: from < 3 ? [] : (state.layouts ?? []),
+          selectors: from < 4 ? {} : (state.selectors ?? {}),
         };
       },
     },

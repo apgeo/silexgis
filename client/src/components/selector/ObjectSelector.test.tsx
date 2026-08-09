@@ -160,3 +160,31 @@ describe('the object selector', () => {
     expect(screen.queryByTestId('picker-sort-title')).not.toBeInTheDocument();
   });
 });
+
+describe('what the control remembers', () => {
+  it('carries an arrangement back to the next time, but never the query', async () => {
+    // Which buttons were on and how rows were ordered is how somebody likes to look. What they
+    // typed is what they were looking for, and that does not belong in a browser they may share.
+    const { unmount } = renderControl({ rememberAs: 'test-site' });
+
+    fireEvent.click(screen.getByTestId('picker-scope-trips'));
+    fireEvent.click(screen.getByTestId('picker-sort-created'));
+    type('urs');
+    unmount();
+
+    renderControl({ rememberAs: 'test-site' });
+
+    expect(screen.getByTestId('picker-scope-trips')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('picker-sort-created')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('picker-input')).toHaveValue('');
+  });
+
+  it('remembers nothing when it was not given somewhere to remember', () => {
+    const { unmount } = renderControl();
+    fireEvent.click(screen.getByTestId('picker-scope-trips'));
+    unmount();
+
+    renderControl();
+    expect(screen.getByTestId('picker-scope-trips')).toHaveAttribute('aria-pressed', 'false');
+  });
+});

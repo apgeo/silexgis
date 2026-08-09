@@ -4,6 +4,7 @@ import { groupsOf, whereOf } from './document.ts';
 import {
   choose,
   documentFor,
+  effectiveState,
   initialState,
   pressSort,
   readPrefix,
@@ -200,5 +201,31 @@ describe('the sort buttons', () => {
 
     // Nobody reads an alphabetical list backwards first.
     expect(pressSort(state, 'title').descending).toBe(false);
+  });
+});
+
+describe('an arrangement that outlived what it referred to', () => {
+  it('ignores a scope the caller no longer offers, without forgetting it', () => {
+    // Somebody who narrowed to documents, used a screen that has none, and came back should find
+    // their choice where they left it — so it is pruned on the way out, never written back.
+    const stored = { ...initialState(), activeScopeIds: ['documents', 'caves'] };
+    const effective = effectiveState(stored, ['caves', 'trips'], ['created']);
+
+    expect(effective.activeScopeIds).toEqual(['caves']);
+    expect(stored.activeScopeIds).toEqual(['documents', 'caves']);
+  });
+
+  it('falls back to a sort that exists when the remembered one does not', () => {
+    const stored = { ...initialState(), sort: 'proximity' as const };
+
+    expect(effectiveState(stored, [], ['created', 'updated']).sort).toBe('created');
+  });
+
+  it('leaves the sort alone while nothing is known about what is available', () => {
+    // The vocabulary arrives after the first render. Substituting during that moment would flip
+    // the sort somebody chose and then flip it back.
+    const stored = { ...initialState(), sort: 'occurred' as const };
+
+    expect(effectiveState(stored, [], []).sort).toBe('occurred');
   });
 });

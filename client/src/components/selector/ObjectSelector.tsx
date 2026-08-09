@@ -47,6 +47,17 @@ export interface ObjectSelectorProps {
   /** Ids never offered: the row being edited, or ones already added somewhere else on screen. */
   exclude?: readonly string[];
 
+  /**
+   * Where this control's last arrangement is remembered — which buttons were on, how rows were
+   * ordered. Two controls given the same key share one memory; omitting it remembers nothing,
+   * which is right inside a form, where the picker is part of filling something in rather than a
+   * place somebody works.
+   *
+   * Never the query. A stored search term would be a record of what a person was looking for,
+   * sitting in a browser they may share.
+   */
+  rememberAs?: string;
+
   /** `inline` draws the panel; `dropdown` puts it behind the box it belongs to. */
   presentation?: 'inline' | 'dropdown';
 
@@ -77,6 +88,7 @@ export default function ObjectSelector({
   onPick,
   multiple = false,
   exclude = [],
+  rememberAs,
   presentation = 'inline',
   pageSize = 15,
   minChars = 2,
@@ -106,6 +118,7 @@ export default function ObjectSelector({
     browseOnEmpty,
     exclude,
     sorts,
+    rememberAs,
     value: chosenIds,
     onChange: () => undefined,
     onPick,
