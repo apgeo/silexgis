@@ -11,10 +11,17 @@ namespace SilexGis.Api.Features.Filters;
 /// the request rather than inside the document — a saved filter that stored where somebody was
 /// looking would be a stored, shareable, negatable statement about a position.
 /// </remarks>
+/// <param name="Count">
+/// Whether a total is wanted. It can only ever say "do not bother" — the ceiling on how many
+/// worlds are worth counting stays where it is, so this cannot turn counting back on past it. A
+/// type-ahead sends false: a total beside a search box is a population statistic for a predicate
+/// somebody just typed, and it costs a full pass over the composed set on every keystroke.
+/// </param>
 public sealed record FilterQueryRequest(
     FilterDocument Document,
     int Page = 1,
-    int PageSize = 25);
+    int PageSize = 25,
+    bool Count = true);
 
 /// <summary>One row, as every world returns it.</summary>
 /// <param name="Placeable">
@@ -89,8 +96,7 @@ public sealed record FilterFieldDto(
     string LabelKey,
     FieldKind Kind,
     IReadOnlyList<FilterOp> Ops,
-    string? Options,
-    bool Sortable);
+    string? Options);
 
 public sealed record FilterLimitsDto(
     int MaxNodes,

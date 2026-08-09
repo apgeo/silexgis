@@ -46,16 +46,18 @@ public static class TripLogFilterFields
         LabelKey: "filters.worlds.tripLog",
         Fields:
         [
-            new FieldDescriptor(Title, "filters.fields.title", FieldKind.Text, Sortable: true),
+            new FieldDescriptor(Title, "filters.fields.title", FieldKind.Text),
             new FieldDescriptor(Type, "filters.fields.tripType", FieldKind.Id, Options: "tripTypes"),
-            new FieldDescriptor(TripDate, "filters.fields.tripDate", FieldKind.Instant, Sortable: true),
+            new FieldDescriptor(TripDate, "filters.fields.tripDate", FieldKind.Instant),
             new FieldDescriptor(OwnerId, "filters.fields.owner", FieldKind.Id, Options: "users"),
             new FieldDescriptor(CavingGroupId, "filters.fields.cavingGroup", FieldKind.Id, Options: "cavingGroups"),
             new FieldDescriptor(
                 OrganizingCavingGroupId, "filters.fields.organizingGroup", FieldKind.Id, Options: "cavingGroups"),
             new FieldDescriptor(Visibility, "filters.fields.visibility", FieldKind.Id, Options: "visibilities"),
-            new FieldDescriptor(CreatedAt, "filters.fields.created", FieldKind.Instant, Sortable: true),
-            new FieldDescriptor(UpdatedAt, "filters.fields.updated", FieldKind.Instant, Sortable: true),
+            new FieldDescriptor(CreatedAt, "filters.fields.created", FieldKind.Instant),
+            new FieldDescriptor(UpdatedAt, "filters.fields.updated", FieldKind.Instant),
         ],
-        Sorts: [SortKey.Created, SortKey.Updated, SortKey.Title, SortKey.Owner]);
+        // Occurred is the one people actually want here: a trip is found by when it happened, not
+        // by when somebody got round to typing it up.
+        Sorts: [SortKey.Occurred, SortKey.Created, SortKey.Updated, SortKey.Title, SortKey.Owner]);
 }

@@ -260,6 +260,41 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
         body.Counted.ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task A_request_may_ask_not_to_be_counted_and_may_never_ask_to_be()
+    {
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
+        await SeedAsync(ownerId, Visibility.Public, 2);
+
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-count");
+
+        // A type-ahead asks for rows, not for a population statistic about what somebody typed.
+        var quiet = await QueryAsync(client, About("feature", Named(tag)), count: false);
+        quiet.Counted.ShouldBeFalse();
+        quiet.Worlds.ShouldAllBe(w => w.Total == null);
+        quiet.Worlds[0].Hits.Count.ShouldBe(2);
+
+        var counted = await QueryAsync(client, About("feature", Named(tag)));
+        counted.Counted.ShouldBeTrue();
+        counted.Worlds[0].Total.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_world_offers_only_sorts_it_can_actually_deliver()
+    {
+        // A sort a world declares but substitutes is worse than one it does not offer: the list
+        // comes back in an order nobody chose and nothing on screen says so.
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-sorts");
+        var body = await client.GetFromJsonAsync<FilterVocabularyResponse>(
+            "/api/v1/filters/vocabulary", Wire);
+
+        body.ShouldNotBeNull();
+
+        // A trip is found by when it happened; a feature has no such date and does not pretend to.
+        body.Worlds.Single(w => w.World == "tripLog").Sorts.ShouldContain(SortKey.Occurred);
+        body.Worlds.Single(w => w.World == "feature").Sorts.ShouldNotContain(SortKey.Occurred);
+    }
+
     // ---------- describing a choice somebody already made ----------
 
     [Fact]
@@ -312,10 +347,11 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
         return await AuthHelper.BearerClientAsync(factory, address);
     }
 
-    private static async Task<FilterQueryResponse> QueryAsync(HttpClient client, FilterDocument document)
+    private static async Task<FilterQueryResponse> QueryAsync(
+        HttpClient client, FilterDocument document, bool count = true)
     {
         var response = await client.PostAsJsonAsync(
-            "/api/v1/filters/query", new FilterQueryRequest(document));
+            "/api/v1/filters/query", new FilterQueryRequest(document, Count: count));
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 
         var body = await response.Content.ReadFromJsonAsync<FilterQueryResponse>(Wire);

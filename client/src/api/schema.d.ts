@@ -10434,7 +10434,6 @@ export interface components {
             kind: components["schemas"]["FieldKind"];
             ops: components["schemas"]["FilterOp"][];
             options: null | string;
-            sortable: boolean;
         };
         FilterHitDto: {
             world: string;
@@ -10496,6 +10495,8 @@ export interface components {
              * @default 25
              */
             pageSize: number;
+            /** @default true */
+            count: boolean;
         };
         FilterQueryResponse: {
             worlds: components["schemas"]["FilterWorldResultDto"][];
@@ -11436,7 +11437,6 @@ export interface components {
             widthPixels?: null | number;
             /** Format: int32 */
             heightPixels?: null | number;
-            isEmpty?: boolean;
         };
         PhotoImportOptions: {
             /** Format: uuid */
@@ -11922,7 +11922,7 @@ export interface components {
             timeoutSeconds: number;
         };
         /** @enum {unknown} */
-        SortKey: "created" | "updated" | "title" | "owner" | "proximity";
+        SortKey: "created" | "updated" | "title" | "owner" | "proximity" | "occurred";
         SurveyModelDto: {
             /** Format: uuid */
             id: string;

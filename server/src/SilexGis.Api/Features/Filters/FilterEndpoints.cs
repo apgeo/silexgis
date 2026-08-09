@@ -99,7 +99,9 @@ public static class FilterEndpoints
         }
 
         var (page, pageSize) = Paging.Normalize(request.Page, request.PageSize);
-        var counted = document.Scope.Count <= CountingWorldLimit;
+        // The request may lower this and never raise it: a caller who could ask for counting past
+        // the ceiling would have back the arithmetic the ceiling exists to prevent.
+        var counted = request.Count && document.Scope.Count <= CountingWorldLimit;
 
         var results = new List<FilterWorldResultDto>(document.Scope.Count);
         foreach (var scope in document.Scope)
@@ -189,7 +191,7 @@ public static class FilterEndpoints
             // The operator list travels with each field rather than being looked up from the kind
             // on the far side, so there is one table and the builder cannot drift from it.
             [.. vocabulary.Fields.Select(f => new FilterFieldDto(
-                f.Key, f.LabelKey, f.Kind, FilterOps.For(f.Kind), f.Options, f.Sortable))],
+                f.Key, f.LabelKey, f.Kind, FilterOps.For(f.Kind), f.Options))],
             vocabulary.Sorts);
 
     private static FilterHitDto ToDto(FilterHit hit) =>

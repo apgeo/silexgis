@@ -57,7 +57,7 @@ public static class FeatureFilterFields
         LabelKey: "filters.worlds.feature",
         Fields:
         [
-            new FieldDescriptor(Name, "filters.fields.name", FieldKind.Text, Sortable: true),
+            new FieldDescriptor(Name, "filters.fields.name", FieldKind.Text),
             new FieldDescriptor(Kind, "filters.fields.kind", FieldKind.Id, Options: "featureKinds"),
             new FieldDescriptor(Category, "filters.fields.category", FieldKind.Id, Options: "featureCategories"),
             new FieldDescriptor(TypeId, "filters.fields.type", FieldKind.Id, Options: "featureTypes"),
@@ -66,8 +66,8 @@ public static class FeatureFilterFields
             new FieldDescriptor(CavingGroupId, "filters.fields.cavingGroup", FieldKind.Id, Options: "cavingGroups"),
             new FieldDescriptor(Visibility, "filters.fields.visibility", FieldKind.Id, Options: "visibilities"),
             new FieldDescriptor(LocationProtected, "filters.fields.protected", FieldKind.Boolean),
-            new FieldDescriptor(CreatedAt, "filters.fields.created", FieldKind.Instant, Sortable: true),
-            new FieldDescriptor(UpdatedAt, "filters.fields.updated", FieldKind.Instant, Sortable: true),
+            new FieldDescriptor(CreatedAt, "filters.fields.created", FieldKind.Instant),
+            new FieldDescriptor(UpdatedAt, "filters.fields.updated", FieldKind.Instant),
         ],
         // Neither the spatial field nor the proximity sort is declared, because neither is served
         // yet. A vocabulary is an offer: a field listed here is one the builder shows, somebody

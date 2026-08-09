@@ -25,7 +25,15 @@ export type FilterOp =
 
 export type FieldKind = 'text' | 'number' | 'boolean' | 'instant' | 'id' | 'spatial';
 
-export type SortKey = 'created' | 'updated' | 'title' | 'owner' | 'proximity';
+/**
+ * How results are ordered.
+ *
+ * A closed set on purpose: every member has to mean the same thing in every world, or a merged list
+ * of several worlds is sorted by nothing in particular. `occurred` is when the thing happened as
+ * opposed to when somebody wrote it down — a trip that took place in May and was typed up in August
+ * is a May trip. Only worlds where those genuinely differ offer it.
+ */
+export type SortKey = 'created' | 'updated' | 'title' | 'owner' | 'proximity' | 'occurred';
 
 /**
  * A value with its type still attached.
@@ -87,7 +95,6 @@ export interface FilterField {
    */
   ops: FilterOp[];
   options: string | null;
-  sortable: boolean;
 }
 
 export interface WorldVocabulary {

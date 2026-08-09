@@ -83,6 +83,9 @@ public sealed class TripLogFilterWorld(SilexGisDbContext db) : FilterWorld<TripL
         var descending = query.Descending;
         return query.Sort switch
         {
+            SortKey.Occurred => descending
+                ? rows.OrderByDescending(t => t.TripDate).ThenByDescending(t => t.Id)
+                : rows.OrderBy(t => t.TripDate).ThenBy(t => t.Id),
             SortKey.Created => descending
                 ? rows.OrderByDescending(t => t.CreatedAt).ThenByDescending(t => t.Id)
                 : rows.OrderBy(t => t.CreatedAt).ThenBy(t => t.Id),
