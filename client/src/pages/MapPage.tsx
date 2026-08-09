@@ -9,6 +9,7 @@ import {
   AimOutlined,
   BorderVerticleOutlined,
   CodeSandboxOutlined,
+  ProfileOutlined,
   ExportOutlined,
   EyeInvisibleOutlined,
   EyeOutlined,
@@ -79,6 +80,7 @@ import {
 import { attachContextMenu, type MapContextMenuTarget } from '../map/contextMenu.ts';
 import { MapEditController, type DrawShape } from '../map/mapEdit.ts';
 import { attachSelection } from '../map/selection.ts';
+import { useShortcuts } from '../hooks/useShortcuts.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import './MapPage.css';
@@ -150,6 +152,9 @@ export default function MapPage() {
   const canEdit = mayWriteFeatures || mayCreateFeatures;
   const mapChromeHidden = useUiPrefsStore((s) => s.mapChromeHidden);
   const setMapChromeHidden = useUiPrefsStore((s) => s.setMapChromeHidden);
+  const setPanelPrefs = useUiPrefsStore((s) => s.setPanelPrefs);
+  const rightPinned = useUiPrefsStore((s) => s.panels.main?.pinned ?? true);
+  const rightWidth = useUiPrefsStore((s) => s.panels.main?.width ?? 22);
   const centerlineDetailZoom = useUiPrefsStore((s) => s.centerlineDetailZoom);
   const centerlineMaxPaths = useUiPrefsStore((s) => s.centerlineMaxPaths);
   const setCenterlinePrefs = useUiPrefsStore((s) => s.setCenterlineLimits);
@@ -197,12 +202,19 @@ export default function MapPage() {
       set: setSelection,
     });
     syncRef.current = sync;
-    const detachSelection = attachSelection(map, (picked) => {
-      setSelection(picked);
-      // Announced as well as stored: a popped-out window has a store of its own that this one
-      // cannot reach, and the scene beside it may be in that window rather than this one.
-      sync.publishSelection(picked);
-    });
+    const detachSelection = attachSelection(
+      map,
+      (picked) => {
+        setSelection(picked);
+        // Announced as well as stored: a popped-out window has a store of its own that this one
+        // cannot reach, and the scene beside it may be in that window rather than this one.
+        sync.publishSelection(picked);
+      },
+      // A modifier-click gathers rather than replaces. Not announced on the bus: a multi-pick is
+      // this window's working set, and another window's panel showing half of it would be worse
+      // than it showing none.
+      (ref) => useWorkspaceStore.getState().toggleInSelectionSet(ref),
+    );
     const detachHover = attachHoverTooltip(map);
     const detachUrlHash = attachUrlHash(map);
     const detachContextMenu = attachContextMenu(map, setContextTarget);
@@ -686,6 +698,30 @@ export default function MapPage() {
     }
   };
 
+  useShortcuts(
+    useMemo(
+      () => [
+        // Escape clears the selection — but only when nothing modal is open, which the hook
+        // decides rather than each caller guessing.
+        {
+          key: 'Escape',
+          run: () => {
+            setSelection(null);
+            useWorkspaceStore.getState().clearSelectionSet();
+          },
+        },
+        { key: '[', run: () => toggleLeftDock() },
+        { key: ']', run: () => toggleRightDock() },
+        { key: 'ArrowLeft', alt: true, run: () => useWorkspaceStore.getState().goBackSelection() },
+        { key: 'ArrowRight', alt: true, run: () => useWorkspaceStore.getState().goForwardSelection() },
+      ],
+      // The dock toggles read state that changes with the layout; rebuilding the list when it
+      // does is what keeps a shortcut from acting on a stale idea of which host is mounted.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [isMobile, leftCollapsed, rightCollapsed, leftDrawerOpen, rightDrawerOpen],
+    ),
+  );
+
   const toggleRightDock = () => {
     if (isMobile) {
       setRightDrawerOpen((open) => !open);
@@ -840,6 +876,15 @@ export default function MapPage() {
                     data-testid="map-popout-scene3d"
                   />
                 </Tooltip>
+                <Tooltip title={t('panel.popOutSelection')}>
+                  <Button
+                    size="small"
+                    icon={<ProfileOutlined />}
+                    onClick={() =>
+                      window.open('/panel/selection', 'silexgis-selection', 'popup,width=520,height=900')}
+                    data-testid="map-popout-selection"
+                  />
+                </Tooltip>
                 <Tooltip title={t('panel.popOut3d')}>
                   <Button
                     size="small"
@@ -887,21 +932,65 @@ export default function MapPage() {
           </Suspense>
         </Panel>
       )}
-      {!isMobile && <Separator className="map-workspace-handle" />}
       {!isMobile && (
+        <Separator
+          className="map-workspace-handle"
+          // Double-click snaps between the width somebody dragged to and the one the panel
+          // ships at, which is the gesture every resizable pane has and the fastest way to get
+          // the map back whole without losing the width you chose.
+          onDoubleClick={() => {
+            const shipped = 22;
+            // The pane reports both units; the stored width is a percentage, so compare in one.
+            const size = rightPanelRef.current?.getSize();
+            const current = Math.round(
+              typeof size === 'number' ? size : (size?.asPercentage ?? shipped),
+            );
+            const next = current === shipped ? (rightWidth === shipped ? 34 : rightWidth) : shipped;
+            rightPanelRef.current?.resize(`${next}%`);
+            setPanelPrefs('main', { width: next });
+          }}
+        />
+      )}
+      {/* Pinned pushes the map aside; unpinned floats over it. A preference rather than a
+          breakpoint, because which one is right depends on the screen *and* on what somebody is
+          doing — a wide monitor still wants the map whole while tracing a passage. */}
+      {!isMobile && rightPinned && (
         <Panel
           panelRef={rightPanelRef}
           collapsible
           collapsedSize="0%"
-          defaultSize="22%"
+          defaultSize={`${rightWidth}%`}
           minSize="12%"
           className="map-workspace-panel"
-          onResize={() => setRightCollapsed(rightPanelRef.current?.isCollapsed() ?? false)}
+          onResize={(size) => {
+            setRightCollapsed(rightPanelRef.current?.isCollapsed() ?? false);
+            // Remembered as the person drags, so the width survives a reload. Rounded: a stored
+            // 21.7318% is noise that makes every save look like a change.
+            if (typeof size === 'number' && size > 0) {
+              setPanelPrefs('main', { width: Math.round(size) });
+            }
+          }}
         >
           {rightDock}
         </Panel>
       )}
     </Group>
+    {!isMobile && !rightPinned && (
+      <Drawer
+        placement="right"
+        open={!rightCollapsed}
+        onClose={() => setRightCollapsed(true)}
+        // No mask: floating over the map is only useful if the map underneath still works.
+        mask={false}
+        size={`${rightWidth}%` as never}
+        title={t('map.detailsTitle')}
+        styles={{ body: { padding: 0 } }}
+        rootClassName="map-dock-drawer"
+        data-testid="map-right-overlay"
+      >
+        {rightDock}
+      </Drawer>
+    )}
     {isMobile && (
       <>
         <Drawer

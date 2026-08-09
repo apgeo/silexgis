@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { LockOutlined, StarFilled } from '@ant-design/icons';
-import { Tag, Tooltip, Typography } from 'antd';
+import { Flex, Tag, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import type { ResLinkMember } from '../../api/hooks.ts';
@@ -48,6 +48,32 @@ export default function MemberChip({ member }: { member: ResLinkMember }) {
     </Tag>
   );
 
-  const withHint = <Tooltip title={hint}>{chip}</Tooltip>;
+  // A linked thing that has a picture shows it on hover. Worth the few lines: a link list is a
+  // column of near-identical chips, and for a photograph or a scanned survey the picture is what
+  // tells them apart — far faster than reading five titles that all begin with the same word.
+  //
+  // Nothing is prefetched and nothing is cached here: the image is only requested when a tooltip
+  // actually opens, and the browser's own cache serves the second hover. A cache of our own would
+  // be a second copy of something the platform already does, holding delivery URLs whose tokens
+  // expire underneath it.
+  const preview = member.display.thumbnailUrl ? (
+    <Flex vertical gap={4} style={{ maxWidth: 220 }}>
+      <img
+        src={member.display.thumbnailUrl}
+        alt=""
+        loading="lazy"
+        style={{ width: '100%', borderRadius: 4, display: 'block' }}
+      />
+      <span>{hint}</span>
+    </Flex>
+  ) : (
+    hint
+  );
+
+  const withHint = (
+    <Tooltip title={preview} mouseEnterDelay={member.display.thumbnailUrl ? 0.4 : 0.1}>
+      {chip}
+    </Tooltip>
+  );
   return route ? <Link to={route}>{withHint}</Link> : withHint;
 }

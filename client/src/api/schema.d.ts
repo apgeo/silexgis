@@ -242,6 +242,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ui-defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The installation's starting interface arrangement; a default, never a policy. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UiDefaultsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/capabilities": {
         parameters: {
             query?: never;
@@ -3925,6 +3961,7 @@ export interface paths {
                     bbox?: string;
                     tag?: string;
                     search?: string;
+                    ids?: string[];
                 };
                 header?: never;
                 path?: never;
@@ -8974,6 +9011,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/interface": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Saves the starting interface arrangement new users begin from; a default, never a policy. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InterfaceSettingsDto"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminSettingsDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/mail/test": {
         parameters: {
             query?: never;
@@ -9257,6 +9334,7 @@ export interface components {
             security: components["schemas"]["SecuritySettingsDto"];
             protection: components["schemas"]["ProtectionSettingsDto"];
             import: components["schemas"]["ImportSettingsDto"];
+            interface: components["schemas"]["InterfaceSettingsDto"];
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
@@ -10567,6 +10645,9 @@ export interface components {
         ImportTargetKind: "cave" | "caveEntrance" | "surfaceFeature";
         /** @enum {unknown} */
         ImportTrackHandling: "ignore" | "importAsLine";
+        InterfaceSettingsDto: {
+            panelDefaults: string;
+        };
         JsonElement: unknown;
         LinkKindDto: {
             /** Format: int64 */
@@ -11843,6 +11924,9 @@ export interface components {
             destination: string;
             /** Format: int32 */
             expiresMinutes: number;
+        };
+        UiDefaultsDto: {
+            panel: components["schemas"]["JsonElement"];
         };
         UiPreferencesDto: {
             preferences: components["schemas"]["JsonElement"];

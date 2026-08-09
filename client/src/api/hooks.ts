@@ -127,6 +127,7 @@ export const queryKeys = {
   member: (id: string) => ['members', 'detail', id] as const,
   notificationPrefs: ['me', 'notifications'] as const,
   uiPreferences: ['me', 'preferences'] as const,
+  uiDefaults: ['ui-defaults'] as const,
   dataExport: ['me', 'data-export'] as const,
   phone: ['me', 'phone'] as const,
   adminSettings: ['admin', 'settings'] as const,
@@ -322,6 +323,20 @@ export function useUpdateNotificationPreferences() {
       categories: { category: NotificationCategory['category']; enabled: boolean }[];
     }) => unwrap(api.PUT('/api/v1/me/notifications', { body })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['me'] }),
+  });
+}
+
+/**
+ * The installation's starting arrangement. A default only: the client fills gaps with it and never
+ * lets it overwrite something the person chose.
+ */
+export function useUiDefaults() {
+  return useQuery({
+    queryKey: queryKeys.uiDefaults,
+    queryFn: () => unwrap(api.GET('/api/v1/ui-defaults')),
+    // It changes when an administrator publishes a new one, which is rare; asking again on every
+    // mount would be a request per page load for an answer that is the same all day.
+    staleTime: 10 * 60_000,
   });
 }
 
@@ -842,6 +857,8 @@ export interface FeatureListParams {
   bbox?: string;
   tag?: string;
   search?: string;
+  /** A named set of objects — what a multi-selection asks about. Bounded by the server. */
+  ids?: string[];
 }
 
 export function useFeatures(params: FeatureListParams, enabled = true) {
@@ -1106,12 +1123,20 @@ export type EntityType = 'feature' | 'tripLog' | 'geofile' | 'georeferencedMap' 
 export type AttachedEntityType = EntityType | 'storedFile';
 export type AttachmentRole = AttachmentInfo['role'];
 
-export function useAttachments(entityType: AttachedEntityType, entityId: string | undefined) {
+/**
+ * @param enabled false keeps the request from being made at all — what a collapsed panel section
+ * passes, so selecting an object on the map costs one small request instead of six.
+ */
+export function useAttachments(
+  entityType: AttachedEntityType,
+  entityId: string | undefined,
+  enabled = true,
+) {
   return useQuery({
     queryKey: queryKeys.attachments(entityType, entityId ?? ''),
     queryFn: () =>
       unwrap(api.GET('/api/v1/attachments', { params: { query: { entityType, entityId: entityId! } } })),
-    enabled: !!entityId,
+    enabled: enabled && !!entityId,
     // Delivery URLs embed 10-minute tokens; refresh the list before they lapse.
     staleTime: 5 * 60_000,
     refetchInterval: 8 * 60_000,
@@ -1131,14 +1156,15 @@ function useInvalidateAttachments() {
 export type HistoryEvent = components['schemas']['HistoryEventDto'];
 
 /** Change history for an entity (incl. its children's events via audit roots). */
-export function useHistory(entityType: string, entityId: string | undefined) {
+/** @param enabled false keeps the request from being made — see {@link useAttachments}. */
+export function useHistory(entityType: string, entityId: string | undefined, enabled = true) {
   return useQuery({
     queryKey: queryKeys.history(entityType, entityId ?? ''),
     queryFn: () =>
       unwrap(api.GET('/api/v1/history', {
         params: { query: { entityType, entityId: entityId!, pageSize: 100 } },
       })),
-    enabled: !!entityId,
+    enabled: enabled && !!entityId,
   });
 }
 
@@ -1824,12 +1850,17 @@ export function useTags(search: string) {
   });
 }
 
-export function useTaggings(entityType: AttachedEntityType, entityId: string | undefined) {
+/** @param enabled false keeps the request from being made — see {@link useAttachments}. */
+export function useTaggings(
+  entityType: AttachedEntityType,
+  entityId: string | undefined,
+  enabled = true,
+) {
   return useQuery({
     queryKey: queryKeys.taggings(entityType, entityId ?? ''),
     queryFn: () =>
       unwrap(api.GET('/api/v1/taggings', { params: { query: { entityType, entityId: entityId! } } })),
-    enabled: !!entityId,
+    enabled: enabled && !!entityId,
   });
 }
 

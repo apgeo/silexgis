@@ -33,9 +33,37 @@ export interface ClusterSelection {
 
 export type WorkspaceSelection = EntranceSelection | FeatureSelection | CaveSelection | ClusterSelection;
 
+/** One member of a multi-selection: a reference, never a payload, like everything else here. */
+export interface SelectedRef {
+  kind: 'feature' | 'cave' | 'entrance';
+  id: string;
+}
+
 interface WorkspaceState {
   selection: WorkspaceSelection | null;
   setSelection: (selection: WorkspaceSelection | null) => void;
+  /**
+   * Several objects picked at once — a modifier-click on the map, or ticking rows in the list.
+   * Ids only, capped, because a panel showing what they have in common asks the server rather
+   * than holding entities here.
+   */
+  selectionSet: SelectedRef[];
+  setSelectionSet: (refs: SelectedRef[]) => void;
+  toggleInSelectionSet: (ref: SelectedRef) => void;
+  clearSelectionSet: () => void;
+  /**
+   * Recently selected objects, so following a link and coming back is one press.
+   *
+   * Recorded inside `setSelection` rather than by whoever calls it: map clicks, the bus, the
+   * in-view list and deep links all set a selection, and a history that only some of them wrote
+   * to would skip exactly the steps somebody wants to go back through.
+   */
+  selectionHistory: WorkspaceSelection[];
+  selectionCursor: number;
+  goBackSelection: () => void;
+  goForwardSelection: () => void;
+  canGoBackSelection: () => boolean;
+  canGoForwardSelection: () => boolean;
   /** Geofile overlays currently shown on the map (ids only). */
   visibleGeofileIds: string[];
   setGeofileVisible: (id: string, visible: boolean) => void;
@@ -79,9 +107,67 @@ interface WorkspaceState {
   resetBaseOpacity: (opacities: Record<number, number>) => void;
 }
 
-export const useWorkspaceStore = create<WorkspaceState>((set) => ({
+/**
+ * How far back the panel can go. Long enough to retrace an afternoon's clicking, short enough
+ * that the list is never something a person scrolls.
+ */
+const MAX_SELECTION_HISTORY = 50;
+
+function sameSelection(a: WorkspaceSelection | null, b: WorkspaceSelection | null): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   selection: null,
-  setSelection: (selection) => set({ selection }),
+  setSelection: (selection) =>
+    set((state) => {
+      if (sameSelection(state.selection, selection)) {
+        return { selection };
+      }
+
+      if (selection === null) {
+        // Deselecting is not a place to come back to; the history keeps its shape so that
+        // pressing Escape and then Back returns to what was selected before, not to nothing.
+        return { selection };
+      }
+
+      // Selecting something after going back drops the forward tail, which is what every
+      // back/forward anybody has used does.
+      const trimmed = state.selectionHistory.slice(0, state.selectionCursor + 1);
+      const next = [...trimmed, selection].slice(-MAX_SELECTION_HISTORY);
+      return { selection, selectionHistory: next, selectionCursor: next.length - 1 };
+    }),
+  selectionSet: [],
+  setSelectionSet: (refs) => set({ selectionSet: refs.slice(0, MAX_SELECTION_SET) }),
+  toggleInSelectionSet: (ref) =>
+    set((state) => {
+      const without = state.selectionSet.filter((x) => !(x.kind === ref.kind && x.id === ref.id));
+      return {
+        selectionSet:
+          without.length === state.selectionSet.length
+            ? [...state.selectionSet, ref].slice(0, MAX_SELECTION_SET)
+            : without,
+      };
+    }),
+  clearSelectionSet: () => set({ selectionSet: [] }),
+  selectionHistory: [],
+  selectionCursor: -1,
+  goBackSelection: () =>
+    set((state) => {
+      const at = state.selectionCursor - 1;
+      return at < 0
+        ? {}
+        : { selectionCursor: at, selection: state.selectionHistory[at] ?? null };
+    }),
+  goForwardSelection: () =>
+    set((state) => {
+      const at = state.selectionCursor + 1;
+      return at >= state.selectionHistory.length
+        ? {}
+        : { selectionCursor: at, selection: state.selectionHistory[at] ?? null };
+    }),
+  canGoBackSelection: () => get().selectionCursor > 0,
+  canGoForwardSelection: () => get().selectionCursor < get().selectionHistory.length - 1,
   visibleGeofileIds: [],
   setGeofileVisible: (id, visible) =>
     set((state) => ({
@@ -112,3 +198,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     set((state) => ({ baseOpacity: { ...state.baseOpacity, [id]: opacity } })),
   resetBaseOpacity: (opacities) => set({ baseOpacity: opacities }),
 }));
+
+/**
+ * A ceiling on how many objects can be picked at once. Bulk actions write per object through the
+ * ordinary gates, so this is what keeps one gesture from becoming two hundred requests.
+ */
+const MAX_SELECTION_SET = 200;

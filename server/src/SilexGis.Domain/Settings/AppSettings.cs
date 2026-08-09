@@ -185,6 +185,31 @@ public sealed record ImportSettings
 /// Section names under which the settings above are stored, one JSON document each. Keys are a
 /// schema contract — renaming one abandons the operator's saved configuration.
 /// </summary>
+/// <summary>
+/// How the installation's interface starts out for somebody who has not arranged it themselves.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A <em>default</em>, not a policy. It fills in what a person has not chosen and never overrides
+/// what they have — an administrator setting a starting arrangement is saying "this is a sensible
+/// place to begin", not "everyone's screen now looks like this". The two need different storage and
+/// converting one into the other later is painful, so which one this is has to be decided here.
+/// </para>
+/// <para>
+/// The document is opaque to the server, exactly as a person's own preferences are: the client owns
+/// the key schema and nothing here reads or branches on it. Anything the server must understand
+/// belongs in a typed setting beside this one instead.
+/// </para>
+/// </remarks>
+public sealed record InterfaceSettings
+{
+    /// <summary>
+    /// The starting panel arrangement, as the client's own preferences document. Empty means the
+    /// installation has published nothing and the built-in defaults apply.
+    /// </summary>
+    public string PanelDefaults { get; init; } = "{}";
+}
+
 public static class AppSettingSections
 {
     public const string Mail = "mail";
@@ -197,5 +222,8 @@ public static class AppSettingSections
 
     public const string Import = "import";
 
-    public static IReadOnlyList<string> All { get; } = [Mail, Sms, Security, Protection, Import];
+    public const string Interface = "interface";
+
+    public static IReadOnlyList<string> All { get; } =
+        [Mail, Sms, Security, Protection, Import, Interface];
 }

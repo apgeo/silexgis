@@ -831,9 +831,15 @@ test('surface feature history records edits and restores in the map panel', asyn
   await editFeatureDescription(page, 'Desc One');
   await editFeatureDescription(page, 'Desc Two');
 
-  // The selection panel's History card records the change as an old→new row.
-  const history = page.locator('.ant-card').filter({ hasText: 'History' });
-  const latest = history.getByRole('row', { name: /Desc One.*Desc Two/ });
+  // The selection panel's history section records the change as an old→new row. It starts
+  // closed — long, rarely read, and it used to push the fields people do read below the fold —
+  // so opening it is part of the flow now, and a closed section has fetched nothing until then.
+  const historySection = page.getByTestId('panel-section-history');
+  await expect(historySection).toBeVisible({ timeout: 15_000 });
+  if ((await historySection.getAttribute('data-open')) !== 'true') {
+    await historySection.getByRole('button', { expanded: false }).click();
+  }
+  const latest = historySection.getByRole('row', { name: /Desc One.*Desc Two/ });
   await expect(latest).toBeVisible({ timeout: 15_000 });
 
   // Restore the previous value; the feature detail reverts and a toast confirms.

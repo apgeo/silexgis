@@ -87,6 +87,7 @@ public sealed record AdminSettingsDto(
     SecuritySettingsDto Security,
     ProtectionSettingsDto Protection,
     ImportSettingsDto Import,
+    InterfaceSettingsDto Interface,
     bool MailConfigured,
     bool SmsConfigured);
 
@@ -108,6 +109,44 @@ public sealed record ImportSettingsDto(
     double DuplicateNameSimilarity,
     double PhotoProximityRadiusMeters,
     double PhotoClusterRadiusMeters);
+
+/// <summary>
+/// The starting interface arrangement this installation publishes. The document is the client's
+/// own preferences shape and is opaque here — the server stores it and never reads inside it.
+/// </summary>
+public sealed record InterfaceSettingsDto(string PanelDefaults);
+
+public sealed class InterfaceSettingsDtoValidator : AbstractValidator<InterfaceSettingsDto>
+{
+    /// <summary>Room for an arrangement several times over, but not for using this as storage.</summary>
+    private const int MaxRawLength = 8000;
+
+    public InterfaceSettingsDtoValidator()
+    {
+        RuleFor(x => x.PanelDefaults).NotNull().MaximumLength(MaxRawLength);
+        RuleFor(x => x.PanelDefaults)
+            .Must(BeAJsonObject)
+            .WithMessage("The starting arrangement must be a JSON object.");
+    }
+
+    private static bool BeAJsonObject(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        try
+        {
+            return System.Text.Json.JsonDocument.Parse(value).RootElement.ValueKind
+                == System.Text.Json.JsonValueKind.Object;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+}
 
 /// <summary>A diagnostic send, to prove the channel works before anyone depends on it.</summary>
 public sealed record TestMessageRequest(string Recipient);

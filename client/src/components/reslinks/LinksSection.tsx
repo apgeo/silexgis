@@ -38,6 +38,11 @@ export interface LinksSectionProps {
    */
   variant?: 'card' | 'compact';
   /**
+   * Controlled disclosure. When a host draws the header — the selection panel's section shell —
+   * it owns whether the list is open, and a closed list fetches nothing.
+   */
+  open?: boolean;
+  /**
    * Offers the record-a-link action, which opens the picker with this entity already in
    * place as the first member. A surface that only reports leaves it off.
    */
@@ -173,11 +178,24 @@ export default function LinksSection({
   variant = 'card',
   canAdd,
   entityTitle,
+  open,
 }: LinksSectionProps) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const [selfExpanded, setSelfExpanded] = useState(false);
   const [adding, setAdding] = useState(false);
-  const { data } = useResLinksForTarget(entityType, entityId, { pageSize: MAX_ROWS });
+  // A host that draws its own disclosure owns the open state; on its own the section keeps its
+  // own. Uncontrolled, the state reset on every selection because this component remounts —
+  // which read as the panel forgetting what had just been opened.
+  const controlled = open !== undefined;
+  const expanded = controlled ? open : selfExpanded;
+  const { data } = useResLinksForTarget(
+    entityType,
+    entityId,
+    { pageSize: MAX_ROWS },
+    // A closed section asks for nothing. The count in the header is the one thing that would
+    // want the query anyway, and a header nobody has opened does not need it.
+    !controlled || open,
+  );
 
   const links = data?.items ?? [];
   const total = data?.totalItems ?? 0;
@@ -226,10 +244,23 @@ export default function LinksSection({
   }
 
   if (variant === 'compact') {
+    // Controlled by a host: the host already drew a header and a disclosure, so this draws the
+    // rows and nothing else. Two disclosures for one list is the shape that makes a panel feel
+    // like it was assembled rather than designed.
+    if (controlled) {
+      return (
+        <div>
+          {addButton}
+          <div style={{ marginTop: 8 }}>{rows}</div>
+          {dialog}
+        </div>
+      );
+    }
+
     return (
       <div style={{ marginTop: 12 }}>
         <Flex align="center" gap={4} wrap>
-          <Button size="small" type="text" icon={<LinkOutlined />} onClick={() => setExpanded((x) => !x)}>
+          <Button size="small" type="text" icon={<LinkOutlined />} onClick={() => setSelfExpanded((x) => !x)}>
             {t('resLinks.titleCount', { count: total })}
           </Button>
           {expanded && addButton}

@@ -48,6 +48,9 @@ public static class AdminSettingsEndpoints
         admin.MapPut("/import", SaveImportAsync)
             .WithValidation<ImportSettingsDto>()
             .WithSummary("Saves whether a vector import may create objects without review, and how far duplicate detection looks.");
+        admin.MapPut("/interface", SaveInterfaceAsync)
+            .WithValidation<InterfaceSettingsDto>()
+            .WithSummary("Saves the starting interface arrangement new users begin from; a default, never a policy.");
         admin.MapPost("/mail/test", TestMailAsync)
             .WithValidation<TestMessageRequest>()
             .WithSummary("Sends a test message to prove the mail server works.");
@@ -258,6 +261,33 @@ public static class AdminSettingsEndpoints
         return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
     }
 
+    private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveInterfaceAsync(
+        InterfaceSettingsDto request,
+        IAccessContextAccessor accessAccessor,
+        IAppSettingsService settings,
+        IEmailDelivery emailDelivery,
+        ISmsDelivery smsDelivery,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
+        {
+            return ApiProblems.Forbidden("access.forbidden");
+        }
+
+        await settings.SaveAsync(
+            AppSettingSections.Interface,
+            new InterfaceSettings { PanelDefaults = request.PanelDefaults },
+            ct);
+
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+    }
+
     /// <summary>
     /// Sends a plain diagnostic message rather than a catalogued one: this is proving the transport
     /// works, and routing it through a template the operator may have just broken would confuse the
@@ -348,6 +378,7 @@ public static class AdminSettingsEndpoints
         var security = await settings.GetSecurityAsync(ct);
         var disclosure = await settings.GetProtectionAsync(ct);
         var import = await settings.GetImportAsync(ct);
+        var ui = await settings.GetInterfaceAsync(ct);
 
         return new AdminSettingsDto(
             new MailSettingsDto(
@@ -387,6 +418,7 @@ public static class AdminSettingsEndpoints
                 import.DuplicateNameSimilarity,
                 import.PhotoProximityRadiusMeters,
                 import.PhotoClusterRadiusMeters),
+            new InterfaceSettingsDto(ui.PanelDefaults),
             await emailDelivery.IsConfiguredAsync(ct),
             await smsDelivery.IsConfiguredAsync(ct));
     }

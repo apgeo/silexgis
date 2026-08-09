@@ -26,17 +26,26 @@ export default function HistoryPanel({
   entityType,
   entityId,
   restore,
+  enabled = true,
+  variant = 'card',
 }: {
   entityType: string;
   entityId: string | undefined;
   restore?: HistoryRestoreProp;
+  /** False asks for nothing at all — what a collapsed panel section passes. */
+  enabled?: boolean;
+  /**
+   * 'bare' drops the card chrome for a host that draws its own header. A timeline inside a card
+   * inside a section header is two borders around one list.
+   */
+  variant?: 'card' | 'bare';
 }) {
   const { t } = useTranslation();
-  const { data, isLoading } = useHistory(entityType, entityId);
+  const { data, isLoading } = useHistory(entityType, entityId, enabled);
   const events = data?.items ?? [];
 
-  return (
-    <Card size="small" title={t('history.title')} style={{ marginTop: 12 }}>
+  const body = (
+    <>
       {isLoading ? (
         <Spin />
       ) : events.length === 0 ? (
@@ -50,6 +59,16 @@ export default function HistoryPanel({
           }))}
         />
       )}
+    </>
+  );
+
+  if (variant === 'bare') {
+    return body;
+  }
+
+  return (
+    <Card size="small" title={t('history.title')} style={{ marginTop: 12 }}>
+      {body}
     </Card>
   );
 }

@@ -131,6 +131,28 @@ public sealed class FeatureTests : IAsyncLifetime, IDisposable
             $"/api/v1/features?search=Dolina Priv {marker}"))!;
         outsiderList["items"]!.AsArray().Count.ShouldBe(0);
 
+        // ---- naming a set of objects: what a multi-selection asks about
+        var bothIds = (await owner.GetFromJsonAsync<JsonObject>(
+            $"/api/v1/features?ids={privateId}&ids={publicId}"))!;
+        bothIds["items"]!.AsArray().Count.ShouldBe(2);
+
+        // The same question from somebody who may not read one of them answers with the other and
+        // nothing else — the id set narrows the visibility-filtered query rather than reaching
+        // past it, so naming an id you may not read is indistinguishable from naming one that
+        // does not exist.
+        var outsiderIds = (await outsider.GetFromJsonAsync<JsonObject>(
+            $"/api/v1/features?ids={privateId}&ids={publicId}"))!;
+        outsiderIds["items"]!.AsArray().Count.ShouldBe(1);
+        outsiderIds["items"]![0]!["id"]!.GetValue<Guid>().ShouldBe(publicId);
+        outsiderIds["totalItems"]!.GetValue<int>().ShouldBe(1);
+
+        // Bounded: the ceiling is what keeps one gesture from becoming an unbounded query.
+        var tooMany = string.Join("&", Enumerable.Range(0, 205).Select(_ => $"ids={Guid.NewGuid()}"));
+        var refused = await owner.GetAsync($"/api/v1/features?{tooMany}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await refused.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
+            .ShouldBe("feature.too_many_ids");
+
         // ---- invalid list filters are named errors, not silent misses
         var badKind = await owner.GetAsync("/api/v1/features?kind=bogus");
         badKind.StatusCode.ShouldBe(HttpStatusCode.BadRequest);

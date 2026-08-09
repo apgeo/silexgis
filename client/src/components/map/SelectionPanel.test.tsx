@@ -82,11 +82,21 @@ vi.mock('../../api/hooks.ts', () => ({
   useCan: () => true,
   useDeleteFeature: () => ({ mutateAsync: deleteFeature, isPending: false }),
   useUpdateFeature: () => ({ mutateAsync: updateFeature, isPending: false }),
+  // The panel's arrangement now merges an installation default over the person's own; with
+  // nothing published, both sides are empty and the built-in order applies.
+  useUiDefaults: () => ({ data: undefined }),
+  useFeatures: () => ({ data: { items: [] } }),
 }));
 
-// Both pull in stacks of their own and neither is what these tests are about.
+// These pull in stacks of their own and none of them is what these tests are about. The panel
+// composes its sections from a registry now, so the sections it can draw are mocked at their own
+// modules rather than by mocking every hook they happen to call.
 vi.mock('../history/HistoryPanel.tsx', () => ({ default: () => null }));
 vi.mock('../features/FeatureEditModal.tsx', () => ({ default: () => null }));
+vi.mock('../tags/TagChips.tsx', () => ({ default: () => <div data-testid="tag-chips" /> }));
+vi.mock('../attachments/AttachmentSection.tsx', () => ({
+  default: () => <div data-testid="attachment-section" />,
+}));
 
 /** The links panel is mounted, not rendered here: what it is mounted *for* is the point. */
 const linksMounted = vi.fn();

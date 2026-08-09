@@ -38,6 +38,13 @@ interface AttachmentSectionProps {
    * photoEntrance; everything else photographs the surface.
    */
   defaultPhotoRole?: AttachmentRole;
+  /**
+   * 'bare' drops the card chrome for a host that draws its own header — the selection panel's
+   * section shell. A card inside a section header is two borders around one gallery.
+   */
+  variant?: 'card' | 'bare';
+  /** False asks for nothing at all, which is what a collapsed panel section passes. */
+  enabled?: boolean;
 }
 
 /**
@@ -51,10 +58,12 @@ export default function AttachmentSection({
   canEdit,
   reportSlot,
   defaultPhotoRole = 'photoSurface',
+  variant = 'card',
+  enabled = true,
 }: AttachmentSectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: attachments } = useAttachments(entityType, entityId);
+  const { data: attachments } = useAttachments(entityType, entityId, enabled);
   const { data: fileConfig } = useFileConfig();
   const uploadFile = useUploadFile();
   const createAttachment = useCreateAttachment();
@@ -100,8 +109,8 @@ export default function AttachmentSection({
     }
   };
 
-  return (
-    <Card title={t('attachments.title')} size="small" style={{ marginTop: 16 }}>
+  const body = (
+    <>
       {reportSlot && (
         <div style={{ marginBottom: 16 }}>
           <Typography.Text strong>{t('attachments.reportDocument')}</Typography.Text>
@@ -330,6 +339,14 @@ export default function AttachmentSection({
           />
         </>
       )}
+    </>
+  );
+
+  return variant === 'bare' ? (
+    body
+  ) : (
+    <Card title={t('attachments.title')} size="small" style={{ marginTop: 16 }}>
+      {body}
     </Card>
   );
 }

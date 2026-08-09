@@ -205,6 +205,7 @@ try
     api.MapMeCredentialEndpoints();
     api.MapMeNotificationEndpoints();
     api.MapMePreferenceEndpoints();
+    api.MapUiDefaultsEndpoints();
     api.MapMeDataExportEndpoints();
     api.MapMeCapabilityEndpoints();
     api.MapUnsubscribeEndpoints();

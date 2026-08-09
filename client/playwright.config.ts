@@ -45,7 +45,7 @@ export default defineConfig({
       // Each project pins its own file, so a new spec runs nowhere until it is named here.
       name: 'desktop',
       testMatch:
-        /(smoke|settings|permission-groups|documents|reslinks|scene3d|vector-import|photo-import|consoleGuard|errorReporting)\.spec\.ts/,
+        /(smoke|settings|permission-groups|documents|reslinks|scene3d|vector-import|photo-import|panel|consoleGuard|errorReporting)\.spec\.ts/,
     },
     {
       // Pixel 7: 412x915 CSS px, touch enabled, coarse pointer, chromium.

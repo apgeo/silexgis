@@ -13,6 +13,8 @@ import {
   type CaveListParams,
 } from '../../api/hooks.ts';
 import CaveViewPanel from '../../components/caveview/CaveViewPanel.tsx';
+import SelectionPanel from '../../components/map/SelectionPanel.tsx';
+import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import Scene3DView from '../../components/scene3d/Scene3DView.tsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { publish, subscribe } from '../../workspace/workspaceBus.ts';
@@ -38,6 +40,8 @@ export default function PanelPage() {
       return <Viewer3dPanel />;
     case 'scene3d':
       return <Scene3dScenePanel />;
+    case 'selection':
+      return <SelectionPopout />;
     default:
       return (
         <Flex align="center" justify="center" style={{ height: '100vh' }}>
@@ -45,6 +49,40 @@ export default function PanelPage() {
         </Flex>
       );
   }
+}
+
+/**
+ * The selection panel in a window of its own — the arrangement somebody sets up on a second
+ * monitor to watch one object while working on the map in the first.
+ *
+ * It follows selections over the bus rather than sharing a store, because a pop-out is a separate
+ * window with its own copy of every module. Its arrangement is its own too: this window was opened
+ * for a purpose, and inheriting the main window's sections would defeat that.
+ */
+function SelectionPopout() {
+  const { t } = useTranslation();
+  const setSelection = useWorkspaceStore((s) => s.setSelection);
+
+  useEffect(
+    () =>
+      subscribe((event) => {
+        if (event.kind === 'selection') {
+          setSelection(event.selection ?? null);
+        }
+      }),
+    [setSelection],
+  );
+
+  return (
+    <Flex vertical style={{ height: '100vh' }}>
+      <Typography.Title level={5} style={{ margin: 0, padding: '8px 12px' }}>
+        {t('panel.selectionTitle')}
+      </Typography.Title>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <SelectionPanel scope="popout" />
+      </div>
+    </Flex>
+  );
 }
 
 /**

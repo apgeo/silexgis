@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
 import { AimOutlined, DeleteOutlined, EditOutlined, ExportOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Descriptions, Empty, Flex, Popconfirm, Spin, Tag, Typography } from 'antd';
+import {
+  Alert, App, Button, ConfigProvider, Descriptions, Empty, Flex, Popconfirm, Spin, Tag, Typography,
+} from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -27,33 +29,65 @@ import {
   type EntranceSelection,
   type FeatureSelection,
 } from '../../stores/workspaceStore.ts';
-import HistoryPanel, { type HistoryRestore } from '../history/HistoryPanel.tsx';
+import { type HistoryRestore } from '../history/HistoryPanel.tsx';
 import { applyFeatureRestore } from '../history/historyModel.ts';
-import LinksSection from '../reslinks/LinksSection.tsx';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
+import MultiSelectionCard from './MultiSelectionCard.tsx';
+import PanelDock from './PanelDock.tsx';
+import SelectionSections, { PanelSectionsMenu } from './SelectionSections.tsx';
+import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
+import type { PanelScope } from '../../stores/panelPrefs.ts';
 import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
 
-export default function SelectionPanel() {
+/**
+ * The panel beside the map: what is selected, in the sections this person arranged.
+ *
+ * `scope` is which panel this is. Each keeps its own arrangement — the main dock, the 3D dock and
+ * every pop-out window — because a window somebody opened to watch one thing should not be
+ * rearranged by the window they work in.
+ */
+export default function SelectionPanel({ scope = 'main' }: { scope?: PanelScope } = {}) {
   const { t } = useTranslation();
   const selection = useWorkspaceStore((s) => s.selection);
+  const selectionSet = useWorkspaceStore((s) => s.selectionSet);
+  const density = useUiPrefsStore((s) => s.panels[scope]?.density);
 
-  if (!selection) {
-    return (
-      <Flex align="center" justify="center" style={{ height: '100%', padding: 16 }}>
-        <Empty description={t('map.noSelection')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+  const body = (() => {
+    // Several things picked at once answers first: showing one of them and ignoring the rest is
+    // what made a multi-selection look like it had not worked.
+    if (selectionSet.length > 1) {
+      return <MultiSelectionCard />;
+    }
+
+    if (!selection) {
+      return (
+        <Flex align="center" justify="center" style={{ height: '100%', padding: 16 }}>
+          <Empty description={t('map.noSelection')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        </Flex>
+      );
+    }
+
+    if (selection.kind === 'feature') {
+      return <FeatureCard selection={selection} scope={scope} />;
+    }
+
+    if (selection.kind === 'cluster') {
+      return <ClusterCard selection={selection} />;
+    }
+
+    return <CaveCard selection={selection} scope={scope} />;
+  })();
+
+  // Density is a preference rather than a breakpoint, so it is applied where the panel is drawn
+  // instead of being read by every component inside it.
+  return (
+    <ConfigProvider componentSize={density === 'compact' ? 'small' : undefined}>
+      <Flex vertical style={{ height: '100%' }}>
+        <PanelDock scope={scope} />
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>{body}</div>
       </Flex>
-    );
-  }
-
-  if (selection.kind === 'feature') {
-    return <FeatureCard selection={selection} />;
-  }
-
-  if (selection.kind === 'cluster') {
-    return <ClusterCard selection={selection} />;
-  }
-
-  return <CaveCard selection={selection} />;
+    </ConfigProvider>
+  );
 }
 
 /** A clicked low-zoom cluster: list its member entrances without moving the camera. */
@@ -94,7 +128,7 @@ function ClusterCard({ selection }: { selection: ClusterSelection }) {
   }
 
   return (
-    <div style={{ padding: 12, overflow: 'auto', height: '100%' }}>
+    <div style={{ padding: 12 }}>
       <Typography.Title level={5} style={{ marginTop: 0 }}>
         {t('map.clusterTitle', { count: entrances.length })}
       </Typography.Title>
@@ -131,7 +165,13 @@ function ClusterCard({ selection }: { selection: ClusterSelection }) {
   );
 }
 
-function CaveCard({ selection }: { selection: EntranceSelection | CaveSelection }) {
+function CaveCard({
+  selection,
+  scope,
+}: {
+  selection: EntranceSelection | CaveSelection;
+  scope: PanelScope;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { data: cave, isPending } = useCave(selection.caveId);
@@ -149,11 +189,8 @@ function CaveCard({ selection }: { selection: EntranceSelection | CaveSelection 
   const entrance = selection.kind === 'entrance' ? entrances?.find((e) => e.id === selection.entranceId) : undefined;
   const typeName = caveTypes?.find((x) => x.id === cave.caveTypeId)?.name;
 
-  return (
-    <div style={{ padding: 12, overflow: 'auto', height: '100%' }}>
-      <Typography.Title level={5} style={{ marginTop: 0 }}>
-        {cave.name}
-      </Typography.Title>
+  const details = (
+    <>
       {cave.approximateLocation && (
         <Alert type="warning" showIcon title={t('map.approximate')} style={{ marginBottom: 12 }} />
       )}
@@ -193,24 +230,34 @@ function CaveCard({ selection }: { selection: EntranceSelection | CaveSelection 
           </Button>
         )}
       </Flex>
-      {/* An entrance is a feature in its own right, so the panel links the thing that was
-          actually clicked: a link recorded from an entrance names that entrance, not the
-          cave it belongs to. The id comes from the selection rather than from the loaded
-          entrance, so which entity is being linked never depends on a list arriving. */}
-      <LinksSection
-        entityType="feature"
-        entityId={selection.kind === 'entrance' ? selection.entranceId : cave.id}
-        variant="compact"
-        canAdd
-        entityTitle={
-          selection.kind === 'entrance' ? (entrance?.name ?? t('features.unnamed')) : cave.name
-        }
+    </>
+  );
+
+  return (
+    <div style={{ padding: 12 }}>
+      <Typography.Title level={5} style={{ marginTop: 0 }}>
+        {cave.name}
+      </Typography.Title>
+      <PanelSectionsMenu scope={scope} />
+      {/* An entrance is a feature in its own right, so the sections hang off the thing that was
+          actually clicked: a link recorded from an entrance names that entrance, not the cave it
+          belongs to. The id comes from the selection rather than from the loaded entrance, so
+          which entity the sections describe never depends on a list arriving. */}
+      <SelectionSections
+        scope={scope}
+        subject={{
+          entityId: selection.kind === 'entrance' ? selection.entranceId : cave.id,
+          entityTitle:
+            selection.kind === 'entrance' ? (entrance?.name ?? t('features.unnamed')) : cave.name,
+          canEdit: false,
+          details,
+        }}
       />
     </div>
   );
 }
 
-function FeatureCard({ selection }: { selection: FeatureSelection }) {
+function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope: PanelScope }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
@@ -250,12 +297,13 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
   // Any feature id can land here (the list page and the envelope route are
   // cross-kind); caves and entrances have a richer card of their own.
   if (envelope.kind === 'cave') {
-    return <CaveCard selection={{ kind: 'cave', caveId: feature.id }} />;
+    return <CaveCard selection={{ kind: 'cave', caveId: feature.id }} scope={scope} />;
   }
   if (envelope.kind === 'caveEntrance' && envelope.entrance) {
     return (
       <CaveCard
         selection={{ kind: 'entrance', entranceId: feature.id, caveId: envelope.entrance.caveFeatureId }}
+        scope={scope}
       />
     );
   }
@@ -320,11 +368,10 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
     }
   };
 
-  return (
-    <div style={{ padding: 12, overflow: 'auto', height: '100%' }}>
-      <Typography.Title level={5} style={{ marginTop: 0 }}>
-        {feature.name ?? featureType?.name ?? t('features.unnamed')}
-      </Typography.Title>
+  const title = feature.name ?? featureType?.name ?? t('features.unnamed');
+
+  const details = (
+    <>
       {feature.omittedLocation && (
         <Alert type="warning" showIcon title={t('map.locationWithheld')} style={{ marginBottom: 12 }} />
       )}
@@ -386,20 +433,25 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
           </>
         )}
       </Flex>
-      <LinksSection
-        entityType="feature"
-        entityId={feature.id}
-        variant="compact"
-        canAdd
-        // The same name this panel puts at its top: a nameless feature still has to read as
-        // something in the sentence a link is composed from.
-        entityTitle={feature.name ?? featureType?.name ?? t('features.unnamed')}
-      />
-      <HistoryPanel
-        entityType="feature"
-        entityId={feature.id}
-        restore={
-          canEdit
+    </>
+  );
+
+  return (
+    <div style={{ padding: 12 }}>
+      <Typography.Title level={5} style={{ marginTop: 0 }}>
+        {title}
+      </Typography.Title>
+      <PanelSectionsMenu scope={scope} />
+      <SelectionSections
+        scope={scope}
+        subject={{
+          entityId: feature.id,
+          // The same name this panel puts at its top: a nameless feature still has to read as
+          // something in the sentence a link is composed from.
+          entityTitle: title,
+          canEdit,
+          details,
+          history: canEdit
             ? ({
                 // Audit rows carry the kind-qualified entity name.
                 entityType: 'Feature:Generic',
@@ -411,8 +463,8 @@ function FeatureCard({ selection }: { selection: FeatureSelection }) {
                   surfaceFeaturesChanged();
                 },
               } satisfies HistoryRestore)
-            : undefined
-        }
+            : undefined,
+        }}
       />
       {/*
         Mounted with the edit rather than kept mounted and closed: the editor makes a form

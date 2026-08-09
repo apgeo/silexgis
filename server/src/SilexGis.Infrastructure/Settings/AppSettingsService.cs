@@ -54,6 +54,9 @@ public sealed class AppSettingsService(
     public ValueTask<ImportSettings> GetImportAsync(CancellationToken ct = default) =>
         GetAsync<ImportSettings>(AppSettingSections.Import, "Import", ct);
 
+    public ValueTask<InterfaceSettings> GetInterfaceAsync(CancellationToken ct = default) =>
+        GetAsync<InterfaceSettings>(AppSettingSections.Interface, "Interface", ct);
+
     public async Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
         where T : class
     {

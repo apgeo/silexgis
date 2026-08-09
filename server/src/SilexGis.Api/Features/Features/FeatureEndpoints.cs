@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
@@ -23,6 +24,12 @@ namespace SilexGis.Api.Features.Features;
 /// </summary>
 public static class FeatureEndpoints
 {
+    /// <summary>
+    /// The most objects one request may name. Matches the ceiling on a multi-selection, because
+    /// that is what asks: past it the URL itself becomes the problem before the query does.
+    /// </summary>
+    private const int MaxIdFilter = 200;
+
     public static RouteGroupBuilder MapFeatureEndpoints(this RouteGroupBuilder api)
     {
         var features = api.MapGroup("/features").WithTags("Features");
@@ -54,6 +61,7 @@ public static class FeatureEndpoints
         string? bbox,
         string? tag,
         string? search,
+        [FromQuery] Guid[]? ids,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -63,6 +71,21 @@ public static class FeatureEndpoints
         }
 
         var query = db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers);
+
+        // A named set of objects — what a multi-selection asks about, and what a working set is.
+        // It narrows the same visibility-filtered query as every other condition rather than
+        // being answered from a second path: naming an id you may not read must return nothing,
+        // not a row, and must not be distinguishable from naming one that does not exist.
+        if (ids is { Length: > 0 })
+        {
+            if (ids.Length > MaxIdFilter)
+            {
+                return ApiProblems.BadRequest(
+                    "feature.too_many_ids", $"At most {MaxIdFilter} objects can be asked about at once.");
+            }
+
+            query = query.Where(f => ids.Contains(f.Id));
+        }
 
         // Enum query parameters arrive as the camelCase strings the JSON contract uses;
         // parse case-insensitively (route binding's Enum.TryParse would not).

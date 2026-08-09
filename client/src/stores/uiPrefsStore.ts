@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { DensityPref, PanelLayout, PanelPrefs, PanelScope } from './panelPrefs.ts';
+
+export type { DensityPref };
 
 /** Dialogs whose modal-vs-side-panel placement the user can choose. */
 export type DialogKind = 'cave-add' | 'feature-edit' | 'entrance-edit' | 'reslink-add-member';
@@ -11,8 +14,6 @@ export type DialogPlacement = 'modal' | 'drawer';
 export type LandingPage = 'map' | 'dashboard';
 
 export type ThemePref = 'system' | 'light' | 'dark';
-
-export type DensityPref = 'comfortable' | 'compact';
 
 /** Appearance choices that must be honoured before anything is painted. */
 export interface Appearance {
@@ -55,6 +56,17 @@ interface UiPrefsState {
    */
   appearance: Appearance;
   setAppearance: (patch: Partial<Appearance>) => void;
+  /**
+   * How each selection panel is arranged, keyed by which panel it is. Every mount keeps its own,
+   * so a pop-out somebody set up to show one thing is not rearranged by the main window.
+   */
+  panels: Partial<Record<PanelScope, PanelPrefs>>;
+  setPanelPrefs: (scope: PanelScope, patch: Partial<PanelPrefs>) => void;
+  /** Named arrangements of the whole workspace — chrome, not place. */
+  layouts: PanelLayout[];
+  saveLayout: (name: string, mapChromeHidden: boolean) => void;
+  applyLayout: (id: string) => void;
+  deleteLayout: (id: string) => void;
 }
 
 /**
@@ -86,16 +98,64 @@ export const useUiPrefsStore = create<UiPrefsState>()(
         set({ centerlineDetailZoom: detailZoom, centerlineMaxPaths: maxPaths }),
       appearance: DEFAULT_APPEARANCE,
       setAppearance: (patch) => set((state) => ({ appearance: { ...state.appearance, ...patch } })),
+      panels: {},
+      setPanelPrefs: (scope, patch) =>
+        set((state) => ({
+          panels: { ...state.panels, [scope]: { ...state.panels[scope], ...patch } },
+        })),
+      layouts: [],
+      saveLayout: (name, mapChromeHidden) =>
+        set((state) => {
+          // Saving under a name that already exists replaces it, which is what "save" means to
+          // somebody who just pressed it twice; a second entry with the same name would be a
+          // list nobody can tell apart.
+          const layout: PanelLayout = {
+            id: state.layouts.find((l) => l.name === name)?.id ?? crypto.randomUUID(),
+            name,
+            panels: structuredClone(state.panels),
+            mapChromeHidden,
+          };
+          return {
+            layouts: [...state.layouts.filter((l) => l.name !== name), layout].slice(-MAX_LAYOUTS),
+          };
+        }),
+      applyLayout: (id) =>
+        set((state) => {
+          const layout = state.layouts.find((l) => l.id === id);
+          if (!layout) {
+            return {};
+          }
+
+          // Replaced wholesale rather than merged: a layout is a complete arrangement, and
+          // merging would leave a panel the layout says nothing about sitting at whatever the
+          // last one left it — which is exactly the state loading a layout is meant to end.
+          return {
+            panels: structuredClone(layout.panels),
+            mapChromeHidden: layout.mapChromeHidden ?? state.mapChromeHidden,
+          };
+        }),
+      deleteLayout: (id) => set((state) => ({ layouts: state.layouts.filter((l) => l.id !== id) })),
     }),
     {
       name: 'silexgis.uiPrefs',
-      version: 2,
+      version: 3,
       // Without a migrate, raising the version makes zustand discard the whole stored blob —
       // wiping everyone's pinned types, landing page and centerline budgets to add one field.
-      migrate: (persisted, from) =>
-        from < 2
-          ? { ...(persisted as UiPrefsState), appearance: DEFAULT_APPEARANCE }
-          : (persisted as UiPrefsState),
+      migrate: (persisted, from) => {
+        const state = persisted as UiPrefsState;
+        return {
+          ...state,
+          appearance: from < 2 ? DEFAULT_APPEARANCE : state.appearance,
+          panels: from < 3 ? {} : (state.panels ?? {}),
+          layouts: from < 3 ? [] : (state.layouts ?? []),
+        };
+      },
     },
   ),
 );
+
+/**
+ * A ceiling on saved arrangements. Not a storage limit — the point is that a list somebody picks
+ * from stops being useful long before this, and the whole blob travels to the server.
+ */
+const MAX_LAYOUTS = 20;
