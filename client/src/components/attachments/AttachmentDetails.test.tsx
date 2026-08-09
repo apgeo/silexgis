@@ -30,6 +30,7 @@ const attachment: AttachmentInfo = {
   role: 'document',
   caption: 'Main entrance',
   sortOrder: 3,
+  isPrimary: false,
   addedBy: null,
   file: {
     id: 'file-1',

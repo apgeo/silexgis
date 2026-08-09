@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
   ApartmentOutlined,
+  AppstoreOutlined,
   CarOutlined,
   CloudUploadOutlined,
   CodeSandboxOutlined,
@@ -14,6 +15,7 @@ import {
   HistoryOutlined,
   LogoutOutlined,
   MailOutlined,
+  PictureOutlined,
   ProfileOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
@@ -64,8 +66,8 @@ export default function AppLayout() {
   // "settings" is listed so an unmatched path does not fall through to highlighting the map.
   // It matches no menu item, so nothing lights up — settings is not a sidebar destination.
   const sections = [
-    'map3d', 'dashboard', 'caves', 'features', 'geodata', 'cabinets', 'uploads', 'documents',
-    'trip-logs',
+    'map3d', 'dashboard', 'caves', 'features', 'geodata', 'gallery', 'albums', 'cabinets',
+    'uploads', 'documents', 'trip-logs',
     'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
     'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'admin/term-rules',
@@ -158,6 +160,10 @@ export default function AppLayout() {
               // is on a shelf is decided per document, not by hiding the shelf.
               ...(can('documents')
                 ? [
+                    // The gallery sits beside the map data rather than under the filing tree:
+                    // photographs are browsed, and paperwork is filed.
+                    { key: 'gallery', icon: <PictureOutlined />, label: t('nav.gallery') },
+                    { key: 'albums', icon: <AppstoreOutlined />, label: t('nav.albums') },
                     { key: 'cabinets', icon: <FolderOutlined />, label: t('nav.cabinets') },
                     // The record of what arrived together, and — for whoever may — the way
                     // to import a directory the server can already reach.

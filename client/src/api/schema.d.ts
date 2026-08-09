@@ -6971,6 +6971,807 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/attachments/{id}/primary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Makes this the object's headline picture, replacing whichever was; requires Write on the target. */
+        put: {
+            parameters: {
+                query?: {
+                    primary?: boolean;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Photographs the caller may see, newest first, narrowed by cave, feature, trip, caver, tag, album, camera, date or map extent. */
+        get: {
+            parameters: {
+                query?: {
+                    CaveId?: string;
+                    FeatureId?: string;
+                    TripLogId?: string;
+                    CaverId?: string;
+                    TagId?: number;
+                    AlbumId?: string;
+                    UploadBatchId?: string;
+                    Camera?: string;
+                    Bbox?: string;
+                    Unplaced?: boolean;
+                    From?: string;
+                    To?: string;
+                    Search?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfPhotoDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photos/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Groups of photographs holding byte-identical content. */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoDuplicateGroupDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photos/deleted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Photographs the caller deleted that can still be restored. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfDeletedPhotoDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photos/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One photograph: its credit, what it states about itself, and where it hangs. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photos/{documentId}/credit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sets the photographer, caption, licence and place; requires write access. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhotoCreditWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photos/{documentId}/public": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Puts a photograph in the installation's public gallery, or takes it out. */
+        put: {
+            parameters: {
+                query: {
+                    published: boolean;
+                };
+                header?: never;
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photos/{documentId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restores a deleted photograph inside its window. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photos/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Tags, attaches, re-audiences, rotates, files into an album or deletes many photographs at once. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhotoBulkRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoBulkResultDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/albums": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Albums the caller may read. */
+        get: {
+            parameters: {
+                query?: {
+                    subjectEntityId?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfAlbumDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates an album. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AlbumWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AlbumDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/albums/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One album. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AlbumDto"];
+                    };
+                };
+            };
+        };
+        /** Renames or re-audiences an album; requires write access. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AlbumWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AlbumDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes an album. The photographs in it are untouched. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/albums/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adds photographs to the end of an album. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": string[];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/albums/{id}/items/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Takes a photograph out of an album; clears the cover if it was the cover. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/albums/{id}/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Moves a photograph to sit after another, or to the start. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AlbumReorderRequest"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/albums/{id}/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sets the album's cover, which has to be one of its photographs. */
+        put: {
+            parameters: {
+                query?: {
+                    documentId?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/albums/{id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mints a share link; the token is returned once and never stored in the clear. */
+        post: {
+            parameters: {
+                query?: {
+                    mode?: components["schemas"]["FeatureShareMode"];
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AlbumShareDto"];
+                    };
+                };
+            };
+        };
+        /** Revokes every share link of an album. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The installation's curated public gallery: photographs an administrator published. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfPublicPhotoDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/albums/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One album, opened by its share link; renderings only. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublicAlbumDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reslinks/for-target": {
         parameters: {
             query?: never;
@@ -9883,6 +10684,54 @@ export interface components {
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
+        AlbumDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            description: null | string;
+            /** Format: uuid */
+            coverDocumentId: null | string;
+            coverThumbnailUrl: null | string;
+            subjectEntityType: null | string;
+            /** Format: uuid */
+            subjectEntityId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: int32 */
+            photoCount: number;
+            hasActiveShare: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AlbumReorderRequest: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            afterDocumentId: null | string;
+        };
+        AlbumShareDto: {
+            /** Format: uuid */
+            id: string;
+            token: null | string;
+            mode: components["schemas"]["FeatureShareMode"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AlbumWriteRequest: {
+            title: string;
+            description: null | string;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            subjectEntityType: null | string;
+            /** Format: uuid */
+            subjectEntityId: null | string;
+        };
         /** @enum {unknown} */
         AnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange" | "modelStation" | "modelStationRange" | "modelSurvey" | "modelSurveyRange" | "modelPoint" | "waypoint" | "waypointRange";
         AttachmentCreateRequest: {
@@ -9910,6 +10759,7 @@ export interface components {
             sortOrder: number;
             /** Format: uuid */
             addedBy: null | string;
+            isPrimary: boolean;
             file: components["schemas"]["FileDto"];
         };
         /** @enum {unknown} */
@@ -10354,6 +11204,18 @@ export interface components {
             completedAt: null | string;
             /** Format: date-time */
             expiresAt: null | string;
+        };
+        DeletedPhotoDto: {
+            /** Format: uuid */
+            documentId: string;
+            title: string;
+            /** Format: date-time */
+            deletedAt: string;
+            /** Format: date-time */
+            restorableUntil: string;
+            /** Format: uuid */
+            deletedByUserId: null | string;
+            deletedByName: null | string;
         };
         DelimitedSourceOptions: {
             delimiter?: null | string;
@@ -11528,6 +12390,15 @@ export interface components {
         };
         /** @enum {unknown} */
         PageDivision: "whole" | "page" | "sheet" | "slide";
+        PagedResultOfAlbumDto: {
+            items: components["schemas"]["AlbumDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfAuditEntryDto: {
             items: components["schemas"]["AuditEntryDto"][];
             /** Format: int32 */
@@ -11548,6 +12419,15 @@ export interface components {
         };
         PagedResultOfCaveListItemDto: {
             items: components["schemas"]["CaveListItemDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfDeletedPhotoDto: {
+            items: components["schemas"]["DeletedPhotoDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -11629,6 +12509,24 @@ export interface components {
         };
         PagedResultOfMemberDto: {
             items: components["schemas"]["MemberDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfPhotoDto: {
+            items: components["schemas"]["PhotoDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfPublicPhotoDto: {
+            items: components["schemas"]["PublicPhotoDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -11749,6 +12647,26 @@ export interface components {
             pendingPhoneNumber: null | string;
             smsConfigured: boolean;
         };
+        PhotoBulkRequest: {
+            documentIds: string[];
+            addTagIds: null | number[];
+            removeTagIds: null | number[];
+            visibility: null | components["schemas"]["Visibility"];
+            /** Format: int32 */
+            rotateQuarterTurns: null | number;
+            attachEntityType: null | string;
+            /** Format: uuid */
+            attachEntityId: null | string;
+            /** Format: uuid */
+            addToAlbumId: null | string;
+            delete: null | boolean;
+        };
+        PhotoBulkResultDto: {
+            changed: string[];
+            refused: {
+                [key: string]: string;
+            };
+        };
         PhotoCandidateDto: {
             /** Format: uuid */
             key: string;
@@ -11798,6 +12716,23 @@ export interface components {
                 [key: string]: components["schemas"]["PhotoDecision"];
             };
         };
+        PhotoCreditDto: {
+            /** Format: uuid */
+            photographerCaverId: null | string;
+            photographerName: null | string;
+            caption: null | string;
+            licenceCode: null | string;
+            placeName: null | string;
+            inPublicGallery: boolean;
+        };
+        PhotoCreditWriteRequest: {
+            /** Format: uuid */
+            photographerCaverId: null | string;
+            photographerName: null | string;
+            caption: null | string;
+            licenceCode: null | string;
+            placeName: null | string;
+        };
         PhotoDecision: {
             action?: components["schemas"]["ImportDecisionAction"];
             kind?: null | components["schemas"]["ImportTargetKind"];
@@ -11809,6 +12744,40 @@ export interface components {
             attachToFeatureId?: null | string;
             keepElevation?: null | boolean;
             position?: null | number[];
+        };
+        PhotoDto: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            fileId: string;
+            title: string;
+            originalName: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: int32 */
+            width: null | number;
+            /** Format: int32 */
+            height: null | number;
+            /** Format: int32 */
+            orientationQuarterTurns: number;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            /** Format: date-time */
+            takenAt: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            thumbnailUrl: string;
+            previewUrl: string;
+            contentUrl: string;
+            mayDownloadOriginal: boolean;
+            credit: components["schemas"]["PhotoCreditDto"];
+            photo: null | components["schemas"]["PhotoExif"];
+            position: null | components["schemas"]["PhotoPositionDto"];
+        };
+        PhotoDuplicateGroupDto: {
+            sha256: string;
+            photos: components["schemas"]["PhotoDto"][];
         };
         PhotoExif: {
             cameraMake?: null | string;
@@ -11980,6 +12949,26 @@ export interface components {
         ProtectedDisplay: "snapPoint" | "withhold";
         ProtectionSettingsDto: {
             revealProtectedAssociations: boolean;
+        };
+        PublicAlbumDto: {
+            title: string;
+            description: null | string;
+            photos: components["schemas"]["PublicPhotoDto"][];
+        };
+        PublicPhotoDto: {
+            /** Format: uuid */
+            documentId: string;
+            title: string;
+            caption: null | string;
+            photographerName: null | string;
+            licenceCode: null | string;
+            placeName: null | string;
+            /** Format: int32 */
+            width: null | number;
+            /** Format: int32 */
+            height: null | number;
+            thumbnailUrl: string;
+            previewUrl: string;
         };
         /** @enum {unknown} */
         RasterStatus: "uploaded" | "processing" | "ready" | "failed";

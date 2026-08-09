@@ -41,6 +41,11 @@ const RelationTypesPage = lazy(() => import('./pages/admin/RelationTypesPage.tsx
 const CabinetsPage = lazy(() => import('./pages/documents/CabinetsPage.tsx'));
 const DocumentDetailPage = lazy(() => import('./pages/documents/DocumentDetailPage.tsx'));
 const UploadsPage = lazy(() => import('./pages/documents/UploadsPage.tsx'));
+const GalleryPage = lazy(() => import('./pages/gallery/GalleryPage.tsx'));
+const AlbumsPage = lazy(() => import('./pages/gallery/AlbumsPage.tsx'));
+const PublicGalleryPage = lazy(() => import('./pages/gallery/PublicGalleryPage.tsx'));
+const SharedAlbumPage = lazy(() =>
+  import('./pages/gallery/PublicGalleryPage.tsx').then((m) => ({ default: m.SharedAlbumPage })));
 const LinkPage = lazy(() => import('./pages/links/LinkPage.tsx'));
 const CavingGroupsPage = lazy(() => import('./pages/cavingGroups/CavingGroupsPage.tsx'));
 const CaversPage = lazy(() => import('./pages/cavers/CaversPage.tsx'));
@@ -71,6 +76,10 @@ const router = createBrowserRouter([
   { path: '/unsubscribe', element: <UnsubscribePage /> },
   { path: '/shared/view/:token', element: <Loadable><SharedViewPage /></Loadable> },
   { path: '/shared/features/:token', element: <Loadable><SharedFeaturePage /></Loadable> },
+  // The two surfaces a visitor reaches without an account: one album by its link, and the
+  // installation's curated gallery. Both show renderings and nothing else.
+  { path: '/shared/albums/:token', element: <Loadable><SharedAlbumPage /></Loadable> },
+  { path: '/gallery/public', element: <Loadable><PublicGalleryPage /></Loadable> },
   {
     element: <RequireAuth />,
     children: [
@@ -106,6 +115,8 @@ const router = createBrowserRouter([
           { path: '/admin/relation-types', element: <Loadable><RelationTypesPage /></Loadable> },
           { path: '/cabinets', element: <Loadable><CabinetsPage /></Loadable> },
           { path: '/uploads', element: <Loadable><UploadsPage /></Loadable> },
+          { path: '/gallery', element: <Loadable><GalleryPage /></Loadable> },
+          { path: '/albums', element: <Loadable><AlbumsPage /></Loadable> },
           { path: '/documents/:id', element: <Loadable><DocumentDetailPage /></Loadable> },
           // A link's own page, reached by the short code someone pasted into a chat.
           { path: '/links/:code', element: <Loadable><LinkPage /></Loadable> },
