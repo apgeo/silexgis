@@ -20,6 +20,9 @@ export type TextExtractionState = components['schemas']['TextExtractionState'];
 export type CabinetInfo = components['schemas']['CabinetDto'];
 export type CabinetWrite = components['schemas']['CabinetWriteRequest'];
 export type CabinetDocument = components['schemas']['CabinetDocumentDto'];
+export type UploadBatchInfo = components['schemas']['UploadBatchDto'];
+export type UploadBatchItemInfo = components['schemas']['UploadBatchItemDto'];
+export type UnfiledDocument = components['schemas']['UnfiledDocumentDto'];
 export type Visibility = components['schemas']['Visibility'];
 export type FileConfig = components['schemas']['FileConfigDto'];
 export type EntranceFeatureCollection = components['schemas']['FeatureCollection'];
@@ -109,6 +112,12 @@ export const queryKeys = {
   // because somebody corrected a spelling in the metadata panel above it.
   documentComments: (id: string) => ['document-comments', id] as const,
   cabinets: ['cabinets'] as const,
+  unfiledDocuments: (params: UnfiledDocumentParams) => ['documents', 'unfiled', params] as const,
+  uploadBatches: (page: number, pageSize: number) => ['upload-batches', 'list', page, pageSize] as const,
+  uploadBatch: (id: string) => ['upload-batches', 'detail', id] as const,
+  uploadBatchItems: (id: string, params: UploadBatchItemParams) =>
+    ['upload-batches', 'items', id, params] as const,
+  importRoots: ['upload-batches', 'import-roots'] as const,
   cabinetDocuments: (id: string, params: CabinetDocumentParams) =>
     ['cabinets', id, 'documents', params] as const,
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
@@ -3085,6 +3094,181 @@ export function useReimportGeofile() {
       void queryClient.invalidateQueries({ queryKey: ['geofiles'] });
       void queryClient.invalidateQueries({ queryKey: ['import-preview'] });
       void queryClient.invalidateQueries({ queryKey: ['geofile-columns'] });
+    },
+  });
+}
+
+export interface UnfiledDocumentParams {
+  uploadBatchId?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * The inbox: documents filed nowhere.
+ *
+ * "Unfiled" is a query rather than a shelf — a document with no cabinet row — which is what
+ * keeps filing a pure addition and leaving the inbox automatic. Nothing here is a way to see
+ * anything: it is filtered by the same read rule as every other document listing, and an
+ * unfiled document starts private because it has no cabinet for a rule to reach it through.
+ */
+export function useUnfiledDocuments(params: UnfiledDocumentParams = {}, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.unfiledDocuments(params),
+    queryFn: () => unwrap(api.GET('/api/v1/documents/unfiled', { params: { query: params } })),
+    enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+/**
+ * Files and unfiles many documents at once.
+ *
+ * The answer is a partial result rather than all-or-nothing, and the caller has to read it: a
+ * selection of two hundred documents will, on a real archive, contain one somebody else owns.
+ */
+export function useBulkFiling() {
+  const invalidate = useInvalidateCabinets();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: {
+      documentIds: string[];
+      fileIntoCabinetIds?: string[];
+      unfileFromCabinetIds?: string[];
+    }) =>
+      unwrap(api.POST('/api/v1/cabinets/filing', {
+        // Both lists are always sent: the contract distinguishes "no shelves named" from
+        // "this field was not mentioned", and only the first of those is a thing to ask for.
+        body: {
+          documentIds: request.documentIds,
+          fileIntoCabinetIds: request.fileIntoCabinetIds ?? [],
+          unfileFromCabinetIds: request.unfileFromCabinetIds ?? [],
+        },
+      })),
+    onSuccess: () => {
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+}
+
+/** The caller's own drops, newest first. */
+export function useUploadBatches(page = 1, pageSize = 20, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.uploadBatches(page, pageSize),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/upload-batches', { params: { query: { page, pageSize } } })),
+    enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+/**
+ * One drop and its counts.
+ *
+ * Polled while the work is still running, because an archive expansion and a directory import
+ * happen in the background and the page has nothing else to learn from.
+ */
+export function useUploadBatch(id: string | undefined, poll = false) {
+  return useQuery({
+    queryKey: queryKeys.uploadBatch(id ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/upload-batches/{id}', { params: { path: { id: id! } } })),
+    enabled: Boolean(id),
+    refetchInterval: poll ? 2000 : false,
+    retry: false,
+  });
+}
+
+export interface UploadBatchItemParams {
+  outcome?: 'pending' | 'stored' | 'skipped' | 'failed';
+  page?: number;
+  pageSize?: number;
+}
+
+/** The per-file report of one drop. */
+export function useUploadBatchItems(
+  id: string | undefined,
+  params: UploadBatchItemParams = {},
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.uploadBatchItems(id ?? '', params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/upload-batches/{id}/items', {
+        params: { path: { id: id! }, query: params },
+      })),
+    enabled: Boolean(id) && enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+/** Opens a drop, so everything uploaded into it can be found together afterwards. */
+export function useOpenUploadBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: { label?: string | null; cabinetId?: string | null; tagName?: string | null }) =>
+      unwrap(api.POST('/api/v1/upload-batches', {
+        body: {
+          label: request.label ?? null,
+          cabinetId: request.cabinetId ?? null,
+          tagName: request.tagName ?? null,
+        },
+      })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['upload-batches'] }),
+  });
+}
+
+/** Closes a drop; nothing more can be counted into it. */
+export function useCloseUploadBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST('/api/v1/upload-batches/{id}/close', { params: { path: { id } } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['upload-batches'] }),
+  });
+}
+
+/**
+ * The directories this installation may import from.
+ *
+ * Empty means the operator has not switched the feature on — which the page states rather than
+ * offering a field that refuses everything.
+ */
+export function useImportRoots(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.importRoots,
+    queryFn: () => unwrap(api.GET('/api/v1/upload-batches/import-roots')),
+    enabled,
+    retry: false,
+    staleTime: 60 * 60_000,
+  });
+}
+
+/** Starts a background import from a directory the server itself can reach. */
+export function useImportDirectory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: {
+      path: string;
+      label?: string | null;
+      cabinetId?: string | null;
+      tagName?: string | null;
+    }) =>
+      unwrap(api.POST('/api/v1/upload-batches/import-directory', {
+        body: {
+          path: request.path,
+          label: request.label ?? null,
+          cabinetId: request.cabinetId ?? null,
+          tagName: request.tagName ?? null,
+        },
+      })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['upload-batches'] });
+      void queryClient.invalidateQueries({ queryKey: ['cabinets'] });
     },
   });
 }

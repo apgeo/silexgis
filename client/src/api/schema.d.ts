@@ -5381,11 +5381,19 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Uploads a file (multipart); attach it to an entity via /attachments. */
+        /** Uploads a file (multipart), optionally filing it into a cabinet, attaching it to an object, and counting it into an upload batch. */
         post: {
             parameters: {
                 query?: {
                     cavingGroupId?: string;
+                    cabinetId?: string;
+                    relativePath?: string;
+                    attachEntityType?: string;
+                    attachEntityId?: string;
+                    attachRole?: components["schemas"]["AttachmentRole"];
+                    batchId?: string;
+                    allowDuplicate?: boolean;
+                    expandArchive?: boolean;
                 };
                 header?: never;
                 path?: never;
@@ -5423,7 +5431,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Upload limits this installation applies. */
+        /** Upload limits this installation applies, and how much room the caller has left. */
         get: {
             parameters: {
                 query?: never;
@@ -5440,6 +5448,44 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["FileConfigDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/duplicate-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether a document the caller may read already holds content with this hash. */
+        get: {
+            parameters: {
+                query: {
+                    sha256: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DuplicateCheckDto"];
                     };
                 };
             };
@@ -5748,6 +5794,465 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["PageTextDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Opens a resumable upload and returns where to send from. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UploadSessionOpenRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UploadSessionDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/uploads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How far a resumable upload has got — the offset to resume from. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UploadSessionDto"];
+                    };
+                };
+            };
+        };
+        /** Appends the next piece at the given offset. */
+        put: {
+            parameters: {
+                query: {
+                    offset: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UploadSessionDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Abandons a resumable upload and drops its partial content. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/uploads/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finishes a resumable upload and files the assembled document. */
+        post: {
+            parameters: {
+                query?: {
+                    allowDuplicate?: boolean;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FileDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/upload-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own drops, newest first. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfUploadBatchDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Opens a drop so everything uploaded into it can be found together afterwards. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UploadBatchOpenRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UploadBatchDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/upload-batches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One drop and its counts. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UploadBatchDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/upload-batches/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The per-file report of one drop. */
+        get: {
+            parameters: {
+                query?: {
+                    outcome?: components["schemas"]["UploadItemOutcome"];
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfUploadBatchItemDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/upload-batches/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Closes a drop; nothing more can be counted into it. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UploadBatchDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/upload-batches/import-roots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Directories on the server this installation may import from. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DirectoryImportConfigDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/upload-batches/import-directory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Starts a background import from a directory the server itself can reach. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DirectoryImportRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UploadBatchDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/unfiled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documents the caller may read that sit in no cabinet — the inbox filing is deferred into. */
+        get: {
+            parameters: {
+                query?: {
+                    uploadBatchId?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfUnfiledDocumentDto"];
                     };
                 };
             };
@@ -6237,6 +6742,46 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cabinets/filing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Files and unfiles many documents at once; reports per-document refusals rather than failing whole. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BulkFilingRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BulkFilingResultDto"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -9368,7 +9913,7 @@ export interface components {
             file: components["schemas"]["FileDto"];
         };
         /** @enum {unknown} */
-        AttachmentRole: "photoEntrance" | "photoInterior" | "photoSurface" | "document" | "map2d" | "surveyData" | "other" | "report";
+        AttachmentRole: "photoEntrance" | "photoInterior" | "photoSurface" | "document" | "map2d" | "surveyData" | "other" | "report" | null;
         AttachmentUpdateRequest: {
             role: components["schemas"]["AttachmentRole"];
             caption: null | string;
@@ -9399,6 +9944,29 @@ export interface components {
         AvatarPresetsDto: {
             presets: string[];
         };
+        BulkFilingRequest: {
+            documentIds: string[];
+            fileIntoCabinetIds: null | string[];
+            unfileFromCabinetIds: null | string[];
+        };
+        BulkFilingResultDto: {
+            filed: string[];
+            refused: {
+                [key: string]: string;
+            };
+        };
+        CabinetDefaultsDto: {
+            /** Format: int64 */
+            documentTypeId: null | number;
+            visibility: null | components["schemas"]["Visibility"];
+            tagIds: number[];
+            requiredMetadataKeys: string[];
+            /** Format: int64 */
+            effectiveDocumentTypeId: null | number;
+            effectiveVisibility: null | components["schemas"]["Visibility"];
+            effectiveTagIds: number[];
+            effectiveRequiredMetadataKeys: string[];
+        };
         CabinetDocumentDto: {
             /** Format: uuid */
             id: string;
@@ -9416,6 +9984,7 @@ export interface components {
             sizeBytes: null | number;
             /** Format: date-time */
             updatedAt: string;
+            missingMetadataKeys: string[];
         };
         CabinetDto: {
             /** Format: uuid */
@@ -9427,12 +9996,18 @@ export interface components {
             ancestorIds: string[];
             /** Format: int32 */
             documentCount: number;
+            defaults: components["schemas"]["CabinetDefaultsDto"];
         };
         CabinetWriteRequest: {
             name: string;
             description: null | string;
             /** Format: uuid */
             parentId: null | string;
+            /** Format: int64 */
+            defaultDocumentTypeId?: null | number;
+            defaultVisibility?: null | components["schemas"]["Visibility"];
+            defaultTagIds?: null | number[];
+            requiredMetadataKeys?: null | string[];
         };
         /** @enum {unknown} */
         CandidateGeometry: "point" | "line" | "area" | "other";
@@ -9787,6 +10362,16 @@ export interface components {
             elevationColumn?: null | string;
             wktColumn?: null | string;
         };
+        DirectoryImportConfigDto: {
+            roots: string[];
+        };
+        DirectoryImportRequest: {
+            path: string;
+            label: null | string;
+            /** Format: uuid */
+            cabinetId: null | string;
+            tagName: null | string;
+        };
         /** @enum {unknown} */
         DocumentAnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange";
         DocumentCommentCreateRequest: {
@@ -9894,6 +10479,12 @@ export interface components {
             /** Format: uuid */
             cavingGroupId: null | string;
             language: null | string;
+        };
+        DuplicateCheckDto: {
+            duplicate: boolean;
+            /** Format: uuid */
+            documentId: null | string;
+            title: null | string;
         };
         EffectiveAccessDto: {
             actions: components["schemas"]["AccessAction"];
@@ -10233,6 +10824,19 @@ export interface components {
         FileConfigDto: {
             /** Format: int64 */
             maxUploadBytes: number;
+            /** Format: int64 */
+            remainingBytes: null | number;
+            /** Format: int64 */
+            quotaBytes: null | number;
+            /** Format: int64 */
+            usedBytes: null | number;
+            acceptedExtensions: string[];
+            refusedExtensions: string[];
+            /** Format: int32 */
+            chunkBytes: number;
+            /** Format: int64 */
+            resumableThresholdBytes: number;
+            archiveExtensions: string[];
         };
         FileDto: {
             /** Format: uuid */
@@ -11052,6 +11656,33 @@ export interface components {
         };
         PagedResultOfTripLogDto: {
             items: components["schemas"]["TripLogDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfUnfiledDocumentDto: {
+            items: components["schemas"]["UnfiledDocumentDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfUploadBatchDto: {
+            items: components["schemas"]["UploadBatchDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfUploadBatchItemDto: {
+            items: components["schemas"]["UploadBatchItemDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -11934,12 +12565,115 @@ export interface components {
         UiPreferencesWriteRequest: {
             preferences: components["schemas"]["JsonElement"];
         };
+        UnfiledDocumentDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: int64 */
+            documentTypeId: null | number;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            /** Format: uuid */
+            uploadBatchId: null | string;
+            /** Format: uuid */
+            currentFileId: null | string;
+            kind: null | components["schemas"]["FileKind"];
+            mimeType: null | string;
+            /** Format: int64 */
+            sizeBytes: null | number;
+            /** Format: date-time */
+            createdAt: string;
+        };
         UnsubscribeRequest: {
             token: string;
         };
         UnsubscribeResultDto: {
             category: components["schemas"]["NotificationCategory"];
         };
+        UploadBatchDto: {
+            /** Format: uuid */
+            id: string;
+            source: components["schemas"]["UploadSource"];
+            status: components["schemas"]["UploadBatchStatus"];
+            label: null | string;
+            /** Format: uuid */
+            cabinetId: null | string;
+            /** Format: int64 */
+            tagId: null | number;
+            sourceDescription: null | string;
+            /** Format: int32 */
+            totalCount: number;
+            /** Format: int32 */
+            storedCount: number;
+            /** Format: int32 */
+            skippedCount: number;
+            /** Format: int32 */
+            failedCount: number;
+            error: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            completedAt: null | string;
+        };
+        UploadBatchItemDto: {
+            /** Format: int64 */
+            id: number;
+            sourcePath: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            outcome: components["schemas"]["UploadItemOutcome"];
+            /** Format: uuid */
+            documentId: null | string;
+            documentTitle: null | string;
+            /** Format: uuid */
+            cabinetId: null | string;
+            reason: null | string;
+            /** Format: uuid */
+            duplicateOfDocumentId: null | string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        UploadBatchOpenRequest: {
+            label: null | string;
+            /** Format: uuid */
+            cabinetId: null | string;
+            tagName: null | string;
+        };
+        /** @enum {unknown} */
+        UploadBatchStatus: "open" | "running" | "completed" | "failed";
+        /** @enum {unknown} */
+        UploadItemOutcome: "pending" | "stored" | "skipped" | "failed";
+        UploadSessionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            receivedBytes: number;
+            /** Format: int64 */
+            declaredSizeBytes: number;
+            /** Format: int32 */
+            chunkBytes: number;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        UploadSessionOpenRequest: {
+            fileName: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: uuid */
+            cabinetId: null | string;
+            relativePath: null | string;
+            attachEntityType: null | string;
+            /** Format: uuid */
+            attachEntityId: null | string;
+            attachRole: null | components["schemas"]["AttachmentRole"];
+            /** Format: uuid */
+            batchId: null | string;
+            /** Format: uuid */
+            cavingGroupId: null | string;
+        };
+        /** @enum {unknown} */
+        UploadSource: "interactive" | "archive" | "serverDirectory";
         UserAddressDto: {
             /** Format: uuid */
             id: string;

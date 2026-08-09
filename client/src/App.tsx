@@ -40,6 +40,7 @@ const DocumentTypesPage = lazy(() => import('./pages/admin/DocumentTypesPage.tsx
 const RelationTypesPage = lazy(() => import('./pages/admin/RelationTypesPage.tsx'));
 const CabinetsPage = lazy(() => import('./pages/documents/CabinetsPage.tsx'));
 const DocumentDetailPage = lazy(() => import('./pages/documents/DocumentDetailPage.tsx'));
+const UploadsPage = lazy(() => import('./pages/documents/UploadsPage.tsx'));
 const LinkPage = lazy(() => import('./pages/links/LinkPage.tsx'));
 const CavingGroupsPage = lazy(() => import('./pages/cavingGroups/CavingGroupsPage.tsx'));
 const CaversPage = lazy(() => import('./pages/cavers/CaversPage.tsx'));
@@ -104,6 +105,7 @@ const router = createBrowserRouter([
           { path: '/admin/document-types', element: <Loadable><DocumentTypesPage /></Loadable> },
           { path: '/admin/relation-types', element: <Loadable><RelationTypesPage /></Loadable> },
           { path: '/cabinets', element: <Loadable><CabinetsPage /></Loadable> },
+          { path: '/uploads', element: <Loadable><UploadsPage /></Loadable> },
           { path: '/documents/:id', element: <Loadable><DocumentDetailPage /></Loadable> },
           // A link's own page, reached by the short code someone pasted into a chat.
           { path: '/links/:code', element: <Loadable><LinkPage /></Loadable> },

@@ -2,6 +2,7 @@
 import {
   ApartmentOutlined,
   CarOutlined,
+  CloudUploadOutlined,
   CodeSandboxOutlined,
   DashboardOutlined,
   DatabaseOutlined,
@@ -63,7 +64,8 @@ export default function AppLayout() {
   // "settings" is listed so an unmatched path does not fall through to highlighting the map.
   // It matches no menu item, so nothing lights up — settings is not a sidebar destination.
   const sections = [
-    'map3d', 'dashboard', 'caves', 'features', 'geodata', 'cabinets', 'documents', 'trip-logs',
+    'map3d', 'dashboard', 'caves', 'features', 'geodata', 'cabinets', 'uploads', 'documents',
+    'trip-logs',
     'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
     'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'admin/term-rules',
@@ -155,7 +157,12 @@ export default function AppLayout() {
               // The filing tree is readable by anyone who may read documents at all; what
               // is on a shelf is decided per document, not by hiding the shelf.
               ...(can('documents')
-                ? [{ key: 'cabinets', icon: <FolderOutlined />, label: t('nav.cabinets') }]
+                ? [
+                    { key: 'cabinets', icon: <FolderOutlined />, label: t('nav.cabinets') },
+                    // The record of what arrived together, and — for whoever may — the way
+                    // to import a directory the server can already reach.
+                    { key: 'uploads', icon: <CloudUploadOutlined />, label: t('nav.uploads') },
+                  ]
                 : []),
               { key: 'trip-logs', icon: <CarOutlined />, label: t('nav.trips') },
               { key: 'caving-groups', icon: <TeamOutlined />, label: t('nav.cavingGroups') },

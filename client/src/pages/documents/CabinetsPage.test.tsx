@@ -5,6 +5,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import '../../i18n';
 
+/**
+ * What a shelf says about whatever lands on it. Every cabinet carries this — the server
+ * always sends it, resolved — so the fixtures do too rather than the page defending against
+ * a shape it will never be given.
+ */
+const noDefaults = {
+  documentTypeId: null,
+  visibility: null,
+  tagIds: [],
+  requiredMetadataKeys: [],
+  effectiveDocumentTypeId: null,
+  effectiveVisibility: null,
+  effectiveTagIds: [],
+  effectiveRequiredMetadataKeys: [],
+};
+
 const cabinets = [
   {
     id: 'c1',
@@ -13,6 +29,7 @@ const cabinets = [
     description: 'Everything the club keeps.',
     ancestorIds: ['c1'],
     documentCount: 3,
+    defaults: noDefaults,
   },
   {
     id: 'c2',
@@ -21,6 +38,7 @@ const cabinets = [
     description: null,
     ancestorIds: ['c1', 'c2'],
     documentCount: 2,
+    defaults: noDefaults,
   },
 ];
 
@@ -38,6 +56,7 @@ const shelf = {
       kind: 'document',
       mimeType: 'application/pdf',
       sizeBytes: 2048,
+      missingMetadataKeys: [],
       updatedAt: '2026-08-01T00:00:00Z',
     },
   ],

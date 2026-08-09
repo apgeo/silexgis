@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
 import {
-  DeleteOutlined, EditOutlined, FolderOpenOutlined, FolderOutlined, PlusOutlined,
+  DeleteOutlined, EditOutlined, FolderOpenOutlined, FolderOutlined, InboxOutlined, PlusOutlined,
+  UploadOutlined,
 } from '@ant-design/icons';
 import {
   App, Alert, Breadcrumb, Button, Collapse, Empty, Flex, Form, Input, Layout, Modal, Popconfirm,
@@ -18,12 +19,23 @@ import {
   useCapabilities,
   useCreateCabinet,
   useDeleteCabinet,
+  useDocumentTypes,
   useFileDocument,
+  useTags,
   useUpdateCabinet,
   type CabinetDocument,
   type CabinetInfo,
 } from '../../api/hooks.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import BulkFilingBar from '../../components/uploads/BulkFilingBar.tsx';
+import UnfiledDocuments from '../../components/uploads/UnfiledDocuments.tsx';
+import UploadDrawer from '../../components/uploads/UploadDrawer.tsx';
+
+/**
+ * The tree's first row is not a cabinet: it is the inbox, and it is a query rather than a
+ * shelf. Giving it a reserved key keeps the selection one piece of state instead of two.
+ */
+const UnfiledKey = '__unfiled__';
 
 /** Bytes as the shortest unit that keeps the number readable. */
 function formatSize(bytes: number | null): string {
@@ -72,6 +84,10 @@ interface CabinetDraft {
   name: string;
   description: string | null;
   parentId: string | null;
+  defaultDocumentTypeId: number | null;
+  defaultVisibility: CabinetInfo['defaults']['visibility'];
+  defaultTagIds: number[];
+  requiredMetadataKeys: string[];
 }
 
 /**
@@ -98,7 +114,17 @@ function CabinetEditModal({
   onSubmit: (draft: CabinetDraft) => Promise<void>;
 }) {
   const { t } = useTranslation();
-  const [form] = Form.useForm<{ name: string; description?: string; parentId?: string }>();
+  const { data: documentTypes } = useDocumentTypes();
+  const { data: tags } = useTags('');
+  const [form] = Form.useForm<{
+    name: string;
+    description?: string;
+    parentId?: string;
+    defaultDocumentTypeId?: number;
+    defaultVisibility?: CabinetInfo['defaults']['visibility'];
+    defaultTagIds?: number[];
+    requiredMetadataKeys?: string[];
+  }>();
 
   const submit = async () => {
     const values = await form.validateFields();
@@ -106,6 +132,10 @@ function CabinetEditModal({
       name: values.name,
       description: values.description ?? null,
       parentId: values.parentId ?? null,
+      defaultDocumentTypeId: values.defaultDocumentTypeId ?? null,
+      defaultVisibility: values.defaultVisibility ?? null,
+      defaultTagIds: values.defaultTagIds ?? [],
+      requiredMetadataKeys: values.requiredMetadataKeys ?? [],
     });
   };
 
@@ -129,6 +159,13 @@ function CabinetEditModal({
                 name: editing.name,
                 description: editing.description ?? undefined,
                 parentId: editing.parentId ?? undefined,
+                // This shelf's own settings, not the ones it inherits: the editor has to show
+                // what this cabinet says, or saving would silently copy its parent's answers
+                // onto it and freeze them there.
+                defaultDocumentTypeId: editing.defaults.documentTypeId ?? undefined,
+                defaultVisibility: editing.defaults.visibility ?? undefined,
+                defaultTagIds: [...editing.defaults.tagIds],
+                requiredMetadataKeys: [...editing.defaults.requiredMetadataKeys],
               }
         }
       >
@@ -150,6 +187,47 @@ function CabinetEditModal({
               .filter((cabinet) => editing === 'new' || cabinet.id !== editing.id)
               .map((cabinet) => ({ value: cabinet.id, label: cabinet.name }))}
           />
+        </Form.Item>
+
+        <Typography.Text strong>{t('cabinets.defaults')}</Typography.Text>
+        <Typography.Paragraph type="secondary" style={{ marginTop: 4 }}>
+          {t('cabinets.defaultsHint')}
+        </Typography.Paragraph>
+
+        <Form.Item name="defaultDocumentTypeId" label={t('cabinets.defaultType')}>
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('cabinets.defaultInherit')}
+            options={(documentTypes ?? []).map((type) => ({ value: type.id, label: type.name }))}
+          />
+        </Form.Item>
+        <Form.Item name="defaultVisibility" label={t('cabinets.defaultVisibility')}>
+          <Select
+            allowClear
+            placeholder={t('cabinets.defaultInherit')}
+            options={(['private', 'cavingGroup', 'internal', 'public'] as const).map((value) => ({
+              value,
+              label: t(`caves.visibilityValues.${value}`),
+            }))}
+          />
+        </Form.Item>
+        <Form.Item name="defaultTagIds" label={t('cabinets.defaultTags')}>
+          <Select
+            mode="multiple"
+            allowClear
+            optionFilterProp="label"
+            placeholder={t('cabinets.defaultTagsHint')}
+            options={(tags ?? []).map((tag) => ({ value: tag.id, label: tag.name }))}
+          />
+        </Form.Item>
+        <Form.Item
+          name="requiredMetadataKeys"
+          label={t('cabinets.requiredMetadata')}
+          help={t('cabinets.requiredMetadataHint')}
+        >
+          <Select mode="tags" allowClear tokenSeparators={[',', ' ']} />
         </Form.Item>
       </Form>
     </Modal>
@@ -182,6 +260,8 @@ export default function CabinetsPage() {
 
   const { data: cabinets, isPending } = useCabinets(canRead);
   const [selected, setSelected] = useState<string>();
+  const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
   // Where the shelf is stacked above the documents rather than beside them, it starts open —
   // nothing has been picked yet, so the tree is the only thing there is to do.
   const [shelfOpen, setShelfOpen] = useState(true);
@@ -209,6 +289,7 @@ export default function CabinetsPage() {
   );
   const treeData = useMemo(() => toTree(cabinets ?? []), [cabinets]);
   const current = selected === undefined ? undefined : byId.get(selected);
+  const showingUnfiled = selected === UnfiledKey;
 
   if (!capabilities) {
     return <Spin style={{ display: 'block', marginTop: '20vh' }} />;
@@ -344,8 +425,6 @@ export default function CabinetsPage() {
       </Flex>
       {isPending ? (
         <Spin />
-      ) : treeData.length === 0 ? (
-        <Empty description={t('cabinets.empty')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
         <Tree
           showIcon
@@ -356,10 +435,23 @@ export default function CabinetsPage() {
           draggable={canWrite && !isMobile}
           defaultExpandAll
           onDrop={onDrop}
-          treeData={treeData}
+          // The inbox rides at the top of the same tree rather than beside it: it is where
+          // an upload lands when nobody has decided yet, so it belongs where somebody is
+          // already looking for a place to put things.
+          treeData={[
+            {
+              key: UnfiledKey,
+              title: t('cabinets.unfiled'),
+              icon: <InboxOutlined />,
+              selectable: true,
+              isLeaf: true,
+            },
+            ...treeData,
+          ]}
           selectedKeys={selected ? [selected] : []}
           onSelect={(keys) => {
             setSelected(keys.length > 0 ? String(keys[0]) : undefined);
+            setSelectedDocuments([]);
             setPage(1);
             // Picking a shelf on a phone is picking what to read next: the tree steps out of
             // the way rather than leaving the documents pushed off the bottom of the screen.
@@ -372,7 +464,9 @@ export default function CabinetsPage() {
 
   const documentsPane = (
     <>
-      {current === undefined ? (
+      {showingUnfiled ? (
+        <UnfiledDocuments cabinets={cabinets ?? []} canWrite={canWrite} />
+      ) : current === undefined ? (
         <Empty description={t('cabinets.pickOne')} style={{ marginTop: '15vh' }} />
       ) : (
         <>
@@ -416,6 +510,15 @@ export default function CabinetsPage() {
                 </Button>
               )}
               {canWrite && (
+                <Button
+                  type="primary"
+                  icon={<UploadOutlined />}
+                  onClick={() => setUploading(true)}
+                >
+                  {t('uploads.upload')}
+                </Button>
+              )}
+              {canWrite && (
                 <Popconfirm
                   title={t('cabinets.deleteConfirm')}
                   onConfirm={() => void onDelete(current)}
@@ -435,6 +538,26 @@ export default function CabinetsPage() {
             title={t('cabinets.filingMovesAccess')}
           />
 
+          {current.defaults.effectiveRequiredMetadataKeys.length > 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={t('cabinets.expectsMetadata', {
+                keys: current.defaults.effectiveRequiredMetadataKeys.join(', '),
+              })}
+            />
+          )}
+
+          {canWrite && selectedDocuments.length > 0 && (
+            <BulkFilingBar
+              documentIds={selectedDocuments}
+              cabinets={cabinets ?? []}
+              currentCabinetId={current.id}
+              onDone={() => setSelectedDocuments([])}
+            />
+          )}
+
           <Table<CabinetDocument>
             scroll={{ x: 'max-content' }}
             rowKey="id"
@@ -442,6 +565,14 @@ export default function CabinetsPage() {
             loading={isFetching && !documents}
             dataSource={documents?.items}
             locale={{ emptyText: t('cabinets.noDocuments') }}
+            rowSelection={
+              canWrite
+                ? {
+                    selectedRowKeys: selectedDocuments,
+                    onChange: (keys) => setSelectedDocuments(keys.map(String)),
+                  }
+                : undefined
+            }
             onChange={(pagination) => {
               setPage(pagination.current ?? 1);
               setPageSize(pagination.pageSize ?? 20);
@@ -460,7 +591,20 @@ export default function CabinetsPage() {
                 // The title is the way in. A shelf that only lists what is on it, with no
                 // way to open any of it, is a catalogue rather than an archive.
                 render: (value: string, row: CabinetDocument) => (
-                  <Link to={`/documents/${row.id}`}>{value}</Link>
+                  <Space size={6}>
+                    <Link to={`/documents/${row.id}`}>{value}</Link>
+                    {row.missingMetadataKeys.length > 0 && (
+                      // A checklist rather than a refusal: the upload was never blocked for
+                      // this, so the mark is where somebody finds out what is still to fill in.
+                      <Tooltip
+                        title={t('cabinets.missingMetadata', {
+                          keys: row.missingMetadataKeys.join(', '),
+                        })}
+                      >
+                        <Tag color="warning">{t('cabinets.incomplete')}</Tag>
+                      </Tooltip>
+                    )}
+                  </Space>
                 ),
               },
               {
@@ -515,6 +659,18 @@ export default function CabinetsPage() {
 
   const modals = (
     <>
+      {/* Mounted only while it is open. A closed drawer's hooks would still run — fetching
+          the upload limits on every visit to this page for a control nobody opened. */}
+      {uploading && (
+        <UploadDrawer
+          open
+          onClose={() => setUploading(false)}
+          cabinetId={current?.id}
+          cabinetName={current?.name}
+          requiredMetadataKeys={current?.defaults.effectiveRequiredMetadataKeys}
+        />
+      )}
+
       {editing !== null && (
         <CabinetEditModal
           editing={editing}
