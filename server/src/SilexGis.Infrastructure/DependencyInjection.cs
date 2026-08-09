@@ -73,6 +73,12 @@ public static class DependencyInjection
         services.AddScoped<Permissions.FullAdminGuard>();
         services.AddScoped<Permissions.AccessExplainer>();
 
+        // The filterable worlds, and the one registry everything asks. Registration order is the
+        // order results are shown in, so it is the order a person reads them in rather than an
+        // implementation detail. A world added here without a fixture fails the conformance suite.
+        services.AddScoped<Filters.IFilterWorld, Filters.FeatureFilterWorld>();
+        services.AddScoped<Filters.FilterWorldRegistry>();
+
         return services;
     }
 

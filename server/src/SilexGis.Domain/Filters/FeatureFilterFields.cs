@@ -68,20 +68,32 @@ public static class FeatureFilterFields
             new FieldDescriptor(LocationProtected, "filters.fields.protected", FieldKind.Boolean),
             new FieldDescriptor(CreatedAt, "filters.fields.created", FieldKind.Instant, Sortable: true),
             new FieldDescriptor(UpdatedAt, "filters.fields.updated", FieldKind.Instant, Sortable: true),
-            new FieldDescriptor(Position, "filters.fields.position", FieldKind.Spatial),
         ],
-        Sorts: [SortKey.Created, SortKey.Updated, SortKey.Title, SortKey.Owner, SortKey.Proximity]);
+        // Neither the spatial field nor the proximity sort is declared, because neither is served
+        // yet. A vocabulary is an offer: a field listed here is one the builder shows, somebody
+        // saves a filter using, and expects to keep meaning what it meant. Offering one that
+        // currently matches nothing would be worse than not offering it, since a filter that
+        // quietly returns nothing looks exactly like a filter with no matches.
+        Sorts: [SortKey.Created, SortKey.Updated, SortKey.Title, SortKey.Owner]);
 
     /// <summary>
     /// Whether a field key names a typed property, and which type and key it names.
     /// </summary>
     /// <remarks>
-    /// Typed-property fields are not listed in the vocabulary above: which ones exist depends on
-    /// the installation's own taxonomy, so they are added to a copy of it built from the feature
-    /// types when the vocabulary is asked for. They are therefore declared fields like any other by
-    /// the time anything validates a filter — nothing recognises them by shape, which is what keeps
-    /// the "a field is either declared or refused" rule single-edged. This reads the key back out
-    /// again for the compiler, which needs the type and the key separately.
+    /// <para>
+    /// Which typed properties exist depends on the installation's own taxonomy, so when they are
+    /// offered they will be folded into a copy of the vocabulary built from the feature types —
+    /// declared fields like any other, so that "a field is either declared or refused" stays a
+    /// single-edged rule and nothing has to recognise a field by its shape.
+    /// </para>
+    /// <para>
+    /// They are not offered yet. The compiler serves equality and presence against the stored
+    /// document, which covers a property somebody chose from a list but not one they want a range
+    /// of: comparing a depth needs the value pulled out of the document and read as a number, and
+    /// that is a decision about how this installation reaches inside jsonb rather than a detail of
+    /// this file. Declaring the fields before then would offer "depth under 30" and answer it as
+    /// "depth exactly 30", which is the kind of wrong nobody reports because it looks like data.
+    /// </para>
     /// </remarks>
     public static bool TryReadProperty(string field, out string typeCode, out string key)
     {

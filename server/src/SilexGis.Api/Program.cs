@@ -34,6 +34,7 @@ using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
 using SilexGis.Api.Features.Notifications;
 using SilexGis.Api.Features.Features;
+using SilexGis.Api.Features.Filters;
 using SilexGis.Api.Features.ResLinks;
 using SilexGis.Api.Features.FeatureShares;
 using SilexGis.Api.Features.Search;
@@ -218,6 +219,7 @@ try
     api.MapCenterlineEndpoints();
     api.MapCrsEndpoints();
     api.MapFeatureEndpoints();
+    api.MapFilterEndpoints();
     api.MapFeatureHierarchyEndpoints();
     api.MapFeatureLinkEndpoints();
     api.MapFeatureShareEndpoints();
