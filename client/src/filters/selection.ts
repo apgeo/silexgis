@@ -144,10 +144,14 @@ export function documentFor(
  * small bounded set say so.
  */
 export function shouldAsk(
+  available: readonly SelectorScope[],
   state: SelectorState,
   { minChars, browseOnEmpty }: { minChars: number; browseOnEmpty: boolean },
 ): boolean {
-  const { query } = readPrefix([], state.query);
+  // The scopes have to be handed in, or the prefix is never recognised and therefore never
+  // stripped: `#u` would count as two characters of search when one was typed, and a bare `#`
+  // would count as one. What is measured is what will actually be matched on.
+  const { query } = readPrefix(available, state.query);
   const text = query.trim();
   return text.length === 0 ? browseOnEmpty : text.length >= minChars;
 }

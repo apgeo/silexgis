@@ -68,7 +68,7 @@ public sealed class TripLogFilterWorld(SilexGisDbContext db) : FilterWorld<TripL
         TripLogFilterFields.OrganizingCavingGroupId =>
             FilterLeaves.Guids<TripLog>(condition, t => t.OrganizingCavingGroupId),
         TripLogFilterFields.Visibility =>
-            FilterLeaves.Ids(condition, FilterLeaves.Enum<TripLog, Visibility>(t => t.Visibility)),
+            FilterLeaves.EnumField<TripLog, Visibility>(condition, t => t.Visibility),
         TripLogFilterFields.CreatedAt => FilterLeaves.Instant<TripLog>(condition, t => t.CreatedAt),
         TripLogFilterFields.UpdatedAt => FilterLeaves.Instant<TripLog>(condition, t => t.UpdatedAt),
         _ => throw new InvalidOperationException(

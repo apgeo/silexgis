@@ -86,7 +86,7 @@ public abstract class ProtectedFilterWorld<TEntity> : FilterWorld<TEntity>
             CommonFilterFields.CavingGroupId =>
                 FilterLeaves.Guids<TEntity>(condition, e => e.CavingGroupId),
             CommonFilterFields.Visibility =>
-                FilterLeaves.Ids(condition, FilterLeaves.Enum<TEntity, Visibility>(e => e.Visibility)),
+                FilterLeaves.EnumField<TEntity, Visibility>(condition, e => e.Visibility),
             CommonFilterFields.CreatedAt => FilterLeaves.Instant<TEntity>(condition, e => e.CreatedAt),
             CommonFilterFields.UpdatedAt => FilterLeaves.Instant<TEntity>(condition, e => e.UpdatedAt),
             _ => throw new InvalidOperationException(

@@ -91,9 +91,9 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
         {
             FeatureFilterFields.Name => FilterLeaves.Text<Feature>(condition, f => f.Name),
             FeatureFilterFields.Kind =>
-                FilterLeaves.Ids(condition, FilterLeaves.Enum<Feature, FeatureKind>(f => f.Kind)),
+                FilterLeaves.EnumField<Feature, FeatureKind>(condition, f => f.Kind),
             FeatureFilterFields.Category =>
-                FilterLeaves.Ids(condition, FilterLeaves.Enum<Feature, FeatureCategory>(f => f.Category)),
+                FilterLeaves.EnumField<Feature, FeatureCategory>(condition, f => f.Category),
             FeatureFilterFields.TypeId => FilterLeaves.Longs<Feature>(condition, f => f.FeatureTypeId),
             FeatureFilterFields.Tag => TagLeaf(condition),
             // The owner is never null, so it is read through a nullable selector to reach the same
@@ -102,7 +102,7 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
             FeatureFilterFields.CavingGroupId =>
                 FilterLeaves.Guids<Feature>(condition, f => f.CavingGroupId),
             FeatureFilterFields.Visibility =>
-                FilterLeaves.Ids(condition, FilterLeaves.Enum<Feature, Visibility>(f => f.Visibility)),
+                FilterLeaves.EnumField<Feature, Visibility>(condition, f => f.Visibility),
             FeatureFilterFields.LocationProtected =>
                 FilterLeaves.Boolean<Feature>(condition, f => f.LocationProtected),
             FeatureFilterFields.CreatedAt => FilterLeaves.Instant<Feature>(condition, f => f.CreatedAt),

@@ -97,7 +97,7 @@ export function useObjectSelector(options: UseObjectSelectorOptions) {
     [options.scopes, askedEffective],
   );
 
-  const enabled = shouldAsk(asked, {
+  const enabled = shouldAsk(options.scopes, asked, {
     minChars: options.minChars,
     browseOnEmpty: options.browseOnEmpty,
   });

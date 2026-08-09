@@ -195,6 +195,39 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task Asking_whether_a_column_that_is_never_empty_is_empty_gets_a_straight_answer()
+    {
+        // The vocabulary offers the emptiness pair on every identity field, so a person can pick it
+        // for a feature's kind. The identity leaf reads "no values given" as "matches nothing" —
+        // right for a multi-select somebody cleared, wrong for the two operators where no values is
+        // what they mean. Left alone, "kind is not empty" returned nothing at all and its negation
+        // returned everything, which is a filter answering the opposite of what it was asked.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var compiler = new FeatureFilterCompiler(db);
+
+        var all = await db.Features.AsNoTracking().CountAsync();
+        all.ShouldBeGreaterThan(0, "The corpus has to hold something for either answer to mean anything.");
+
+        async Task<int> CountAsync(string field, FilterOp op) => await db.Features.AsNoTracking()
+            .Where(compiler.Compile(new ConditionNode(field, op, [])))
+            .CountAsync();
+
+        foreach (var field in new[]
+        {
+            FeatureFilterFields.Kind, FeatureFilterFields.Category, FeatureFilterFields.Visibility,
+        })
+        {
+            (await CountAsync(field, FilterOp.IsNotEmpty)).ShouldBe(all, $"{field} is never empty.");
+            (await CountAsync(field, FilterOp.IsEmpty)).ShouldBe(0, $"{field} is never empty.");
+        }
+
+        // A column that genuinely can be empty still answers about itself rather than about nothing.
+        (await CountAsync(FeatureFilterFields.TypeId, FilterOp.IsEmpty)
+         + await CountAsync(FeatureFilterFields.TypeId, FilterOp.IsNotEmpty)).ShouldBe(all);
+    }
+
+    [Fact]
     public async Task An_empty_filter_matches_everything_rather_than_being_a_special_case()
     {
         using var scope = factory.Services.CreateScope();

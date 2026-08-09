@@ -20,10 +20,10 @@ public class FilterValidationTests
         "feature",
         "worlds.feature",
         [
-            new FieldDescriptor("name", "fields.name", FieldKind.Text, Sortable: true),
+            new FieldDescriptor("name", "fields.name", FieldKind.Text),
             new FieldDescriptor("typeId", "fields.type", FieldKind.Id, Options: "featureTypes"),
             new FieldDescriptor("depth", "fields.depth", FieldKind.Number),
-            new FieldDescriptor("updatedAt", "fields.updated", FieldKind.Instant, Sortable: true),
+            new FieldDescriptor("updatedAt", "fields.updated", FieldKind.Instant),
             new FieldDescriptor("protected", "fields.protected", FieldKind.Boolean),
             new FieldDescriptor("position", "fields.position", FieldKind.Spatial),
         ],
@@ -32,7 +32,7 @@ public class FilterValidationTests
     private static readonly WorldVocabulary Documents = new(
         "document",
         "worlds.document",
-        [new FieldDescriptor("title", "fields.title", FieldKind.Text, Sortable: true)],
+        [new FieldDescriptor("title", "fields.title", FieldKind.Text)],
         [SortKey.Created, SortKey.Updated, SortKey.Title]);
 
     private static readonly Dictionary<string, WorldVocabulary> Vocabularies = new(StringComparer.Ordinal)
@@ -267,5 +267,38 @@ public class FilterValidationTests
         FilterDocument.Deserialize("{ not json").ShouldBeNull();
         FilterDocument.Deserialize(null).ShouldBeNull();
         FilterDocument.Deserialize("").ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_group_with_a_hole_in_it_is_refused_rather_than_quietly_shrunk()
+    {
+        // A document whose list of children holds a literal null. Skipping it would leave a group
+        // with fewer conditions than the person wrote — matching more than they asked for, with
+        // nothing on screen to say so — and passing it on reaches a compiler that dereferences it.
+        var document = new FilterDocument
+        {
+            Scope =
+            [
+                new WorldScope("feature", new AllOfNode(
+                [
+                    new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue("a")]),
+                    null!,
+                ])),
+            ],
+        };
+
+        FilterValidation.Validate(document, Vocabularies)
+            .ShouldContain(e => e.Contains("missing", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void A_negation_of_nothing_is_refused()
+    {
+        var document = new FilterDocument
+        {
+            Scope = [new WorldScope("feature", new NotNode(null!))],
+        };
+
+        FilterValidation.Validate(document, Vocabularies).ShouldNotBeEmpty();
     }
 }

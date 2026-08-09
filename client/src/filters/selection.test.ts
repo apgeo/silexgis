@@ -124,15 +124,25 @@ describe('when the server is asked at all', () => {
     // to be, which is how it becomes a way to enumerate.
     const state = initialState();
 
-    expect(shouldAsk(state, { minChars: 2, browseOnEmpty: false })).toBe(false);
-    expect(shouldAsk(state, { minChars: 2, browseOnEmpty: true })).toBe(true);
+    expect(shouldAsk(SCOPES, state, { minChars: 2, browseOnEmpty: false })).toBe(false);
+    expect(shouldAsk(SCOPES, state, { minChars: 2, browseOnEmpty: true })).toBe(true);
   });
 
   it('waits for enough characters', () => {
-    expect(shouldAsk({ ...initialState(), query: 'u' }, { minChars: 2, browseOnEmpty: false }))
+    expect(shouldAsk(SCOPES, { ...initialState(), query: 'u' }, { minChars: 2, browseOnEmpty: false }))
       .toBe(false);
-    expect(shouldAsk({ ...initialState(), query: 'ur' }, { minChars: 2, browseOnEmpty: false }))
+    expect(shouldAsk(SCOPES, { ...initialState(), query: 'ur' }, { minChars: 2, browseOnEmpty: false }))
       .toBe(true);
+  });
+
+  it('counts what will be searched for, not the symbol that chose the scope', () => {
+    // Otherwise a leading '#' is a free character: '#u' asks on one letter of search, and at a
+    // threshold of one a bare '#' asks on none at all.
+    const options = { minChars: 2, browseOnEmpty: false };
+
+    expect(shouldAsk(SCOPES, { ...initialState(), query: '#u' }, options)).toBe(false);
+    expect(shouldAsk(SCOPES, { ...initialState(), query: '#ur' }, options)).toBe(true);
+    expect(shouldAsk(SCOPES, { ...initialState(), query: '#' }, options)).toBe(false);
   });
 });
 

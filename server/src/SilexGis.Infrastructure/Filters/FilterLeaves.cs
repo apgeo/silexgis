@@ -169,6 +169,32 @@ internal static class FilterLeaves
         return Expression.Lambda<Func<T, bool>>(body, selector.Parameters);
     }
 
+    /// <summary>
+    /// An enum column the schema never leaves empty.
+    /// </summary>
+    /// <remarks>
+    /// The emptiness pair is answered here rather than falling through to the identity leaf, which
+    /// reads "no values given" as "matches nothing" — correct for a cleared multi-select, and wrong
+    /// for these two operators, where no values is what they mean. Left as it was, a vocabulary that
+    /// offers "kind is not empty" answered it with nothing at all, and its negation with everything.
+    /// </remarks>
+    public static Expression<Func<T, bool>> EnumField<T, TEnum>(
+        ConditionNode condition, Expression<Func<T, TEnum>> selector)
+        where TEnum : struct, Enum
+    {
+        if (condition.Op is FilterOp.IsEmpty)
+        {
+            return _ => false;
+        }
+
+        if (condition.Op is FilterOp.IsNotEmpty)
+        {
+            return _ => true;
+        }
+
+        return Ids(condition, Enum(selector));
+    }
+
     public static Expression<Func<T, bool>> Longs<T>(
         ConditionNode condition, Expression<Func<T, long?>> selector) =>
         Nullable<T, long>(condition, selector, v => long.TryParse(v, out var p) ? p : null);
