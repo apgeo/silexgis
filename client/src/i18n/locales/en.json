@@ -1870,7 +1870,8 @@
   "filters": {
     "worlds": {
       "feature": "Features",
-      "tripLog": "Trip logs"
+      "tripLog": "Trip logs",
+      "mapView": "Map views"
     },
     "fields": {
       "name": "Name",

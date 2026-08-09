@@ -210,6 +210,45 @@ public sealed class TripLogWorldFixture : WorldFixture
     };
 }
 
+/// <summary>A saved map view nobody but its owner may see.</summary>
+public sealed class MapViewWorldFixture : WorldFixture
+{
+    public override string World => MapViewFilterWorld.Key;
+
+    public override async Task<FilterNode> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        db.MapViews.Add(new MapView
+        {
+            Name = $"Conformance {tag}",
+            OwnerUserId = ownerId,
+            Visibility = Visibility.Private,
+        });
+        await db.SaveChangesAsync();
+
+        return new ConditionNode(CommonFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
+    }
+
+    public override async Task<FilterNode> SeedIndistinguishableAsync(
+        SilexGisDbContext db, Guid ownerId, string tag, int count)
+    {
+        var stamp = DateTimeOffset.UtcNow;
+        for (var i = 0; i < count; i++)
+        {
+            db.MapViews.Add(new MapView
+            {
+                Name = $"Paged {tag}",
+                OwnerUserId = ownerId,
+                Visibility = Visibility.Public,
+                CreatedAt = stamp,
+                UpdatedAt = stamp,
+            });
+        }
+
+        await db.SaveChangesAsync();
+        return new ConditionNode(CommonFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
+    }
+}
+
 /// <summary>
 /// The suite every filterable world passes, or is not shipped.
 /// </summary>
@@ -231,7 +270,11 @@ public sealed class TripLogWorldFixture : WorldFixture
 public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable
 {
     private static readonly WorldFixture[] Fixtures =
-        [new FeatureWorldFixture(), new TripLogWorldFixture()];
+    [
+        new FeatureWorldFixture(),
+        new TripLogWorldFixture(),
+        new MapViewWorldFixture(),
+    ];
 
     private readonly SilexGisApiFactory factory;
     private string tag = null!;

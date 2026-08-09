@@ -78,6 +78,7 @@ public static class DependencyInjection
         // implementation detail. A world added here without a fixture fails the conformance suite.
         services.AddScoped<Filters.IFilterWorld, Filters.FeatureFilterWorld>();
         services.AddScoped<Filters.IFilterWorld, Filters.TripLogFilterWorld>();
+        services.AddScoped<Filters.IFilterWorld, Filters.MapViewFilterWorld>();
         services.AddScoped<Filters.FilterWorldRegistry>();
 
         return services;

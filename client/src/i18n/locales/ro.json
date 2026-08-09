@@ -1870,7 +1870,8 @@
   "filters": {
     "worlds": {
       "feature": "Obiective",
-      "tripLog": "Jurnale de tură"
+      "tripLog": "Jurnale de tură",
+      "mapView": "Vizualizări de hartă"
     },
     "fields": {
       "name": "Nume",
