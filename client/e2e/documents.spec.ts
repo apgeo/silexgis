@@ -48,6 +48,7 @@ async function uploadFixture(page: Page, path: string, fileName: string): Promis
 
   const gallery = page.locator('.ant-card', { hasText: 'Photos & documents' });
   await gallery.locator('input[type=file]').setInputFiles(path);
+  await acceptDuplicate(page);
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 30_000 });
 
   // The upload became a document, and the row that carries it offers a way in that is not a
@@ -61,6 +62,26 @@ async function uploadFixture(page: Page, path: string, fileName: string): Promis
     timeout: 15_000,
   });
   return page.url().split('/documents/')[1].split('?')[0];
+}
+
+/**
+ * Answers the duplicate warning, when there is one.
+ *
+ * Detaching a file does not delete it, so the archive still holds these bytes from the run
+ * before — and the store warns about content it already has. The warning is the product
+ * working; this flow is about the document surfaces, so it says yes and carries on.
+ */
+async function acceptDuplicate(page: Page) {
+  const warning = page.getByRole('dialog').filter({ hasText: 'This file is already here' });
+  const saved = page.getByText('Saved.');
+
+  // Whichever arrives first. Probing for the warning on a fixed timer decides the answer by
+  // how busy the server is: too short and a slow run walks past a dialog that is about to
+  // appear, too long and every run without one waits out the whole probe.
+  await expect(warning.or(saved)).toBeVisible({ timeout: 45_000 });
+  if (await warning.isVisible()) {
+    await warning.getByRole('button', { name: 'Store anyway' }).click();
+  }
 }
 
 /** Removes an uploaded fixture from the cave, so a re-run starts where this one did. */
@@ -208,7 +229,11 @@ test('a content search finds the document by a word inside it and opens it there
  * words the file carries, they cover the page rather than collapsing into its corner, and a
  * selection over them yields the sentence and not the whole document.
  */
-test('the words of a portable document can be selected on the page', async ({ page }) => {
+test('the words of a portable document can be selected on the page', async ({ page, consoleErrors }) => {
+  consoleErrors.allow(
+    /Failed to load resource.*409/,
+    'the duplicate refusal these fixtures provoke on a second run',
+  );
   await login(page);
   await uploadReport(page);
 
@@ -262,7 +287,11 @@ test('the words of a portable document can be selected on the page', async ({ pa
   await removeReport(page);
 });
 
-test('filing a document in a cabinet says so on both sides', async ({ page }) => {
+test('filing a document in a cabinet says so on both sides', async ({ page, consoleErrors }) => {
+  consoleErrors.allow(
+    /Failed to load resource.*409/,
+    'the duplicate refusal these fixtures provoke on a second run',
+  );
   const cabinetName = `E2E Cabinet ${Date.now()}`;
   await login(page);
   const documentId = await uploadReport(page);
@@ -293,6 +322,10 @@ test('filing a document in a cabinet says so on both sides', async ({ page }) =>
     .locator('.ant-select')
     .last();
   await filing.click();
+  // Typed rather than scrolled to. The control only renders the part of the list that is on
+  // screen, and an installation's cabinet list grows — as this one does with every run of the
+  // suite — until the shelf being looked for is not among the rendered rows.
+  await filing.locator('input').fill(cabinetName);
   await page.locator('.ant-select-item-option').filter({ hasText: cabinetName }).first().click();
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
 

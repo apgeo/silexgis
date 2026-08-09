@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { DeleteOutlined, DownloadOutlined, FileOutlined, InboxOutlined } from '@ant-design/icons';
+import { ApiError } from '../../api/client.ts';
 import {
   App, Button, Card, Empty, Flex, Image, Popconfirm, Tooltip, Typography, Upload,
 } from 'antd';
@@ -62,7 +63,7 @@ export default function AttachmentSection({
   enabled = true,
 }: AttachmentSectionProps) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const { data: attachments } = useAttachments(entityType, entityId, enabled);
   const { data: fileConfig } = useFileConfig();
   const uploadFile = useUploadFile();
@@ -74,6 +75,26 @@ export default function AttachmentSection({
   const photos = (attachments ?? []).filter((a) => a.file.kind === 'image' && a.id !== report?.id);
   const documents = (attachments ?? []).filter((a) => a.file.kind !== 'image' && a.id !== report?.id);
 
+  /**
+   * Asks whether to store content the archive already holds.
+   *
+   * The store refuses a second copy of bytes this caller can already see, and attaching is one
+   * of the two commonest reasons somebody genuinely wants one anyway — the other being a file
+   * that legitimately belongs to two objects. Without the question the refusal would surface
+   * as a bare failure on the ordinary drop zone.
+   */
+  const askAboutDuplicate = () =>
+    new Promise<boolean>((resolve) => {
+      modal.confirm({
+        title: t('uploads.duplicateTitle'),
+        content: t('uploads.duplicateKnown'),
+        okText: t('uploads.duplicateStoreAnyway'),
+        cancelText: t('uploads.duplicateSkip'),
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+
   const onUpload = async (file: File, roleOverride?: AttachmentRole) => {
     // Checked before the transfer starts, against the limit the server publishes rather
     // than a number compiled in here — an installation may raise it, and transferring half
@@ -84,7 +105,21 @@ export default function AttachmentSection({
     }
 
     try {
-      const stored = await uploadFile.mutateAsync(file);
+      let stored;
+      try {
+        stored = await uploadFile.mutateAsync({ file });
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.code !== 'file.duplicate') {
+          throw error;
+        }
+
+        if (!(await askAboutDuplicate())) {
+          return;
+        }
+
+        stored = await uploadFile.mutateAsync({ file, allowDuplicate: true });
+      }
+
       await createAttachment.mutateAsync({
         fileId: stored.id,
         entityType,

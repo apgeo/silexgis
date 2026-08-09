@@ -173,7 +173,7 @@ function BatchReport({ batchId, onClose }: { batchId?: string; onClose: () => vo
         </Descriptions>
       )}
 
-      {batch?.error && <Alert type="error" showIcon style={{ marginBottom: 12 }} message={batch.error} />}
+      {batch?.error && <Alert type="error" showIcon style={{ marginBottom: 12 }} title={batch.error} />}
 
       <Table<UploadBatchItemInfo>
         rowKey="id"
@@ -272,7 +272,7 @@ function DirectoryImportModal({
 
       {configured ? (
         <Card size="small" style={{ marginBottom: 12 }} title={t('uploads.importRoots')}>
-          <Space direction="vertical" size={2}>
+          <Space orientation="vertical" size={2}>
             {roots!.roots.map((root) => (
               <Typography.Text key={root} code>
                 {root}
@@ -281,7 +281,7 @@ function DirectoryImportModal({
           </Space>
         </Card>
       ) : (
-        <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={t('uploads.importNoRoots')} />
+        <Alert type="warning" showIcon style={{ marginBottom: 12 }} title={t('uploads.importNoRoots')} />
       )}
 
       <Form form={form} layout="vertical" disabled={!configured}>

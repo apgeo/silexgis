@@ -1599,12 +1599,23 @@ export function useFileDocument() {
   });
 }
 
+/**
+ * Uploads one file.
+ *
+ * `allowDuplicate` is how a caller answers the one refusal a person can answer: content the
+ * store already holds and this caller may read is refused with `file.duplicate` until somebody
+ * says to store it anyway. It defaults to no, and the default is the point — a caller that
+ * simply never asked would otherwise quietly make second copies of everything.
+ */
 export function useUploadFile() {
   return useMutation({
-    mutationFn: async (file: File): Promise<FileInfo> => {
+    mutationFn: async (
+      { file, allowDuplicate = false }: { file: File; allowDuplicate?: boolean },
+    ): Promise<FileInfo> => {
       const form = new FormData();
       form.append('file', file, file.name);
       return unwrap(api.POST('/api/v1/files', {
+        params: { query: { allowDuplicate } },
         body: form as never,
         bodySerializer: (b: unknown) => b as FormData,
       }));

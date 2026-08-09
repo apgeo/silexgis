@@ -262,13 +262,17 @@ export default function CabinetsPage() {
   const [selected, setSelected] = useState<string>();
   const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const showingUnfiled = selected === UnfiledKey;
   // Where the shelf is stacked above the documents rather than beside them, it starts open —
   // nothing has been picked yet, so the tree is the only thing there is to do.
   const [shelfOpen, setShelfOpen] = useState(true);
   const [includeSubtree, setIncludeSubtree] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const { data: documents, isFetching } = useCabinetDocuments(selected, {
+  // The inbox is a reserved key rather than a cabinet, so nothing is asked about it here —
+  // the inbox reads its own listing. Passing it through would ask the cabinet route about an
+  // id that is not one, which answers 404 on every visit.
+  const { data: documents, isFetching } = useCabinetDocuments(showingUnfiled ? undefined : selected, {
     includeSubtree,
     page,
     pageSize,
@@ -289,7 +293,6 @@ export default function CabinetsPage() {
   );
   const treeData = useMemo(() => toTree(cabinets ?? []), [cabinets]);
   const current = selected === undefined ? undefined : byId.get(selected);
-  const showingUnfiled = selected === UnfiledKey;
 
   if (!capabilities) {
     return <Spin style={{ display: 'block', marginTop: '20vh' }} />;

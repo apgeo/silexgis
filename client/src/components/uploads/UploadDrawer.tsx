@@ -171,7 +171,7 @@ export default function UploadDrawer({
     <Drawer
       open={open}
       onClose={finish}
-      width={560}
+      size="large"
       destroyOnHidden
       title={cabinetName ? t('uploads.titleInto', { cabinet: cabinetName }) : t('uploads.title')}
       extra={
@@ -181,7 +181,15 @@ export default function UploadDrawer({
               {t('uploads.retryFailed', { count: summary.failed })}
             </Button>
           )}
-          <Button type="primary" onClick={finish} disabled={summary.running}>
+          {/* Named for a test as well as for a person: the drawer draws a close control of
+              its own, and two buttons with the same label are two things a spec cannot tell
+              apart. */}
+          <Button
+            type="primary"
+            onClick={finish}
+            disabled={summary.running}
+            data-testid="upload-done"
+          >
             {t('common.close')}
           </Button>
         </Space>
@@ -192,9 +200,9 @@ export default function UploadDrawer({
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message={t('uploads.limitsTitle')}
+          title={t('uploads.limitsTitle')}
           description={
-            <Space direction="vertical" size={2}>
+            <Space orientation="vertical" size={2}>
               <span>{t('uploads.limitMaxSize', { size: formatSize(config.maxUploadBytes) })}</span>
               {config.remainingBytes !== null && config.remainingBytes !== undefined && (
                 <span>{t('uploads.limitRemaining', { size: formatSize(config.remainingBytes) })}</span>
@@ -217,7 +225,7 @@ export default function UploadDrawer({
           type="warning"
           showIcon
           style={{ marginBottom: 12 }}
-          message={t('uploads.expectsMetadata')}
+          title={t('uploads.expectsMetadata')}
           description={
             <Space wrap size={4}>
               {requiredMetadataKeys.map((key) => (
@@ -249,29 +257,24 @@ export default function UploadDrawer({
         {/* Two zones rather than one with a switch: a browser cannot offer files and folders
             from the same control, and hiding that behind a toggle makes the folder case
             undiscoverable — which is the case a club handing over its archive needs. */}
-        <Upload.Dragger
-          multiple
-          showUploadList={false}
-          beforeUpload={accept}
-          data-testid="upload-files"
-          style={{ flex: 1 }}
-        >
-          <p className="ant-upload-drag-icon">
-            <InboxOutlined />
-          </p>
-          <p className="ant-upload-text">{t('uploads.dropFiles')}</p>
-        </Upload.Dragger>
-        <Upload
-          directory
-          multiple
-          showUploadList={false}
-          beforeUpload={accept}
-          data-testid="upload-folder"
-        >
-          <Button icon={<FolderOpenOutlined />} style={{ height: '100%' }}>
-            {t('uploads.chooseFolder')}
-          </Button>
-        </Upload>
+        {/* The identifiers sit on wrappers rather than on the upload components: those do not
+            forward unknown props to their element, and a spec reaching for a file input without
+            one has previously posted a batch of photographs to an entirely different endpoint. */}
+        <div data-testid="upload-files" style={{ flex: 1 }}>
+          <Upload.Dragger multiple showUploadList={false} beforeUpload={accept}>
+            <p className="ant-upload-drag-icon">
+              <InboxOutlined />
+            </p>
+            <p className="ant-upload-text">{t('uploads.dropFiles')}</p>
+          </Upload.Dragger>
+        </div>
+        <div data-testid="upload-folder">
+          <Upload directory multiple showUploadList={false} beforeUpload={accept}>
+            <Button icon={<FolderOpenOutlined />} style={{ height: '100%' }}>
+              {t('uploads.chooseFolder')}
+            </Button>
+          </Upload>
+        </div>
       </Flex>
 
       {items.length > 0 && (

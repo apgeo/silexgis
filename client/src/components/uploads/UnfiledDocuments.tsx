@@ -54,7 +54,7 @@ export default function UnfiledDocuments({ cabinets, canWrite }: UnfiledDocument
         type="info"
         showIcon
         style={{ marginBottom: 12 }}
-        message={t('cabinets.unfiledHint')}
+        title={t('cabinets.unfiledHint')}
       />
 
       {canWrite && selected.length > 0 && (

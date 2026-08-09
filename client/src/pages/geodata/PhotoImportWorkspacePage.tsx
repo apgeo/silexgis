@@ -137,7 +137,9 @@ export default function PhotoImportWorkspacePage() {
   const onDropped = async (file: File) => {
     setUploading((count) => count + 1);
     try {
-      const stored = await upload.mutateAsync(file);
+      // A photo review is a sitting somebody may restart: dropping the same pictures again
+      // is how a half-finished review is resumed, so a second copy is what was asked for.
+      const stored = await upload.mutateAsync({ file, allowDuplicate: true });
       setFileIds((current) => (current.includes(stored.id) ? current : [...current, stored.id]));
     } catch {
       message.error(t('photoImport.uploadFailed'));
