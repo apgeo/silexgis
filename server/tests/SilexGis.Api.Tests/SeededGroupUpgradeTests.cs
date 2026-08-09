@@ -203,7 +203,10 @@ public sealed class SeededGroupUpgradeTests : IAsyncLifetime, IDisposable
         var content = new ByteArrayContent("body"u8.ToArray());
         content.Headers.ContentType = new("text/plain");
         using var form = new MultipartFormDataContent { { content, "file", fileName } };
-        var response = await editor.PostAsync("/api/v1/files/", form);
+        // These fixtures upload byte-identical content more than once, which the store now
+        // warns about. Saying yes up front is what a person would do; deduplication is
+        // asserted in its own suite rather than incidentally here.
+        var response = await editor.PostAsync("/api/v1/files/?allowDuplicate=true", form);
         var payload = await response.Content.ReadAsStringAsync();
         if (response.IsSuccessStatusCode)
         {

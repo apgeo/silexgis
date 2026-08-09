@@ -332,7 +332,10 @@ public sealed class AccessHistoryTests : IAsyncLifetime, IDisposable
         var content = new ByteArrayContent(picture.ToByteArray(MagickFormat.Jpeg));
         content.Headers.ContentType = new("image/jpeg");
         using var form = new MultipartFormDataContent { { content, "file", "survey.jpg" } };
-        var uploaded = await owner.PostAsync("/api/v1/files/", form);
+        // These fixtures upload byte-identical content more than once, which the store now
+        // warns about. Saying yes up front is what a person would do; deduplication is
+        // asserted in its own suite rather than incidentally here.
+        var uploaded = await owner.PostAsync("/api/v1/files/?allowDuplicate=true", form);
         var payload = await uploaded.Content.ReadAsStringAsync();
         uploaded.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         var file = JsonDocument.Parse(payload).RootElement;
@@ -358,7 +361,7 @@ public sealed class AccessHistoryTests : IAsyncLifetime, IDisposable
         var content = new ByteArrayContent("private notes"u8.ToArray());
         content.Headers.ContentType = new("text/plain");
         using var form = new MultipartFormDataContent { { content, "file", "notes.txt" } };
-        var uploaded = await owner.PostAsync("/api/v1/files/", form);
+        var uploaded = await owner.PostAsync("/api/v1/files/?allowDuplicate=true", form);
         var payload = await uploaded.Content.ReadAsStringAsync();
         uploaded.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("documentId").GetGuid();

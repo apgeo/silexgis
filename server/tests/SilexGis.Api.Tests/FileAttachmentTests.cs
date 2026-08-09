@@ -230,7 +230,10 @@ public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
         // Role gates: viewers cannot upload; editors cannot attach to features they cannot write.
         using (var form = BuildForm("x.png", MakePng(8, 8), "image/png"))
         {
-            (await viewer.PostAsync("/api/v1/files/", form)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+            // These fixtures upload byte-identical content more than once, which the store now
+            // warns about. Saying yes up front is what a person would do; deduplication is
+            // asserted in its own suite rather than incidentally here.
+            (await viewer.PostAsync("/api/v1/files/?allowDuplicate=true", form)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         }
 
         // Readable but not writable for the outsider.
@@ -762,7 +765,7 @@ public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
     private async Task<JsonElement> UploadAsync(HttpClient client, string fileName, byte[] bytes, string contentType)
     {
         using var form = BuildForm(fileName, bytes, contentType);
-        var response = await client.PostAsync("/api/v1/files/", form);
+        var response = await client.PostAsync("/api/v1/files/?allowDuplicate=true", form);
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement;

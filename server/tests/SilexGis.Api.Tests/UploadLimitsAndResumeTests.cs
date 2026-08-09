@@ -110,12 +110,12 @@ public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task A_file_past_the_size_limit_is_refused_with_the_limit_named()
     {
-        var refused = await PostUploadAsync(owner, "big.txt", new byte[5000]);
+        var refused = await PostUploadAsync(owner, "big.txt", RandomNumberGenerator.GetBytes(5000));
         refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await ReadCodeAsync(refused)).ShouldBe("file.too_large");
 
         // Just inside the limit is accepted, so the refusal is the limit rather than the route.
-        (await PostUploadAsync(owner, "ok.txt", new byte[4096])).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await PostUploadAsync(owner, "ok.txt", RandomNumberGenerator.GetBytes(4096))).StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     [Fact]
@@ -218,18 +218,18 @@ public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable
             var before = await client.GetFromJsonAsync<JsonElement>("/api/v1/files/config");
             before.GetProperty("remainingBytes").GetInt64().ShouldBe(600);
 
-            (await PostUploadAsync(client, "first.txt", new byte[500])).StatusCode.ShouldBe(HttpStatusCode.Created);
+            (await PostUploadAsync(client, "first.txt", RandomNumberGenerator.GetBytes(500))).StatusCode.ShouldBe(HttpStatusCode.Created);
 
             // The number moves with what was stored, which is what makes it advice worth acting on.
             var after = await client.GetFromJsonAsync<JsonElement>("/api/v1/files/config");
             after.GetProperty("remainingBytes").GetInt64().ShouldBe(100);
 
-            var refused = await PostUploadAsync(client, "second.txt", new byte[200]);
+            var refused = await PostUploadAsync(client, "second.txt", RandomNumberGenerator.GetBytes(200));
             refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
             (await ReadCodeAsync(refused)).ShouldBe("file.quota_exceeded");
 
             // What fits still fits: the quota refuses the excess rather than the account.
-            (await PostUploadAsync(client, "small.txt", new byte[100])).StatusCode.ShouldBe(HttpStatusCode.Created);
+            (await PostUploadAsync(client, "small.txt", RandomNumberGenerator.GetBytes(100))).StatusCode.ShouldBe(HttpStatusCode.Created);
         }
         finally
         {
@@ -344,7 +344,7 @@ public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable
         // Answered as absent rather than forbidden: a session is a transfer in progress, and
         // confirming an id belongs to someone would say what they are uploading and when.
         (await other.GetAsync($"/api/v1/files/uploads/{session}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await SendChunkAsync(other, session, 0, new byte[10])).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await SendChunkAsync(other, session, 0, RandomNumberGenerator.GetBytes(10))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await other.DeleteAsync($"/api/v1/files/uploads/{session}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
         (await owner.GetAsync($"/api/v1/files/uploads/{session}")).StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -354,7 +354,7 @@ public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable
     public async Task Abandoning_an_upload_takes_its_partial_bytes_with_it()
     {
         var session = await OpenSessionAsync(owner, "scan.bin", 1000);
-        await AppendAsync(owner, session, 0, new byte[400]);
+        await AppendAsync(owner, session, 0, RandomNumberGenerator.GetBytes(400));
 
         string storagePath;
         await using (var scope = factory.Services.CreateAsyncScope())

@@ -167,7 +167,10 @@ public sealed class DocumentAccessApiTests : IAsyncLifetime, IDisposable
         // A Viewer's baseline rules carry no Create over documents, so the upload is
         // refused before a single byte is filed.
         using var form = BuildForm("unwanted.txt", "nope"u8.ToArray(), "text/plain");
-        var refused = await reader.PostAsync("/api/v1/files/", form);
+        // These fixtures upload byte-identical content more than once, which the store now
+        // warns about. Saying yes up front is what a person would do; deduplication is
+        // asserted in its own suite rather than incidentally here.
+        var refused = await reader.PostAsync("/api/v1/files/?allowDuplicate=true", form);
         refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await ReadCodeAsync(refused)).ShouldBe(CreateRules.ForbiddenCode);
 
@@ -175,7 +178,7 @@ public sealed class DocumentAccessApiTests : IAsyncLifetime, IDisposable
         // document at all" — the very same upload is accepted.
         await GrantAsync(readerId, AccessEffect.Allow, AccessAction.Create, AccessScopeKind.All);
         using var retry = BuildForm("wanted.txt", "yes"u8.ToArray(), "text/plain");
-        var accepted = await reader.PostAsync("/api/v1/files/", retry);
+        var accepted = await reader.PostAsync("/api/v1/files/?allowDuplicate=true", retry);
         accepted.StatusCode.ShouldBe(HttpStatusCode.Created, await accepted.Content.ReadAsStringAsync());
     }
 
@@ -549,7 +552,7 @@ public sealed class DocumentAccessApiTests : IAsyncLifetime, IDisposable
     private async Task<Guid> UploadFileAsync(string fileName, byte[] bytes, string contentType)
     {
         using var form = BuildForm(fileName, bytes, contentType);
-        var response = await owner.PostAsync("/api/v1/files/", form);
+        var response = await owner.PostAsync("/api/v1/files/?allowDuplicate=true", form);
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();

@@ -311,7 +311,10 @@ public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable
         var content = new ByteArrayContent(bytes);
         content.Headers.ContentType = new(contentType);
         using var form = new MultipartFormDataContent { { content, "file", name } };
-        var response = await client.PostAsync("/api/v1/files", form);
+        // These fixtures upload byte-identical content more than once, which the store now
+        // warns about. Saying yes up front is what a person would do; deduplication is
+        // asserted in its own suite rather than incidentally here.
+        var response = await client.PostAsync("/api/v1/files?allowDuplicate=true", form);
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         return body.GetProperty("id").GetGuid();

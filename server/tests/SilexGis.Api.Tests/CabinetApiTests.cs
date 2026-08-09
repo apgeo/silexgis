@@ -568,7 +568,10 @@ public sealed class CabinetApiTests : IAsyncLifetime, IDisposable
         var content = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes($"contents of {fileName}"));
         content.Headers.ContentType = new("text/plain");
         using var form = new MultipartFormDataContent { { content, "file", fileName } };
-        var url = cavingGroupId is { } id ? $"/api/v1/files/?cavingGroupId={id}" : "/api/v1/files/";
+        // These fixtures upload byte-identical content more than once, which the store now
+        // warns about. Saying yes up front is what a person would do; deduplication is
+        // asserted in its own suite rather than incidentally here.
+        var url = cavingGroupId is { } id ? $"/api/v1/files/?cavingGroupId={id}&allowDuplicate=true" : "/api/v1/files/?allowDuplicate=true";
         return await client.PostAsync(url, form);
     }
 

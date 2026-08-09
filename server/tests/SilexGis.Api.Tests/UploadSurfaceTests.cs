@@ -310,19 +310,22 @@ public sealed class UploadSurfaceTests : IAsyncLifetime, IDisposable
             // transport error — which is why the request-body ceiling sits above the file
             // limit rather than on it.
             using var tooLarge = BuildForm("big.bin", new byte[cap + 1], "application/octet-stream");
-            var rejected = await client.PostAsync("/api/v1/files/", tooLarge);
+            // These fixtures upload byte-identical content more than once, which the store now
+            // warns about. Saying yes up front is what a person would do; deduplication is
+            // asserted in its own suite rather than incidentally here.
+            var rejected = await client.PostAsync("/api/v1/files/?allowDuplicate=true", tooLarge);
             rejected.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
             (await ReadCodeAsync(rejected)).ShouldBe("file.too_large");
 
             // The positive twin: a file of exactly the configured limit is accepted, so the
             // rejection above is the limit and not an off-by-one that hides real uploads.
             using var atLimit = BuildForm("exact.bin", new byte[cap], "application/octet-stream");
-            var accepted = await client.PostAsync("/api/v1/files/", atLimit);
+            var accepted = await client.PostAsync("/api/v1/files/?allowDuplicate=true", atLimit);
             accepted.StatusCode.ShouldBe(HttpStatusCode.Created, await accepted.Content.ReadAsStringAsync());
 
             // Empty stays its own answer rather than collapsing into "too large".
             using var empty = BuildForm("nothing.bin", [], "application/octet-stream");
-            var refused = await client.PostAsync("/api/v1/files/", empty);
+            var refused = await client.PostAsync("/api/v1/files/?allowDuplicate=true", empty);
             refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
             (await ReadCodeAsync(refused)).ShouldBe("file.empty");
         }
@@ -369,17 +372,27 @@ public sealed class UploadSurfaceTests : IAsyncLifetime, IDisposable
             scope.ServiceProvider.GetRequiredService<IOptions<FormOptions>>()
                 .Value.MultipartBodyLengthLimit.ShouldBe(files.MaxRequestBodyBytes);
 
-            // And the request-body ceiling on the two routes that carry an upload. Left off,
+            // And the request-body ceiling on every route that carries an upload. Left off,
             // the web server's own default (well under 30 MB) decides instead.
             // Matched on the pattern as written, route constraint included — that is what the
             // router keeps, and spelling it out here means a renamed route fails this test
-            // rather than silently matching nothing.
+            // rather than silently matching nothing. The method is part of the match because
+            // one of them is not a POST, and a route matched by pattern alone would find the
+            // wrong endpoint or none at all.
             var endpoints = configured.Services.GetRequiredService<EndpointDataSource>().Endpoints;
-            foreach (var route in (string[])["/api/v1/files/", "/api/v1/files/{id:guid}/versions"])
+            foreach (var (route, method) in ((string Route, string Method)[])
+                [
+                    ("/api/v1/files/", "POST"),
+                    ("/api/v1/files/{id:guid}/versions", "POST"),
+                    // A piece of a resumable upload carries as many bytes as any other upload.
+                    // Cut off by the web server's own default it arrives as a bare transport
+                    // error, and a client resuming from the wrong offset is the only symptom.
+                    ("/api/v1/files/uploads/{id:guid}", "PUT"),
+                ])
             {
                 var upload = endpoints.OfType<RouteEndpoint>().Single(e =>
                     e.RoutePattern.RawText == route
-                    && e.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Contains("POST"));
+                    && e.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Contains(method));
 
                 upload.Metadata.GetMetadata<IRequestSizeLimitMetadata>()
                     .ShouldNotBeNull($"{route} accepts an upload with no request-size limit of its own.")
@@ -488,7 +501,7 @@ public sealed class UploadSurfaceTests : IAsyncLifetime, IDisposable
         HttpClient client, string fileName, byte[] bytes, string contentType)
     {
         using var form = BuildForm(fileName, bytes, contentType);
-        var response = await client.PostAsync("/api/v1/files/", form);
+        var response = await client.PostAsync("/api/v1/files/?allowDuplicate=true", form);
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement;
