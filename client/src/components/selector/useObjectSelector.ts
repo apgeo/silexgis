@@ -36,9 +36,8 @@ export interface UseObjectSelectorOptions {
   exclude: readonly string[];
   /** Restricts the sort buttons further; omitted offers everything the worlds in play share. */
   sorts?: readonly SortKey[];
+  /** The chosen ids. Owned by the caller: a form owns its value, and a copy here would drift. */
   value: readonly string[];
-  onChange: (ids: string[]) => void;
-  onPick?: (hit: FilterHit | null) => void;
   /**
    * Where this control's last arrangement is kept. Omitted means remember nothing, which is the
    * right default inside a form: a picker that is part of filling something in has no arrangement

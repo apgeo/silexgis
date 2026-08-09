@@ -120,8 +120,6 @@ export default function ObjectSelector({
     sorts,
     rememberAs,
     value: chosenIds,
-    onChange: () => undefined,
-    onPick,
   });
 
   const emit = (ids: string[], picked: FilterHit | null) => {
