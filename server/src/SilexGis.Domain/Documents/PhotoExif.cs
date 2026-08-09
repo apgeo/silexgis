@@ -45,6 +45,16 @@ public sealed record PhotoExif(
     /// <summary>A picture that stated nothing about itself, or one nothing could read.</summary>
     public static readonly PhotoExif None = new();
 
+    /// <summary>
+    /// Whether the picture stated nothing about itself.
+    /// </summary>
+    /// <remarks>
+    /// Never written down. It is derived from the other fields, and this record is serialised into
+    /// the stored metadata — so writing it would put a value in storage that can disagree with what
+    /// it was derived from the moment either changes. Rows written before this carry the key; it is
+    /// read-only, so it is ignored on the way back in.
+    /// </remarks>
+    [JsonIgnore]
     public bool IsEmpty => this == None;
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)

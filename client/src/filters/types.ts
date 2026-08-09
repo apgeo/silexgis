@@ -33,13 +33,17 @@ export type SortKey = 'created' | 'updated' | 'title' | 'owner' | 'proximity';
  * The type travels the whole way rather than being inferred at either end, because the difference
  * between the number 4.5 and the text "4.5" is a difference the database can see: a depth recorded
  * as one is not a row a filter for the other should find.
+ *
+ * The discriminator is spelled `type`, which is what the server reads. The generated contract
+ * cannot check this — the tool describes a polymorphic list as an unknown — so it is pinned by a
+ * test on each side holding the same literal JSON.
  */
 export type FilterValue =
-  | { value: string; kind: 'text' }
-  | { value: number; kind: 'number' }
-  | { value: boolean; kind: 'boolean' }
-  | { value: string; kind: 'instant' }
-  | { value: string; kind: 'id' };
+  | { type: 'text'; value: string }
+  | { type: 'number'; value: number }
+  | { type: 'boolean'; value: boolean }
+  | { type: 'instant'; value: string }
+  | { type: 'id'; value: string };
 
 export type FilterNode =
   | { node: 'allOf'; of: FilterNode[] }

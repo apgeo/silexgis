@@ -148,6 +148,30 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public async Task A_document_this_version_cannot_read_is_refused_rather_than_crashing()
+    {
+        // A value that does not say which type it is. The reader raises NotSupportedException for
+        // this rather than a JsonException, which is a different path through model binding — and a
+        // filter arriving from an older client, or a link somebody edited, must be a refusal rather
+        // than a fault the caller can do nothing about.
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-malformed");
+
+        const string body = """
+            {"version":1,"scope":[{"world":"feature","where":{"node":"condition","field":"name",
+            "op":"contains","values":[{"kind":"text","value":"urs"}]}}],
+            "sort":"updated","descending":true}
+            """;
+
+        var response = await client.PostAsync(
+            "/api/v1/filters/query",
+            new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+
+        ((int)response.StatusCode).ShouldBeLessThan(500,
+            "A filter this version cannot read is the caller's mistake, not a fault.");
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
     // ---------- what comes back ----------
 
     [Fact]

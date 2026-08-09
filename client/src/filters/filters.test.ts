@@ -46,7 +46,7 @@ const VOCABULARIES: WorldVocabulary[] = [
   },
 ];
 
-const named = (text: string) => condition('name', 'contains', [{ kind: 'text', value: text }]);
+const named = (text: string) => condition('name', 'contains', [{ type: 'text', value: text }]);
 
 describe('a filter document', () => {
   it('asks nothing until somebody narrows something', () => {
@@ -185,7 +185,7 @@ describe('the pre-flight check', () => {
     const document = withWhere(
       emptyDocument(['feature']),
       'feature',
-      condition('somethingElse', 'contains', [{ kind: 'text', value: 'x' }]),
+      condition('somethingElse', 'contains', [{ type: 'text', value: 'x' }]),
     );
 
     expect(preflight(document, LIMITS, VOCABULARIES)).toEqual([]);
@@ -195,12 +195,43 @@ describe('the pre-flight check', () => {
 describe('a half-written condition', () => {
   it('is left out of the request rather than complained about', () => {
     expect(isComplete(condition('name', 'contains', []))).toBe(false);
-    expect(isComplete(condition('name', 'contains', [{ kind: 'text', value: '' }]))).toBe(false);
+    expect(isComplete(condition('name', 'contains', [{ type: 'text', value: '' }]))).toBe(false);
     expect(isComplete(named('urs'))).toBe(true);
   });
 
   it('knows the operators that need nothing and the one that needs two', () => {
     expect(isComplete(condition('name', 'isEmpty'))).toBe(true);
-    expect(isComplete(condition('createdAt', 'between', [{ kind: 'instant', value: 'a' }]))).toBe(false);
+    expect(isComplete(condition('createdAt', 'between', [{ type: 'instant', value: 'a' }]))).toBe(false);
+  });
+});
+
+describe('the wire shape', () => {
+  it('spells a document exactly the way the server reads one', () => {
+    // The generated contract cannot check this. The tool describes a polymorphic list of values as
+    // an unknown, so nothing in the build would notice if the two sides disagreed about how a value
+    // says what type it is — the filter would simply be refused as malformed, at run time, in
+    // somebody's face.
+    //
+    // The same literal appears in the server's FilterWireContractTests. If either side changes how
+    // it spells a document, exactly one of the two tests fails and says so.
+    const document = withSort(
+      withWhere(
+        emptyDocument(['feature']),
+        'feature',
+        fromGroups([[named('urs'), condition('createdAt', 'greaterThan', [
+          { type: 'instant', value: '2026-01-01T00:00:00+00:00' },
+        ])]]),
+      ),
+      'title',
+      false,
+    );
+
+    expect(JSON.stringify(document)).toBe(
+      '{"version":1,"scope":[{"world":"feature","where":{"node":"allOf","of":['
+      + '{"node":"condition","field":"name","op":"contains","values":[{"type":"text","value":"urs"}]},'
+      + '{"node":"condition","field":"createdAt","op":"greaterThan","values":'
+      + '[{"type":"instant","value":"2026-01-01T00:00:00+00:00"}]}]}}],'
+      + '"sort":"title","descending":false}',
+    );
   });
 });

@@ -4096,6 +4096,122 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/filters/vocabulary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What each kind of object can be filtered by, and the limits on a filter. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FilterVocabularyResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/filters/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Runs a filter across the kinds of object it names. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FilterQueryRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FilterQueryResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/filters/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Describes rows named by id, for a control showing an existing choice. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FilterResolveRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FilterHitDto"][];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/features/{id}/parents": {
         parameters: {
             query?: never;
@@ -10216,6 +10332,8 @@ export interface components {
             cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
+        /** @enum {unknown} */
+        FieldKind: "text" | "number" | "boolean" | "instant" | "id" | "spatial";
         FileAccessEventDto: {
             /** Format: int64 */
             id: number;
@@ -10285,6 +10403,127 @@ export interface components {
             createdAt: string;
             contentUrl: string;
             isHead: boolean;
+        };
+        FilterAnchor: components["schemas"]["FilterAnchorPointAnchor"] | components["schemas"]["FilterAnchorObjectAnchor"];
+        FilterAnchorObjectAnchor: {
+            /** @enum {string} */
+            anchor?: "object";
+            world: string;
+            /** Format: uuid */
+            id: string;
+        };
+        FilterAnchorPointAnchor: {
+            /** @enum {string} */
+            anchor?: "point";
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+        };
+        FilterDocument: {
+            /** Format: int32 */
+            version?: number;
+            scope?: components["schemas"]["WorldScope"][];
+            sort?: components["schemas"]["SortKey"];
+            descending?: boolean;
+            anchor?: null | components["schemas"]["FilterAnchor"];
+        };
+        FilterFieldDto: {
+            key: string;
+            labelKey: string;
+            kind: components["schemas"]["FieldKind"];
+            ops: components["schemas"]["FilterOp"][];
+            options: null | string;
+            sortable: boolean;
+        };
+        FilterHitDto: {
+            world: string;
+            /** Format: uuid */
+            id: string;
+            title: string;
+            subtitle: null | string;
+            symbol: null | string;
+            placeable: boolean;
+        };
+        FilterLimitsDto: {
+            /** Format: int32 */
+            maxNodes: number;
+            /** Format: int32 */
+            maxDepth: number;
+            /** Format: int32 */
+            maxValuesPerCondition: number;
+            /** Format: int32 */
+            maxWorlds: number;
+            /** Format: int32 */
+            maxTextValueLength: number;
+            /** Format: int32 */
+            maxPageSize: number;
+        };
+        FilterNode: components["schemas"]["FilterNodeAllOfNode"] | components["schemas"]["FilterNodeAnyOfNode"] | components["schemas"]["FilterNodeNotNode"] | components["schemas"]["FilterNodeConditionNode"];
+        FilterNodeAllOfNode: {
+            /** @enum {string} */
+            node?: "allOf";
+            of: components["schemas"]["FilterNode"][];
+        };
+        FilterNodeAnyOfNode: {
+            /** @enum {string} */
+            node?: "anyOf";
+            of: unknown;
+        };
+        FilterNodeConditionNode: {
+            /** @enum {string} */
+            node?: "condition";
+            field: string;
+            op: components["schemas"]["FilterOp"];
+            values: unknown;
+        };
+        FilterNodeNotNode: {
+            /** @enum {string} */
+            node?: "not";
+            of: components["schemas"]["FilterNode"];
+        };
+        /** @enum {unknown} */
+        FilterOp: "equals" | "in" | "contains" | "startsWith" | "lessThan" | "greaterThan" | "between" | "isEmpty" | "isNotEmpty" | "within" | "inside";
+        FilterQueryRequest: {
+            document: components["schemas"]["FilterDocument"];
+            /**
+             * Format: int32
+             * @default 1
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @default 25
+             */
+            pageSize: number;
+        };
+        FilterQueryResponse: {
+            worlds: components["schemas"]["FilterWorldResultDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            counted: boolean;
+        };
+        FilterResolveRequest: {
+            world: string;
+            ids: string[];
+        };
+        FilterVocabularyResponse: {
+            worlds: components["schemas"]["FilterWorldVocabularyDto"][];
+            limits: components["schemas"]["FilterLimitsDto"];
+        };
+        FilterWorldResultDto: {
+            world: string;
+            hits: components["schemas"]["FilterHitDto"][];
+            /** Format: int32 */
+            total: null | number;
+        };
+        FilterWorldVocabularyDto: {
+            world: string;
+            labelKey: string;
+            fields: components["schemas"]["FilterFieldDto"][];
+            sorts: components["schemas"]["SortKey"][];
         };
         ForgotPasswordRequest: {
             email: string;
@@ -11682,6 +11921,8 @@ export interface components {
             /** Format: int32 */
             timeoutSeconds: number;
         };
+        /** @enum {unknown} */
+        SortKey: "created" | "updated" | "title" | "owner" | "proximity";
         SurveyModelDto: {
             /** Format: uuid */
             id: string;
@@ -11971,6 +12212,10 @@ export interface components {
         };
         /** @enum {unknown} */
         Visibility: "private" | "cavingGroup" | "authenticated" | "public";
+        WorldScope: {
+            world: string;
+            where?: null | components["schemas"]["FilterNode"];
+        };
     };
     responses: never;
     parameters: never;

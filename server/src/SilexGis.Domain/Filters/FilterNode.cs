@@ -31,18 +31,28 @@ public abstract record FilterNode
     /// Every node this one contains, for walking a document without knowing its shape.
     /// A leaf contains nothing, which is what ends the walk.
     /// </summary>
+    /// <remarks>
+    /// Never written to the wire. These are the same nodes the concrete shape already carries under
+    /// its own name, so serialising them puts every subtree into the document twice — and again
+    /// inside each copy, which at the depth a filter may reach turns a small document into a large
+    /// one. A filter is saved and put into links, so that cost would have been paid on every save
+    /// and every URL for a convenience that only exists in memory.
+    /// </remarks>
+    [JsonIgnore]
     public virtual IReadOnlyList<FilterNode> Children => [];
 }
 
 /// <summary>Every child must match.</summary>
 public sealed record AllOfNode(IReadOnlyList<FilterNode> Of) : FilterNode
 {
+    [JsonIgnore]
     public override IReadOnlyList<FilterNode> Children => Of;
 }
 
 /// <summary>At least one child must match.</summary>
 public sealed record AnyOfNode(IReadOnlyList<FilterNode> Of) : FilterNode
 {
+    [JsonIgnore]
     public override IReadOnlyList<FilterNode> Children => Of;
 }
 
@@ -58,6 +68,7 @@ public sealed record AnyOfNode(IReadOnlyList<FilterNode> Of) : FilterNode
 /// </remarks>
 public sealed record NotNode(FilterNode Of) : FilterNode
 {
+    [JsonIgnore]
     public override IReadOnlyList<FilterNode> Children => [Of];
 }
 
