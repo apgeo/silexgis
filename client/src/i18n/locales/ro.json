@@ -1898,6 +1898,23 @@
       "tooManyValues": "O condiție are cel mult {{max}} valori.",
       "textTooLong": "Textul dintr-o condiție are cel mult {{max}} caractere.",
       "sortUnavailable": "Nimic din ce se caută nu poate fi ordonat astfel."
+    },
+    "selector": {
+      "placeholder": "Caută",
+      "typeToSearch": "Scrie cel puțin {{count}} caractere",
+      "noMatches": "Nu se potrivește nimic",
+      "nothingChosen": "Nimic ales",
+      "chosen": "{{count}} alese",
+      "restricted": "{{count}} neafișate — dispărute sau nu îți sunt vizibile",
+      "placeable": "Ți se poate arăta unde este"
+    },
+    "sorts": {
+      "created": "Adăugat",
+      "updated": "Modificat",
+      "title": "Nume",
+      "owner": "Proprietar",
+      "occurred": "Data",
+      "proximity": "Cel mai apropiat"
     }
   }
 }

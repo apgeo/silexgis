@@ -1898,6 +1898,23 @@
       "tooManyValues": "A condition holds at most {{max}} values.",
       "textTooLong": "Text in a condition is at most {{max}} characters.",
       "sortUnavailable": "Nothing being searched can be sorted that way."
+    },
+    "selector": {
+      "placeholder": "Search",
+      "typeToSearch": "Type at least {{count}} characters",
+      "noMatches": "Nothing matches",
+      "nothingChosen": "Nothing chosen",
+      "chosen": "{{count}} chosen",
+      "restricted": "{{count}} not shown — gone, or not yours to see",
+      "placeable": "You can be shown where this is"
+    },
+    "sorts": {
+      "created": "Added",
+      "updated": "Changed",
+      "title": "Name",
+      "owner": "Owner",
+      "occurred": "Date",
+      "proximity": "Nearest"
     }
   }
 }
