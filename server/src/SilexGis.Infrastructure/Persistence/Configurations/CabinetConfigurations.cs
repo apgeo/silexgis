@@ -35,6 +35,23 @@ public sealed class CabinetConfiguration : IEntityTypeConfiguration<Cabinet>
         builder.Property(x => x.AncestorIds).HasColumnType("uuid[]").HasDefaultValueSql("'{}'::uuid[]");
         builder.HasIndex(x => x.AncestorIds).HasMethod("gin");
 
+        // What this shelf says about whatever lands on it. All four are nullable or empty by
+        // default, which is what "this shelf has no opinion, ask the one above" looks like.
+        builder.Property(x => x.DefaultVisibility).HasConversion<short?>();
+        builder.Property(x => x.DefaultTagIds).HasColumnType("bigint[]")
+            .HasDefaultValueSql("'{}'::bigint[]");
+        builder.Property(x => x.RequiredMetadataKeys).HasColumnType("text[]")
+            .HasDefaultValueSql("'{}'::text[]");
+
+        // Restrict, as documents do: a kind still named as a shelf's default cannot be removed
+        // out from under it, or the shelf would silently start typing nothing.
+        builder.HasOne<DocumentType>().WithMany().HasForeignKey(x => x.DefaultDocumentTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Tag ids are an array rather than a junction table, and deliberately carry no
+        // referential integrity: they are a default to copy onto new documents, not a
+        // membership. A deleted tag leaves an id nothing resolves, which the resolver drops —
+        // the alternative is a junction table whose only reader is the upload path.
         // A name identifies a cabinet among its siblings, not globally: "1987" may sit
         // under several archives. Postgres treats NULLs as distinct, so root cabinets need
         // an index of their own — a single (parent_id, name) index would let two roots

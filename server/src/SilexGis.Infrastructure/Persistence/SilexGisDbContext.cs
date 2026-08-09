@@ -88,6 +88,14 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<ImportBatchItem> ImportBatchItems => Set<ImportBatchItem>();
 
+    public DbSet<UploadBatch> UploadBatches => Set<UploadBatch>();
+
+    public DbSet<UploadBatchItem> UploadBatchItems => Set<UploadBatchItem>();
+
+    public DbSet<UploadSession> UploadSessions => Set<UploadSession>();
+
+    public DbSet<DuplicateUploadRecord> DuplicateUploadRecords => Set<DuplicateUploadRecord>();
+
     public DbSet<Attachment> Attachments => Set<Attachment>();
 
     public DbSet<GeoreferencedMap> GeoreferencedMaps => Set<GeoreferencedMap>();

@@ -42,6 +42,19 @@ public class SilexGisUser : IdentityUser<Guid>, ITimestamped, IUserProfile
     public string? AvatarPreset { get; set; }
 
     /// <summary>
+    /// How many bytes of stored content this person may own, overriding the installation's
+    /// own figure. Null means they get the installation default, which is what almost every
+    /// account has; zero is a real value meaning "may upload nothing", and is why this is not
+    /// simply a number with zero for absent.
+    /// <para>
+    /// An override rather than an allocation: nothing is reserved, and the sum of everybody's
+    /// quotas may exceed the disk. The installation-wide ceiling is what actually protects the
+    /// disk, and it is checked as well as this one.
+    /// </para>
+    /// </summary>
+    public long? StorageQuotaBytes { get; set; }
+
+    /// <summary>
     /// Address requested by a change that has not been confirmed yet. The live
     /// <see cref="IdentityUser{TKey}.Email"/> is untouched until the emailed token comes back.
     /// </summary>

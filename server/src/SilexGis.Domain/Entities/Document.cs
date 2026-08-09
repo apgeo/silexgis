@@ -63,6 +63,19 @@ public class Document : IProtectedEntity, ITimestamped, IAuditable
 
     public Visibility Visibility { get; set; } = Visibility.Private;
 
+    /// <summary>
+    /// The drop this document arrived in, when it arrived in one. Null for a document
+    /// uploaded on its own, which is most of them.
+    /// <para>
+    /// This is what makes an import findable and reversible afterwards: "everything that came
+    /// out of that archive" is one indexed lookup rather than a guess from timestamps, and it
+    /// keeps answering after whoever did it has forgotten which afternoon it was. It is set
+    /// once, when the document is created, and never moves — a document re-filed elsewhere
+    /// still arrived where it arrived.
+    /// </para>
+    /// </summary>
+    public Guid? UploadBatchId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

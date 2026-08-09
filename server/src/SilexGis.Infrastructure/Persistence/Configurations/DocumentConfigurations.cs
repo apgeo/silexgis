@@ -28,9 +28,19 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
         builder.HasOne<DocumentType>().WithMany().HasForeignKey(x => x.DocumentTypeId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // The drop this arrived in. Set null rather than restricting: a batch is a record of
+        // something that happened and may be pruned, and its documents outlive it — losing
+        // the reference is a loss of provenance, not of content.
+        builder.HasOne<UploadBatch>().WithMany().HasForeignKey(x => x.UploadBatchId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasIndex(x => x.OwnerUserId);
         builder.HasIndex(x => x.CavingGroupId);
         builder.HasIndex(x => x.DocumentTypeId);
+
+        // "Everything that came out of that archive" — filtered, because almost every row is
+        // null and an index over them would be mostly a copy of the table.
+        builder.HasIndex(x => x.UploadBatchId).HasFilter("upload_batch_id is not null");
     }
 }
 

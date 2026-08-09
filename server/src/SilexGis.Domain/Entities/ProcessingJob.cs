@@ -84,4 +84,21 @@ public static class ProcessingJobKinds
     /// document whose own attempt did not finish.
     /// </summary>
     public const string DocumentConversionBackfill = "document-conversion-backfill";
+
+    /// <summary>
+    /// Expand an uploaded archive into filed documents, mirroring its folders as cabinets.
+    /// </summary>
+    public const string ArchiveExpansion = "archive-expansion";
+
+    /// <summary>
+    /// Copy a directory the server itself can reach into the archive. Only ever queued for a
+    /// path inside the roots the operator listed.
+    /// </summary>
+    public const string DirectoryImport = "directory-import";
+
+    /// <summary>
+    /// Delete resumable uploads nobody came back to, and the partial bytes they hold.
+    /// Scheduled.
+    /// </summary>
+    public const string UploadSessionSweep = "upload-session-sweep";
 }

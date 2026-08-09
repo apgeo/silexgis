@@ -41,6 +41,45 @@ public class Cabinet : ITimestamped, IAuditable
     /// </summary>
     public Guid[] AncestorIds { get; set; } = [];
 
+    /// <summary>
+    /// The kind of document things filed here are, unless the upload said otherwise. Null
+    /// means this shelf has no opinion and the question passes to the shelf above it.
+    /// <para>
+    /// A default, never a constraint: it fills in what an upload did not say and is not
+    /// re-applied to anything already filed. A shelf that could retype its contents would
+    /// mean moving a document between shelves silently rewrote what it is.
+    /// </para>
+    /// </summary>
+    public long? DefaultDocumentTypeId { get; set; }
+
+    /// <summary>
+    /// The read audience things filed here start with. Null means no opinion — and the
+    /// difference matters, because <see cref="Visibility.Private"/> is itself a perfectly
+    /// good opinion for a shelf to hold.
+    /// </summary>
+    public Visibility? DefaultVisibility { get; set; }
+
+    /// <summary>
+    /// Tags applied to whatever lands here. An empty array means no opinion, which is the
+    /// same thing as an empty set of tags and so needs no third state.
+    /// </summary>
+    public long[] DefaultTagIds { get; set; } = [];
+
+    /// <summary>
+    /// Metadata keys a document filed here is expected to carry ("surveyDate", "author").
+    ///
+    /// <para>
+    /// Expected, and deliberately not enforced. A shelf that refused an upload for missing
+    /// metadata would break the one thing this whole area exists to make easy — dropping four
+    /// hundred scans in and filing them later — and would do it at the worst moment, halfway
+    /// through a batch, for a field the uploader cannot fill in until they have opened the
+    /// file. So the keys are published, the upload succeeds, and a document missing any of
+    /// them is marked as incomplete wherever it is listed. The club gets its checklist; the
+    /// archive still gets its files.
+    /// </para>
+    /// </summary>
+    public string[] RequiredMetadataKeys { get; set; } = [];
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
