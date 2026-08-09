@@ -94,7 +94,7 @@ public sealed class FeatureWorldFixture : WorldFixture
     public override async Task<FilterNode> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
     {
         var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
-        db.Features.Add(Rootless(typeId, ownerId, $"Conformance {tag}", Visibility.Private));
+        Add(db, Rootless(typeId, ownerId, $"Conformance {tag}", Visibility.Private));
         await db.SaveChangesAsync();
 
         return new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
@@ -111,7 +111,7 @@ public sealed class FeatureWorldFixture : WorldFixture
             var row = Rootless(typeId, ownerId, $"Paged {tag}", Visibility.Public);
             row.CreatedAt = stamp;
             row.UpdatedAt = stamp;
-            db.Features.Add(row);
+            Add(db, row);
         }
 
         await db.SaveChangesAsync();
@@ -150,10 +150,20 @@ public sealed class FeatureWorldFixture : WorldFixture
             ]),
         ])
         { SRID = 4326 };
-        db.Features.Add(row);
+        Add(db, row);
         await db.SaveChangesAsync();
 
         return new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]);
+    }
+
+        // A rootless feature is its own ancestor, and that fact lives in two places the write
+        // service keeps in step: the array on the row, which the visibility walk reads, and the
+        // closure table, which the integrity check compares against the hierarchy edges. A fixture
+        // that sets only the array leaves every row it creates looking corrupt to that check.
+    private static void Add(SilexGisDbContext db, Feature feature)
+    {
+        db.Features.Add(feature);
+        db.FeatureAncestors.Add(new FeatureAncestor { FeatureId = feature.Id, AncestorId = feature.Id });
     }
 
     private static Feature Rootless(long typeId, Guid ownerId, string name, Visibility visibility)

@@ -141,31 +141,9 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
 
-        db.Features.AddRange(
-            new Feature
-            {
-                Name = $"Numeric {tag}",
-                Kind = FeatureKind.Generic,
-                FeatureTypeId = typeId,
-                OwnerUserId = ownerId,
-                Properties = """{"depth_m":4.5}""",
-            },
-            new Feature
-            {
-                Name = $"Textual {tag}",
-                Kind = FeatureKind.Generic,
-                FeatureTypeId = typeId,
-                OwnerUserId = ownerId,
-                Properties = """{"depth_m":"4.5"}""",
-            },
-            new Feature
-            {
-                Name = $"Silent {tag}",
-                Kind = FeatureKind.Generic,
-                FeatureTypeId = typeId,
-                OwnerUserId = ownerId,
-                Properties = """{"other":1}""",
-            });
+        Rootless(db, typeId, ownerId, $"Numeric {tag}", properties: """{"depth_m":4.5}""");
+        Rootless(db, typeId, ownerId, $"Textual {tag}", properties: """{"depth_m":"4.5"}""");
+        Rootless(db, typeId, ownerId, $"Silent {tag}", properties: """{"other":1}""");
         await db.SaveChangesAsync();
 
         var compiler = new FeatureFilterCompiler(db);
@@ -278,14 +256,7 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable
         // A generic feature carries a type — the schema insists, because a surface feature with
         // no type is a symbol nothing knows how to draw.
         var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
-        db.Features.Add(new Feature
-        {
-            Name = name,
-            Kind = FeatureKind.Generic,
-            FeatureTypeId = typeId,
-            OwnerUserId = ownerId,
-            Visibility = Visibility.Private,
-        });
+        Rootless(db, typeId, ownerId, name);
         await db.SaveChangesAsync();
 
         var compiler = new FeatureFilterCompiler(db);
@@ -324,14 +295,7 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
-        db.Features.Add(new Feature
-        {
-            Name = $"Hidden {tag}",
-            Kind = FeatureKind.Generic,
-            FeatureTypeId = typeId,
-            OwnerUserId = ownerId,
-            Visibility = Visibility.Private,
-        });
+        Rootless(db, typeId, ownerId, $"Hidden {tag}");
         await db.SaveChangesAsync();
 
         var compiler = new FeatureFilterCompiler(db);
@@ -346,6 +310,42 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable
 
         // The negation matches every row in the database; the walk is what keeps the private one out.
         visibleToOutsider.ShouldNotContain($"Hidden {tag}");
+    }
+
+    /// <summary>
+    /// A feature with no parent, stamped the way the write service stamps one.
+    /// </summary>
+    /// <remarks>
+    /// A rootless feature is its own ancestor, and that fact lives in two places kept in step: the
+    /// array on the row, which the visibility walk reads, and the closure table, which the integrity
+    /// check compares against the hierarchy edges. A fixture that sets neither leaves every row it
+    /// creates looking corrupt to a check that scans the whole database — which is somebody else's
+    /// test failing for a reason that has nothing to do with them.
+    /// </remarks>
+    private static Feature Rootless(
+        SilexGisDbContext db,
+        long typeId,
+        Guid ownerId,
+        string name,
+        Visibility visibility = Visibility.Private,
+        string properties = "{}")
+    {
+        var id = Guid.NewGuid();
+        var feature = new Feature
+        {
+            Id = id,
+            Name = name,
+            Kind = FeatureKind.Generic,
+            FeatureTypeId = typeId,
+            OwnerUserId = ownerId,
+            Visibility = visibility,
+            AncestorIds = [id],
+            Properties = properties,
+        };
+
+        db.Features.Add(feature);
+        db.FeatureAncestors.Add(new FeatureAncestor { FeatureId = id, AncestorId = id });
+        return feature;
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

@@ -382,6 +382,10 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
                 // itself — a row inserted without it is invisible to everybody but its owner.
                 AncestorIds = [id],
             });
+            // The row's ancestor array and the closure table are two places the write service keeps
+            // in step; a fixture that sets only the array leaves the rows looking corrupt to the
+            // integrity check, which scans the whole database.
+            db.FeatureAncestors.Add(new FeatureAncestor { FeatureId = id, AncestorId = id });
         }
 
         await db.SaveChangesAsync();
