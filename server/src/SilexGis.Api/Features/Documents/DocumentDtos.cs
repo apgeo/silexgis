@@ -94,3 +94,24 @@ public sealed record DocumentUpdateRequest(
     Visibility Visibility,
     Guid? CavingGroupId,
     string? Language);
+
+/// <summary>
+/// A document sitting in no cabinet, as the inbox lists it. Enough to draw a row and to file
+/// it; no file bytes and no delivery URL, because filing is what this list is for.
+/// </summary>
+/// <param name="UploadBatchId">
+/// The drop it arrived in, when it arrived in one — so an inbox can be narrowed to "the four
+/// hundred scans I added on Tuesday" rather than being one undifferentiated pile.
+/// </param>
+public sealed record UnfiledDocumentDto(
+    Guid Id,
+    string Title,
+    long? DocumentTypeId,
+    Visibility Visibility,
+    Guid? CavingGroupId,
+    Guid? UploadBatchId,
+    Guid? CurrentFileId,
+    FileKind? Kind,
+    string? MimeType,
+    long? SizeBytes,
+    DateTimeOffset CreatedAt);

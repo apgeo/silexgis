@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
@@ -40,6 +42,7 @@ public static class CabinetEndpoints
     public const string NotEmptyCode = "cabinet.not_empty";
     public const string DocumentNotFoundCode = "document.not_found";
     public const string DocumentWriteForbiddenCode = "document.write_forbidden";
+    public const string DocumentTypeUnknownCode = "document.type_unknown";
 
     public static RouteGroupBuilder MapCabinetEndpoints(this RouteGroupBuilder api)
     {
@@ -57,6 +60,8 @@ public static class CabinetEndpoints
             .WithSummary("Renames, re-describes or moves a cabinet and everything below it.");
         cabinets.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes an empty cabinet no rule points at.");
+        cabinets.MapPost("/filing", BulkFileAsync).WithValidation<BulkFilingRequest>()
+            .WithSummary("Files and unfiles many documents at once; reports per-document refusals rather than failing whole.");
         cabinets.MapPut("/{id:guid}/documents/{documentId:guid}", FileAsync)
             .WithSummary("Files a document in a cabinet.");
         cabinets.MapDelete("/{id:guid}/documents/{documentId:guid}", UnfileAsync)
@@ -164,6 +169,10 @@ public static class CabinetEndpoints
                     .FirstOrDefault(),
             });
 
+        // Resolved once for the shelf rather than per row: the expectation is a property of
+        // where the documents are filed, not of any one of them.
+        var expected = await ExpectedKeysAsync(db, id, ct);
+
         return TypedResults.Ok(await documents.ToPagedAsync(
             p,
             size,
@@ -177,7 +186,8 @@ public static class CabinetEndpoints
                 row.CurrentFile?.Kind,
                 row.CurrentFile?.MimeType,
                 row.CurrentFile?.SizeBytes,
-                row.Document.UpdatedAt),
+                row.Document.UpdatedAt,
+                CabinetDefaultRules.MissingMetadataKeys(expected, AnsweredKeys(row.Document.Metadata))),
             ct));
     }
 
@@ -211,10 +221,16 @@ public static class CabinetEndpoints
             return ApiProblems.BadRequest(NameTakenCode, "A cabinet with this name already sits here.");
         }
 
+        if (await UnknownDocumentTypeAsync(db, request.DefaultDocumentTypeId, ct))
+        {
+            return ApiProblems.BadRequest(DocumentTypeUnknownCode, "The default document type does not exist.");
+        }
+
         Cabinet cabinet;
         try
         {
             cabinet = await cabinets.CreateAsync(name, request.Description, request.ParentId, ct);
+            ApplyDefaults(cabinet, request);
             await db.SaveChangesAsync(ct);
         }
         catch (CabinetWriteException e)
@@ -276,8 +292,14 @@ public static class CabinetEndpoints
             return ApiProblems.BadRequest(NameTakenCode, "A cabinet with this name already sits here.");
         }
 
+        if (await UnknownDocumentTypeAsync(db, request.DefaultDocumentTypeId, ct))
+        {
+            return ApiProblems.BadRequest(DocumentTypeUnknownCode, "The default document type does not exist.");
+        }
+
         cabinet.Name = name;
         cabinet.Description = request.Description;
+        ApplyDefaults(cabinet, request);
 
         try
         {
@@ -441,6 +463,36 @@ public static class CabinetEndpoints
             AccessAction.Write,
             cabinet is null ? null : new AccessTargetFacts { CabinetIds = cabinet.AncestorIds }).Allowed;
 
+    /// <summary>
+    /// Writes a shelf's own defaults. Absent means cleared, not unchanged: this is a full-DTO
+    /// write like every other cabinet edit, so a client that omits a field is saying the shelf
+    /// no longer has an opinion about it.
+    /// </summary>
+    private static void ApplyDefaults(Cabinet cabinet, CabinetWriteRequest request)
+    {
+        cabinet.DefaultDocumentTypeId = request.DefaultDocumentTypeId;
+        cabinet.DefaultVisibility = request.DefaultVisibility;
+        cabinet.DefaultTagIds = [.. (request.DefaultTagIds ?? []).Distinct()];
+
+        // Trimmed and de-duplicated: an expected key is compared against what a document's
+        // metadata actually holds, and " author" would never match anything.
+        cabinet.RequiredMetadataKeys =
+        [
+            .. (request.RequiredMetadataKeys ?? [])
+                .Select(k => k.Trim())
+                .Where(k => k.Length > 0)
+                .Distinct(StringComparer.Ordinal),
+        ];
+    }
+
+    /// <summary>
+    /// Whether a named default document type does not exist. Checked rather than left to the
+    /// foreign key, so a mistyped id is a stable code instead of a constraint violation.
+    /// </summary>
+    private static async Task<bool> UnknownDocumentTypeAsync(
+        SilexGisDbContext db, long? documentTypeId, CancellationToken ct) =>
+        documentTypeId is { } id && !await db.DocumentTypes.AsNoTracking().AnyAsync(t => t.Id == id, ct);
+
     private static Task<Cabinet?> ParentAsync(SilexGisDbContext db, Guid? parentId, CancellationToken ct) =>
         parentId is { } id
             ? db.Cabinets.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct)
@@ -490,12 +542,26 @@ public static class CabinetEndpoints
         IReadOnlyCollection<Guid> reached,
         CancellationToken ct)
     {
-        var shelves = await source
-            .Select(c => new { c.Id, c.ParentId, c.Name, c.Description, c.AncestorIds })
-            .ToListAsync(ct);
+        var shelves = await source.ToListAsync(ct);
         if (shelves.Count == 0)
         {
             return [];
+        }
+
+        // Inheritance needs the ancestors of every shelf being projected, which for the whole
+        // tree is the tree itself. Fetched once for the whole projection rather than per row:
+        // resolving a shelf's defaults is pure arithmetic over rows, and the only expensive
+        // part would be asking the database for them one shelf at a time.
+        var ancestorIds = shelves.SelectMany(c => c.AncestorIds).Distinct().ToList();
+        var chain = await db.Cabinets.AsNoTracking()
+            .Where(c => ancestorIds.Contains(c.Id))
+            .ToListAsync(ct);
+        foreach (var shelf in shelves)
+        {
+            if (chain.TrueForAll(c => c.Id != shelf.Id))
+            {
+                chain.Add(shelf);
+            }
         }
 
         var ids = shelves.Select(c => c.Id).ToList();
@@ -516,7 +582,8 @@ public static class CabinetEndpoints
                 c.Name,
                 c.Description,
                 c.AncestorIds,
-                counts.GetValueOrDefault(c.Id))),
+                counts.GetValueOrDefault(c.Id),
+                DefaultsOf(c, chain))),
         ];
     }
 
@@ -552,6 +619,193 @@ public static class CabinetEndpoints
         var shelf = db.Cabinets.AsNoTracking().Where(c => c.Id == id);
         var reached = await ReachOverAsync(db, ctx, FiledOn(db, shelf.Select(c => c.Id)), ct);
         return (await ProjectAsync(shelf, db, ctx, reached, ct)).FirstOrDefault();
+    }
+
+    /// <summary>
+    /// A shelf's own settings beside what actually applies once inheritance is resolved. Both,
+    /// because they answer different questions: the editor has to show what this shelf itself
+    /// says, and the upload dialog has to show what an upload will actually get.
+    /// </summary>
+    private static CabinetDefaultsDto DefaultsOf(Cabinet cabinet, IReadOnlyCollection<Cabinet> chain)
+    {
+        var effective = CabinetDefaultRules.Resolve(cabinet.Id, chain);
+        return new CabinetDefaultsDto(
+            cabinet.DefaultDocumentTypeId,
+            cabinet.DefaultVisibility,
+            cabinet.DefaultTagIds,
+            cabinet.RequiredMetadataKeys,
+            effective.DocumentTypeId,
+            effective.Visibility,
+            effective.TagIds,
+            effective.RequiredMetadataKeys);
+    }
+
+    /// <summary>
+    /// Files and unfiles many documents in one request, reporting per-document refusals rather
+    /// than failing whole.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every document is judged exactly as it would be one at a time: read on the document,
+    /// write on the document, and the right to write documents at each shelf named. Doing them
+    /// together is a convenience for the caller, never a relaxation — a bulk path that
+    /// permitted what the single path refuses would be the way round the single path.
+    /// </para>
+    /// <para>
+    /// Partial results, deliberately. A selection of two hundred documents will, on a real
+    /// archive, contain one somebody else owns; refusing the whole request for it would make
+    /// the feature unusable on exactly the archives it exists for, and would leave the caller
+    /// picking through the selection by hand to find the offender. A document the caller may
+    /// not read is in neither list — its existence is not disclosed by a refusal.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<BulkFilingResultDto>, UnauthorizedHttpResult, ProblemHttpResult>> BulkFileAsync(
+        BulkFilingRequest request,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var fileInto = request.FileIntoCabinetIds ?? [];
+        var unfileFrom = request.UnfileFromCabinetIds ?? [];
+        var named = fileInto.Concat(unfileFrom).Distinct().ToList();
+
+        var shelves = await db.Cabinets.AsNoTracking()
+            .Where(c => named.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, ct);
+        if (shelves.Count != named.Count)
+        {
+            return ApiProblems.BadRequest(NotFoundCode, "One of the cabinets does not exist.");
+        }
+
+        // The shelves are checked once for the whole request rather than per document: whether
+        // this caller may write documents at a given shelf does not depend on which document.
+        // A shelf they may not administer fails the request outright — unlike a document they
+        // may not write, it is the caller's own choice of destination and not a property of
+        // the selection.
+        if (named.Exists(id => !MayAdminister(ctx, shelves[id])))
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        var filed = new List<Guid>();
+        var refused = new Dictionary<Guid, string>();
+
+        foreach (var documentId in request.DocumentIds.Distinct())
+        {
+            var document = await db.Documents.AsNoTracking().FirstOrDefaultAsync(d => d.Id == documentId, ct);
+            var content = document is null ? null : await DocumentQueries.CurrentFileAsync(db, documentId, ct);
+
+            if (document is null
+                || !await DocumentAccessRules.CanReadAsync(db, access, ctx, document, content?.File, ct))
+            {
+                // Never an existence oracle: a document the caller may not read is absent from
+                // the answer entirely, exactly as one that is not there.
+                continue;
+            }
+
+            if (!await DocumentAccessRules.CanWriteAsync(db, access, ctx, document, content?.File, ct))
+            {
+                refused[documentId] = DocumentWriteForbiddenCode;
+                continue;
+            }
+
+            await ApplyFilingAsync(db, documentId, fileInto, unfileFrom, ct);
+            filed.Add(documentId);
+        }
+
+        // One save for the whole request: a refile is one act to the person who asked for it,
+        // and a half-applied move is the state that leaves an archive looking rearranged
+        // without being.
+        await db.SaveChangesAsync(ct);
+        return TypedResults.Ok(new BulkFilingResultDto(filed, refused));
+    }
+
+    /// <summary>
+    /// Stages one document's filing changes. Filing what is already filed and unfiling what is
+    /// not are both the same fact stated twice, so neither is an error.
+    /// </summary>
+    private static async Task ApplyFilingAsync(
+        SilexGisDbContext db,
+        Guid documentId,
+        IReadOnlyList<Guid> fileInto,
+        IReadOnlyList<Guid> unfileFrom,
+        CancellationToken ct)
+    {
+        var existing = await db.CabinetDocuments
+            .Where(m => m.DocumentId == documentId)
+            .ToListAsync(ct);
+
+        foreach (var cabinetId in fileInto)
+        {
+            if (existing.TrueForAll(m => m.CabinetId != cabinetId))
+            {
+                db.CabinetDocuments.Add(new CabinetDocument { CabinetId = cabinetId, DocumentId = documentId });
+            }
+        }
+
+        foreach (var membership in existing.Where(m => unfileFrom.Contains(m.CabinetId)))
+        {
+            db.CabinetDocuments.Remove(membership);
+        }
+    }
+
+    /// <summary>The metadata keys a shelf expects, its ancestors' included.</summary>
+    private static async Task<IReadOnlyList<string>> ExpectedKeysAsync(
+        SilexGisDbContext db, Guid cabinetId, CancellationToken ct)
+    {
+        var shelf = await db.Cabinets.AsNoTracking().FirstOrDefaultAsync(c => c.Id == cabinetId, ct);
+        if (shelf is null)
+        {
+            return [];
+        }
+
+        var ancestorIds = shelf.AncestorIds;
+        var chain = await db.Cabinets.AsNoTracking().Where(c => ancestorIds.Contains(c.Id)).ToListAsync(ct);
+        if (chain.TrueForAll(c => c.Id != shelf.Id))
+        {
+            chain.Add(shelf);
+        }
+
+        return CabinetDefaultRules.Resolve(cabinetId, chain).RequiredMetadataKeys;
+    }
+
+    /// <summary>
+    /// The metadata keys a document actually answers. A key present but empty counts as
+    /// unanswered: a required field left blank is exactly the case the checklist exists for,
+    /// and treating it as answered would make the mark useless.
+    /// </summary>
+    private static IReadOnlyCollection<string> AnsweredKeys(string metadata)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(metadata);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return [];
+            }
+
+            return
+            [
+                .. document.RootElement.EnumerateObject()
+                    .Where(p => p.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined)
+                        && !(p.Value.ValueKind == JsonValueKind.String
+                            && string.IsNullOrWhiteSpace(p.Value.GetString())))
+                    .Select(p => p.Name),
+            ];
+        }
+        catch (JsonException)
+        {
+            // Metadata that will not parse answers nothing, which is the honest reading and
+            // keeps a malformed row from failing a listing of two hundred good ones.
+            return [];
+        }
     }
 
     /// <summary>The documents filed directly on any of the given cabinets.</summary>

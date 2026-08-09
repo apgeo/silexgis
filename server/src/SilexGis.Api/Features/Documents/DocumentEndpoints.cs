@@ -66,6 +66,8 @@ public static class DocumentEndpoints
     {
         var documents = api.MapGroup("/documents").WithTags("Documents");
 
+        documents.MapGet("/unfiled", ListUnfiledAsync)
+            .WithSummary("Documents the caller may read that sit in no cabinet — the inbox filing is deferred into.");
         documents.MapGet("/{id:guid}", GetAsync)
             .WithSummary("A document's title, kind and typed metadata.");
         documents.MapPut("/{id:guid}", UpdateAsync)
@@ -73,6 +75,87 @@ public static class DocumentEndpoints
             .WithSummary("Updates a document's title, kind and typed metadata; requires write access.");
 
         return api;
+    }
+
+    /// <summary>
+    /// The inbox: documents filed nowhere.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// "Unfiled" is a query rather than a place — a document with no membership row — which is
+    /// what keeps filing a pure addition and leaving the inbox automatic. A real cabinet would
+    /// have made filing a move, given the inbox rules of its own, and left a ghost row for
+    /// every document anybody ever uploaded.
+    /// </para>
+    /// <para>
+    /// It is filtered by exactly the document read rule every other listing uses, so this is
+    /// not a way to see anything. What makes it the uploader's own in practice is that a
+    /// document with no cabinet has no cabinet rule reaching it and starts private: the rule
+    /// admits its owner and whoever an entry names, and nobody else — which is what
+    /// "an unfiled file inherits from nothing, so it gets the uploader's own access" means once
+    /// it is written down as a query.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<PagedResult<UnfiledDocumentDto>>, UnauthorizedHttpResult>> ListUnfiledAsync(
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct,
+        Guid? uploadBatchId = null,
+        int? page = null,
+        int? pageSize = null)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var unfiled = db.Documents.AsNoTracking()
+            .Where(d => !db.CabinetDocuments.Any(m => m.DocumentId == d.Id))
+            .Where(d => uploadBatchId == null || d.UploadBatchId == uploadBatchId);
+
+        // Reach through an attachment is asked about the same candidates the listing will show,
+        // exactly as the cabinet listing asks it, so a document reached only by being hung on a
+        // cave the caller may read appears here too — it is unfiled, and being attached is not
+        // being filed.
+        var admitted = unfiled
+            .VisibleTo(ctx, AccessDomain.Documents, null, (db.CabinetDocuments, db.Cabinets))
+            .Select(d => d.Id);
+        var reached = await DocumentAccessRules.ReachedByAttachmentAsync(
+            db, ctx, unfiled.Where(d => !admitted.Contains(d.Id)).Select(d => d.Id), ct);
+
+        var (p, size) = Paging.Normalize(page, pageSize);
+        var visible = unfiled
+            .VisibleTo(ctx, AccessDomain.Documents, reached, (db.CabinetDocuments, db.Cabinets))
+            .OrderByDescending(d => d.CreatedAt)
+            .ThenByDescending(d => d.Id)
+            .Select(d => new
+            {
+                Document = d,
+                CurrentFile = db.StoredFiles.AsNoTracking()
+                    .Where(f => db.DocumentVersions
+                        .Any(v => v.Id == f.DocumentVersionId && v.DocumentId == d.Id && v.IsCurrent))
+                    .OrderBy(f => f.CreatedAt)
+                    .ThenBy(f => f.Id)
+                    .FirstOrDefault(),
+            });
+
+        return TypedResults.Ok(await visible.ToPagedAsync(
+            p,
+            size,
+            row => new UnfiledDocumentDto(
+                row.Document.Id,
+                row.Document.Title,
+                row.Document.DocumentTypeId,
+                row.Document.Visibility,
+                row.Document.CavingGroupId,
+                row.Document.UploadBatchId,
+                row.CurrentFile == null ? null : row.CurrentFile.Id,
+                row.CurrentFile == null ? null : row.CurrentFile.Kind,
+                row.CurrentFile == null ? null : row.CurrentFile.MimeType,
+                row.CurrentFile == null ? null : row.CurrentFile.SizeBytes,
+                row.Document.CreatedAt),
+            ct));
     }
 
     private static async Task<Results<Ok<DocumentDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(

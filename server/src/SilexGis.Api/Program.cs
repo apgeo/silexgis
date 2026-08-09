@@ -42,6 +42,7 @@ using SilexGis.Api.Features.Taxonomies;
 using SilexGis.Api.Features.Cavers;
 using SilexGis.Api.Features.CavingGroups;
 using SilexGis.Api.Features.TripLogs;
+using SilexGis.Api.Features.Uploads;
 using SilexGis.Api.Features.Users;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -232,6 +233,7 @@ try
     api.MapJobEndpoints();
     api.MapExportEndpoints();
     api.MapFileEndpoints();
+    api.MapUploadBatchEndpoints();
     api.MapDocumentEndpoints();
     api.MapDocumentTypeEndpoints();
     api.MapDocumentCommentEndpoints();

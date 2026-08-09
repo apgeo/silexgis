@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using System.Security.Cryptography;
+using System.Text.Json;
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +12,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Files;
+using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -36,8 +37,61 @@ public sealed class FileUpdateRequestValidator : AbstractValidator<FileUpdateReq
     }
 }
 
+/// <summary>
+/// What a resumable upload will be, stated before any of it arrives.
+/// </summary>
+/// <param name="FileName">The name the finished file takes.</param>
+/// <param name="SizeBytes">
+/// How large it is. Every limit is judged against this before a byte is accepted, and the
+/// completed transfer is measured against it as well — a declaration is a claim, and the
+/// bytes are the fact.
+/// </param>
+public sealed record UploadSessionOpenRequest(
+    string FileName,
+    long SizeBytes,
+    Guid? CabinetId,
+    string? RelativePath,
+    string? AttachEntityType,
+    Guid? AttachEntityId,
+    AttachmentRole? AttachRole,
+    Guid? BatchId,
+    Guid? CavingGroupId);
+
+public sealed class UploadSessionOpenRequestValidator : AbstractValidator<UploadSessionOpenRequest>
+{
+    public UploadSessionOpenRequestValidator()
+    {
+        RuleFor(x => x.FileName).NotEmpty().MaximumLength(500);
+        RuleFor(x => x.SizeBytes).GreaterThan(0);
+        RuleFor(x => x.RelativePath).MaximumLength(2000);
+        RuleFor(x => x.AttachRole).IsInEnum();
+
+        // The pair is all or nothing: a target id with no type names nothing, and a type with
+        // no id would attach to whatever the parser happened to produce.
+        RuleFor(x => x.AttachEntityId).NotNull()
+            .When(x => !string.IsNullOrWhiteSpace(x.AttachEntityType))
+            .WithMessage("An attachment target needs both a type and an id.");
+    }
+}
+
 public static class FileEndpoints
 {
+    /// <summary>The content this caller already holds cannot be stored twice unasked.</summary>
+    public const string DuplicateCode = "file.duplicate";
+
+    /// <summary>The named upload batch is not this caller's, or is not there.</summary>
+    public const string UploadBatchNotFoundCode = "upload_batch.not_found";
+
+    /// <summary>The named upload batch has been closed and takes nothing more.</summary>
+    public const string UploadBatchClosedCode = "upload_batch.closed";
+
+    /// <summary>
+    /// Above this size a client should open a resumable session rather than send one request.
+    /// Below it the extra round trips cost more than the resumption is worth — a 4 MB
+    /// photograph that fails is re-sent in seconds, and a 400 MB scan is not.
+    /// </summary>
+    private const long ResumableThresholdBytes = 32L * 1024 * 1024;
+
     public static RouteGroupBuilder MapFileEndpoints(this RouteGroupBuilder api)
     {
         var files = api.MapGroup("/files").WithTags("Files");
@@ -52,9 +106,29 @@ public static class FileEndpoints
         files.MapPost("/", UploadAsync)
             .DisableAntiforgery() // bearer-token API; no cookie-form surface to forge
             .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maxRequestBodyBytes))
-            .WithSummary("Uploads a file (multipart); attach it to an entity via /attachments.");
+            .WithSummary("Uploads a file (multipart), optionally filing it into a cabinet, attaching it to an object, and counting it into an upload batch.");
         files.MapGet("/config", ConfigAsync)
-            .WithSummary("Upload limits this installation applies.");
+            .WithSummary("Upload limits this installation applies, and how much room the caller has left.");
+        files.MapGet("/duplicate-check", DuplicateCheckAsync)
+            .WithSummary("Whether a document the caller may read already holds content with this hash.");
+
+        // Resumable uploads. A survey scan is hundreds of megabytes and the connection it
+        // travels over is frequently a phone on a hillside; one request that has to succeed
+        // whole is, at that size and over that link, a request that often does not.
+        var uploads = files.MapGroup("/uploads");
+        uploads.MapPost("/", OpenUploadAsync)
+            .WithValidation<UploadSessionOpenRequest>()
+            .WithSummary("Opens a resumable upload and returns where to send from.");
+        uploads.MapGet("/{id:guid}", UploadStatusAsync)
+            .WithSummary("How far a resumable upload has got — the offset to resume from.");
+        uploads.MapPut("/{id:guid}", AppendChunkAsync)
+            .DisableAntiforgery()
+            .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(maxRequestBodyBytes))
+            .WithSummary("Appends the next piece at the given offset.");
+        uploads.MapPost("/{id:guid}/complete", CompleteUploadAsync)
+            .WithSummary("Finishes a resumable upload and files the assembled document.");
+        uploads.MapDelete("/{id:guid}", AbandonUploadAsync)
+            .WithSummary("Abandons a resumable upload and drops its partial content.");
         files.MapGet("/{id:guid}", GetAsync)
             .WithSummary("File metadata with fresh short-lived delivery URLs.");
         files.MapPut("/{id:guid}", UpdateAsync)
@@ -89,44 +163,194 @@ public static class FileEndpoints
     }
 
     /// <summary>
-    /// Limits the client needs to know before it starts an upload. Served rather than
-    /// compiled in, so a client build cannot disagree with the server it is talking to and
-    /// let a user watch a large file transfer only to be refused at the end.
+    /// Limits the client needs to know before it starts an upload, and how much room this
+    /// caller has left. Served rather than compiled in, so a client build cannot disagree with
+    /// the server it is talking to and let a user watch a large file transfer only to be
+    /// refused at the end.
     /// </summary>
-    private static Ok<FileConfigDto> ConfigAsync(IOptions<FilesOptions> options) =>
-        TypedResults.Ok(new FileConfigDto(options.Value.MaxUploadBytes));
-
-    private static async Task<Results<Created<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
-        IFormFile file,
-        Guid? cavingGroupId,
-        SilexGisDbContext db,
-        DocumentWriteService documents,
-        IFileStore fileStore,
-        IFileAccessTokenService tokens,
-        IPhotoGeotagReader geotagReader,
-        IContentMetadataReader metadataReader,
-        IUserContextAccessor userAccessor,
+    private static async Task<Results<Ok<FileConfigDto>, UnauthorizedHttpResult>> ConfigAsync(
+        UploadAllowanceService allowances,
         IAccessContextAccessor accessAccessor,
-        IOptions<FilesOptions> filesOptions,
         CancellationToken ct)
     {
-        var user = await userAccessor.GetAsync(ct);
         var ctx = await accessAccessor.GetAsync(ct);
-        if (user is null || ctx is null)
+        if (ctx is null)
         {
             return TypedResults.Unauthorized();
         }
 
-        // An upload creates a document — the identity the bytes hang off — so "who may
-        // upload" is Create in the documents domain rather than a staff-grade right over
-        // the file store. The two are different questions: one is authoring content, the
-        // other is administering the store it lands in.
-        //
-        // A club named on the upload is part of that question, exactly as it is for a
-        // feature or a trip: it is what lets a ruleset granting a club's own content admit
-        // its members, rather than requiring an installation-wide right to add anything at
-        // all. Binding is guarded on its own terms — belonging to the club, or holding a
-        // rule that names its documents — so naming a club cannot be a way into one.
+        var allowance = await allowances.ForAsync(ctx.UserId, ct);
+        return TypedResults.Ok(new FileConfigDto(
+            allowance.MaxUploadBytes,
+            allowance.RemainingBytes,
+            allowance.UserQuotaBytes,
+            allowance.UserQuotaBytes is null ? null : allowance.UserUsedBytes,
+            allowance.AcceptedExtensions,
+            allowance.RefusedExtensions,
+            UploadSessionRules.SuggestedChunkBytes,
+            ResumableThresholdBytes,
+            ArchiveExpansionRules.Extensions));
+    }
+
+    /// <summary>
+    /// Whether the caller already holds this content. Asked by hash before a transfer, so the
+    /// warning arrives instead of the bytes.
+    /// </summary>
+    /// <remarks>
+    /// It is only ever advice, and the refusal that matters is the one the upload itself
+    /// makes: a client that skipped this is still refused with the same code, so the warning
+    /// cannot be bypassed by not asking for it.
+    /// </remarks>
+    private static async Task<Results<Ok<DuplicateCheckDto>, UnauthorizedHttpResult, ProblemHttpResult>> DuplicateCheckAsync(
+        string sha256,
+        SilexGisDbContext db,
+        UploadIngestService ingest,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!IsHexHash(sha256))
+        {
+            return ApiProblems.BadRequest("file.sha256_invalid", "A SHA-256 hash is 64 hex characters.");
+        }
+
+        var duplicate = await ingest.VisibleDuplicateAsync(ctx, sha256.ToLowerInvariant(), ct);
+        if (duplicate is not { } documentId)
+        {
+            return TypedResults.Ok(new DuplicateCheckDto(false, null, null));
+        }
+
+        var title = await db.Documents.AsNoTracking()
+            .Where(d => d.Id == documentId)
+            .Select(d => d.Title)
+            .FirstOrDefaultAsync(ct);
+        return TypedResults.Ok(new DuplicateCheckDto(true, documentId, title));
+    }
+
+    private static async Task<Results<Created<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
+        IFormFile file,
+        Guid? cavingGroupId,
+        Guid? cabinetId,
+        string? relativePath,
+        string? attachEntityType,
+        Guid? attachEntityId,
+        AttachmentRole? attachRole,
+        Guid? batchId,
+        bool? allowDuplicate,
+        bool? expandArchive,
+        SilexGisDbContext db,
+        ContentIntake intake,
+        UploadIngestService ingest,
+        UploadBatchService batches,
+        UploadAllowanceService allowances,
+        IFileStore fileStore,
+        IFileAccessTokenService tokens,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (await GuardCreationAsync(ctx, db, cavingGroupId, ct) is { } createProblem)
+        {
+            return createProblem;
+        }
+
+        var (destination, destinationProblem) = await UploadDestinationBinding.ResolveAsync(
+            new UploadDestinationRequest(
+                cabinetId, relativePath, attachEntityType, attachEntityId, attachRole, cavingGroupId),
+            ctx,
+            db,
+            ingest,
+            access,
+            ct);
+        if (destination is null)
+        {
+            return destinationProblem!;
+        }
+
+        if (await GuardBatchAsync(ctx, db, batchId, ct) is { } batchProblem)
+        {
+            return batchProblem;
+        }
+
+        // Every limit, in one place, before a byte is stored. The same rule answers the
+        // config route above, so what the client was told and what the server enforces cannot
+        // drift apart.
+        var allowance = await allowances.ForAsync(ctx.UserId, ct);
+        if (UploadLimits.Refuse(allowance, file.FileName, file.Length) is { } refusal)
+        {
+            return RefusalProblem(refusal, allowance);
+        }
+
+        var content = await intake.FromStreamAsync(
+            file.OpenReadStream(), file.FileName, file.ContentType, ct);
+
+        var outcome = await ingest.RecordAsync(
+            content,
+            string.IsNullOrWhiteSpace(relativePath) ? file.FileName : relativePath,
+            ctx,
+            destination,
+            batchId,
+            allowDuplicate ?? false,
+            ct);
+
+        if (batchId is { } batch)
+        {
+            await batches.RecordAsync(batch, content.OriginalName, content.SizeBytes, outcome, ct);
+        }
+
+        if (outcome.Outcome != UploadItemOutcome.Stored || outcome.Content is null)
+        {
+            // Bytes land before the write path can decide whether they belong to a document at
+            // all. Anything that did not become one takes its bytes back out; nothing
+            // references them, and leaving them would grow the store by one dead blob per
+            // refusal.
+            await fileStore.DeleteAsync(content.StoragePath, CancellationToken.None);
+            return OutcomeProblem(outcome);
+        }
+
+        if ((expandArchive ?? false) && ArchiveExpansionRules.IsArchive(content.OriginalName))
+        {
+            await QueueArchiveExpansionAsync(db, batches, ctx.UserId, outcome, destination, ct);
+        }
+
+        // Nothing can hang on a row created this instant, so a photo uploaded here places
+        // nothing yet and its uploader is holding the file they just sent. Attaching it to a
+        // guarded cave is what closes this, and every later read of it asks again.
+        return TypedResults.Created(
+            $"/api/v1/files/{outcome.Content.File.Id}",
+            outcome.Content.File.ToDto(outcome.Content.Version, tokens, mayHaveOriginal: true));
+    }
+
+    /// <summary>
+    /// Whether this caller may create a document at all, and bind it to the club they named.
+    /// </summary>
+    /// <remarks>
+    /// An upload creates a document — the identity the bytes hang off — so "who may upload" is
+    /// Create in the documents domain rather than a staff-grade right over the file store. The
+    /// two are different questions: one is authoring content, the other is administering the
+    /// store it lands in.
+    /// <para>
+    /// A club named on the upload is part of that question, exactly as it is for a feature or
+    /// a trip: it is what lets a ruleset granting a club's own content admit its members,
+    /// rather than requiring an installation-wide right to add anything at all. Binding is
+    /// guarded on its own terms — belonging to the club, or holding a rule that names its
+    /// documents — so naming a club cannot be a way into one.
+    /// </para>
+    /// </remarks>
+    private static async Task<ProblemHttpResult?> GuardCreationAsync(
+        AccessContext ctx, SilexGisDbContext db, Guid? cavingGroupId, CancellationToken ct)
+    {
         if (cavingGroupId is { } requestedGroupId)
         {
             if (!await db.CavingGroups.AsNoTracking().AnyAsync(g => g.Id == requestedGroupId, ct))
@@ -140,27 +364,80 @@ public static class FileEndpoints
             }
         }
 
-        if (!CreateRules.MayCreate(ctx, AccessDomain.Documents, cavingGroupId))
+        return CreateRules.MayCreate(ctx, AccessDomain.Documents, cavingGroupId)
+            ? null
+            : ApiProblems.Forbidden(CreateRules.ForbiddenCode);
+    }
+
+    /// <summary>
+    /// Whether the caller may count this file into the batch they named — which they may only
+    /// do for a batch of their own that is still open.
+    /// </summary>
+    /// <remarks>
+    /// Somebody else's batch is answered as absent rather than forbidden. A batch is a record
+    /// of what one person did, and confirming that a given id belongs to somebody would make
+    /// the ids an enumerable list of who uploaded when.
+    /// </remarks>
+    private static async Task<ProblemHttpResult?> GuardBatchAsync(
+        AccessContext ctx, SilexGisDbContext db, Guid? batchId, CancellationToken ct)
+    {
+        if (batchId is not { } id)
         {
-            return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
+            return null;
         }
 
-        if (ValidateSize(file, filesOptions.Value.MaxUploadBytes) is { } sizeProblem)
-        {
-            return sizeProblem;
-        }
+        var batch = await db.UploadBatches.AsNoTracking()
+            .Where(b => b.Id == id && b.StartedByUserId == ctx.UserId)
+            .Select(b => new { b.Status })
+            .FirstOrDefaultAsync(ct);
 
-        var content = await ReadContentAsync(file, fileStore, geotagReader, metadataReader, ct);
-        var stored = documents.Create(
-            content, content.OriginalName, user.UserId, user.UserId, documentDate: null, cavingGroupId);
+        return batch switch
+        {
+            null => ApiProblems.NotFound(UploadBatchNotFoundCode),
+            { Status: not UploadBatchStatus.Open } => ApiProblems.Conflict(
+                UploadBatchClosedCode, "The upload batch has been closed."),
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Queues the expansion of an uploaded archive into its own batch, and answers the upload
+    /// with the archive itself.
+    /// </summary>
+    /// <remarks>
+    /// A batch of its own rather than the one the archive was counted into: the archive is one
+    /// file that arrived, and what comes out of it is a separate act with its own report,
+    /// possibly hundreds of lines long. Folding them together would make the drop's own
+    /// summary — "1 file uploaded" — turn into something else while the person watched.
+    /// </remarks>
+    private static async Task QueueArchiveExpansionAsync(
+        SilexGisDbContext db,
+        UploadBatchService batches,
+        Guid userId,
+        IngestOutcome outcome,
+        UploadDestination destination,
+        CancellationToken ct)
+    {
+        var expansion = await batches.OpenAsync(
+            userId,
+            UploadSource.Archive,
+            label: null,
+            destination.CabinetId,
+            tagId: null,
+            sourceDescription: outcome.Content!.File.OriginalName,
+            ct);
+
+        db.ProcessingJobs.Add(new ProcessingJob
+        {
+            Kind = ProcessingJobKinds.ArchiveExpansion,
+            Payload = JsonSerializer.Serialize(
+                new ArchiveExpansionPayload(outcome.Content.File.Id, expansion.Id), JsonSerializerOptions.Web),
+
+            // Named, unlike the readings an upload queues: this one is something a person
+            // asked for and is waiting on the result of.
+            RequestedBy = userId,
+        });
         await db.SaveChangesAsync(ct);
-
-        // Nothing can hang on a row created this instant, so a photo uploaded here places
-        // nothing yet and its uploader is holding the file they just sent. Attaching it to a
-        // guarded cave is what closes this, and every later read of it asks again.
-        return TypedResults.Created(
-            $"/api/v1/files/{stored.File.Id}",
-            stored.File.ToDto(stored.Version, tokens, mayHaveOriginal: true));
     }
 
     private static async Task<Results<Created<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadVersionAsync(
@@ -168,14 +445,13 @@ public static class FileEndpoints
         IFormFile file,
         SilexGisDbContext db,
         DocumentWriteService documents,
+        ContentIntake intake,
         IFileStore fileStore,
         IFileAccessTokenService tokens,
-        IPhotoGeotagReader geotagReader,
-        IContentMetadataReader metadataReader,
+        UploadAllowanceService allowances,
         IAccessService access,
         PhotoPositionDisclosure photos,
         IAccessContextAccessor accessAccessor,
-        IOptions<FilesOptions> filesOptions,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -190,12 +466,16 @@ public static class FileEndpoints
             return ApiProblems.NotFound("file.not_found"); // existence not disclosed to non-writers
         }
 
-        if (ValidateSize(file, filesOptions.Value.MaxUploadBytes) is { } sizeProblem)
+        // A revision is as much stored content as a first upload, so it answers to the same
+        // limits. Deliberately not to the duplicate rule: re-uploading a document's own bytes
+        // as a new version is a correction somebody meant to make, not an accident.
+        var allowance = await allowances.ForAsync(ctx.UserId, ct);
+        if (UploadLimits.Refuse(allowance, file.FileName, file.Length) is { } refusal)
         {
-            return sizeProblem;
+            return RefusalProblem(refusal, allowance);
         }
 
-        var content = await ReadContentAsync(file, fileStore, geotagReader, metadataReader, ct);
+        var content = await intake.FromStreamAsync(file.OpenReadStream(), file.FileName, file.ContentType, ct);
         try
         {
             var stored = await documents.AddVersionAsync(subject.File.DocumentVersionId, content, ctx.UserId, ct);
@@ -345,13 +625,47 @@ public static class FileEndpoints
         return TypedResults.NoContent();
     }
 
-    private static ProblemHttpResult? ValidateSize(IFormFile file, long maxUploadBytes) => file.Length switch
+    /// <summary>
+    /// A limit refusal, as the Problem Details the caller sees. One mapping, because the same
+    /// refusal codes come back from a plain upload, a new revision, the opening of a resumable
+    /// session and every line of a bulk import — and a client that had to recognise four
+    /// spellings of "too large" would recognise three.
+    /// </summary>
+    private static ProblemHttpResult RefusalProblem(string code, UploadAllowance allowance) => code switch
     {
-        0 => ApiProblems.BadRequest("file.empty", "The uploaded file is empty."),
-        var length when length > maxUploadBytes => ApiProblems.BadRequest(
-            "file.too_large", $"Files are limited to {maxUploadBytes / (1024 * 1024)} MB."),
-        _ => null,
+        UploadItemReasons.Empty => ApiProblems.BadRequest("file.empty", "The uploaded file is empty."),
+        UploadItemReasons.TooLarge => ApiProblems.BadRequest(
+            "file.too_large", $"Files are limited to {allowance.MaxUploadBytes / (1024 * 1024)} MB."),
+        UploadItemReasons.TypeNotAccepted => ApiProblems.BadRequest(
+            "file.type_not_accepted", "This installation does not accept files of this type."),
+
+        // Conflict rather than a bad request: nothing about the request is wrong, and the way
+        // out of it is to delete something or be given more room.
+        UploadItemReasons.QuotaExceeded => ApiProblems.Conflict(
+            "file.quota_exceeded", "There is not enough room left to store this file."),
+        _ => ApiProblems.BadRequest(code),
     };
+
+    /// <summary>An ingest outcome that is not a stored file, as the caller sees it.</summary>
+    private static ProblemHttpResult OutcomeProblem(IngestOutcome outcome) => outcome.Reason switch
+    {
+        // The one refusal a client is expected to answer: it names the document already
+        // holding these bytes so the warning can say what it collides with, and the caller
+        // repeats the upload with allowDuplicate to store it anyway.
+        UploadItemReasons.Duplicate => ApiProblems.Conflict(
+            DuplicateCode,
+            outcome.DuplicateOfDocumentId is { } id
+                ? $"This content is already stored as document {id}."
+                : "This content is already stored."),
+        UploadItemReasons.FilingRefused => ApiProblems.Forbidden(UploadDestinationBinding.FilingForbiddenCode),
+        UploadItemReasons.PathRefused => ApiProblems.BadRequest(UploadDestinationBinding.PathRefusedCode),
+        null => ApiProblems.BadRequest("file.upload_failed"),
+        var reason => ApiProblems.BadRequest(reason),
+    };
+
+    /// <summary>Whether a value is a SHA-256 hash and not merely a string somebody sent.</summary>
+    private static bool IsHexHash(string? value) =>
+        value is { Length: 64 } && value.All(char.IsAsciiHexDigit);
 
     /// <summary>A rejected document write, as the Problem Details the caller sees.</summary>
     private static ProblemHttpResult ToProblem(DocumentWriteException e) => e.Code switch
@@ -363,60 +677,321 @@ public static class FileEndpoints
     };
 
     /// <summary>
-    /// Writes the upload to the store and describes it. Both the format and the geotag are
-    /// content-derived: they are read from the bytes that just landed rather than from what
-    /// the upload claimed about itself or carried across from anything.
+    /// Opens a resumable upload: everything is decided here, before a byte moves — who may
+    /// create, where it is going, whether it fits, whether the type is accepted.
     /// </summary>
-    private static async Task<StoredContent> ReadContentAsync(
-        IFormFile file,
+    /// <remarks>
+    /// Deciding it all up front is the whole value of the mechanism. The failure it exists to
+    /// prevent is a large transfer over a bad link that is refused at the end, and a session
+    /// that accepted pieces for ten minutes before checking the quota would reproduce exactly
+    /// that failure with more steps.
+    /// </remarks>
+    private static async Task<Results<Created<UploadSessionDto>, UnauthorizedHttpResult, ProblemHttpResult>> OpenUploadAsync(
+        UploadSessionOpenRequest request,
+        SilexGisDbContext db,
         IFileStore fileStore,
-        IPhotoGeotagReader geotagReader,
-        IContentMetadataReader metadataReader,
+        UploadIngestService ingest,
+        UploadAllowanceService allowances,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
-        var (storagePath, sha256, format) = await SaveContentAsync(file, fileStore, ct);
-        var absolutePath = fileStore.GetAbsolutePath(storagePath);
-        return new StoredContent(
-            storagePath,
-            Path.GetFileName(file.FileName),
-            format.MimeType,
-            file.Length,
-            sha256,
-            format.Kind,
-            // Reading EXIF is gated on the sniffed kind, so a photo uploaded under the wrong
-            // media type still has its capture location found — and, more importantly, that
-            // location is then protected like any other, instead of quietly going unread.
-            format.Kind == FileKind.Image ? geotagReader.Read(absolutePath) : null,
-            await metadataReader.ReadAsync(absolutePath, format.Kind, ct));
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (await GuardCreationAsync(ctx, db, request.CavingGroupId, ct) is { } createProblem)
+        {
+            return createProblem;
+        }
+
+        var (destination, destinationProblem) = await UploadDestinationBinding.ResolveAsync(
+            new UploadDestinationRequest(
+                request.CabinetId,
+                request.RelativePath,
+                request.AttachEntityType,
+                request.AttachEntityId,
+                request.AttachRole,
+                request.CavingGroupId),
+            ctx,
+            db,
+            ingest,
+            access,
+            ct);
+        if (destination is null)
+        {
+            return destinationProblem!;
+        }
+
+        if (await GuardBatchAsync(ctx, db, request.BatchId, ct) is { } batchProblem)
+        {
+            return batchProblem;
+        }
+
+        var allowance = await allowances.ForAsync(ctx.UserId, ct);
+        if (UploadLimits.Refuse(allowance, request.FileName, request.SizeBytes) is { } refusal)
+        {
+            return RefusalProblem(refusal, allowance);
+        }
+
+        // An empty blob to append into. It is the final resting place of the bytes as well as
+        // the partial one: when the last piece lands there is nothing to assemble or move,
+        // which is what keeps completing a 400 MB upload from being a 400 MB copy.
+        var storagePath = await fileStore.SaveAsync(
+            Stream.Null, Path.GetExtension(request.FileName), ct);
+
+        var session = new UploadSession
+        {
+            UserId = ctx.UserId,
+            OriginalName = Path.GetFileName(request.FileName),
+            DeclaredSizeBytes = request.SizeBytes,
+            StoragePath = storagePath,
+            CabinetId = destination.CabinetId,
+            UploadBatchId = request.BatchId,
+            AttachEntityType = destination.AttachEntityType,
+            AttachEntityId = destination.AttachEntityId,
+            AttachFeatureId = destination.AttachFeatureId,
+            RelativePath = request.RelativePath,
+            ExpiresAt = UploadSessionRules.ExpiryFrom(DateTimeOffset.UtcNow),
+        };
+        db.UploadSessions.Add(session);
+        await db.SaveChangesAsync(ct);
+
+        return TypedResults.Created($"/api/v1/files/uploads/{session.Id}", ToDto(session));
     }
 
-    private static async Task<(string StoragePath, string Sha256, FileFormat Format)> SaveContentAsync(
-        IFormFile file, IFileStore fileStore, CancellationToken ct)
+    private static async Task<Results<Ok<UploadSessionDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadStatusAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
     {
-        string storagePath;
-        await using (var content = file.OpenReadStream())
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
         {
-            storagePath = await fileStore.SaveAsync(content, Path.GetExtension(file.FileName), ct);
+            return TypedResults.Unauthorized();
         }
 
-        string sha256;
-        await using (var saved = await fileStore.OpenReadAsync(storagePath, ct))
-        {
-            sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(saved, ct));
-        }
-
-        // Decided from the stored bytes: the browser's media type and the file name are
-        // whatever the uploader sent, and text extraction later dispatches on the recorded
-        // format — a file filed under the wrong one is handed to a reader that cannot read
-        // it and silently produces nothing.
-        FileFormat format;
-        await using (var saved = await fileStore.OpenReadAsync(storagePath, ct))
-        {
-            format = await ContentSniffer.DetectAsync(saved, file.ContentType, file.FileName, ct);
-        }
-
-        return (storagePath, sha256, format);
+        var session = await OwnSessionAsync(db, ctx, id, ct);
+        return session is null
+            ? ApiProblems.NotFound(UploadSessionRules.SessionNotFoundCode)
+            : TypedResults.Ok(ToDto(session));
     }
+
+    /// <summary>
+    /// Appends the next piece. The body is the raw bytes — not multipart — because there is
+    /// nothing to describe about a piece except where it goes, and wrapping it would add an
+    /// envelope to every one of fifty requests.
+    /// </summary>
+    /// <remarks>
+    /// Answers 200 for a piece that was already held, which is what makes a lost response
+    /// survivable: a client that never saw the answer sends the same piece again and is told
+    /// the same thing, rather than having its upload ended for repeating itself.
+    /// </remarks>
+    private static async Task<Results<Ok<UploadSessionDto>, UnauthorizedHttpResult, ProblemHttpResult>> AppendChunkAsync(
+        Guid id,
+        long offset,
+        HttpRequest httpRequest,
+        SilexGisDbContext db,
+        IFileStore fileStore,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var session = await OwnSessionAsync(db, ctx, id, ct);
+        if (session is null)
+        {
+            return ApiProblems.NotFound(UploadSessionRules.SessionNotFoundCode);
+        }
+
+        var length = httpRequest.ContentLength ?? 0;
+        switch (UploadSessionRules.Decide(session.ReceivedBytes, offset, length, session.DeclaredSizeBytes))
+        {
+            case ChunkDisposition.AlreadyHeld:
+                return TypedResults.Ok(ToDto(session));
+
+            case ChunkDisposition.OutOfOrder:
+                // The response carries how far the file actually got, so the client's next
+                // attempt is right rather than another guess.
+                return ApiProblems.Conflict(
+                    UploadSessionRules.OutOfOrderCode,
+                    $"The next piece starts at {session.ReceivedBytes}.");
+
+            case ChunkDisposition.Overflow:
+                return ApiProblems.BadRequest(
+                    UploadSessionRules.OverflowCode, "The upload is larger than it was declared to be.");
+
+            default:
+                break;
+        }
+
+        long received;
+        try
+        {
+            received = await fileStore.AppendAsync(session.StoragePath, httpRequest.Body, ct);
+        }
+        catch (IOException)
+        {
+            // Two pieces of one upload arriving at once: the store refuses to open the blob
+            // twice, and the loser is told where the file ends so it can resend from there.
+            return ApiProblems.Conflict(
+                UploadSessionRules.OutOfOrderCode, $"The next piece starts at {session.ReceivedBytes}.");
+        }
+
+        // Taken from the stored bytes rather than added up here. What actually landed is the
+        // only thing a resuming client can safely continue from — a number kept beside the
+        // bytes would, on the one occasion it disagreed with them, produce a file with a hole
+        // in it that nothing notices until somebody opens it months later.
+        session.ReceivedBytes = Math.Min(received, session.DeclaredSizeBytes);
+        session.ExpiresAt = UploadSessionRules.ExpiryFrom(DateTimeOffset.UtcNow);
+        await db.SaveChangesAsync(ct);
+
+        return TypedResults.Ok(ToDto(session));
+    }
+
+    /// <summary>
+    /// Finishes a resumable upload: the assembled blob is described and filed exactly as a
+    /// single-request upload would have been.
+    /// </summary>
+    private static async Task<Results<Created<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> CompleteUploadAsync(
+        Guid id,
+        bool? allowDuplicate,
+        SilexGisDbContext db,
+        ContentIntake intake,
+        UploadIngestService ingest,
+        UploadBatchService batches,
+        IFileStore fileStore,
+        IFileAccessTokenService tokens,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var session = await OwnSessionAsync(db, ctx, id, ct);
+        if (session is null)
+        {
+            return ApiProblems.NotFound(UploadSessionRules.SessionNotFoundCode);
+        }
+
+        if (!UploadSessionRules.IsComplete(session.ReceivedBytes, session.DeclaredSizeBytes))
+        {
+            return ApiProblems.Conflict(
+                UploadSessionRules.IncompleteCode,
+                $"Only {session.ReceivedBytes} of {session.DeclaredSizeBytes} bytes have arrived.");
+        }
+
+        // Described now rather than piece by piece: the hash, the format and a photograph's
+        // capture facts are all properties of the whole file, and none of them can be read
+        // from a fragment.
+        var content = await intake.FromStoredAsync(
+            session.StoragePath, session.OriginalName, declaredMediaType: null, ct);
+
+        var destination = new UploadDestination(
+            session.CabinetId,
+            FilingPaths.FolderSegmentsOf(session.RelativePath) ?? [],
+            session.AttachEntityType,
+            session.AttachEntityId,
+            session.AttachFeatureId);
+
+        var outcome = await ingest.RecordAsync(
+            content,
+            string.IsNullOrWhiteSpace(session.RelativePath) ? session.OriginalName : session.RelativePath,
+            ctx,
+            destination,
+            session.UploadBatchId,
+            allowDuplicate ?? false,
+            ct);
+
+        if (session.UploadBatchId is { } batch)
+        {
+            await batches.RecordAsync(batch, content.OriginalName, content.SizeBytes, outcome, ct);
+        }
+
+        if (outcome.Outcome != UploadItemOutcome.Stored || outcome.Content is null)
+        {
+            // The session stays open on a refusal the caller can answer — a duplicate they may
+            // choose to store anyway — so the bytes they spent ten minutes sending are still
+            // there when they say yes. Anything else is final, and takes them with it.
+            if (outcome.Reason == UploadItemReasons.Duplicate)
+            {
+                return OutcomeProblem(outcome);
+            }
+
+            db.UploadSessions.Remove(session);
+            await db.SaveChangesAsync(ct);
+            await fileStore.DeleteAsync(session.StoragePath, CancellationToken.None);
+            return OutcomeProblem(outcome);
+        }
+
+        // The blob is now a stored file's own content, so the session must stop claiming it —
+        // otherwise the expiry sweep would delete the bytes of a perfectly good document.
+        db.UploadSessions.Remove(session);
+        await db.SaveChangesAsync(ct);
+
+        return TypedResults.Created(
+            $"/api/v1/files/{outcome.Content.File.Id}",
+            outcome.Content.File.ToDto(outcome.Content.Version, tokens, mayHaveOriginal: true));
+    }
+
+    private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> AbandonUploadAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IFileStore fileStore,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var session = await OwnSessionAsync(db, ctx, id, ct);
+        if (session is null)
+        {
+            return ApiProblems.NotFound(UploadSessionRules.SessionNotFoundCode);
+        }
+
+        db.UploadSessions.Remove(session);
+        await db.SaveChangesAsync(ct);
+        await fileStore.DeleteAsync(session.StoragePath, CancellationToken.None);
+        return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// The caller's own session, or null. Somebody else's is answered as absent rather than
+    /// forbidden: a session is a transfer in progress and confirming that an id belongs to
+    /// someone would say what they are uploading and when.
+    /// </summary>
+    private static async Task<UploadSession?> OwnSessionAsync(
+        SilexGisDbContext db, AccessContext ctx, Guid id, CancellationToken ct)
+    {
+        var session = await db.UploadSessions.FirstOrDefaultAsync(
+            s => s.Id == id && s.UserId == ctx.UserId, ct);
+
+        // An expired session is answered as absent even before the sweep has collected it. Its
+        // bytes are due to go, and letting a client resume onto content that is about to be
+        // deleted would produce a document whose bytes vanish an hour later.
+        return session is null || session.ExpiresAt <= DateTimeOffset.UtcNow ? null : session;
+    }
+
+    private static UploadSessionDto ToDto(UploadSession session) => new(
+        session.Id,
+        session.ReceivedBytes,
+        session.DeclaredSizeBytes,
+        UploadSessionRules.SuggestedChunkBytes,
+        session.ExpiresAt);
 
     private static async Task<Results<Ok<FileDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
         Guid id,

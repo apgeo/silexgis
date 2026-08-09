@@ -72,11 +72,72 @@ public sealed record FileDto(
     PhotoPositionDto? Position);
 
 /// <summary>
-/// Upload limits this installation applies. Published so a client checks a file before
-/// transferring it rather than after, and so no client build carries a number that could
-/// disagree with the server's.
+/// Upload limits this installation applies, and how much room the caller has left.
+/// Published so a client checks a file before transferring it rather than after, and so no
+/// client build carries a number that could disagree with the server's.
 /// </summary>
-public sealed record FileConfigDto(long MaxUploadBytes);
+/// <param name="MaxUploadBytes">Largest single file accepted.</param>
+/// <param name="RemainingBytes">
+/// How much this caller may still store, or null when nothing limits them. Stated up front
+/// because a quota discovered at the end of a 400 MB transfer is the same as no warning at
+/// all — and because "you have 2 GB left" is a thing somebody can act on before they start.
+/// </param>
+/// <param name="QuotaBytes">Their total allowance, or null when they have none.</param>
+/// <param name="UsedBytes">How much they already hold. Null when nothing is counting.</param>
+/// <param name="AcceptedExtensions">
+/// What this installation takes, lower-case and dotted. Empty means everything, which is the
+/// default: an archive whose purpose is holding whatever a caving club has accumulated should
+/// not have a list of formats somebody has to remember to extend.
+/// </param>
+/// <param name="RefusedExtensions">What it will not take, whatever the list above says.</param>
+/// <param name="ChunkBytes">
+/// The piece size a resumable upload should send. Advice — the server accepts whatever
+/// arrives — but following it keeps a dropped connection cheap.
+/// </param>
+/// <param name="ResumableThresholdBytes">
+/// Above this size a client should open a resumable session rather than send one request.
+/// Below it the extra round trips cost more than the resumption is worth.
+/// </param>
+/// <param name="ArchiveExtensions">
+/// Archives this installation can expand server-side. Empty would mean the feature is off;
+/// it is what the upload dialog offers "expand this" for.
+/// </param>
+public sealed record FileConfigDto(
+    long MaxUploadBytes,
+    long? RemainingBytes,
+    long? QuotaBytes,
+    long? UsedBytes,
+    IReadOnlyList<string> AcceptedExtensions,
+    IReadOnlyList<string> RefusedExtensions,
+    int ChunkBytes,
+    long ResumableThresholdBytes,
+    IReadOnlyList<string> ArchiveExtensions);
+
+/// <summary>
+/// Whether content with this hash is already here, as far as this caller is concerned.
+/// </summary>
+/// <param name="Duplicate">
+/// True only when a document holding exactly these bytes exists <em>and</em> this caller may
+/// read it. A copy they may not read is reported as no copy at all — telling them it exists
+/// is the disclosure the whole rule is there to prevent — and they get their own copy, with
+/// the pair recorded for an administrator who can see both.
+/// </param>
+/// <param name="DocumentId">The document already holding it, when there is one to name.</param>
+/// <param name="Title">Its title, so the warning can say what it collides with.</param>
+public sealed record DuplicateCheckDto(bool Duplicate, Guid? DocumentId, string? Title);
+
+/// <summary>How far a resumable upload has got.</summary>
+/// <param name="Id">The session, named in every later piece.</param>
+/// <param name="ReceivedBytes">
+/// The offset to send from. A resuming client asks for this and continues; it is read back
+/// from the stored bytes rather than remembered, so it never describes bytes that did not
+/// survive.
+/// </param>
+/// <param name="DeclaredSizeBytes">What the file was said to be, and what completion measures against.</param>
+/// <param name="ChunkBytes">The piece size to send.</param>
+/// <param name="ExpiresAt">When the session stops being resumable and its bytes are swept up.</param>
+public sealed record UploadSessionDto(
+    Guid Id, long ReceivedBytes, long DeclaredSizeBytes, int ChunkBytes, DateTimeOffset ExpiresAt);
 
 /// <summary>
 /// The extracted words of one page. The text is what a reader wrote into the search index,
