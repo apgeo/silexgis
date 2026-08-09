@@ -6,6 +6,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 

@@ -10,6 +10,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;

@@ -2,10 +2,9 @@
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
-namespace SilexGis.Api.Common;
+namespace SilexGis.Infrastructure.Documents;
 
 /// <summary>
 /// Who may read or write a document. A document is content in its own right — it carries

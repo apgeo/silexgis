@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Tags;

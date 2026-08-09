@@ -10,6 +10,7 @@ using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Permissions;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.History;
