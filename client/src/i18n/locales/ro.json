@@ -1866,5 +1866,38 @@
       "en": "Termeni în engleză",
       "any": "Termeni fără limbă"
     }
+  },
+  "filters": {
+    "worlds": {
+      "feature": "Obiective",
+      "tripLog": "Jurnale de tură"
+    },
+    "fields": {
+      "name": "Nume",
+      "title": "Titlu",
+      "kind": "Fel",
+      "category": "Categorie",
+      "type": "Tip",
+      "tag": "Etichetă",
+      "owner": "Proprietar",
+      "cavingGroup": "Club",
+      "organizingGroup": "Club organizator",
+      "visibility": "Vizibilitate",
+      "protected": "Locație protejată",
+      "created": "Creat",
+      "updated": "Ultima modificare",
+      "tripType": "Tip de tură",
+      "tripDate": "Data turei"
+    },
+    "problems": {
+      "noWorlds": "Alege cel puțin un fel de obiect de căutat.",
+      "tooManyWorlds": "Un filtru acoperă cel mult {{max}} feluri de obiecte.",
+      "worldTwice": "Fiecare fel de obiect apare o singură dată.",
+      "tooLarge": "Filtrul are mai mult de {{max}} părți. Încearcă să îl împarți.",
+      "tooDeep": "Condițiile sunt imbricate pe mai mult de {{max}} niveluri.",
+      "tooManyValues": "O condiție are cel mult {{max}} valori.",
+      "textTooLong": "Textul dintr-o condiție are cel mult {{max}} caractere.",
+      "sortUnavailable": "Nimic din ce se caută nu poate fi ordonat astfel."
+    }
   }
 }
