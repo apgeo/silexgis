@@ -14,6 +14,16 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
         builder.ToTable("documents");
         builder.Property(x => x.Id).ValueGeneratedNever();
 
+        // A deleted document is gone from every query that does not deliberately ask for it.
+        //
+        // As a model-wide filter rather than a condition each read path remembers, because
+        // "every listing filters on this" is the kind of rule that holds for a year and then
+        // does not: the one query somebody adds without it shows a document the interface has
+        // already told them is deleted. The two places that must see through it — restoring
+        // one, and the sweep that purges them — say IgnoreQueryFilters, which is a visible
+        // decision at the call site rather than an omission.
+        builder.HasQueryFilter(d => d.DeletedAt == null);
+
         builder.Property(x => x.Title).HasMaxLength(300);
         builder.Property(x => x.Visibility).HasConversion<short>();
         builder.Property(x => x.Metadata).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
@@ -41,6 +51,12 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
         // "Everything that came out of that archive" — filtered, because almost every row is
         // null and an index over them would be mostly a copy of the table.
         builder.HasIndex(x => x.UploadBatchId).HasFilter("upload_batch_id is not null");
+
+        // The purge sweep reads by this and nothing else, and almost every row is null: a
+        // filtered index over the deleted ones is small however large the archive is.
+        builder.HasIndex(x => x.DeletedAt).HasFilter("deleted_at is not null");
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.DeletedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
 

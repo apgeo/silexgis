@@ -57,8 +57,14 @@ public sealed class StoredFileConfiguration : IEntityTypeConfiguration<StoredFil
         builder.HasOne<DocumentVersion>().WithMany().HasForeignKey(x => x.DocumentVersionId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.ToTable(t => t.HasCheckConstraint(
+            "ck_files_orientation", "orientation_quarter_turns between 0 and 3"));
+
         builder.HasIndex(x => x.Sha256);
         builder.HasIndex(x => x.DocumentVersionId);
+        // The gallery reads the newest pictures first over a table that also holds every survey
+        // and report, so the kind is part of the index rather than a filter applied after it.
+        builder.HasIndex(x => new { x.Kind, x.CreatedAt });
         // Photo-map endpoint filters by bbox on the EXIF point.
         builder.HasIndex(x => x.Geom).HasMethod("gist");
     }

@@ -101,4 +101,9 @@ public static class ProcessingJobKinds
     /// Scheduled.
     /// </summary>
     public const string UploadSessionSweep = "upload-session-sweep";
+
+    /// <summary>
+    /// Delete documents whose restore window has run out, and the bytes they hold. Scheduled.
+    /// </summary>
+    public const string DocumentPurge = "document-purge";
 }

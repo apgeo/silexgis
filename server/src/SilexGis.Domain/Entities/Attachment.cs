@@ -32,6 +32,9 @@ public enum AttachedEntityType : short
 
     /// <summary>Reserved for a comment entity that does not exist yet; no consumer accepts it.</summary>
     Comment = 13,
+
+    /// <summary>A named, ordered set of photographs.</summary>
+    Album = 14,
 }
 
 /// <summary>Maps non-feature protected entity instances to their polymorphic discriminator.</summary>
@@ -68,6 +71,7 @@ public static class AttachedEntityTypes
         AttachedEntityType.Caver => nameof(AttachedEntityType.Caver),
         AttachedEntityType.Cabinet => nameof(AttachedEntityType.Cabinet),
         AttachedEntityType.Comment => nameof(AttachedEntityType.Comment),
+        AttachedEntityType.Album => nameof(AttachedEntityType.Album),
         _ => type.ToString(),
     };
 }
@@ -115,6 +119,23 @@ public class Attachment : ITimestamped, IAuditable, IAuditChild
     public string? Caption { get; set; }
 
     public int SortOrder { get; set; }
+
+    /// <summary>
+    /// Whether this is the object's headline picture — the one a cave shows in a list, a card or
+    /// a popup.
+    ///
+    /// <para>
+    /// On the attachment rather than on the object, so one rule serves every kind of thing a
+    /// picture can hang on rather than a column per table. At most one per target, which the
+    /// database enforces with a partial unique index: two headline pictures is a state nothing
+    /// downstream can resolve, and it would resolve itself differently on every query.
+    /// </para>
+    /// <para>
+    /// The point of choosing one is that the alternative is "whichever sorted first", which
+    /// changes when somebody uploads an unrelated picture.
+    /// </para>
+    /// </summary>
+    public bool IsPrimary { get; set; }
 
     public Guid? AddedBy { get; set; }
 

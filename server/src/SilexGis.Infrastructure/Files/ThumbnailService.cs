@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using ImageMagick;
 using SilexGis.Domain;
+using SilexGis.Domain.Documents;
 
 namespace SilexGis.Infrastructure.Files;
 
@@ -19,7 +20,13 @@ namespace SilexGis.Infrastructure.Files;
 public sealed class ThumbnailService(IFileStore fileStore)
 {
     /// <summary>Allowed thumbnail bounding-box sizes (px) — a fixed set keeps the cache small.</summary>
-    public static readonly int[] AllowedSizes = [160, 480, 1200];
+    /// <remarks>
+    /// The largest is what a full-screen viewer shows and what somebody zooming into a
+    /// photograph is looking at, so it is well past a screen's own width: a 60-megapixel
+    /// panorama shown at 1200 is unreadable the moment anybody enlarges it. Every size is still
+    /// a rendering — none of them is the upload, and none carries its metadata.
+    /// </remarks>
+    public static readonly int[] AllowedSizes = [160, 480, 1200, 2400];
 
     /// <summary>
     /// Cache names of thumbnails written before metadata removal became unconditional.
@@ -30,14 +37,33 @@ public sealed class ThumbnailService(IFileStore fileStore)
     /// </summary>
     private static string LegacyCachePath(Guid fileId, int size) => $"thumbs/{fileId:N}-{size}.webp";
 
-    private static string CachePath(Guid fileId, int size) => $"thumbs/{fileId:N}-{size}-nometa.webp";
+    /// <summary>
+    /// Where a rendering is cached.
+    /// </summary>
+    /// <remarks>
+    /// The turn is part of the name, so rotating a picture does not need the cache cleared and
+    /// turning it back costs nothing — the earlier rendering is still there. It also makes the
+    /// wrong answer impossible rather than unlikely: a cache keyed without it would serve the
+    /// old orientation until something remembered to purge, and "something remembered" is what
+    /// stale caches are made of.
+    /// </remarks>
+    private static string CachePath(Guid fileId, int size, int quarterTurns) =>
+        quarterTurns == 0
+            ? $"thumbs/{fileId:N}-{size}-nometa.webp"
+            : $"thumbs/{fileId:N}-{size}-r{quarterTurns}-nometa.webp";
 
-    /// <summary>Deletes every cached thumbnail size for a file (no-op when none exist).</summary>
+    /// <summary>Deletes every cached rendering of a file (no-op when none exist).</summary>
     public void Purge(Guid fileId)
     {
         foreach (var size in AllowedSizes)
         {
-            foreach (var relative in new[] { CachePath(fileId, size), LegacyCachePath(fileId, size) })
+            var names = new List<string> { LegacyCachePath(fileId, size) };
+            for (var turn = 0; turn < PhotoOrientation.Turns; turn++)
+            {
+                names.Add(CachePath(fileId, size, turn));
+            }
+
+            foreach (var relative in names)
             {
                 var path = fileStore.GetAbsolutePath(relative);
                 if (File.Exists(path))
@@ -48,15 +74,25 @@ public sealed class ThumbnailService(IFileStore fileStore)
         }
     }
 
-    /// <summary>Returns the absolute path of the cached thumbnail, creating it when missing.</summary>
-    public async Task<string> GetOrCreateAsync(Guid fileId, string sourceStoragePath, int size, CancellationToken ct)
+    /// <summary>
+    /// Returns the absolute path of the cached rendering, creating it when missing.
+    /// </summary>
+    /// <param name="quarterTurns">
+    /// The turn somebody recorded for this picture, applied on top of whatever the camera said.
+    /// Rotating is stored rather than written back into the upload, so this is where it takes
+    /// effect — and it takes effect on every rendering, which is everything anybody is ever
+    /// shown.
+    /// </param>
+    public async Task<string> GetOrCreateAsync(
+        Guid fileId, string sourceStoragePath, int size, CancellationToken ct, int quarterTurns = 0)
     {
         if (!AllowedSizes.Contains(size))
         {
             throw new ArgumentOutOfRangeException(nameof(size), size, "Unsupported thumbnail size.");
         }
 
-        var cachePath = fileStore.GetAbsolutePath(CachePath(fileId, size));
+        var turns = PhotoOrientation.Normalize(quarterTurns);
+        var cachePath = fileStore.GetAbsolutePath(CachePath(fileId, size, turns));
         if (File.Exists(cachePath))
         {
             return cachePath;
@@ -67,6 +103,15 @@ public sealed class ThumbnailService(IFileStore fileStore)
         var sourcePath = fileStore.GetAbsolutePath(sourceStoragePath);
         using var image = new MagickImage(sourcePath);
         image.AutoOrient(); // bakes the rotation in and clears the tag it read, so do it first
+
+        // Then the turn somebody recorded, which is a correction on top of what the camera
+        // said — a picture needs turning precisely when the camera got it wrong or said
+        // nothing, so this is applied after the tag rather than instead of it. Before the
+        // resize, so the bounding box is measured against the shape that will be shown.
+        if (turns != 0)
+        {
+            image.Rotate(PhotoOrientation.Degrees(turns));
+        }
 
         if (image.Width > size || image.Height > size)
         {

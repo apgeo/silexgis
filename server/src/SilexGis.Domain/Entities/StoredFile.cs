@@ -171,6 +171,24 @@ public class StoredFile : ITimestamped, IAuditable
     /// <summary>Primary codec of an audio or video file, as the container names it.</summary>
     public string? Codec { get; set; }
 
+    /// <summary>
+    /// Quarter-turns clockwise to apply when drawing this picture: 0, 1, 2 or 3.
+    ///
+    /// <para>
+    /// Rotating a photograph does not rewrite it. The upload is immutable — its hash is what
+    /// duplicate detection compares and what the archive means by "this is what we were given" —
+    /// so a turn is recorded here and applied to every rendering instead. Nothing is copied,
+    /// nothing is re-encoded, and turning a picture back leaves it byte-identical to what
+    /// arrived.
+    /// </para>
+    /// <para>
+    /// This is a correction somebody made, and is deliberately separate from the orientation tag
+    /// the camera wrote: that one is already honoured when a rendering is drawn, and a picture
+    /// needs turning precisely when the camera got it wrong or said nothing.
+    /// </para>
+    /// </summary>
+    public int OrientationQuarterTurns { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

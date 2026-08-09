@@ -30,5 +30,16 @@ public sealed class AttachmentConfiguration : IEntityTypeConfiguration<Attachmen
         // The polymorphic target has no FK by design; lookups are by (type, id).
         builder.HasIndex(x => new { x.EntityType, x.EntityId });
         builder.HasIndex(x => x.FileId);
+
+        // One headline picture per object, enforced rather than agreed. Two of them is a state
+        // nothing downstream can resolve, and it would resolve itself differently on every
+        // query. Two indexes because the target is a feature or the polymorphic pair, and a
+        // single index over both would let one of each coexist.
+        builder.HasIndex(x => x.FeatureId).IsUnique()
+            .HasFilter("is_primary and feature_id is not null")
+            .HasDatabaseName("ux_attachments_primary_feature");
+        builder.HasIndex(x => new { x.EntityType, x.EntityId }).IsUnique()
+            .HasFilter("is_primary and entity_id is not null")
+            .HasDatabaseName("ux_attachments_primary_entity");
     }
 }

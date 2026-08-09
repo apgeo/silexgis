@@ -76,9 +76,30 @@ public class Document : IProtectedEntity, ITimestamped, IAuditable
     /// </summary>
     public Guid? UploadBatchId { get; set; }
 
+    /// <summary>
+    /// When somebody deleted this, if they have.
+    ///
+    /// <para>
+    /// Deleting is soft because a document is reached from many directions — attachments,
+    /// albums, cabinets, links, search — and a hard delete would have to unpick all of them in
+    /// one transaction while the person deleting is looking at one of them. A marked document
+    /// disappears from every listing at once, which is what they asked for, and the bytes go
+    /// later when nothing is going to change its mind.
+    /// </para>
+    /// <para>
+    /// Every read path filters on this. That is a rule and not a convention: a listing that
+    /// forgot would show a document the interface has already told somebody is gone.
+    /// </para>
+    /// </summary>
+    public DateTimeOffset? DeletedAt { get; set; }
+
+    public Guid? DeletedByUserId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
 
     public string AuditId => Id.ToString();
+
+    public bool IsDeleted => DeletedAt is not null;
 }

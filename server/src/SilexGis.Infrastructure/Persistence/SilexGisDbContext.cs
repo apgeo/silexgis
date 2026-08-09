@@ -96,6 +96,14 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<DuplicateUploadRecord> DuplicateUploadRecords => Set<DuplicateUploadRecord>();
 
+    public DbSet<Album> Albums => Set<Album>();
+
+    public DbSet<AlbumItem> AlbumItems => Set<AlbumItem>();
+
+    public DbSet<AlbumShare> AlbumShares => Set<AlbumShare>();
+
+    public DbSet<PhotoDetails> PhotoDetails => Set<PhotoDetails>();
+
     public DbSet<Attachment> Attachments => Set<Attachment>();
 
     public DbSet<GeoreferencedMap> GeoreferencedMaps => Set<GeoreferencedMap>();

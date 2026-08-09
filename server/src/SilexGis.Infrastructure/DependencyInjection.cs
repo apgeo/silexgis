@@ -65,6 +65,7 @@ public static class DependencyInjection
         services.AddScoped<Documents.DocumentWriteService>();
         services.AddScoped<Documents.DocumentTypeWriteService>();
         services.AddScoped<Documents.CabinetWriteService>();
+        services.AddScoped<Documents.AlbumWriteService>();
         services.AddScoped<Documents.UploadAllowanceService>();
         services.AddScoped<Documents.UploadIngestService>();
         services.AddScoped<Documents.UploadBatchService>();
@@ -183,8 +184,13 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, ArchiveExpansionHandler>();
         services.AddScoped<IProcessingJobHandler, DirectoryImportHandler>();
         services.AddScoped<IProcessingJobHandler, UploadSessionSweepHandler>();
+        services.AddScoped<IProcessingJobHandler, DocumentPurgeHandler>();
         services.AddHostedService<ProcessingJobWorker>();
         services.AddHostedService<UploadSessionScheduler>();
+
+        services.Configure<DocumentRetentionOptions>(
+            configuration.GetSection(DocumentRetentionOptions.SectionName));
+        services.AddHostedService<DocumentPurgeScheduler>();
 
         services.Configure<FeatureIntegrityOptions>(
             configuration.GetSection(FeatureIntegrityOptions.SectionName));
