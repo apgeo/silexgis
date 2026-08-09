@@ -65,6 +65,11 @@ public static class DependencyInjection
         services.AddScoped<Documents.DocumentWriteService>();
         services.AddScoped<Documents.DocumentTypeWriteService>();
         services.AddScoped<Documents.CabinetWriteService>();
+        services.AddScoped<Documents.UploadAllowanceService>();
+        services.AddScoped<Documents.UploadIngestService>();
+        services.AddScoped<Documents.UploadBatchService>();
+        services.AddScoped<Documents.BulkIngestRunner>();
+        services.AddScoped<Documents.ServerDirectorySource>();
 
         services.AddScoped<Domain.Access.IAccessService, Permissions.AccessService>();
         services.AddScoped<Permissions.FeatureProtection>();
@@ -144,6 +149,7 @@ public static class DependencyInjection
         services.AddSingleton<PageRenderService>();
         services.AddSingleton<IPhotoGeotagReader, MagickPhotoGeotagReader>();
         services.AddSingleton<IContentMetadataReader, ContentMetadataReader>();
+        services.AddScoped<ContentIntake>();
         services.AddSingleton<IVectorIO, GdalVectorIO>();
         services.AddSingleton<RasterCogService>();
 
@@ -174,7 +180,11 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, AccessHistoryPruneHandler>();
         services.AddScoped<IProcessingJobHandler, DocumentConversionHandler>();
         services.AddScoped<IProcessingJobHandler, DocumentConversionBackfillHandler>();
+        services.AddScoped<IProcessingJobHandler, ArchiveExpansionHandler>();
+        services.AddScoped<IProcessingJobHandler, DirectoryImportHandler>();
+        services.AddScoped<IProcessingJobHandler, UploadSessionSweepHandler>();
         services.AddHostedService<ProcessingJobWorker>();
+        services.AddHostedService<UploadSessionScheduler>();
 
         services.Configure<FeatureIntegrityOptions>(
             configuration.GetSection(FeatureIntegrityOptions.SectionName));
