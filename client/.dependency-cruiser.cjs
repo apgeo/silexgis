@@ -28,6 +28,28 @@ module.exports = {
       to: { path: '^src/(pages|components)/' },
     },
     {
+      name: 'filter-logic-is-ui-free',
+      comment:
+        'The filter and selector logic must be usable without the control that draws it: another '
+        + 'component, a table, an export dialog or a test may build, serialise and read a filter '
+        + 'without mounting anything. Enforced rather than asserted, because "decoupled" is true '
+        + 'the day it is written and quietly false six months later — one convenience import of a '
+        + 'component is all it takes.',
+      severity: 'error',
+      from: { path: '^src/filters/' },
+      to: { path: '^src/(pages|components)/' },
+    },
+    {
+      name: 'filter-logic-imports-no-view-library',
+      comment:
+        'The same boundary from the other side: the logic may not reach for React or the component '
+        + 'library at all, so it cannot grow a hook or a rendered default that only works inside a '
+        + 'tree. Type-only imports count.',
+      severity: 'error',
+      from: { path: '^src/filters/' },
+      to: { path: '^node_modules/(react|react-dom|antd|@ant-design)/' },
+    },
+    {
       name: 'cesium-only-in-the-3d-scene-module',
       comment:
         'Only src/scene3d/scene3dContext.ts may import the 3D engine library; everything else '
