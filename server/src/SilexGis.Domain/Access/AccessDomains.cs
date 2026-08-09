@@ -14,6 +14,10 @@ public static class AccessDomains
         GeoreferencedMap => AccessDomain.GeoreferencedMaps,
         MapView => AccessDomain.MapViews,
         Document => AccessDomain.Documents,
+        // An album is an arrangement of documents and is governed with them: one right over
+        // "the club's photographs" should reach the albums made of them, and a second domain
+        // would mean writing every rule twice.
+        Album => AccessDomain.Documents,
         _ => throw new ArgumentException($"No access domain for {entity.GetType().Name}.", nameof(entity)),
     };
 }

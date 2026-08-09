@@ -1143,7 +1143,11 @@ public static class FileEndpoints
         string path;
         try
         {
-            path = await thumbnails.GetOrCreateAsync(file.Id, file.StoragePath, effectiveSize, ct);
+            // Drawn with the turn somebody recorded. The upload is untouched, so this is the
+            // only place a rotation becomes visible — and it is every place a picture is shown,
+            // because everything anybody is shown is a rendering.
+            path = await thumbnails.GetOrCreateAsync(
+                file.Id, file.StoragePath, effectiveSize, ct, file.OrientationQuarterTurns);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {

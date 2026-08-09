@@ -30,6 +30,7 @@ using SilexGis.Api.Features.Map;
 using SilexGis.Api.Features.MapViews;
 using SilexGis.Api.Features.FeatureSets;
 using SilexGis.Api.Features.Permissions;
+using SilexGis.Api.Features.Photos;
 using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
 using SilexGis.Api.Features.Notifications;
@@ -239,6 +240,9 @@ try
     api.MapDocumentCommentEndpoints();
     api.MapCabinetEndpoints();
     api.MapAttachmentEndpoints();
+    api.MapPhotoEndpoints();
+    api.MapAlbumEndpoints();
+    api.MapPublicPhotoEndpoints();
     api.MapResLinkEndpoints();
     api.MapResLinkRelationTypeEndpoints();
     api.MapGeoreferencedMapEndpoints();

@@ -26,6 +26,7 @@ public sealed record AttachmentDto(
     string? Caption,
     int SortOrder,
     Guid? AddedBy,
+    bool IsPrimary,
     FileDto File);
 
 public sealed record AttachmentCreateRequest(
@@ -82,6 +83,8 @@ public static class AttachmentEndpoints
             .WithSummary("Edits an attachment's role/caption/order; requires Write on the target.");
         attachments.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Detaches a file (the file itself is kept); requires Write on the target.");
+        attachments.MapPut("/{id:guid}/primary", SetPrimaryAsync)
+            .WithSummary("Makes this the object's headline picture, replacing whichever was; requires Write on the target.");
 
         return api;
     }
@@ -308,6 +311,64 @@ public static class AttachmentEndpoints
         return TypedResults.NoContent();
     }
 
+    /// <summary>
+    /// Makes one attachment the object's headline picture.
+    /// </summary>
+    /// <remarks>
+    /// The point of choosing one is that the alternative is "whichever sorted first", which
+    /// changes when somebody uploads an unrelated picture. At most one per object, so setting a
+    /// new one clears the old in the same unit of work — the database enforces the same thing
+    /// with a partial unique index, and doing it in two saves would trip it.
+    /// </remarks>
+    private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> SetPrimaryAsync(
+        Guid id,
+        bool? primary,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var attachment = await db.Attachments.FirstOrDefaultAsync(a => a.Id == id, ct);
+        if (attachment is null)
+        {
+            return ApiProblems.NotFound("attachment.not_found");
+        }
+
+        if (!await FileAccessRules.CanWriteTargetAsync(db, access, ctx, TargetOf(attachment), ct))
+        {
+            return await FileAccessRules.CanReadTargetAsync(db, access, ctx, TargetOf(attachment), ct)
+                ? ApiProblems.Forbidden()
+                : ApiProblems.NotFound("attachment.not_found");
+        }
+
+        if (primary ?? true)
+        {
+            // Everything else on the same object stops being headline first, in the same save:
+            // the uniqueness is a partial index, checked per statement.
+            var siblings = await db.Attachments
+                .Where(a => a.Id != id
+                    && a.IsPrimary
+                    && (attachment.FeatureId != null
+                        ? a.FeatureId == attachment.FeatureId
+                        : a.EntityType == attachment.EntityType && a.EntityId == attachment.EntityId))
+                .ToListAsync(ct);
+            foreach (var sibling in siblings)
+            {
+                sibling.IsPrimary = false;
+            }
+        }
+
+        attachment.IsPrimary = primary ?? true;
+        await db.SaveChangesAsync(ct);
+        return TypedResults.NoContent();
+    }
+
     // The row's XOR maps directly: a feature row has a null EntityType, which is exactly
     // the parsed shape of a feature target.
     private static AttachmentTarget TargetOf(Attachment a) => new(a.EntityType, a.FeatureId ?? a.EntityId!.Value);
@@ -322,5 +383,6 @@ public static class AttachmentEndpoints
         a.Caption,
         a.SortOrder,
         a.AddedBy,
+        a.IsPrimary,
         content.File.ToDto(content.Version, tokens, mayHaveOriginal));
 }
