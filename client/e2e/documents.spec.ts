@@ -102,7 +102,14 @@ const removeReport = (page: Page) => removeFixture(page, 'e2e-report.pdf');
 
 test('an upload becomes a readable document, and its text is read and discussed', async ({
   page,
+  consoleErrors,
 }) => {
+  // Declared rather than left to look like a defect: these fixtures are re-uploaded on every
+  // run, detaching a file does not delete it, and the flow answers the warning on purpose.
+  consoleErrors.allow(
+    /Failed to load resource.*409/,
+    'the duplicate refusal these fixtures provoke on a second run',
+  );
   await login(page);
   await uploadReport(page);
 
@@ -151,7 +158,14 @@ test('an upload becomes a readable document, and its text is read and discussed'
  */
 test('a text document is read on the page, and a recording is playable there', async ({
   page,
+  consoleErrors,
 }) => {
+  // Declared rather than left to look like a defect: these fixtures are re-uploaded on every
+  // run, detaching a file does not delete it, and the flow answers the warning on purpose.
+  consoleErrors.allow(
+    /Failed to load resource.*409/,
+    'the duplicate refusal these fixtures provoke on a second run',
+  );
   await login(page);
   await uploadFixture(page, 'e2e/fixtures/e2e-notes.txt', 'e2e-notes.txt');
 
@@ -181,7 +195,14 @@ test('a text document is read on the page, and a recording is playable there', a
 
 test('a content search finds the document by a word inside it and opens it there', async ({
   page,
+  consoleErrors,
 }) => {
+  // Declared rather than left to look like a defect: these fixtures are re-uploaded on every
+  // run, detaching a file does not delete it, and the flow answers the warning on purpose.
+  consoleErrors.allow(
+    /Failed to load resource.*409/,
+    'the duplicate refusal these fixtures provoke on a second run',
+  );
   await login(page);
   await uploadReport(page);
 
