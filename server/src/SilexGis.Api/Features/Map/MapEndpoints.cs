@@ -455,14 +455,19 @@ public static class MapEndpoints
             .VisibleTo(ctx, AccessDomain.TripLogs)
             .Where(x => x.Geom != null && x.Geom.Intersects(polygon));
 
+        // The window asks whether the trip overlapped it, not whether it started inside it, or a
+        // trip that ran across the end of a month is missing from the map for the days it was
+        // actually out. A trip with no end date is one day long.
         if (from is not null)
         {
-            query = query.Where(x => x.TripDate >= from);
+            var start = from.Value;
+            query = query.Where(x => (x.TripDateEnd ?? x.TripDate) >= start);
         }
 
         if (to is not null)
         {
-            query = query.Where(x => x.TripDate <= to);
+            var end = to.Value;
+            query = query.Where(x => x.TripDate <= end);
         }
 
         var rows = await query.OrderBy(x => x.Id).Take(MaxPoints).ToListAsync(ct);

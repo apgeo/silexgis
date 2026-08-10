@@ -14,6 +14,11 @@ import {
   type TripType,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import TripGeometryField from './TripGeometryField.tsx';
+import { tripDateEndForWrite } from './tripDates.ts';
+import type { TripGeometry } from './tripGeometry.ts';
+
+const { RangePicker } = DatePicker;
 
 interface TripFormModalProps {
   open: boolean;
@@ -24,7 +29,8 @@ interface TripFormModalProps {
 interface FormValues {
   title: string;
   type?: TripType | null;
-  dates: [Dayjs, Dayjs | null] | Dayjs; // range when multi-day
+  // Always a range: a single-day trip picks the same day twice, and the equal end is dropped on write.
+  dates: [Dayjs, Dayjs | null];
   entryTime?: Dayjs | null;
   exitTime?: Dayjs | null;
   locationText?: string;
@@ -32,6 +38,7 @@ interface FormValues {
   description?: string;
   results?: string;
   weather?: string;
+  geom?: TripGeometry | null;
   caveIds: string[];
   participants: { caverId?: string; name: string }[];
   proposers: { caverId?: string; name: string }[];
@@ -110,6 +117,9 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
   const updateTrip = useUpdateTripLog();
 
   const [caveQuery, setCaveQuery] = useState('');
+  // The map inside the form can only be built once the dialog's open transition has put the
+  // content in the document — a map built against a container with no size renders nothing.
+  const [shown, setShown] = useState(false);
   const { data: cavingGroups } = useCavingGroups();
   const debouncedCaveQuery = useDebouncedValue(caveQuery);
   // A trip is logged against caves, and the server's hit budget is shared across kinds —
@@ -143,9 +153,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
         form.setFieldsValue({
           title: trip.title,
           type: trip.type ?? undefined,
-          dates: trip.tripDateEnd
-            ? [dayjs(trip.tripDate), dayjs(trip.tripDateEnd)]
-            : dayjs(trip.tripDate),
+          dates: [dayjs(trip.tripDate), dayjs(trip.tripDateEnd ?? trip.tripDate)],
           entryTime: parseTime(trip.entryTime),
           exitTime: parseTime(trip.exitTime),
           locationText: trip.locationText ?? undefined,
@@ -153,6 +161,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           description: trip.description ?? undefined,
           results: trip.results ?? undefined,
           weather: trip.weatherConditions ?? undefined,
+          geom: trip.geom ?? null,
           caveIds: [...trip.caveIds],
           participants: trip.participants.map((p) => ({ caverId: p.caverId, name: p.name })),
           proposers: trip.proposers.map((p) => ({ caverId: p.caverId, name: p.name })),
@@ -160,7 +169,10 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
         });
       } else {
         form.setFieldsValue({
-          dates: dayjs(),
+          // Today, both ends: a trip logged without touching the date control is a day trip today,
+          // and the field is a range, so a bare day would leave it failing its own required rule.
+          dates: [dayjs(), dayjs()],
+          geom: null,
           caveIds: [],
           participants: [],
           proposers: [],
@@ -174,12 +186,13 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
 
   const onOk = async () => {
     const values = await form.validateFields();
-    const range = Array.isArray(values.dates) ? values.dates : [values.dates, null];
+    const [start, end] = values.dates;
+    const tripDate = start.format('YYYY-MM-DD');
     const body: TripLogWrite = {
       title: values.title.trim(),
       type: values.type ?? null,
-      tripDate: range[0]!.format('YYYY-MM-DD'),
-      tripDateEnd: range[1] ? range[1].format('YYYY-MM-DD') : null,
+      tripDate,
+      tripDateEnd: tripDateEndForWrite(tripDate, end ? end.format('YYYY-MM-DD') : null),
       entryTime: values.entryTime ? values.entryTime.format('HH:mm:ss') : null,
       exitTime: values.exitTime ? values.exitTime.format('HH:mm:ss') : null,
       description: values.description?.trim() || null,
@@ -187,7 +200,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
       weatherConditions: values.weather?.trim() || null,
       locationText: values.locationText?.trim() || null,
       organizingCavingGroupId: values.organizingCavingGroupId ?? null,
-      geom: trip?.geom ?? null,
+      geom: values.geom ?? null,
       caveIds: values.caveIds,
       participants: toParticipants(values.participants),
       proposers: toParticipants(values.proposers),
@@ -215,6 +228,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
       confirmLoading={createTrip.isPending || updateTrip.isPending}
       width={720}
       destroyOnHidden
+      afterOpenChange={setShown}
     >
       <Form<FormValues> form={form} layout="vertical">
         <Form.Item name="title" label={t('trips.titleField')} rules={[{ required: true }]}>
@@ -228,8 +242,9 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
               options={TRIP_TYPES.map((v) => ({ value: v, label: t(`trips.typeValues.${v}`) }))}
             />
           </Form.Item>
-          <Form.Item name="dates" label={t('trips.date')} rules={[{ required: true }]} style={{ flex: 1 }}>
-            <DatePicker style={{ width: '100%' }} />
+          {/* Wider than its neighbours: two dates and a separator do not fit an equal third. */}
+          <Form.Item name="dates" label={t('trips.dates')} rules={[{ required: true }]} style={{ flex: 2 }}>
+            <RangePicker style={{ width: '100%' }} allowClear={false} />
           </Form.Item>
           <Form.Item name="visibility" label={t('features.visibility')} rules={[{ required: true }]} style={{ flex: 1 }}>
             <Select
@@ -300,6 +315,9 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
         </Form.Item>
         <Form.Item name="description" label={t('features.description')}>
           <Input.TextArea rows={4} maxLength={10000} />
+        </Form.Item>
+        <Form.Item name="geom" label={t('trips.geometry')}>
+          <TripGeometryField active={shown} height={260} />
         </Form.Item>
       </Form>
     </Modal>

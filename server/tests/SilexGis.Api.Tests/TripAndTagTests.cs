@@ -168,6 +168,52 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task Trip_date_windows_span_a_multi_day_trip()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+
+        // Ran across the end of the month: started in February, came out in March.
+        var spanning = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Camp {marker}",
+            tripDate = "2026-02-27",
+            tripDateEnd = "2026-03-02",
+            geom = new { type = "Point", coordinates = new[] { 25.61, 45.55 } },
+            caveIds = Array.Empty<Guid>(),
+            participants = Array.Empty<object>(),
+            visibility = "authenticated",
+        });
+        spanning.StatusCode.ShouldBe(HttpStatusCode.Created, await spanning.Content.ReadAsStringAsync());
+        var spanningId = (await spanning.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        // The control: one day, entirely before the window, and it must stay out of it.
+        var before = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Day out {marker}",
+            tripDate = "2026-02-27",
+            geom = new { type = "Point", coordinates = new[] { 25.62, 45.56 } },
+            caveIds = Array.Empty<Guid>(),
+            participants = Array.Empty<object>(),
+            visibility = "authenticated",
+        });
+        var beforeId = (await before.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        var march = await outsider.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/trip-logs/?search={marker}&from=2026-03-01&to=2026-03-31");
+        var listed = march.GetProperty("items").EnumerateArray()
+            .Select(x => x.GetProperty("id").GetGuid()).ToList();
+        listed.ShouldContain(spanningId);
+        listed.ShouldNotContain(beforeId);
+
+        var mapped = await outsider.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/map/trip-logs?bbox={WorldBbox}&from=2026-03-01&to=2026-03-31");
+        var onMap = mapped.GetProperty("features").EnumerateArray()
+            .Select(f => f.GetProperty("properties").GetProperty("id").GetGuid()).ToList();
+        onMap.ShouldContain(spanningId);
+        onMap.ShouldNotContain(beforeId);
+    }
+
+    [Fact]
     public async Task Trip_report_fields_and_proposers_round_trip()
     {
         var marker = Guid.NewGuid().ToString("N")[..8];

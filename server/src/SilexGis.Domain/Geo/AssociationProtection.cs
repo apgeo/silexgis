@@ -7,9 +7,12 @@ namespace SilexGis.Domain.Geo;
 /// position of its own.
 /// </summary>
 /// <param name="TargetFeatureId">
-/// The feature the association names, or null when it names something with no position at
-/// all — a trip, a club, a map view. An association that names nothing positioned cannot
-/// place anything, so the rule leaves it alone.
+/// The feature the association names, or null when it names something that is not a
+/// feature — a club, a map view, a trip. An association that names no feature names
+/// nothing this rule guards the position of, so the rule leaves it alone. That is not the
+/// same as naming something with no position: a trip carries a sketch of its own, served
+/// exactly to everyone who may read the trip, and so a trip standing in a resource link
+/// counts as a sibling showing coordinates even though it is never itself withheld.
 /// </param>
 /// <param name="DocumentCarriesItsOwnPosition">
 /// Whether the association itself puts exact coordinates in front of the caller — a
@@ -78,8 +81,11 @@ public static class AssociationProtection
     public static bool IsWithheld(
         FeatureAssociation association, bool exactViewOfTarget, bool revealProtectedAssociations)
     {
-        // Nothing positioned is being named, or the caller may place it exactly anyway:
-        // either way there is no protected position for the pairing to give away.
+        // The association names no feature whose position this rule guards, or the caller may
+        // place that feature exactly anyway: either way there is no protected position for the
+        // pairing to give away. Naming no feature is not the same as naming something with no
+        // position — a trip carries a sketch of its own, and it counts through the arm below,
+        // as a sibling showing coordinates, rather than through this one.
         if (association.TargetFeatureId is null || exactViewOfTarget)
         {
             return false;

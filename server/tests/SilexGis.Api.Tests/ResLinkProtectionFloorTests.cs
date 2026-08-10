@@ -305,6 +305,95 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_trip_carrying_its_own_sketch_seats_no_guarded_name_beside_it()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var guardedName = $"Guarded shaft {suffix}";
+        var guarded = await CreateProtectedCaveAsync(guardedName);
+        var openCave = await CreateCaveAsync($"Junction {suffix}", "authenticated");
+
+        // Three trips differing in exactly the two facts the arm reads: whether the trip
+        // carries a sketch of its own, and whether this caller may read the trip at all.
+        // A trip's sketch is served exactly to every reader of the trip — it is never
+        // snapped or omitted the way a protected feature's geometry is — so a readable
+        // positioned trip shows coordinates as plainly as a placeable feature member.
+        var flatTitle = $"Flat trip {suffix}";
+        var drawnTitle = $"Drawn trip {suffix}";
+        var hiddenTitle = $"Hidden trip {suffix}";
+        var sketch = new { type = "Point", coordinates = new[] { 25.44721, 45.53127 } };
+        var flatTrip = await CreateTripLogAsync(flatTitle, openCave, "authenticated");
+        var drawnTrip = await CreateTripLogAsync(drawnTitle, openCave, "authenticated", sketch);
+        var hiddenTrip = await CreateTripLogAsync(hiddenTitle, openCave, "private", sketch);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            // Fixture proof: the sketches really were stored and the flat trip really has
+            // none, so each refusal below is exercised rather than merely uncontradicted.
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripLogs.AsNoTracking().FirstAsync(t => t.Id == flatTrip)).Geom.ShouldBeNull();
+            (await db.TripLogs.AsNoTracking().FirstAsync(t => t.Id == drawnTrip)).Geom.ShouldNotBeNull();
+            (await db.TripLogs.AsNoTracking().FirstAsync(t => t.Id == hiddenTrip)).Geom.ShouldNotBeNull();
+        }
+
+        // …and the readability half of the fixture: this caller reads the drawn trip and
+        // does not read the hidden one, which is what makes the two links differ.
+        (await viewer.GetAsync($"/api/v1/trip-logs/{drawnTrip}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await viewer.GetAsync($"/api/v1/trip-logs/{hiddenTrip}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        var flatLink = await CreateLinkAsync(
+            Member("feature", guarded), Member("tripLog", flatTrip, sortOrder: 1));
+        var drawnLink = await CreateLinkAsync(
+            Member("feature", guarded), Member("tripLog", drawnTrip, sortOrder: 1));
+        var hiddenLink = await CreateLinkAsync(
+            Member("feature", guarded), Member("tripLog", hiddenTrip, sortOrder: 1));
+
+        await SetRevealAsync(true);
+        try
+        {
+            // Control: beside a trip with no sketch the setting re-admits the guarded
+            // name, because nothing in the link puts a position next to it.
+            var flatMembers = MembersOf(await BodyAsync(viewer, $"/api/v1/reslinks/{flatLink}"));
+            flatMembers.Count.ShouldBe(2);
+            DisplayTitle(flatMembers, guarded).ShouldBe(guardedName);
+
+            // The same link with a positioned trip: the name would stand beside
+            // coordinates this caller may see, which is the pairing no setting opens.
+            var drawnBody = await BodyAsync(viewer, $"/api/v1/reslinks/{drawnLink}");
+            drawnBody.ShouldNotContain(guardedName);
+            MembersOf(drawnBody).Single().GetProperty("targetId").GetGuid().ShouldBe(drawnTrip);
+
+            // A positioned trip this caller may not read shows them nothing, so it counts
+            // against nobody: the member stays a bare row and the name comes back.
+            var hiddenMembers = MembersOf(await BodyAsync(viewer, $"/api/v1/reslinks/{hiddenLink}"));
+            hiddenMembers.Count.ShouldBe(2);
+            DisplayTitle(hiddenMembers, guarded).ShouldBe(guardedName);
+            hiddenMembers.Single(m => m.GetProperty("targetId").GetGuid() == hiddenTrip)
+                .GetProperty("display").ValueKind.ShouldBe(JsonValueKind.Null);
+
+            // The owner may place the cave exactly, so all three links read whole for
+            // them — the absence above was this caller's rights, not the link's shape.
+            foreach (var linkId in new[] { flatLink, drawnLink, hiddenLink })
+            {
+                MembersOf(await BodyAsync(owner, $"/api/v1/reslinks/{linkId}")).Count.ShouldBe(2, linkId.ToString());
+            }
+
+            // With the setting off the guarded member is withheld either way — and the
+            // trip member is never itself the thing withheld: it names no feature, so it
+            // travels whole in both links, sketch or no sketch.
+            await SetRevealAsync(false);
+            var offFlat = MembersOf(await BodyAsync(viewer, $"/api/v1/reslinks/{flatLink}"));
+            offFlat.Single().GetProperty("targetId").GetGuid().ShouldBe(flatTrip);
+            var offDrawn = MembersOf(await BodyAsync(viewer, $"/api/v1/reslinks/{drawnLink}"));
+            offDrawn.Single().GetProperty("targetId").GetGuid().ShouldBe(drawnTrip);
+            DisplayTitle(offDrawn, drawnTrip).ShouldBe(drawnTitle);
+        }
+        finally
+        {
+            await SetRevealAsync(false);
+        }
+    }
+
+    [Fact]
     public async Task A_superseded_geotag_counts_against_exactly_whoever_can_reach_it()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
@@ -722,12 +811,18 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateTripLogAsync(string title, Guid caveId, string visibility)
+    /// <summary>A trip as the owner. <paramref name="geom"/> is the trip's own sketch —
+    /// left null unless a test is about a positioned trip, since a trip with a geometry
+    /// exposes coordinates to every reader and would change what its siblings disclose.
+    /// </summary>
+    private async Task<Guid> CreateTripLogAsync(
+        string title, Guid caveId, string visibility, object? geom = null)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
         {
             title,
             tripDate = "2026-05-01",
+            geom,
             caveIds = new[] { caveId },
             participants = Array.Empty<object>(),
             visibility,

@@ -55,14 +55,19 @@ public static class TripLogEndpoints
 
         var query = db.TripLogs.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs);
 
+        // A trip may run across several days, so the window asks whether the trip overlapped it
+        // rather than whether it started inside it: a trip that ran 27 February to 2 March belongs
+        // in March as much as in February. A trip with no end date is one day long.
         if (from is not null)
         {
-            query = query.Where(x => x.TripDate >= from);
+            var start = from.Value;
+            query = query.Where(x => (x.TripDateEnd ?? x.TripDate) >= start);
         }
 
         if (to is not null)
         {
-            query = query.Where(x => x.TripDate <= to);
+            var end = to.Value;
+            query = query.Where(x => x.TripDate <= end);
         }
 
         if (caveId is not null)

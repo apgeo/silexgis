@@ -509,8 +509,10 @@ public class ResLinkRulesTests
     [Fact]
     public void A_membership_naming_no_feature_is_never_withheld()
     {
-        // An entity-world member — a document, a trip, a caver — presents no position
-        // for the rule to guard; what travels for it is its own world's business.
+        // An entity-world member — a document, a trip, a caver — names no feature for the
+        // rule to guard; what travels for it is its own world's business. A trip carries a
+        // sketch of its own, and that still does not withhold the trip's own row: it counts
+        // only for the members standing beside it, through the sibling mapping.
         MemberAssociation(null).TargetFeatureId.ShouldBeNull();
         AssociationProtection.IsWithheld(
                 MemberAssociation(null), exactViewOfTarget: false, revealProtectedAssociations: false)

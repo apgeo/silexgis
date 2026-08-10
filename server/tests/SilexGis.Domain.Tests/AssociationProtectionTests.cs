@@ -29,10 +29,11 @@ public class AssociationProtectionTests
     }
 
     [Fact]
-    public void An_association_that_names_nothing_positioned_is_never_withheld()
+    public void An_association_that_names_no_feature_is_never_withheld()
     {
-        // A document hung on a trip, a club or a map view names no place, so there is no
-        // position for the pairing to give away and no setting to consult.
+        // A document hung on a trip, a club or a map view names no feature, so this rule
+        // guards no position for it and there is no setting to consult — whatever position
+        // the named thing may carry of its own is that world's business, not a pairing here.
         var unpositioned = new FeatureAssociation(null, DocumentCarriesItsOwnPosition: true);
         AssociationProtection.IsWithheld(unpositioned, exactViewOfTarget: false, revealProtectedAssociations: false)
             .ShouldBeFalse();

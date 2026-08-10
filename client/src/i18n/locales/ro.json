@@ -727,6 +727,7 @@
       "other": "Altele"
     },
     "date": "Data",
+    "dates": "Perioada",
     "entryTime": "Ora de intrare",
     "exitTime": "Ora de ieșire",
     "duration": "Timp în subteran",
@@ -744,7 +745,16 @@
     "weather": "Vreme / condiții",
     "deleteConfirm": "Ștergeți acest jurnal de tură?",
     "searchPlaceholder": "Caută după titlu…",
-    "organizingCavingGroup": "Grupul organizator"
+    "organizingCavingGroup": "Grupul organizator",
+    "geometry": "Schița turei",
+    "geometryHint": "Alegeți o formă, apoi desenați pe hartă. O formă nouă o înlocuiește pe cea dinainte.",
+    "drawHint": "Faceți clic pe hartă pentru a pune puncte — dublu-clic încheie o linie sau o suprafață.",
+    "drawPoint": "Punct",
+    "drawLine": "Linie",
+    "drawArea": "Suprafață",
+    "clearGeometry": "Șterge forma",
+    "geometryWarning": "Locație exactă — schița unei ture nu este niciodată aproximată.",
+    "geometryWarningDetail": "Oricine poate citi această tură vede forma exact așa cum a fost desenată, indiferent de protecția peșterilor pe care le numește. O schiță pusă peste o intrare protejată dezvăluie astfel acea intrare."
   },
   "tags": {
     "title": "Etichete",

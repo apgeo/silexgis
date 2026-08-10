@@ -376,7 +376,9 @@ public static class ResLinkRules
     /// feature — the same act as attaching a document to it — so every read path asks
     /// <see cref="AssociationProtection"/> about each member before emitting it, under
     /// this mapping and never a private reading of protection. A membership that names
-    /// no feature (an entity-world member) presents no position for the rule to guard.
+    /// no feature (an entity-world member) presents no position for the rule to guard,
+    /// even when the thing it names carries one of its own — a trip's sketch matters
+    /// only to the members standing beside it, through the overload below.
     /// A membership row carries no coordinates of its own the way a geotagged photo
     /// does, so alone it can never trip the rule's always-withheld arm — only the
     /// caller's exact-view answer and the installation setting decide.
@@ -386,10 +388,12 @@ public static class ResLinkRules
     /// <summary>
     /// A membership seen together with its siblings. A link is one association among all
     /// of its members, so when any sibling member shows this caller exact coordinates —
-    /// a feature whose exact position they may see, a document with a capture-point file
-    /// they may both see and fetch (a superseded revision's counts only for callers the
-    /// document lets into version history), a survey model they may open, an anchor that
-    /// reads coordinates out of a geofile they may read — the protected feature's name
+    /// a feature whose exact position they may see, a trip they may read that carries a
+    /// sketch of its own (trip geometry is served exactly to every reader of the trip), a
+    /// document with a capture-point file they may both see and fetch (a superseded
+    /// revision's counts only for callers the document lets into version history), a
+    /// survey model they may open, an anchor that reads coordinates out of a geofile they
+    /// may read — the protected feature's name
     /// stands beside a position, exactly like a geotagged photo attached to it. That is
     /// the association the reveal setting never opens, and mapping the sibling fact onto
     /// the rule's own-position arm is what makes the same written rule decide, instead

@@ -727,6 +727,7 @@
       "other": "Other"
     },
     "date": "Date",
+    "dates": "Dates",
     "entryTime": "Entry time",
     "exitTime": "Exit time",
     "duration": "Underground time",
@@ -744,7 +745,16 @@
     "weather": "Weather / conditions",
     "deleteConfirm": "Delete this trip log?",
     "searchPlaceholder": "Search by title…",
-    "organizingCavingGroup": "Organizing caving group"
+    "organizingCavingGroup": "Organizing caving group",
+    "geometry": "Trip sketch",
+    "geometryHint": "Pick a shape, then draw on the map. A new shape replaces the one before it.",
+    "drawHint": "Click the map to place points — double-click finishes a line or an area.",
+    "drawPoint": "Point",
+    "drawLine": "Line",
+    "drawArea": "Area",
+    "clearGeometry": "Clear shape",
+    "geometryWarning": "Exact location — a trip's sketch is never approximated.",
+    "geometryWarningDetail": "Everyone who may read this trip sees this shape exactly as drawn, whatever protection the caves it names carry. A sketch placed on a protected entrance therefore discloses that entrance."
   },
   "tags": {
     "title": "Tags",

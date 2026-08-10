@@ -13,6 +13,7 @@ import {
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import TripFormModal from './TripFormModal.tsx';
+import { formatTripDates } from './tripDates.ts';
 
 export default function TripLogListPage() {
   const { t, i18n } = useTranslation();
@@ -38,13 +39,6 @@ export default function TripLogListPage() {
 
   const onTableChange = (pagination: TablePaginationConfig) => {
     setParams((p) => ({ ...p, page: pagination.current, pageSize: pagination.pageSize }));
-  };
-
-  const formatDate = (trip: TripLogInfo) => {
-    const start = new Date(trip.tripDate).toLocaleDateString(i18n.resolvedLanguage);
-    return trip.tripDateEnd
-      ? `${start} – ${new Date(trip.tripDateEnd).toLocaleDateString(i18n.resolvedLanguage)}`
-      : start;
   };
 
   return (
@@ -82,7 +76,13 @@ export default function TripLogListPage() {
           showSizeChanger: true,
         }}
         columns={[
-          { title: t('trips.date'), key: 'date', width: 200, render: (_, trip) => formatDate(trip) },
+          {
+            title: t('trips.date'),
+            key: 'date',
+            width: 200,
+            render: (_, trip) =>
+              formatTripDates(trip.tripDate, trip.tripDateEnd, i18n.resolvedLanguage),
+          },
           { title: t('trips.titleField'), dataIndex: 'title' },
           {
             title: t('trips.type'),

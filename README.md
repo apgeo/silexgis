@@ -109,7 +109,12 @@ Previous versions:
   elevation server and nothing downloaded. An operator who wants the caves under actual
   hillsides bakes free elevation data into a tile pyramid in one documented step and serves it
   as static files from the same installation. Everyone who does not is unaffected.
-- **Trips, tags, saved & shareable map views**, and **multi-window** pop-out panels.
+- **Trips** — a trip is logged over the days it actually ran, with who was there, what came of it
+  and how long was spent underground, and it can be sketched on a map: a point, a line or an area
+  for where it happened. That sketch is shown exactly to everyone who may read the trip, including
+  on the trip map, so the editor says so beside it — a sketch dropped on a protected entrance
+  discloses that entrance, whatever protection the caves the trip names carry.
+- **Tags, saved & shareable map views**, and **multi-window** pop-out panels.
 - **Share links** — hand out a revocable link to one feature and what it contains, either
   public or sign-in-only. A share never reveals a protected location.
 - **Works on a phone** — the map workspace adapts to touch, including full geometry editing by

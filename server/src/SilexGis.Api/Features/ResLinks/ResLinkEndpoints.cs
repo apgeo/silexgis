@@ -1137,15 +1137,17 @@ public static class ResLinkEndpoints
 
     /// <summary>
     /// The members that show this caller exact coordinates — the sibling fact the
-    /// membership-disclosure mapping asks for. Four ways a member does: it names a
-    /// feature with a drawn geometry the caller may both read and place exactly; a file
-    /// of its document carries a capture point of its own that the photo-position rule
-    /// discloses to this caller and that the caller can actually fetch — any currently
-    /// served file, or a superseded one for callers the document's own rules let into
-    /// version history; it names a survey model the caller may open, which resolves only
-    /// with exact view on its cave and routes straight to it; or its anchor reads
-    /// coordinates out of a geofile the caller may read. Batched throughout — a link
-    /// page costs the same handful of queries however many members it has.
+    /// membership-disclosure mapping asks for. Five ways a member does: it names a
+    /// feature with a drawn geometry the caller may both read and place exactly; it
+    /// names a trip the caller may read that carries a sketch of its own, which is
+    /// served exactly to every reader of the trip; a file of its document carries a
+    /// capture point of its own that the photo-position rule discloses to this caller
+    /// and that the caller can actually fetch — any currently served file, or a
+    /// superseded one for callers the document's own rules let into version history; it
+    /// names a survey model the caller may open, which resolves only with exact view on
+    /// its cave and routes straight to it; or its anchor reads coordinates out of a
+    /// geofile the caller may read. Batched throughout — a link page costs the same
+    /// handful of queries however many members it has.
     /// </summary>
     private static async Task<HashSet<Guid>> ExposingMemberIdsAsync(
         SilexGisDbContext db,
@@ -1178,6 +1180,27 @@ public static class ResLinkEndpoints
                     .Where(m => exact.Contains(m.FeatureId!.Value))
                     .Select(m => m.Id));
             }
+        }
+
+        // Trip members carrying a sketch of their own. A trip's geometry is served exactly
+        // to everyone who may read the trip — it is never snapped or omitted the way a
+        // protected feature's is — so a readable positioned trip standing in a link puts
+        // coordinates in front of the caller just as a placeable feature member does. A
+        // resolved display is the proof the caller may read the trip; only the geometry is
+        // left to ask about, and it is asked in one batched query.
+        var tripMembers = members
+            .Where(m => m.EntityType == AttachedEntityType.TripLog && displays.ContainsKey(m.Id))
+            .ToList();
+        var tripIds = tripMembers.Select(m => m.EntityId!.Value).Distinct().ToList();
+        if (tripIds.Count > 0)
+        {
+            var positionedTrips = await db.TripLogs.AsNoTracking()
+                .Where(t => tripIds.Contains(t.Id) && t.Geom != null)
+                .Select(t => t.Id)
+                .ToHashSetAsync(ct);
+            exposing.UnionWith(tripMembers
+                .Where(m => positionedTrips.Contains(m.EntityId!.Value))
+                .Select(m => m.Id));
         }
 
         // Geofile members whose anchor addresses coordinates of a file the caller may read.
