@@ -421,23 +421,30 @@ public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
-    public async Task A_headline_picture_is_withheld_from_a_reader_of_the_cave_who_may_not_read_it()
+    public async Task A_headline_picture_is_offered_to_everybody_the_attachment_reaches()
     {
-        // The cave is public and the photograph is not, which is the ordinary case: a club
-        // publishes its caves and keeps the photographs to members.
+        // Worth pinning because it surprises: the photograph is private and owned by somebody
+        // else, and the ordinary member is still shown it. Hanging a document on an object the
+        // caller may read is what grants the read — otherwise attaching a survey to a cave
+        // would put it out of reach of everyone who works on that cave. The headline picture
+        // rides on exactly that rule rather than on one of its own, which is the point.
         var caveId = await CreateCaveAsync();
-        var photo = await UploadPhotoAsync(owner, "private-headline.png");
+        var photo = await UploadPhotoAsync(owner, "shared-headline.png");
         var attachmentId = await AttachAsync(photo.FileId, caveId);
         (await owner.PutAsync($"/api/v1/attachments/{attachmentId}/primary?primary=true", null))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         var summary = await member.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/summary");
 
-        // Filtered by the same rule as the count beside it, and it has to be: a headline picture
-        // is the loudest thing on the card, so one that outlived the reader's rule would announce
-        // the photograph more plainly than any listing.
-        summary.GetProperty("headlinePicture").ValueKind.ShouldBe(JsonValueKind.Null);
-        summary.GetProperty("attachmentCount").GetInt32().ShouldBe(0);
+        summary.GetProperty("attachmentCount").GetInt32().ShouldBe(1);
+        summary.GetProperty("headlinePicture").GetProperty("documentId").GetGuid()
+            .ShouldBe(photo.DocumentId);
+
+        // Reaching the cave is what carried it, so a cave the member cannot read carries
+        // nothing: the summary itself is refused rather than answered without the picture.
+        var privateCaveId = await CreatePrivateCaveAsync();
+        (await member.GetAsync($"/api/v1/caves/{privateCaveId}/summary"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -528,7 +535,12 @@ public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable
         return caver.Id;
     }
 
-    private async Task<Guid> CreateCaveAsync()
+    private Task<Guid> CreateCaveAsync() => CreateCaveAsync("public");
+
+    /// <summary>A cave the ordinary member cannot read, so a negative has something to rest on.</summary>
+    private Task<Guid> CreatePrivateCaveAsync() => CreateCaveAsync("private");
+
+    private async Task<Guid> CreateCaveAsync(string visibility)
     {
         long caveTypeId;
         await using (var scope = factory.Services.CreateAsyncScope())
@@ -541,7 +553,7 @@ public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable
         {
             name = $"Cave {Guid.NewGuid():N}"[..20],
             caveTypeId,
-            visibility = "public",
+            visibility,
         });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);

@@ -146,6 +146,39 @@ public sealed class AssociationDisclosureTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_headline_picture_is_not_offered_where_the_pairing_that_names_it_is_withheld()
+    {
+        // The summary's headline picture is a second way of asking "which photograph belongs to
+        // this cave", and it is the loudest one: it is drawn on the card and beside the map
+        // before anybody clicks anything. It has to answer the way the attachment listing
+        // answers, or the pairing every other surface withholds is readable by looking.
+        var caveId = await CreateProtectedCaveAsync();
+        var photoFileId = await UploadAsync("headline.jpg", GeotaggedJpeg(45.53127, 25.44721), "image/jpeg");
+        var photoAttachmentId = await AttachAsync(photoFileId, caveId);
+
+        (await owner.PutAsync($"/api/v1/attachments/{photoAttachmentId}/primary?primary=true", null))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // The owner may place this cave exactly, so they are shown all of it — which is what
+        // makes the reader's answer below a rule rather than a fixture that quietly attached
+        // nothing.
+        var mine = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/summary");
+        mine.GetProperty("headlinePicture").GetProperty("attachmentId").GetGuid()
+            .ShouldBe(photoAttachmentId);
+
+        var theirs = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/summary");
+        theirs.GetProperty("headlinePicture").ValueKind.ShouldBe(JsonValueKind.Null);
+        theirs.GetProperty("attachmentCount").GetInt32().ShouldBe(0);
+
+        // And with the setting on, which opens the ordinary pairings, this one stays shut: a
+        // photograph stamped with where it was taken, shown as this cave's picture, is the
+        // cave's position to within a walk.
+        await SetRevealAsync(true);
+        var afterReveal = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/summary");
+        afterReveal.GetProperty("headlinePicture").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
     public async Task An_unprotected_cave_discloses_its_documents_to_everyone_who_can_read_it()
     {
         // The rule reaches only protected positions: a cave nobody guards keeps working the
