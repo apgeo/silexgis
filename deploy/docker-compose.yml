@@ -39,6 +39,15 @@ services:
       # works without touching it; going higher means editing client/nginx.conf and
       # rebuilding the web image, because that value is baked in at build time.
       SILEXGIS__Files__MaxUploadBytes: ${SILEXGIS_MAX_UPLOAD_BYTES:-536870912}
+      # How much may be stored. Both default to 0, meaning no limit — neither is an allocation,
+      # so nothing is reserved and the sum of everybody's quota may exceed the disk. The second
+      # is what actually protects the volume, and the operator who mounted it is the one who
+      # knows its size.
+      SILEXGIS__Files__DefaultUserQuotaBytes: ${SILEXGIS_USER_QUOTA_BYTES:-0}
+      SILEXGIS__Files__MaxTotalStoreBytes: ${SILEXGIS_MAX_TOTAL_STORE_BYTES:-0}
+      # How long a deleted document can still be got back, and how often the sweep that removes
+      # the expired ones runs.
+      SILEXGIS__DocumentRetention__RetentionDays: ${SILEXGIS_RETENTION_DAYS:-30}
       SILEXGIS__Keys__Path: /data/keys
     volumes:
       - silexgis-files:/data/files
