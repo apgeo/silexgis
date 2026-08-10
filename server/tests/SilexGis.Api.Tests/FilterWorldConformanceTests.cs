@@ -220,6 +220,45 @@ public sealed class TripLogWorldFixture : WorldFixture
     };
 }
 
+/// <summary>A document nobody but its owner may see.</summary>
+public sealed class DocumentWorldFixture : WorldFixture
+{
+    public override string World => DocumentFilterWorld.Key;
+
+    public override async Task<FilterNode> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
+    {
+        db.Documents.Add(new Document
+        {
+            Title = $"Conformance {tag}",
+            OwnerUserId = ownerId,
+            Visibility = Visibility.Private,
+        });
+        await db.SaveChangesAsync();
+
+        return new ConditionNode(DocumentFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]);
+    }
+
+    public override async Task<FilterNode> SeedIndistinguishableAsync(
+        SilexGisDbContext db, Guid ownerId, string tag, int count)
+    {
+        var stamp = DateTimeOffset.UtcNow;
+        for (var i = 0; i < count; i++)
+        {
+            db.Documents.Add(new Document
+            {
+                Title = $"Paged {tag}",
+                OwnerUserId = ownerId,
+                Visibility = Visibility.Public,
+                CreatedAt = stamp,
+                UpdatedAt = stamp,
+            });
+        }
+
+        await db.SaveChangesAsync();
+        return new ConditionNode(DocumentFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]);
+    }
+}
+
 /// <summary>A saved map view nobody but its owner may see.</summary>
 public sealed class MapViewWorldFixture : WorldFixture
 {
@@ -283,6 +322,7 @@ public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable
     [
         new FeatureWorldFixture(),
         new TripLogWorldFixture(),
+        new DocumentWorldFixture(),
         new MapViewWorldFixture(),
     ];
 

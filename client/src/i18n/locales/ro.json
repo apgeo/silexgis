@@ -2031,7 +2031,8 @@
     "worlds": {
       "feature": "Obiective",
       "tripLog": "Jurnale de tură",
-      "mapView": "Vizualizări de hartă"
+      "mapView": "Vizualizări de hartă",
+      "document": "Documente"
     },
     "fields": {
       "name": "Nume",
@@ -2048,7 +2049,8 @@
       "created": "Creat",
       "updated": "Ultima modificare",
       "tripType": "Tip de tură",
-      "tripDate": "Data turei"
+      "tripDate": "Data turei",
+      "language": "Limbă"
     },
     "problems": {
       "noWorlds": "Alege cel puțin un fel de obiect de căutat.",
