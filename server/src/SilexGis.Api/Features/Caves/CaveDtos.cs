@@ -92,6 +92,28 @@ public sealed record CavePermissionsDto(
     bool CanManagePermissions,
     bool CanViewExactLocation);
 
+/// <summary>
+/// The one picture that stands for a cave wherever it is named — a list row, a card, the panel
+/// beside the map.
+/// </summary>
+/// <param name="ThumbnailUrl">
+/// A rendering, and only ever a rendering: the token minted for it does not open the upload. A
+/// headline picture is shown to everybody who may see the cave at all, so it must not be a way
+/// to obtain bytes that the picture's own read rule would have withheld.
+/// </param>
+public sealed record CaveHeadlinePictureDto(
+    Guid AttachmentId,
+    Guid DocumentId,
+    Guid FileId,
+    string ThumbnailUrl,
+    string? Caption);
+
+/// <param name="HeadlinePicture">
+/// Null both when nobody has chosen one and when the chosen one is not this caller's to see —
+/// the same two rules that filter <paramref name="AttachmentCount"/>. A headline that survived
+/// them would pair a cave with a photograph the caller was not to be told about, which is the
+/// pairing itself and not merely the picture.
+/// </param>
 public sealed record CaveSummaryDto(
     Guid Id,
     string Name,
@@ -101,7 +123,8 @@ public sealed record CaveSummaryDto(
     int AttachmentCount,
     int TripLogCount,
     CaveMainEntranceDto? MainEntrance,
-    CavePermissionsDto Permissions);
+    CavePermissionsDto Permissions,
+    CaveHeadlinePictureDto? HeadlinePicture);
 
 /// <summary>
 /// Create/update payload — server assigns identity, ownership and derived fields.

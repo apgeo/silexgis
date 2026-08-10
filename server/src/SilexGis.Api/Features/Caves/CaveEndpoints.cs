@@ -151,6 +151,7 @@ public static class CaveEndpoints
         IAccessService access,
         FeatureProtection protection,
         AssociationDisclosure associations,
+        IFileAccessTokenService tokens,
         IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
@@ -176,7 +177,16 @@ public static class CaveEndpoints
                                     join f in db.StoredFiles.AsNoTracking() on a.FileId equals f.Id
                                     join v in db.DocumentVersions.AsNoTracking() on f.DocumentVersionId equals v.Id
                                     join d in db.Documents.AsNoTracking() on v.DocumentId equals d.Id
-                                    select new { a.Id, Document = d, HasOwnPosition = f.Geom != null })
+                                    select new
+                                    {
+                                        a.Id,
+                                        a.IsPrimary,
+                                        a.Caption,
+                                        FileId = f.Id,
+                                        f.Kind,
+                                        Document = d,
+                                        HasOwnPosition = f.Geom != null,
+                                    })
             .ToListAsync(ct);
 
         // Every row here names this cave, which the caller was authorised for a few lines
@@ -192,6 +202,24 @@ public static class CaveEndpoints
             [.. readableRows.Select(r => new AssociationCandidate(r.Id, new FeatureAssociation(id, r.HasOwnPosition)))],
             ct);
         var attachmentCount = readableRows.Count - withheldAttachments.Count;
+
+        // Drawn from the rows that survived both filters rather than from the attachment table:
+        // a headline picture is the most visible thing a cave has, so one that outlived the
+        // caller's read rule would be the loudest possible way to leak it.
+        var headlineRow = readableRows.FirstOrDefault(
+            r => r.IsPrimary && r.Kind == FileKind.Image && !withheldAttachments.Contains(r.Id));
+        var headline = headlineRow is null
+            ? null
+            : new CaveHeadlinePictureDto(
+                headlineRow.Id,
+                headlineRow.Document.Id,
+                headlineRow.FileId,
+                // A derivatives-only token by construction, not by decision: this URL is handed
+                // to everybody who may see the cave, and the picture's own bytes are a separate
+                // question answered on the file's own route.
+                $"/api/v1/files/{headlineRow.FileId}/thumbnail?size=480&token="
+                    + Uri.EscapeDataString(tokens.CreateToken(headlineRow.FileId, FileDelivery.DerivativesOnly)),
+                headlineRow.Caption);
 
         // Trip links are visibility-filtered — two callers may legitimately see different counts.
         var visibleTrips = db.TripLogs.AsNoTracking().VisibleTo(ctx!, AccessDomain.TripLogs);
@@ -223,7 +251,8 @@ public static class CaveEndpoints
 
         return TypedResults.Ok(new CaveSummaryDto(
             feature.Id, feature.Name ?? string.Empty, feature.Cave!.EntranceCount,
-            centerlineCount, surveyModelCount, attachmentCount, tripLogCount, mainDto, caps));
+            centerlineCount, surveyModelCount, attachmentCount, tripLogCount, mainDto, caps,
+            headline));
     }
 
     private static async Task<Results<Created<CaveDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(

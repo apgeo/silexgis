@@ -391,6 +391,56 @@ public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_headline_picture_reaches_the_cave_summary_as_a_rendering_only()
+    {
+        var caveId = await CreateCaveAsync();
+        var photo = await UploadPhotoAsync(owner, "headline.png");
+        var attachmentId = await AttachAsync(photo.FileId, caveId);
+
+        (await owner.PutAsync($"/api/v1/attachments/{attachmentId}/primary?primary=true", null))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var summary = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/summary");
+        var headline = summary.GetProperty("headlinePicture");
+        headline.GetProperty("documentId").GetGuid().ShouldBe(photo.DocumentId);
+        headline.GetProperty("attachmentId").GetGuid().ShouldBe(attachmentId);
+
+        // The URL carries its own delivery token, so the card can draw the picture without the
+        // reader holding a session for the file — and that token opens renderings and nothing
+        // else. A headline picture is shown to everybody who may see the cave at all, so this is
+        // the difference between naming a photograph and handing over its bytes.
+        var thumbnailUrl = headline.GetProperty("thumbnailUrl").GetString()!;
+        thumbnailUrl.ShouldContain($"/api/v1/files/{photo.FileId}/thumbnail");
+
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync(thumbnailUrl)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var token = thumbnailUrl[(thumbnailUrl.IndexOf("token=", StringComparison.Ordinal) + 6)..];
+        (await anonymous.GetAsync($"/api/v1/files/{photo.FileId}/content?token={token}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task A_headline_picture_is_withheld_from_a_reader_of_the_cave_who_may_not_read_it()
+    {
+        // The cave is public and the photograph is not, which is the ordinary case: a club
+        // publishes its caves and keeps the photographs to members.
+        var caveId = await CreateCaveAsync();
+        var photo = await UploadPhotoAsync(owner, "private-headline.png");
+        var attachmentId = await AttachAsync(photo.FileId, caveId);
+        (await owner.PutAsync($"/api/v1/attachments/{attachmentId}/primary?primary=true", null))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var summary = await member.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/summary");
+
+        // Filtered by the same rule as the count beside it, and it has to be: a headline picture
+        // is the loudest thing on the card, so one that outlived the reader's rule would announce
+        // the photograph more plainly than any listing.
+        summary.GetProperty("headlinePicture").ValueKind.ShouldBe(JsonValueKind.Null);
+        summary.GetProperty("attachmentCount").GetInt32().ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Byte_identical_photographs_are_grouped_as_duplicates()
     {
         var bytes = MakePng(64, 64, $"{Guid.NewGuid()}");
