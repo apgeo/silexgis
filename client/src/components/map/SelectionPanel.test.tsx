@@ -70,8 +70,14 @@ const featureEnvelope = {
 const deleteFeature = vi.fn().mockResolvedValue(undefined);
 const updateFeature = vi.fn().mockResolvedValue(undefined);
 
+/** Reassigned per test: the panel draws a headline picture only when there is one to draw. */
+let caveSummary: { headlinePicture: { thumbnailUrl: string; caption: string | null } | null } = {
+  headlinePicture: null,
+};
+
 vi.mock('../../api/hooks.ts', () => ({
   useCave: () => ({ data: cave, isPending: false }),
+  useCaveSummary: () => ({ data: caveSummary }),
   useCaveTypes: () => ({ data: [] }),
   useClusterEntrances: () => ({ data: clusterEntrances, isPending: false }),
   useEntrances: () => ({ data: entrances }),
@@ -130,6 +136,7 @@ beforeEach(() => {
   detachCamera = setActiveViewCamera(camera);
   deleteFeature.mockClear();
   linksMounted.mockReset();
+  caveSummary = { headlinePicture: null };
 });
 
 afterEach(() => {
@@ -159,6 +166,27 @@ describe('the shared detail panel', () => {
       caveId: 'cave-1',
     });
     expect(camera.flyTo).toHaveBeenCalledWith(25.104, 45.203, 15);
+  });
+
+  it('shows the cave its headline picture', async () => {
+    caveSummary = {
+      headlinePicture: { thumbnailUrl: '/api/v1/files/f/thumbnail?size=480&token=x', caption: 'The entrance' },
+    };
+    renderPanel({ kind: 'cave', caveId: 'cave-1' });
+
+    const picture = (await screen.findByAltText('The entrance')) as HTMLImageElement;
+    // A rendering, which is the whole of what the summary hands over: the URL carries a token
+    // that opens derivatives and not the stored bytes.
+    expect(picture.getAttribute('src')).toContain('/thumbnail?');
+  });
+
+  it('shows no picture for a cave whose headline this reader may not see', async () => {
+    // Withheld and absent read the same on the wire, deliberately — so the panel must draw
+    // nothing rather than a broken frame where a picture would be.
+    renderPanel({ kind: 'cave', caveId: 'cave-1' });
+
+    await screen.findByText('Peștera de Test');
+    expect(screen.queryByAltText('The entrance')).toBeNull();
   });
 
   it('moves it to a cave entrance', async () => {

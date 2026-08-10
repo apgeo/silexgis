@@ -138,9 +138,22 @@ export default function CaveDetailPage() {
       )}
 
       <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          {cave.name}
-        </Typography.Title>
+        <Flex align="center" gap={12}>
+          {/* The headline picture somebody chose, when there is one this reader may see. It sits
+              beside the name rather than down among the attachments because that is what it is
+              for: recognising the place at a glance. */}
+          {summary?.headlinePicture && (
+            <img
+              src={summary.headlinePicture.thumbnailUrl}
+              alt={summary.headlinePicture.caption ?? cave.name ?? ''}
+              loading="lazy"
+              style={{ width: 96, height: 72, objectFit: 'cover', borderRadius: 6 }}
+            />
+          )}
+          <Typography.Title level={3} style={{ margin: 0 }}>
+            {cave.name}
+          </Typography.Title>
+        </Flex>
         <Flex gap={8} wrap justify="end">
           {canShare && (
             <Button icon={<ShareAltOutlined />} onClick={() => setShareOpen(true)}>

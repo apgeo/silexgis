@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { DeleteOutlined, DownloadOutlined, FileOutlined, InboxOutlined } from '@ant-design/icons';
+import {
+  DeleteOutlined, DownloadOutlined, FileOutlined, InboxOutlined, StarFilled, StarOutlined,
+} from '@ant-design/icons';
 import { ApiError } from '../../api/client.ts';
 import {
   App, Button, Card, Empty, Flex, Image, Popconfirm, Tooltip, Typography, Upload,
@@ -11,6 +13,7 @@ import {
   useCreateAttachment,
   useDeleteAttachment,
   useFileConfig,
+  useSetPrimaryAttachment,
   useUploadFile,
   type AttachedEntityType,
   type AttachmentInfo,
@@ -69,6 +72,7 @@ export default function AttachmentSection({
   const uploadFile = useUploadFile();
   const createAttachment = useCreateAttachment();
   const deleteAttachment = useDeleteAttachment();
+  const setPrimary = useSetPrimaryAttachment();
 
   // The report document (if any) lives in its own slot and is kept out of the generic lists.
   const report = reportSlot ? (attachments ?? []).find((a) => a.role === 'report') : undefined;
@@ -278,6 +282,33 @@ export default function AttachmentSection({
                       {attachment.caption ?? attachment.file.originalName}
                     </Typography.Text>
                     <Flex align="center">
+                      {/* The one picture that stands for this object wherever it is named — a
+                          list row, a card, the panel beside the map. Clicking the current one
+                          again clears it, so an object can go back to having no headline. */}
+                      {canEdit && (
+                        <Tooltip
+                          title={t(attachment.isPrimary ? 'attachments.clearPrimary' : 'attachments.makePrimary')}
+                        >
+                          <Button
+                            size="small"
+                            type="text"
+                            aria-label={t('attachments.makePrimary')}
+                            icon={
+                              attachment.isPrimary ? (
+                                <StarFilled style={{ color: '#faad14' }} />
+                              ) : (
+                                <StarOutlined />
+                              )
+                            }
+                            onClick={() =>
+                              void setPrimary.mutateAsync({
+                                id: attachment.id,
+                                primary: !attachment.isPrimary,
+                              })
+                            }
+                          />
+                        </Tooltip>
+                      )}
                       <OpenDocument documentId={attachment.file.documentId} />
                       <PhotoFactsPanel file={attachment.file} />
                       <PhotoPositionAction

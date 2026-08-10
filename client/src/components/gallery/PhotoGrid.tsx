@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { CheckCircleFilled, PictureOutlined } from '@ant-design/icons';
-import { Empty, Flex, Typography, theme } from 'antd';
+import type { ReactNode } from 'react';
+import { CheckCircleFilled, LeftOutlined, PictureOutlined, RightOutlined } from '@ant-design/icons';
+import { Button, Empty, Flex, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 
 /** The least a tile needs. Both the signed-in gallery and the public one supply it. */
@@ -13,6 +14,22 @@ export interface GridPhoto {
   caption?: string | null;
 }
 
+/**
+ * Rearranging, when the grid is an album rather than a listing.
+ *
+ * <p>
+ * Both gestures are offered, and the second is not a nicety: dragging is a mouse gesture, and an
+ * album of two hundred pictures has to be arrangeable by somebody who is not using a mouse. They
+ * are the same operation — a step is a drop onto the neighbour — so there is one ordering rule
+ * rather than two that can disagree.
+ * </p>
+ */
+export interface PhotoGridArrange {
+  /** A picture was dropped onto another. Where it lands is the caller's rule, not the grid's. */
+  onDrop: (movedId: string, targetId: string) => void;
+  onStep: (documentId: string, direction: -1 | 1) => void;
+}
+
 export interface PhotoGridProps {
   photos: readonly GridPhoto[];
   onOpen: (documentId: string) => void;
@@ -20,6 +37,9 @@ export interface PhotoGridProps {
   selected?: readonly string[];
   onToggle?: (documentId: string) => void;
   emptyText?: string;
+  arrange?: PhotoGridArrange;
+  /** Per-tile controls the page hangs on — the album page puts "cover" and "remove" here. */
+  renderExtra?: (photo: GridPhoto) => ReactNode;
 }
 
 /**
@@ -45,6 +65,8 @@ export default function PhotoGrid({
   selected,
   onToggle,
   emptyText,
+  arrange,
+  renderExtra,
 }: PhotoGridProps) {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -63,7 +85,7 @@ export default function PhotoGrid({
 
   return (
     <Flex wrap gap={12} data-testid="photo-grid">
-      {photos.map((photo) => {
+      {photos.map((photo, position) => {
         const isSelected = selected?.includes(photo.documentId) ?? false;
 
         // The tile keeps the picture's own proportions inside a fixed height, so a row of
@@ -77,6 +99,31 @@ export default function PhotoGrid({
             key={photo.documentId}
             style={{ margin: 0, position: 'relative' }}
             data-testid="photo-tile"
+            data-document-id={photo.documentId}
+            draggable={arrange !== undefined}
+            onDragStart={(event) => {
+              event.dataTransfer.setData('text/plain', photo.documentId);
+              event.dataTransfer.effectAllowed = 'move';
+            }}
+            onDragOver={(event) => {
+              // Without this the browser refuses the drop outright — the default for most
+              // elements is "nothing may be dropped here".
+              if (arrange) {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+              }
+            }}
+            onDrop={(event) => {
+              if (!arrange) {
+                return;
+              }
+
+              event.preventDefault();
+              const moved = event.dataTransfer.getData('text/plain');
+              if (moved) {
+                arrange.onDrop(moved, photo.documentId);
+              }
+            }}
           >
             <button
               type="button"
@@ -133,6 +180,37 @@ export default function PhotoGrid({
                   <PictureOutlined style={{ color: token.colorTextLightSolid, fontSize: 18 }} />
                 )}
               </button>
+            )}
+
+            {renderExtra && (
+              <Flex
+                gap={2}
+                style={{ position: 'absolute', top: 4, right: 4 }}
+                data-testid="photo-tile-extra"
+              >
+                {renderExtra(photo)}
+              </Flex>
+            )}
+
+            {arrange && (
+              <Flex justify="space-between" style={{ maxWidth: Math.round(height * ratio) }}>
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<LeftOutlined />}
+                  aria-label={t('gallery.moveEarlier')}
+                  disabled={position === 0}
+                  onClick={() => arrange.onStep(photo.documentId, -1)}
+                />
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<RightOutlined />}
+                  aria-label={t('gallery.moveLater')}
+                  disabled={position === photos.length - 1}
+                  onClick={() => arrange.onStep(photo.documentId, 1)}
+                />
+              </Flex>
             )}
 
             <figcaption style={{ maxWidth: Math.round(height * ratio) }}>

@@ -3601,12 +3601,18 @@ export function useRevokeAlbumShare() {
 /** The object's headline picture — the one a list, a card or a popup shows. */
 export function useSetPrimaryAttachment() {
   const invalidate = useInvalidatePhotos();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, primary }: { id: string; primary: boolean }) =>
       unwrapVoid(api.PUT('/api/v1/attachments/{id}/primary', {
         params: { path: { id }, query: { primary } },
       })),
-    onSuccess: () => invalidate(),
+    onSuccess: () => {
+      invalidate();
+      // The cave summary carries the headline picture, so the card and the panel beside the map
+      // both read a stale one until this is dropped.
+      void queryClient.invalidateQueries({ queryKey: ['caves'] });
+    },
   });
 }
 

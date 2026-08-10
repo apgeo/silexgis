@@ -10981,6 +10981,7 @@ export interface components {
             domains: {
                 [key: string]: components["schemas"]["AccessAction"];
             };
+            isFullAdmin: boolean;
         };
         CaveDto: {
             /** Format: uuid */
@@ -11052,6 +11053,16 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        CaveHeadlinePictureDto: {
+            /** Format: uuid */
+            attachmentId: string;
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            fileId: string;
+            thumbnailUrl: string;
+            caption: null | string;
         };
         CaveListItemDto: {
             /** Format: uuid */
@@ -11143,6 +11154,7 @@ export interface components {
             tripLogCount: number;
             mainEntrance: null | components["schemas"]["CaveMainEntranceDto"];
             permissions: components["schemas"]["CavePermissionsDto"];
+            headlinePicture: null | components["schemas"]["CaveHeadlinePictureDto"];
         };
         CaveWriteRequest: {
             name: string;

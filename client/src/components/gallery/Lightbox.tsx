@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  CloseOutlined, DownloadOutlined, InfoCircleOutlined, LeftOutlined, RightOutlined,
+  CloseOutlined, DownloadOutlined, EditOutlined, InfoCircleOutlined, LeftOutlined, RightOutlined,
   ZoomInOutlined, ZoomOutOutlined,
 } from '@ant-design/icons';
 import { Button, Descriptions, Drawer, Flex, Tooltip, Typography } from 'antd';
@@ -36,6 +36,8 @@ export interface LightboxProps {
   index: number | null;
   onClose: () => void;
   onIndexChange: (index: number) => void;
+  /** When given, the viewer offers a way to say who took this one. */
+  onEdit?: (documentId: string) => void;
 }
 
 /** How far in one step of the zoom control goes, and where it stops. */
@@ -59,7 +61,13 @@ const MaxZoom = 6;
  * offered, and it is disabled with a reason when the server says it will not hand it over.
  * </p>
  */
-export default function Lightbox({ photos, index, onClose, onIndexChange }: LightboxProps) {
+export default function Lightbox({
+  photos,
+  index,
+  onClose,
+  onIndexChange,
+  onEdit,
+}: LightboxProps) {
   const { t } = useTranslation();
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -142,7 +150,11 @@ export default function Lightbox({ photos, index, onClose, onIndexChange }: Ligh
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 1100,
+        // Deliberately below the layer the component library stacks its own overlays on. The
+        // viewer covers the page, so anything opened *from* it — the credit drawer, and the
+        // confirmation that follows a save — has to come out above it, and picking a number
+        // higher than theirs would put every one of those behind a black screen.
+        zIndex: 900,
         background: 'rgba(0, 0, 0, 0.92)',
         display: 'flex',
         flexDirection: 'column',
@@ -174,6 +186,17 @@ export default function Lightbox({ photos, index, onClose, onIndexChange }: Ligh
             onClick={() => setFacts(true)}
             style={{ color: '#fff' }}
           />
+          {/* Offered here because this is where somebody is actually looking at the picture —
+              crediting a photograph is something you do while looking at it, not from a list. */}
+          {onEdit && (
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              aria-label={t('gallery.editCredit')}
+              onClick={() => onEdit(photo.documentId)}
+              style={{ color: '#fff' }}
+            />
+          )}
           {/* Offered only where the server says it will actually hand the bytes over. A
               photograph whose subject this reader may not place is delivered as renderings, and
               following the link would answer as a missing file — so the control says why

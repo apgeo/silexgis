@@ -165,7 +165,7 @@ export default function AlbumsPage() {
               }
             >
               <Card.Meta
-                title={<Link to={`/gallery?albumId=${album.id}`}>{album.title}</Link>}
+                title={<Link to={`/albums/${album.id}`}>{album.title}</Link>}
                 description={t('gallery.albumCount', { count: album.photoCount })}
               />
             </Card>

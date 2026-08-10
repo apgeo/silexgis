@@ -375,7 +375,9 @@
       "map2d": "2D map",
       "surveyData": "Survey data",
       "other": "Other"
-    }
+    },
+    "makePrimary": "Use as the headline picture",
+    "clearPrimary": "Stop using as the headline picture"
   },
   "documents": {
     "language": "Language",
@@ -608,7 +610,26 @@
       "cc-by-nc-nd": "CC BY-NC-ND",
       "all-rights-reserved": "All rights reserved"
     },
-    "delete": "Delete"
+    "delete": "Delete",
+    "editCredit": "Credit and licence",
+    "caption": "Caption",
+    "fromRoster": "A caver",
+    "someoneElse": "Somebody else",
+    "photographerName": "The photographer's name",
+    "licenceUnsaid": "Nobody has said",
+    "inPublicGallery": "Show in the public gallery",
+    "inPublicGalleryHint": "Puts this photograph on the page anyone can reach without signing in. Separate from who may read it here.",
+    "published": "Published to the public gallery.",
+    "unpublished": "Withdrawn from the public gallery.",
+    "moveEarlier": "Move earlier",
+    "moveLater": "Move later",
+    "makeCover": "Use as the cover",
+    "removeFromAlbum": "Take out of the album",
+    "removedFromAlbum": "Taken out of the album.",
+    "openInGallery": "Open in the gallery",
+    "arrangeHint": "Drag a photograph onto the place you want it, or move it with the arrows.",
+    "albumEmpty": "Nothing in this album yet. Add photographs from the gallery.",
+    "albumPartial": "Showing the first {{shown}} of {{total}} photographs. Arranging applies to these."
   },
   "geodata": {
     "title": "Geodata",

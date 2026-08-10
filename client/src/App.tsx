@@ -43,6 +43,7 @@ const DocumentDetailPage = lazy(() => import('./pages/documents/DocumentDetailPa
 const UploadsPage = lazy(() => import('./pages/documents/UploadsPage.tsx'));
 const GalleryPage = lazy(() => import('./pages/gallery/GalleryPage.tsx'));
 const AlbumsPage = lazy(() => import('./pages/gallery/AlbumsPage.tsx'));
+const AlbumDetailPage = lazy(() => import('./pages/gallery/AlbumDetailPage.tsx'));
 const PublicGalleryPage = lazy(() => import('./pages/gallery/PublicGalleryPage.tsx'));
 const SharedAlbumPage = lazy(() =>
   import('./pages/gallery/PublicGalleryPage.tsx').then((m) => ({ default: m.SharedAlbumPage })));
@@ -117,6 +118,7 @@ const router = createBrowserRouter([
           { path: '/uploads', element: <Loadable><UploadsPage /></Loadable> },
           { path: '/gallery', element: <Loadable><GalleryPage /></Loadable> },
           { path: '/albums', element: <Loadable><AlbumsPage /></Loadable> },
+          { path: '/albums/:id', element: <Loadable><AlbumDetailPage /></Loadable> },
           { path: '/documents/:id', element: <Loadable><DocumentDetailPage /></Loadable> },
           // A link's own page, reached by the short code someone pasted into a chat.
           { path: '/links/:code', element: <Loadable><LinkPage /></Loadable> },

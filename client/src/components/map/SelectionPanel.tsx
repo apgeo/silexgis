@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   useCave,
+  useCaveSummary,
   useCaveTypes,
   useClusterEntrances,
   useDeleteFeature,
@@ -177,6 +178,8 @@ function CaveCard({
   const { data: cave, isPending } = useCave(selection.caveId);
   const { data: entrances } = useEntrances(selection.caveId);
   const { data: caveTypes } = useCaveTypes();
+  // Shares its cache entry with the cave page, so moving between the two costs nothing.
+  const { data: summary } = useCaveSummary(selection.caveId);
 
   if (isPending || !cave) {
     return (
@@ -191,6 +194,24 @@ function CaveCard({
 
   const details = (
     <>
+      {/* The headline picture, when the cave has one this reader may see. A cave is a place, and
+          a photograph of the entrance says more about which place than any row of measurements —
+          so it goes above them rather than under a section somebody has to open. */}
+      {summary?.headlinePicture && (
+        <img
+          src={summary.headlinePicture.thumbnailUrl}
+          alt={summary.headlinePicture.caption ?? cave.name ?? ''}
+          loading="lazy"
+          style={{
+            width: '100%',
+            maxHeight: 160,
+            objectFit: 'cover',
+            borderRadius: 6,
+            marginBottom: 12,
+            display: 'block',
+          }}
+        />
+      )}
       {cave.approximateLocation && (
         <Alert type="warning" showIcon title={t('map.approximate')} style={{ marginBottom: 12 }} />
       )}

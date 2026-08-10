@@ -19,7 +19,9 @@ import {
   type PhotoQueryParams,
 } from '../../api/hooks.ts';
 import Lightbox from '../../components/gallery/Lightbox.tsx';
+import PhotoCreditDrawer from '../../components/gallery/PhotoCreditDrawer.tsx';
 import PhotoGrid from '../../components/gallery/PhotoGrid.tsx';
+import { viewPhoto } from '../../components/gallery/photoView.ts';
 
 /** Pictures per page. Large enough that scrolling is the main gesture, small enough to load. */
 const PageSize = 60;
@@ -50,6 +52,7 @@ export default function GalleryPage() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
 
   const { data: cavers } = useCavers();
   const { data: tags } = useTags('');
@@ -78,7 +81,9 @@ export default function GalleryPage() {
   );
 
   const { data, isFetching } = usePhotos(query, canRead);
-  const photos = data?.items ?? [];
+  // Narrowed to what the grid and the viewer take, so a caption edited here shows here: the
+  // listing nests it under a credit and both components read the flat shape.
+  const photos = useMemo(() => (data?.items ?? []).map(viewPhoto), [data]);
 
   if (!capabilities) {
     return <Spin style={{ display: 'block', marginTop: '20vh' }} />;
@@ -280,7 +285,12 @@ export default function GalleryPage() {
         index={openIndex}
         onClose={() => setOpenIndex(null)}
         onIndexChange={setOpenIndex}
+        onEdit={canWrite ? setEditing : undefined}
       />
+
+      {/* Mounted beside the viewer rather than inside it, so closing the viewer with the credit
+          drawer open does not take the form away mid-edit. */}
+      <PhotoCreditDrawer documentId={editing} onClose={() => setEditing(null)} />
     </div>
   );
 }

@@ -375,7 +375,9 @@
       "map2d": "Hartă 2D",
       "surveyData": "Date topografice",
       "other": "Altele"
-    }
+    },
+    "makePrimary": "Folosește ca fotografie reprezentativă",
+    "clearPrimary": "Nu mai folosi ca fotografie reprezentativă"
   },
   "documents": {
     "language": "Limbă",
@@ -608,7 +610,26 @@
       "cc-by-nc-nd": "CC BY-NC-ND",
       "all-rights-reserved": "Toate drepturile rezervate"
     },
-    "delete": "Șterge"
+    "delete": "Șterge",
+    "editCredit": "Autor și licență",
+    "caption": "Descriere",
+    "fromRoster": "Un speolog",
+    "someoneElse": "Altcineva",
+    "photographerName": "Numele fotografului",
+    "licenceUnsaid": "Nu s-a specificat",
+    "inPublicGallery": "Arată în galeria publică",
+    "inPublicGalleryHint": "Pune fotografia pe pagina la care poate ajunge oricine, fără autentificare. Separat de cine o poate vedea aici.",
+    "published": "Publicată în galeria publică.",
+    "unpublished": "Retrasă din galeria publică.",
+    "moveEarlier": "Mută mai devreme",
+    "moveLater": "Mută mai târziu",
+    "makeCover": "Folosește ca și copertă",
+    "removeFromAlbum": "Scoate din album",
+    "removedFromAlbum": "Scoasă din album.",
+    "openInGallery": "Deschide în galerie",
+    "arrangeHint": "Trage o fotografie peste locul unde o vrei, sau mut-o cu săgețile.",
+    "albumEmpty": "Încă nimic în acest album. Adaugă fotografii din galerie.",
+    "albumPartial": "Se arată primele {{shown}} din {{total}} fotografii. Rearanjarea se aplică acestora."
   },
   "geodata": {
     "title": "Geodate",
