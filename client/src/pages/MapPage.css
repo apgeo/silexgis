@@ -86,6 +86,12 @@
   top: 12px;
   left: 44px;
   z-index: 5;
+  /* Search and the selector side by side; they wrap to a stack when the strip is too narrow
+     for both, which is the phone case and needs no separate rule. */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
 }
 
 /* Phone: search is the primary action and takes the strip, clearing the corner toggle. */

@@ -28,6 +28,45 @@ vi.mock('../../api/hooks.ts', () => ({
   useResLinkTargets: () => ({ data: targetHits, isFetching: false }),
   useResLinkRelationTypes: () => ({ data: relationTypes, isLoading: false }),
   useResLinkPointDefault: () => ({ data: pointDefault, isError: audienceUnknown }),
+  // The target picker now asks the filter routes for the kinds that are worlds. The same rows
+  // this file already seeds are handed back, so the tests below say what they always said.
+  useFilterVocabulary: () => ({
+    data: {
+      worlds: [
+        { world: 'feature', labelKey: 'x', fields: [], sorts: ['created', 'updated', 'title'] },
+        { world: 'document', labelKey: 'x', fields: [], sorts: ['created', 'updated', 'title'] },
+        { world: 'tripLog', labelKey: 'x', fields: [], sorts: ['created', 'updated'] },
+        { world: 'mapView', labelKey: 'x', fields: [], sorts: ['created', 'updated', 'title'] },
+      ],
+      limits: {
+        maxNodes: 200, maxDepth: 6, maxValuesPerCondition: 200,
+        maxWorlds: 12, maxTextValueLength: 200, maxPageSize: 500,
+      },
+    },
+  }),
+  useFilterQuery: (_body: unknown, enabled: boolean) => ({
+    data: enabled
+      ? {
+          worlds: [{
+            world: 'feature',
+            hits: (targetHits ?? []).map((hit: { id: string; title: string; subtitle?: string }) => ({
+              world: 'feature',
+              id: hit.id,
+              title: hit.title,
+              subtitle: hit.subtitle ?? null,
+              symbol: null,
+              placeable: false,
+            })),
+            total: null,
+          }],
+          page: 1,
+          pageSize: 6,
+          counted: false,
+        }
+      : undefined,
+    isFetching: false,
+  }),
+  useFilterResolve: () => ({ data: [] }),
 }));
 
 // The map dialog builds a real OpenLayers map; the point field's contract is the only part
@@ -362,7 +401,9 @@ describe('AddMemberModal', () => {
     fireEvent.click(screen.getAllByText('Contains').at(-1)!);
 
     fireEvent.change(screen.getByLabelText('Item'), { target: { value: 'Falia' } });
-    fireEvent.click(screen.getAllByText('Falia Demo').at(-1)!);
+    // Awaited, because the picker waits before asking: a control that queried on every
+    // keystroke would hammer the server for words nobody finished typing.
+    fireEvent.click((await screen.findAllByText('Falia Demo')).at(-1)!);
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
 
     await vi.waitFor(() => expect(createLink).toHaveBeenCalled());

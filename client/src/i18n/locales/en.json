@@ -2069,7 +2069,9 @@
       "nothingChosen": "Nothing chosen",
       "chosen": "{{count}} chosen",
       "restricted": "{{count}} not shown — gone, or not yours to see",
-      "placeable": "You can be shown where this is"
+      "placeable": "You can be shown where this is",
+      "mapPlaceholder": "Go to…",
+      "noDestination": "Nothing to open for that yet."
     },
     "sorts": {
       "created": "Added",
@@ -2078,6 +2080,14 @@
       "owner": "Owner",
       "occurred": "Date",
       "proximity": "Nearest"
+    },
+    "scopes": {
+      "caves": "Caves",
+      "entrances": "Entrances",
+      "features": "All features",
+      "documents": "Documents",
+      "trips": "Trips",
+      "views": "Views"
     }
   }
 }

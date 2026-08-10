@@ -2069,7 +2069,9 @@
       "nothingChosen": "Nimic ales",
       "chosen": "{{count}} alese",
       "restricted": "{{count}} neafișate — dispărute sau nu îți sunt vizibile",
-      "placeable": "Ți se poate arăta unde este"
+      "placeable": "Ți se poate arăta unde este",
+      "mapPlaceholder": "Mergi la…",
+      "noDestination": "Încă nu se poate deschide nimic pentru asta."
     },
     "sorts": {
       "created": "Adăugat",
@@ -2078,6 +2080,14 @@
       "owner": "Proprietar",
       "occurred": "Data",
       "proximity": "Cel mai apropiat"
+    },
+    "scopes": {
+      "caves": "Peșteri",
+      "entrances": "Intrări",
+      "features": "Toate obiectivele",
+      "documents": "Documente",
+      "trips": "Ture",
+      "views": "Vizualizări"
     }
   }
 }

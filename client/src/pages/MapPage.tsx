@@ -33,6 +33,7 @@ import { drawShapeForType } from '../components/map/featureTypeGroups.ts';
 import LayerPanel from '../components/map/LayerPanel.tsx';
 import MapContextMenu from '../components/map/MapContextMenu.tsx';
 import ViewsPanel from '../components/map/ViewsPanel.tsx';
+import MapObjectSelector from '../components/map/MapObjectSelector.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
 import SelectionPanel from '../components/map/SelectionPanel.tsx';
 import { getBaseLayerId, getBaseLayers, setActiveBaseLayer, syncBaseLayers } from '../map/baseLayers.ts';
@@ -757,9 +758,12 @@ export default function MapPage() {
         <div className={`map-canvas-wrap${mapChromeHidden ? ' map-chrome-hidden' : ''}`}>
           <div ref={mapTarget} className="map-canvas" data-testid="map-canvas" />
           {/* Search is the primary action on a phone: it gets the width the pop-out
-              buttons no longer need. */}
+              buttons no longer need. The selector sits beside it — search asks what mentions
+              these words, the selector asks which of these things you mean — and stacks under
+              it on a phone, where they cannot both have the strip. */}
           <div className={`map-search-overlay map-chrome${isMobile ? ' map-search-overlay-mobile' : ''}`}>
             <MapSearch fullWidth={isMobile} />
+            <MapObjectSelector fullWidth={isMobile} />
           </div>
           <Tooltip title={mapChromeHidden ? t('map.showChrome') : t('map.hideChrome')} placement="left">
             <Button

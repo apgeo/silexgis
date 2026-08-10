@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   App,
   Alert,
-  AutoComplete,
   Checkbox,
   Flex,
   Input,
@@ -18,7 +17,6 @@ import {
   useCreateResLink,
   useDeleteResLink,
   useResLinkPointDefault,
-  useResLinkTargets,
   useUpdateResLink,
   type AnchorKind,
   type ResLink,
@@ -27,9 +25,9 @@ import {
 } from '../../api/hooks.ts';
 import DialogHost from '../DialogHost.tsx';
 import PointField from '../settings/PointField.tsx';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { resLinkProblemMessage } from './problems.ts';
 import RelationSelect from './RelationSelect.tsx';
+import ResLinkTargetPicker from './ResLinkTargetPicker.tsx';
 import {
   admittedAnchorKinds,
   anchorKindEntry,
@@ -58,8 +56,6 @@ interface Props {
 }
 
 /** Shortest query worth a round trip, matching the app's other pickers. */
-const SEARCH_MIN_LENGTH = 2;
-
 /** Server limit on a member note; saying so here beats a refusal after the round trip. */
 const NOTE_MAX = 2000;
 
@@ -79,7 +75,6 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
   const [source, setSource] = useState<'existing' | 'newPoint'>('existing');
   const [targetId, setTargetId] = useState<string | null>(null);
   const [targetTitle, setTargetTitle] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
   const [anchorKind, setAnchorKind] = useState<AnchorKind>('whole');
   const [anchor, setAnchor] = useState<unknown>(null);
   const [note, setNote] = useState('');
@@ -102,7 +97,6 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
       setSource('existing');
       setTargetId(null);
       setTargetTitle(null);
-      setQuery('');
       setAnchorKind('whole');
       setAnchor(null);
       setNote('');
@@ -117,10 +111,6 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
       setIsMain(false);
     }
   }, [open]);
-
-  const debouncedQuery = useDebouncedValue(query);
-  const searchable = source === 'existing' && debouncedQuery.trim().length >= SEARCH_MIN_LENGTH;
-  const { data: hits, isFetching } = useResLinkTargets(targetType, debouncedQuery, open && searchable);
 
   // Who the point will be visible to is the server's rule applied to this caller's own
   // group roster — a fact only the server holds — so it is asked for rather than guessed,
@@ -174,20 +164,6 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
     ? link.members.reduce((highest, member) => Math.max(highest, member.sortOrder), -1) + 1
     : 0;
 
-  const options = useMemo(
-    () =>
-      (hits ?? []).map((hit) => ({
-        value: hit.id,
-        label: (
-          <Flex vertical>
-            <span>{hit.title}</span>
-            {hit.subtitle && <Typography.Text type="secondary">{hit.subtitle}</Typography.Text>}
-          </Flex>
-        ),
-        title: hit.title,
-      })),
-    [hits],
-  );
 
   /** The member as the add endpoint takes it — the only shape that mints a point. */
   const memberBody = (sortOrder: number, main: boolean): ResLinkMemberAdd =>
@@ -368,7 +344,6 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
               setTargetType(next);
               setTargetId(null);
               setTargetTitle(null);
-              setQuery('');
               setAnchorKind('whole');
               setAnchor(null);
               if (next !== 'feature') {
@@ -398,26 +373,14 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
         {source === 'existing' ? (
           <Flex vertical gap={4}>
             <Typography.Text strong>{t('resLinks.target')}</Typography.Text>
-            <AutoComplete
-              value={query}
-              options={options}
-              // The server does the matching; filtering the answer again here would only
-              // hide rows it deliberately returned.
-              filterOption={false}
-              notFoundContent={null}
-              onSearch={(next) => {
-                setQuery(next);
-                setTargetId(null);
+            <ResLinkTargetPicker
+              targetType={targetType}
+              value={targetId}
+              onChange={(id, title) => {
+                setTargetId(id);
+                setTargetTitle(title);
               }}
-              onSelect={(value, option) => {
-                setTargetId(String(value));
-                setTargetTitle(option.title ?? null);
-                setQuery(option.title ?? '');
-              }}
-              placeholder={t('resLinks.searchPlaceholder')}
-              aria-label={t('resLinks.target')}
             />
-            {isFetching && <Typography.Text type="secondary">{t('common.loading')}</Typography.Text>}
           </Flex>
         ) : (
           <Flex vertical gap={8}>
