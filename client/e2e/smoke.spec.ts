@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
+import { uniquePng } from './png.ts';
 import { centreOnDemoCave, deleteFeature, gotoRoute, login, overlayTreeNode } from './helpers.ts';
 
 test('login, map workspace and cave registry work end to end', async ({ page }) => {
@@ -336,7 +337,12 @@ test('cave photo attachment round-trip', async ({ page }) => {
 
   // Upload a photo through the attachment drop zone (scoped to the gallery card).
   const gallery = page.locator('.ant-card', { hasText: 'Photos & documents' });
-  await gallery.locator('input[type=file]').setInputFiles('e2e/fixtures/e2e-photo.png');
+  // Bytes unique to this run, under the fixture's own name. The archive refuses content it
+  // already holds until somebody answers a dialog, and deleting a figure detaches the
+  // attachment without deleting the document behind it — so fixed bytes are accepted the first
+  // time this suite is ever run and refused every time after, with the refusal landing on the
+  // "Saved." below.
+  await gallery.locator('input[type=file]').setInputFiles([{ name: 'e2e-photo.png', mimeType: 'image/png', buffer: uniquePng(4) }]);
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
 
   // The gallery renders the thumbnail through the token-authenticated URL.
@@ -888,7 +894,12 @@ test('cave attachment file versioning', async ({ page }) => {
 
   const gallery = page.locator('.ant-card', { hasText: 'Photos & documents' });
   await deletePhotoFigures(page); // start clean
-  await gallery.locator('input[type=file]').setInputFiles('e2e/fixtures/e2e-photo.png');
+  // Bytes unique to this run, under the fixture's own name. The archive refuses content it
+  // already holds until somebody answers a dialog, and deleting a figure detaches the
+  // attachment without deleting the document behind it — so fixed bytes are accepted the first
+  // time this suite is ever run and refused every time after, with the refusal landing on the
+  // "Saved." below.
+  await gallery.locator('input[type=file]').setInputFiles([{ name: 'e2e-photo.png', mimeType: 'image/png', buffer: uniquePng(4) }]);
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
   const figure = page.locator('figure').filter({ hasText: 'e2e-photo' }).first();
   await expect(figure).toBeVisible({ timeout: 15_000 });
@@ -897,7 +908,9 @@ test('cave attachment file versioning', async ({ page }) => {
   await figure.getByRole('button', { name: 'history' }).click();
   const popover = page.locator('.ant-popover');
   await expect(popover.getByText('Upload new version')).toBeVisible();
-  await popover.locator('input[type=file]').setInputFiles('e2e/fixtures/e2e-photo.png');
+  // Unique again, and doubly so here: a corrected version that is byte-identical to what it
+  // corrects is not a second version of anything.
+  await popover.locator('input[type=file]').setInputFiles([{ name: 'e2e-photo.png', mimeType: 'image/png', buffer: uniquePng(4) }]);
 
   // The chain now has two versions: the head (current) and the superseded v1.
   await expect(popover.getByText('current')).toBeVisible({ timeout: 15_000 });
@@ -916,7 +929,12 @@ test('cave attachment details: caption, document date and tags persist', async (
 
   const gallery = page.locator('.ant-card', { hasText: 'Photos & documents' });
   await deletePhotoFigures(page); // start clean
-  await gallery.locator('input[type=file]').setInputFiles('e2e/fixtures/e2e-photo.png');
+  // Bytes unique to this run, under the fixture's own name. The archive refuses content it
+  // already holds until somebody answers a dialog, and deleting a figure detaches the
+  // attachment without deleting the document behind it — so fixed bytes are accepted the first
+  // time this suite is ever run and refused every time after, with the refusal landing on the
+  // "Saved." below.
+  await gallery.locator('input[type=file]').setInputFiles([{ name: 'e2e-photo.png', mimeType: 'image/png', buffer: uniquePng(4) }]);
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
   const figure = page.locator('figure').filter({ hasText: 'e2e-photo' }).first();
   await expect(figure).toBeVisible({ timeout: 15_000 });

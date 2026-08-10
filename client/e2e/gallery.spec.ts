@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { randomUUID } from 'node:crypto';
-import { crc32, deflateSync } from 'node:zlib';
 import { expect, type Locator, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { gotoRoute, login } from './helpers.ts';
+import { uniquePng } from './png.ts';
 
 /**
  * The gallery, the viewer, crediting a photograph and arranging an album — in a real browser.
@@ -23,48 +23,6 @@ import { gotoRoute, login } from './helpers.ts';
  */
 test.describe.configure({ timeout: 120_000 });
 
-/** A PNG chunk: length, type, payload, CRC over type+payload. */
-function chunk(type: string, body: Buffer) {
-  const head = Buffer.alloc(4);
-  head.writeUInt32BE(body.length);
-  const typed = Buffer.concat([Buffer.from(type, 'ascii'), body]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(typed));
-  return Buffer.concat([head, typed, crc]);
-}
-
-/**
- * A real PNG with random pixels.
- *
- * Generated rather than kept as a fixture because the bytes have to differ every run: two
- * uploads of identical content are a duplicate, and the second is refused until somebody
- * answers a dialog this flow is not about.
- */
-function png(size = 24) {
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(size, 0);
-  header.writeUInt32BE(size, 4);
-  header[8] = 8; // bit depth
-  header[9] = 2; // truecolour RGB
-
-  // One filter byte per scanline, then the pixels — the whole point being that they are noise.
-  const raw = Buffer.concat(
-    Array.from({ length: size }, () =>
-      Buffer.concat([Buffer.from([0]), Buffer.from(randomBytes(size * 3))])),
-  );
-
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk('IHDR', header),
-    chunk('IDAT', deflateSync(raw)),
-    chunk('IEND', Buffer.alloc(0)),
-  ]);
-}
-
-function randomBytes(count: number) {
-  return Uint8Array.from({ length: count }, () => Math.floor(Math.random() * 256));
-}
-
 /** Photographs unique to this run, in their names as well as their pixels. */
 function photographs(count: number) {
   const run = randomUUID().slice(0, 8);
@@ -72,7 +30,7 @@ function photographs(count: number) {
   return {
     run,
     names,
-    files: names.map((name) => ({ name, mimeType: 'image/png', buffer: png() })),
+    files: names.map((name) => ({ name, mimeType: 'image/png', buffer: uniquePng() })),
   };
 }
 
