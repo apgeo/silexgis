@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { crc32, deflateSync } from 'node:zlib';
 import { expect, type Locator, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { gotoRoute, login } from './helpers.ts';
 
 /**
  * The gallery, the viewer, crediting a photograph and arranging an album — in a real browser.
@@ -76,12 +76,26 @@ function photographs(count: number) {
   };
 }
 
-/** Uploads photographs through the drawer and waits for the archive to have taken them. */
+/**
+ * Uploads photographs through the drawer and waits for the archive to have taken them.
+ *
+ * They are dropped with no shelf chosen, so they wait in the inbox — the gallery lists every
+ * photograph whatever it is filed under, and filing is a different flow with its own cover.
+ */
 async function upload(page: Page, files: { name: string; mimeType: string; buffer: Buffer }[]) {
-  await page.goto('/uploads');
-  await page.waitForURL((url) => url.pathname === '/uploads', { timeout: 60_000 });
+  await gotoRoute(page, '/cabinets');
+  // Reaching a route by address is a full sign-in round trip, and the address matches before
+  // the round trip has finished. Waiting for something only this page draws is what makes the
+  // clicks below act on the page rather than on a redirect.
+  const inbox = page.locator('.ant-tree-title').filter({ hasText: 'Not filed' }).first();
+  await expect(inbox).toBeVisible({ timeout: 45_000 });
 
-  await page.getByRole('button', { name: /Upload$/ }).click();
+  // Dropping is always into somewhere, so the control appears once somewhere is chosen. The
+  // inbox is the choice here: these photographs are not what the filing flow is about.
+  await inbox.click();
+  const uploadButton = page.getByRole('button', { name: /Upload$/ });
+  await expect(uploadButton).toBeVisible({ timeout: 30_000 });
+  await uploadButton.click();
   const drawer = page.getByRole('dialog').last();
   await drawer.getByTestId('upload-files').locator('input[type=file]').setInputFiles(files);
   await expect(drawer.getByText(`${files.length} of ${files.length} stored`, { exact: false }))
@@ -93,7 +107,16 @@ async function upload(page: Page, files: { name: string; mimeType: string; buffe
 async function openGallery(page: Page, run: string) {
   await page.goto(`/gallery?search=${run}`);
   await page.waitForURL((url) => url.pathname === '/gallery', { timeout: 60_000 });
+  // The heading before the grid: the address matches while the sign-in round trip is still in
+  // flight, so waiting on the grid alone would look for it on a redirect page.
+  await expect(page.getByRole('heading', { name: 'Photographs' })).toBeVisible({ timeout: 45_000 });
   await expect(page.getByTestId('photo-grid')).toBeVisible({ timeout: 30_000 });
+}
+
+/** The album list, settled past the sign-in round trip. */
+async function openAlbums(page: Page) {
+  await gotoRoute(page, '/albums');
+  await expect(page.getByRole('heading', { name: 'Albums' })).toBeVisible({ timeout: 45_000 });
 }
 
 /** The document ids of the tiles, in the order they are drawn. */
@@ -118,18 +141,24 @@ test('the gallery shows what was uploaded and the viewer walks through it', asyn
     images.map((image) => image.getAttribute('src') ?? ''));
   expect(sources.every((src) => src.includes('/thumbnail?'))).toBe(true);
 
-  await tiles.first().getByRole('button', { name: names[0] }).click();
+  // Read from the grid rather than assumed: the gallery is newest first, so which upload is
+  // leftmost is a fact about the listing's order and not about this test.
+  const shown = await tiles.locator('img').evaluateAll((images) =>
+    images.map((image) => image.getAttribute('alt') ?? ''));
+  expect([...shown].sort()).toEqual([...names].sort());
+
+  await tiles.first().getByRole('button', { name: shown[0] }).click();
   const viewer = page.getByTestId('lightbox');
   await expect(viewer).toBeVisible();
-  await expect(viewer.getByAltText(names[0])).toBeVisible();
+  await expect(viewer.getByAltText(shown[0])).toBeVisible();
 
   // Arrows move and wrap, because a gallery is a loop to somebody flicking through it.
   await page.keyboard.press('ArrowRight');
-  await expect(viewer.getByAltText(names[1])).toBeVisible();
+  await expect(viewer.getByAltText(shown[1])).toBeVisible();
   await page.keyboard.press('ArrowLeft');
-  await expect(viewer.getByAltText(names[0])).toBeVisible();
+  await expect(viewer.getByAltText(shown[0])).toBeVisible();
   await page.keyboard.press('ArrowLeft');
-  await expect(viewer.getByAltText(names[2])).toBeVisible();
+  await expect(viewer.getByAltText(shown[2])).toBeVisible();
 
   await page.keyboard.press('Escape');
   await expect(viewer).toBeHidden();
@@ -168,9 +197,14 @@ test('a photograph is credited from the viewer and the gallery says so afterward
   // absent from the tile beside it is the defect this whole flow is here for.
   await expect(page.getByTestId('photo-tile').first()).toContainText(caption, { timeout: 15_000 });
 
-  await page.getByTestId('photo-tile').first().getByRole('button', { name: caption }).click();
+  // The viewer is still open behind the form — closing the form does not close what it was
+  // opened from — so the facts panel is reached from there rather than by opening it again.
+  await expect(drawer).toBeHidden();
   await page.getByTestId('lightbox').getByRole('button', { name: 'About this photograph' }).click();
   const facts = page.getByRole('dialog').filter({ hasText: 'About this photograph' });
+
+  // The whole reason this flow exists: the listing nests these under a credit and the viewer
+  // reads them flat, so the panel showed nothing at all until the two shapes were joined up.
   await expect(facts).toContainText('CC BY-SA');
   await expect(facts).toContainText(`Padiș ${run}`);
 });
@@ -182,8 +216,7 @@ test('photographs are gathered into an album and arranged in it', async ({ page 
 
   // ---- an album to put them in
   const albumTitle = `E2E album ${run}`;
-  await page.goto('/albums');
-  await page.waitForURL((url) => url.pathname === '/albums', { timeout: 60_000 });
+  await openAlbums(page);
   await page.getByRole('button', { name: /New album$/ }).click();
 
   const editor = page.getByRole('dialog').filter({ hasText: 'New album' });
@@ -206,7 +239,7 @@ test('photographs are gathered into an album and arranged in it', async ({ page 
   await expect(page.getByText('3 added.')).toBeVisible({ timeout: 20_000 });
 
   // ---- the album, in its own order
-  await page.goto('/albums');
+  await openAlbums(page);
   await page.getByRole('link', { name: albumTitle }).click();
   await page.waitForURL(/\/albums\/[0-9a-f-]{36}$/, { timeout: 30_000 });
   await expect(page.getByTestId('photo-tile')).toHaveCount(3, { timeout: 30_000 });
@@ -232,7 +265,7 @@ test('photographs are gathered into an album and arranged in it', async ({ page 
   await page.getByTestId('photo-tile').first().getByRole('button', { name: 'Use as the cover' })
     .click();
 
-  await page.goto('/albums');
+  await openAlbums(page);
   const card = page.locator('.ant-card').filter({ hasText: albumTitle });
   await expect(card.locator('img')).toBeVisible({ timeout: 20_000 });
 
