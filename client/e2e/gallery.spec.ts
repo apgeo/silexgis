@@ -222,6 +222,9 @@ test('photographs are gathered into an album and arranged in it', async ({ page 
   // ---- a cover, which is how an album is recognised in a list of them
   await page.getByTestId('photo-tile').first().getByRole('button', { name: 'Use as the cover' })
     .click();
+  // Waited for rather than assumed: navigating away while the request is still in flight
+  // abandons it, and the list then legitimately shows an album with no cover.
+  await expect(page.locator('[data-cover="true"]')).toHaveCount(1, { timeout: 20_000 });
 
   await openAlbums(page);
   const card = page.locator('.ant-card').filter({ hasText: albumTitle });

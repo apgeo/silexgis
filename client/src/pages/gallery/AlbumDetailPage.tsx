@@ -192,6 +192,10 @@ export default function AlbumDetailPage() {
                         size="small"
                         type="text"
                         aria-label={t('gallery.makeCover')}
+                        // Which picture is the cover, stated on the element rather than left to
+                        // be read off an icon's shape — the star is the only thing that changes,
+                        // and "which icon is this" is not a question worth asking of the DOM.
+                        data-cover={album.coverDocumentId === photo.documentId}
                         icon={
                           album.coverDocumentId === photo.documentId ? (
                             <StarFilled style={{ color: '#faad14' }} />
