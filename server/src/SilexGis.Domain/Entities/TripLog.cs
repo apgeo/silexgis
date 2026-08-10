@@ -57,6 +57,27 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
 
     public Visibility Visibility { get; set; } = Visibility.Private;
 
+    /// <summary>
+    /// Where the trip has got to in its lifecycle. A new trip starts as a draft: it is being
+    /// written, and nobody named on it is told about it until it is published.
+    /// </summary>
+    /// <remarks>
+    /// This is never consulted when deciding who may read the trip. Visibility and the access
+    /// entries answer that on their own, and a second rule saying who may read a row is how the
+    /// two come to disagree — a draft with public visibility is public, and that is correct.
+    /// </remarks>
+    public ActivityState State { get; set; } = ActivityState.Draft;
+
+    /// <summary>
+    /// When the trip was first published, or null while it never has been. Stamped once and never
+    /// cleared, so unpublishing and publishing again does not move it.
+    /// </summary>
+    /// <remarks>
+    /// The change history could answer this, but it is read on every listing and reconstructing it
+    /// per row from an audit trail is the wrong shape for a column that only ever gains a value.
+    /// </remarks>
+    public DateTimeOffset? PublishedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

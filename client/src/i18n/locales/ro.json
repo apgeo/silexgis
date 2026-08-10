@@ -743,6 +743,24 @@
     "addProposer": "Adaugă propunător",
     "results": "Rezultate / observații",
     "weather": "Vreme / condiții",
+    "state": "Stare",
+    "stateValues": {
+      "draft": "Ciornă",
+      "proposed": "Propusă",
+      "planned": "Planificată",
+      "confirmed": "Confirmată",
+      "done": "Efectuată",
+      "published": "Publicată",
+      "cancelled": "Anulată",
+      "delayed": "Amânată"
+    },
+    "publish": "Publică",
+    "publishConfirm": "Publicați acest jurnal de tură? Persoanele menționate în el vor fi anunțate.",
+    "publishSuccess": "Publicat. Persoanele menționate în această tură au fost anunțate.",
+    "publishedAt": "Publicat la",
+    "unpublish": "Înapoi la ciornă",
+    "unpublishSuccess": "Înapoi la ciornă.",
+    "draftNotice": "Aceasta este o ciornă. Nimeni nu a fost anunțat încă — publicați-o când raportul este gata.",
     "deleteConfirm": "Ștergeți acest jurnal de tură?",
     "searchPlaceholder": "Caută după titlu…",
     "organizingCavingGroup": "Grupul organizator",
@@ -2060,6 +2078,7 @@
       "updated": "Ultima modificare",
       "tripType": "Tip de tură",
       "tripDate": "Data turei",
+      "state": "Stare",
       "language": "Limbă"
     },
     "problems": {

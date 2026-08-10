@@ -113,7 +113,11 @@ Previous versions:
   and how long was spent underground, and it can be sketched on a map: a point, a line or an area
   for where it happened. That sketch is shown exactly to everyone who may read the trip, including
   on the trip map, so the editor says so beside it — a sketch dropped on a protected entrance
-  discloses that entrance, whatever protection the caves the trip names carry.
+  discloses that entrance, whatever protection the caves the trip names carry. A trip starts as a
+  **draft**: you can write it up over several sittings without anybody being told, and publishing it
+  is what announces it to the people who were there — and only to those of them who may actually
+  open it. A draft is not a hidden trip, though: whoever the trip's visibility admits can read it
+  from the moment it exists.
 - **Tags, saved & shareable map views**, and **multi-window** pop-out panels.
 - **Share links** — hand out a revocable link to one feature and what it contains, either
   public or sign-in-only. A share never reveals a protected location.

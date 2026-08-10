@@ -22,11 +22,21 @@ namespace SilexGis.Domain.Filters;
 /// person rather than about the records. The same reasoning keeps the free-text location note out:
 /// it is where a trip went, written down.
 /// </para>
+/// <para>
+/// <b>Where the write-up has got to is here, and belongs here.</b> Unlike the two above, it is a
+/// plain row fact: the same for every caller who may read the row, disclosing nothing about any
+/// other row and nothing the trip's own screen does not already say. It is also never consulted
+/// when deciding who may read a trip — a draft is not hidden, only unannounced — so asking for it
+/// cannot be a second way to ask a question visibility already answered.
+/// </para>
 /// </remarks>
 public static class TripLogFilterFields
 {
     public const string Title = "title";
     public const string Type = "type";
+
+    /// <summary>How far the write-up has got — a draft, announced, or called off.</summary>
+    public const string State = "state";
 
     /// <summary>The day it happened — not the day the record was written.</summary>
     public const string TripDate = "tripDate";
@@ -48,6 +58,10 @@ public static class TripLogFilterFields
         [
             new FieldDescriptor(Title, "filters.fields.title", FieldKind.Text),
             new FieldDescriptor(Type, "filters.fields.tripType", FieldKind.Id, Options: "tripTypes"),
+            // The whole lifecycle vocabulary is offered, not only the four a trip may hold today:
+            // the option set names a shared vocabulary, and narrowing it per kind of activity here
+            // would put a second copy of "which states a trip may hold" a long way from the first.
+            new FieldDescriptor(State, "filters.fields.state", FieldKind.Id, Options: "activityStates"),
             new FieldDescriptor(TripDate, "filters.fields.tripDate", FieldKind.Instant),
             new FieldDescriptor(OwnerId, "filters.fields.owner", FieldKind.Id, Options: "users"),
             new FieldDescriptor(CavingGroupId, "filters.fields.cavingGroup", FieldKind.Id, Options: "cavingGroups"),

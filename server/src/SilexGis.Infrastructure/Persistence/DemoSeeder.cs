@@ -487,17 +487,26 @@ public static class DemoSeeder
         // Spread across a year and across types, so a date sort and a type filter both have
         // something to do. The dates are fixed rather than relative to now: a demo that drifts is
         // a demo whose screenshots stop matching it.
+        // The lifecycle is mostly announced trips, because that is what a real archive is, with one
+        // still being written and one called off so the states that read differently are both on
+        // screen without being hunted for. A published trip carries the day it was announced —
+        // fixed like the trip dates, for the same reason.
         var trips = new[]
         {
-            ("Demo: exploration push", TripType.Exploration, new DateOnly(2026, 3, 14), Visibility.Public),
-            ("Demo: survey trip", TripType.Survey, new DateOnly(2026, 4, 2), Visibility.Public),
-            ("Demo: science trip", TripType.Science, new DateOnly(2026, 5, 23), Visibility.Authenticated),
-            ("Demo: training weekend", TripType.Training, new DateOnly(2026, 6, 6), Visibility.CavingGroup),
-            ("Demo: maintenance and rebolting", TripType.Maintenance, new DateOnly(2026, 7, 18), Visibility.Public),
+            ("Demo: exploration push", TripType.Exploration, new DateOnly(2026, 3, 14), Visibility.Public,
+                ActivityState.Published, (DateTimeOffset?)new DateTimeOffset(2026, 3, 16, 18, 0, 0, TimeSpan.Zero)),
+            ("Demo: survey trip", TripType.Survey, new DateOnly(2026, 4, 2), Visibility.Public,
+                ActivityState.Published, new DateTimeOffset(2026, 4, 5, 18, 0, 0, TimeSpan.Zero)),
+            ("Demo: science trip", TripType.Science, new DateOnly(2026, 5, 23), Visibility.Authenticated,
+                ActivityState.Published, new DateTimeOffset(2026, 5, 27, 18, 0, 0, TimeSpan.Zero)),
+            ("Demo: training weekend", TripType.Training, new DateOnly(2026, 6, 6), Visibility.CavingGroup,
+                ActivityState.Draft, null),
+            ("Demo: maintenance and rebolting", TripType.Maintenance, new DateOnly(2026, 7, 18), Visibility.Public,
+                ActivityState.Cancelled, null),
         };
 
         var index = 0;
-        foreach (var (title, type, date, visibility) in trips)
+        foreach (var (title, type, date, visibility, state, publishedAt) in trips)
         {
             var trip = new TripLog
             {
@@ -509,6 +518,8 @@ public static class DemoSeeder
                 ExitTime = new TimeOnly(16, 45),
                 OwnerUserId = ownerUserId,
                 Visibility = visibility,
+                State = state,
+                PublishedAt = publishedAt,
             };
             db.TripLogs.Add(trip);
 

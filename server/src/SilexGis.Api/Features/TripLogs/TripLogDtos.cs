@@ -37,7 +37,14 @@ public sealed record TripLogDto(
     Guid? CavingGroupId,
     Visibility Visibility,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    // Appended, and appended only. This record is constructed positionally and has runs of
+    // members of the same type, so a value inserted in the middle is absorbed silently by the
+    // neighbour it displaces. The lifecycle pair is deliberately absent from the write request
+    // below: a state moves through the transition endpoints, which is the only place the legal
+    // moves are checked.
+    ActivityState State,
+    DateTimeOffset? PublishedAt);
 
 public sealed record TripLogWriteRequest(
     string Title,

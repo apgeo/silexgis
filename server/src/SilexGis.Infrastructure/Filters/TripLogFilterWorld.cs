@@ -31,6 +31,12 @@ public sealed class TripLogFilterWorld(SilexGisDbContext db) : FilterWorld<TripL
     /// What this caller may see. A trip has no second rule the way a feature does — nothing about
     /// a trip is withheld from somebody who may read the trip.
     /// </summary>
+    /// <remarks>
+    /// A draft is not a hidden trip. Where the write-up has got to is deliberately not consulted
+    /// here: who may read a trip is settled in one place, and a draft the trip's own list endpoint
+    /// hands to this caller must be handed over here too, or the filter becomes a second way to ask
+    /// the same question with a different answer.
+    /// </remarks>
     protected override ValueTask<IQueryable<TripLog>> VisibleAsync(
         AccessContext caller, CancellationToken ct) =>
         ValueTask.FromResult(db.TripLogs.AsNoTracking().VisibleTo(caller, AccessDomain.TripLogs));
@@ -62,6 +68,8 @@ public sealed class TripLogFilterWorld(SilexGisDbContext db) : FilterWorld<TripL
     {
         TripLogFilterFields.Title => FilterLeaves.Text<TripLog>(condition, t => t.Title),
         TripLogFilterFields.Type => FilterLeaves.NullableEnum<TripLog, TripType>(condition, t => t.Type),
+        TripLogFilterFields.State =>
+            FilterLeaves.EnumField<TripLog, ActivityState>(condition, t => t.State),
         TripLogFilterFields.TripDate => FilterLeaves.Date<TripLog>(condition, t => t.TripDate),
         TripLogFilterFields.OwnerId => FilterLeaves.Guids<TripLog>(condition, t => t.OwnerUserId),
         TripLogFilterFields.CavingGroupId => FilterLeaves.Guids<TripLog>(condition, t => t.CavingGroupId),

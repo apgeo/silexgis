@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { CameraOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
-import { App, Button, Card, Descriptions, Flex, Popconfirm, Spin, Tag, Typography } from 'antd';
+import { Alert, App, Button, Card, Descriptions, Flex, Popconfirm, Spin, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
@@ -22,6 +22,8 @@ import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
 import TripFormModal from './TripFormModal.tsx';
 import TripGeometryField from './TripGeometryField.tsx';
+import TripPublishControl from './TripPublishControl.tsx';
+import TripStateTag from './TripStateTag.tsx';
 import { formatTripDates, formatUndergroundTime, isMultiDay } from './tripDates.ts';
 
 function CaveLink({ caveId }: { caveId: string }) {
@@ -77,12 +79,18 @@ export default function TripLogDetailPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 900 }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          {trip.title}
-        </Typography.Title>
+      <Flex justify="space-between" align="center" gap={12} style={{ marginBottom: 12 }}>
+        {/* The badge sits with the title rather than down among the details: whether this has
+            gone out yet is the first thing an author needs from the page. */}
+        <Flex align="center" gap={8} wrap>
+          <Typography.Title level={3} style={{ margin: 0 }}>
+            {trip.title}
+          </Typography.Title>
+          <TripStateTag state={trip.state} />
+        </Flex>
         {(canEdit || canDelete) && (
           <Flex gap={8}>
+            <TripPublishControl tripId={trip.id} state={trip.state} canEdit={canEdit} />
             {canEdit && (
               <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
                 {t('trips.edit')}
@@ -98,6 +106,20 @@ export default function TripLogDetailPage() {
           </Flex>
         )}
       </Flex>
+
+      {/* Said in words as well as shown as a badge, and only to somebody who could act on it.
+          A draft is not hidden from anyone its visibility admits — being unfinished is not a
+          permission — so the author is told plainly that nobody has been notified yet, rather
+          than being left to infer it from a grey tag. */}
+      {trip.state === 'draft' && canEdit && (
+        <Alert
+          type="info"
+          showIcon
+          title={t('trips.draftNotice')}
+          style={{ marginBottom: 12 }}
+          data-testid="trip-draft-notice"
+        />
+      )}
 
       <Card size="small">
         <Descriptions column={1} size="small">
@@ -147,6 +169,13 @@ export default function TripLogDetailPage() {
           )}
           {trip.weatherConditions && (
             <Descriptions.Item label={t('trips.weather')}>{trip.weatherConditions}</Descriptions.Item>
+          )}
+          {/* Kept from the first announcement even after the trip goes back to draft, so
+              "when did this go out" keeps the answer the people who were told would give. */}
+          {trip.publishedAt && (
+            <Descriptions.Item label={t('trips.publishedAt')}>
+              {new Date(trip.publishedAt).toLocaleString(i18n.resolvedLanguage)}
+            </Descriptions.Item>
           )}
           <Descriptions.Item label={t('features.visibility')}>
             <Tag>{t(`caves.visibilityValues.${trip.visibility}`)}</Tag>

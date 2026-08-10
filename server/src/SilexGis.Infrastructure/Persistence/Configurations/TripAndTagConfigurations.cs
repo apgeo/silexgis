@@ -20,6 +20,7 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
         builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.OrganizingCavingGroupId)
             .OnDelete(DeleteBehavior.SetNull);
         builder.Property(x => x.Visibility).HasConversion<short>();
+        builder.Property(x => x.State).HasConversion<short>();
         builder.Property(x => x.Geom).HasColumnType("geometry(Geometry, 4326)");
 
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);

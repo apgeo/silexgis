@@ -13,6 +13,7 @@ import {
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import TripFormModal from './TripFormModal.tsx';
+import TripStateTag from './TripStateTag.tsx';
 import { formatTripDates } from './tripDates.ts';
 
 export default function TripLogListPage() {
@@ -84,6 +85,12 @@ export default function TripLogListPage() {
               formatTripDates(trip.tripDate, trip.tripDateEnd, i18n.resolvedLanguage),
           },
           { title: t('trips.titleField'), dataIndex: 'title' },
+          {
+            title: t('trips.state'),
+            dataIndex: 'state',
+            width: 140,
+            render: (value: TripLogInfo['state']) => <TripStateTag state={value} />,
+          },
           {
             title: t('trips.type'),
             dataIndex: 'type',

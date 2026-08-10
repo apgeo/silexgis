@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import type { AccessDomainName, AccessScopeKind, SearchDocumentItem } from '../api/hooks.ts';
+import type {
+  AccessDomainName,
+  AccessScopeKind,
+  ActivityState,
+  SearchDocumentItem,
+} from '../api/hooks.ts';
 import { RESLINK_ANCHOR_KINDS, RESLINK_TARGET_TYPES } from '../components/reslinks/registry.ts';
 import { SEEDED_RELATION_CODES, DIRECTED_RELATION_CODES } from '../components/reslinks/relations.ts';
 import en from './locales/en.json';
@@ -93,6 +98,23 @@ const numberedDivisions: Record<NumberedDivision, true> = {
   slide: true,
 };
 
+/**
+ * Every lifecycle state the server publishes. The badge looks its label up by the value it was
+ * given, so an unnamed state ships as a raw lookup key where a word belongs — and the states a
+ * trip cannot hold today are named too, because they belong to the same vocabulary and will
+ * start arriving without any client change when the activities that use them land.
+ */
+const activityStates: Record<ActivityState, true> = {
+  draft: true,
+  proposed: true,
+  planned: true,
+  confirmed: true,
+  done: true,
+  published: true,
+  cancelled: true,
+  delayed: true,
+};
+
 // EN and RO must be maintained together.
 describe('i18n locales', () => {
   it('en and ro define exactly the same keys', () => {
@@ -126,6 +148,16 @@ describe('i18n locales', () => {
     expect(kinds.filter((kind) => !enScopes[kind])).toEqual([]);
     expect(kinds.filter((kind) => !roScopes[kind])).toEqual([]);
     expect(Object.keys(enScopes).sort()).toEqual(kinds.sort());
+  });
+
+  it('every activity state the server publishes is named in both locales', () => {
+    const states = Object.keys(activityStates);
+    const enStates: Record<string, string> = en.trips.stateValues;
+    const roStates: Record<string, string> = ro.trips.stateValues;
+    expect(states.filter((state) => !enStates[state])).toEqual([]);
+    expect(states.filter((state) => !roStates[state])).toEqual([]);
+    // And the reverse: a label kept for a state the server no longer has.
+    expect(Object.keys(enStates).sort()).toEqual(states.sort());
   });
 
   // A link chip labels its target by type. An unnamed type would render as a raw lookup

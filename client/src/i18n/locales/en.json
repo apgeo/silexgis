@@ -743,6 +743,24 @@
     "addProposer": "Add proposer",
     "results": "Results / observations",
     "weather": "Weather / conditions",
+    "state": "State",
+    "stateValues": {
+      "draft": "Draft",
+      "proposed": "Proposed",
+      "planned": "Planned",
+      "confirmed": "Confirmed",
+      "done": "Done",
+      "published": "Published",
+      "cancelled": "Cancelled",
+      "delayed": "Delayed"
+    },
+    "publish": "Publish",
+    "publishConfirm": "Publish this trip log? The people named on it will be notified.",
+    "publishSuccess": "Published. The people named on this trip have been notified.",
+    "publishedAt": "Published on",
+    "unpublish": "Back to draft",
+    "unpublishSuccess": "Back to draft.",
+    "draftNotice": "This is a draft. Nobody has been notified about it yet — publish it when the write-up is ready.",
     "deleteConfirm": "Delete this trip log?",
     "searchPlaceholder": "Search by title…",
     "organizingCavingGroup": "Organizing caving group",
@@ -2060,6 +2078,7 @@
       "updated": "Last changed",
       "tripType": "Trip type",
       "tripDate": "Trip date",
+      "state": "State",
       "language": "Language"
     },
     "problems": {

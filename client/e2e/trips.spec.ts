@@ -109,6 +109,50 @@ test('a trip spans several days, carries a shape of its own, and says the shape 
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
 });
 
+test('a trip is written as a draft and stays one until it is published', async ({
+  page,
+  consoleErrors,
+}) => {
+  const title = `E2E Draft Trip ${Date.now()}`;
+  allowDeletedTripRefetch(consoleErrors);
+  await login(page);
+
+  // Creating a trip no longer announces it. Whoever is named on it hears about it when the
+  // write-up is ready and not before, so a new trip arrives as a draft with nothing sent.
+  await page.goto('/trip-logs');
+  await page.getByRole('button', { name: /New trip log/ }).click();
+  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('button', { name: 'OK' }).click();
+
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  const tripUrl = page.url();
+  await expect(page.getByTestId('trip-state')).toHaveText('Draft');
+  // Said in words as well, so the author is not left to read a grey tag.
+  await expect(page.getByTestId('trip-draft-notice')).toBeVisible();
+
+  // Publishing is confirmed first: it is the moment the people on the trip are told.
+  await page.getByRole('button', { name: /Publish$/ }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByTestId('trip-state')).toHaveText('Published', { timeout: 15_000 });
+  await expect(page.getByTestId('trip-draft-notice')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Publish$/ })).toHaveCount(0);
+
+  // The state is a stored fact about the row, not a thing the page was holding: it survives a
+  // reload, and the list shows the same answer the detail page does.
+  await page.goto(tripUrl);
+  await expect(page.getByTestId('trip-state')).toHaveText('Published', { timeout: 15_000 });
+
+  // And the reverse takes it back for more work without pretending the announcement never
+  // happened — the date it first went out is kept.
+  await page.getByRole('button', { name: /Back to draft$/ }).click();
+  await expect(page.getByTestId('trip-state')).toHaveText('Draft', { timeout: 15_000 });
+  await expect(page.getByText('Published on')).toBeVisible();
+
+  await page.getByRole('button', { name: /Delete/ }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
+});
+
 test('a trip logged without touching the date control is a day trip today', async ({
   page,
   consoleErrors,

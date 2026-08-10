@@ -8674,6 +8674,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Announces a trip log and tells the people named on it (Write permission). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{id}/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Returns a trip log to draft — the reverse of publishing (Write permission). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/taggings": {
         parameters: {
             query?: never;
@@ -10790,6 +10866,8 @@ export interface components {
         AccessSubjectKind: "user" | "cavingGroup";
         /** @enum {unknown} */
         AccountExportStatus: "queued" | "running" | "ready" | "failed";
+        /** @enum {unknown} */
+        ActivityState: "draft" | "proposed" | "planned" | "confirmed" | "done" | "published" | "cancelled" | "delayed";
         AdminSettingsDto: {
             mail: components["schemas"]["MailSettingsDto"];
             sms: components["schemas"]["SmsSettingsDto"];
@@ -13747,6 +13825,9 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            state: components["schemas"]["ActivityState"];
+            /** Format: date-time */
+            publishedAt: null | string;
         };
         TripLogWriteRequest: {
             title: string;

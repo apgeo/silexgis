@@ -58,6 +58,8 @@ public sealed class ApiSmokeTests : IDisposable
         document.ShouldContain("/api/v1/features/{id}/parents");
         document.ShouldContain("/api/v1/features/{id}/links");
         document.ShouldContain("/api/v1/centerlines/{id}");
+        document.ShouldContain("/api/v1/trip-logs/{id}/publish");
+        document.ShouldContain("/api/v1/trip-logs/{id}/unpublish");
         document.ShouldContain("/api/v1/export/features");
         document.ShouldContain("/api/v1/shared/features/{token}");
 

@@ -90,6 +90,20 @@ api.use({
   },
 });
 
+/**
+ * The version last read for a resource, for a write the replay above cannot thread by itself.
+ *
+ * An action posted to a sub-path of a resource — announcing a trip, say — is a write on that
+ * resource and the server checks the precondition exactly as it does on a full update, but the
+ * request's own path is not the one the ETag was captured under and its method is not one that
+ * carries a precondition by default. Callers in that position ask for the version here and set
+ * the header themselves, so the opt-in stays visible at the call site: replaying preconditions
+ * onto every POST would start refusing action endpoints that never asked for one.
+ */
+export function lastReadETag(path: string): string | undefined {
+  return etags.get(path);
+}
+
 // What the application asked the server, kept as part of the trail attached to an error report.
 // Development only, and only what a request line would say — method, path, status. It is here rather
 // than around each call because this is the one place every request already passes through, and the

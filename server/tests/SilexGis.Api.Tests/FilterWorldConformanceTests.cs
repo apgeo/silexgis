@@ -211,6 +211,27 @@ public sealed class TripLogWorldFixture : WorldFixture
         return new ConditionNode(TripLogFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]);
     }
 
+    /// <summary>
+    /// Real lifecycle names for the state field, and the generic values for everything else.
+    /// </summary>
+    /// <remarks>
+    /// The generated placeholder is a name no enum has, and an enum leaf answers an unknown name by
+    /// matching nothing — so the suite would have proved only that a nonsense value is refused
+    /// politely, never that the comparison the field exists for is translatable at all. Both values
+    /// are real states, so the two-value operators compare two rows' worth of the vocabulary.
+    /// </remarks>
+    public override FilterValue[] ValuesFor(FieldDescriptor field, FilterOp op)
+    {
+        if (field.Key != TripLogFilterFields.State)
+        {
+            return base.ValuesFor(field, op);
+        }
+
+        var count = FilterOps.Arity(op) ?? 2;
+        ActivityState[] states = [ActivityState.Draft, ActivityState.Published];
+        return [.. Enumerable.Range(0, count).Select(i => new IdValue(states[i % states.Length].ToString()))];
+    }
+
     private static TripLog Trip(Guid ownerId, string title, Visibility visibility) => new()
     {
         Title = title,

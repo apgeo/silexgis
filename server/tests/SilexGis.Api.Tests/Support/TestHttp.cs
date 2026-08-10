@@ -18,4 +18,17 @@ public static class TestHttp
         request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
         return client.SendAsync(request);
     }
+
+    /// <summary>
+    /// POST with an If-Match header and no body — the shape a state transition takes. The
+    /// precondition is required on those the same way it is on a full edit, so a test that is
+    /// about the transition and not about concurrency presents the wildcard.
+    /// </summary>
+    public static Task<HttpResponseMessage> PostWithIfMatchAsync(
+        this HttpClient client, string url, string ifMatch = "*")
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
+        return client.SendAsync(request);
+    }
 }

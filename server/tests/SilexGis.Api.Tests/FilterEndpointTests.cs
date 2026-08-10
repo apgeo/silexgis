@@ -280,6 +280,45 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_trip_is_found_by_where_its_write_up_has_got_to_and_a_draft_is_not_hidden_by_it()
+    {
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
+        await SeedTripsAsync(ownerId, Visibility.Public, 2, ActivityState.Draft);
+        await SeedTripsAsync(ownerId, Visibility.Public, 3, ActivityState.Published);
+
+        // Somebody other than the owner, on the plainest role there is: whatever comes back comes
+        // back because the trips are public, not because this caller wrote them.
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-state");
+
+        var drafts = await QueryAsync(client, About("tripLog", new AllOfNode(
+        [
+            new ConditionNode(TripLogFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]),
+            new ConditionNode(TripLogFilterFields.State, FilterOp.Equals,
+                [new IdValue(nameof(ActivityState.Draft))]),
+        ])));
+
+        // A draft is unannounced, not hidden: a stranger asking for public trips gets it, and the
+        // state is a way of narrowing what came back rather than a rule about who may read it.
+        drafts.Worlds[0].Total.ShouldBe(2);
+
+        var announced = await QueryAsync(client, About("tripLog", new AllOfNode(
+        [
+            new ConditionNode(TripLogFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]),
+            new ConditionNode(TripLogFilterFields.State, FilterOp.In,
+                [new IdValue(nameof(ActivityState.Published)), new IdValue(nameof(ActivityState.Cancelled))]),
+        ])));
+
+        announced.Worlds[0].Total.ShouldBe(3);
+
+        // And unnarrowed, every one of them — so the two answers above are a filter narrowing the
+        // set, not the visibility walk quietly withholding half of it.
+        var all = await QueryAsync(client, About("tripLog",
+            new ConditionNode(TripLogFilterFields.Title, FilterOp.Contains, [new TextValue(tag)])));
+
+        all.Worlds[0].Total.ShouldBe(5);
+    }
+
+    [Fact]
     public async Task A_world_offers_only_sorts_it_can_actually_deliver()
     {
         // A sort a world declares but substitutes is worse than one it does not offer: the list
@@ -392,7 +431,8 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
         return ids;
     }
 
-    private async Task SeedTripsAsync(Guid ownerId, Visibility visibility, int count)
+    private async Task SeedTripsAsync(
+        Guid ownerId, Visibility visibility, int count, ActivityState state = ActivityState.Draft)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -401,10 +441,11 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
         {
             db.TripLogs.Add(new TripLog
             {
-                Title = $"Trip {i} {tag}",
+                Title = $"Trip {i} {state} {tag}",
                 TripDate = new DateOnly(2026, 5, 3),
                 OwnerUserId = ownerId,
                 Visibility = visibility,
+                State = state,
             });
         }
 

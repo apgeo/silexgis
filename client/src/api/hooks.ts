@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clusterCellBbox } from '../geo/cluster.ts';
-import { api, ApiError } from './client.ts';
+import { api, ApiError, lastReadETag } from './client.ts';
 import type { components } from './schema';
 
 export type CaveListItem = components['schemas']['CaveListItemDto'];
@@ -1817,6 +1817,7 @@ export type TripLogWrite = components['schemas']['TripLogWriteRequest'];
 export type TripType = NonNullable<components['schemas']['TripType']>;
 export type TripParticipant = components['schemas']['TripParticipantDto'];
 export type TripParticipantWrite = components['schemas']['TripParticipantWrite'];
+export type ActivityState = components['schemas']['ActivityState'];
 export type TagInfo = components['schemas']['TagDto'];
 export type TaggingInfo = components['schemas']['TaggingDto'];
 
@@ -1877,6 +1878,42 @@ export function useDeleteTripLog() {
     mutationFn: (id: string) => unwrapVoid(api.DELETE('/api/v1/trip-logs/{id}', { params: { path: { id } } })),
     onSuccess: () => invalidate(),
   });
+}
+
+/**
+ * Announcing a trip and taking it back, as the two moves the server offers.
+ *
+ * Both are writes on the trip and both are checked against the version the user was looking at,
+ * so each carries the precondition the detail read captured. Which moves are legal from which
+ * state is the server's to decide — the buttons only offer the ones a reader would expect, and a
+ * request the rules refuse comes back as a conflict rather than being prevented here.
+ */
+function useTripLogTransition(action: 'publish' | 'unpublish') {
+  const invalidate = useInvalidateTripLogs();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: (id: string) => {
+      const etag = lastReadETag(`/api/v1/trip-logs/${id}`);
+      return unwrap(
+        api.POST(action === 'publish' ? '/api/v1/trip-logs/{id}/publish' : '/api/v1/trip-logs/{id}/unpublish', {
+          params: { path: { id } },
+          headers: etag ? { 'If-Match': etag } : undefined,
+        }),
+      );
+    },
+    onSuccess: () => {
+      invalidate();
+      invalidateHistory();
+    },
+  });
+}
+
+export function usePublishTripLog() {
+  return useTripLogTransition('publish');
+}
+
+export function useUnpublishTripLog() {
+  return useTripLogTransition('unpublish');
 }
 
 export function useTags(search: string) {
