@@ -307,6 +307,13 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable
         var theirs = await editor.GetFromJsonAsync<JsonElement>("/api/v1/me/capabilities");
         theirs.GetProperty("domains").GetProperty("features").GetString()!.ShouldContain("create");
 
+        // Stated rather than left to be guessed from a domain right that happens to correlate.
+        // A handful of decisions turn on the installation-wide role directly — publishing a
+        // photograph to the open internet is one — and a client inferring it would offer that
+        // control to the wrong people.
+        mine.GetProperty("isFullAdmin").GetBoolean().ShouldBeFalse();
+        theirs.GetProperty("isFullAdmin").GetBoolean().ShouldBeFalse();
+
         var groups = await viewer.GetFromJsonAsync<JsonElement>("/api/v1/me/permission-groups");
         groups.EnumerateArray()
             .Select(g => g.GetProperty("slug").GetString())

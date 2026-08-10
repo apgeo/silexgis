@@ -142,7 +142,7 @@ public static class PermissionGroupEndpoints
             domains[AccessCatalog.Name(domain)] = held;
         }
 
-        return new CapabilitiesDto(domains);
+        return new CapabilitiesDto(domains, ctx.IsFullAdmin);
     }
 
     // ---- groups ----

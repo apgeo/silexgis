@@ -64,7 +64,15 @@ public sealed record FeatureSetMemberReplaceRequest(IReadOnlyList<Guid> FeatureI
 /// What the caller may do in each domain, with no particular row in view — the shape UI
 /// gating needs. Row-level answers come from the per-object access routes instead.
 /// </summary>
-public sealed record CapabilitiesDto(IReadOnlyDictionary<string, AccessAction> Domains);
+/// <param name="IsFullAdmin">
+/// Whether the caller holds the installation-wide role, which a handful of decisions turn on
+/// directly rather than through a domain right — publishing a photograph to the public gallery
+/// is one. Stated rather than inferred: a client guessing it from an unrelated domain would
+/// offer the control to the wrong people, and hide it from the right ones.
+/// </param>
+public sealed record CapabilitiesDto(
+    IReadOnlyDictionary<string, AccessAction> Domains,
+    bool IsFullAdmin);
 
 /// <summary>The valid vocabulary, generated from the rule that validates writes.</summary>
 public sealed record AccessCatalogDto(

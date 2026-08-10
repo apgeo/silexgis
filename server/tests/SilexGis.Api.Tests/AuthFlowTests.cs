@@ -105,9 +105,12 @@ public sealed class AuthFlowTests : IDisposable
         // identity only — what the caller may do lives in the access model).
         var me = await GetMeAsync(client, tokens.AccessToken);
         me.GetProperty("email").GetString().ShouldBe(AdminEmail);
-        (await GetJsonAsync(client, tokens.AccessToken, "/api/v1/me/capabilities"))
-            .GetProperty("domains").GetProperty("permissionGroups").GetString()!
+        var capabilities = await GetJsonAsync(client, tokens.AccessToken, "/api/v1/me/capabilities");
+        capabilities.GetProperty("domains").GetProperty("permissionGroups").GetString()!
             .ShouldContain("managePermissions");
+        // The installation-wide role, stated on its own rather than implied by the domains above:
+        // a few decisions turn on it directly and nothing else answers them.
+        capabilities.GetProperty("isFullAdmin").GetBoolean().ShouldBeTrue();
 
         // 5. Refresh grant rotates the pair and the new access token works.
         var refreshed = await ExchangeAsync(client, new Dictionary<string, string>
