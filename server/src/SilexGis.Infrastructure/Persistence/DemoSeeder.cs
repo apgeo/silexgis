@@ -47,6 +47,15 @@ public static class DemoSeeder
         await SeedGenericFeaturesAsync(db, writer, ownerUserId, demoCaveId.Value, ct);
         await db.SaveChangesAsync(ct);
 
+        // Every kind of thing the selector offers needs something to find, or its button looks
+        // broken rather than empty. Trips and saved views had nothing at all until now.
+        await SeedMoreCavesAsync(db, writer, ownerUserId, ct);
+        await db.SaveChangesAsync(ct);
+
+        await SeedTripLogsAsync(db, ownerUserId, ct);
+        await SeedMapViewsAsync(db, ownerUserId, ct);
+        await db.SaveChangesAsync(ct);
+
         if (documents is not null && fileStore is not null)
         {
             await SeedDocumentsAsync(db, documents, fileStore, ownerUserId, demoCaveId.Value, ct);
@@ -365,5 +374,199 @@ public static class DemoSeeder
                 Visibility = Visibility.Public,
             },
             parents: [], ct);
+    }
+
+    /// <summary>
+    /// A handful more caves, so a list is a list rather than two rows.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately varied in the axes somebody sorts and filters by — visibility, depth, region,
+    /// exploration status — because a demo where every row is identical proves that sorting runs
+    /// and nothing about whether it is right. Several share a name stem so type-ahead has
+    /// something to narrow.
+    /// </remarks>
+    private static async Task SeedMoreCavesAsync(
+        SilexGisDbContext db, FeatureWriteService writer, Guid ownerUserId, CancellationToken ct)
+    {
+        if (await db.Caves.AnyAsync(c => c.IdentificationCode == "DEMO-0003", ct))
+        {
+            return;
+        }
+
+        var caveTypeId = await db.CaveTypes.Where(t => t.Code == "cave").Select(t => t.Id).SingleAsync(ct);
+        var pitTypeId = await db.CaveTypes.Where(t => t.Code == "pit").Select(t => t.Id).SingleAsync(ct);
+        var limestoneId = await db.RockTypes.Where(t => t.Code == "limestone").Select(t => t.Id).SingleAsync(ct);
+        var naturalEntranceId = await db.EntranceTypes
+            .Where(t => t.Code == "natural").Select(t => t.Id).SingleAsync(ct);
+        var areaId = await db.Features
+            .Where(f => f.Name == "Platoul Demo").Select(f => (Guid?)f.Id).FirstOrDefaultAsync(ct);
+
+        var more = new[]
+        {
+            ("DEMO-0003", "Peștera Demo Mică", "Small demo cave, public.",
+                caveTypeId, Visibility.Public, 210.0m, 24.5m, "Brașov", 25.4390, 45.5265, 880m),
+            ("DEMO-0004", "Peștera Demo Ursului", "Demo cave with a bear-bone chamber.",
+                caveTypeId, Visibility.Public, 1890.0m, 63.0m, "Bihor", 22.5560, 46.5490, 640m),
+            ("DEMO-0005", "Avenul Demo Vântului", "Demo pit with a strong draught.",
+                pitTypeId, Visibility.Authenticated, 640.0m, 198.0m, "Hunedoara", 22.8120, 45.4410, 1180m),
+            ("DEMO-0006", "Peștera Demo Izvorului", "Demo resurgence cave, club members only.",
+                caveTypeId, Visibility.CavingGroup, 3120.0m, 41.0m, "Bihor", 22.5915, 46.5225, 520m),
+        };
+
+        foreach (var (code, name, description, typeId, visibility, length, depth, region, lon, lat, altitude) in more)
+        {
+            var cave = await writer.CreateCaveAsync(
+                new Feature
+                {
+                    Name = name,
+                    Description = description,
+                    OwnerUserId = ownerUserId,
+                    Visibility = visibility,
+                },
+                new Cave
+                {
+                    IdentificationCode = code,
+                    CaveTypeId = typeId,
+                    RockTypeId = limestoneId,
+                    Region = region,
+                    SurveyedLength = length,
+                    Depth = depth,
+                    Altitude = altitude,
+                    ExplorationStatus = ExplorationStatus.Finished,
+                },
+                parents: areaId is null ? [] : [new ParentSpec(areaId.Value, IsPrimary: true)], ct);
+
+            await AddEntranceAsync(writer, cave.Id, ownerUserId, naturalEntranceId,
+                name + " entrance", lon, lat, altitude, isMain: true, ct);
+        }
+    }
+
+    /// <summary>
+    /// Trips, with the people on them.
+    /// </summary>
+    /// <remarks>
+    /// Cavers are seeded alongside rather than assumed: a trip whose participants are all the one
+    /// demo account is not what a club's records look like, and it would leave the roster controls
+    /// with nothing to show. None of these cavers holds an account, which is the ordinary case the
+    /// identity model exists for.
+    /// </remarks>
+    private static async Task SeedTripLogsAsync(
+        SilexGisDbContext db, Guid ownerUserId, CancellationToken ct)
+    {
+        if (await db.TripLogs.AnyAsync(t => t.Title.StartsWith("Demo:"), ct))
+        {
+            return;
+        }
+
+        var caverIds = new List<Guid>();
+        foreach (var fullName in new[] { "Ana Demo", "Bogdan Demo", "Cristina Demo", "Dan Demo" })
+        {
+            var existing = await db.Cavers
+                .Where(c => c.FullName == fullName)
+                .Select(c => (Guid?)c.Id)
+                .FirstOrDefaultAsync(ct);
+            if (existing is not null)
+            {
+                caverIds.Add(existing.Value);
+                continue;
+            }
+
+            var caver = new Caver { FullName = fullName };
+            db.Cavers.Add(caver);
+            caverIds.Add(caver.Id);
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        var caveIds = await db.Caves
+            .OrderBy(c => c.IdentificationCode)
+            .Select(c => c.Id)
+            .Take(4)
+            .ToListAsync(ct);
+
+        // Spread across a year and across types, so a date sort and a type filter both have
+        // something to do. The dates are fixed rather than relative to now: a demo that drifts is
+        // a demo whose screenshots stop matching it.
+        var trips = new[]
+        {
+            ("Demo: exploration push", TripType.Exploration, new DateOnly(2026, 3, 14), Visibility.Public),
+            ("Demo: survey trip", TripType.Survey, new DateOnly(2026, 4, 2), Visibility.Public),
+            ("Demo: science trip", TripType.Science, new DateOnly(2026, 5, 23), Visibility.Authenticated),
+            ("Demo: training weekend", TripType.Training, new DateOnly(2026, 6, 6), Visibility.CavingGroup),
+            ("Demo: maintenance and rebolting", TripType.Maintenance, new DateOnly(2026, 7, 18), Visibility.Public),
+        };
+
+        var index = 0;
+        foreach (var (title, type, date, visibility) in trips)
+        {
+            var trip = new TripLog
+            {
+                Title = title,
+                Type = type,
+                TripDate = date,
+                Description = "Demonstration trip log.",
+                EntryTime = new TimeOnly(9, 30),
+                ExitTime = new TimeOnly(16, 45),
+                OwnerUserId = ownerUserId,
+                Visibility = visibility,
+            };
+            db.TripLogs.Add(trip);
+
+            // The person who proposed it and one who was there — enough that the roster is a
+            // roster and not a single name.
+            db.TripLogParticipants.Add(new TripLogParticipant
+            {
+                TripLogId = trip.Id,
+                CaverId = caverIds[index % caverIds.Count],
+                Kind = TripParticipantKind.Proposer,
+            });
+            db.TripLogParticipants.Add(new TripLogParticipant
+            {
+                TripLogId = trip.Id,
+                CaverId = caverIds[(index + 1) % caverIds.Count],
+                Kind = TripParticipantKind.Participant,
+            });
+
+            if (caveIds.Count > 0)
+            {
+                db.TripLogCaves.Add(new TripLogCave
+                {
+                    TripLogId = trip.Id,
+                    CaveId = caveIds[index % caveIds.Count],
+                });
+            }
+
+            index++;
+        }
+    }
+
+    /// <summary>
+    /// A couple of saved views, so the map has somewhere to be taken.
+    /// </summary>
+    private static async Task SeedMapViewsAsync(
+        SilexGisDbContext db, Guid ownerUserId, CancellationToken ct)
+    {
+        if (await db.MapViews.AnyAsync(v => v.Name.StartsWith("Demo:"), ct))
+        {
+            return;
+        }
+
+        var views = new[]
+        {
+            ("Demo: Platoul Demo", "The demo karst area, at plateau scale.", 25.44, 45.525, 13.0),
+            ("Demo: Bihor caves", "The Bihor demo caves.", 22.57, 46.535, 12.0),
+        };
+
+        foreach (var (name, description, lon, lat, zoom) in views)
+        {
+            db.MapViews.Add(new MapView
+            {
+                Name = name,
+                Description = description,
+                Config = JsonSerializer.Serialize(new { center = new[] { lon, lat }, zoom }),
+                OwnerUserId = ownerUserId,
+                Visibility = Visibility.Public,
+            });
+        }
     }
 }

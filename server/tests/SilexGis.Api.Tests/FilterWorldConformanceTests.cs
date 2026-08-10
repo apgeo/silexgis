@@ -227,12 +227,7 @@ public sealed class DocumentWorldFixture : WorldFixture
 
     public override async Task<FilterNode> SeedHiddenAsync(SilexGisDbContext db, Guid ownerId, string tag)
     {
-        db.Documents.Add(new Document
-        {
-            Title = $"Conformance {tag}",
-            OwnerUserId = ownerId,
-            Visibility = Visibility.Private,
-        });
+        Add(db, $"Conformance {tag}", ownerId, Visibility.Private);
         await db.SaveChangesAsync();
 
         return new ConditionNode(DocumentFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]);
@@ -244,18 +239,51 @@ public sealed class DocumentWorldFixture : WorldFixture
         var stamp = DateTimeOffset.UtcNow;
         for (var i = 0; i < count; i++)
         {
-            db.Documents.Add(new Document
-            {
-                Title = $"Paged {tag}",
-                OwnerUserId = ownerId,
-                Visibility = Visibility.Public,
-                CreatedAt = stamp,
-                UpdatedAt = stamp,
-            });
+            var row = Add(db, $"Paged {tag}", ownerId, Visibility.Public);
+            row.CreatedAt = stamp;
+            row.UpdatedAt = stamp;
         }
 
         await db.SaveChangesAsync();
         return new ConditionNode(DocumentFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]);
+    }
+
+    /// <summary>
+    /// A document and the revision it serves.
+    /// </summary>
+    /// <remarks>
+    /// A document is three rows, not one: the document, the revision it currently serves, and the
+    /// file that revision carries. The integrity check knows all three and scans the whole
+    /// database, so a fixture that stops short fails somebody else's test rather than this one.
+    /// </remarks>
+    private static Document Add(SilexGisDbContext db, string title, Guid ownerId, Visibility visibility)
+    {
+        var document = new Document
+        {
+            Title = title,
+            OwnerUserId = ownerId,
+            Visibility = visibility,
+        };
+        db.Documents.Add(document);
+        var version = new DocumentVersion
+        {
+            DocumentId = document.Id,
+            VersionNumber = 1,
+            IsCurrent = true,
+            UploadedBy = ownerId,
+        };
+        db.DocumentVersions.Add(version);
+        db.StoredFiles.Add(new StoredFile
+        {
+            DocumentVersionId = version.Id,
+            StoragePath = Guid.NewGuid().ToString("N"),
+            OriginalName = title + ".pdf",
+            MimeType = "application/pdf",
+            SizeBytes = 1,
+            Sha256 = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"),
+        });
+
+        return document;
     }
 }
 
