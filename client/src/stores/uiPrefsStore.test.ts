@@ -41,7 +41,7 @@ describe('uiPrefsStore pinned types', () => {
     const raw = localStorage.getItem('silexgis.uiPrefs');
     expect(raw).not.toBeNull();
     const stored = JSON.parse(raw!) as { state: { pinnedTypeIds: number[]; mapChromeHidden: boolean }; version: number };
-    expect(stored.version).toBe(3);
+    expect(stored.version).toBe(4);
     expect(stored.state.pinnedTypeIds).toEqual([7]);
     expect(stored.state.mapChromeHidden).toBe(true);
   });
@@ -114,6 +114,28 @@ describe('uiPrefsStore appearance', () => {
     expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([3]);
     expect(useUiPrefsStore.getState().panels).toEqual({});
     expect(useUiPrefsStore.getState().layouts).toEqual([]);
+  });
+
+  it('keeps a panel arrangement when the selector memory arrives beside it', () => {
+    // The same guard again. Adding somewhere for the object selectors to remember themselves must
+    // not cost anybody the panel they had arranged.
+    localStorage.setItem(
+      'silexgis.uiPrefs',
+      JSON.stringify({
+        version: 3,
+        state: {
+          pinnedTypeIds: [5],
+          panels: { main: { width: 420, pinned: false } },
+          layouts: [{ id: 'a', name: 'Survey', panels: {} }],
+        },
+      }),
+    );
+
+    useUiPrefsStore.persist.rehydrate();
+
+    expect(useUiPrefsStore.getState().panels.main?.width).toBe(420);
+    expect(useUiPrefsStore.getState().layouts).toHaveLength(1);
+    expect(useUiPrefsStore.getState().selectors).toEqual({});
   });
 });
 

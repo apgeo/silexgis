@@ -58,6 +58,11 @@ public sealed record FilterDocument
     /// </summary>
     public FilterAnchor? Anchor { get; init; }
 
+    /// <summary>
+    /// Whether this narrows anything. Never written: it is derived from the scope that is already
+    /// in the document, and a stored copy would be one more thing that can disagree with it.
+    /// </summary>
+    [JsonIgnore]
     public bool IsEmpty => Scope.Count == 0 || Scope.All(s => s.Where is null);
 
     public static JsonSerializerOptions SerializerOptions { get; } = Build();
@@ -84,6 +89,14 @@ public sealed record FilterDocument
         }
         catch (JsonException)
         {
+            return null;
+        }
+        catch (NotSupportedException)
+        {
+            // A node or value that does not say which shape it is. The reader raises this rather
+            // than a JsonException, and catching only the latter is how a filter saved by a version
+            // that spelled a discriminator differently would take down the page listing it — which
+            // is the one thing this method promises cannot happen.
             return null;
         }
     }

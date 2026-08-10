@@ -16,12 +16,17 @@ namespace SilexGis.Domain.Filters;
 /// Where the builder gets the choices for an identity field, when the choices are a list rather
 /// than something typed. Null means the field takes free input.
 /// </param>
+/// <remarks>
+/// A field says what can be asked of it, not how results are ordered. Ordering is a
+/// <see cref="SortKey"/>, which is a small closed set precisely so that a merged list of several
+/// worlds is sorted by something that means the same in all of them — a per-field sort flag would
+/// promise an order no world could be asked for.
+/// </remarks>
 public sealed record FieldDescriptor(
     string Key,
     string LabelKey,
     FieldKind Kind,
-    string? Options = null,
-    bool Sortable = false);
+    string? Options = null);
 
 /// <summary>
 /// What one world can be asked about.
@@ -75,6 +80,16 @@ public enum SortKey
 
     /// <summary>Who made it.</summary>
     Owner = 3,
+
+    /// <summary>
+    /// When the thing happened, as opposed to when somebody wrote it down.
+    /// <para>
+    /// A trip that took place in May and was typed up in August is a May trip, and a person looking
+    /// for it looks in May. Only worlds where the two genuinely differ declare this; a feature has
+    /// no such date and does not offer it, rather than quietly answering with the record's own.
+    /// </para>
+    /// </summary>
+    Occurred = 5,
 
     /// <summary>
     /// Nearest an anchor first — the selected object, or the middle of the view when nothing is

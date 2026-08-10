@@ -129,6 +129,12 @@ public static class FilterValidation
                 return;
 
             case NotNode not:
+                if (not.Of is null)
+                {
+                    errors.Add("A negation has nothing to negate.");
+                    return;
+                }
+
                 Walk(not.Of, vocabulary, depth + 1, ref counted, errors);
                 return;
 
@@ -144,6 +150,16 @@ public static class FilterValidation
 
                 foreach (var child in node.Children)
                 {
+                    if (child is null)
+                    {
+                        // A hole in a group, which arrives from a document whose list of children
+                        // contains a literal null. Refused rather than skipped: skipped, it becomes
+                        // a group with fewer conditions than the person wrote, which matches more
+                        // than they asked for and says nothing about having done so.
+                        errors.Add("A group has a condition missing from it.");
+                        continue;
+                    }
+
                     Walk(child, vocabulary, depth + 1, ref counted, errors);
                 }
 

@@ -2005,5 +2005,56 @@
       "en": "English terms",
       "any": "Terms in no language"
     }
+  },
+  "filters": {
+    "worlds": {
+      "feature": "Features",
+      "tripLog": "Trip logs",
+      "mapView": "Map views"
+    },
+    "fields": {
+      "name": "Name",
+      "title": "Title",
+      "kind": "Kind",
+      "category": "Category",
+      "type": "Type",
+      "tag": "Tag",
+      "owner": "Owner",
+      "cavingGroup": "Caving group",
+      "organizingGroup": "Organising group",
+      "visibility": "Visibility",
+      "protected": "Protected location",
+      "created": "Created",
+      "updated": "Last changed",
+      "tripType": "Trip type",
+      "tripDate": "Trip date"
+    },
+    "problems": {
+      "noWorlds": "Choose at least one kind of object to search.",
+      "tooManyWorlds": "A filter covers at most {{max}} kinds of object.",
+      "worldTwice": "Each kind of object appears once.",
+      "tooLarge": "This filter has more than {{max}} parts. Try splitting it.",
+      "tooDeep": "These conditions are nested more than {{max}} deep.",
+      "tooManyValues": "A condition holds at most {{max}} values.",
+      "textTooLong": "Text in a condition is at most {{max}} characters.",
+      "sortUnavailable": "Nothing being searched can be sorted that way."
+    },
+    "selector": {
+      "placeholder": "Search",
+      "typeToSearch": "Type at least {{count}} characters",
+      "noMatches": "Nothing matches",
+      "nothingChosen": "Nothing chosen",
+      "chosen": "{{count}} chosen",
+      "restricted": "{{count}} not shown — gone, or not yours to see",
+      "placeable": "You can be shown where this is"
+    },
+    "sorts": {
+      "created": "Added",
+      "updated": "Changed",
+      "title": "Name",
+      "owner": "Owner",
+      "occurred": "Date",
+      "proximity": "Nearest"
+    }
   }
 }
