@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -10,6 +11,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Persistence;
+using Xunit.Abstractions;
 
 namespace SilexGis.Api.Tests;
 
@@ -32,6 +34,7 @@ namespace SilexGis.Api.Tests;
 public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable
 {
     private readonly SilexGisApiFactory factory;
+    private readonly ITestOutputHelper output;
     private readonly string filesRoot;
 
     private HttpClient owner = null!;   // Editor — owns every fixture, so every negative has its positive
@@ -41,8 +44,9 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable
     private long caveTypeId;
     private long genericTypeId;
 
-    public ResLinkProtectionFloorTests(PostgresFixture postgres)
+    public ResLinkProtectionFloorTests(PostgresFixture postgres, ITestOutputHelper output)
     {
+        this.output = output;
         filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-rlfloor-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
@@ -673,6 +677,47 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable
         }
     }
 
+    /// <summary>
+    /// The curation answer survives the arm that pages in memory. A protected feature's
+    /// panel materialises every candidate before it can know which survive the disclosure
+    /// cut — that is what keeps the badge total honest — and slices afterwards, so the
+    /// capability is decided on the rows returned rather than alongside the projection.
+    /// Both halves of the answer over the one listing: its author is told yes, and a
+    /// Viewer who wrote none of it and holds nothing over it is told no.
+    /// </summary>
+    [Fact]
+    public async Task A_revealed_panel_states_curation_for_the_rows_it_returns()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var guarded = await CreateProtectedCaveAsync($"Guarded curation {suffix}");
+        var (documentId, _) = await UploadDocumentAsync($"curation-notes-{suffix}.txt");
+        await MakeDocumentReadableAsync(documentId);
+        var linkId = await CreateLinkAsync(
+            Member("feature", guarded), Member("document", documentId, sortOrder: 1));
+
+        await SetRevealAsync(true);
+        try
+        {
+            var mine = await ReadJsonAsync(
+                await owner.GetAsync($"/api/v1/reslinks/for-target?type=feature&id={guarded}"));
+            mine.GetProperty("items").EnumerateArray()
+                .Single(i => i.GetProperty("id").GetGuid() == linkId)
+                .GetProperty("mayEdit").GetBoolean().ShouldBeTrue();
+
+            var theirs = await ReadJsonAsync(
+                await viewer.GetAsync($"/api/v1/reslinks/for-target?type=feature&id={guarded}"));
+            var listed = theirs.GetProperty("items").EnumerateArray()
+                .Single(i => i.GetProperty("id").GetGuid() == linkId);
+            listed.GetProperty("mayEdit").GetBoolean().ShouldBeFalse();
+            theirs.GetProperty("totalItems").GetInt32()
+                .ShouldBe(theirs.GetProperty("items").GetArrayLength());
+        }
+        finally
+        {
+            await SetRevealAsync(false);
+        }
+    }
+
     [Fact]
     public async Task A_panel_asked_for_one_relation_counts_exactly_the_rows_it_lists()
     {
@@ -980,6 +1025,73 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable
         // Whoever may place the cave reads the same timeline whole, link id included.
         (await BodyAsync(owner, $"/api/v1/history?entityType=feature&entityId={guarded}"))
             .ShouldContain(linkId.ToString());
+    }
+
+    // ---- what the honest total costs ----------------------------------------------------
+
+    /// <summary>
+    /// The panel of a protected feature under the reveal setting is the one read that
+    /// materialises every candidate rather than a page of them, because the total it
+    /// reports is the count of candidates that survived the disclosure cut and there is no
+    /// way to count those without projecting them. That is a deliberate price, and this is
+    /// the measurement of it at a link count a heavily-worked cave can plausibly reach —
+    /// so that a change which multiplies the candidate set (a per-row decision taken before
+    /// the slice, say) shows up as a failure here rather than as a slow page in an
+    /// installation. The budget is loose on purpose: it is a regression trip-wire on a
+    /// shared, containerised database, not a benchmark.
+    /// </summary>
+    [Fact]
+    public async Task A_revealed_panel_pays_for_its_honest_total_within_budget()
+    {
+        const int Links = 150;
+        const int PageSize = 20;
+        // Measured at ~40 ms on a development machine against a containerised database.
+        // The budget is two orders of magnitude above that on purpose: it must survive a
+        // loaded CI agent while still failing loudly if the arm ever turns quadratic.
+        const long BudgetMs = 2000;
+
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var guarded = await CreateProtectedCaveAsync($"Busy pot {suffix}");
+        var openCave = await CreateCaveAsync($"Doline {suffix}", "authenticated");
+        var visited = await RelationIdAsync("trip-visited");
+
+        // Every link is a trip naming the guarded cave — the shape a role really makes,
+        // and the one that puts a main member on every row for the curation answer to be
+        // taken over. One trip serves them all: what is being measured is the number of
+        // candidate links, not the number of distinct trips.
+        var tripId = await CreateTripLogAsync($"Load {suffix}", openCave, "authenticated");
+        for (var i = 0; i < Links; i++)
+        {
+            await CreateTypedLinkAsync(
+                visited, Member("tripLog", tripId, isMain: true), Member("feature", guarded, sortOrder: 1));
+        }
+
+        await SetRevealAsync(true);
+        try
+        {
+            var route = $"/api/v1/reslinks/for-target?type=feature&id={guarded}&pageSize={PageSize}";
+
+            // Warm up first (connection pool, query plans), then measure — otherwise the
+            // number reported is mostly first-request cost.
+            (await BodyAsync(viewer, route)).ShouldNotBeNullOrEmpty();
+            var stopwatch = Stopwatch.StartNew();
+            var panel = JsonDocument.Parse(await BodyAsync(viewer, route)).RootElement;
+            stopwatch.Stop();
+
+            output.WriteLine(
+                $"revealed panel, {Links} candidates, page of {PageSize}: {stopwatch.ElapsedMilliseconds} ms");
+
+            // The total is the whole point of paying for it: it counts what survived the
+            // cut, not what the page holds.
+            panel.GetProperty("totalItems").GetInt32().ShouldBe(Links);
+            panel.GetProperty("items").GetArrayLength().ShouldBe(PageSize);
+            stopwatch.ElapsedMilliseconds.ShouldBeLessThan(
+                BudgetMs, $"{Links} candidates took {stopwatch.ElapsedMilliseconds} ms");
+        }
+        finally
+        {
+            await SetRevealAsync(false);
+        }
     }
 
     // ---- helpers -----------------------------------------------------------------------

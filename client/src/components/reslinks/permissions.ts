@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMe, useMyPermissionGroups, type ResLink } from '../../api/hooks.ts';
+import { useMyPermissionGroups, type ResLink } from '../../api/hooks.ts';
 
 /**
  * The protected permission group whose members the server treats as full administrators.
@@ -27,25 +27,20 @@ export function useIsFullAdmin(): boolean {
 }
 
 /**
- * Whether this caller may edit or delete a link, as far as the client can tell: its
- * creator, or a full administrator. One home for what the client decides, because the row
- * menu on a panel and the link's own page have to offer the same controls — an
- * administrator with no control to use is as wrong as a control that earns a refusal.
+ * Whether this caller may edit or delete a link: the answer the link itself carries, not a
+ * rule restated here. One home for the question, because the row menu on a panel and the
+ * link's own page have to offer the same controls — a control that earns a refusal is as
+ * wrong as a refusal for somebody the server would have accepted.
  *
- * This is deliberately narrower than the server's rule, which also admits whoever may
- * write the link's main member. That arm is a decision over a target whose kind varies —
- * a trip, a document, a shelf, a survey model — and the link payload carries only the
- * creator, so the client cannot compute it and does not guess at it. The consequence is
- * that some callers whose edit the server would accept are shown no control; closing that
- * needs the server to say, on the link itself, whether this caller may edit it.
+ * The rule has three arms — the creator, a full administrator, or whoever may write the
+ * link's main member — and two of them the client cannot compute. The last is a decision
+ * over a target whose kind varies (a trip, a document, a shelf, a survey model), so the
+ * client used to recognise the author alone and showed no control to the co-editor of the
+ * very thing the link is about. The server now answers it per link, having taken the same
+ * decision the write path takes, and this reads that answer. A missing link reads as "no",
+ * as does a link still loading: an offer that disappears once the answer arrives is worse
+ * than one that arrives late.
  */
-export function useMayEditResLink(link: Pick<ResLink, 'createdBy'> | null | undefined): boolean {
-  const { data: me } = useMe();
-  const isFullAdmin = useIsFullAdmin();
-
-  if (!link) {
-    return false;
-  }
-  const mine = Boolean(me && link.createdBy && me.id === link.createdBy);
-  return mine || isFullAdmin;
+export function mayEditResLink(link: Pick<ResLink, 'mayEdit'> | null | undefined): boolean {
+  return link?.mayEdit ?? false;
 }

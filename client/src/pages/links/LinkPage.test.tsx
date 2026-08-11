@@ -90,6 +90,7 @@ function link(overrides: Partial<ResLink> = {}): ResLink {
     },
     description: 'Recorded after the 1987 survey.',
     createdBy: 'me',
+    mayEdit: true,
     createdAt: '2026-08-05T09:30:00Z',
     updatedAt: '2026-08-05T09:30:00Z',
     members: [member()],
@@ -240,19 +241,24 @@ describe('LinkPage', () => {
     expect(screen.queryByText('the sensitive one')).not.toBeInTheDocument();
   });
 
-  it('offers editing to the creator and to a full administrator, and to nobody else', () => {
+  it('offers editing from the answer the link carries, and never from its author', () => {
     show();
     expect(screen.getByRole('button', { name: /Edit link/ })).toBeInTheDocument();
 
     cleanup();
-    meId = 'someone-else';
+    // Somebody else's link, and the answer says this caller may curate it — the co-editor
+    // of the thing the link is about, whom recognising the author alone showed nothing.
+    linkState = { data: link({ createdBy: 'someone-else' }), isLoading: false, isError: false };
+    meId = 'me';
+    show();
+    expect(screen.getByRole('button', { name: /Edit link/ })).toBeInTheDocument();
+
+    cleanup();
+    // And the mirror image, which only a fixture can arrange: this caller's own id on a
+    // link the answer refuses them. Nothing here reads the creator id any more.
+    linkState = { data: link({ createdBy: 'me', mayEdit: false }), isLoading: false, isError: false };
     show();
     expect(screen.queryByRole('button', { name: /Edit link/ })).not.toBeInTheDocument();
-
-    cleanup();
-    myGroups = [{ id: 'g', name: 'Full Administrators', slug: 'full-administrators', isProtected: true }];
-    show();
-    expect(screen.getByRole('button', { name: /Edit link/ })).toBeInTheDocument();
   });
 
   it('names who recorded the link, not only when', () => {

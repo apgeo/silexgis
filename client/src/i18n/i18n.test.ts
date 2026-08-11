@@ -7,7 +7,11 @@ import type {
   SearchDocumentItem,
 } from '../api/hooks.ts';
 import { RESLINK_ANCHOR_KINDS, RESLINK_TARGET_TYPES } from '../components/reslinks/registry.ts';
-import { SEEDED_RELATION_CODES, DIRECTED_RELATION_CODES } from '../components/reslinks/relations.ts';
+import {
+  SEEDED_RELATION_CODES,
+  DIRECTED_RELATION_CODES,
+  TRIP_ROLE_CODES,
+} from '../components/reslinks/relations.ts';
 import en from './locales/en.json';
 import ro from './locales/ro.json';
 
@@ -198,6 +202,16 @@ describe('i18n locales', () => {
       expect(
         Object.keys(relations).filter((key) => key !== 'unspecified' && !shipped.includes(key)),
       ).toEqual([]);
+    }
+  });
+
+  // A trip draws each of its roles as a field of its own, titled by what the field holds
+  // rather than by the verb the relation reads as. The title is looked up from the code, so
+  // a missing one shows as a raw key where a heading belongs.
+  it('every trip role field is titled in both locales', () => {
+    const expected = [...TRIP_ROLE_CODES].sort();
+    for (const locale of [en, ro]) {
+      expect(Object.keys(locale.trips.roles).sort()).toEqual(expected);
     }
   });
 

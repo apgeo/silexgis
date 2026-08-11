@@ -60,6 +60,36 @@ export function isSeededRelationCode(code: string): code is SeededRelationCode {
   return (SEEDED_RELATION_CODES as readonly string[]).includes(code);
 }
 
+/**
+ * The roles a trip draws as labelled fields of its own, in the order they read: what the
+ * trip set out to do, what it did, and what it left behind.
+ *
+ * Each is a filtered view of the one links list rather than a store of its own, so this
+ * list decides only which relations get a field and how that field is titled — a relation
+ * missing from here is still a link, and still shows in the trip's general links section.
+ */
+export const TRIP_ROLE_CODES: readonly SeededRelationCode[] = [
+  'trip-work-area',
+  'trip-objective',
+  'trip-visited',
+  'trip-surveyed',
+  'trip-discovered',
+  'trip-dug',
+  'trip-photographed',
+  'trip-searched-not-found',
+  'trip-lead',
+  'trip-follows-on-from',
+];
+
+/**
+ * The lookup key for a role field's title. A field is titled by what it holds ("Work
+ * areas"), not by the verb the relation reads as ("Worked in") — the phrase belongs in a
+ * sentence about one link, the title labels a column of them.
+ */
+export function tripRoleLabelKey(code: SeededRelationCode): string {
+  return `trips.roles.${code}`;
+}
+
 /** Which end of a directed relation the reader is standing on. */
 export type RelationReading = 'forward' | 'inverse';
 

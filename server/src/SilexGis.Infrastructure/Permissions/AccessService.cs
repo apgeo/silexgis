@@ -59,58 +59,105 @@ public sealed class AccessService(SilexGisDbContext db) : IAccessService
         return effective;
     }
 
-    public async Task<AccessTargetFacts> FactsOfAsync(IProtectedEntity entity, CancellationToken ct = default)
-    {
-        if (entity is Document document)
-        {
-            // Filing lives in a join table, so the reach a cabinet entry matches on has to
-            // be read: every cabinet the document sits in, plus their ancestors, because a
-            // cabinet entry covers everything below it.
-            var cabinetIds = await db.CabinetDocuments.AsNoTracking()
-                .Where(m => m.DocumentId == document.Id)
-                .Join(db.Cabinets.AsNoTracking(), m => m.CabinetId, c => c.Id, (_, c) => c.AncestorIds)
-                .ToListAsync(ct);
+    public async Task<AccessTargetFacts> FactsOfAsync(IProtectedEntity entity, CancellationToken ct = default) =>
+        (await FactsOfManyAsync([entity], ct))[entity.Id];
 
-            return AccessTargetFacts.Of(entity) with
+    public async Task<IReadOnlyDictionary<Guid, AccessTargetFacts>> FactsOfManyAsync(
+        IReadOnlyCollection<IProtectedEntity> entities, CancellationToken ct = default)
+    {
+        var rows = entities.DistinctBy(e => e.Id).ToList();
+        if (rows.Count == 0)
+        {
+            return new Dictionary<Guid, AccessTargetFacts>();
+        }
+
+        var documents = rows.OfType<Document>().ToList();
+        var features = rows.OfType<Feature>().ToList();
+
+        // Filing lives in a join table, so the reach a cabinet entry matches on has to be
+        // read: every cabinet a document sits in, plus their ancestors, because a cabinet
+        // entry covers everything below it. One query for the whole set.
+        var cabinetsByDocument = new Dictionary<Guid, Guid[]>();
+        if (documents.Count > 0)
+        {
+            var documentIds = documents.Select(d => d.Id).ToList();
+            var filings = await db.CabinetDocuments.AsNoTracking()
+                .Where(m => documentIds.Contains(m.DocumentId))
+                .Join(
+                    db.Cabinets.AsNoTracking(),
+                    m => m.CabinetId,
+                    c => c.Id,
+                    (m, c) => new { m.DocumentId, c.AncestorIds })
+                .ToListAsync(ct);
+            cabinetsByDocument = filings
+                .GroupBy(f => f.DocumentId)
+                .ToDictionary(g => g.Key, g => g.SelectMany(f => f.AncestorIds).Distinct().ToArray());
+        }
+
+        var ancestorAudience = new Dictionary<Guid, VisibilityFact>();
+        var setsByFeature = new Dictionary<Guid, Guid[]>();
+        if (features.Count > 0)
+        {
+            // The audience of every ancestor of every feature in the set, in one query;
+            // an ancestor that is missing or soft-deleted simply contributes no link to
+            // the chain, exactly as the per-row filter left it out.
+            var ancestorsAbove = features
+                .SelectMany(f => f.AncestorIds.Where(id => id != f.Id))
+                .Distinct()
+                .ToArray();
+            if (ancestorsAbove.Length > 0)
             {
-                CabinetIds = [.. cabinetIds.SelectMany(ids => ids).Distinct()],
+                ancestorAudience = (await db.Features.AsNoTracking()
+                        .Where(a => ancestorsAbove.Contains(a.Id))
+                        .Select(a => new { a.Id, a.Visibility, a.CavingGroupId })
+                        .ToListAsync(ct))
+                    .ToDictionary(a => a.Id, a => new VisibilityFact(a.Visibility, a.CavingGroupId));
+            }
+
+            var featureIds = features.Select(f => f.Id).ToList();
+            setsByFeature = (await db.FeatureSetMembers.AsNoTracking()
+                    .Where(m => featureIds.Contains(m.FeatureId))
+                    .Select(m => new { m.FeatureId, m.FeatureSetId })
+                    .ToListAsync(ct))
+                .GroupBy(m => m.FeatureId)
+                .ToDictionary(g => g.Key, g => g.Select(m => m.FeatureSetId).ToArray());
+        }
+
+        var facts = new Dictionary<Guid, AccessTargetFacts>(rows.Count);
+        foreach (var entity in rows)
+        {
+            facts[entity.Id] = entity switch
+            {
+                Document => AccessTargetFacts.Of(entity) with
+                {
+                    CabinetIds = cabinetsByDocument.GetValueOrDefault(entity.Id, []),
+                },
+                Feature feature => new AccessTargetFacts
+                {
+                    ObjectId = feature.Id,
+                    OwnerUserId = feature.OwnerUserId,
+                    CavingGroupId = feature.CavingGroupId,
+                    AncestorIds = feature.AncestorIds,
+                    FeatureKind = feature.Kind,
+                    FeatureTypeId = feature.FeatureTypeId,
+                    FeatureSetIds = setsByFeature.GetValueOrDefault(feature.Id, []),
+
+                    // The chain starts with the row's own (possibly not-yet-saved) values
+                    // so a decision mid-edit sees what the caller is writing, then the
+                    // stored ancestors.
+                    VisibilityChain =
+                    [
+                        new VisibilityFact(feature.Visibility, feature.CavingGroupId),
+                        .. feature.AncestorIds
+                            .Where(id => id != feature.Id && ancestorAudience.ContainsKey(id))
+                            .Select(id => ancestorAudience[id]),
+                    ],
+                },
+                _ => AccessTargetFacts.Of(entity),
             };
         }
 
-        if (entity is not Feature feature)
-        {
-            return AccessTargetFacts.Of(entity);
-        }
-
-        // The chain starts with the row's own (possibly not-yet-saved) values so a
-        // decision mid-edit sees what the caller is writing, then the stored ancestors.
-        var ancestorsAbove = feature.AncestorIds.Where(id => id != feature.Id).ToArray();
-        var chain = new List<VisibilityFact> { new(feature.Visibility, feature.CavingGroupId) };
-        if (ancestorsAbove.Length > 0)
-        {
-            var rows = await db.Features.AsNoTracking()
-                .Where(a => ancestorsAbove.Contains(a.Id))
-                .Select(a => new { a.Visibility, a.CavingGroupId })
-                .ToListAsync(ct);
-            chain.AddRange(rows.Select(a => new VisibilityFact(a.Visibility, a.CavingGroupId)));
-        }
-
-        var setIds = await db.FeatureSetMembers.AsNoTracking()
-            .Where(m => m.FeatureId == feature.Id)
-            .Select(m => m.FeatureSetId)
-            .ToArrayAsync(ct);
-
-        return new AccessTargetFacts
-        {
-            ObjectId = feature.Id,
-            OwnerUserId = feature.OwnerUserId,
-            CavingGroupId = feature.CavingGroupId,
-            AncestorIds = feature.AncestorIds,
-            FeatureKind = feature.Kind,
-            FeatureTypeId = feature.FeatureTypeId,
-            FeatureSetIds = setIds,
-            VisibilityChain = chain,
-        };
+        return facts;
     }
 
     public async Task<HashSet<Guid>> ViewExactLocationRootIdsAsync(

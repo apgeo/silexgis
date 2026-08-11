@@ -772,7 +772,25 @@
     "drawArea": "Area",
     "clearGeometry": "Clear shape",
     "geometryWarning": "Exact location — a trip's sketch is never approximated.",
-    "geometryWarningDetail": "Everyone who may read this trip sees this shape exactly as drawn, whatever protection the caves it names carry. A sketch placed on a protected entrance therefore discloses that entrance."
+    "geometryWarningDetail": "Everyone who may read this trip sees this shape exactly as drawn, whatever protection the caves it names carry. A sketch placed on a protected entrance therefore discloses that entrance.",
+    "roleAdd": "Add",
+    "roleShowingFirst": "Showing the first {{count}} of {{total}} records here.",
+    "rolesTitle": "What this trip did",
+    "roleOther": "Record something else",
+    "roleNoteEmpty": "Describe it",
+    "roleNoteEdit": "Describe what was left",
+    "roles": {
+      "trip-work-area": "Work areas",
+      "trip-objective": "Main work features",
+      "trip-visited": "Visited",
+      "trip-surveyed": "Surveyed",
+      "trip-discovered": "Discovered",
+      "trip-dug": "Dug",
+      "trip-photographed": "Photographed",
+      "trip-searched-not-found": "Searched, not found",
+      "trip-lead": "Leads left",
+      "trip-follows-on-from": "Follows on from"
+    }
   },
   "tags": {
     "title": "Tags",

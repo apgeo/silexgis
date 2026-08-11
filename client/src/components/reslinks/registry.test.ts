@@ -211,6 +211,7 @@ describe('relation phrasing', () => {
       relationType: relation({}),
       description: null,
       createdBy: null,
+      mayEdit: false,
       createdAt: '2026-08-05T00:00:00Z',
       updatedAt: '2026-08-05T00:00:00Z',
       members: [

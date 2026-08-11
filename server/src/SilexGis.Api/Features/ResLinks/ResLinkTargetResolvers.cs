@@ -3,6 +3,7 @@ using SilexGis.Infrastructure.Documents;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
+using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
@@ -77,14 +78,53 @@ public interface IResLinkTargetResolver
         AccessContext ctx, string query, int limit, CancellationToken ct);
 
     /// <summary>
-    /// Whether the caller may write this one target, asked in whatever way that world
+    /// Which of these targets the caller may write, asked in whatever way that world
     /// decides writing — the question "who curates a link" defers to, because a link is
     /// an assertion about its main member and the people who may change that member are
-    /// the people who may correct what is said about it. Answers false for an id that is
-    /// not there: a member row can outlive a polymorphic target, and a decision about
-    /// nothing is never an admission.
+    /// the people who may correct what is said about it. An id that is not there is
+    /// simply absent from the answer: a member row can outlive a polymorphic target, and
+    /// a decision about nothing is never an admission.
     /// </summary>
-    Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct);
+    /// <remarks>
+    /// Set-shaped rather than one id at a time because the answer is now needed for a
+    /// whole page of links at once — every link on a listing states whether this caller
+    /// may curate it — and a world that could only answer one row would make that listing
+    /// cost round trips in proportion to its length. Worlds whose write rule reduces to
+    /// arithmetic over the caller's entries answer in a single fetch; the two that walk
+    /// something per row say so where they do it.
+    /// </remarks>
+    Task<HashSet<Guid>> WritableIdsAsync(
+        AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct);
+}
+
+/// <summary>Shared write decision for target worlds whose rows are ordinary protected
+/// entities: one fetch, then the pure evaluator over facts built for the whole set at
+/// once, so the cost of deciding a page does not grow with the page.</summary>
+internal static class ResLinkTargetWrites
+{
+    public static async Task<HashSet<Guid>> WritableAsync<T>(
+        IAccessService access, AccessContext ctx, IReadOnlyList<T> rows, CancellationToken ct)
+        where T : IProtectedEntity
+    {
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        if (ctx.IsFullAdmin)
+        {
+            return [.. rows.Select(r => r.Id)];
+        }
+
+        var facts = await access.FactsOfManyAsync([.. rows.Cast<IProtectedEntity>()], ct);
+        return
+        [
+            .. rows
+                .Where(r => AccessEvaluator.Decide(
+                    ctx, AccessDomains.Of(r), AccessAction.Write, facts[r.Id]).Allowed)
+                .Select(r => r.Id),
+        ];
+    }
 }
 
 /// <summary>The registered resolvers, one per admissible target type. Fully populated by
@@ -115,9 +155,14 @@ public sealed class ResLinkTargetDirectory
         (await Of(type).ResolveAsync(ctx, [id], ct)).ContainsKey(id);
 
     /// <summary>The curation floor: whether the caller may write one target.</summary>
-    public Task<bool> CanWriteAsync(
+    public async Task<bool> CanWriteAsync(
         AccessContext ctx, AttachedEntityType? type, Guid id, CancellationToken ct) =>
-        Of(type).CanWriteAsync(ctx, id, ct);
+        (await Of(type).WritableIdsAsync(ctx, [id], ct)).Contains(id);
+
+    /// <summary>The curation floor over a whole set of one world's targets.</summary>
+    public Task<HashSet<Guid>> WritableIdsAsync(
+        AccessContext ctx, AttachedEntityType? type, IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
+        Of(type).WritableIdsAsync(ctx, ids, ct);
 }
 
 /// <summary>Features of any kind, through the shared visibility filter. The title is the
@@ -127,14 +172,20 @@ public sealed class FeatureTargetResolver(SilexGisDbContext db, IAccessService a
 {
     public AttachedEntityType? TargetType => null;
 
-    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    public async Task<HashSet<Guid>> WritableIdsAsync(
+        AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
         // Deliberately fetched unfiltered and decided afterwards, exactly as the feature
         // write path does: the write decision is the one that answers here, and running
         // the visibility filter first would refuse a feature the caller may edit but
         // reaches by a rule the filter does not express.
-        var feature = await db.Features.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
-        return feature is not null && (await access.DecideAsync(ctx, AccessAction.Write, feature, ct)).Allowed;
+        var features = await db.Features.AsNoTracking().Where(f => ids.Contains(f.Id)).ToListAsync(ct);
+        return await ResLinkTargetWrites.WritableAsync(access, ctx, features, ct);
     }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
@@ -146,7 +197,12 @@ public sealed class FeatureTargetResolver(SilexGisDbContext db, IAccessService a
         }
 
         var rows = await Project(Readable(ctx).Where(f => ids.Contains(f.Id))).ToListAsync(ct);
-        return rows.ToDictionary(r => r.Id, Display);
+
+        // The whole page's containment in one batched answer, not one walk per chip: a
+        // role field is a row of these, and a per-chip query would make the field cost
+        // grow with what was recorded on the trip.
+        var paths = await PathsAsync(ctx, rows, ct);
+        return rows.ToDictionary(r => r.Id, r => Display(r, paths.GetValueOrDefault(r.Id)));
     }
 
     public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
@@ -173,17 +229,45 @@ public sealed class FeatureTargetResolver(SilexGisDbContext db, IAccessService a
             f.Id,
             f.Name,
             f.Kind,
-            db.FeatureTypes.Where(t => t.Id == f.FeatureTypeId).Select(t => t.Name).FirstOrDefault()));
+            db.FeatureTypes.Where(t => t.Id == f.FeatureTypeId).Select(t => t.Name).FirstOrDefault(),
+            f.AncestorIds));
 
-    private static ResLinkTargetDisplayDto Display(FeatureRow r) => new(
+    /// <summary>
+    /// Each row's containment path, outermost first, through the one definition of a
+    /// feature's parent chain — so a chip's path and the breadcrumb over the feature's own
+    /// page are the same sentence, and are truncated at an unreadable step in the same way.
+    /// The outermost step is dropped when the installation has a single root: it would then
+    /// begin every path in the application and distinguish nothing.
+    /// </summary>
+    private async Task<Dictionary<Guid, IReadOnlyList<string>>> PathsAsync(
+        AccessContext ctx, IReadOnlyList<FeatureRow> rows, CancellationToken ct)
+    {
+        var chains = await FeaturePrimaryChains.OfAsync(
+            db, ctx, [.. rows.Select(r => new FeaturePrimaryChains.Subject(r.Id, r.AncestorIds))], ct);
+        var singleRoot = chains.Values.Any(c => c.Count > 0)
+            ? await FeaturePrimaryChains.SingleRootIdAsync(db, ct)
+            : null;
+        return chains.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<string>)[..
+                pair.Value
+                    .Where(step => step.Id != singleRoot)
+                    .Select(step => step.Name)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Select(name => name!)]);
+    }
+
+    private static ResLinkTargetDisplayDto Display(FeatureRow r, IReadOnlyList<string>? path) => new(
         Title(r),
         r.TypeName ?? r.Kind.ToString(),
         r.Kind == FeatureKind.Cave ? $"/caves/{r.Id}" : $"/features/{r.Id}",
-        null);
+        null,
+        path is { Count: > 0 } ? path : null);
 
     private static string Title(FeatureRow r) => r.Name ?? r.Kind.ToString();
 
-    private sealed record FeatureRow(Guid Id, string? Name, FeatureKind Kind, string? TypeName);
+    private sealed record FeatureRow(
+        Guid Id, string? Name, FeatureKind Kind, string? TypeName, Guid[] AncestorIds);
 }
 
 /// <summary>
@@ -197,19 +281,41 @@ public sealed class DocumentTargetResolver(SilexGisDbContext db, IAccessService 
 {
     public AttachedEntityType? TargetType => AttachedEntityType.Document;
 
-    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    /// <remarks>
+    /// The one world that still decides row by row. Writing a document is decided against
+    /// the file it currently serves as well as the document row, and that walk reaches
+    /// through the file's own rules — it has no set-shaped form today, so the two facts it
+    /// needs are fetched for the whole set (documents in one query, their served files in
+    /// one more) and only the decision repeats. Documents appear here as the main member of
+    /// a link, which is rare beside features and trips; if a listing ever carries many, the
+    /// walk is what to make set-shaped, not this method.
+    /// </remarks>
+    public async Task<HashSet<Guid>> WritableIdsAsync(
+        AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {
-        // The document's own walk, not a bare domain decision: writing a document is
-        // decided against the file it currently serves as well as the document row, and
-        // a narrower question here would refuse people the documents surface admits.
-        var document = await db.Documents.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
-        if (document is null)
+        if (ids.Count == 0)
         {
-            return false;
+            return [];
         }
 
-        var content = await DocumentQueries.CurrentFileAsync(db, id, ct);
-        return await DocumentAccessRules.CanWriteAsync(db, access, ctx, document, content?.File, ct);
+        var documents = await db.Documents.AsNoTracking().Where(d => ids.Contains(d.Id)).ToListAsync(ct);
+        if (documents.Count == 0)
+        {
+            return [];
+        }
+
+        var currentFiles = await CurrentFilesAsync(documents.Select(d => d.Id).ToList(), ct);
+        var writable = new HashSet<Guid>();
+        foreach (var document in documents)
+        {
+            if (await DocumentAccessRules.CanWriteAsync(
+                db, access, ctx, document, currentFiles.GetValueOrDefault(document.Id), ct))
+            {
+                writable.Add(document.Id);
+            }
+        }
+
+        return writable;
     }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
@@ -224,19 +330,7 @@ public sealed class DocumentTargetResolver(SilexGisDbContext db, IAccessService 
         var documents = await db.Documents.AsNoTracking().Where(d => ids.Contains(d.Id)).ToListAsync(ct);
         var typeNames = await TypeNamesAsync(documents.Select(d => d.DocumentTypeId), ct);
 
-        // The served file of every document in one query — the rule itself stays the
-        // per-row document walk, but its one storage-backed fact must not cost a round
-        // trip per member of a listing.
-        var documentIds = documents.Select(d => d.Id).ToList();
-        var currentFiles = (await (
-                from version in db.DocumentVersions.AsNoTracking()
-                join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
-                where documentIds.Contains(version.DocumentId) && version.IsCurrent
-                orderby file.CreatedAt, file.Id
-                select new { version.DocumentId, File = file })
-            .ToListAsync(ct))
-            .GroupBy(x => x.DocumentId)
-            .ToDictionary(g => g.Key, g => g.First().File);
+        var currentFiles = await CurrentFilesAsync(documents.Select(d => d.Id).ToList(), ct);
 
         foreach (var document in documents)
         {
@@ -272,6 +366,21 @@ public sealed class DocumentTargetResolver(SilexGisDbContext db, IAccessService 
             d.DocumentTypeId is { } typeId ? typeNames.GetValueOrDefault(typeId) : null))];
     }
 
+    /// <summary>The served file of every named document in one query — the rules
+    /// themselves stay the per-row document walk, but their one storage-backed fact must
+    /// not cost a round trip per member of a listing.</summary>
+    private async Task<Dictionary<Guid, StoredFile>> CurrentFilesAsync(
+        IReadOnlyList<Guid> documentIds, CancellationToken ct) =>
+        (await (
+                from version in db.DocumentVersions.AsNoTracking()
+                join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
+                where documentIds.Contains(version.DocumentId) && version.IsCurrent
+                orderby file.CreatedAt, file.Id
+                select new { version.DocumentId, File = file })
+            .ToListAsync(ct))
+        .GroupBy(x => x.DocumentId)
+        .ToDictionary(g => g.Key, g => g.First().File);
+
     private async Task<Dictionary<long, string>> TypeNamesAsync(
         IEnumerable<long?> typeIds, CancellationToken ct)
     {
@@ -288,10 +397,16 @@ public sealed class TripLogTargetResolver(SilexGisDbContext db, IAccessService a
 {
     public AttachedEntityType? TargetType => AttachedEntityType.TripLog;
 
-    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    public async Task<HashSet<Guid>> WritableIdsAsync(
+        AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {
-        var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, ct);
-        return trip is not null && (await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed;
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var trips = await db.TripLogs.AsNoTracking().Where(t => ids.Contains(t.Id)).ToListAsync(ct);
+        return await ResLinkTargetWrites.WritableAsync(access, ctx, trips, ct);
     }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
@@ -347,10 +462,29 @@ public sealed class CaverTargetResolver(
     /// deliberately not honoured here: that arm is about your own personal data, not a
     /// claim that you curate what other people record about you.
     /// </summary>
-    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct) =>
-        await db.Cavers.AsNoTracking().AnyAsync(c => c.Id == id, ct)
-        && AccessEvaluator.Decide(
-            ctx, AccessDomain.Cavers, AccessAction.Write, new AccessTargetFacts { ObjectId = id }).Allowed;
+    public async Task<HashSet<Guid>> WritableIdsAsync(
+        AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        // The decision is pure arithmetic over the caller's entries, so the existence
+        // check is the only round trip however many people are named.
+        var present = await db.Cavers.AsNoTracking()
+            .Where(c => ids.Contains(c.Id))
+            .Select(c => c.Id)
+            .ToListAsync(ct);
+        return
+        [
+            .. present.Where(id => AccessEvaluator.Decide(
+                ctx,
+                AccessDomain.Cavers,
+                AccessAction.Write,
+                new AccessTargetFacts { ObjectId = id }).Allowed),
+        ];
+    }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
@@ -427,13 +561,27 @@ public sealed class CavingGroupTargetResolver(SilexGisDbContext db) : IResLinkTa
 {
     public AttachedEntityType? TargetType => AttachedEntityType.CavingGroup;
 
-    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct) =>
-        await db.CavingGroups.AsNoTracking().AnyAsync(g => g.Id == id, ct)
-        && AccessEvaluator.Decide(
-            ctx,
-            AccessDomain.CavingGroups,
-            AccessAction.Write,
-            new AccessTargetFacts { ObjectId = id }).Allowed;
+    public async Task<HashSet<Guid>> WritableIdsAsync(
+        AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var present = await db.CavingGroups.AsNoTracking()
+            .Where(g => ids.Contains(g.Id))
+            .Select(g => g.Id)
+            .ToListAsync(ct);
+        return
+        [
+            .. present.Where(id => AccessEvaluator.Decide(
+                ctx,
+                AccessDomain.CavingGroups,
+                AccessAction.Write,
+                new AccessTargetFacts { ObjectId = id }).Allowed),
+        ];
+    }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
@@ -481,10 +629,16 @@ public sealed class MapViewTargetResolver(SilexGisDbContext db, IAccessService a
 {
     public AttachedEntityType? TargetType => AttachedEntityType.MapView;
 
-    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    public async Task<HashSet<Guid>> WritableIdsAsync(
+        AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {
-        var view = await db.MapViews.AsNoTracking().FirstOrDefaultAsync(v => v.Id == id, ct);
-        return view is not null && (await access.DecideAsync(ctx, AccessAction.Write, view, ct)).Allowed;
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var views = await db.MapViews.AsNoTracking().Where(v => ids.Contains(v.Id)).ToListAsync(ct);
+        return await ResLinkTargetWrites.WritableAsync(access, ctx, views, ct);
     }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
@@ -530,10 +684,21 @@ public sealed class CabinetTargetResolver(SilexGisDbContext db) : IResLinkTarget
     /// rather than restated here, so tightening it later cannot leave this admitting people
     /// the shelf itself refuses.
     /// </summary>
-    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    public async Task<HashSet<Guid>> WritableIdsAsync(
+        AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {
-        var cabinet = await db.Cabinets.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
-        return cabinet is not null && CabinetAccessRules.MayAdminister(ctx, cabinet.AncestorIds);
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        // The shelf rule reads the ancestry the row already carries, so one fetch decides
+        // the whole set.
+        var rows = await db.Cabinets.AsNoTracking()
+            .Where(c => ids.Contains(c.Id))
+            .Select(c => new { c.Id, c.AncestorIds })
+            .ToListAsync(ct);
+        return [.. rows.Where(c => CabinetAccessRules.MayAdminister(ctx, c.AncestorIds)).Select(c => c.Id)];
     }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
@@ -611,21 +776,46 @@ public sealed class SurveyModelTargetResolver(
     /// admitting somebody the model's own endpoints refuse would let the link surface be
     /// the way around location protection.
     /// </summary>
-    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    /// <remarks>
+    /// Two fetches for the whole set — the models, then their caves — and then the shared
+    /// definition once per <em>distinct cave</em> rather than once per model, since several
+    /// models of one cave answer the same. That definition composes a read decision, an
+    /// exact-location check and a write decision, and is deliberately asked whole rather
+    /// than taken apart here: a set-shaped variant of it would be a second copy of the rule,
+    /// and the surface it protects is the one where a second copy costs the most.
+    /// </remarks>
+    public async Task<HashSet<Guid>> WritableIdsAsync(
+        AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {
-        var caveId = await db.SurveyModels.AsNoTracking()
-            .Where(m => m.Id == id)
-            .Select(m => (Guid?)m.CaveFeatureId)
-            .FirstOrDefaultAsync(ct);
-        if (caveId is not { } cave)
+        if (ids.Count == 0)
         {
-            return false;
+            return [];
         }
 
-        var feature = await db.Features.AsNoTracking()
-            .FirstOrDefaultAsync(f => f.Id == cave && f.Kind == FeatureKind.Cave, ct);
-        return feature is not null
-            && await SurveyModelAccess.MayWriteAsync(access, protection, ctx, feature, ct);
+        var models = await db.SurveyModels.AsNoTracking()
+            .Where(m => ids.Contains(m.Id))
+            .Select(m => new { m.Id, m.CaveFeatureId })
+            .ToListAsync(ct);
+        if (models.Count == 0)
+        {
+            return [];
+        }
+
+        var caveIds = models.Select(m => m.CaveFeatureId).Distinct().ToList();
+        var caves = await db.Features.AsNoTracking()
+            .Where(f => caveIds.Contains(f.Id) && f.Kind == FeatureKind.Cave)
+            .ToListAsync(ct);
+
+        var writableCaves = new HashSet<Guid>();
+        foreach (var cave in caves)
+        {
+            if (await SurveyModelAccess.MayWriteAsync(access, protection, ctx, cave, ct))
+            {
+                writableCaves.Add(cave.Id);
+            }
+        }
+
+        return [.. models.Where(m => writableCaves.Contains(m.CaveFeatureId)).Select(m => m.Id)];
     }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
@@ -683,10 +873,16 @@ public sealed class GeofileTargetResolver(SilexGisDbContext db, IAccessService a
 {
     public AttachedEntityType? TargetType => AttachedEntityType.Geofile;
 
-    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    public async Task<HashSet<Guid>> WritableIdsAsync(
+        AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {
-        var geofile = await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(g => g.Id == id, ct);
-        return geofile is not null && (await access.DecideAsync(ctx, AccessAction.Write, geofile, ct)).Allowed;
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var geofiles = await db.Geofiles.AsNoTracking().Where(g => ids.Contains(g.Id)).ToListAsync(ct);
+        return await ResLinkTargetWrites.WritableAsync(access, ctx, geofiles, ct);
     }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(

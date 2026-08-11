@@ -13332,6 +13332,7 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            mayEdit: boolean;
             members: components["schemas"]["ResLinkMemberDto"][];
         };
         ResLinkMemberAddRequest: {
@@ -13426,6 +13427,7 @@ export interface components {
             subtitle: null | string;
             route: null | string;
             thumbnailUrl: null | string;
+            path?: null | string[];
         };
         ResLinkTargetHitDto: {
             /** Format: uuid */

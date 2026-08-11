@@ -52,6 +52,14 @@ interface Props {
   link?: ResLink | null;
   /** Required when creating: the member the new link starts from. */
   origin?: LinkOrigin;
+  /**
+   * The relation a new link must carry, when the flow already knows it — a field that
+   * stands for one role opens this dialog to record another target of that role, so the
+   * relation is not a question and the origin is the end the relation reads from. Both
+   * controls that would ask are left out rather than shown pre-filled and disabled: a
+   * disabled control invites the reader to work out why it cannot be changed.
+   */
+  relation?: { typeId: number; directed: boolean } | null;
   onCreated?: (link: ResLink) => void;
 }
 
@@ -61,7 +69,14 @@ const NOTE_MAX = 2000;
 
 const pointVisibilities: Visibility[] = ['private', 'cavingGroup', 'authenticated', 'public'];
 
-export default function AddMemberModal({ open, onClose, link, origin, onCreated }: Props) {
+export default function AddMemberModal({
+  open,
+  onClose,
+  link,
+  origin,
+  relation,
+  onCreated,
+}: Props) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const createLink = useCreateResLink();
@@ -79,8 +94,10 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
   const [anchor, setAnchor] = useState<unknown>(null);
   const [note, setNote] = useState('');
   const [isMain, setIsMain] = useState(false);
-  const [relationTypeId, setRelationTypeId] = useState<number | null>(null);
-  const [relationDirected, setRelationDirected] = useState(false);
+  const presetRelationTypeId = relation?.typeId ?? null;
+  const presetRelationDirected = relation?.directed ?? false;
+  const [relationTypeId, setRelationTypeId] = useState<number | null>(presetRelationTypeId);
+  const [relationDirected, setRelationDirected] = useState(presetRelationDirected);
   const [point, setPoint] = useState<[number, number] | null>(null);
   // Kept apart from the picked position rather than folded into it: the map picker deals in
   // lon/lat and is shared with flows that have no notion of height, so height is stated
@@ -100,8 +117,8 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
       setAnchorKind('whole');
       setAnchor(null);
       setNote('');
-      setRelationTypeId(null);
-      setRelationDirected(false);
+      setRelationTypeId(presetRelationTypeId);
+      setRelationDirected(presetRelationDirected);
       setPoint(null);
       setAltitude(null);
       setPointName('');
@@ -110,7 +127,7 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
       // is the natural place to read it from — so a new member is not it by default.
       setIsMain(false);
     }
-  }, [open]);
+  }, [open, presetRelationTypeId, presetRelationDirected]);
 
   // Who the point will be visible to is the server's rule applied to this caller's own
   // group roster — a fact only the server holds — so it is asked for rather than guessed,
@@ -126,9 +143,12 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
   // A directed relation reads from one end, so exactly one member carries the marker. On an
   // existing link the marker is already placed unless the link is still a single member, and
   // moving it is the link page's job — offering it here would only earn a refusal.
+  // A relation handed in fixes which end reads it: the origin. Offering the marker there
+  // would offer a way to record a role backwards, which the field it was opened from could
+  // then not draw.
   const existingMain = link?.members.some((member) => member.isMain) ?? false;
   const directed = creating ? relationDirected : Boolean(link?.relationType?.directed);
-  const mainAvailable = directed && !existingMain;
+  const mainAvailable = directed && !existingMain && !relation;
   const mainDisabledReason = !directed
     ? t('resLinks.mainNeedsDirected')
     : existingMain
@@ -315,7 +335,7 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
       width={560}
     >
       <Flex vertical gap={12}>
-        {creating && origin && (
+        {creating && origin && !relation && (
           <Flex vertical gap={4}>
             <Typography.Text strong>{t('resLinks.relation')}</Typography.Text>
             <RelationSelect
@@ -481,15 +501,17 @@ export default function AddMemberModal({ open, onClose, link, origin, onCreated 
           aria-label={t('resLinks.note')}
         />
 
-        <Tooltip title={mainDisabledReason}>
-          <Checkbox
-            checked={isMain}
-            disabled={!mainAvailable}
-            onChange={(event) => setIsMain(event.target.checked)}
-          >
-            {t('resLinks.markAsMain')}
-          </Checkbox>
-        </Tooltip>
+        {!relation && (
+          <Tooltip title={mainDisabledReason}>
+            <Checkbox
+              checked={isMain}
+              disabled={!mainAvailable}
+              onChange={(event) => setIsMain(event.target.checked)}
+            >
+              {t('resLinks.markAsMain')}
+            </Checkbox>
+          </Tooltip>
+        )}
       </Flex>
     </DialogHost>
   );

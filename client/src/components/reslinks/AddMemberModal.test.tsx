@@ -119,6 +119,7 @@ function link(overrides: Partial<ResLink> = {}): ResLink {
     relationType: null,
     description: null,
     createdBy: 'me',
+    mayEdit: true,
     createdAt: '2026-08-05T00:00:00Z',
     updatedAt: '2026-08-05T00:00:00Z',
     members: [],
@@ -442,6 +443,46 @@ describe('AddMemberModal', () => {
     expect(screen.getByRole('checkbox')).toBeDisabled();
     // Adding to an existing link chooses no relation — that belongs to the link itself.
     expect(screen.queryByLabelText('Relation')).not.toBeInTheDocument();
+  });
+
+  it('takes a relation it was handed without asking for it, or for which end reads it', async () => {
+    targetHits = [{ id: 'other', title: 'Falia Demo', subtitle: null }];
+    open({ relation: { typeId: 1, directed: true } });
+
+    // A field that stands for one role opens this to record another target of that role.
+    // Neither the relation nor the end it reads from is a question there: both are what
+    // the field is, and a control offering to change them would offer to record a role
+    // the field could then not draw.
+    expect(screen.queryByLabelText('Relation')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Item'), { target: { value: 'Falia' } });
+    fireEvent.click((await screen.findAllByText('Falia Demo')).at(-1)!);
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await vi.waitFor(() => expect(createLink).toHaveBeenCalled());
+    const body = createLink.mock.calls[0][0];
+    expect(body.relationTypeId).toBe(1);
+    expect(body.members[0]).toMatchObject({ targetId: 'self', isMain: true, sortOrder: 0 });
+    expect(body.members[1]).toMatchObject({ targetId: 'other', isMain: false, sortOrder: 1 });
+  });
+
+  it('adds to a link that carries the role without moving the end it reads from', async () => {
+    targetHits = [{ id: 'other', title: 'Falia Demo', subtitle: null }];
+    open({
+      link: link({ relationType: relation(), members: [member({ id: 'm1', isMain: true })] }),
+      origin: undefined,
+      relation: { typeId: 1, directed: true },
+    });
+
+    fireEvent.change(screen.getByLabelText('Item'), { target: { value: 'Falia' } });
+    fireEvent.click((await screen.findAllByText('Falia Demo')).at(-1)!);
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await vi.waitFor(() => expect(addMember).toHaveBeenCalled());
+    expect(addMember.mock.calls[0][0]).toMatchObject({ id: 'l1' });
+    expect(addMember.mock.calls[0][0].body.isMain).toBe(false);
+    expect(createLink).not.toHaveBeenCalled();
   });
 
   it('previews both readings of a directed relation once there is an end to read from', () => {

@@ -42,7 +42,7 @@ import {
   type ResLinkMember,
 } from '../../api/hooks.ts';
 import AddMemberModal from '../../components/reslinks/AddMemberModal.tsx';
-import { useMayEditResLink } from '../../components/reslinks/permissions.ts';
+import { mayEditResLink } from '../../components/reslinks/permissions.ts';
 import { resLinkProblemMessage } from '../../components/reslinks/problems.ts';
 import RelationSelect from '../../components/reslinks/RelationSelect.tsx';
 import { relationPhrase } from '../../components/reslinks/relations.ts';
@@ -219,7 +219,7 @@ export default function LinkPage() {
   const { data: me } = useMe();
   const { data: link, isLoading, isError, error } = useResLink(code);
   const { data: creator } = useMember(link?.createdBy ?? '');
-  const mayEdit = useMayEditResLink(link);
+  const mayEdit = mayEditResLink(link);
   const updateLink = useUpdateResLink();
   const updateMember = useUpdateResLinkMember();
 

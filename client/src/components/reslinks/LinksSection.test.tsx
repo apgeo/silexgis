@@ -58,6 +58,7 @@ function link(overrides: Partial<ResLink> = {}): ResLink {
     },
     description: null,
     createdBy: 'me',
+    mayEdit: true,
     createdAt: '2026-08-05T00:00:00Z',
     updatedAt: '2026-08-05T00:00:00Z',
     members: [],

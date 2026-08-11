@@ -497,45 +497,16 @@ public static class FeatureEndpoints
     }
 
     /// <summary>
-    /// The feature's primary-parent chain (outermost ancestor first) for breadcrumbs.
-    /// Truncated at the first ancestor the caller may not read — names above that point
-    /// are never disclosed.
+    /// The feature's primary-parent chain (outermost ancestor first) as breadcrumb rows.
+    /// The walk and its truncation at the first unreadable ancestor belong to the shared
+    /// rule; this only dresses the answer in this surface's DTO.
     /// </summary>
     internal static async Task<IReadOnlyList<FeatureBreadcrumbDto>> PrimaryChainAsync(
         SilexGisDbContext db, AccessContext ctx, Feature feature, CancellationToken ct)
     {
-        var ancestorIds = feature.AncestorIds.Where(a => a != feature.Id).ToArray();
-        if (ancestorIds.Length == 0)
-        {
-            return [];
-        }
-
-        // One flat read: the primary edge of the feature and of every ancestor.
-        var chainChildIds = feature.AncestorIds;
-        var primaryParentOf = await db.FeatureHierarchyEdges.AsNoTracking()
-            .Where(e => e.IsPrimary && chainChildIds.Contains(e.ChildId))
-            .ToDictionaryAsync(e => e.ChildId, e => e.ParentId, ct);
-        var visibleNames = await db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-            .Where(f => ancestorIds.Contains(f.Id))
-            .Select(f => new { f.Id, f.Name })
-            .ToDictionaryAsync(x => x.Id, x => x.Name, ct);
-
-        var chain = new List<FeatureBreadcrumbDto>();
-        var current = feature.Id;
-        // The DAG is cycle-free by construction; the cap keeps corrupt data from looping.
-        while (chain.Count <= ancestorIds.Length && primaryParentOf.TryGetValue(current, out var parentId))
-        {
-            if (!visibleNames.TryGetValue(parentId, out var name))
-            {
-                break;
-            }
-
-            chain.Add(new FeatureBreadcrumbDto(parentId, name));
-            current = parentId;
-        }
-
-        chain.Reverse();
-        return chain;
+        var chain = await FeaturePrimaryChains.OfAsync(
+            db, ctx, new FeaturePrimaryChains.Subject(feature.Id, feature.AncestorIds), ct);
+        return [.. chain.Select(step => new FeatureBreadcrumbDto(step.Id, step.Name))];
     }
 
     internal static ProblemHttpResult WriteProblem(FeatureWriteException ex) =>

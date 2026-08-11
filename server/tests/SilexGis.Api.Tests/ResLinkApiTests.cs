@@ -509,6 +509,40 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>
+    /// The link states whether this caller may curate it, because nothing else in the
+    /// payload lets anyone work that out: two of the rule's three arms are about the
+    /// caller's rights over a main member whose kind varies, and a reader holding only the
+    /// creator id can recognise nobody but the author. Both halves on one account — a
+    /// Viewer who wrote none of it is told no, and the same Viewer, once holding write on
+    /// the trip the role is about, is told yes — asked of the link's own route and of the
+    /// panel a page reads, which must not disagree. The claim is then spent: the edit it
+    /// advertises is the edit the write path accepts.
+    /// </summary>
+    [Fact]
+    public async Task A_link_states_whether_this_caller_may_curate_it()
+    {
+        var cave = await CreateCaveAsync(owner, "Stated Curation Cave", "authenticated");
+        var tripId = await CreateTripLogAsync("Stated curation trip", cave, "authenticated");
+        var visited = await RelationIdAsync("trip-visited");
+        var linkId = await CreateTypedLinkAsync(
+            owner, visited, Member("tripLog", tripId, isMain: true), Member("feature", cave, sortOrder: 1));
+
+        (await MayEditAsync(owner, linkId)).ShouldBeTrue();
+        (await MayEditAsync(viewer, linkId)).ShouldBeFalse();
+        (await PanelMayEditAsync(viewer, "tripLog", tripId, linkId)).ShouldBeFalse();
+
+        await GrantAsync(viewerId, AccessDomain.TripLogs, AccessAction.Write, tripId);
+
+        (await MayEditAsync(viewer, linkId)).ShouldBeTrue();
+        (await PanelMayEditAsync(viewer, "tripLog", tripId, linkId)).ShouldBeTrue();
+
+        (await viewer.PatchAsJsonAsync(
+                $"/api/v1/reslinks/{linkId}",
+                new { description = "amended by a co-editor", relationTypeId = visited, mainMemberId = (Guid?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
     /// The same rule on a main member from another world, because it is a property of the
     /// link mechanism and not a trip feature wearing a general name. A document's write
     /// question is its own walk rather than a bare domain check, and the link surface asks
@@ -1068,6 +1102,54 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
             .Single(m => m.GetProperty("targetId").GetGuid() == groupId)
             .GetProperty("display").ValueKind.ShouldBe(JsonValueKind.Null);
         (await SearchIdsAsync(owner, "cavingGroup", token)).ShouldBe([groupId]);
+    }
+
+    [Fact]
+    public async Task A_feature_target_carries_the_containment_that_tells_two_of_one_name_apart()
+    {
+        var token = $"Rlp{Guid.NewGuid():N}"[..12];
+
+        // A massif, a sector inside it, and a passage inside that — the shape a work area
+        // really has, and the shape that makes a bare name useless: the passage is called
+        // the same thing in every second cave. The second massif is not decoration: the
+        // outermost step is dropped only where the installation has a single root feature,
+        // so two of them keep this test measuring the path and not that rule.
+        var massif = await CreateGenericFeatureAsync(owner, $"{token} Massif", "authenticated");
+        await CreateGenericFeatureAsync(owner, $"{token} Other massif", "authenticated");
+        var sector = await CreateChildFeatureAsync($"{token} Sector", "authenticated", massif);
+        var passage = await CreateChildFeatureAsync($"{token} Passage", "authenticated", sector);
+        var linkId = await CreateLinkAsync(owner, Member("feature", passage));
+
+        var path = await FeaturePathAsync(viewer, linkId, passage);
+        path.Count.ShouldBe(2);
+        path[0].ShouldContain("Massif");
+        path[1].ShouldContain("Sector");
+
+        // Nothing is stored on the membership: the path is derived at read time, so
+        // re-parenting the passage changes what the chip says without the link being
+        // rewritten — which is the whole reason it is not written down.
+        await SetPrimaryParentAsync(passage, massif);
+        (await FeaturePathAsync(viewer, linkId, passage)).ShouldBe([path[0]]);
+
+        // A step this caller may not read ends the path rather than being stepped over:
+        // continuing past the gap would name a feature the visibility rules keep from them,
+        // and the part below it is the honest answer.
+        var hiddenSector = await CreateChildFeatureAsync($"{token} Hidden sector", "authenticated", massif);
+        var deep = await CreateChildFeatureAsync($"{token} Deep passage", "authenticated", hiddenSector);
+        var deepLink = await CreateLinkAsync(owner, Member("feature", deep));
+        await DenyFeatureReadAsync(viewerId, hiddenSector);
+        (await FeaturePathAsync(viewer, deepLink, deep)).ShouldBeEmpty();
+
+        // …and the refusal is about the step, not about the member: the passage itself is
+        // still readable, so an empty path here is a truncation and not a stripped chip.
+        (await ReadJsonAsync(await viewer.GetAsync($"/api/v1/reslinks/{deepLink}")))
+            .GetProperty("members").EnumerateArray()
+            .Single(m => m.GetProperty("targetId").GetGuid() == deep)
+            .GetProperty("display").GetProperty("title").GetString()!.ShouldContain("Deep passage");
+
+        // Fixture proof that the emptiness above is the hidden step and not an empty answer
+        // for everybody: whoever may read that sector still gets the whole path.
+        (await FeaturePathAsync(owner, deepLink, deep)).Count.ShouldBe(2);
     }
 
     // ---- the GPS-point convenience ---------------------------------------------------
@@ -2392,6 +2474,28 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
+    /// <summary>The curation capability the link states for this caller, from its own route.</summary>
+    private static async Task<bool> MayEditAsync(HttpClient client, Guid linkId)
+    {
+        var response = await client.GetAsync($"/api/v1/reslinks/{linkId}");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("mayEdit").GetBoolean();
+    }
+
+    /// <summary>The same capability as the panel on an entity's page reports it.</summary>
+    private static async Task<bool> PanelMayEditAsync(
+        HttpClient client, string targetType, Guid targetId, Guid linkId)
+    {
+        var route = $"/api/v1/reslinks/for-target?type={targetType}&id={targetId}";
+        var response = await client.GetAsync(route);
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("items").EnumerateArray()
+            .Single(i => i.GetProperty("id").GetGuid() == linkId)
+            .GetProperty("mayEdit").GetBoolean();
+    }
+
     /// <summary>
     /// The link ids one panel lists, optionally asked for a single relation, with the
     /// reported total asserted against the rows actually returned — the total doubles as
@@ -2499,6 +2603,47 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>A generic feature contained by another, as the owner.</summary>
+    private async Task<Guid> CreateChildFeatureAsync(string name, string visibility, Guid parentId)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/features", new
+        {
+            kind = "generic",
+            name = $"{name} {Guid.NewGuid():N}"[..40],
+            featureTypeId = genericTypeId,
+            geometry = new { type = "Point", coordinates = new[] { 25.83, 45.83 } },
+            locationProtected = false,
+            visibility,
+            parents = new[] { new { parentId, isPrimary = true } },
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>Moves one feature under another, replacing whatever contained it.</summary>
+    private async Task SetPrimaryParentAsync(Guid featureId, Guid parentId)
+    {
+        var response = await owner.PutAsJsonAsync($"/api/v1/features/{featureId}/parents", new
+        {
+            parents = new[] { new { parentId, isPrimary = true } },
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>The containment path a link states for one feature member, outermost first.</summary>
+    private static async Task<List<string>> FeaturePathAsync(
+        HttpClient client, Guid linkId, Guid featureId)
+    {
+        var display = (await ReadJsonAsync(await client.GetAsync($"/api/v1/reslinks/{linkId}")))
+            .GetProperty("members").EnumerateArray()
+            .Single(m => m.GetProperty("targetId").GetGuid() == featureId)
+            .GetProperty("display");
+        return display.TryGetProperty("path", out var path) && path.ValueKind == JsonValueKind.Array
+            ? [.. path.EnumerateArray().Select(step => step.GetString()!)]
+            : [];
     }
 
     /// <summary>An entrance of a cave, returning the entrance's own feature id.</summary>
@@ -2790,6 +2935,28 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
             // Object scope anchors in ScopeId outside the feature domain, where the
             // dedicated foreign key carries it instead.
             ScopeId = scopeId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Takes one feature out of one person's sight whatever their role grants. Object
+    /// scope names that one row and no descendant of it, which is exactly what a test
+    /// about a gap in the middle of a containment path needs.
+    /// </summary>
+    private async Task DenyFeatureReadAsync(Guid userId, Guid featureId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = userId,
+            Effect = AccessEffect.Deny,
+            Domain = AccessDomain.Features,
+            Actions = AccessAction.Read,
+            ScopeKind = AccessScopeKind.Object,
+            ScopeFeatureId = featureId,
         });
         await db.SaveChangesAsync();
     }

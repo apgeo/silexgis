@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { LockOutlined, StarFilled } from '@ant-design/icons';
-import { Flex, Tag, Tooltip, Typography } from 'antd';
+import type { MouseEvent } from 'react';
+import { CloseOutlined, LockOutlined, StarFilled } from '@ant-design/icons';
+import { Flex, Popconfirm, Tag, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import type { ResLinkMember } from '../../api/hooks.ts';
@@ -15,16 +16,65 @@ import { anchorStateNote, anchorSummary, memberRoute, targetTypeEntry } from './
  * are deliberately not rendered: a part label or an author's note beside an otherwise
  * nameless chip narrows down what the hidden thing is, which is exactly what withholding
  * the display was for.
+ *
+ * `onRemove` turns the chip into a removable one. A restricted chip is removable too when
+ * the caller may curate the link: whether a membership may be struck out is a question
+ * about the link, not about the thing on the other end of it — and a member somebody
+ * cannot read is exactly the one they are most likely to have to correct blind.
+ *
+ * `showPath` draws the target's containment ahead of its name, for the surfaces where the
+ * name alone is ambiguous — two caves of one massif each have a "Galeria Mare". It is
+ * derived by the server from the hierarchy at read time and never stored beside the
+ * membership: a path written down is a path that goes stale the first time somebody moves
+ * a passage. The hover hint carries it whether or not the chip shows it, since it costs
+ * nothing there.
  */
-export default function MemberChip({ member }: { member: ResLinkMember }) {
+export default function MemberChip({
+  member,
+  onRemove,
+  showPath,
+}: {
+  member: ResLinkMember;
+  onRemove?: () => void;
+  showPath?: boolean;
+}) {
   const { t } = useTranslation();
   const entry = targetTypeEntry(member.targetType);
   const Icon = entry.icon;
 
+  // The chip may sit inside a link to its target, so the close click has to say it is not
+  // a navigation before anything else reads it as one — and it never removes anything by
+  // itself: striking a membership out is a hard delete of somebody's record of what was
+  // done, with no undo, on a target small enough to hit by accident while aiming at the
+  // chip. The confirmation is the same one the link's own page puts on the same act, so
+  // the two surfaces agree about how dangerous it is.
+  const closeProps = onRemove
+    ? {
+        closable: true,
+        closeIcon: (
+          <Popconfirm
+            title={t('resLinks.removeMemberConfirm')}
+            okButtonProps={{ danger: true }}
+            onConfirm={onRemove}
+          >
+            <CloseOutlined aria-label={t('resLinks.removeMember')} />
+          </Popconfirm>
+        ),
+        onClose: (event: MouseEvent<HTMLElement>) => {
+          // The tag would remove itself and follow any surrounding navigation; the
+          // confirmation inside the icon has already taken the click.
+          event.preventDefault();
+          event.stopPropagation();
+        },
+      }
+    : {};
+
   if (!member.display) {
     return (
       <Tooltip title={t('resLinks.restrictedHint')}>
-        <Tag icon={<LockOutlined />}>{t('resLinks.restricted')}</Tag>
+        <Tag icon={<LockOutlined />} {...closeProps}>
+          {t('resLinks.restricted')}
+        </Tag>
       </Tooltip>
     );
   }
@@ -32,12 +82,31 @@ export default function MemberChip({ member }: { member: ResLinkMember }) {
   const summary = anchorSummary(member.anchorKind, member.anchor, t);
   const stateNote = anchorStateNote(member.anchorState, t);
   const route = memberRoute(member.targetType, member.targetId, member.display);
-  const hint = [t(entry.labelKey), member.display.subtitle, stateNote].filter(Boolean).join(' · ');
+  const path = member.display.path ?? [];
+  const hint = [
+    t(entry.labelKey),
+    member.display.subtitle,
+    path.length > 0 ? path.join(' › ') : null,
+    stateNote,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   const chip = (
-    <Tag icon={<Icon />} style={route ? { cursor: 'pointer', marginInlineEnd: 0 } : { marginInlineEnd: 0 }}>
+    <Tag
+      icon={<Icon />}
+      style={route ? { cursor: 'pointer', marginInlineEnd: 0 } : { marginInlineEnd: 0 }}
+      {...closeProps}
+    >
       {member.isMain && (
         <StarFilled aria-label={t('resLinks.mainMember')} style={{ marginInlineEnd: 4 }} />
+      )}
+      {/* Ahead of the name and quieter than it: the path answers "which one", which is a
+          question the reader only asks once the name has already been read. */}
+      {showPath && path.length > 0 && (
+        <Typography.Text type="secondary" style={{ marginInlineEnd: 4 }}>
+          {path.join(' › ')} ›
+        </Typography.Text>
       )}
       {member.display.title}
       {summary && (

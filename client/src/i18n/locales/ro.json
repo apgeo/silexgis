@@ -772,7 +772,25 @@
     "drawArea": "Suprafață",
     "clearGeometry": "Șterge forma",
     "geometryWarning": "Locație exactă — schița unei ture nu este niciodată aproximată.",
-    "geometryWarningDetail": "Oricine poate citi această tură vede forma exact așa cum a fost desenată, indiferent de protecția peșterilor pe care le numește. O schiță pusă peste o intrare protejată dezvăluie astfel acea intrare."
+    "geometryWarningDetail": "Oricine poate citi această tură vede forma exact așa cum a fost desenată, indiferent de protecția peșterilor pe care le numește. O schiță pusă peste o intrare protejată dezvăluie astfel acea intrare.",
+    "roleAdd": "Adaugă",
+    "roleShowingFirst": "Se afișează primele {{count}} din {{total}} înregistrări.",
+    "rolesTitle": "Ce a făcut tura",
+    "roleOther": "Înregistrează altceva",
+    "roleNoteEmpty": "Descrie",
+    "roleNoteEdit": "Descrie ce a rămas",
+    "roles": {
+      "trip-work-area": "Zone de lucru",
+      "trip-objective": "Obiective principale",
+      "trip-visited": "Vizitate",
+      "trip-surveyed": "Cartate",
+      "trip-discovered": "Descoperite",
+      "trip-dug": "Săpate",
+      "trip-photographed": "Fotografiate",
+      "trip-searched-not-found": "Căutate, negăsite",
+      "trip-lead": "Continuări lăsate",
+      "trip-follows-on-from": "Continuă tura"
+    }
   },
   "tags": {
     "title": "Etichete",

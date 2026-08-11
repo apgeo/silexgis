@@ -117,7 +117,11 @@ Previous versions:
   **draft**: you can write it up over several sittings without anybody being told, and publishing it
   is what announces it to the people who were there — and only to those of them who may actually
   open it. A draft is not a hidden trip, though: whoever the trip's visibility admits can read it
-  from the moment it exists.
+  from the moment it exists. A trip's page also records **what it did to what it names** — the
+  areas worked in, the passages surveyed, dug, photographed or discovered, the leads left for next
+  time — each as a labelled field you fill in as the trip earns it, rather than a form of empty
+  boxes to stare at. A work area shows what contains it, so two passages of the same name are told
+  apart. What one person records, everybody who may maintain the thing it is about can correct.
 - **Tags, saved & shareable map views**, and **multi-window** pop-out panels.
 - **Share links** — hand out a revocable link to one feature and what it contains, either
   public or sign-in-only. A share never reveals a protected location.

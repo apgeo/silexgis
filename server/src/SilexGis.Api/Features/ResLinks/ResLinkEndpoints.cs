@@ -868,18 +868,46 @@ public static class ResLinkEndpoints
             // Nothing bounds them in principle, though, and this arm's cost grows with the
             // number of candidates rather than the page size — narrowed by a relation
             // filter when one is asked for, and by nothing otherwise: the accepted price
-            // of an honest badge. If a heavily-linked protected feature ever
-            // appears, cap the candidates or split the sibling-exposure question into
-            // a cheaper first pass before projecting.
+            // of an honest badge. It cannot be capped without changing what the total
+            // means — the total is the count of candidates that survived the cut, so a cap
+            // would make the badge say "at least this many" while the panel still claims a
+            // number. If a heavily-linked protected feature ever appears, the way out is
+            // the cheaper first pass: answer the sibling-exposure question without
+            // resolving displays or assembling members, then project only the page. What
+            // must not happen meanwhile is a new per-row decision multiplying this set,
+            // which is why the curation answer below is taken after the slice. What it
+            // costs today is measured rather than assumed: at 150 candidate links on a
+            // page of twenty this answers in tens of milliseconds, and a test holds it to
+            // a budget so that a change turning the arm quadratic fails there instead of
+            // on somebody's cave page.
             var candidates = await linkQuery.ToListAsync(ct);
             var projected = await ProjectAsync(
-                db, targets, associations, protection, photoPositions, access, ctx, candidates, ct);
+                db, targets, associations, protection, photoPositions, access, ctx, candidates, ct,
+                skipCuration: true);
             var listed = projected
                 .Where(l => l.Members.Any(m =>
                     m.TargetType == ResLinkTargets.FeatureName && m.TargetId == id))
                 .ToList();
+
+            // Curation is decided after the slice, never with the projection above: which
+            // links survive to be listed is only known once every candidate has been
+            // projected, but who may curate them is only ever asked about the rows actually
+            // returned. So this arm's per-row cost is the page's, not the candidate set's,
+            // and the honest total stays the count of what survived.
+            var rows = listed.Skip((p - 1) * size).Take(size).ToList();
+            var pageIds = rows.Select(l => l.Id).ToHashSet();
+            List<ResLinkMember> pageMains = pageIds.Count == 0
+                ? []
+                : await db.ResLinkMembers.AsNoTracking()
+                    .Where(m => pageIds.Contains(m.ResLinkId) && m.IsMain)
+                    .ToListAsync(ct);
+            var curated = await CuratedLinkIdsAsync(
+                targets, ctx, [.. candidates.Where(l => pageIds.Contains(l.Id))], pageMains, ct);
             return TypedResults.Ok(new PagedResult<ResLinkDto>(
-                [.. listed.Skip((p - 1) * size).Take(size)], p, size, listed.Count));
+                [.. rows.Select(l => l with { MayEdit = curated.Contains(l.Id) })],
+                p,
+                size,
+                listed.Count));
         }
 
         var total = await linkQuery.CountAsync(ct);
@@ -958,29 +986,11 @@ public static class ResLinkEndpoints
     // ---- shared pieces --------------------------------------------------------------
 
     /// <summary>
-    /// Who may edit or delete a link: its creator, a full administrator, or whoever may
-    /// write the link's main member.
+    /// Whether this caller may edit or delete one link, at write time. The rule itself
+    /// lives in <see cref="CuratedLinkIdsAsync"/> and is asked here for a set of one: what
+    /// this method adds is the lock-time re-read of the main marker, which a write must do
+    /// for itself because the marker can move under a concurrent promotion.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The third arm exists because a directed link is an assertion <em>about</em> its main
-    /// member — what this trip surveyed, what this document describes — and authorship of
-    /// the sentence is a poor proxy for stewardship of the subject. Without it, whoever
-    /// typed a link first owns it forever: a second person who may edit the very thing the
-    /// link is about cannot correct what was recorded, only add a rival link beside it. The
-    /// rule is asked through each target world's own write decision rather than by
-    /// comparing ids, so a world that decides writing in an unusual way — a document
-    /// through its served file, a shelf through the documents filed at it, a survey model
-    /// through its cave — answers here the way it answers everywhere else.
-    /// </para>
-    /// <para>
-    /// It is a widening and never a narrowing: everyone who could edit a link before can
-    /// still edit it. A link with <em>no</em> main member is untouched — an undirected link
-    /// has no subject to inherit stewardship from, so the creator rule stands alone there,
-    /// and a link whose creator account is gone and which names no main member answers to
-    /// administrators only.
-    /// </para>
-    /// </remarks>
     private static async Task<bool> MayEditAsync(
         SilexGisDbContext db,
         ResLinkTargetDirectory targets,
@@ -988,22 +998,16 @@ public static class ResLinkEndpoints
         ResLink link,
         CancellationToken ct)
     {
-        if (ctx.IsFullAdmin || (link.CreatedBy is { } creator && creator == ctx.UserId))
-        {
-            return true;
-        }
-
         // One row through the partial unique index that already makes "at most one main
         // per link" a schema fact. Every caller asks this after taking the link's row
-        // lock, so the marker it reads is the one the write will act on; the creator arm
-        // it grew from could be decided anywhere, because a creator id never changes.
+        // lock, so the marker it reads is the one the write will act on — which is the
+        // whole reason a write does not simply reuse a marker somebody else read earlier.
         var main = await db.ResLinkMembers.AsNoTracking()
             .Where(m => m.ResLinkId == link.Id && m.IsMain)
-            .Select(m => new { m.FeatureId, m.EntityType, m.EntityId })
             .FirstOrDefaultAsync(ct);
-        return main is not null
-            && await targets.CanWriteAsync(
-                ctx, main.EntityType, main.FeatureId ?? main.EntityId!.Value, ct);
+        var curated = await CuratedLinkIdsAsync(
+            targets, ctx, [link], main is null ? [] : [main], ct);
+        return curated.Contains(link.Id);
     }
 
     private static Task<ResLinkRelationType?> RelationAsync(
@@ -1140,7 +1144,8 @@ public static class ResLinkEndpoints
         AccessContext ctx,
         IReadOnlyList<ResLink> links,
         CancellationToken ct,
-        bool skipMembershipCut = false)
+        bool skipMembershipCut = false,
+        bool skipCuration = false)
     {
         if (links.Count == 0)
         {
@@ -1154,6 +1159,13 @@ public static class ResLinkEndpoints
             .ThenBy(m => m.CreatedAt)
             .ThenBy(m => m.Id)
             .ToListAsync(ct);
+
+        // Taken before the disclosure cut below, which removes members from the answer but
+        // not from the link: curation asks who may write the link's subject, and a caller
+        // who holds that write is not told less about their own rights because the marker
+        // sits on a member whose association is withheld from them. It is also the same
+        // marker the write paths will read.
+        var mainMembers = members.Where(m => m.IsMain).ToList();
 
         // Displays are resolved before the disclosure cut: which members this caller can
         // read is also an input to it — only a readable sibling can show them coordinates.
@@ -1201,6 +1213,10 @@ public static class ResLinkEndpoints
                 .Where(r => relationIds.Contains(r.Id))
                 .ToDictionaryAsync(r => r.Id, ct);
 
+        var curated = skipCuration
+            ? []
+            : await CuratedLinkIdsAsync(targets, ctx, links, mainMembers, ct);
+
         var memberDtos = await AssembleMembersAsync(db, access, ctx, members, displays, ct);
         var byLink = members
             .GroupBy(m => m.ResLinkId)
@@ -1216,7 +1232,84 @@ public static class ResLinkEndpoints
             l.CreatedBy,
             l.CreatedAt,
             l.UpdatedAt,
+            curated.Contains(l.Id),
             byLink.GetValueOrDefault(l.Id) ?? []))];
+    }
+
+    /// <summary>
+    /// Which of these links the caller may curate — the one home of the rule, answered for
+    /// a whole page at once: a link is curated by its creator, by a full administrator, or
+    /// by whoever may write the link's main member. The write paths ask it too, for a set
+    /// of one, so that there is no second expression of it to drift.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The third arm exists because a directed link is an assertion <em>about</em> its main
+    /// member — what this trip surveyed, what this document describes — and authorship of
+    /// the sentence is a poor proxy for stewardship of the subject. Without it, whoever
+    /// typed a link first owns it forever: a second person who may edit the very thing the
+    /// link is about cannot correct what was recorded, only add a rival link beside it. The
+    /// rule is asked through each target world's own write decision rather than by
+    /// comparing ids, so a world that decides writing in an unusual way — a document
+    /// through its served file, a shelf through the documents filed at it, a survey model
+    /// through its cave — answers here the way it answers everywhere else.
+    /// </para>
+    /// <para>
+    /// It is a widening and never a narrowing: everyone who could edit a link before can
+    /// still edit it. A link with <em>no</em> main member is untouched — an undirected link
+    /// has no subject to inherit stewardship from, so the creator rule stands alone there,
+    /// and a link whose creator account is gone and which names no main member answers to
+    /// administrators only.
+    /// </para>
+    /// <para>
+    /// The two arms that need no storage go first, because they answer most of a page for
+    /// nothing: an administrator curates everything, and an author curates what they wrote.
+    /// Only what is left asks the third arm — write on the link's main member — and it is
+    /// asked once per target world over the distinct ids of that world, never once per link.
+    /// The main markers are read from the members the projection has already loaded, so
+    /// finding them costs nothing at all; the per-link rule would instead have cost a query
+    /// for the marker plus a decision walk for every row on the page, on a listing whose
+    /// whole cost contract is that it stays flat as the page grows.
+    /// </para>
+    /// <para>
+    /// The answer is a snapshot for display. Writers re-decide under the link's row lock,
+    /// because the marker this reads can be moved by a concurrent promotion — so a stale
+    /// "yes" here costs a refusal at the write, not a write that should have been refused.
+    /// </para>
+    /// </remarks>
+    private static async Task<HashSet<Guid>> CuratedLinkIdsAsync(
+        ResLinkTargetDirectory targets,
+        AccessContext ctx,
+        IReadOnlyList<ResLink> links,
+        IReadOnlyList<ResLinkMember> mainMembers,
+        CancellationToken ct)
+    {
+        if (ctx.IsFullAdmin)
+        {
+            return [.. links.Select(l => l.Id)];
+        }
+
+        var curated = new HashSet<Guid>(
+            links.Where(l => l.CreatedBy is { } creator && creator == ctx.UserId).Select(l => l.Id));
+        var undecided = mainMembers.Where(m => !curated.Contains(m.ResLinkId)).ToList();
+        if (undecided.Count == 0)
+        {
+            return curated;
+        }
+
+        foreach (var world in undecided.GroupBy(m => m.EntityType))
+        {
+            var ids = world.Select(TargetIdOf).Distinct().ToList();
+            var writable = await targets.WritableIdsAsync(ctx, world.Key, ids, ct);
+            foreach (var main in world.Where(m => writable.Contains(TargetIdOf(m))))
+            {
+                curated.Add(main.ResLinkId);
+            }
+        }
+
+        return curated;
+
+        static Guid TargetIdOf(ResLinkMember member) => member.FeatureId ?? member.EntityId!.Value;
     }
 
     /// <summary>

@@ -15,7 +15,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useDeleteResLink, useResLinksForTarget, type ResLink } from '../../api/hooks.ts';
 import AddMemberModal from './AddMemberModal.tsx';
 import MemberChip from './MemberChip.tsx';
-import { useMayEditResLink } from './permissions.ts';
+import { mayEditResLink } from './permissions.ts';
 import { relationPhraseFor } from './relations.ts';
 import { linkPageRoute, linkPageUrl, type ResLinkTargetType } from './registry.ts';
 
@@ -65,7 +65,7 @@ function LinkRow({
   const navigate = useNavigate();
   const deleteLink = useDeleteResLink();
 
-  const mayEdit = useMayEditResLink(link);
+  const mayEdit = mayEditResLink(link);
 
   // The entity whose page this is speaks for itself; repeating its chip in its own row
   // would say nothing. Everything else is what the row is actually about.

@@ -23,6 +23,7 @@ import TagChips from '../../components/tags/TagChips.tsx';
 import TripFormModal from './TripFormModal.tsx';
 import TripGeometryField from './TripGeometryField.tsx';
 import TripPublishControl from './TripPublishControl.tsx';
+import TripRoleFields from './TripRoleFields.tsx';
 import TripStateTag from './TripStateTag.tsx';
 import { formatTripDates, formatUndergroundTime, isMultiDay } from './tripDates.ts';
 
@@ -210,6 +211,11 @@ export default function TripLogDetailPage() {
           <TripGeometryField value={trip.geom} readOnly height={280} />
         </Card>
       )}
+
+      {/* What the trip did to what it names, role by role. The general links list stays
+          below it and still shows the same links among everything else the trip is tied to
+          — these fields are a reading of that list, not a second store. */}
+      <TripRoleFields tripId={trip.id} tripTitle={trip.title} canEdit={canEdit} />
 
       <LinksSection entityType="tripLog" entityId={trip.id} canAdd entityTitle={trip.title} />
 

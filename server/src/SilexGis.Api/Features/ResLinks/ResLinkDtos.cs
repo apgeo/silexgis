@@ -47,8 +47,18 @@ public sealed record ResLinkRelationTypeDto(
 /// <summary>What a caller may see of a member's target, from its own domain's rules —
 /// null on the member when the target is unreadable, and then nothing here (name, route,
 /// thumbnail) leaks around that answer.</summary>
+/// <param name="Path">Where the target sits in its own world's containment, outermost
+/// first — the names only, since nothing addresses a step. Two passages called "Galeria
+/// Mare" are the same chip without it. Filled by the worlds that have a containment to
+/// speak of and left empty by the rest, and it obeys the same reading rules as everything
+/// else here: a step the caller may not read ends the path rather than being skipped over,
+/// so a path never names something its reader is not allowed to know about.</param>
 public sealed record ResLinkTargetDisplayDto(
-    string Title, string? Subtitle, string? Route, string? ThumbnailUrl);
+    string Title,
+    string? Subtitle,
+    string? Route,
+    string? ThumbnailUrl,
+    IReadOnlyList<string>? Path = null);
 
 /// <summary>One row of the target picker feed — deliberately uniform across types so the
 /// picker stays type-agnostic.</summary>
@@ -81,6 +91,14 @@ public sealed record ResLinkDto(
     Guid? CreatedBy,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
+    /// <summary>Whether this caller may amend or delete the link — the curation rule
+    /// answered for them, on the link, because it is not a question the payload lets
+    /// anyone else answer: two of its three arms are about the caller's rights over the
+    /// link's main member, whose kind varies. Without it a surface can only recognise the
+    /// author, and shows no control to the very people the rule was widened for. A
+    /// snapshot, and advisory only: the write paths re-decide it under the link's row
+    /// lock, because the main marker it turns on can move.</summary>
+    bool MayEdit,
     IReadOnlyList<ResLinkMemberDto> Members);
 
 /// <summary>A member of a link being created: a typed target reference plus its anchor.

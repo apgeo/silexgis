@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
 
@@ -65,6 +65,80 @@ function allowDeletedTripRefetch(consoleErrors: { allow: (p: RegExp, reason: str
     'this flow deletes its own trip from the trip page, which refetches it once on the way out',
   );
 }
+
+/**
+ * Picks an existing thing in the record-a-link dialog by typing part of its name.
+ *
+ * Typed rather than scrolled to: the picker asks the server as the reader types, and which
+ * things are within reach is a fact about the installation's data rather than about the trip.
+ * Addressed by test id rather than by the row's own text, because the picker draws its results
+ * as a list of rows whose visible words are the thing's name and its kind, and the kind is what
+ * two different installations are least likely to agree on.
+ */
+async function pickExistingItem(dialog: Locator, name: string, query: string) {
+  await dialog.getByTestId('reslink-target-picker-input').fill(query);
+  const row = dialog.getByTestId('reslink-target-picker-row').filter({ hasText: name });
+  await expect(row.first()).toBeVisible({ timeout: 15_000 });
+  await row.first().click();
+}
+
+/** One role's field on the trip page, addressed by the role it stands for. */
+function roleField(page: Page, code: string): Locator {
+  return page.getByTestId(`role-field-${code}`);
+}
+
+test('a trip records what it worked in, and the record survives a reload and can be struck out', async ({
+  page,
+  consoleErrors,
+}) => {
+  const title = `E2E Role Trip ${Date.now()}`;
+  allowDeletedTripRefetch(consoleErrors);
+  await login(page);
+
+  await page.goto('/trip-logs');
+  await page.getByRole('button', { name: /New trip log/ }).click();
+  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('button', { name: 'OK' }).click();
+
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  const tripUrl = page.url();
+
+  // A trip that has recorded nothing still offers the two fields a report is expected to
+  // state, and does not open onto a wall of the other eight.
+  await expect(page.getByText('What this trip did')).toBeVisible();
+  const workAreas = roleField(page, 'trip-work-area');
+  await expect(workAreas.getByText('Work areas')).toBeVisible();
+  await expect(roleField(page, 'trip-surveyed')).toHaveCount(0);
+
+  // Recording a work area is one act in the field itself: the role is not a question the
+  // dialog asks, because the field it was opened from is the answer.
+  await workAreas.getByText('Add', { exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('combobox', { name: 'Relation' })).toHaveCount(0);
+  await pickExistingItem(dialog, 'Falia Demo', 'Falia');
+  await dialog.getByRole('button', { name: 'OK' }).click();
+
+  await expect(workAreas.getByText('Falia Demo')).toBeVisible({ timeout: 15_000 });
+
+  // The role is a link on the server, not a thing the page was holding: it comes back the
+  // same on a page that was loaded fresh.
+  await page.goto(tripUrl);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  const reloaded = roleField(page, 'trip-work-area');
+  await expect(reloaded.getByText('Falia Demo')).toBeVisible({ timeout: 15_000 });
+
+  // Striking a chip out removes that one membership from the link it belongs to, leaving the
+  // field standing and ready to record another. It asks first: the act is a hard delete of
+  // somebody's record of what the trip did, on a target the size of a close icon.
+  await reloaded.getByLabel('Remove from link').click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(reloaded.getByText('Falia Demo')).toHaveCount(0, { timeout: 15_000 });
+  await expect(reloaded.getByText('Work areas')).toBeVisible();
+
+  await page.getByRole('button', { name: /Delete/ }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
+});
 
 test('a trip spans several days, carries a shape of its own, and says the shape is exact', async ({
   page,
