@@ -131,7 +131,13 @@ test('a trip records what it worked in, and the record survives a reload and can
   // field standing and ready to record another. It asks first: the act is a hard delete of
   // somebody's record of what the trip did, on a target the size of a close icon.
   await reloaded.getByLabel('Remove from link').click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  // Scoped to the popover, and waited out afterwards. Its OK is an ordinary button that also
+  // answers the page-wide "OK" the trip's own delete asks for a few lines below, and antd fades
+  // the popover rather than removing it at once — so an unscoped click there resolves to this
+  // button while it is detaching, and fails as unstable rather than confirming anything.
+  const removeConfirm = page.locator('.ant-popover:visible');
+  await removeConfirm.getByRole('button', { name: 'OK' }).click();
+  await expect(page.locator('.ant-popover:visible')).toHaveCount(0, { timeout: 15_000 });
   await expect(reloaded.getByText('Falia Demo')).toHaveCount(0, { timeout: 15_000 });
   await expect(reloaded.getByText('Work areas')).toBeVisible();
 
