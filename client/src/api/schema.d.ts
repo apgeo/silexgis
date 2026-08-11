@@ -7895,7 +7895,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Links incident to one target, sibling members resolved; the total doubles as the badge count. */
+        /** Links incident to one target, sibling members resolved, optionally narrowed to one relation code; the total doubles as the badge count. */
         get: {
             parameters: {
                 query: {
@@ -7903,6 +7903,7 @@ export interface paths {
                     id: string;
                     page?: number;
                     pageSize?: number;
+                    relation?: string;
                 };
                 header?: never;
                 path?: never;

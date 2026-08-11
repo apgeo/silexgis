@@ -1649,6 +1649,46 @@
       },
       "needs-clarification": {
         "name": "Needs clarification"
+      },
+      "trip-work-area": {
+        "name": "Worked in",
+        "inverse": "Work area of trip"
+      },
+      "trip-objective": {
+        "name": "Aimed at",
+        "inverse": "Objective of trip"
+      },
+      "trip-visited": {
+        "name": "Visited",
+        "inverse": "Visited on trip"
+      },
+      "trip-surveyed": {
+        "name": "Surveyed",
+        "inverse": "Surveyed on trip"
+      },
+      "trip-discovered": {
+        "name": "Discovered",
+        "inverse": "Discovered on trip"
+      },
+      "trip-dug": {
+        "name": "Dug at",
+        "inverse": "Dug on trip"
+      },
+      "trip-photographed": {
+        "name": "Photographed",
+        "inverse": "Photographed on trip"
+      },
+      "trip-searched-not-found": {
+        "name": "Searched, not found",
+        "inverse": "Searched for on trip, not found"
+      },
+      "trip-lead": {
+        "name": "Left lead",
+        "inverse": "Lead left on trip"
+      },
+      "trip-follows-on-from": {
+        "name": "Follows on from",
+        "inverse": "Followed up by"
       }
     },
     "members": "Members",

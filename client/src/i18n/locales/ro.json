@@ -1649,6 +1649,46 @@
       },
       "needs-clarification": {
         "name": "Necesită clarificare"
+      },
+      "trip-work-area": {
+        "name": "A lucrat în",
+        "inverse": "Zonă de lucru a turei"
+      },
+      "trip-objective": {
+        "name": "A vizat",
+        "inverse": "Obiectiv al turei"
+      },
+      "trip-visited": {
+        "name": "A vizitat",
+        "inverse": "Vizitat în tură"
+      },
+      "trip-surveyed": {
+        "name": "A cartat",
+        "inverse": "Cartat în tură"
+      },
+      "trip-discovered": {
+        "name": "A descoperit",
+        "inverse": "Descoperit în tură"
+      },
+      "trip-dug": {
+        "name": "A săpat la",
+        "inverse": "Săpat în tură"
+      },
+      "trip-photographed": {
+        "name": "A fotografiat",
+        "inverse": "Fotografiat în tură"
+      },
+      "trip-searched-not-found": {
+        "name": "A căutat, fără rezultat",
+        "inverse": "Căutat în tură, negăsit"
+      },
+      "trip-lead": {
+        "name": "A lăsat continuare",
+        "inverse": "Continuare lăsată în tură"
+      },
+      "trip-follows-on-from": {
+        "name": "Continuă tura",
+        "inverse": "Urmată de"
       }
     },
     "members": "Elemente",

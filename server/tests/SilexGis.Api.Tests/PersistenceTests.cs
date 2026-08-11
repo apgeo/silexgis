@@ -76,6 +76,22 @@ public sealed class PersistenceTests : IDisposable
             ("adjacent-to", false),
             ("duplicate-of", true),
             ("needs-clarification", false),
+
+            // The trip roles. Every one is directed with the trip as the main member, which is
+            // what makes a role-filtered field read one way from the trip and the other way
+            // from what the trip named; an undirected role would be ambiguous the moment two
+            // trips shared a link. Directedness also cannot be changed once any installation
+            // has linked with the code, so it is pinned per row here rather than in bulk.
+            ("trip-work-area", true),
+            ("trip-objective", true),
+            ("trip-visited", true),
+            ("trip-surveyed", true),
+            ("trip-discovered", true),
+            ("trip-dug", true),
+            ("trip-photographed", true),
+            ("trip-searched-not-found", true),
+            ("trip-lead", true),
+            ("trip-follows-on-from", true),
         ];
         foreach (var (code, directed) in relations)
         {
@@ -88,10 +104,40 @@ public sealed class PersistenceTests : IDisposable
         var before = await db.FeatureTypes.CountAsync();
         var linkKindsBefore = await db.LinkKinds.CountAsync();
         var relationTypesBefore = await db.ResLinkRelationTypes.CountAsync();
+
+        // Sort order too, not only the count: the seeder derives it from a row's position in
+        // the shipped list, so a second pass that moved one would mean the vocabulary's display
+        // order depends on how many times the application has started.
+        var relationOrderBefore = await db.ResLinkRelationTypes.AsNoTracking()
+            .OrderBy(x => x.Code)
+            .Select(x => new { x.Code, x.SortOrder })
+            .ToListAsync();
+
         await TaxonomySeeder.SeedAsync(db);
         (await db.FeatureTypes.CountAsync()).ShouldBe(before);
         (await db.LinkKinds.CountAsync()).ShouldBe(linkKindsBefore);
         (await db.ResLinkRelationTypes.CountAsync()).ShouldBe(relationTypesBefore);
+
+        var relationOrderAfter = await db.ResLinkRelationTypes.AsNoTracking()
+            .OrderBy(x => x.Code)
+            .Select(x => new { x.Code, x.SortOrder })
+            .ToListAsync();
+        relationOrderAfter.ShouldBe(relationOrderBefore);
+
+        // The trip roles were appended, so they sort after every code that shipped before them
+        // and their own order matches the list. Appending is the whole reason they do: the
+        // seeder never re-sorts a row it already inserted, so a code added in the middle would
+        // take one sort order on a fresh database and a different one on an existing install.
+        var byCode = relationOrderAfter.ToDictionary(x => x.Code, x => x.SortOrder);
+        var lastShippedBefore = byCode["needs-clarification"];
+        var tripRoles = relations.Where(r => r.Code.StartsWith("trip-", StringComparison.Ordinal)).ToList();
+        tripRoles.Count.ShouldBe(10);
+        var expected = lastShippedBefore;
+        foreach (var (code, _) in tripRoles)
+        {
+            expected += 10;
+            byCode[code].ShouldBe(expected, code);
+        }
     }
 
     [Fact]

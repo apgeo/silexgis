@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 using Npgsql;
 using Shouldly;
+using SilexGis.Api.Features.ResLinks;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -44,6 +45,7 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
     private Guid viewerId;
     private long caveTypeId;
     private long genericTypeId;
+    private long entranceTypeId;
 
     public ResLinkApiTests(PostgresFixture postgres)
     {
@@ -69,6 +71,7 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
             genericTypeId = await db.FeatureTypes.Where(t => t.Code == "generic").Select(t => t.Id).SingleAsync();
+            entranceTypeId = await db.EntranceTypes.Select(t => t.Id).FirstAsync();
         }
 
         owner = await AuthHelper.BearerClientAsync(factory, $"rl-own-{suffix}@t.local");
@@ -1187,6 +1190,82 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task What_a_trip_did_to_what_it_names_ships_as_ten_directed_roles()
+    {
+        // The roles are ordinary rows of the shared vocabulary, so any signed-in caller reads
+        // them the same way they read the rest — no trip-specific surface, no second list.
+        var listed = await viewer.GetFromJsonAsync<JsonElement>("/api/v1/reslinks/relation-types");
+        var byCode = listed.EnumerateArray().ToDictionary(r => r.GetProperty("code").GetString()!);
+
+        string[] roles =
+        [
+            "trip-work-area", "trip-objective", "trip-visited", "trip-surveyed", "trip-discovered",
+            "trip-dug", "trip-photographed", "trip-searched-not-found", "trip-lead",
+            "trip-follows-on-from",
+        ];
+
+        foreach (var code in roles)
+        {
+            byCode.ContainsKey(code).ShouldBeTrue(code);
+            var row = byCode[code];
+            row.GetProperty("seeded").GetBoolean().ShouldBeTrue(code);
+
+            // Every role is directed with the trip as the main member: "Trip surveyed Cave" and
+            // "Cave was surveyed on Trip" are the two readings a role-filtered field needs, and
+            // an undirected role would have neither the moment two trips shared one link.
+            row.GetProperty("directed").GetBoolean().ShouldBeTrue(code);
+            row.GetProperty("inverseName").ValueKind.ShouldBe(JsonValueKind.String, code);
+            row.GetProperty("name").GetString().ShouldNotBeNullOrWhiteSpace();
+
+            // Directedness is what the write path checks to require exactly one main member, so
+            // a role that lost it would let a link claim two trips did the thing — hence every
+            // role is undeletable, like every other shipped code.
+            var deleted = await admin.DeleteAsync(
+                $"/api/v1/reslinks/relation-types/{row.GetProperty("id").GetInt64()}");
+            deleted.StatusCode.ShouldBe(HttpStatusCode.Conflict, code);
+            (await ReadCodeAsync(deleted)).ShouldBe("reslink.relation.seeded_immutable", code);
+        }
+
+        // Managing the vocabulary at all is a full-administrator act — an editor is refused
+        // before the row is even looked at.
+        var visited = byCode["trip-visited"];
+        var visitedId = visited.GetProperty("id").GetInt64();
+        (await owner.DeleteAsync($"/api/v1/reslinks/relation-types/{visitedId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        var body = new
+        {
+            code = visited.GetProperty("code").GetString(),
+            name = visited.GetProperty("name").GetString(),
+            description = (string?)null,
+            sortOrder = visited.GetProperty("sortOrder").GetInt32(),
+            directed = visited.GetProperty("directed").GetBoolean(),
+            inverseName = visited.GetProperty("inverseName").GetString(),
+        };
+
+        var recoded = await admin.PatchAsJsonAsync(
+            $"/api/v1/reslinks/relation-types/{visitedId}", body with { code = "visited" });
+        recoded.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ReadCodeAsync(recoded)).ShouldBe("reslink.relation.seeded_immutable");
+
+        var flipped = await admin.PatchAsJsonAsync(
+            $"/api/v1/reslinks/relation-types/{visitedId}",
+            body with { directed = false, inverseName = (string?)null });
+        flipped.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ReadCodeAsync(flipped)).ShouldBe("reslink.relation.seeded_immutable");
+
+        // The positive twin of all three refusals: wording and ordering are an installation's
+        // own, so the identical write with code and directedness untouched goes through.
+        (await admin.PatchAsJsonAsync($"/api/v1/reslinks/relation-types/{visitedId}", body))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // A caller who is not signed in reads none of it.
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync("/api/v1/reslinks/relation-types"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task A_relation_type_in_use_keeps_its_directedness_and_its_life()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
@@ -1234,6 +1313,80 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
         (await owner.DeleteAsync($"/api/v1/reslinks/{linkId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await admin.DeleteAsync($"/api/v1/reslinks/relation-types/{relationId}"))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    // ---- the panel answers for one relation --------------------------------------------
+
+    [Fact]
+    public async Task The_panel_answers_for_one_relation_and_refuses_a_code_no_relation_carries()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var caveId = await CreateCaveAsync(owner, "Role Cave", "authenticated");
+        var tripId = await CreateTripLogAsync($"Roles {suffix}", caveId, "authenticated");
+
+        // Three links between the same two things, differing only in what the trip did:
+        // exactly the case a filtered field has to tell apart.
+        var visitedLink = await CreateTypedLinkAsync(
+            owner,
+            await RelationIdAsync("trip-visited"),
+            Member("tripLog", tripId, isMain: true),
+            Member("feature", caveId, sortOrder: 1));
+        var dugLink = await CreateTypedLinkAsync(
+            owner,
+            await RelationIdAsync("trip-dug"),
+            Member("tripLog", tripId, isMain: true),
+            Member("feature", caveId, sortOrder: 1));
+        var untypedLink = await CreateLinkAsync(
+            owner, Member("tripLog", tripId), Member("feature", caveId, sortOrder: 1));
+
+        var everything = new[] { visitedLink, dugLink, untypedLink };
+
+        // Unasked, the panel is every link incident to the cave, whatever it means…
+        (await PanelLinkIdsAsync(owner, "feature", caveId)).ShouldBe(everything, ignoreOrder: true);
+
+        // …and asked for one relation it is that relation alone — not the sibling role,
+        // not the link that names no relation at all.
+        (await PanelLinkIdsAsync(owner, "feature", caveId, "trip-visited"))
+            .ShouldBe(new[] { visitedLink });
+        (await PanelLinkIdsAsync(owner, "feature", caveId, "trip-dug")).ShouldBe(new[] { dugLink });
+
+        // The same question from the trip's side reads back the other way round and
+        // narrows identically.
+        (await PanelLinkIdsAsync(owner, "tripLog", tripId, "trip-visited"))
+            .ShouldBe(new[] { visitedLink });
+
+        // A relation nobody used here is a question with an answer, and the answer is
+        // none; an empty filter is no filter at all.
+        (await PanelLinkIdsAsync(owner, "feature", caveId, "trip-photographed")).ShouldBeEmpty();
+        (await PanelLinkIdsAsync(owner, "feature", caveId, string.Empty))
+            .ShouldBe(everything, ignoreOrder: true);
+        (await PanelLinkIdsAsync(owner, "feature", caveId, "   "))
+            .ShouldBe(everything, ignoreOrder: true);
+
+        // A code no relation type carries is refused rather than answered with an empty
+        // page: a mistyped role must not read as a role nobody used.
+        var mistyped = await owner.GetAsync(
+            $"/api/v1/reslinks/for-target?type=feature&id={caveId}&relation=trip-abseiled");
+        mistyped.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ReadCodeAsync(mistyped)).ShouldBe("reslink.relation.not_found");
+
+        // The target's own rules still gate the panel first: a caller who may not read the
+        // target learns that and nothing else, whatever they asked about the relation.
+        var privateCave = await CreateCaveAsync(owner, "Role Cave Hidden", "private");
+        var gated = await viewer.GetAsync(
+            $"/api/v1/reslinks/for-target?type=feature&id={privateCave}&relation=trip-abseiled");
+        gated.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await ReadCodeAsync(gated)).ShouldBe("reslink.target_not_found");
+
+        // …and the owner of that cave reads its (empty) panel with the same filter, so the
+        // refusal above was the caller's rights and not the route.
+        (await PanelLinkIdsAsync(owner, "feature", privateCave, "trip-visited")).ShouldBeEmpty();
+
+        // Asked with a filter, an anonymous caller is still refused before any of it is
+        // resolved — the parameter opens no door of its own.
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync($"/api/v1/reslinks/for-target?type=feature&id={caveId}&relation=trip-visited"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     // ---- target deletion cleans the membership ----------------------------------------
@@ -1498,7 +1651,498 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
         (await ReadCodeAsync(overflow)).ShouldBe("reslink.member.limit_reached");
     }
 
+    // ---- what a trip did to what it names ---------------------------------------------
+
+    /// <summary>
+    /// The ten roles a trip plays towards the things it names are ordinary relation types
+    /// on this one link mechanism, so they are written through this one write path: a link
+    /// per role, the trip as its main member, targets added and removed one at a time. No
+    /// second write law exists for them, and this test is the statement that none is
+    /// needed — every role is authored, read back and asked for by name here.
+    /// </summary>
+    [Fact]
+    public async Task Every_trip_role_links_its_targets_with_the_trip_as_the_main_member()
+    {
+        var cave = await CreateCaveAsync(owner, "Role Cave", "authenticated");
+        var tripId = await CreateTripLogAsync("Role trip", cave, "authenticated");
+
+        var links = new Dictionary<string, Guid>();
+        foreach (var role in TripRoleCodes)
+        {
+            var relationId = await RelationIdAsync(role);
+            links[role] = await CreateTypedLinkAsync(
+                owner, relationId,
+                Member("tripLog", tripId, isMain: true),
+                Member("feature", cave, sortOrder: 1));
+
+            var link = await GetLinkAsync(links[role]);
+            link.GetProperty("relationType").GetProperty("code").GetString().ShouldBe(role);
+            link.GetProperty("relationType").GetProperty("directed").GetBoolean().ShouldBeTrue(role);
+            // Directed with the trip as main is what makes the two readings distinguishable:
+            // the trip's page reads outwards, the cave's page reads the inverse back.
+            link.GetProperty("relationType").GetProperty("inverseName").GetString().ShouldNotBeNull();
+            var main = link.GetProperty("members").EnumerateArray().Single(m => m.GetProperty("isMain").GetBoolean());
+            main.GetProperty("targetType").GetString().ShouldBe("tripLog");
+            main.GetProperty("targetId").GetGuid().ShouldBe(tripId);
+        }
+
+        // Asked for one role, either side answers with that role's link alone; asked for
+        // nothing, with all ten. This is what a filtered field on a page is made of.
+        foreach (var (role, linkId) in links)
+        {
+            (await PanelLinkIdsAsync(owner, "tripLog", tripId, role)).ShouldBe([linkId]);
+            (await PanelLinkIdsAsync(owner, "feature", cave, role)).ShouldBe([linkId]);
+        }
+
+        (await PanelLinkIdsAsync(owner, "tripLog", tripId)).Count.ShouldBe(TripRoleCodes.Length);
+    }
+
+    /// <summary>
+    /// A role's membership is edited one member at a time through the generic member
+    /// routes — the marker handover included. Adding a member marked main demotes the
+    /// sitting one first, in its own statement, because the single-main index is checked
+    /// per statement; removing the main while two or more would remain is refused rather
+    /// than leaving a directed link with no main.
+    /// </summary>
+    [Fact]
+    public async Task A_role_grows_and_shrinks_one_member_at_a_time_and_the_marker_moves_with_it()
+    {
+        var cave = await CreateCaveAsync(owner, "Surveyed Cave", "authenticated");
+        var otherCave = await CreateCaveAsync(owner, "Surveyed Cave Too", "authenticated");
+        var entrance = await CreateEntranceAsync(cave);
+        var tripId = await CreateTripLogAsync("Survey trip", cave, "authenticated");
+        var surveyed = await RelationIdAsync("trip-surveyed");
+
+        var linkId = await CreateTypedLinkAsync(
+            owner, surveyed,
+            Member("tripLog", tripId, isMain: true),
+            Member("feature", cave, sortOrder: 1));
+
+        // Growing: two more targets, neither of them a cave — a trip surveys entrances and
+        // surface features too, and the role does not inherit the trip's cave-only list.
+        foreach (var (target, sort) in new[] { (entrance, 2), (otherCave, 3) })
+        {
+            var added = await owner.PostAsJsonAsync(
+                $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: sort));
+            added.StatusCode.ShouldBe(HttpStatusCode.Created, await added.Content.ReadAsStringAsync());
+        }
+
+        (await GetLinkAsync(linkId)).GetProperty("members").GetArrayLength().ShouldBe(4);
+        (await MainTargetIdsAsync(linkId)).ShouldBe([tripId]);
+
+        // The main cannot simply leave while the link still needs one…
+        var tripMember = await MemberIdOfAsync(linkId, tripId);
+        var orphaned = await owner.DeleteAsync($"/api/v1/reslinks/{linkId}/members/{tripMember}");
+        orphaned.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ReadCodeAsync(orphaned)).ShouldBe("reslink.main.required");
+
+        // …the marker is handed over instead, and the handover is a single act.
+        var caveMember = await MemberIdOfAsync(linkId, cave);
+        var promoted = await owner.PatchAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members/{caveMember}",
+            new { isMain = true, sortOrder = 1, note = (string?)null });
+        promoted.StatusCode.ShouldBe(HttpStatusCode.OK, await promoted.Content.ReadAsStringAsync());
+        (await MainTargetIdsAsync(linkId)).ShouldBe([cave]);
+
+        // Adding a member as main hands it over the same way rather than colliding.
+        var thirdCave = await CreateCaveAsync(owner, "Surveyed Cave Three", "authenticated");
+        var addedAsMain = await owner.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", thirdCave, isMain: true, sortOrder: 4));
+        addedAsMain.StatusCode.ShouldBe(HttpStatusCode.Created, await addedAsMain.Content.ReadAsStringAsync());
+        (await MainTargetIdsAsync(linkId)).ShouldBe([thirdCave]);
+
+        // Shrinking: members come off one at a time, the main last of all — and the marker
+        // comes off with the removal that takes the link below two members, where it means
+        // nothing.
+        foreach (var target in new[] { cave, entrance, otherCave, thirdCave })
+        {
+            var memberId = await MemberIdOfAsync(linkId, target);
+            (await owner.DeleteAsync($"/api/v1/reslinks/{linkId}/members/{memberId}"))
+                .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        }
+
+        (await GetLinkAsync(linkId)).GetProperty("members").GetArrayLength().ShouldBe(1);
+        (await MainTargetIdsAsync(linkId)).ShouldBeEmpty();
+
+        // Emptying a role is deleting its link, never removing members down to none.
+        var lastMember = await MemberIdOfAsync(linkId, tripId);
+        var last = await owner.DeleteAsync($"/api/v1/reslinks/{linkId}/members/{lastMember}");
+        last.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await ReadCodeAsync(last)).ShouldBe("reslink.member.last");
+        (await owner.DeleteAsync($"/api/v1/reslinks/{linkId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    /// <summary>
+    /// The marker laws a role write hits on its first request: a role link holding only
+    /// the trip has nothing to be main of, and one holding two or more needs exactly one.
+    /// Stated here because the obvious authoring order — create the link with the trip as
+    /// main, then add targets — is refused, and a client that tried it would read the
+    /// refusal as the role being unavailable. The first target to arrive at a trip-only
+    /// role hands the marker to the trip, so an ordinary add never reverses the role.
+    /// </summary>
+    [Fact]
+    public async Task A_role_carries_its_main_marker_only_once_it_has_something_to_be_main_of()
+    {
+        var cave = await CreateCaveAsync(owner, "Marker Cave", "authenticated");
+        var otherCave = await CreateCaveAsync(owner, "Marker Cave Too", "authenticated");
+        var tripId = await CreateTripLogAsync("Marker trip", cave, "authenticated");
+        var visited = await RelationIdAsync("trip-visited");
+
+        await ShouldRefuseCreateAsync(visited, "reslink.main.not_allowed_for_relation",
+            Member("tripLog", tripId, isMain: true));
+        await ShouldRefuseCreateAsync(visited, "reslink.main.required",
+            Member("tripLog", tripId), Member("feature", cave, sortOrder: 1));
+        await ShouldRefuseCreateAsync(visited, "reslink.main.not_single",
+            Member("tripLog", tripId, isMain: true), Member("feature", cave, isMain: true, sortOrder: 1));
+
+        // A role opened with the trip alone is legal without the marker: below two members
+        // it would mean nothing. The first target to arrive brings the link to two, and the
+        // marker goes to the member that was already there — the trip — so an ordinary add
+        // states "the trip visited the cave" and not its reverse.
+        var linkId = await CreateTypedLinkAsync(owner, visited, Member("tripLog", tripId));
+        (await MainTargetIdsAsync(linkId)).ShouldBeEmpty();
+        var added = await owner.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", cave, isMain: false, sortOrder: 1));
+        added.StatusCode.ShouldBe(HttpStatusCode.Created, await added.Content.ReadAsStringAsync());
+        (await MainTargetIdsAsync(linkId)).ShouldBe([tripId]);
+
+        // The same whole target twice in one role is refused: a role names a thing once.
+        var again = await owner.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", cave, sortOrder: 2));
+        again.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await ReadCodeAsync(again)).ShouldBe("reslink.member.duplicate_whole");
+
+        // A target nobody may read refuses exactly like one that does not exist.
+        var missing = await owner.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", Guid.NewGuid(), sortOrder: 3));
+        missing.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await ReadCodeAsync(missing)).ShouldBe("reslink.member.target_not_found");
+
+        // And the positive alongside it, so the refusals above cannot be a broken fixture.
+        var real = await owner.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", otherCave, sortOrder: 3));
+        real.StatusCode.ShouldBe(HttpStatusCode.Created, await real.Content.ReadAsStringAsync());
+        (await MainTargetIdsAsync(linkId)).ShouldBe([tripId]);
+    }
+
+    /// <summary>
+    /// The everyday correction — the wrong cave was named, take it off and put the right
+    /// one on — leaves the role reading in the same direction it started in. Removing the
+    /// last target takes the marker off, because a one-member link may not carry one; the
+    /// replacement puts it back on the trip. The reverse would be a silent inversion:
+    /// "this cave surveyed that trip", rendered as such on both pages, and for a role
+    /// joining two trips it would invert an actual claim about which came first.
+    /// </summary>
+    [Fact]
+    public async Task A_role_emptied_and_refilled_still_reads_from_the_trip()
+    {
+        var cave = await CreateCaveAsync(owner, "Refill Cave", "authenticated");
+        var replacement = await CreateCaveAsync(owner, "Refill Cave Too", "authenticated");
+        var tripId = await CreateTripLogAsync("Refill trip", cave, "authenticated");
+        var surveyed = await RelationIdAsync("trip-surveyed");
+
+        var linkId = await CreateTypedLinkAsync(
+            owner, surveyed,
+            Member("tripLog", tripId, isMain: true),
+            Member("feature", cave, sortOrder: 1));
+
+        (await owner.DeleteAsync($"/api/v1/reslinks/{linkId}/members/{await MemberIdOfAsync(linkId, cave)}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await MainTargetIdsAsync(linkId)).ShouldBeEmpty();
+
+        var refilled = await owner.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", replacement, sortOrder: 1));
+        refilled.StatusCode.ShouldBe(HttpStatusCode.Created, await refilled.Content.ReadAsStringAsync());
+        (await MainTargetIdsAsync(linkId)).ShouldBe([tripId]);
+
+        // An arriving member that claims the marker still takes it — the handover is an
+        // explicit act, and only the silent case defaults to the member already there.
+        var claimed = await owner.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", cave, isMain: true, sortOrder: 2));
+        claimed.StatusCode.ShouldBe(HttpStatusCode.Created, await claimed.Content.ReadAsStringAsync());
+        (await MainTargetIdsAsync(linkId)).ShouldBe([cave]);
+    }
+
+    /// <summary>
+    /// A role is not one link — it is every link of that relation the trip is in. A link
+    /// answers to whoever authored it, so a second person recording the same role on the
+    /// same trip writes a second link rather than amending the first, and nothing refuses
+    /// that. The panel asked for the role therefore returns both, and what the role names
+    /// is the union of their targets: a reader that assumed a single link per role would
+    /// silently hide the second author's caves.
+    /// </summary>
+    [Fact]
+    public async Task A_role_recorded_by_two_authors_is_two_links_the_panel_lists_together()
+    {
+        var mine = await CreateCaveAsync(owner, "Union Cave", "authenticated");
+        var theirs = await CreateCaveAsync(owner, "Union Cave Too", "authenticated");
+        var tripId = await CreateTripLogAsync("Union trip", mine, "authenticated");
+        var surveyed = await RelationIdAsync("trip-surveyed");
+
+        var authored = await CreateTypedLinkAsync(
+            owner, surveyed,
+            Member("tripLog", tripId, isMain: true),
+            Member("feature", mine, sortOrder: 1));
+
+        // The second editor reads the role whole and may still not amend it…
+        (await editor2.PostAsJsonAsync(
+                $"/api/v1/reslinks/{authored}/members", Member("feature", theirs, sortOrder: 2)))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // …so what they can record is a second link of the same role, which is accepted.
+        var second = await CreateTypedLinkAsync(
+            editor2, surveyed,
+            Member("tripLog", tripId, isMain: true),
+            Member("feature", theirs, sortOrder: 1));
+        second.ShouldNotBe(authored);
+
+        var listed = await PanelLinkIdsAsync(owner, "tripLog", tripId, "trip-surveyed");
+        listed.Count.ShouldBe(2);
+        listed.ShouldContain(authored);
+        listed.ShouldContain(second);
+
+        var named = new List<Guid>();
+        foreach (var linkId in listed)
+        {
+            named.AddRange((await GetLinkAsync(linkId)).GetProperty("members").EnumerateArray()
+                .Select(m => m.GetProperty("targetId").GetGuid())
+                .Where(id => id != tripId));
+        }
+
+        named.OrderBy(id => id).ToList().ShouldBe(new[] { mine, theirs }.OrderBy(id => id).ToList());
+    }
+
+    /// <summary>
+    /// Who may amend a role: nobody unsigned, and among signed-in callers the link's
+    /// author and full administrators — the ordinary law of this mechanism, which trip
+    /// roles inherit rather than replace. A second editor of the same trip is refused,
+    /// which is a real limit on how a trip's roles are curated and is stated here rather
+    /// than discovered: their route is a second link of the same role, whose targets join
+    /// the first link's when the role is read.
+    /// </summary>
+    [Fact]
+    public async Task Role_membership_answers_to_whoever_authored_the_link_and_to_administrators()
+    {
+        var cave = await CreateCaveAsync(owner, "Authored Cave", "authenticated");
+        var tripId = await CreateTripLogAsync("Authored trip", cave, "authenticated");
+        var dug = await RelationIdAsync("trip-dug");
+        var linkId = await CreateTypedLinkAsync(
+            owner, dug, Member("tripLog", tripId, isMain: true), Member("feature", cave, sortOrder: 1));
+
+        var target = await CreateCaveAsync(owner, "Authored Cave Too", "authenticated");
+        using (var anonymous = factory.CreateClient())
+        {
+            (await anonymous.PostAsJsonAsync(
+                    $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2)))
+                .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        }
+
+        // Another editor reads the link whole and may still not amend it.
+        (await editor2.GetAsync($"/api/v1/reslinks/{linkId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await editor2.PostAsJsonAsync(
+                $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2)))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // A viewer neither authored it nor administers anything.
+        (await viewer.PostAsJsonAsync(
+                $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2)))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // The author may…
+        var byAuthor = await owner.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2));
+        byAuthor.StatusCode.ShouldBe(HttpStatusCode.Created, await byAuthor.Content.ReadAsStringAsync());
+
+        // …and so may a full administrator, over a link they did not author.
+        var another = await CreateCaveAsync(owner, "Authored Cave Three", "authenticated");
+        var byAdmin = await admin.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", another, sortOrder: 3));
+        byAdmin.StatusCode.ShouldBe(HttpStatusCode.Created, await byAdmin.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// What a role can actually name. The trip's own cave list is caves and nothing else —
+    /// its write path says so — but a trip visits entrances, springs, digs and surface
+    /// features, and the role mechanism admits every feature kind plus the other worlds a
+    /// trip sensibly points at. Both halves are asserted together so the difference is
+    /// visible rather than assumed.
+    /// </summary>
+    [Fact]
+    public async Task A_role_names_any_feature_a_trip_reaches_where_the_trips_cave_list_names_only_caves()
+    {
+        var cave = await CreateCaveAsync(owner, "Reach Cave", "authenticated");
+        var entrance = await CreateEntranceAsync(cave);
+        var spring = await CreateGenericFeatureAsync(owner, "Reach Spring", "authenticated");
+        var tripId = await CreateTripLogAsync("Reach trip", cave, "authenticated");
+        var groupId = await CreateCavingGroupAsync($"Reach club {Guid.NewGuid():N}"[..40]);
+        var (documentId, _) = await UploadDocumentAsync("reach.txt");
+        var earlierTrip = await CreateTripLogAsync("Earlier trip", cave, "authenticated");
+        var visited = await RelationIdAsync("trip-visited");
+
+        // The trip's cave list refuses the entrance — that predicate is the trip write
+        // path's, and the role must not inherit it.
+        var asCaveList = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = "Entrance as a cave",
+            tripDate = "2026-05-02",
+            caveIds = new[] { entrance },
+            participants = Array.Empty<object>(),
+            visibility = "authenticated",
+        });
+        asCaveList.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ReadCodeAsync(asCaveList)).ShouldBe("trip_log.cave_not_found");
+
+        // The role names all three feature kinds, and a document and a club besides.
+        var linkId = await CreateTypedLinkAsync(
+            owner, visited,
+            Member("tripLog", tripId, isMain: true),
+            Member("feature", cave, sortOrder: 1),
+            Member("feature", entrance, sortOrder: 2),
+            Member("feature", spring, sortOrder: 3),
+            Member("document", documentId, sortOrder: 4),
+            Member("cavingGroup", groupId, sortOrder: 5));
+
+        var members = (await GetLinkAsync(linkId)).GetProperty("members").EnumerateArray().ToList();
+        members.Count.ShouldBe(6);
+        members.Select(m => m.GetProperty("targetId").GetGuid())
+            .ShouldBe([tripId, cave, entrance, spring, documentId, groupId], ignoreOrder: true);
+
+        // A second trip in the same role is admitted too — which is exactly why the roles
+        // are directed: without a main member, "which trip did this" has no answer here.
+        var follows = await RelationIdAsync("trip-follows-on-from");
+        var chained = await CreateTypedLinkAsync(
+            owner, follows,
+            Member("tripLog", tripId, isMain: true),
+            Member("tripLog", earlierTrip, sortOrder: 1));
+        (await PanelLinkIdsAsync(owner, "tripLog", earlierTrip, "trip-follows-on-from")).ShouldBe([chained]);
+    }
+
+    /// <summary>
+    /// Every target type a role can name resolves through a registered resolver. The
+    /// directory throws when asked for a linkable type nobody registered — a failed
+    /// request rather than a refused one — so the coverage is asserted directly against
+    /// the rule that decides which types are linkable, and again through the route that
+    /// reaches a resolver from outside.
+    /// </summary>
+    [Fact]
+    public async Task Every_target_type_a_role_can_name_answers_through_a_registered_resolver()
+    {
+        var linkable = Enum.GetValues<AttachedEntityType>().Where(ResLinkRules.IsLinkableType).ToList();
+        linkable.ShouldContain(AttachedEntityType.TripLog);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var directory = scope.ServiceProvider.GetRequiredService<ResLinkTargetDirectory>();
+            Should.NotThrow(() => directory.Of(null));
+            foreach (var type in linkable)
+            {
+                Should.NotThrow(() => directory.Of(type), type.ToString());
+            }
+        }
+
+        // …and from outside, where an unregistered resolver would surface as a failure
+        // rather than an answer.
+        foreach (var name in linkable
+            .Select(t => JsonNamingPolicy.CamelCase.ConvertName(t.ToString()))
+            .Append(ResLinkTargets.FeatureName))
+        {
+            var response = await owner.GetAsync($"/api/v1/reslinks/targets/search?type={name}&q=a");
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, name);
+        }
+
+        // The rule and the wire vocabulary agree about what is linkable, in both
+        // directions: a type the rule refuses is not parseable either.
+        foreach (var refused in Enum.GetValues<AttachedEntityType>().Where(t => !ResLinkRules.IsLinkableType(t)))
+        {
+            ResLinkTargets.TryParse(JsonNamingPolicy.CamelCase.ConvertName(refused.ToString()), out _)
+                .ShouldBeFalse(refused.ToString());
+        }
+    }
+
+    /// <summary>
+    /// The real ceiling of a role: a link holds a hundred members and the trip is one of
+    /// them, so a role carries ninety-nine targets. Fine for a trip; worth knowing before
+    /// anything rolls several trips up into one link.
+    /// </summary>
+    [Fact]
+    public async Task A_role_carries_the_trip_and_ninety_nine_targets_and_refuses_the_hundredth()
+    {
+        var cave = await CreateCaveAsync(owner, "Ceiling Cave", "authenticated");
+        var tripId = await CreateTripLogAsync("Ceiling trip", cave, "authenticated");
+        var photographed = await RelationIdAsync("trip-photographed");
+
+        var targets = await SeedGenericFeaturesAsync(ResLinkRules.MaxMembers);
+        var members = new List<object> { Member("tripLog", tripId, isMain: true) };
+        members.AddRange(targets[..(ResLinkRules.MaxMembers - 1)]
+            .Select((id, i) => Member("feature", id, sortOrder: i + 1)));
+        members.Count.ShouldBe(ResLinkRules.MaxMembers);
+
+        var linkId = await CreateTypedLinkAsync(owner, photographed, [.. members]);
+        (await GetLinkAsync(linkId)).GetProperty("members").GetArrayLength()
+            .ShouldBe(ResLinkRules.MaxMembers);
+
+        var overflow = await owner.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members",
+            Member("feature", targets[^1], sortOrder: ResLinkRules.MaxMembers));
+        overflow.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await ReadCodeAsync(overflow)).ShouldBe("reslink.member.limit_reached");
+
+        // One removed, one admitted: the ceiling is a count, not a closed link.
+        var freed = await MemberIdOfAsync(linkId, targets[0]);
+        (await owner.DeleteAsync($"/api/v1/reslinks/{linkId}/members/{freed}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var admitted = await owner.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members",
+            Member("feature", targets[^1], sortOrder: ResLinkRules.MaxMembers));
+        admitted.StatusCode.ShouldBe(HttpStatusCode.Created, await admitted.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// A role link discloses nothing its members' own rules withhold: a private feature in
+    /// a role travels as a bare member, named nowhere in the answer, while its owner reads
+    /// the same link whole. The outsider is a viewer with no grant of any kind — an editor
+    /// reads past visibility by design and would prove nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_role_names_a_private_target_to_nobody_who_could_not_already_read_it()
+    {
+        var cave = await CreateCaveAsync(owner, "Shared Cave", "authenticated");
+        var secretName = $"Private dig {Guid.NewGuid():N}"[..40];
+        var secret = await CreateGenericFeatureAsync(owner, secretName, "private");
+        var tripId = await CreateTripLogAsync("Digging trip", cave, "authenticated");
+        var dug = await RelationIdAsync("trip-dug");
+        var linkId = await CreateTypedLinkAsync(
+            owner, dug,
+            Member("tripLog", tripId, isMain: true),
+            Member("feature", cave, sortOrder: 1),
+            Member("feature", secret, sortOrder: 2));
+
+        var byOwner = await GetLinkAsync(linkId);
+        byOwner.GetProperty("members").EnumerateArray()
+            .Single(m => m.GetProperty("targetId").GetGuid() == secret)
+            .GetProperty("display").GetProperty("title").GetString().ShouldNotBeNullOrWhiteSpace();
+
+        var response = await viewer.GetAsync($"/api/v1/reslinks/{linkId}");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var raw = await response.Content.ReadAsStringAsync();
+        raw.ShouldNotContain(secretName);
+        var seen = JsonDocument.Parse(raw).RootElement.GetProperty("members").EnumerateArray().ToList();
+        seen.Count.ShouldBe(3);
+        var bare = seen.Single(m => m.GetProperty("targetId").GetGuid() == secret);
+        bare.GetProperty("display").ValueKind.ShouldBe(JsonValueKind.Null);
+        // The readable sibling proves the viewer's read is working at all.
+        seen.Single(m => m.GetProperty("targetId").GetGuid() == cave)
+            .GetProperty("display").GetProperty("title").GetString().ShouldNotBeNullOrWhiteSpace();
+    }
+
     // ---- helpers ---------------------------------------------------------------------
+
+    /// <summary>The roles a trip plays towards the things it names.</summary>
+    private static readonly string[] TripRoleCodes =
+    [
+        "trip-work-area", "trip-objective", "trip-visited", "trip-surveyed", "trip-discovered",
+        "trip-dug", "trip-photographed", "trip-searched-not-found", "trip-lead", "trip-follows-on-from",
+    ];
 
     /// <summary>A member payload in the create/add wire shape.</summary>
     private static object Member(
@@ -1521,17 +2165,45 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
     };
 
     /// <summary>Creates an untyped link from members and returns its id.</summary>
-    private async Task<Guid> CreateLinkAsync(HttpClient client, params object[] members)
+    private Task<Guid> CreateLinkAsync(HttpClient client, params object[] members) =>
+        CreateTypedLinkAsync(client, null, members);
+
+    /// <summary>Creates a link of one relation type and returns its id. A directed
+    /// relation wants exactly one member marked main once the link has two, so callers
+    /// pass one.</summary>
+    private async Task<Guid> CreateTypedLinkAsync(
+        HttpClient client, long? relationTypeId, params object[] members)
     {
         var response = await client.PostAsJsonAsync("/api/v1/reslinks", new
         {
-            relationTypeId = (long?)null,
+            relationTypeId,
             description = (string?)null,
             members,
         });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    /// The link ids one panel lists, optionally asked for a single relation, with the
+    /// reported total asserted against the rows actually returned — the total doubles as
+    /// the badge count, so the two agreeing is part of every answer.
+    /// </summary>
+    private static async Task<List<Guid>> PanelLinkIdsAsync(
+        HttpClient client, string targetType, Guid targetId, string? relation = null)
+    {
+        var route = $"/api/v1/reslinks/for-target?type={targetType}&id={targetId}"
+            + (relation is null ? string.Empty : $"&relation={Uri.EscapeDataString(relation)}");
+        var response = await client.GetAsync(route);
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        var panel = JsonDocument.Parse(payload).RootElement;
+        var ids = panel.GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("id").GetGuid())
+            .ToList();
+        panel.GetProperty("totalItems").GetInt32().ShouldBe(ids.Count, route);
+        return ids;
     }
 
     /// <summary>Asserts that creating an untyped link with this single member is refused
@@ -1620,6 +2292,60 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>An entrance of a cave, returning the entrance's own feature id.</summary>
+    private async Task<Guid> CreateEntranceAsync(Guid caveId)
+    {
+        var response = await owner.PostAsJsonAsync($"/api/v1/caves/{caveId}/entrances", new
+        {
+            entranceTypeId,
+            isMain = true,
+            geom = new { type = "Point", coordinates = new[] { 25.82, 45.82 } },
+            positionQuality = "Gps",
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    /// Publicly readable generic features, written straight to the database because the
+    /// test that needs a hundred of them is about the membership ceiling and not about the
+    /// feature write path — which the rest of the suite exercises through its own route.
+    /// </summary>
+    private async Task<List<Guid>> SeedGenericFeaturesAsync(int count)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var now = DateTimeOffset.UtcNow;
+        var features = Enumerable.Range(0, count).Select(i => new Feature
+        {
+            Kind = FeatureKind.Generic,
+            FeatureTypeId = genericTypeId,
+            Name = $"Ceiling target {i} {Guid.NewGuid():N}"[..40],
+            Geom = new Point(25.83, 45.83) { SRID = 4326 },
+            OwnerUserId = ownerId,
+            Visibility = Visibility.Public,
+            CreatedAt = now,
+            UpdatedAt = now,
+        }).ToList();
+        foreach (var feature in features)
+        {
+            feature.AncestorIds = [feature.Id];
+        }
+
+        db.Features.AddRange(features);
+
+        // Containment is stored twice: the flattened array above, and one closure row per
+        // ancestor — including the depth-0 row naming the feature itself, which a root with
+        // no containment edges has as its only one. The database-wide integrity check
+        // compares both against the edges, so seeding only the array would leave these rows
+        // diverging for the rest of the run and fail every later check, not just this test.
+        db.FeatureAncestors.AddRange(features.Select(
+            f => new FeatureAncestor { FeatureId = f.Id, AncestorId = f.Id }));
+        await db.SaveChangesAsync();
+        return [.. features.Select(f => f.Id)];
     }
 
     private async Task<Guid> CreateCabinetAsync(string name, Guid? parentId = null)

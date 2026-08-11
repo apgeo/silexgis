@@ -23,6 +23,17 @@ export const SEEDED_RELATION_CODES = [
   'adjacent-to',
   'duplicate-of',
   'needs-clarification',
+  // What a trip did to what it names. All directed, with the trip as the main member.
+  'trip-work-area',
+  'trip-objective',
+  'trip-visited',
+  'trip-surveyed',
+  'trip-discovered',
+  'trip-dug',
+  'trip-photographed',
+  'trip-searched-not-found',
+  'trip-lead',
+  'trip-follows-on-from',
 ] as const;
 
 export type SeededRelationCode = (typeof SEEDED_RELATION_CODES)[number];
@@ -33,6 +44,16 @@ export const DIRECTED_RELATION_CODES: readonly SeededRelationCode[] = [
   'documents',
   'derived-from',
   'duplicate-of',
+  'trip-work-area',
+  'trip-objective',
+  'trip-visited',
+  'trip-surveyed',
+  'trip-discovered',
+  'trip-dug',
+  'trip-photographed',
+  'trip-searched-not-found',
+  'trip-lead',
+  'trip-follows-on-from',
 ];
 
 export function isSeededRelationCode(code: string): code is SeededRelationCode {

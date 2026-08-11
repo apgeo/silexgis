@@ -673,6 +673,286 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable
         }
     }
 
+    [Fact]
+    public async Task A_panel_asked_for_one_relation_counts_exactly_the_rows_it_lists()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var guardedName = $"Guarded rift {suffix}";
+        var guarded = await CreateProtectedCaveAsync(guardedName);
+        var openCave = await CreateCaveAsync($"Junction {suffix}", "authenticated");
+        var pointId = await CreateGenericFeatureAsync($"Parking {suffix}", "public");
+        var (documentId, _) = await UploadDocumentAsync($"roles-{suffix}.txt");
+        await MakeDocumentReadableAsync(documentId);
+
+        // One trip standing as the main member of every role link below, deliberately
+        // without a sketch of its own: a positioned trip shows its readers coordinates
+        // and would re-withhold the guarded member for that reason rather than the one
+        // under test here.
+        var tripId = await CreateTripLogAsync($"Roles {suffix}", openCave, "authenticated");
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripLogs.AsNoTracking().FirstAsync(t => t.Id == tripId)).Geom.ShouldBeNull();
+        }
+
+        var visited = await RelationIdAsync("trip-visited");
+        var surveyed = await RelationIdAsync("trip-surveyed");
+
+        // Three links on the same guarded cave: two visits, one of which seats the cave
+        // beside a public point, and one survey that no question about visits may answer.
+        var visitedPlain = await CreateTypedLinkAsync(
+            visited,
+            Member("tripLog", tripId, isMain: true),
+            Member("feature", guarded, sortOrder: 1),
+            Member("document", documentId, sortOrder: 2));
+        var visitedBesideCoordinates = await CreateTypedLinkAsync(
+            visited,
+            Member("tripLog", tripId, isMain: true),
+            Member("feature", guarded, sortOrder: 1),
+            Member("feature", pointId, sortOrder: 2));
+        var surveyedPlain = await CreateTypedLinkAsync(
+            surveyed,
+            Member("tripLog", tripId, isMain: true),
+            Member("feature", guarded, sortOrder: 1),
+            Member("document", documentId, sortOrder: 2));
+
+        // Setting off, the guarded cave's own panel admits nothing to the viewer whatever
+        // it is asked for — a filtered badge is a badge, and a non-zero one would say
+        // links of that role about this feature exist.
+        await ShouldAgreeWithItsRowsAsync(viewer, guarded, "trip-visited", 0);
+        await ShouldAgreeWithItsRowsAsync(viewer, guarded, null, 0);
+
+        // Whoever may place the cave reads the same panel whole, and the filter narrows it
+        // rather than emptying it: two visits of three links, and the survey on its own.
+        await ShouldAgreeWithItsRowsAsync(owner, guarded, null, 3);
+        await ShouldAgreeWithItsRowsAsync(owner, guarded, "trip-visited", 2);
+        var ownerSurvey = await ShouldAgreeWithItsRowsAsync(owner, guarded, "trip-surveyed", 1);
+        ownerSurvey.GetProperty("items").EnumerateArray()
+            .Single().GetProperty("id").GetGuid().ShouldBe(surveyedPlain);
+
+        // A role nobody used here answers empty rather than refusing — it is a question
+        // with an answer, and the answer is none.
+        await ShouldAgreeWithItsRowsAsync(owner, guarded, "trip-dug", 0);
+
+        // The trip's own side pages in the database rather than in memory, and the
+        // identity has to hold there too: every role link is listed from the trip, with
+        // the guarded cave's name absent from every byte of the filtered answer.
+        var fromTrip = await ShouldAgreeWithItsRowsAsync(viewer, tripId, "trip-visited", 2, "tripLog");
+        fromTrip.GetRawText().ShouldNotContain(guardedName);
+        await ShouldAgreeWithItsRowsAsync(viewer, tripId, "trip-surveyed", 1, "tripLog");
+        await ShouldAgreeWithItsRowsAsync(viewer, tripId, null, 3, "tripLog");
+
+        await SetRevealAsync(true);
+        try
+        {
+            // Setting on, each link decides for itself and the filter is applied before
+            // that decision, not after it: unfiltered, the two links whose connecting
+            // member survives are listed; asked for visits, only the visit among them is,
+            // and the total counts that one row rather than the two candidates it came
+            // from. The link seating the guarded name beside coordinates is listed by
+            // neither question.
+            var revealed = await ShouldAgreeWithItsRowsAsync(viewer, guarded, null, 2);
+            revealed.GetRawText().ShouldNotContain(visitedBesideCoordinates.ToString());
+
+            var revealedVisits = await ShouldAgreeWithItsRowsAsync(viewer, guarded, "trip-visited", 1);
+            revealedVisits.GetProperty("items").EnumerateArray()
+                .Single().GetProperty("id").GetGuid().ShouldBe(visitedPlain);
+            revealedVisits.GetRawText().ShouldNotContain(surveyedPlain.ToString());
+
+            var revealedSurvey = await ShouldAgreeWithItsRowsAsync(viewer, guarded, "trip-surveyed", 1);
+            revealedSurvey.GetProperty("items").EnumerateArray()
+                .Single().GetProperty("id").GetGuid().ShouldBe(surveyedPlain);
+            revealedSurvey.GetRawText().ShouldNotContain(visitedPlain.ToString());
+        }
+        finally
+        {
+            await SetRevealAsync(false);
+        }
+    }
+
+    [Fact]
+    public async Task A_role_withholds_the_cave_it_names_exactly_as_any_other_link_does()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var guardedName = $"Guarded sink {suffix}";
+        var guarded = await CreateProtectedCaveAsync(guardedName);
+        var openCave = await CreateCaveAsync($"Portal {suffix}", "authenticated");
+
+        // Fixture proof for the negative below: this caller reads the cave and may not
+        // place it, while the owner may — the absences asserted here are that difference
+        // and not an unreadable row.
+        var viewerCave = await ReadJsonAsync(await viewer.GetAsync($"/api/v1/caves/{guarded}"));
+        viewerCave.GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
+        var ownerCave = await ReadJsonAsync(await owner.GetAsync($"/api/v1/caves/{guarded}"));
+        ownerCave.GetProperty("approximateLocation").GetBoolean().ShouldBeFalse();
+
+        // …and the sibling that does the exposing really does show this caller a position.
+        var pointName = $"Track end {suffix}";
+        var pointId = await CreateGenericFeatureAsync(pointName, "public");
+        var viewerPoint = await ReadJsonAsync(await viewer.GetAsync($"/api/v1/features/{pointId}"));
+        var viewerPointFeature = viewerPoint.GetProperty("feature");
+        viewerPointFeature.GetProperty("geometry").ValueKind.ShouldNotBe(JsonValueKind.Null);
+        viewerPointFeature.GetProperty("approximateLocation").GetBoolean().ShouldBeFalse();
+
+        var tripId = await CreateTripLogAsync($"Roll {suffix}", openCave, "authenticated");
+        var dug = await RelationIdAsync("trip-dug");
+
+        // Two links of the same role, differing only in what stands beside the guarded
+        // cave: nothing that shows a position, and a public point that does.
+        var plainRole = await CreateTypedLinkAsync(
+            dug,
+            Member("tripLog", tripId, isMain: true),
+            Member("feature", guarded, sortOrder: 1));
+        var roleBesideCoordinates = await CreateTypedLinkAsync(
+            dug,
+            Member("tripLog", tripId, isMain: true),
+            Member("feature", guarded, sortOrder: 1),
+            Member("feature", pointId, sortOrder: 2));
+
+        // Setting off: a role names the guarded cave to nobody who cannot place it. The
+        // trip member is never the thing withheld — it names no feature — so it travels
+        // whole and the link still reads as a role, with the cave simply absent.
+        var offPlain = await BodyAsync(viewer, $"/api/v1/reslinks/{plainRole}");
+        offPlain.ShouldNotContain(guardedName);
+        MembersOf(offPlain).Single().GetProperty("targetId").GetGuid().ShouldBe(tripId);
+        JsonDocument.Parse(offPlain).RootElement
+            .GetProperty("relationType").GetProperty("code").GetString().ShouldBe("trip-dug");
+
+        var offBeside = await BodyAsync(viewer, $"/api/v1/reslinks/{roleBesideCoordinates}");
+        offBeside.ShouldNotContain(guardedName);
+        var offBesideIds = MembersOf(offBeside).Select(m => m.GetProperty("targetId").GetGuid()).ToList();
+        offBesideIds.Count.ShouldBe(2);
+        offBesideIds.ShouldContain(tripId);
+        offBesideIds.ShouldContain(pointId);
+
+        // The positive, in the same test: the owner places the cave exactly, so both role
+        // links read whole for them and the withholding above was this caller's rights.
+        MembersOf(await BodyAsync(owner, $"/api/v1/reslinks/{plainRole}")).Count.ShouldBe(2);
+        var ownerBeside = MembersOf(await BodyAsync(owner, $"/api/v1/reslinks/{roleBesideCoordinates}"));
+        ownerBeside.Count.ShouldBe(3);
+        DisplayTitle(ownerBeside, guarded).ShouldBe(guardedName);
+
+        await SetRevealAsync(true);
+        try
+        {
+            // Setting on re-admits the name where nothing seats it beside coordinates…
+            var onPlain = MembersOf(await BodyAsync(viewer, $"/api/v1/reslinks/{plainRole}"));
+            onPlain.Count.ShouldBe(2);
+            DisplayTitle(onPlain, guarded).ShouldBe(guardedName);
+
+            // …and never where something does. A role is a link like any other here: the
+            // rule reads the members standing together, not the relation they stand in.
+            var onBeside = await BodyAsync(viewer, $"/api/v1/reslinks/{roleBesideCoordinates}");
+            onBeside.ShouldNotContain(guardedName);
+            var onBesideIds = MembersOf(onBeside).Select(m => m.GetProperty("targetId").GetGuid()).ToList();
+            onBesideIds.Count.ShouldBe(2);
+            onBesideIds.ShouldContain(pointId);
+
+            // The cave's own panel, asked for this one role, lists exactly the link whose
+            // connecting member survived — and counts it, the badge agreeing with the row.
+            var panel = await ShouldAgreeWithItsRowsAsync(viewer, guarded, "trip-dug", 1);
+            panel.GetProperty("items").EnumerateArray()
+                .Single().GetProperty("id").GetGuid().ShouldBe(plainRole);
+        }
+        finally
+        {
+            await SetRevealAsync(false);
+        }
+    }
+
+    [Fact]
+    public async Task A_trips_own_sketch_withholds_the_cave_its_role_names_whatever_the_setting_says()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var guardedName = $"Guarded pot {suffix}";
+        var guarded = await CreateProtectedCaveAsync(guardedName);
+        var openCave = await CreateCaveAsync($"Doline {suffix}", "authenticated");
+
+        // The two trips differ in one fact only: whether the trip carries a sketch. A
+        // trip's sketch is served exactly to everyone who may read the trip, so a
+        // positioned trip standing as a role's main member shows the caller coordinates
+        // as plainly as a placeable feature would — and a role puts a trip in every link
+        // it makes, which is where this now decides most of what a caller sees.
+        var flatTitle = $"Flat survey {suffix}";
+        var drawnTitle = $"Drawn survey {suffix}";
+        var flatTrip = await CreateTripLogAsync(flatTitle, openCave, "authenticated");
+        var drawnTrip = await CreateTripLogAsync(
+            drawnTitle, openCave, "authenticated",
+            new { type = "Point", coordinates = new[] { 25.44803, 45.52914 } });
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            // Fixture proof: one sketch really was stored and the other really was not,
+            // so each half below is exercised rather than merely uncontradicted.
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripLogs.AsNoTracking().FirstAsync(t => t.Id == flatTrip)).Geom.ShouldBeNull();
+            (await db.TripLogs.AsNoTracking().FirstAsync(t => t.Id == drawnTrip)).Geom.ShouldNotBeNull();
+        }
+
+        // …and the readability half: this caller reads both trips, so the drawn one really
+        // does show them a position rather than counting against nobody.
+        (await viewer.GetAsync($"/api/v1/trip-logs/{flatTrip}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await viewer.GetAsync($"/api/v1/trip-logs/{drawnTrip}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var surveyed = await RelationIdAsync("trip-surveyed");
+        var flatRole = await CreateTypedLinkAsync(
+            surveyed,
+            Member("tripLog", flatTrip, isMain: true),
+            Member("feature", guarded, sortOrder: 1));
+        var drawnRole = await CreateTypedLinkAsync(
+            surveyed,
+            Member("tripLog", drawnTrip, isMain: true),
+            Member("feature", guarded, sortOrder: 1));
+
+        await SetRevealAsync(true);
+        try
+        {
+            // Setting on: the flat trip's role reads whole — the control that proves the
+            // refusal beside it is about the sketch and not about roles.
+            var flatMembers = MembersOf(await BodyAsync(viewer, $"/api/v1/reslinks/{flatRole}"));
+            flatMembers.Count.ShouldBe(2);
+            DisplayTitle(flatMembers, guarded).ShouldBe(guardedName);
+
+            // The same role behind a positioned trip: no setting seats a guarded name
+            // beside coordinates its reader may see, and the trip is those coordinates.
+            var drawnBody = await BodyAsync(viewer, $"/api/v1/reslinks/{drawnRole}");
+            drawnBody.ShouldNotContain(guardedName);
+            var drawnMember = MembersOf(drawnBody).Single();
+            drawnMember.GetProperty("targetId").GetGuid().ShouldBe(drawnTrip);
+            drawnMember.GetProperty("display").GetProperty("title").GetString().ShouldBe(drawnTitle);
+
+            // The cave's panel for that role therefore lists the flat trip's link alone,
+            // and says so in its count.
+            var panel = await ShouldAgreeWithItsRowsAsync(viewer, guarded, "trip-surveyed", 1);
+            panel.GetProperty("items").EnumerateArray()
+                .Single().GetProperty("id").GetGuid().ShouldBe(flatRole);
+
+            // Whoever may place the cave sees both roles whole, sketch or no sketch.
+            foreach (var linkId in new[] { flatRole, drawnRole })
+            {
+                MembersOf(await BodyAsync(owner, $"/api/v1/reslinks/{linkId}")).Count.ShouldBe(2, linkId.ToString());
+            }
+            await ShouldAgreeWithItsRowsAsync(owner, guarded, "trip-surveyed", 2);
+        }
+        finally
+        {
+            await SetRevealAsync(false);
+        }
+
+        // Setting off, the cave is withheld from both roles — and the trip member stays
+        // whole in both, because a member naming no feature has no position to guard.
+        foreach (var (linkId, tripId, title) in
+            new[] { (flatRole, flatTrip, flatTitle), (drawnRole, drawnTrip, drawnTitle) })
+        {
+            var body = await BodyAsync(viewer, $"/api/v1/reslinks/{linkId}");
+            body.ShouldNotContain(guardedName);
+            var members = MembersOf(body);
+            members.Single().GetProperty("targetId").GetGuid().ShouldBe(tripId);
+            DisplayTitle(members, tripId).ShouldBe(title);
+        }
+        await ShouldAgreeWithItsRowsAsync(viewer, guarded, "trip-surveyed", 0);
+    }
+
     // ---- the timeline is never a side door ---------------------------------------------
 
     [Fact]
@@ -725,17 +1005,50 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable
     };
 
     /// <summary>Creates an untyped link as the owner and returns its id.</summary>
-    private async Task<Guid> CreateLinkAsync(params object[] members)
+    private Task<Guid> CreateLinkAsync(params object[] members) =>
+        CreateTypedLinkAsync(null, members);
+
+    /// <summary>Creates a link of one relation type as the owner and returns its id. A
+    /// directed relation wants exactly one member marked main once the link has two, so
+    /// callers pass one.</summary>
+    private async Task<Guid> CreateTypedLinkAsync(long? relationTypeId, params object[] members)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/reslinks", new
         {
-            relationTypeId = (long?)null,
+            relationTypeId,
             description = (string?)null,
             members,
         });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>The id of a relation type, by the code clients address it as.</summary>
+    private async Task<long> RelationIdAsync(string code)
+    {
+        var listed = await owner.GetFromJsonAsync<JsonElement>("/api/v1/reslinks/relation-types");
+        return listed.EnumerateArray()
+            .Single(r => r.GetProperty("code").GetString() == code)
+            .GetProperty("id").GetInt64();
+    }
+
+    /// <summary>
+    /// Reads one panel — optionally asked for a single relation — and asserts the count it
+    /// reports is both the expected one and the number of rows it actually returned. The
+    /// total doubles as the badge, so a filter that reached the rows without reaching the
+    /// count (or the other way round) would show a number nothing on the page explains.
+    /// </summary>
+    private static async Task<JsonElement> ShouldAgreeWithItsRowsAsync(
+        HttpClient client, Guid targetId, string? relation, int expectedTotal, string targetType = "feature")
+    {
+        var route = $"/api/v1/reslinks/for-target?type={targetType}&id={targetId}"
+            + (relation is null ? string.Empty : $"&relation={Uri.EscapeDataString(relation)}");
+        var panel = await ReadJsonAsync(await client.GetAsync(route));
+        var total = panel.GetProperty("totalItems").GetInt32();
+        total.ShouldBe(expectedTotal, route);
+        panel.GetProperty("items").GetArrayLength().ShouldBe(total, route);
+        return panel;
     }
 
     /// <summary>GETs a route, asserts 200, and returns the raw body — the byte-level

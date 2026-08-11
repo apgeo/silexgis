@@ -2567,6 +2567,13 @@ export function useDeleteEntrance(caveId: string) {
 export interface ResLinkPageParams {
   page?: number;
   pageSize?: number;
+  /**
+   * A relation code, narrowing the panel to links of that one relation — how a page asks
+   * for a single role rather than reading every link and sorting them itself. Omitted or
+   * blank means every relation, untyped links included; a code no relation type carries is
+   * refused by the server rather than answered with an empty page.
+   */
+  relation?: string;
 }
 
 /**

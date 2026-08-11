@@ -76,7 +76,7 @@ public static class ResLinkEndpoints
         var links = api.MapGroup("/reslinks").WithTags("ResLinks");
 
         links.MapGet("/for-target", ForTargetAsync)
-            .WithSummary("Links incident to one target, sibling members resolved; the total doubles as the badge count.");
+            .WithSummary("Links incident to one target, sibling members resolved, optionally narrowed to one relation code; the total doubles as the badge count.");
         links.MapGet("/targets/search", SearchTargetsAsync)
             .WithSummary("Picker feed: readable targets of one type matching a query, as uniform rows.");
         links.MapGet("/point-default", PointDefaultAsync)
@@ -532,7 +532,22 @@ public static class ResLinkEndpoints
         }
 
         var currentMain = members.FirstOrDefault(m => m.IsMain);
-        var resultingMains = request.IsMain || currentMain is not null ? 1 : 0;
+
+        // A directed link standing at a single member carries no marker — below two
+        // members it would mean nothing, so the removal that got the link there took it
+        // off. Growing such a link back hands the marker to the member that stayed,
+        // unless the arriving one explicitly claims it. Refusing instead would leave the
+        // caller exactly one way through — marking the arriving member main — which
+        // silently reverses the relation: the link whose distinguished side was "this
+        // trip surveyed those caves" would come back reading "this cave surveyed that
+        // trip". The member already in the link is what the relation was built around,
+        // so it is the one the marker belongs to.
+        var incumbent = relation?.Directed == true && currentMain is null
+            && !request.IsMain && members.Count == 1
+            ? members[0]
+            : null;
+
+        var resultingMains = request.IsMain || currentMain is not null || incumbent is not null ? 1 : 0;
         if (ResLinkRules.MainMarkerProblem(relation, members.Count + 1, resultingMains) is { } mainProblem)
         {
             return MainProblem(mainProblem);
@@ -559,6 +574,10 @@ public static class ResLinkEndpoints
         {
             currentMain.IsMain = false;
             await db.SaveChangesAsync(ct);
+        }
+        else if (incumbent is not null)
+        {
+            incumbent.IsMain = true;
         }
 
         db.ResLinkMembers.Add(member);
@@ -713,6 +732,19 @@ public static class ResLinkEndpoints
     /// all members resolved for display. Requires Read on the target — the panel sits on
     /// the target's page, so the target's own rules gate it.
     /// </summary>
+    /// <param name="relation">
+    /// Optional relation code, narrowing the answer to links of that one relation — how a
+    /// page asks for a single role ("what did this trip survey?") without reading every
+    /// link and sorting them itself. Addressed by code rather than by row id because the
+    /// code is the shared vocabulary clients already translate their labels by, while the
+    /// numeric id is assigned per installation. Blank or absent means every relation,
+    /// untyped links included; a code no relation type carries is refused rather than
+    /// answered with an empty page, so a mistyped role does not read as a role nobody used.
+    /// The answer is a page of links, not one link: a link answers to whoever authored it,
+    /// so two people recording the same role on the same target write two links, and what
+    /// the role names is the union of their members. A caller that renders a role must read
+    /// every link the filter returns — taking the first would hide the other author's work.
+    /// </param>
     private static async Task<Results<Ok<PagedResult<ResLinkDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ForTargetAsync(
         string type,
         Guid id,
@@ -725,7 +757,8 @@ public static class ResLinkEndpoints
         IAccessContextAccessor accessAccessor,
         CancellationToken ct,
         int? page = null,
-        int? pageSize = null)
+        int? pageSize = null,
+        string? relation = null)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null)
@@ -744,13 +777,39 @@ public static class ResLinkEndpoints
             return ApiProblems.NotFound(TargetNotFoundCode);
         }
 
+        long? relationTypeId = null;
+        if (!string.IsNullOrWhiteSpace(relation))
+        {
+            var relationCode = relation.Trim();
+            relationTypeId = await db.ResLinkRelationTypes.AsNoTracking()
+                .Where(r => r.Code == relationCode)
+                .Select(r => (long?)r.Id)
+                .FirstOrDefaultAsync(ct);
+            if (relationTypeId is null)
+            {
+                return ApiProblems.BadRequest(
+                    RelationNotFoundCode, $"No relation type carries the code '{relationCode}'.");
+            }
+        }
+
         var (p, size) = Paging.Normalize(page, pageSize);
 
         var incident = parsedType is { } pairType
             ? db.ResLinkMembers.AsNoTracking().Where(m => m.EntityType == pairType && m.EntityId == id)
             : db.ResLinkMembers.AsNoTracking().Where(m => m.FeatureId == id);
-        var linkQuery = db.ResLinks.AsNoTracking()
-            .Where(l => incident.Any(m => m.ResLinkId == l.Id))
+        var incidentLinks = db.ResLinks.AsNoTracking()
+            .Where(l => incident.Any(m => m.ResLinkId == l.Id));
+
+        // The relation filter narrows the one query both paging arms below are built from,
+        // and it has to: one arm counts rows in the database while the other counts what
+        // survived the disclosure cut, so a filter reaching only one of them would report a
+        // total that disagrees with the rows returned — and that total is the badge.
+        if (relationTypeId is { } roleId)
+        {
+            incidentLinks = incidentLinks.Where(l => l.RelationTypeId == roleId);
+        }
+
+        var linkQuery = incidentLinks
             .OrderByDescending(l => l.CreatedAt)
             .ThenBy(l => l.Id);
 
@@ -775,13 +834,14 @@ public static class ResLinkEndpoints
             // re-withholds the member naming this feature, and with it the link's
             // presence here — a row on this feature's page states the association the
             // dropped member no longer may. The projection already makes that per-link
-            // decision, so the panel projects every incident link and lists exactly
-            // those still connected to the feature, paging in memory to keep the total
-            // (and badge) honest. Links a feature accrues are bounded in practice; the
-            // exact-view fast path above keeps unprotected features off this path.
-            // Nothing bounds them in principle, though, and this arm's cost grows with
-            // the feature's total link count rather than the page size — the accepted
-            // price of an honest badge. If a heavily-linked protected feature ever
+            // decision, so the panel projects every link the query above admits and lists
+            // exactly those still connected to the feature, paging in memory to keep the
+            // total (and badge) honest. Links a feature accrues are bounded in practice;
+            // the exact-view fast path above keeps unprotected features off this path.
+            // Nothing bounds them in principle, though, and this arm's cost grows with the
+            // number of candidates rather than the page size — narrowed by a relation
+            // filter when one is asked for, and by nothing otherwise: the accepted price
+            // of an honest badge. If a heavily-linked protected feature ever
             // appears, cap the candidates or split the sibling-exposure question into
             // a cheaper first pass before projecting.
             var candidates = await linkQuery.ToListAsync(ct);
