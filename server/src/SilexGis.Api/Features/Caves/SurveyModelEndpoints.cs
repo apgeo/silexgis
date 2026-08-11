@@ -324,8 +324,7 @@ public static class SurveyModelEndpoints
         var ctx = await accessAccessor.GetAsync(ct);
         var (model, cave) = await FindWithCaveAsync(db, id, ct);
         if (model is null || cave is null
-            || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed
-            || await WithheldAsync(protection, ctx, cave.Id, ct))
+            || !await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct))
         {
             return ApiProblems.NotFound("survey_model.not_found");
         }
@@ -349,13 +348,12 @@ public static class SurveyModelEndpoints
         var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.Id == id, ct);
         var cave = model is null ? null : await CaveFeatureAsync(db, model.CaveFeatureId, ct);
         if (model is null || cave is null
-            || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed
-            || await WithheldAsync(protection, ctx, cave.Id, ct))
+            || !await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct))
         {
             return ApiProblems.NotFound("survey_model.not_found");
         }
 
-        if (!(await access.DecideAsync(ctx, AccessAction.Write, cave, ct)).Allowed)
+        if (!await SurveyModelAccess.WritableAsync(access, ctx, cave, ct))
         {
             return ApiProblems.Forbidden();
         }
@@ -385,13 +383,12 @@ public static class SurveyModelEndpoints
         var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.Id == id, ct);
         var cave = model is null ? null : await CaveFeatureAsync(db, model.CaveFeatureId, ct);
         if (model is null || cave is null
-            || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed
-            || await WithheldAsync(protection, ctx, cave.Id, ct))
+            || !await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct))
         {
             return ApiProblems.NotFound("survey_model.not_found");
         }
 
-        if (!(await access.DecideAsync(ctx, AccessAction.Write, cave, ct)).Allowed)
+        if (!await SurveyModelAccess.WritableAsync(access, ctx, cave, ct))
         {
             return ApiProblems.Forbidden();
         }
@@ -429,7 +426,7 @@ public static class SurveyModelEndpoints
     /// </summary>
     private static async Task<bool> WithheldAsync(
         FeatureProtection protection, AccessContext? ctx, Guid caveFeatureId, CancellationToken ct) =>
-        !(await protection.ExactViewIdsAsync(ctx, [caveFeatureId], ct)).Contains(caveFeatureId);
+        !await SurveyModelAccess.LocationOpenAsync(protection, ctx, caveFeatureId, ct);
 
     private static SurveyModelDto ToDto(this SurveyModel m, IFileAccessTokenService tokens) => new(
         m.Id,

@@ -425,13 +425,22 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
 
     // ---- who may edit ----------------------------------------------------------------
 
+    /// <summary>
+    /// The creator rule, on the link shape where it is the whole rule: an untyped link
+    /// carries no main member — the marker is refused without a directed relation — so
+    /// there is no subject whose writers could inherit curation, and edit rights stop at
+    /// the creator and full administrators. The stranger here holds write on both caves
+    /// the link names, which is deliberate: members are not the subject, only the main
+    /// member is, and a link that has none hands nothing to anybody.
+    /// </summary>
     [Fact]
-    public async Task Editing_a_link_belongs_to_its_creator_and_to_administrators()
+    public async Task Editing_a_link_with_no_main_member_belongs_to_its_creator_and_to_administrators()
     {
         var caveA = await CreateCaveAsync(owner, "Owned Cave A", "authenticated");
         var caveB = await CreateCaveAsync(owner, "Owned Cave B", "authenticated");
         var linkId = await CreateLinkAsync(owner, Member("feature", caveA), Member("feature", caveB, sortOrder: 1));
         var memberId = await MemberIdOfAsync(linkId, caveB);
+        (await MainTargetIdsAsync(linkId)).ShouldBeEmpty();
 
         // Another editor reads the link like anyone signed in — and edits nothing of it.
         (await editor2.GetAsync($"/api/v1/reslinks/{linkId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -452,6 +461,197 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
             new { description = "curated", relationTypeId = (long?)null, mainMemberId = (Guid?)null }))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
         (await owner.DeleteAsync($"/api/v1/reslinks/{linkId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    /// <summary>
+    /// The third arm of the edit rule, on the kind of link it exists for: a link whose
+    /// main member is a trip is curated by whoever may write that trip, whether or not
+    /// they typed it. The two halves are the same person — a viewer with no right to the
+    /// trip is refused, the identical viewer holding write on that one trip is admitted —
+    /// so the admission can only be coming from the main member and not from anything the
+    /// account carries by role.
+    /// </summary>
+    [Fact]
+    public async Task A_writer_of_the_main_member_curates_the_link_even_without_authoring_it()
+    {
+        var cave = await CreateCaveAsync(owner, "Curated Cave", "authenticated");
+        var target = await CreateCaveAsync(owner, "Curated Cave Too", "authenticated");
+        var tripId = await CreateTripLogAsync("Curated trip", cave, "authenticated");
+        var visited = await RelationIdAsync("trip-visited");
+        var linkId = await CreateTypedLinkAsync(
+            owner, visited, Member("tripLog", tripId, isMain: true), Member("feature", cave, sortOrder: 1));
+
+        // Without a right to the trip the link is somebody else's assertion, and reading
+        // it — which any signed-in caller may — buys nothing on the write side.
+        (await viewer.GetAsync($"/api/v1/reslinks/{linkId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await viewer.PostAsJsonAsync(
+                $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2)))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        await GrantAsync(viewerId, AccessDomain.TripLogs, AccessAction.Write, tripId);
+
+        // The same account, the same link, one right added on the trip the role is about.
+        var amended = await viewer.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2));
+        amended.StatusCode.ShouldBe(HttpStatusCode.Created, await amended.Content.ReadAsStringAsync());
+
+        // …and the rest of the surface follows the same rule, not just member addition.
+        var memberId = await MemberIdOfAsync(linkId, target);
+        (await viewer.PatchAsJsonAsync($"/api/v1/reslinks/{linkId}",
+            new { description = "corrected", relationTypeId = visited, mainMemberId = (Guid?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await viewer.PatchAsJsonAsync($"/api/v1/reslinks/{linkId}/members/{memberId}",
+            new { isMain = false, sortOrder = 7, note = "seen from the far side" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await viewer.DeleteAsync($"/api/v1/reslinks/{linkId}/members/{memberId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await viewer.DeleteAsync($"/api/v1/reslinks/{linkId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    /// <summary>
+    /// The same rule on a main member from another world, because it is a property of the
+    /// link mechanism and not a trip feature wearing a general name. A document's write
+    /// question is its own walk rather than a bare domain check, and the link surface asks
+    /// it the way the documents surface does — refused for a viewer with nothing, admitted
+    /// for the same viewer holding write on that one document.
+    /// </summary>
+    [Fact]
+    public async Task A_writer_of_a_document_main_member_curates_the_link_about_it()
+    {
+        var (documentId, _) = await UploadDocumentAsync("curated-report.txt");
+        var cave = await CreateCaveAsync(owner, "Documented Cave", "authenticated");
+        var target = await CreateCaveAsync(owner, "Documented Cave Too", "authenticated");
+        var documents = await RelationIdAsync("documents");
+        var linkId = await CreateTypedLinkAsync(
+            owner, documents,
+            Member("document", documentId, isMain: true),
+            Member("feature", cave, sortOrder: 1));
+
+        (await viewer.PostAsJsonAsync(
+                $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2)))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        await GrantAsync(viewerId, AccessDomain.Documents, AccessAction.Write, documentId);
+
+        var amended = await viewer.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2));
+        amended.StatusCode.ShouldBe(HttpStatusCode.Created, await amended.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// Curating a link about a survey model asks exactly what changing that model asks, and
+    /// a model is closed to anyone who may not see its cave's exact position — it is a
+    /// measured drawing of the passage, so it *is* the position. Write on a protected cave
+    /// is therefore not enough on its own: the same account, with the same write right, is
+    /// refused without exact view and admitted with it. Without this the link surface would
+    /// be a way to delete a survey model's association that the model's own endpoints
+    /// answer 404 for.
+    /// </summary>
+    [Fact]
+    public async Task Curating_a_link_about_a_survey_model_needs_what_changing_the_model_needs()
+    {
+        var cave = await CreateProtectedCaveAsync(owner, "Guarded Curation Cave");
+        var modelId = await CreateSurveyModelAsync(cave, $"{Guid.NewGuid():N} guarded-curation.lox");
+        var target = await CreateCaveAsync(owner, "Guarded Curation Target", "authenticated");
+        var documents = await RelationIdAsync("documents");
+        var linkId = await CreateTypedLinkAsync(
+            owner, documents,
+            Member("surveyModel", modelId, isMain: true),
+            Member("feature", cave, sortOrder: 1));
+
+        (await viewer.PostAsJsonAsync(
+                $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2)))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // Write on the cave, and the model still refuses this caller everything.
+        await GrantFeatureAccessAsync(cave, viewerId, "read, write");
+        (await viewer.PutAsJsonAsync($"/api/v1/survey-models/{modelId}",
+                new { name = "renamed from outside", description = (string?)null, surveyedAt = (string?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await viewer.PostAsJsonAsync(
+                $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2)))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // The one right that was missing, and both surfaces open together.
+        await GrantFeatureAccessAsync(cave, viewerId, "read, write, viewExactLocation");
+        (await viewer.PutAsJsonAsync($"/api/v1/survey-models/{modelId}",
+                new { name = "renamed by a steward", description = (string?)null, surveyedAt = (string?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var amendedModel = await viewer.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2));
+        amendedModel.StatusCode.ShouldBe(
+            HttpStatusCode.Created, await amendedModel.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// The other half of the same parity: an entry may carry Write without Read, and the
+    /// built-in visibility arm that hands Read out freely never applies to Write — so on a
+    /// private cave a write-only entry is a caller every survey-model endpoint refuses. The
+    /// link about that model refuses them too, and admits them the moment Read joins the
+    /// entry, which is when the model's own endpoints admit them.
+    /// </summary>
+    [Fact]
+    public async Task Curation_through_a_survey_model_refuses_a_write_that_carries_no_read()
+    {
+        var cave = await CreateCaveAsync(owner, "Unread Curation Cave", "private");
+        var modelId = await CreateSurveyModelAsync(cave, $"{Guid.NewGuid():N} unread-curation.lox");
+        var target = await CreateCaveAsync(owner, "Unread Curation Target", "authenticated");
+        var documents = await RelationIdAsync("documents");
+        var linkId = await CreateTypedLinkAsync(
+            owner, documents,
+            Member("surveyModel", modelId, isMain: true),
+            Member("feature", target, sortOrder: 1));
+        var second = await CreateCaveAsync(owner, "Unread Curation Target Too", "authenticated");
+
+        await GrantFeatureAccessAsync(cave, viewerId, "write");
+        (await viewer.PostAsJsonAsync(
+                $"/api/v1/reslinks/{linkId}/members", Member("feature", second, sortOrder: 2)))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        await GrantFeatureAccessAsync(cave, viewerId, "read, write");
+        var amended = await viewer.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", second, sortOrder: 2));
+        amended.StatusCode.ShouldBe(HttpStatusCode.Created, await amended.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// Widening who may write a link does not change how a promotion is written. The
+    /// marker still comes off one row in its own statement before it goes onto another,
+    /// because the partial unique index that permits one main per link is checked per
+    /// statement — and a curator who never authored the link goes through exactly that
+    /// transaction. The promotion also hands the subject away: once the trip is no longer
+    /// main, the trip's writers are no longer the link's curators, which is the rule
+    /// working rather than a corner of it.
+    /// </summary>
+    [Fact]
+    public async Task A_promotion_by_a_non_creator_hands_the_marker_over_in_one_act()
+    {
+        var cave = await CreateCaveAsync(owner, "Promoted Cave", "authenticated");
+        var tripId = await CreateTripLogAsync("Promoted trip", cave, "authenticated");
+        var dug = await RelationIdAsync("trip-dug");
+        var linkId = await CreateTypedLinkAsync(
+            owner, dug, Member("tripLog", tripId, isMain: true), Member("feature", cave, sortOrder: 1));
+        var caveMemberId = await MemberIdOfAsync(linkId, cave);
+
+        (await viewer.PatchAsJsonAsync($"/api/v1/reslinks/{linkId}/members/{caveMemberId}",
+            new { isMain = true, sortOrder = 1, note = (string?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        await GrantAsync(viewerId, AccessDomain.TripLogs, AccessAction.Write, tripId);
+
+        var promoted = await viewer.PatchAsJsonAsync($"/api/v1/reslinks/{linkId}/members/{caveMemberId}",
+            new { isMain = true, sortOrder = 1, note = (string?)null });
+        promoted.StatusCode.ShouldBe(HttpStatusCode.OK, await promoted.Content.ReadAsStringAsync());
+        (await MainTargetIdsAsync(linkId)).ShouldBe([cave]);
+
+        // The subject moved with the marker: the trip's writers curate the link no longer,
+        // and this caller holds nothing on the cave that took its place.
+        (await viewer.PatchAsJsonAsync($"/api/v1/reslinks/{linkId}",
+            new { description = "no longer mine", relationTypeId = dug, mainMemberId = (Guid?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await owner.PatchAsJsonAsync($"/api/v1/reslinks/{linkId}",
+            new { description = "still the author's", relationTypeId = dug, mainMemberId = (Guid?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     // ---- visibility ------------------------------------------------------------------
@@ -1864,12 +2064,14 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>
-    /// A role is not one link — it is every link of that relation the trip is in. A link
-    /// answers to whoever authored it, so a second person recording the same role on the
-    /// same trip writes a second link rather than amending the first, and nothing refuses
-    /// that. The panel asked for the role therefore returns both, and what the role names
-    /// is the union of their targets: a reader that assumed a single link per role would
-    /// silently hide the second author's caves.
+    /// A role is not one link — it is every link of that relation the trip is in. Curation
+    /// follows the trip, so somebody who may write it amends the existing link; but
+    /// recording a role never took more than reading what it names, and a person who may
+    /// read the trip without writing it still cannot amend somebody else's link. Their
+    /// route is a second link of the same role, which nothing refuses. The panel asked for
+    /// the role therefore returns both, and what the role names is the union of their
+    /// targets: a reader that assumed a single link per role would silently hide the
+    /// second author's caves.
     /// </summary>
     [Fact]
     public async Task A_role_recorded_by_two_authors_is_two_links_the_panel_lists_together()
@@ -1884,14 +2086,15 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
             Member("tripLog", tripId, isMain: true),
             Member("feature", mine, sortOrder: 1));
 
-        // The second editor reads the role whole and may still not amend it…
-        (await editor2.PostAsJsonAsync(
+        // A reader of the trip who may not write it reads the role whole and may still
+        // not amend it…
+        (await viewer.PostAsJsonAsync(
                 $"/api/v1/reslinks/{authored}/members", Member("feature", theirs, sortOrder: 2)))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         // …so what they can record is a second link of the same role, which is accepted.
         var second = await CreateTypedLinkAsync(
-            editor2, surveyed,
+            viewer, surveyed,
             Member("tripLog", tripId, isMain: true),
             Member("feature", theirs, sortOrder: 1));
         second.ShouldNotBe(authored);
@@ -1914,14 +2117,14 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
 
     /// <summary>
     /// Who may amend a role: nobody unsigned, and among signed-in callers the link's
-    /// author and full administrators — the ordinary law of this mechanism, which trip
-    /// roles inherit rather than replace. A second editor of the same trip is refused,
-    /// which is a real limit on how a trip's roles are curated and is stated here rather
-    /// than discovered: their route is a second link of the same role, whose targets join
-    /// the first link's when the role is read.
+    /// author, full administrators, and anyone who may write the trip the role is about —
+    /// the ordinary law of this mechanism, which trip roles inherit rather than replace. A
+    /// second editor of the same trip is admitted here through the third arm, and a viewer
+    /// with no right to the trip is not, which is what makes the admission a statement
+    /// about the trip rather than about being signed in.
     /// </summary>
     [Fact]
-    public async Task Role_membership_answers_to_whoever_authored_the_link_and_to_administrators()
+    public async Task Role_membership_answers_to_the_author_administrators_and_the_trips_writers()
     {
         var cave = await CreateCaveAsync(owner, "Authored Cave", "authenticated");
         var tripId = await CreateTripLogAsync("Authored trip", cave, "authenticated");
@@ -1937,20 +2140,24 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
                 .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         }
 
-        // Another editor reads the link whole and may still not amend it.
-        (await editor2.GetAsync($"/api/v1/reslinks/{linkId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await editor2.PostAsJsonAsync(
-                $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2)))
-            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-
-        // A viewer neither authored it nor administers anything.
+        // A viewer neither authored it, nor administers anything, nor may write the trip
+        // it is about — three reasons and no arm of the rule left.
         (await viewer.PostAsJsonAsync(
                 $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2)))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        // The author may…
-        var byAuthor = await owner.PostAsJsonAsync(
+        // Another editor did not author it either — but this installation's editors may
+        // write every trip, so the role is theirs to correct rather than to duplicate.
+        (await editor2.GetAsync($"/api/v1/reslinks/{linkId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var byTripWriter = await editor2.PostAsJsonAsync(
             $"/api/v1/reslinks/{linkId}/members", Member("feature", target, sortOrder: 2));
+        byTripWriter.StatusCode.ShouldBe(
+            HttpStatusCode.Created, await byTripWriter.Content.ReadAsStringAsync());
+
+        // The author still may — the widening took nothing away from the arm it grew from.
+        var authorsTarget = await CreateCaveAsync(owner, "Authored Cave Four", "authenticated");
+        var byAuthor = await owner.PostAsJsonAsync(
+            $"/api/v1/reslinks/{linkId}/members", Member("feature", authorsTarget, sortOrder: 4));
         byAuthor.StatusCode.ShouldBe(HttpStatusCode.Created, await byAuthor.Content.ReadAsStringAsync());
 
         // …and so may a full administrator, over a link they did not author.
@@ -2502,7 +2709,15 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>Grants a user Read + ViewExactLocation on one feature.</summary>
-    private async Task GrantExactViewAsync(Guid featureId, Guid userId)
+    private Task GrantExactViewAsync(Guid featureId, Guid userId) =>
+        GrantFeatureAccessAsync(featureId, userId, "read, viewExactLocation");
+
+    /// <summary>
+    /// Object-scoped allow of exactly these actions on one feature, replacing whatever this
+    /// object's rules said before — so a test can widen a caller one right at a time and
+    /// see which one the answer turned on.
+    /// </summary>
+    private async Task GrantFeatureAccessAsync(Guid featureId, Guid userId, string actions)
     {
         var grant = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/access", new
         {
@@ -2513,7 +2728,7 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
                     subjectKind = "user",
                     subjectId = userId,
                     effect = "allow",
-                    actions = "read, viewExactLocation",
+                    actions,
                     scopeKind = "object",
                 },
             },
@@ -2549,6 +2764,32 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
             Domain = removed.Domain,
             Actions = removed.Actions,
             ScopeKind = removed.ScopeKind,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// A rule naming one person on one object. Written straight into storage: the
+    /// authoring surface refuses rules that hand out more than the author holds, which is
+    /// exactly what a fixture needs to do. Both the subject and the object belong to this
+    /// class's own run, so the row cannot change what another class in the shared database
+    /// sees. Entries are re-resolved per request, so the next call already sees it.
+    /// </summary>
+    private async Task GrantAsync(Guid userId, AccessDomain domain, AccessAction actions, Guid scopeId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = userId,
+            Effect = AccessEffect.Allow,
+            Domain = domain,
+            Actions = actions,
+            ScopeKind = AccessScopeKind.Object,
+            // Object scope anchors in ScopeId outside the feature domain, where the
+            // dedicated foreign key carries it instead.
+            ScopeId = scopeId,
         });
         await db.SaveChangesAsync();
     }

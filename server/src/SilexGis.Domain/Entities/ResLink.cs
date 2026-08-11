@@ -130,8 +130,11 @@ public class ResLink : ITimestamped, IAuditable
 
     public string? Description { get; set; }
 
-    /// <summary>Creator — owns edit/delete alongside global admins; null once the
-    /// account is gone.</summary>
+    /// <summary>
+    /// Creator — one of the three who own edit/delete, alongside global admins and whoever
+    /// may write the link's main member (a link with no main member has no such subject, so
+    /// there the creator and the admins are the whole rule). Null once the account is gone.
+    /// </summary>
     public Guid? CreatedBy { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

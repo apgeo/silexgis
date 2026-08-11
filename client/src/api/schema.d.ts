@@ -8094,7 +8094,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Hard-deletes a link and its members, audited (creator or admin). */
+        /** Hard-deletes a link and its members, audited (creator, admin, or a writer of the main member). */
         delete: {
             parameters: {
                 query?: never;
@@ -8117,7 +8117,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        /** Sets description and relation type (creator or admin); mainMemberId moves the marker with them. */
+        /** Sets description and relation type (creator, admin, or a writer of the main member); mainMemberId moves the marker with them. */
         patch: {
             parameters: {
                 query?: never;
@@ -8155,7 +8155,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Adds a member — a readable target, or a new GPS point via newGeoPoint (creator or admin). */
+        /** Adds a member — a readable target, or a new GPS point via newGeoPoint (creator, admin, or a writer of the main member). */
         post: {
             parameters: {
                 query?: never;

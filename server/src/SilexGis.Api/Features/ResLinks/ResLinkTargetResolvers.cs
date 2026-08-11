@@ -75,6 +75,16 @@ public interface IResLinkTargetResolver
     /// <paramref name="limit"/>.</summary>
     Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
         AccessContext ctx, string query, int limit, CancellationToken ct);
+
+    /// <summary>
+    /// Whether the caller may write this one target, asked in whatever way that world
+    /// decides writing — the question "who curates a link" defers to, because a link is
+    /// an assertion about its main member and the people who may change that member are
+    /// the people who may correct what is said about it. Answers false for an id that is
+    /// not there: a member row can outlive a polymorphic target, and a decision about
+    /// nothing is never an admission.
+    /// </summary>
+    Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct);
 }
 
 /// <summary>The registered resolvers, one per admissible target type. Fully populated by
@@ -103,14 +113,29 @@ public sealed class ResLinkTargetDirectory
     public async Task<bool> CanReadAsync(
         AccessContext ctx, AttachedEntityType? type, Guid id, CancellationToken ct) =>
         (await Of(type).ResolveAsync(ctx, [id], ct)).ContainsKey(id);
+
+    /// <summary>The curation floor: whether the caller may write one target.</summary>
+    public Task<bool> CanWriteAsync(
+        AccessContext ctx, AttachedEntityType? type, Guid id, CancellationToken ct) =>
+        Of(type).CanWriteAsync(ctx, id, ct);
 }
 
 /// <summary>Features of any kind, through the shared visibility filter. The title is the
 /// feature's name — never a coordinate; exact-location handling stays with the location
 /// protection machinery.</summary>
-public sealed class FeatureTargetResolver(SilexGisDbContext db) : IResLinkTargetResolver
+public sealed class FeatureTargetResolver(SilexGisDbContext db, IAccessService access) : IResLinkTargetResolver
 {
     public AttachedEntityType? TargetType => null;
+
+    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    {
+        // Deliberately fetched unfiltered and decided afterwards, exactly as the feature
+        // write path does: the write decision is the one that answers here, and running
+        // the visibility filter first would refuse a feature the caller may edit but
+        // reaches by a rule the filter does not express.
+        var feature = await db.Features.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
+        return feature is not null && (await access.DecideAsync(ctx, AccessAction.Write, feature, ct)).Allowed;
+    }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
@@ -171,6 +196,21 @@ public sealed class FeatureTargetResolver(SilexGisDbContext db) : IResLinkTarget
 public sealed class DocumentTargetResolver(SilexGisDbContext db, IAccessService access) : IResLinkTargetResolver
 {
     public AttachedEntityType? TargetType => AttachedEntityType.Document;
+
+    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    {
+        // The document's own walk, not a bare domain decision: writing a document is
+        // decided against the file it currently serves as well as the document row, and
+        // a narrower question here would refuse people the documents surface admits.
+        var document = await db.Documents.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (document is null)
+        {
+            return false;
+        }
+
+        var content = await DocumentQueries.CurrentFileAsync(db, id, ct);
+        return await DocumentAccessRules.CanWriteAsync(db, access, ctx, document, content?.File, ct);
+    }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
@@ -244,9 +284,15 @@ public sealed class DocumentTargetResolver(SilexGisDbContext db, IAccessService 
     }
 }
 
-public sealed class TripLogTargetResolver(SilexGisDbContext db) : IResLinkTargetResolver
+public sealed class TripLogTargetResolver(SilexGisDbContext db, IAccessService access) : IResLinkTargetResolver
 {
     public AttachedEntityType? TargetType => AttachedEntityType.TripLog;
+
+    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    {
+        var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, ct);
+        return trip is not null && (await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed;
+    }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
@@ -293,6 +339,18 @@ public sealed class CaverTargetResolver(
     SilexGisDbContext db, IUserContextAccessor userAccessor) : IResLinkTargetResolver
 {
     public AttachedEntityType? TargetType => AttachedEntityType.Caver;
+
+    /// <summary>
+    /// The roster's write right on this one person, the same object-level question the
+    /// roster asks before letting somebody remove an entry. The roster's *edit* rule has
+    /// a second arm — a person may correct their own contact details — which is
+    /// deliberately not honoured here: that arm is about your own personal data, not a
+    /// claim that you curate what other people record about you.
+    /// </summary>
+    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct) =>
+        await db.Cavers.AsNoTracking().AnyAsync(c => c.Id == id, ct)
+        && AccessEvaluator.Decide(
+            ctx, AccessDomain.Cavers, AccessAction.Write, new AccessTargetFacts { ObjectId = id }).Allowed;
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
@@ -369,6 +427,14 @@ public sealed class CavingGroupTargetResolver(SilexGisDbContext db) : IResLinkTa
 {
     public AttachedEntityType? TargetType => AttachedEntityType.CavingGroup;
 
+    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct) =>
+        await db.CavingGroups.AsNoTracking().AnyAsync(g => g.Id == id, ct)
+        && AccessEvaluator.Decide(
+            ctx,
+            AccessDomain.CavingGroups,
+            AccessAction.Write,
+            new AccessTargetFacts { ObjectId = id }).Allowed;
+
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {
@@ -411,9 +477,15 @@ public sealed class CavingGroupTargetResolver(SilexGisDbContext db) : IResLinkTa
             new AccessTargetFacts { ObjectId = groupId }).Allowed;
 }
 
-public sealed class MapViewTargetResolver(SilexGisDbContext db) : IResLinkTargetResolver
+public sealed class MapViewTargetResolver(SilexGisDbContext db, IAccessService access) : IResLinkTargetResolver
 {
     public AttachedEntityType? TargetType => AttachedEntityType.MapView;
+
+    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    {
+        var view = await db.MapViews.AsNoTracking().FirstOrDefaultAsync(v => v.Id == id, ct);
+        return view is not null && (await access.DecideAsync(ctx, AccessAction.Write, view, ct)).Allowed;
+    }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
@@ -451,6 +523,18 @@ public sealed class MapViewTargetResolver(SilexGisDbContext db) : IResLinkTarget
 public sealed class CabinetTargetResolver(SilexGisDbContext db) : IResLinkTargetResolver
 {
     public AttachedEntityType? TargetType => AttachedEntityType.Cabinet;
+
+    /// <summary>
+    /// A shelf is not a guarded thing in its own right, so "writing a cabinet" is the
+    /// question the shelf's own surface reduces to — asked through that rule's one home
+    /// rather than restated here, so tightening it later cannot leave this admitting people
+    /// the shelf itself refuses.
+    /// </summary>
+    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    {
+        var cabinet = await db.Cabinets.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
+        return cabinet is not null && CabinetAccessRules.MayAdminister(ctx, cabinet.AncestorIds);
+    }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
@@ -515,9 +599,34 @@ public sealed class CabinetTargetResolver(SilexGisDbContext db) : IResLinkTarget
 /// view, the same stance every survey-model read path takes.
 /// </summary>
 public sealed class SurveyModelTargetResolver(
-    SilexGisDbContext db, FeatureProtection protection) : IResLinkTargetResolver
+    SilexGisDbContext db, FeatureProtection protection, IAccessService access) : IResLinkTargetResolver
 {
     public AttachedEntityType? TargetType => AttachedEntityType.SurveyModel;
+
+    /// <summary>
+    /// A survey model carries no rights of its own: the cave it belongs to answers for it,
+    /// and the question is asked through the one definition every survey-model surface
+    /// uses. All three parts of it apply — the cave readable, its exact location open to
+    /// this caller, and Write on it — because a curator of the link may delete it, and
+    /// admitting somebody the model's own endpoints refuse would let the link surface be
+    /// the way around location protection.
+    /// </summary>
+    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    {
+        var caveId = await db.SurveyModels.AsNoTracking()
+            .Where(m => m.Id == id)
+            .Select(m => (Guid?)m.CaveFeatureId)
+            .FirstOrDefaultAsync(ct);
+        if (caveId is not { } cave)
+        {
+            return false;
+        }
+
+        var feature = await db.Features.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == cave && f.Kind == FeatureKind.Cave, ct);
+        return feature is not null
+            && await SurveyModelAccess.MayWriteAsync(access, protection, ctx, feature, ct);
+    }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
@@ -570,9 +679,15 @@ public sealed class SurveyModelTargetResolver(
     }
 }
 
-public sealed class GeofileTargetResolver(SilexGisDbContext db) : IResLinkTargetResolver
+public sealed class GeofileTargetResolver(SilexGisDbContext db, IAccessService access) : IResLinkTargetResolver
 {
     public AttachedEntityType? TargetType => AttachedEntityType.Geofile;
+
+    public async Task<bool> CanWriteAsync(AccessContext ctx, Guid id, CancellationToken ct)
+    {
+        var geofile = await db.Geofiles.AsNoTracking().FirstOrDefaultAsync(g => g.Id == id, ct);
+        return geofile is not null && (await access.DecideAsync(ctx, AccessAction.Write, geofile, ct)).Allowed;
+    }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)

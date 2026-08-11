@@ -454,14 +454,11 @@ public static class CabinetEndpoints
     /// <summary>
     /// Whether the caller may write documents at this cabinet — the question filing and
     /// tree administration both come down to. A null cabinet means the root of the tree,
-    /// where only a domain-wide right answers, because there is no shelf to name.
+    /// where only a domain-wide right answers, because there is no shelf to name. The rule
+    /// itself lives in Domain, so surfaces that reach a shelf sideways answer identically.
     /// </summary>
     private static bool MayAdminister(AccessContext ctx, Cabinet? cabinet) =>
-        AccessEvaluator.Decide(
-            ctx,
-            AccessDomain.Documents,
-            AccessAction.Write,
-            cabinet is null ? null : new AccessTargetFacts { CabinetIds = cabinet.AncestorIds }).Allowed;
+        CabinetAccessRules.MayAdminister(ctx, cabinet?.AncestorIds);
 
     /// <summary>
     /// Writes a shelf's own defaults. Absent means cleared, not unchanged: this is a full-DTO

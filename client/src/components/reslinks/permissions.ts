@@ -27,11 +27,17 @@ export function useIsFullAdmin(): boolean {
 }
 
 /**
- * Whether this caller may edit or delete a link: its creator, or a full administrator.
+ * Whether this caller may edit or delete a link, as far as the client can tell: its
+ * creator, or a full administrator. One home for what the client decides, because the row
+ * menu on a panel and the link's own page have to offer the same controls — an
+ * administrator with no control to use is as wrong as a control that earns a refusal.
  *
- * One home for the rule, because the row menu on a panel and the link's own page have to
- * offer the same controls — an administrator with no control to use is as wrong as a
- * control that earns a refusal.
+ * This is deliberately narrower than the server's rule, which also admits whoever may
+ * write the link's main member. That arm is a decision over a target whose kind varies —
+ * a trip, a document, a shelf, a survey model — and the link payload carries only the
+ * creator, so the client cannot compute it and does not guess at it. The consequence is
+ * that some callers whose edit the server would accept are shown no control; closing that
+ * needs the server to say, on the link itself, whether this caller may edit it.
  */
 export function useMayEditResLink(link: Pick<ResLink, 'createdBy'> | null | undefined): boolean {
   const { data: me } = useMe();

@@ -50,8 +50,11 @@ namespace SilexGis.Api.Features.ResLinks;
 /// <para>
 /// Authoring is asymmetric on purpose: adding a member takes Read on its target — the
 /// author asserts about what they can see, and the link shows that member to others only
-/// if they can read it too — while editing or deleting a link belongs to its creator and
-/// global administrators.
+/// if they can read it too — while editing or deleting a link belongs to its creator,
+/// to global administrators, and to whoever may write the link's main member. That last
+/// arm is what keeps a link curated by the people who steward the thing it is about
+/// rather than by whoever happened to type it first; a link with no main member has no
+/// such subject, so there the creator rule stands alone.
 /// </para>
 /// </remarks>
 public static class ResLinkEndpoints
@@ -86,11 +89,11 @@ public static class ResLinkEndpoints
         links.MapGet("/{idOrCode}", GetAsync)
             .WithSummary("One link by id or by short code — told apart by shape.");
         links.MapPatch("/{id:guid}", UpdateAsync).WithValidation<ResLinkUpdateRequest>()
-            .WithSummary("Sets description and relation type (creator or admin); mainMemberId moves the marker with them.");
+            .WithSummary("Sets description and relation type (creator, admin, or a writer of the main member); mainMemberId moves the marker with them.");
         links.MapDelete("/{id:guid}", DeleteAsync)
-            .WithSummary("Hard-deletes a link and its members, audited (creator or admin).");
+            .WithSummary("Hard-deletes a link and its members, audited (creator, admin, or a writer of the main member).");
         links.MapPost("/{id:guid}/members", AddMemberAsync).WithValidation<ResLinkMemberAddRequest>()
-            .WithSummary("Adds a member — a readable target, or a new GPS point via newGeoPoint (creator or admin).");
+            .WithSummary("Adds a member — a readable target, or a new GPS point via newGeoPoint (creator, admin, or a writer of the main member).");
         links.MapPatch("/{id:guid}/members/{memberId:guid}", UpdateMemberAsync)
             .WithValidation<ResLinkMemberUpdateRequest>()
             .WithSummary("Edits isMain/sortOrder/note; anchors are replace-only — delete and re-add.");
@@ -280,11 +283,6 @@ public static class ResLinkEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        if (!MayEdit(ctx, link))
-        {
-            return ApiProblems.Forbidden();
-        }
-
         var relation = await RelationAsync(db, request.RelationTypeId, ct);
         if (request.RelationTypeId is not null && relation is null)
         {
@@ -293,6 +291,16 @@ public static class ResLinkEndpoints
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await LockForMemberWriteAsync(db, link.Id, ct);
+
+        // Decided inside the lock rather than before it: the third arm of the edit rule
+        // reads which member carries the main marker, and that marker moves. A decision
+        // taken on a snapshot this write would not go on to see could let a caller whose
+        // right came from the old main member finish a write after the subject had already
+        // been handed to something else.
+        if (!await MayEditAsync(db, targets, ctx, link, ct))
+        {
+            return ApiProblems.Forbidden();
+        }
 
         var members = await db.ResLinkMembers.Where(m => m.ResLinkId == link.Id).ToListAsync(ct);
         var directed = relation?.Directed ?? false;
@@ -346,6 +354,7 @@ public static class ResLinkEndpoints
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
         Guid id,
         SilexGisDbContext db,
+        ResLinkTargetDirectory targets,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -361,7 +370,15 @@ public static class ResLinkEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        if (!MayEdit(ctx, link))
+        // Locked like every other write of this link, so the edit decision and the delete
+        // it authorises see one snapshot: the rule reads the main marker, and a concurrent
+        // promotion could otherwise hand the subject away between the two.
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await LockForMemberWriteAsync(db, link.Id, ct);
+
+        // Inside the lock, for the reason the update handler above spells out: the rule
+        // reads the main marker, and the marker moves.
+        if (!await MayEditAsync(db, targets, ctx, link, ct))
         {
             return ApiProblems.Forbidden();
         }
@@ -372,6 +389,7 @@ public static class ResLinkEndpoints
         db.ResLinkMembers.RemoveRange(members);
         db.ResLinks.Remove(link);
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
         return TypedResults.NoContent();
     }
 
@@ -397,16 +415,18 @@ public static class ResLinkEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        if (!MayEdit(ctx, link))
+        // The whole act — the edit decision, the optional new feature, the marker handover
+        // and the insert — is one transaction, opened by taking the link's row lock so the
+        // snapshot every rule below runs against cannot be moved by a concurrent writer.
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await LockForMemberWriteAsync(db, link.Id, ct);
+
+        // Inside the lock, for the reason the update handler above spells out: the rule
+        // reads the main marker, and the marker moves.
+        if (!await MayEditAsync(db, targets, ctx, link, ct))
         {
             return ApiProblems.Forbidden();
         }
-
-        // The whole act — the optional new feature, the marker handover and the insert —
-        // is one transaction, opened by taking the link's row lock so the snapshot the
-        // count-sensitive rules below run against cannot be moved by a concurrent writer.
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        await LockForMemberWriteAsync(db, link.Id, ct);
 
         var members = await db.ResLinkMembers.Where(m => m.ResLinkId == link.Id).ToListAsync(ct);
         var relation = await RelationAsync(db, link.RelationTypeId, ct);
@@ -516,14 +536,14 @@ public static class ResLinkEndpoints
         // The snapshot behind this check is uncut by membership disclosure, so the
         // refusal can confirm to the caller that a whole target — possibly a member
         // their own reads withhold — already sits in the link. Accepted, eyes open:
-        // only the link's creator or a full administrator (who reads every member
-        // anyway) can reach this line, so the audience is whoever authored the link,
-        // and the honest alternatives are worse — a disclosure-cut snapshot would
-        // drive the insert into the unique backstop index, and answering "created"
-        // for a row that already exists would either misstate its fields or overwrite
-        // another author's. The count-based rules above share the same snapshot and
-        // the same bounded audience: a creator can infer that hidden members exist,
-        // never which targets they name.
+        // the audience is the people who curate this link — its creator, a full
+        // administrator who reads every member anyway, and whoever may write the main
+        // member the link is about — and the honest alternatives are worse: a
+        // disclosure-cut snapshot would drive the insert into the unique backstop
+        // index, and answering "created" for a row that already exists would either
+        // misstate its fields or overwrite another author's. The count-based rules
+        // above share the same snapshot and the same bounded audience: a curator can
+        // infer that hidden members exist, never which targets they name.
         if (request.AnchorKind == AnchorKind.Whole && members.Any(m =>
                 m.AnchorKind == AnchorKind.Whole && m.FeatureId == featureId
                 && m.EntityType == entityType && m.EntityId == entityId))
@@ -613,13 +633,15 @@ public static class ResLinkEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        if (!MayEdit(ctx, link))
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await LockForMemberWriteAsync(db, link.Id, ct);
+
+        // Inside the lock, for the reason the update handler above spells out: the rule
+        // reads the main marker, and the marker moves.
+        if (!await MayEditAsync(db, targets, ctx, link, ct))
         {
             return ApiProblems.Forbidden();
         }
-
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        await LockForMemberWriteAsync(db, link.Id, ct);
 
         var members = await db.ResLinkMembers.Where(m => m.ResLinkId == link.Id).ToListAsync(ct);
         var member = members.FirstOrDefault(m => m.Id == memberId);
@@ -663,6 +685,7 @@ public static class ResLinkEndpoints
         Guid id,
         Guid memberId,
         SilexGisDbContext db,
+        ResLinkTargetDirectory targets,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -678,16 +701,18 @@ public static class ResLinkEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        if (!MayEdit(ctx, link))
-        {
-            return ApiProblems.Forbidden();
-        }
-
         // Locked first: the one-member floor and the directed-main successor rule count
         // a snapshot, and two concurrent removals passing the same count could otherwise
         // leave a zero-member link — a state nothing repairs.
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await LockForMemberWriteAsync(db, link.Id, ct);
+
+        // Inside the lock, for the reason the update handler above spells out: the rule
+        // reads the main marker, and the marker moves.
+        if (!await MayEditAsync(db, targets, ctx, link, ct))
+        {
+            return ApiProblems.Forbidden();
+        }
 
         var members = await db.ResLinkMembers.Where(m => m.ResLinkId == link.Id).ToListAsync(ct);
         var member = members.FirstOrDefault(m => m.Id == memberId);
@@ -740,8 +765,10 @@ public static class ResLinkEndpoints
     /// numeric id is assigned per installation. Blank or absent means every relation,
     /// untyped links included; a code no relation type carries is refused rather than
     /// answered with an empty page, so a mistyped role does not read as a role nobody used.
-    /// The answer is a page of links, not one link: a link answers to whoever authored it,
-    /// so two people recording the same role on the same target write two links, and what
+    /// The answer is a page of links, not one link. Somebody who may write the target a role
+    /// is about amends the existing link rather than opening a rival one — but recording a
+    /// role never took more than being able to read what it names, so a caller who may read
+    /// the target without writing it can only add a second link of the same role, and what
     /// the role names is the union of their members. A caller that renders a role must read
     /// every link the filter returns — taking the first would hide the other author's work.
     /// </param>
@@ -930,10 +957,54 @@ public static class ResLinkEndpoints
 
     // ---- shared pieces --------------------------------------------------------------
 
-    /// <summary>Edit and delete belong to the creator and to full administrators; a link
-    /// whose creator account is gone answers only to administrators.</summary>
-    private static bool MayEdit(AccessContext ctx, ResLink link) =>
-        ctx.IsFullAdmin || (link.CreatedBy is { } creator && creator == ctx.UserId);
+    /// <summary>
+    /// Who may edit or delete a link: its creator, a full administrator, or whoever may
+    /// write the link's main member.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The third arm exists because a directed link is an assertion <em>about</em> its main
+    /// member — what this trip surveyed, what this document describes — and authorship of
+    /// the sentence is a poor proxy for stewardship of the subject. Without it, whoever
+    /// typed a link first owns it forever: a second person who may edit the very thing the
+    /// link is about cannot correct what was recorded, only add a rival link beside it. The
+    /// rule is asked through each target world's own write decision rather than by
+    /// comparing ids, so a world that decides writing in an unusual way — a document
+    /// through its served file, a shelf through the documents filed at it, a survey model
+    /// through its cave — answers here the way it answers everywhere else.
+    /// </para>
+    /// <para>
+    /// It is a widening and never a narrowing: everyone who could edit a link before can
+    /// still edit it. A link with <em>no</em> main member is untouched — an undirected link
+    /// has no subject to inherit stewardship from, so the creator rule stands alone there,
+    /// and a link whose creator account is gone and which names no main member answers to
+    /// administrators only.
+    /// </para>
+    /// </remarks>
+    private static async Task<bool> MayEditAsync(
+        SilexGisDbContext db,
+        ResLinkTargetDirectory targets,
+        AccessContext ctx,
+        ResLink link,
+        CancellationToken ct)
+    {
+        if (ctx.IsFullAdmin || (link.CreatedBy is { } creator && creator == ctx.UserId))
+        {
+            return true;
+        }
+
+        // One row through the partial unique index that already makes "at most one main
+        // per link" a schema fact. Every caller asks this after taking the link's row
+        // lock, so the marker it reads is the one the write will act on; the creator arm
+        // it grew from could be decided anywhere, because a creator id never changes.
+        var main = await db.ResLinkMembers.AsNoTracking()
+            .Where(m => m.ResLinkId == link.Id && m.IsMain)
+            .Select(m => new { m.FeatureId, m.EntityType, m.EntityId })
+            .FirstOrDefaultAsync(ct);
+        return main is not null
+            && await targets.CanWriteAsync(
+                ctx, main.EntityType, main.FeatureId ?? main.EntityId!.Value, ct);
+    }
 
     private static Task<ResLinkRelationType?> RelationAsync(
         SilexGisDbContext db, long? relationTypeId, CancellationToken ct) =>
