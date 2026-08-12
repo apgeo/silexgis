@@ -4,9 +4,10 @@ import { Card, Table, Tag } from 'antd';
 import type { TablePaginationConfig } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useTripLogs, type TripLogInfo } from '../../api/hooks.ts';
+import { useTripLogs, useTripTypes, type TripLogInfo } from '../../api/hooks.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
+import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 
 /** A cave page shows a page of trips at a time; the whole list lives on the trips page. */
 const PAGE_SIZE = 10;
@@ -26,6 +27,7 @@ export default function CaveTripsSection({ caveId }: { caveId: string }) {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const { data, isFetching } = useTripLogs({ caveId, page, pageSize: PAGE_SIZE });
+  const { data: tripTypes } = useTripTypes();
 
   const onTableChange = (pagination: TablePaginationConfig) => {
     setPage(pagination.current ?? 1);
@@ -68,10 +70,12 @@ export default function CaveTripsSection({ caveId }: { caveId: string }) {
           },
           {
             title: t('trips.type'),
-            dataIndex: 'type',
+            dataIndex: 'tripTypeId',
             width: 150,
-            render: (value: TripLogInfo['type']) =>
-              value ? <Tag>{t(`trips.typeValues.${value}`)}</Tag> : null,
+            render: (value: TripLogInfo['tripTypeId']) => {
+              const label = tripTypeLabelOf(value, tripTypes, t);
+              return label ? <Tag>{label}</Tag> : null;
+            },
           },
           {
             title: t('trips.participants'),

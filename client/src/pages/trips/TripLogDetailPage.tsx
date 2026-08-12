@@ -12,21 +12,24 @@ import {
   useDeleteTripLog,
   useEffectiveAccess,
   useTripLog,
+  useTripTypes,
   useUpdateTripLog,
   type TripLogWrite,
 } from '../../api/hooks.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import HistoryPanel, { type HistoryRestore } from '../../components/history/HistoryPanel.tsx';
-import { applyRestore } from '../../components/history/historyModel.ts';
+import { applyTripRestore } from '../../components/history/historyModel.ts';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import { TRIP_ROLE_CODES } from '../../components/reslinks/relations.ts';
 import TagChips from '../../components/tags/TagChips.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates, formatUndergroundTime, isMultiDay } from '../../components/trips/tripDates.ts';
+import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 import TripFormModal from './TripFormModal.tsx';
 import TripGeometryField from './TripGeometryField.tsx';
 import TripPublishControl from './TripPublishControl.tsx';
 import TripRoleFields from './TripRoleFields.tsx';
+import TripSections from './TripSections.tsx';
 
 function CaveLink({ caveId }: { caveId: string }) {
   const { data: cave } = useCave(caveId);
@@ -40,6 +43,7 @@ export default function TripLogDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: trip, isPending } = useTripLog(id);
   const { data: cavingGroups } = useCavingGroups();
+  const { data: tripTypes } = useTripTypes();
   const organizingCavingGroup = cavingGroups?.find((g) => g.id === trip?.organizingCavingGroupId);
   const deleteTrip = useDeleteTripLog();
   const updateTrip = useUpdateTripLog();
@@ -60,6 +64,9 @@ export default function TripLogDetailPage() {
 
   const canEdit = held ? held.has('write') : domainFallback;
   const canDelete = held ? held.has('delete') : domainFallback;
+  // Absent while the vocabulary is still loading, which is right: an identity is not a label,
+  // and showing the raw number would be worse than showing nothing for the moment it takes.
+  const tripTypeLabel = tripTypeLabelOf(trip.tripTypeId, tripTypes, t);
   const spansDays = isMultiDay(trip.tripDate, trip.tripDateEnd);
   const dateText = formatTripDates(trip.tripDate, trip.tripDateEnd, i18n.resolvedLanguage);
   const timeText = formatUndergroundTime(
@@ -125,9 +132,9 @@ export default function TripLogDetailPage() {
 
       <Card size="small">
         <Descriptions column={1} size="small">
-          {trip.type && (
+          {tripTypeLabel && (
             <Descriptions.Item label={t('trips.type')}>
-              <Tag>{t(`trips.typeValues.${trip.type}`)}</Tag>
+              <Tag>{tripTypeLabel}</Tag>
             </Descriptions.Item>
           )}
           <Descriptions.Item label={spansDays ? t('trips.dates') : t('trips.date')}>
@@ -172,6 +179,38 @@ export default function TripLogDetailPage() {
           {trip.weatherConditions && (
             <Descriptions.Item label={t('trips.weather')}>{trip.weatherConditions}</Descriptions.Item>
           )}
+          {/* Metres, always: the number is stored in one unit and written in the reader's
+              locale, so nothing here has to be trusted to say which unit it meant. */}
+          {trip.depthReachedM != null && (
+            <Descriptions.Item label={t('trips.depthReachedM')}>
+              <span data-testid="trip-depth-reached">
+                {t('trips.metres', { value: trip.depthReachedM })}
+              </span>
+            </Descriptions.Item>
+          )}
+          {trip.lengthSurveyedM != null && (
+            <Descriptions.Item label={t('trips.lengthSurveyedM')}>
+              {t('trips.metres', { value: trip.lengthSurveyedM })}
+            </Descriptions.Item>
+          )}
+          {trip.surveyStations != null && (
+            <Descriptions.Item label={t('trips.surveyStations')}>{trip.surveyStations}</Descriptions.Item>
+          )}
+          {trip.ropeMetres != null && (
+            <Descriptions.Item label={t('trips.ropeMetres')}>
+              {t('trips.metres', { value: trip.ropeMetres })}
+            </Descriptions.Item>
+          )}
+          {/* Said only when it is true. That something went wrong is on the trip's own
+              visibility so a club can count it; the account of what went wrong is not, and
+              lives in the safety section below where its narrower audience is drawn. */}
+          {trip.hadIncident && (
+            <Descriptions.Item label={t('trips.incident')}>
+              <Tag color="warning" data-testid="trip-had-incident">
+                {t('trips.hadIncidentYes')}
+              </Tag>
+            </Descriptions.Item>
+          )}
           {/* Kept from the first announcement even after the trip goes back to draft, so
               "when did this go out" keeps the answer the people who were told would give. */}
           {trip.publishedAt && (
@@ -213,6 +252,11 @@ export default function TripLogDetailPage() {
         </Card>
       )}
 
+      {/* What the trip found, what it took to get in, and what went wrong — each measured
+          against a schema the trip's purpose carries, so what a club asks a report to record
+          is a club's decision. */}
+      <TripSections trip={trip} canEdit={canEdit} />
+
       {/* What the trip did to what it names, role by role — a reading of the one links list,
           not a second store. */}
       <TripRoleFields tripId={trip.id} tripTitle={trip.title} canEdit={canEdit} />
@@ -251,10 +295,13 @@ export default function TripLogDetailPage() {
           canEdit
             ? ({
                 entityType: 'TripLog',
+                // Only what the restore names: a section it does not name is left out of the
+                // write entirely rather than sent back as it stands, so putting an old title
+                // back cannot be refused over a report section nobody opened.
                 onRestore: async (event, props) => {
                   await updateTrip.mutateAsync({
                     id: trip.id,
-                    body: applyRestore(trip as unknown as TripLogWrite, event.changes, props),
+                    body: applyTripRestore(trip as unknown as TripLogWrite, event.changes, props),
                   });
                 },
               } satisfies HistoryRestore)

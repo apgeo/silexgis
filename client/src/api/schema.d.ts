@@ -8751,6 +8751,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The trip purposes: shipped rows (translated by code) and club rows (shown as written). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripTypeDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Adds a trip purpose. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripTypeRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripTypeDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Updates a trip purpose; a shipped row keeps its code. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripTypeRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripTypeDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes an unused club trip purpose; shipped rows cannot be deleted. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/taggings": {
         parameters: {
             query?: never;
@@ -13800,7 +13922,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             title: string;
-            type: null | components["schemas"]["TripType"];
+            /** Format: int64 */
+            tripTypeId: null | number;
             /** Format: date */
             tripDate: string;
             /** Format: date */
@@ -13831,10 +13954,29 @@ export interface components {
             state: components["schemas"]["ActivityState"];
             /** Format: date-time */
             publishedAt: null | string;
+            /** Format: double */
+            depthReachedM: null | number;
+            /** Format: double */
+            lengthSurveyedM: null | number;
+            /** Format: int32 */
+            surveyStations: null | number;
+            /** Format: double */
+            ropeMetres: null | number;
+            hadIncident: boolean;
+            fieldData: components["schemas"]["JsonElement"];
+            /** Format: int32 */
+            fieldDataSchemaVersion: null | number;
+            logistics: components["schemas"]["JsonElement"];
+            /** Format: int32 */
+            logisticsSchemaVersion: null | number;
+            safety: null | components["schemas"]["JsonElement"];
+            /** Format: int32 */
+            safetySchemaVersion: null | number;
         };
         TripLogWriteRequest: {
             title: string;
-            type: null | components["schemas"]["TripType"];
+            /** Format: int64 */
+            tripTypeId: null | number;
             /** Format: date */
             tripDate: string;
             /** Format: date */
@@ -13856,6 +13998,18 @@ export interface components {
             /** Format: uuid */
             cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
+            /** Format: double */
+            depthReachedM: null | number;
+            /** Format: double */
+            lengthSurveyedM: null | number;
+            /** Format: int32 */
+            surveyStations: null | number;
+            /** Format: double */
+            ropeMetres: null | number;
+            hadIncident: boolean;
+            fieldData: null | components["schemas"]["JsonElement"];
+            logistics: null | components["schemas"]["JsonElement"];
+            safety: null | components["schemas"]["JsonElement"];
         };
         TripParticipantDto: {
             /** Format: uuid */
@@ -13869,8 +14023,35 @@ export interface components {
             caverId: null | string;
             newCaverName: null | string;
         };
-        /** @enum {unknown} */
-        TripType: "exploration" | "survey" | "maintenance" | "training" | "tourism" | "rescue" | "science" | "other" | null;
+        TripTypeDto: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            isSeeded: boolean;
+            fieldDataSchema: null | string;
+            /** Format: int32 */
+            fieldDataSchemaVersion: number;
+            logisticsSchema: null | string;
+            /** Format: int32 */
+            logisticsSchemaVersion: number;
+            safetySchema: null | string;
+            /** Format: int32 */
+            safetySchemaVersion: number;
+        };
+        TripTypeRequest: {
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            fieldDataSchema: null | string;
+            logisticsSchema: null | string;
+            safetySchema: null | string;
+        };
         /** @enum {unknown} */
         TwoFactorMethod: "authenticator" | "email" | "sms" | null;
         TwoFactorSendRequest: {

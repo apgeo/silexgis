@@ -318,6 +318,49 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
         all.Worlds[0].Total.ShouldBe(5);
     }
 
+    /// <summary>
+    /// Trips are found by whether something went wrong on them, and the fact is disclosed to
+    /// whoever may read the trip rather than to whoever may edit it.
+    /// </summary>
+    /// <remarks>
+    /// The caller here is a stranger on the plainest role there is, reading public trips they did
+    /// not write. That is the whole point of admitting the field: unlike "which trips visited cave
+    /// X", the answer is assembled entirely out of rows this caller already reads, so it discloses
+    /// nothing a plain listing would not. What went wrong is a different question with a narrower
+    /// audience and is no part of this vocabulary.
+    /// </remarks>
+    [Fact]
+    public async Task A_trip_is_found_by_whether_something_went_wrong_on_it()
+    {
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
+        await SeedTripsAsync(ownerId, Visibility.Public, 2, ActivityState.Published, hadIncident: true);
+        await SeedTripsAsync(ownerId, Visibility.Public, 4, ActivityState.Published);
+
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-incident");
+
+        var mine = new ConditionNode(TripLogFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]);
+
+        var wentWrong = await QueryAsync(client, About("tripLog", new AllOfNode(
+        [
+            mine,
+            new ConditionNode(TripLogFilterFields.HadIncident, FilterOp.Equals, [new BooleanValue(true)]),
+        ])));
+        wentWrong.Worlds[0].Total.ShouldBe(2);
+
+        // The other side of the same question, asked explicitly: a trip that records no incident
+        // is not merely absent from the first answer, it is present in this one. Both halves
+        // matter, because a leaf that matched nothing at all would pass the first assertion.
+        var wentFine = await QueryAsync(client, About("tripLog", new AllOfNode(
+        [
+            mine,
+            new ConditionNode(TripLogFilterFields.HadIncident, FilterOp.Equals, [new BooleanValue(false)]),
+        ])));
+        wentFine.Worlds[0].Total.ShouldBe(4);
+
+        var all = await QueryAsync(client, About("tripLog", mine));
+        all.Worlds[0].Total.ShouldBe(6);
+    }
+
     [Fact]
     public async Task A_world_offers_only_sorts_it_can_actually_deliver()
     {
@@ -432,7 +475,11 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
     }
 
     private async Task SeedTripsAsync(
-        Guid ownerId, Visibility visibility, int count, ActivityState state = ActivityState.Draft)
+        Guid ownerId,
+        Visibility visibility,
+        int count,
+        ActivityState state = ActivityState.Draft,
+        bool hadIncident = false)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -441,11 +488,12 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
         {
             db.TripLogs.Add(new TripLog
             {
-                Title = $"Trip {i} {state} {tag}",
+                Title = $"Trip {i} {state} {hadIncident} {tag}",
                 TripDate = new DateOnly(2026, 5, 3),
                 OwnerUserId = ownerId,
                 Visibility = visibility,
                 State = state,
+                HadIncident = hadIncident,
             });
         }
 

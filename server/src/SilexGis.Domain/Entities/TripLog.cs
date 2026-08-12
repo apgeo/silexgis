@@ -3,19 +3,6 @@ using NetTopologySuite.Geometries;
 
 namespace SilexGis.Domain.Entities;
 
-/// <summary>Purpose of a trip, for filtering and reporting. Stored as smallint.</summary>
-public enum TripType : short
-{
-    Exploration = 0,
-    Survey = 1,
-    Maintenance = 2,
-    Training = 3,
-    Tourism = 4,
-    Rescue = 5,
-    Science = 6,
-    Other = 7,
-}
-
 /// <summary>
 /// A dated exploration/visit report: who went where and what happened. Optionally
 /// carries a location geometry (point or area) and links to the caves involved.
@@ -26,7 +13,12 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
 
     public required string Title { get; set; }
 
-    public TripType? Type { get; set; }
+    /// <summary>
+    /// What the trip was for, as a row in the trip-purpose vocabulary rather than a value fixed
+    /// at build time: a club that runs a kind of trip nobody thought of adds it themselves.
+    /// Null while a trip does not say — a half-written record is a real state.
+    /// </summary>
+    public long? TripTypeId { get; set; }
 
     public DateOnly TripDate { get; set; }
 
@@ -45,6 +37,72 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
     public string? WeatherConditions { get; set; }
 
     public string? LocationText { get; set; }
+
+    /// <summary>
+    /// How deep the trip got, in metres below the entrance. Null while the trip does not say.
+    /// </summary>
+    /// <remarks>
+    /// Metres, always, for this and every other measurement on a trip — one unit stored, formatted
+    /// to whatever a reader's locale wants. A unit column beside the number would mean every sum,
+    /// ranking and comparison had to convert first, and one row with the wrong unit would poison
+    /// all three silently. Stored to a decimetre; a finer figure is rounded to it.
+    /// </remarks>
+    public decimal? DepthReachedM { get; set; }
+
+    /// <summary>New passage surveyed on the trip, in metres. Null while the trip does not say.</summary>
+    public decimal? LengthSurveyedM { get; set; }
+
+    /// <summary>Survey stations set on the trip. A count, so a whole number.</summary>
+    public int? SurveyStations { get; set; }
+
+    /// <summary>Rope used, in metres. Null while the trip does not say.</summary>
+    public decimal? RopeMetres { get; set; }
+
+    /// <summary>
+    /// Whether anything went wrong on the trip. A fact of the row, deliberately separate from any
+    /// account of what happened: a club reviews <em>that</em> there was an incident — counts them,
+    /// finds them, notices a run of them — before it reads <em>what</em> it was, and the two answer
+    /// to different audiences. Never null: "nobody said" and "nothing happened" are not worth
+    /// telling apart here, and a nullable flag would make every count ask which it meant.
+    /// </summary>
+    public bool HadIncident { get; set; }
+
+    /// <summary>
+    /// What the trip found underground, as a bag of values the purpose's field-data schema
+    /// describes (jsonb). Always an object — a trip that says nothing says <c>{}</c>, so a
+    /// reader never has to tell "no answers" from "no bag".
+    /// </summary>
+    public string FieldData { get; set; } = "{}";
+
+    /// <inheritdoc cref="SafetySchemaVersion"/>
+    public int? FieldDataSchemaVersion { get; set; }
+
+    /// <summary>What the trip needed to happen — permits, keys, access, costs (jsonb).</summary>
+    public string Logistics { get; set; } = "{}";
+
+    /// <inheritdoc cref="SafetySchemaVersion"/>
+    public int? LogisticsSchemaVersion { get; set; }
+
+    /// <summary>
+    /// What went wrong and what was learned (jsonb). Read by a narrower audience than the rest
+    /// of the trip: <see cref="HadIncident"/> says that something happened and is told to
+    /// everyone who may read the trip, while this says what it was and names identifiable
+    /// people making mistakes.
+    /// </summary>
+    public string Safety { get; set; } = "{}";
+
+    /// <summary>
+    /// Which version of the purpose's schema for this section the stored bag was measured
+    /// against, or null while it has never been measured — either because the purpose carries
+    /// no schema for the section, or because nobody has supplied a value yet.
+    /// </summary>
+    /// <remarks>
+    /// A write that supplies the bag is measured against the schema as it stands now; a write
+    /// that leaves it alone is measured against the version stamped here. That is what keeps
+    /// tightening a schema from invalidating reports already written under the looser one:
+    /// they are re-measured only when somebody actually rewrites them.
+    /// </remarks>
+    public int? SafetySchemaVersion { get; set; }
 
     /// <summary>The caving group that organized the trip, when one did.</summary>
     public Guid? OrganizingCavingGroupId { get; set; }
@@ -83,6 +141,18 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
     public DateTimeOffset UpdatedAt { get; set; }
 
     public string AuditId => Id.ToString();
+}
+
+/// <summary>
+/// One of the three schema-carrying sections of a trip report. Stored as smallint, and the
+/// discriminator on the published-schema history — the codes are a contract, so a value is
+/// never re-numbered and a new section is appended.
+/// </summary>
+public enum TripSection : short
+{
+    FieldData = 0,
+    Logistics = 1,
+    Safety = 2,
 }
 
 /// <summary>Whether a person attended the trip or proposed it. Stored as smallint.</summary>

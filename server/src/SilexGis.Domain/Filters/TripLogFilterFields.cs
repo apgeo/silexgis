@@ -29,10 +29,26 @@ namespace SilexGis.Domain.Filters;
 /// when deciding who may read a trip — a draft is not hidden, only unannounced — so asking for it
 /// cannot be a second way to ask a question visibility already answered.
 /// </para>
+/// <para>
+/// <b>Whether something went wrong is here, on the same reasoning.</b> It names no cave and no
+/// person: it is a fact about the trip being asked about, and about nothing else, so an answer
+/// discloses only rows the caller already reads. That is the whole test the two refusals above
+/// fail — "which trips visited cave X" and "which trips had person Y on them" answer questions
+/// about a cave and about a person from rows the asker may never see, and the count alone gives
+/// the answer away. Nothing of the sort follows from knowing that a trip one may already read
+/// went badly. The account of what went wrong is a different matter and is not a field here;
+/// it is disclosed by the trip's own reading, under its own narrower rule.
+/// </para>
 /// </remarks>
 public static class TripLogFilterFields
 {
     public const string Title = "title";
+
+    /// <summary>
+    /// What the trip was for. The key stays what it always was because saved filter documents are
+    /// addressed by it, but what it holds is now a row identity from the trip-purpose vocabulary
+    /// rather than the name of a value fixed when the software was built.
+    /// </summary>
     public const string Type = "type";
 
     /// <summary>How far the write-up has got — a draft, announced, or called off.</summary>
@@ -46,6 +62,9 @@ public static class TripLogFilterFields
 
     /// <summary>The group that put the trip on, which is not always the owner's own.</summary>
     public const string OrganizingCavingGroupId = "organizingCavingGroupId";
+
+    /// <summary>Whether anything went wrong — the fact, never the account of it.</summary>
+    public const string HadIncident = "hadIncident";
 
     public const string Visibility = "visibility";
     public const string CreatedAt = "createdAt";
@@ -63,6 +82,7 @@ public static class TripLogFilterFields
             // would put a second copy of "which states a trip may hold" a long way from the first.
             new FieldDescriptor(State, "filters.fields.state", FieldKind.Id, Options: "activityStates"),
             new FieldDescriptor(TripDate, "filters.fields.tripDate", FieldKind.Instant),
+            new FieldDescriptor(HadIncident, "filters.fields.hadIncident", FieldKind.Boolean),
             new FieldDescriptor(OwnerId, "filters.fields.owner", FieldKind.Id, Options: "users"),
             new FieldDescriptor(CavingGroupId, "filters.fields.cavingGroup", FieldKind.Id, Options: "cavingGroups"),
             new FieldDescriptor(

@@ -40,6 +40,13 @@ async function fillRange(page: Page, start: string, end: string) {
   await expect(to).toHaveValue(end);
 }
 
+/** Opens one of the trip report's sections by its collapse header. */
+async function openSection(page: Page, name: string) {
+  // By role, not by text: the change history names the same sections in its own list, so a
+  // plain text match would be ambiguous the moment a trip has been edited once.
+  await page.getByRole('button', { name: new RegExp(`${name}$`) }).click();
+}
+
 /** Draws the trip's one shape as a single point on the form's embedded map. */
 async function drawPoint(page: Page) {
   const map = page.getByTestId('trip-geometry-map');
@@ -276,6 +283,49 @@ test('a trip logged without touching the date control is a day trip today', asyn
   await expect(page.getByText('Dates', { exact: true })).toHaveCount(0);
   // Nothing was drawn, so the trip carries no sketch and the page shows no map at all.
   await expect(page.getByTestId('trip-geometry-map')).toHaveCount(0);
+
+  await page.getByRole('button', { name: /Delete/ }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
+});
+
+test('what a trip measured and what it found are stored on it, not held by the page', async ({
+  page,
+  consoleErrors,
+}) => {
+  const title = `E2E Report ${Date.now()}`;
+  allowDeletedTripRefetch(consoleErrors);
+  await login(page);
+
+  // A purpose is what carries the questions: the three sections are drawn from schemas the
+  // trip's purpose holds, so a trip with no purpose has nothing to be asked.
+  await page.goto('/trip-logs');
+  await page.getByRole('button', { name: /New trip log/ }).click();
+  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByLabel('Trip type').click();
+  await page.getByTitle('Survey / mapping').click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+
+  // A counted fact: a column on the trip, so a club can count it across trips rather than dig
+  // it out of prose.
+  await openSection(page, 'Measured');
+  await page.getByTestId('trip-measure-depthReachedM').fill('218');
+  await page.getByTestId('trip-section-save-measured').click();
+  await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
+
+  // And a value in a section whose field this client never named: the form is built from the
+  // purpose's schema, so what is asked for is the installation's decision.
+  await openSection(page, 'Field data');
+  await page.getByTestId('trip-section-field-instrument').fill('DistoX2');
+  await page.getByTestId('trip-section-save-fieldData').click();
+  await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
+
+  // Both survive a reload, which is the whole claim: they are on the row, not in the page.
+  await page.reload();
+  await expect(page.getByTestId('trip-depth-reached')).toContainText('218', { timeout: 15_000 });
+  await openSection(page, 'Field data');
+  await expect(page.getByTestId('trip-section-field-instrument')).toHaveValue('DistoX2');
 
   await page.getByRole('button', { name: /Delete/ }).click();
   await page.getByRole('button', { name: 'OK' }).click();

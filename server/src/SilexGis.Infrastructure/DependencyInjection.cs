@@ -48,8 +48,9 @@ public static class DependencyInjection
                 sp.GetRequiredService<AuditInterceptor>(),
                 sp.GetRequiredService<UserIdTransactionInterceptor>()));
 
-        // One typed-property validator serves every kind-keyed schema in the system
-        // (feature properties, document metadata) — the knowledge has a single home.
+        // One typed-property validator serves every kind-keyed schema in the system (feature
+        // properties, document metadata, the three sections of a trip report) — the knowledge
+        // has a single home.
         services.AddSingleton<ITypedPropertiesValidator, Metadata.JsonSchemaPropertiesValidator>();
         services.AddSingleton<Geodata.ICrsRegistry, Geodata.ProjCrsRegistry>();
         services.AddSingleton<Geodata.ICoordinateProjector, Geodata.ProjCoordinateProjector>();
@@ -62,6 +63,8 @@ public static class DependencyInjection
         services.AddScoped<Import.ImportCommitService>();
         services.AddScoped<Import.PhotoCandidateService>();
         services.AddScoped<Import.PhotoCommitService>();
+        services.AddScoped<Trips.TripTypeWriteService>();
+        services.AddScoped<Trips.TripSectionWriter>();
         services.AddScoped<Documents.DocumentWriteService>();
         services.AddScoped<Documents.DocumentTypeWriteService>();
         services.AddScoped<Documents.CabinetWriteService>();

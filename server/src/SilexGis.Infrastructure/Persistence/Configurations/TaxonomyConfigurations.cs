@@ -33,6 +33,40 @@ public sealed class RockTypeConfiguration : IEntityTypeConfiguration<RockType>
     public void Configure(EntityTypeBuilder<RockType> builder) => builder.ConfigureTaxonomy("rock_types");
 }
 
+public sealed class TripTypeConfiguration : IEntityTypeConfiguration<TripType>
+{
+    public void Configure(EntityTypeBuilder<TripType> builder)
+    {
+        builder.ConfigureTaxonomy("trip_types");
+        builder.Property(x => x.FieldDataSchema).HasColumnType("jsonb");
+        builder.Property(x => x.FieldDataSchemaVersion).HasDefaultValue(TripType.FirstSchemaVersion);
+        builder.Property(x => x.LogisticsSchema).HasColumnType("jsonb");
+        builder.Property(x => x.LogisticsSchemaVersion).HasDefaultValue(TripType.FirstSchemaVersion);
+        builder.Property(x => x.SafetySchema).HasColumnType("jsonb");
+        builder.Property(x => x.SafetySchemaVersion).HasDefaultValue(TripType.FirstSchemaVersion);
+    }
+}
+
+public sealed class TripTypeSchemaConfiguration : IEntityTypeConfiguration<TripTypeSchema>
+{
+    public void Configure(EntityTypeBuilder<TripTypeSchema> builder)
+    {
+        builder.ToTable("trip_type_schemas",
+            t => t.HasCheckConstraint("ck_trip_type_schemas_version", "version >= 1"));
+        builder.Property(x => x.Section).HasConversion<short>();
+        builder.Property(x => x.Schema).HasColumnType("jsonb");
+
+        // The history goes with the purpose: a version of a schema means nothing without the
+        // purpose it belongs to, and a purpose with no rows here has never published one.
+        builder.HasOne<TripType>().WithMany().HasForeignKey(x => x.TripTypeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Section is part of the key because the three sections version independently: editing
+        // the safety schema must not make every field-data stamp look stale.
+        builder.HasIndex(x => new { x.TripTypeId, x.Section, x.Version }).IsUnique();
+    }
+}
+
 public sealed class DocumentTypeConfiguration : IEntityTypeConfiguration<DocumentType>
 {
     public void Configure(EntityTypeBuilder<DocumentType> builder)

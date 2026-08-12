@@ -124,7 +124,17 @@ Previous versions:
   apart. What one person records, everybody who may maintain the thing it is about can correct. Those
   fields are also the *only* way a trip is tied to a place — there is no separate cave list to keep in
   step — and a cave's own page returns the favour with a **Trips** section listing the trips that named
-  it, newest first, counted by the same rule that decides what the list may show.
+  it, newest first, counted by the same rule that decides what the list may show. **What a trip was
+  for is a list your club owns**, not a list we chose: the eight kinds we ship are there from the
+  start and cannot be renamed out from under the software, but a club that runs something nobody
+  thought of adds it themselves, and it is filterable and countable from that moment. Each kind also
+  decides **what a report of that kind asks for** — three sections, field data, logistics and safety,
+  drawn from a form the club describes once and can change later without invalidating a single report
+  already written. Beside them a trip records the figures worth counting — how deep, how far surveyed,
+  how many stations, how much rope — in metres, once, shown in your own language's numbers. It also
+  records **whether anything went wrong**, which anyone who may read the trip can see and search for,
+  while the account of *what* went wrong is shown only to the people who may correct the trip: a
+  near-miss names somebody's mistake, and it is not gossip for the whole club.
 - **Tags, saved & shareable map views**, and **multi-window** pop-out panels.
 - **Share links** — hand out a revocable link to one feature and what it contains, either
   public or sign-in-only. A share never reveals a protected location.

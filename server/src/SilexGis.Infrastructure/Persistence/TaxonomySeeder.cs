@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Infrastructure.Persistence;
 
@@ -38,6 +39,7 @@ public static class TaxonomySeeder
             ("volcanic", "Volcanic rock"),
             ("other", "Other"));
 
+        await SeedTripTypesAsync(db, ct);
         await SeedLinkKindsAsync(db, ct);
         await SeedResLinkRelationTypesAsync(db, ct);
         await SeedFeatureTypesAsync(db, ct);
@@ -62,6 +64,99 @@ public static class TaxonomySeeder
                 set.Add(entity);
             }
         }
+    }
+
+    // The purposes a trip may be recorded under. The rows come from the shared seed list so the
+    // admin surface refusing to re-code or delete a shipped row and this insert can never
+    // disagree about which codes those are.
+    private static async Task SeedTripTypesAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var existing = await db.TripTypes.ToDictionaryAsync(x => x.Code, ct);
+        var sort = 0;
+        foreach (var seed in Domain.Trips.TripTypeSeeds.All)
+        {
+            sort += 10;
+            var sections = TripTypeStarterSchemas.For(seed.Code);
+            if (existing.TryGetValue(seed.Code, out var row))
+            {
+                foreach (var section in TripType.Sections)
+                {
+                    // Backfill a shipped schema only onto a section nobody has edited. A null
+                    // schema is not proof that none was ever set: emptying the schema box is how
+                    // an administrator says this section has none, and writing the shipped text
+                    // back over that on the next restart would silently undo their change — and
+                    // then publish the shipped text as the very version that was meant to mean
+                    // "no schema". Every edit moves the version, so the version is what tells
+                    // the two nulls apart.
+                    if (row.SchemaOf(section) is null
+                        && row.SchemaVersionOf(section) == TripType.FirstSchemaVersion)
+                    {
+                        row.SetInitialSchema(section, sections.Of(section));
+                    }
+                }
+            }
+            else
+            {
+                var added = new TripType { Code = seed.Code, Name = seed.Name, SortOrder = sort };
+                foreach (var section in TripType.Sections)
+                {
+                    added.SetInitialSchema(section, sections.Of(section));
+                }
+
+                db.TripTypes.Add(added);
+            }
+        }
+
+        // Identities are assigned by the database, so the history rows that reference them
+        // cannot be built in the same pass.
+        await db.SaveChangesAsync(ct);
+        await PublishUnpublishedTripSchemasAsync(db, ct);
+    }
+
+    /// <summary>
+    /// Makes sure every trip purpose's current section schemas exist in the schema history. A
+    /// trip stamps the version it was validated against and is re-checked against that
+    /// version's text, so a current schema missing from the history would leave those trips
+    /// measured against a schema nobody can produce.
+    /// </summary>
+    private static async Task PublishUnpublishedTripSchemasAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var types = await db.TripTypes.AsNoTracking().ToListAsync(ct);
+        if (types.Count == 0)
+        {
+            return;
+        }
+
+        var typeIds = types.Select(t => t.Id).ToList();
+        var published = await db.TripTypeSchemas.AsNoTracking()
+            .Where(s => typeIds.Contains(s.TripTypeId))
+            .Select(s => new { s.TripTypeId, s.Section, s.Version })
+            .ToListAsync(ct);
+        var known = published.Select(p => (p.TripTypeId, p.Section, p.Version)).ToHashSet();
+
+        foreach (var type in types)
+        {
+            foreach (var section in TripType.Sections)
+            {
+                if (type.SchemaOf(section) is not { } schema)
+                {
+                    continue;
+                }
+
+                if (known.Add((type.Id, section, type.SchemaVersionOf(section))))
+                {
+                    db.TripTypeSchemas.Add(new TripTypeSchema
+                    {
+                        TripTypeId = type.Id,
+                        Section = section,
+                        Version = type.SchemaVersionOf(section),
+                        Schema = schema,
+                    });
+                }
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 
     // Locating is security-bearing (a locating link to a protected feature is redacted).

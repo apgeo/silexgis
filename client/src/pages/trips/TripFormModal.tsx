@@ -7,12 +7,13 @@ import { useTranslation } from 'react-i18next';
 import {
   useCavingGroups,
   useCreateTripLog,
+  useTripTypes,
   useUpdateTripLog,
   type TripLogInfo,
   type TripLogWrite,
-  type TripType,
 } from '../../api/hooks.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
+import { tripTypeLabel } from '../../components/trips/tripTypes.ts';
 import TripGeometryField from './TripGeometryField.tsx';
 import type { TripGeometry } from './tripGeometry.ts';
 
@@ -26,7 +27,7 @@ interface TripFormModalProps {
 
 interface FormValues {
   title: string;
-  type?: TripType | null;
+  tripTypeId?: number | null;
   // Always a range: a single-day trip picks the same day twice, and the equal end is dropped on write.
   dates: [Dayjs, Dayjs | null];
   entryTime?: Dayjs | null;
@@ -41,17 +42,6 @@ interface FormValues {
   proposers: { caverId?: string; name: string }[];
   visibility: TripLogInfo['visibility'];
 }
-
-const TRIP_TYPES: TripType[] = [
-  'exploration',
-  'survey',
-  'maintenance',
-  'training',
-  'tourism',
-  'rescue',
-  'science',
-  'other',
-];
 
 // An untouched row still points at its person; a typed one carries a name for the server to add
 // to the roster. Blank rows are dropped rather than creating someone with no name.
@@ -117,6 +107,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
   // content in the document — a map built against a container with no size renders nothing.
   const [shown, setShown] = useState(false);
   const { data: cavingGroups } = useCavingGroups();
+  const { data: tripTypes } = useTripTypes();
 
   useEffect(() => {
     if (open) {
@@ -124,7 +115,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
       if (trip) {
         form.setFieldsValue({
           title: trip.title,
-          type: trip.type ?? undefined,
+          tripTypeId: trip.tripTypeId ?? undefined,
           dates: [dayjs(trip.tripDate), dayjs(trip.tripDateEnd ?? trip.tripDate)],
           entryTime: parseTime(trip.entryTime),
           exitTime: parseTime(trip.exitTime),
@@ -159,7 +150,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
     const tripDate = start.format('YYYY-MM-DD');
     const body: TripLogWrite = {
       title: values.title.trim(),
-      type: values.type ?? null,
+      tripTypeId: values.tripTypeId ?? null,
       tripDate,
       tripDateEnd: tripDateEndForWrite(tripDate, end ? end.format('YYYY-MM-DD') : null),
       entryTime: values.entryTime ? values.entryTime.format('HH:mm:ss') : null,
@@ -177,6 +168,24 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
       proposers: toParticipants(values.proposers),
       cavingGroupId: trip?.cavingGroupId ?? null,
       visibility: values.visibility,
+      // Carried through untouched. This form does not offer the measured facts, and a write
+      // sets every one of them, so sending blanks here would unmeasure a trip whose title
+      // somebody corrected — and sending false would quietly say nothing went wrong on a trip
+      // where something did.
+      depthReachedM: trip?.depthReachedM ?? null,
+      lengthSurveyedM: trip?.lengthSurveyedM ?? null,
+      surveyStations: trip?.surveyStations ?? null,
+      ropeMetres: trip?.ropeMetres ?? null,
+      hadIncident: trip?.hadIncident ?? false,
+      // Not three cleared sections — no sections at all, the same reading `caveIds` above gets.
+      // What a trip found, needed and learned is recorded in its own sections on the trip's
+      // page, and a form that never showed them must not be able to empty them by saving a
+      // title. Echoing the stored objects back instead would look equivalent and is not: it
+      // would re-measure each of them against the purpose's schema as it now stands, so
+      // correcting a title on an old report could fail on a section nobody opened.
+      fieldData: null,
+      logistics: null,
+      safety: null,
     };
 
     try {
@@ -206,11 +215,14 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           <Input maxLength={255} />
         </Form.Item>
         <Flex gap={12}>
-          <Form.Item name="type" label={t('trips.type')} style={{ flex: 1 }}>
+          <Form.Item name="tripTypeId" label={t('trips.type')} style={{ flex: 1 }}>
             <Select
               allowClear
               placeholder={t('trips.type')}
-              options={TRIP_TYPES.map((v) => ({ value: v, label: t(`trips.typeValues.${v}`) }))}
+              options={(tripTypes ?? []).map((type) => ({
+                value: type.id,
+                label: tripTypeLabel(type, t),
+              }))}
             />
           </Form.Item>
           {/* Wider than its neighbours: two dates and a separator do not fit an equal third. */}

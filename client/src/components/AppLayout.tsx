@@ -5,6 +5,7 @@ import {
   CarOutlined,
   CloudUploadOutlined,
   CodeSandboxOutlined,
+  CompassOutlined,
   DashboardOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
@@ -199,6 +200,11 @@ export default function AppLayout() {
               // what every document of that kind may say, which is administration.
               ...(hasAccessAction(capabilities?.domains.taxonomies, 'write')
                 ? [{ key: 'admin/document-types', icon: <ProfileOutlined />, label: t('nav.documentTypes') }]
+                : []),
+              // The same gate, for the same reason: what a trip purpose asks a report to
+              // record decides what every trip under it may say.
+              ...(hasAccessAction(capabilities?.domains.taxonomies, 'write')
+                ? [{ key: 'admin/trip-types', icon: <CompassOutlined />, label: t('nav.tripTypes') }]
                 : []),
               ...(isFullAdmin
                 ? [{ key: 'admin/relation-types', icon: <ApartmentOutlined />, label: t('nav.relationTypes') }]

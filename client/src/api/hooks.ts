@@ -1356,6 +1356,74 @@ export function useDocumentTypes() {
   });
 }
 
+/**
+ * The purposes a trip may be recorded under: the rows that ship, which this client has its own
+ * wording for, plus whatever an installation added, which is shown as it was written.
+ */
+export function useTripTypes() {
+  return useQuery({
+    queryKey: queryKeys.taxonomy('trip-types'),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-types')),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * A trip purpose as an administrator authors it: three schemas, each arriving as the raw text
+ * that was typed rather than as a parsed object, because raw text is what is edited and what
+ * the server measures reports against.
+ */
+export interface TripTypeWrite {
+  code: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  fieldDataSchema: string | null;
+  logisticsSchema: string | null;
+  safetySchema: string | null;
+}
+
+function useInvalidateTripTypes() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.taxonomy('trip-types') });
+    // A purpose's schemas decide what every trip recorded under it may say, so cached trip
+    // reads are stale in a way the vocabulary list alone does not express.
+    void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+  };
+}
+
+export function useCreateTripType() {
+  const invalidate = useInvalidateTripTypes();
+  return useMutation({
+    mutationFn: (body: TripTypeWrite) => unwrap(api.POST('/api/v1/trip-types', { body })),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Saves a trip purpose. Rewriting one of its schemas publishes a new version of that schema
+ * server-side, so every trip already recorded keeps the version it was checked against and is
+ * only re-checked when someone next edits the section it belongs to.
+ */
+export function useUpdateTripType() {
+  const invalidate = useInvalidateTripTypes();
+  return useMutation({
+    mutationFn: ({ id, ...body }: TripTypeWrite & { id: number }) =>
+      unwrap(api.PUT('/api/v1/trip-types/{id}', { params: { path: { id } }, body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteTripType() {
+  const invalidate = useInvalidateTripTypes();
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrapVoid(api.DELETE('/api/v1/trip-types/{id}', { params: { path: { id } } })),
+    onSuccess: invalidate,
+  });
+}
+
 /** A document kind as it is authored: the schema arrives as raw text, not as a parsed object. */
 export interface DocumentTypeWrite {
   code: string;
@@ -1814,7 +1882,7 @@ export function useDeleteRasterMap() {
 
 export type TripLogInfo = components['schemas']['TripLogDto'];
 export type TripLogWrite = components['schemas']['TripLogWriteRequest'];
-export type TripType = NonNullable<components['schemas']['TripType']>;
+export type TripType = components['schemas']['TripTypeDto'];
 export type TripParticipant = components['schemas']['TripParticipantDto'];
 export type TripParticipantWrite = components['schemas']['TripParticipantWrite'];
 export type ActivityState = components['schemas']['ActivityState'];

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using FluentValidation;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
@@ -20,7 +21,10 @@ public sealed record TripParticipantWrite(Guid? CaverId, string? NewCaverName);
 public sealed record TripLogDto(
     Guid Id,
     string Title,
-    TripType? Type,
+    // The purpose, as a row in the trip-purpose vocabulary. Only the identity travels: a client
+    // reads that vocabulary once and renders every trip's purpose from it, so a renamed row does
+    // not leave old readings behind.
+    long? TripTypeId,
     DateOnly TripDate,
     DateOnly? TripDateEnd,
     TimeOnly? EntryTime,
@@ -49,11 +53,36 @@ public sealed record TripLogDto(
     // below: a state moves through the transition endpoints, which is the only place the legal
     // moves are checked.
     ActivityState State,
-    DateTimeOffset? PublishedAt);
+    DateTimeOffset? PublishedAt,
+    // The counted facts. Metres throughout — the number travels bare and a reader formats it for
+    // its locale, because a unit alongside would have to be trusted per row.
+    decimal? DepthReachedM,
+    decimal? LengthSurveyedM,
+    int? SurveyStations,
+    decimal? RopeMetres,
+    // Whether something went wrong, which every caller who may read the trip is told. What
+    // happened is a different question with a different audience.
+    bool HadIncident,
+    // The three per-purpose sections, each as the object it was stored as, and each with the
+    // version of its purpose's schema it was measured against — null while it has never been
+    // measured. A reader that wants to know why a value looks odd needs the version it was
+    // written under, not only the schema that happens to be current.
+    JsonElement FieldData,
+    int? FieldDataSchemaVersion,
+    JsonElement Logistics,
+    int? LogisticsSchemaVersion,
+    // Absent — not empty — for a caller who may read the trip but not change it. What went
+    // wrong names identifiable people making mistakes, so it is told to the group already
+    // trusted with what the trip says about them; that something went wrong is told to
+    // everyone, above. Null and "{}" are different answers on purpose: a stored section is
+    // always an object, so nothing at all can only mean "not yours to read", and a surface
+    // drawing it can say so rather than show an empty section reading as "nothing happened".
+    JsonElement? Safety,
+    int? SafetySchemaVersion);
 
 public sealed record TripLogWriteRequest(
     string Title,
-    TripType? Type,
+    long? TripTypeId,
     DateOnly TripDate,
     DateOnly? TripDateEnd,
     TimeOnly? EntryTime,
@@ -73,14 +102,33 @@ public sealed record TripLogWriteRequest(
     IReadOnlyList<TripParticipantWrite> Participants,
     IReadOnlyList<TripParticipantWrite>? Proposers,
     Guid? CavingGroupId,
-    Visibility Visibility);
+    Visibility Visibility,
+    // Appended for the same reason the reading above is: this record is positional too, and it
+    // now has a run of three nullable decimals that would absorb each other silently.
+    decimal? DepthReachedM,
+    decimal? LengthSurveyedM,
+    int? SurveyStations,
+    decimal? RopeMetres,
+    // Not nullable: a trip either had an incident or it did not, and a request that says nothing
+    // says it did not — the same reading the column's default gives a row nobody has touched.
+    bool HadIncident,
+    // An omitted section means "not editing this section", the same reading the cave list above
+    // gets: a surface that draws one section must not blank the two it never showed. Supplied,
+    // the object replaces what was stored whole — keys the current schema does not know about
+    // survive only because the surface that sent it sent them back, which is the rule it works
+    // under.
+    JsonElement? FieldData,
+    JsonElement? Logistics,
+    JsonElement? Safety);
 
 public sealed class TripLogWriteRequestValidator : AbstractValidator<TripLogWriteRequest>
 {
     public TripLogWriteRequestValidator()
     {
         RuleFor(x => x.Title).NotEmpty().MaximumLength(255);
-        RuleFor(x => x.Type).IsInEnum().When(x => x.Type is not null);
+        // A purpose is a row now, so whether it exists is a question for the database and is
+        // asked on the write path beside the other reference checks; there is nothing about the
+        // shape of the value to check here.
         RuleFor(x => x.Description).MaximumLength(10000);
         RuleFor(x => x.Results).MaximumLength(10000);
         RuleFor(x => x.WeatherConditions).MaximumLength(300);
@@ -90,6 +138,29 @@ public sealed class TripLogWriteRequestValidator : AbstractValidator<TripLogWrit
             .GreaterThanOrEqualTo(x => x.TripDate)
             .When(x => x.TripDateEnd is not null)
             .WithMessage("Trip end date must not precede the start date.");
+
+        // The measured facts. Two rules each, and both are load-bearing:
+        //
+        // Not negative, because none of these has a meaning below zero — depth is measured
+        // downwards, and a trip cannot un-survey passage or carry minus rope.
+        //
+        // Not wider than the column, because the column is a fixed-scale numeric and a value it
+        // cannot hold is refused by the database with a message about numeric overflow, several
+        // layers below anything that could turn it into an answer. Stating the ceiling here is
+        // what makes an impossible figure a plain bad request. The ceilings are generous by
+        // design: they are the shape of the storage, not a judgement about how deep a cave gets.
+        RuleFor(x => x.DepthReachedM)
+            .InclusiveBetween(0m, 999_999.9m)
+            .When(x => x.DepthReachedM is not null);
+        RuleFor(x => x.LengthSurveyedM)
+            .InclusiveBetween(0m, 99_999_999.9m)
+            .When(x => x.LengthSurveyedM is not null);
+        RuleFor(x => x.RopeMetres)
+            .InclusiveBetween(0m, 999_999.9m)
+            .When(x => x.RopeMetres is not null);
+        RuleFor(x => x.SurveyStations)
+            .GreaterThanOrEqualTo(0)
+            .When(x => x.SurveyStations is not null);
         // A cave list is recorded as link memberships, which are bounded — every read of a link
         // resolves all of them at once. Refusing an over-long list here says so plainly, rather
         // than accepting it and spreading one trip's caves over links a reader has to reassemble.
@@ -97,12 +168,23 @@ public sealed class TripLogWriteRequestValidator : AbstractValidator<TripLogWrit
             .Must(caves => caves.Count <= ResLinkRules.MaxMembers)
             .When(x => x.CaveIds is not null)
             .WithMessage($"A trip records at most {ResLinkRules.MaxMembers} caves.");
+        // A section is an object or it is nothing: the schemas describe objects, and a bare
+        // array or number would be refused several layers down with a message about a schema
+        // rather than about the request.
+        RuleFor(x => x.FieldData).Must(BeAnObject).When(x => x.FieldData is not null)
+            .WithMessage("Field data must be a JSON object.");
+        RuleFor(x => x.Logistics).Must(BeAnObject).When(x => x.Logistics is not null)
+            .WithMessage("Logistics must be a JSON object.");
+        RuleFor(x => x.Safety).Must(BeAnObject).When(x => x.Safety is not null)
+            .WithMessage("Safety must be a JSON object.");
         RuleFor(x => x.Participants).NotNull();
         // Proposers are optional (a trip needn't record who proposed it); a null list is
         // treated as empty. Each supplied entry still follows the shared identity rules.
         RuleForEach(x => x.Participants).SetValidator(new TripParticipantValidator());
         RuleForEach(x => x.Proposers).SetValidator(new TripParticipantValidator());
     }
+
+    private static bool BeAnObject(JsonElement? value) => value?.ValueKind == JsonValueKind.Object;
 }
 
 /// <summary>Shared identity rules for both attendee and proposer entries.</summary>

@@ -13,6 +13,9 @@ vi.mock('../../api/hooks.ts', () => ({
     asked = params;
     return { data: page, isFetching: false };
   },
+  useTripTypes: () => ({
+    data: [{ id: 1, code: 'survey', name: 'Survey / mapping', isSeeded: true }],
+  }),
 }));
 
 const { default: CaveTripsSection } = await import('./CaveTripsSection.tsx');
@@ -24,7 +27,7 @@ function trip(id: string, title: string): TripLogInfo {
     tripDate: '2026-05-04',
     tripDateEnd: null,
     state: 'published',
-    type: 'survey',
+    tripTypeId: 1,
     participants: [],
   } as unknown as TripLogInfo;
 }

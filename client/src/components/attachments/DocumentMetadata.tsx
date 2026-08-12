@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ProfileOutlined } from '@ant-design/icons';
-import { App, Button, Checkbox, Flex, Input, InputNumber, Popover, Select, Typography } from 'antd';
+import { App, Button, Flex, Input, Popover, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
@@ -18,7 +18,8 @@ import {
 } from '../../api/hooks.ts';
 import TextState from '../documents/TextState.tsx';
 import LinksSection from '../reslinks/LinksSection.tsx';
-import { parsePropertiesSchema, type SchemaField } from '../typedProperties/propertiesSchema.ts';
+import TypedField from '../typedProperties/TypedField.tsx';
+import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
 
 const visibilities: Visibility[] = ['private', 'cavingGroup', 'authenticated', 'public'];
 
@@ -297,50 +298,4 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
       <Button size="small" type="text" icon={<ProfileOutlined />} aria-label={t('documents.metadata')} />
     </Popover>
   );
-}
-
-/** One schema-described value, as the control its declared type calls for. */
-function TypedField({
-  field,
-  value,
-  onChange,
-}: {
-  field: SchemaField;
-  value: unknown;
-  onChange: (value: unknown) => void;
-}) {
-  switch (field.kind) {
-    case 'boolean':
-      return <Checkbox checked={value === true} onChange={(e) => onChange(e.target.checked)} />;
-    case 'enum':
-      return (
-        <Select
-          value={typeof value === 'string' ? value : undefined}
-          onChange={onChange}
-          allowClear
-          onClear={() => onChange(undefined)}
-          options={(field.enumValues ?? []).map((option) => ({ value: option, label: option }))}
-        />
-      );
-    case 'number':
-    case 'integer':
-      return (
-        <InputNumber
-          value={typeof value === 'number' ? value : null}
-          onChange={(next) => onChange(next ?? undefined)}
-          min={field.min}
-          max={field.max}
-          precision={field.kind === 'integer' ? 0 : undefined}
-          style={{ width: '100%' }}
-        />
-      );
-    default:
-      return (
-        <Input
-          value={typeof value === 'string' ? value : ''}
-          onChange={(e) => onChange(e.target.value)}
-          maxLength={2000}
-        />
-      );
-  }
 }

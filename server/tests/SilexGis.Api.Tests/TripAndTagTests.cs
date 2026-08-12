@@ -40,6 +40,8 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
     private Guid cavingGroupId;
     private long caveTypeId;
     private long entranceTypeId;
+    private long surveyTypeId;
+    private long explorationTypeId;
 
     public TripAndTagTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
@@ -58,6 +60,8 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
             entranceTypeId = await db.EntranceTypes.Select(t => t.Id).FirstAsync();
+            surveyTypeId = await db.TripTypes.Where(t => t.Code == "survey").Select(t => t.Id).FirstAsync();
+            explorationTypeId = await db.TripTypes.Where(t => t.Code == "exploration").Select(t => t.Id).FirstAsync();
 
             // The organizing club is a caving group now, so a trip that names one needs one.
             var cavingGroup = new CavingGroup { Name = $"Trip Club {suffix}", Slug = $"trip-club-{suffix}" };
@@ -224,7 +228,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         var create = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
         {
             title = $"Survey push {marker}",
-            type = "survey",
+            tripTypeId = surveyTypeId,
             tripDate = "2026-06-01",
             entryTime = "09:30:00",
             exitTime = "16:15:00",
@@ -248,7 +252,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
 
         void AssertReportFields(JsonElement t)
         {
-            t.GetProperty("type").GetString().ShouldBe("survey");
+            t.GetProperty("tripTypeId").GetInt64().ShouldBe(surveyTypeId);
             t.GetProperty("entryTime").GetString().ShouldBe("09:30:00");
             t.GetProperty("exitTime").GetString().ShouldBe("16:15:00");
             t.GetProperty("results").GetString().ShouldBe("200 m of new passage surveyed.");
@@ -270,7 +274,7 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         var update = await owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{tripId}", new
         {
             title = $"Survey push {marker}",
-            type = "exploration",
+            tripTypeId = explorationTypeId,
             tripDate = "2026-06-01",
             entryTime = (string?)null,
             exitTime = (string?)null,
@@ -282,7 +286,21 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         });
         update.StatusCode.ShouldBe(HttpStatusCode.OK, await update.Content.ReadAsStringAsync());
         var updated = await update.Content.ReadFromJsonAsync<JsonElement>();
-        updated.GetProperty("type").GetString().ShouldBe("exploration");
+        updated.GetProperty("tripTypeId").GetInt64().ShouldBe(explorationTypeId);
+
+        // A purpose is a row an installation extends, so an identity no row carries is refused
+        // rather than stored — the same refusal a nonexistent cave gets.
+        var unknownType = await owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{tripId}", new
+        {
+            title = $"Survey push {marker}",
+            tripTypeId = long.MaxValue,
+            tripDate = "2026-06-01",
+            caveIds = Array.Empty<Guid>(),
+            participants = Array.Empty<object>(),
+            visibility = "authenticated",
+        });
+        unknownType.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemCodeAsync(unknownType)).ShouldBe("trip_log.type_unknown");
         updated.GetProperty("entryTime").ValueKind.ShouldBe(JsonValueKind.Null);
         updated.GetProperty("proposers").GetArrayLength().ShouldBe(1);
 
@@ -305,6 +323,109 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             proposers = new object[] { new { caverId = (Guid?)outsiderCaverId, newCaverName = "Also named" } },
             visibility = "private",
         })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    /// <summary>
+    /// The five facts a trip is counted by survive a write, a read and a re-read, and a figure the
+    /// column could not hold is refused as a bad request rather than reaching the database.
+    /// </summary>
+    /// <remarks>
+    /// The refusals are asserted beside the round trip rather than in a suite of their own because
+    /// the thing that breaks is the pairing: a bound stated only in the validator drifts from the
+    /// column it was sized for, and the first sign of it is an insert failing several layers below
+    /// anything that could explain itself. One test holding both means a widened column with a
+    /// forgotten validator, or the reverse, shows up here.
+    /// </remarks>
+    [Fact]
+    public async Task Counted_facts_round_trip_and_a_figure_no_column_could_hold_is_refused()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+
+        var create = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Deep push {marker}",
+            tripDate = "2026-06-02",
+            depthReachedM = 412.5m,
+            lengthSurveyedM = 1284.0m,
+            surveyStations = 63,
+            ropeMetres = 260.0m,
+            hadIncident = true,
+            caveIds = Array.Empty<Guid>(),
+            participants = Array.Empty<object>(),
+            visibility = "authenticated",
+        });
+        create.StatusCode.ShouldBe(HttpStatusCode.Created, await create.Content.ReadAsStringAsync());
+        var created = await create.Content.ReadFromJsonAsync<JsonElement>();
+        var tripId = created.GetProperty("id").GetGuid();
+
+        static void AssertCounted(JsonElement t)
+        {
+            t.GetProperty("depthReachedM").GetDecimal().ShouldBe(412.5m);
+            t.GetProperty("lengthSurveyedM").GetDecimal().ShouldBe(1284.0m);
+            t.GetProperty("surveyStations").GetInt32().ShouldBe(63);
+            t.GetProperty("ropeMetres").GetDecimal().ShouldBe(260.0m);
+            t.GetProperty("hadIncident").GetBoolean().ShouldBeTrue();
+        }
+
+        AssertCounted(created);
+        AssertCounted(await ReadTripAsync(owner, tripId));
+
+        // A trip nobody has measured says nothing about four of them, and says plainly that
+        // nothing went wrong about the fifth: an unmeasured depth is unknown, an unmentioned
+        // incident is no incident.
+        var quiet = await ReadTripAsync(owner, await CreateTripAsync($"Unmeasured {marker}"));
+        quiet.GetProperty("depthReachedM").ValueKind.ShouldBe(JsonValueKind.Null);
+        quiet.GetProperty("surveyStations").ValueKind.ShouldBe(JsonValueKind.Null);
+        quiet.GetProperty("hadIncident").GetBoolean().ShouldBeFalse();
+
+        // Rewritten: the figures are corrected downwards and the incident turns out to have been
+        // somebody else's trip, so the flag clears. Every one of them is set by the write, so a
+        // request that stops mentioning a measurement is a request that unmeasures it.
+        var update = await owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{tripId}", new
+        {
+            title = $"Deep push {marker}",
+            tripDate = "2026-06-02",
+            depthReachedM = 380.0m,
+            surveyStations = 0,
+            hadIncident = false,
+            caveIds = Array.Empty<Guid>(),
+            participants = Array.Empty<object>(),
+            visibility = "authenticated",
+        });
+        update.StatusCode.ShouldBe(HttpStatusCode.OK, await update.Content.ReadAsStringAsync());
+        var updated = await update.Content.ReadFromJsonAsync<JsonElement>();
+        updated.GetProperty("depthReachedM").GetDecimal().ShouldBe(380.0m);
+        updated.GetProperty("surveyStations").GetInt32().ShouldBe(0);
+        updated.GetProperty("hadIncident").GetBoolean().ShouldBeFalse();
+        updated.GetProperty("lengthSurveyedM").ValueKind.ShouldBe(JsonValueKind.Null);
+        updated.GetProperty("ropeMetres").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // Below zero has no meaning for any of them, and above what the column holds would be a
+        // numeric overflow deep in the database instead of an answer.
+        async Task RefusedAsync(string what, decimal? depth, decimal? length, int? stations, decimal? rope)
+        {
+            var refused = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+            {
+                title = $"Impossible {marker}",
+                tripDate = "2026-06-02",
+                depthReachedM = depth,
+                lengthSurveyedM = length,
+                surveyStations = stations,
+                ropeMetres = rope,
+                caveIds = Array.Empty<Guid>(),
+                participants = Array.Empty<object>(),
+                visibility = "private",
+            });
+            refused.StatusCode.ShouldBe(
+                HttpStatusCode.BadRequest, $"{what}: {await refused.Content.ReadAsStringAsync()}");
+        }
+
+        await RefusedAsync("depth below zero", -1m, null, null, null);
+        await RefusedAsync("length below zero", null, -0.1m, null, null);
+        await RefusedAsync("a negative count of stations", null, null, -1, null);
+        await RefusedAsync("rope beyond the column", null, null, null, 1_000_000m);
+        await RefusedAsync("depth beyond the column", 1_000_000m, null, null, null);
+        await RefusedAsync("length beyond the column", null, 100_000_000m, null, null);
     }
 
     [Fact]

@@ -97,36 +97,6 @@ public interface IResLinkTargetResolver
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct);
 }
 
-/// <summary>Shared write decision for target worlds whose rows are ordinary protected
-/// entities: one fetch, then the pure evaluator over facts built for the whole set at
-/// once, so the cost of deciding a page does not grow with the page.</summary>
-internal static class ResLinkTargetWrites
-{
-    public static async Task<HashSet<Guid>> WritableAsync<T>(
-        IAccessService access, AccessContext ctx, IReadOnlyList<T> rows, CancellationToken ct)
-        where T : IProtectedEntity
-    {
-        if (rows.Count == 0)
-        {
-            return [];
-        }
-
-        if (ctx.IsFullAdmin)
-        {
-            return [.. rows.Select(r => r.Id)];
-        }
-
-        var facts = await access.FactsOfManyAsync([.. rows.Cast<IProtectedEntity>()], ct);
-        return
-        [
-            .. rows
-                .Where(r => AccessEvaluator.Decide(
-                    ctx, AccessDomains.Of(r), AccessAction.Write, facts[r.Id]).Allowed)
-                .Select(r => r.Id),
-        ];
-    }
-}
-
 /// <summary>The registered resolvers, one per admissible target type. Fully populated by
 /// construction — a linkable type without a resolver is a wiring error, surfaced loudly
 /// here rather than as a member nobody can display.</summary>
@@ -185,7 +155,7 @@ public sealed class FeatureTargetResolver(SilexGisDbContext db, IAccessService a
         // the visibility filter first would refuse a feature the caller may edit but
         // reaches by a rule the filter does not express.
         var features = await db.Features.AsNoTracking().Where(f => ids.Contains(f.Id)).ToListAsync(ct);
-        return await ResLinkTargetWrites.WritableAsync(access, ctx, features, ct);
+        return await ProtectedWrites.WritableAsync(access, ctx, features, ct);
     }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
@@ -406,7 +376,7 @@ public sealed class TripLogTargetResolver(SilexGisDbContext db, IAccessService a
         }
 
         var trips = await db.TripLogs.AsNoTracking().Where(t => ids.Contains(t.Id)).ToListAsync(ct);
-        return await ResLinkTargetWrites.WritableAsync(access, ctx, trips, ct);
+        return await ProtectedWrites.WritableAsync(access, ctx, trips, ct);
     }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
@@ -638,7 +608,7 @@ public sealed class MapViewTargetResolver(SilexGisDbContext db, IAccessService a
         }
 
         var views = await db.MapViews.AsNoTracking().Where(v => ids.Contains(v.Id)).ToListAsync(ct);
-        return await ResLinkTargetWrites.WritableAsync(access, ctx, views, ct);
+        return await ProtectedWrites.WritableAsync(access, ctx, views, ct);
     }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
@@ -882,7 +852,7 @@ public sealed class GeofileTargetResolver(SilexGisDbContext db, IAccessService a
         }
 
         var geofiles = await db.Geofiles.AsNoTracking().Where(g => ids.Contains(g.Id)).ToListAsync(ct);
-        return await ResLinkTargetWrites.WritableAsync(access, ctx, geofiles, ct);
+        return await ProtectedWrites.WritableAsync(access, ctx, geofiles, ct);
     }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(

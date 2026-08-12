@@ -11,6 +11,7 @@ const updateTrip = vi.fn();
 
 vi.mock('../../api/hooks.ts', () => ({
   useCavingGroups: () => ({ data: [] }),
+  useTripTypes: () => ({ data: [{ id: 1, code: 'survey', name: 'Survey / mapping', isSeeded: true }] }),
   useSearch: () => ({ data: undefined }),
   useCreateTripLog: () => ({ mutateAsync: createTrip, isPending: false }),
   useUpdateTripLog: () => ({ mutateAsync: updateTrip, isPending: false }),
@@ -22,7 +23,7 @@ function trip(overrides: Partial<TripLogInfo> = {}): TripLogInfo {
   return {
     id: 'trip-1',
     title: 'Digging weekend',
-    type: null,
+    tripTypeId: null,
     tripDate: '2026-03-14',
     tripDateEnd: null,
     entryTime: null,
@@ -110,6 +111,61 @@ describe('TripFormModal dates', () => {
 
     const body = await savedBody(updateTrip);
     expect(body.geom).toBeNull();
+  });
+
+  it('carries the measured facts through a save that never showed them', async () => {
+    // Every write sets all of them, and this form offers none of them yet, so blanks would
+    // unmeasure a trip whose title somebody corrected. The incident flag is the one that would
+    // hurt most: a form that quietly sends false says nothing went wrong on a trip where
+    // something did, and nothing on screen would have said so.
+    show(
+      trip({
+        depthReachedM: 218,
+        lengthSurveyedM: 412.5,
+        surveyStations: 47,
+        ropeMetres: 260,
+        hadIncident: true,
+      }),
+    );
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Digging weekend (2)' } });
+
+    const body = await savedBody(updateTrip);
+    expect(body.depthReachedM).toBe(218);
+    expect(body.lengthSurveyedM).toBe(412.5);
+    expect(body.surveyStations).toBe(47);
+    expect(body.ropeMetres).toBe(260);
+    expect(body.hadIncident).toBe(true);
+  });
+
+  it('mentions no section at all, rather than three empty ones', async () => {
+    // Absent and empty are different answers on the wire: absent leaves the stored section
+    // alone, empty clears it. This form draws none of the three, so a title correction here
+    // must not empty what a trip found, needed and learned — and echoing them back instead
+    // would be worse still, because that re-measures each one against the purpose's schema as
+    // it now stands, so an old report could fail on a section nobody opened.
+    show(
+      trip({
+        fieldData: { water_level: 'high' },
+        logistics: { permit_reference: 'RO-2026-14' },
+        safety: { incident_severity: 'near_miss' },
+      }),
+    );
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Digging weekend (3)' } });
+
+    const body = await savedBody(updateTrip);
+    expect(body.fieldData).toBeNull();
+    expect(body.logistics).toBeNull();
+    expect(body.safety).toBeNull();
+  });
+
+  it('says nothing went wrong on a trip nobody has measured', async () => {
+    show(null);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Quick look' } });
+
+    const body = await savedBody(createTrip);
+    expect(body.depthReachedM).toBeNull();
+    expect(body.surveyStations).toBeNull();
+    expect(body.hadIncident).toBe(false);
   });
 
   it('leaves a one-day trip without an end date rather than a range of itself', async () => {

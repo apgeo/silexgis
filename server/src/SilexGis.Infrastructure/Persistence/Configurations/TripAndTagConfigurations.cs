@@ -14,9 +14,27 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
         builder.Property(x => x.Id).ValueGeneratedNever();
 
         builder.Property(x => x.Title).HasMaxLength(255);
-        builder.Property(x => x.Type).HasConversion<short>();
         builder.Property(x => x.WeatherConditions).HasMaxLength(300);
         builder.Property(x => x.LocationText).HasMaxLength(300);
+
+        // Metres to a decimetre, sized to what the measurement can plausibly be: no cave is a
+        // thousand kilometres deep, and a surveyed length runs longer than a depth does. Scale
+        // is what matters more than the width — a fixed scale is what lets these be summed and
+        // ranked without every reader deciding how much precision to believe.
+        builder.Property(x => x.DepthReachedM).HasPrecision(7, 1);
+        builder.Property(x => x.LengthSurveyedM).HasPrecision(9, 1);
+        builder.Property(x => x.RopeMetres).HasPrecision(7, 1);
+        // False rather than null, and defaulted in the database so a row written by anything
+        // that does not know about the column still says "nothing went wrong" rather than
+        // "unknown" — a count of incidents must never have a third answer.
+        builder.Property(x => x.HadIncident).HasDefaultValue(false);
+
+        // The three per-purpose sections. Defaulted to an empty object in the database as well
+        // as in the entity, so a row inserted by anything that does not know about the columns
+        // still reads as "answered nothing" rather than as a null a reader has to guard.
+        builder.Property(x => x.FieldData).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+        builder.Property(x => x.Logistics).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+        builder.Property(x => x.Safety).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
         builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.OrganizingCavingGroupId)
             .OnDelete(DeleteBehavior.SetNull);
         builder.Property(x => x.Visibility).HasConversion<short>();
@@ -25,6 +43,12 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
 
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.CavingGroupId).OnDelete(DeleteBehavior.SetNull);
+
+        // Restricted rather than set-null: a purpose still in use is a purpose the vocabulary
+        // surface refuses to delete, and letting the database quietly unset it instead would
+        // retype every trip that held it to "not said".
+        builder.HasOne<TripType>().WithMany().HasForeignKey(x => x.TripTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => x.Geom).HasMethod("gist");
         builder.HasIndex(x => x.TripDate);

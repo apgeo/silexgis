@@ -24,6 +24,7 @@
     "featureSets": "Seturi de elemente",
     "documentTypes": "Tipuri de documente",
     "relationTypes": "Relații între elemente",
+    "tripTypes": "Scopuri de tură",
     "termRules": "Reguli de detectare"
   },
   "dashboard": {
@@ -744,6 +745,78 @@
     "addProposer": "Adaugă propunător",
     "results": "Rezultate / observații",
     "weather": "Vreme / condiții",
+    "depthReachedM": "Adâncime atinsă",
+    "lengthSurveyedM": "Lungime cartată",
+    "surveyStations": "Stații topografice",
+    "ropeMetres": "Coardă folosită",
+    "metres": "{{value, number}} m",
+    "incident": "Incident",
+    "hadIncidentYes": "S-a întâmplat ceva",
+    "sections": {
+      "title": "Raportul turei",
+      "measured": "Măsurători",
+      "fieldData": "Date de teren",
+      "logistics": "Logistică",
+      "safety": "Siguranță",
+      "noFields": "Scopul acestei ture nu cere nimic aici.",
+      "invalid": "Secțiunea {{section}} nu corespunde cu ceea ce cere scopul acestei ture.",
+      "safetyWithheld": "Nu vi se arată",
+      "safetyWithheldDetail": "Ce a mers prost într-o tură numește oamenii cărora li s-a întâmplat, așa că relatarea este păstrată pentru cine poate modifica tura. Aceasta nu înseamnă că nu s-a întâmplat nimic.",
+      "pickPerson": "Alege o persoană din registru",
+      "yes": "Da",
+      "no": "Nu"
+    },
+    "sectionValues": {
+      "water_level": {
+        "low": "Scăzut",
+        "normal": "Normal",
+        "high": "Ridicat",
+        "flood": "Viitură"
+      },
+      "survey_grade": {
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4",
+        "5": "5",
+        "6": "6",
+        "X": "X"
+      },
+      "incident_severity": {
+        "near_miss": "La limită",
+        "minor": "Minor",
+        "serious": "Grav",
+        "rescue": "Salvare"
+      }
+    },
+    "sectionFields": {
+      "conditions": "Condiții în subteran",
+      "water_level": "Nivelul apei",
+      "objective_reached": "Obiectiv atins",
+      "leads_found": "Continuări găsite",
+      "leads_remaining": "Continuări rămase deschise",
+      "survey_grade": "Gradul ridicării",
+      "instrument": "Instrument",
+      "loops_closed": "Bucle închise",
+      "sketch_completed": "Schiță finalizată",
+      "new_passage_note": "Galerie nouă",
+      "permit_reference": "Referința autorizației",
+      "permit_holder_caver_id": "Titularul autorizației",
+      "permit_holder_note": "Titularul autorizației, dacă nu este în registru",
+      "key_holder_caver_id": "Deținătorul cheii",
+      "key_holder_note": "Deținătorul cheii, dacă nu este în registru",
+      "landowner_caver_id": "Contactul proprietarului terenului",
+      "landowner_note": "Contactul proprietarului terenului, dacă nu este în registru",
+      "access_notes": "Note despre acces",
+      "cost_amount": "Cost",
+      "cost_currency": "Monedă",
+      "cost_note": "Ce a acoperit costul",
+      "incident_summary": "Ce s-a întâmplat",
+      "incident_severity": "Gravitate",
+      "equipment_failure": "Echipament defect",
+      "lessons_learned": "Ce s-a învățat",
+      "reported_to": "Raportat către"
+    },
     "state": "Stare",
     "stateValues": {
       "draft": "Ciornă",
@@ -1484,6 +1557,43 @@
         "enum": "alegere"
       }
     },
+    "tripTypes": {
+      "title": "Scopuri de tură",
+      "intro": "Pentru ce sunt înregistrate turele la această instalare și ce cere fiecare scop să fie consemnat într-un raport. Scopurile care vin odată cu produsul sunt afișate în limba dumneavoastră și își păstrează codurile — alte instalări citesc turele după ele — însă formularea, ordinea și întrebările lor vă aparțin. Rescrierea a ceea ce cere un scop nu modifică rapoartele deja scrise: fiecare păstrează versiunea față de care a fost verificat și este verificat din nou abia când cineva îl editează.",
+      "add": "Adaugă un scop",
+      "edit": "Editare scop de tură",
+      "editAction": "Editare",
+      "delete": "Șterge",
+      "deleteConfirm": "Ștergeți acest scop? Turele deja înregistrate cu el îl păstrează, așa că poate fi șters abia când nu mai există niciuna.",
+      "name": "Denumire",
+      "code": "Cod",
+      "codeHint": "Litere mici, cifre și liniuțe de subliniere. Instalările schimbă ture după acest cod, așa că păstrați-l neschimbat.",
+      "description": "Descriere",
+      "sortOrder": "Ordine",
+      "source": "De unde provine",
+      "seeded": "Vine cu produsul",
+      "custom": "Adăugat aici",
+      "fieldDataSchema": "Schema datelor de teren (JSON Schema)",
+      "logisticsSchema": "Schema logisticii (JSON Schema)",
+      "safetySchema": "Schema de siguranță (JSON Schema)",
+      "schemaHint": "Lăsați gol pentru o secțiune care nu cere nimic. În formular apar doar câmpuri simple de tip text, număr, da/nu și alegere.",
+      "schemaInvalid": "Acesta nu este un JSON Schema utilizabil.",
+      "codeTaken": "Un alt scop folosește deja acest cod.",
+      "seededImmutable": "Un scop care vine cu produsul își păstrează codul și nu poate fi șters.",
+      "inUse": "Există ture care înregistrează acest scop; mutați-le mai întâi.",
+      "sections": "Secțiuni cerute",
+      "noSchema": "Nu se cere nimic",
+      "preview": "Câmpurile pe care le va oferi formularul turei",
+      "noFields": "Niciunul — nimic din această schemă nu poate fi afișat ca un câmp.",
+      "requiredWarning": "Un câmp marcat ca obligatoriu (afișat cu albastru) este cerut de fiecare dată când secțiunea este salvată, însă o tură este creată înainte ca raportul ei să fie scris și nimic din formularul de creare nu îl poate completa — așa că un scop cu un câmp obligatoriu refuză orice tură nouă înregistrată cu el și refuză mutarea unei ture existente la el. Lăsați câmpurile opționale dacă rapoartele nu sunt completate în alt mod.",
+      "kinds": {
+        "string": "text",
+        "number": "număr",
+        "integer": "număr întreg",
+        "boolean": "da/nu",
+        "enum": "alegere"
+      }
+    },
     "relationTypes": {
       "title": "Relații între elemente",
       "intro": "Formulările cu care sunt înregistrate legăturile dintre elemente. Relațiile care vin odată cu produsul sunt afișate în limba dumneavoastră și nu pot fi modificate — alte instalări citesc legăturile după ele. Ce adăugați aici aparține acestei instalări și este afișat exact așa cum îl scrieți.",
@@ -2136,6 +2246,7 @@
       "updated": "Ultima modificare",
       "tripType": "Tip de tură",
       "tripDate": "Data turei",
+      "hadIncident": "A avut incident",
       "state": "Stare",
       "language": "Limbă"
     },

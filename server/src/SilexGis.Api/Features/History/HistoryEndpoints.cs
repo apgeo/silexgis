@@ -134,6 +134,11 @@ public static class HistoryEndpoints
         var carriesOwnPosition = await GeotaggedFileIdsAsync(db, parsed.Select(x => x.Row), ct);
         var revealAssociations = (await settings.GetProtectionAsync(ct)).RevealProtectedAssociations;
 
+        // A timeline is always one entity's, so whether this caller may change that entity is
+        // one question for the whole page rather than one per row. It matters for rows that
+        // carry a part told to a narrower audience than the row itself.
+        var mayWriteSubject = await MayWriteSubjectAsync(db, access, ctx, entityType, entityId, ct);
+
         var items = parsed.Select(r =>
         {
             var governing = GoverningFeatureId(r.Row);
@@ -144,7 +149,8 @@ public static class HistoryEndpoints
                     exactViewOfTarget: !governingHidden,
                     revealAssociations);
             var (changes, redacted) = HistoryProtection.Redact(
-                r.Row.EntityType!, r.Changes, governingHidden, hidden.Contains, associationHidden);
+                r.Row.EntityType!, r.Changes, governingHidden, hidden.Contains, associationHidden,
+                mayWriteSubject);
             return new HistoryEventDto(
                 r.Row.Id, r.Row.At, r.Row.UserId, r.UserName, r.Row.Action,
                 r.Row.EntityType!, r.Row.EntityId!,
@@ -153,6 +159,29 @@ public static class HistoryEndpoints
         }).ToList();
 
         return TypedResults.Ok(new PagedResult<HistoryEventDto>(items, p, size, total));
+    }
+
+    /// <summary>
+    /// Whether the caller may change the entity a timeline is about — asked only of the entity
+    /// types that hold a part told to a narrower audience than the row itself, and answered
+    /// "no" for every other, which is what the redaction reads as "withhold nothing extra".
+    /// </summary>
+    private static async Task<bool> MayWriteSubjectAsync(
+        SilexGisDbContext db,
+        IAccessService access,
+        AccessContext ctx,
+        string? entityType,
+        Guid? entityId,
+        CancellationToken ct)
+    {
+        if (entityId is not { } id
+            || !string.Equals(entityType, nameof(TripLog), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, ct);
+        return trip is not null && (await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed;
     }
 
     /// <summary>

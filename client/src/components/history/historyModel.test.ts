@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyFeatureRestore,
   applyRestore,
+  applyTripRestore,
   changeRows,
   formatValue,
   restorableProps,
@@ -65,6 +66,38 @@ describe('historyModel', () => {
     expect(restored.name).toBe('Old name');
     expect(restored.geom).toEqual({ type: 'Point', coordinates: [25, 45] });
     expect(restored.description).toBe('New desc'); // untouched — keeps the current value
+  });
+
+  it('applyTripRestore mentions no report section the restore did not name', () => {
+    const current = {
+      title: 'New title',
+      fieldData: { conditions: 'dry' },
+      logistics: { permit_reference: 'P-1' },
+      safety: { incident_summary: 'slip' },
+    };
+    const changes = { Title: { old: 'Old title', new: 'New title' } };
+
+    const restored = applyTripRestore(current, changes, ['Title']);
+
+    expect(restored.title).toBe('Old title');
+    // Not three emptied sections — no section at all, which is what tells the server to leave
+    // them alone rather than measure them against the purpose's schema as it stands now.
+    expect(restored.fieldData).toBeNull();
+    expect(restored.logistics).toBeNull();
+    expect(restored.safety).toBeNull();
+  });
+
+  it('applyTripRestore restores a named section, parsed from the audit JSON string', () => {
+    const current = { title: 'T', fieldData: { conditions: 'wet' }, logistics: {}, safety: {} };
+    const changes = {
+      FieldData: { old: '{"conditions":"dry"}', new: '{"conditions":"wet"}' },
+    };
+
+    const restored = applyTripRestore(current, changes, ['FieldData']);
+
+    expect(restored.fieldData).toEqual({ conditions: 'dry' });
+    expect(restored.logistics).toBeNull();
+    expect(restored.safety).toBeNull();
   });
 
   it('applyFeatureRestore maps Geom to the geometry field and parses a Properties string', () => {

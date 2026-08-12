@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import i18next from 'i18next';
 import { describe, expect, it } from 'vitest';
 import type {
   AccessDomainName,
@@ -12,6 +13,11 @@ import {
   DIRECTED_RELATION_CODES,
   TRIP_ROLE_CODES,
 } from '../components/reslinks/relations.ts';
+import {
+  SEEDED_TRIP_SECTION_ENUM_VALUES,
+  SEEDED_TRIP_SECTION_FIELD_CODES,
+} from '../components/trips/tripSectionFields.ts';
+import { SEEDED_TRIP_TYPE_CODES } from '../components/trips/tripTypes.ts';
 import en from './locales/en.json';
 import ro from './locales/ro.json';
 
@@ -202,6 +208,72 @@ describe('i18n locales', () => {
       expect(
         Object.keys(relations).filter((key) => key !== 'unspecified' && !shipped.includes(key)),
       ).toEqual([]);
+    }
+  });
+
+  // What a trip was for is a row an installation may extend, and the rows that ship are
+  // translated by code — exactly like the relation vocabulary. Both directions matter: a
+  // shipped code with no wording renders as a raw key, and wording left behind for a code the
+  // application no longer ships is an offer nothing can take up.
+  it('every shipped trip purpose has wording in both locales, and no wording outlives its code', () => {
+    const expected = [...SEEDED_TRIP_TYPE_CODES].sort();
+    for (const locale of [en, ro]) {
+      expect(Object.keys(locale.trips.typeValues).sort()).toEqual(expected);
+    }
+  });
+
+  // A trip purpose carries JSON schemas whose field titles are one string each, written in
+  // whatever language their author was working in. The codes the product ships are therefore
+  // translated by code, the same way every other shipped vocabulary is — so a missing one puts
+  // the schema's own language on a screen in another, and one left behind is wording that
+  // overrides a title nothing writes any more.
+  it('every shipped trip report field has wording in both locales, and no wording outlives its code', () => {
+    const expected = [...SEEDED_TRIP_SECTION_FIELD_CODES].sort();
+    for (const locale of [en, ro]) {
+      expect(Object.keys(locale.trips.sectionFields).sort()).toEqual(expected);
+    }
+  });
+
+  // A choice offers values, and a value is a code like any other. A translated label above a
+  // list of English tokens is only half a translation, so the values the product ships are
+  // worded in both locales too — and wording left behind for a value nothing offers any more is
+  // an option a reader can never be shown.
+  it('every shipped trip report choice has its values worded in both locales', () => {
+    for (const locale of [en, ro]) {
+      const worded = (locale.trips as Record<string, unknown>).sectionValues as Record<
+        string,
+        Record<string, string>
+      >;
+      expect(Object.keys(worded).sort()).toEqual(Object.keys(SEEDED_TRIP_SECTION_ENUM_VALUES).sort());
+      for (const [field, values] of Object.entries(SEEDED_TRIP_SECTION_ENUM_VALUES)) {
+        expect(Object.keys(worded[field]).sort(), field).toEqual([...values].sort());
+      }
+    }
+  });
+
+  // One unit is stored and the reader's locale decides how the figure is written, which is the
+  // whole reason a metre column carries no unit beside it. A raw JavaScript number would put a
+  // decimal point and a thousands comma on a screen that uses neither.
+  it('writes a measured figure in the reader’s own number formatting', async () => {
+    const probe = i18next.createInstance();
+    await probe.init({
+      lng: 'ro',
+      resources: { ro: { translation: ro }, en: { translation: en } },
+      interpolation: { escapeValue: false },
+    });
+
+    expect(probe.t('trips.metres', { value: 1284.5 })).toBe('1.284,5 m');
+    await probe.changeLanguage('en');
+    expect(probe.t('trips.metres', { value: 1284.5 })).toBe('1,284.5 m');
+  });
+
+  // The counted facts are labelled by the name they are stored under, so a column and its
+  // label cannot drift apart without this saying so.
+  it('every counted fact a trip records is labelled in both locales', () => {
+    for (const locale of [en, ro]) {
+      for (const key of ['depthReachedM', 'lengthSurveyedM', 'surveyStations', 'ropeMetres']) {
+        expect(Boolean((locale.trips as Record<string, unknown>)[key]), key).toBe(true);
+      }
     }
   });
 

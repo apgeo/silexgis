@@ -24,6 +24,7 @@
     "featureSets": "Feature sets",
     "documentTypes": "Document kinds",
     "relationTypes": "Link relations",
+    "tripTypes": "Trip purposes",
     "termRules": "Detection rules"
   },
   "dashboard": {
@@ -744,6 +745,78 @@
     "addProposer": "Add proposer",
     "results": "Results / observations",
     "weather": "Weather / conditions",
+    "depthReachedM": "Depth reached",
+    "lengthSurveyedM": "Length surveyed",
+    "surveyStations": "Survey stations",
+    "ropeMetres": "Rope used",
+    "metres": "{{value, number}} m",
+    "incident": "Incident",
+    "hadIncidentYes": "Something went wrong",
+    "sections": {
+      "title": "Trip report",
+      "measured": "Measured",
+      "fieldData": "Field data",
+      "logistics": "Logistics",
+      "safety": "Safety",
+      "noFields": "This trip's purpose asks for nothing here.",
+      "invalid": "The {{section}} section does not fit what this trip's purpose asks for.",
+      "safetyWithheld": "Not shown to you",
+      "safetyWithheldDetail": "What went wrong on a trip names the people it happened to, so the account of it is kept for whoever may change the trip. This is not a record that nothing happened.",
+      "pickPerson": "Choose someone from the roster",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "sectionValues": {
+      "water_level": {
+        "low": "Low",
+        "normal": "Normal",
+        "high": "High",
+        "flood": "In flood"
+      },
+      "survey_grade": {
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4",
+        "5": "5",
+        "6": "6",
+        "X": "X"
+      },
+      "incident_severity": {
+        "near_miss": "Near miss",
+        "minor": "Minor",
+        "serious": "Serious",
+        "rescue": "Rescue"
+      }
+    },
+    "sectionFields": {
+      "conditions": "Conditions underground",
+      "water_level": "Water level",
+      "objective_reached": "Objective reached",
+      "leads_found": "Leads found",
+      "leads_remaining": "Leads still open",
+      "survey_grade": "Survey grade",
+      "instrument": "Instrument",
+      "loops_closed": "Loops closed",
+      "sketch_completed": "Sketch completed",
+      "new_passage_note": "New passage",
+      "permit_reference": "Permit reference",
+      "permit_holder_caver_id": "Permit holder",
+      "permit_holder_note": "Permit holder, if not on the roster",
+      "key_holder_caver_id": "Key holder",
+      "key_holder_note": "Key holder, if not on the roster",
+      "landowner_caver_id": "Landowner contact",
+      "landowner_note": "Landowner contact, if not on the roster",
+      "access_notes": "Access notes",
+      "cost_amount": "Cost",
+      "cost_currency": "Currency",
+      "cost_note": "What the cost covered",
+      "incident_summary": "What happened",
+      "incident_severity": "Severity",
+      "equipment_failure": "Equipment failed",
+      "lessons_learned": "Lessons learned",
+      "reported_to": "Reported to"
+    },
     "state": "State",
     "stateValues": {
       "draft": "Draft",
@@ -1484,6 +1557,43 @@
         "enum": "choice"
       }
     },
+    "tripTypes": {
+      "title": "Trip purposes",
+      "intro": "What trips at this installation are recorded as being for, and what each purpose asks a report to record. The purposes that ship with the product are shown in your language and keep their codes — other installations read trips by them — while their wording, ordering and questions are yours to change. Rewriting what a purpose asks for never changes reports already written: each keeps the version it was checked against and is re-checked only when someone next edits it.",
+      "add": "Add a purpose",
+      "edit": "Edit trip purpose",
+      "editAction": "Edit",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this purpose? Trips already recorded under it keep it, so it can only go once none are left.",
+      "name": "Name",
+      "code": "Code",
+      "codeHint": "Lower-case letters, digits and underscores. Installations exchange trips by this code, so keep it stable.",
+      "description": "Description",
+      "sortOrder": "Sort order",
+      "source": "Where it comes from",
+      "seeded": "Ships with the product",
+      "custom": "Added here",
+      "fieldDataSchema": "Field data schema (JSON Schema)",
+      "logisticsSchema": "Logistics schema (JSON Schema)",
+      "safetySchema": "Safety schema (JSON Schema)",
+      "schemaHint": "Leave empty for a section that asks for nothing. Only flat text, number, yes/no and choice fields appear on the form.",
+      "schemaInvalid": "That is not a usable JSON Schema.",
+      "codeTaken": "Another purpose already uses that code.",
+      "seededImmutable": "A purpose that ships with the product keeps its code and cannot be deleted.",
+      "inUse": "Trips still record this purpose; move them first.",
+      "sections": "Sections asked for",
+      "noSchema": "Nothing asked for",
+      "preview": "Fields the trip form will offer",
+      "noFields": "None — nothing in this schema can be rendered as a field.",
+      "requiredWarning": "A field marked required (shown in blue) is asked for whenever the section is saved, but a trip is created before its report is written and nothing on the create form can answer it — so a purpose with a required field refuses every new trip recorded under it, and refuses moving an existing trip to it. Leave fields optional unless reports are filled in some other way.",
+      "kinds": {
+        "string": "text",
+        "number": "number",
+        "integer": "whole number",
+        "boolean": "yes/no",
+        "enum": "choice"
+      }
+    },
     "relationTypes": {
       "title": "Link relations",
       "intro": "The wording links between items are recorded with. The relations that ship with the product are shown in your language and cannot be changed — other installations read links by them. Anything you add here belongs to this installation and is shown exactly as you write it.",
@@ -2136,6 +2246,7 @@
       "updated": "Last changed",
       "tripType": "Trip type",
       "tripDate": "Trip date",
+      "hadIncident": "Had an incident",
       "state": "State",
       "language": "Language"
     },

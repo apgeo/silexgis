@@ -4399,6 +4399,11 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<decimal?>("DepthReachedM")
+                        .HasPrecision(7, 1)
+                        .HasColumnType("numeric(7,1)")
+                        .HasColumnName("depth_reached_m");
+
                     b.Property<string>("Description")
                         .HasColumnType("text")
                         .HasColumnName("description");
@@ -4411,14 +4416,47 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("time without time zone")
                         .HasColumnName("exit_time");
 
+                    b.Property<string>("FieldData")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("field_data")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<int?>("FieldDataSchemaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("field_data_schema_version");
+
                     b.Property<Geometry>("Geom")
                         .HasColumnType("geometry(Geometry, 4326)")
                         .HasColumnName("geom");
+
+                    b.Property<bool>("HadIncident")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("had_incident");
+
+                    b.Property<decimal?>("LengthSurveyedM")
+                        .HasPrecision(9, 1)
+                        .HasColumnType("numeric(9,1)")
+                        .HasColumnName("length_surveyed_m");
 
                     b.Property<string>("LocationText")
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)")
                         .HasColumnName("location_text");
+
+                    b.Property<string>("Logistics")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("logistics")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<int?>("LogisticsSchemaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("logistics_schema_version");
 
                     b.Property<Guid?>("OrganizingCavingGroupId")
                         .HasColumnType("uuid")
@@ -4436,9 +4474,29 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("results");
 
+                    b.Property<decimal?>("RopeMetres")
+                        .HasPrecision(7, 1)
+                        .HasColumnType("numeric(7,1)")
+                        .HasColumnName("rope_metres");
+
+                    b.Property<string>("Safety")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("safety")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<int?>("SafetySchemaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("safety_schema_version");
+
                     b.Property<short>("State")
                         .HasColumnType("smallint")
                         .HasColumnName("state");
+
+                    b.Property<int?>("SurveyStations")
+                        .HasColumnType("integer")
+                        .HasColumnName("survey_stations");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -4454,9 +4512,9 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("date")
                         .HasColumnName("trip_date_end");
 
-                    b.Property<short?>("Type")
-                        .HasColumnType("smallint")
-                        .HasColumnName("type");
+                    b.Property<long?>("TripTypeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("trip_type_id");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -4490,6 +4548,9 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("TripDate")
                         .HasDatabaseName("ix_trip_logs_trip_date");
+
+                    b.HasIndex("TripTypeId")
+                        .HasDatabaseName("ix_trip_logs_trip_type_id");
 
                     b.ToTable("trip_logs", (string)null);
                 });
@@ -4529,6 +4590,127 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_trip_log_participants_trip_log_id_kind_caver_id");
 
                     b.ToTable("trip_log_participants", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TripType", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("FieldDataSchema")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("field_data_schema");
+
+                    b.Property<int>("FieldDataSchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("field_data_schema_version");
+
+                    b.Property<string>("LogisticsSchema")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("logistics_schema");
+
+                    b.Property<int>("LogisticsSchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("logistics_schema_version");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("SafetySchema")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("safety_schema");
+
+                    b.Property<int>("SafetySchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("safety_schema_version");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_trip_types");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_trip_types_code");
+
+                    b.ToTable("trip_types", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TripTypeSchema", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Schema")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("schema");
+
+                    b.Property<short>("Section")
+                        .HasColumnType("smallint")
+                        .HasColumnName("section");
+
+                    b.Property<long>("TripTypeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("trip_type_id");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_trip_type_schemas");
+
+                    b.HasIndex("TripTypeId", "Section", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("ix_trip_type_schemas_trip_type_id_section_version");
+
+                    b.ToTable("trip_type_schemas", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_trip_type_schemas_version", "version >= 1");
+                        });
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.UploadBatch", b =>
@@ -6026,6 +6208,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_trip_logs_users_owner_user_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.TripType", null)
+                        .WithMany()
+                        .HasForeignKey("TripTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_trip_logs_trip_types_trip_type_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripLogParticipant", b =>
@@ -6043,6 +6231,16 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_trip_log_participants_trip_logs_trip_log_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TripTypeSchema", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.TripType", null)
+                        .WithMany()
+                        .HasForeignKey("TripTypeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_trip_type_schemas_trip_types_trip_type_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.UploadBatch", b =>

@@ -188,11 +188,15 @@ public sealed class FeatureWorldFixture : WorldFixture
 /// No <c>SeedWithheldAsync</c>, deliberately, and the reason was re-checked when which caves a
 /// trip is about stopped being a column of its own and became links like any other.
 ///
-/// A trip row is disclosed whole to whoever may read the trip: nothing about the row itself is
-/// held back beyond visibility, so there is no row this world's list would withhold and nothing
-/// to seed. What is held back is a trip's <em>children</em> — the caves it names are taken out
-/// of the reading for a caller who may not place them, and asking the trip list for the trips at
-/// a particular cave answers with an empty page rather than a partial one. Neither is a rule
+/// A trip row is disclosed whole to whoever may read the trip: no row is held back beyond
+/// visibility, so there is no row this world's list would withhold and nothing to seed. One
+/// <em>field</em> is held back — the account of what went wrong is told only to a caller who may
+/// change the trip, since it names identifiable people making mistakes — and that still needs no
+/// seeding here, because it withholds part of a row rather than the row, and the vocabulary
+/// declares no field over it. What is also held back is a trip's <em>children</em> — the caves
+/// it names are taken out of the reading for a caller who may not place them, and asking the trip
+/// list for the trips at a particular cave answers with an empty page rather than a partial one.
+/// None of the three is a rule
 /// about which trips exist, and this world offers no way to ask either question: the vocabulary
 /// declares no field naming a cave, on purpose, because a caller who may read a trip but not the
 /// cave it went to could otherwise read the answer off a count of rows they never see.
@@ -231,24 +235,45 @@ public sealed class TripLogWorldFixture : WorldFixture
     }
 
     /// <summary>
-    /// Real lifecycle names for the state field, and the generic values for everything else.
+    /// Values a trip's two identity-shaped fields can actually be compared by, and the generic
+    /// ones for everything else.
     /// </summary>
     /// <remarks>
-    /// The generated placeholder is a name no enum has, and an enum leaf answers an unknown name by
-    /// matching nothing — so the suite would have proved only that a nonsense value is refused
-    /// politely, never that the comparison the field exists for is translatable at all. Both values
-    /// are real states, so the two-value operators compare two rows' worth of the vocabulary.
+    /// <para>
+    /// The generated placeholder is a name no lifecycle state has, and an enum leaf answers an
+    /// unknown name by matching nothing — so the suite would have proved only that a nonsense
+    /// value is refused politely, never that the comparison the field exists for is translatable
+    /// at all. Both values are real states, so the two-value operators compare two rows' worth of
+    /// the vocabulary.
+    /// </para>
+    /// <para>
+    /// The purpose field has the same problem for a different reason: it names a row in a
+    /// vocabulary an installation extends, so the value is a numeric identity and the generated
+    /// placeholder is not one. Row identities are assigned by the database and this runs before
+    /// anything is seeded here, so what is fed is a well-formed identity rather than a particular
+    /// row's — enough to prove the comparison compiles and runs, which is what this suite judges.
+    /// </para>
     /// </remarks>
     public override FilterValue[] ValuesFor(FieldDescriptor field, FilterOp op)
     {
-        if (field.Key != TripLogFilterFields.State)
+        var count = FilterOps.Arity(op) ?? 2;
+
+        if (field.Key == TripLogFilterFields.State)
         {
-            return base.ValuesFor(field, op);
+            ActivityState[] states = [ActivityState.Draft, ActivityState.Published];
+            return [.. Enumerable.Range(0, count).Select(i => new IdValue(states[i % states.Length].ToString()))];
         }
 
-        var count = FilterOps.Arity(op) ?? 2;
-        ActivityState[] states = [ActivityState.Draft, ActivityState.Published];
-        return [.. Enumerable.Range(0, count).Select(i => new IdValue(states[i % states.Length].ToString()))];
+        if (field.Key == TripLogFilterFields.Type)
+        {
+            return
+            [
+                .. Enumerable.Range(1, count)
+                    .Select(i => new IdValue(i.ToString(System.Globalization.CultureInfo.InvariantCulture))),
+            ];
+        }
+
+        return base.ValuesFor(field, op);
     }
 
     private static TripLog Trip(Guid ownerId, string title, Visibility visibility) => new()

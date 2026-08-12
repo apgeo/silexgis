@@ -108,6 +108,10 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<GeoreferencedMap> GeoreferencedMaps => Set<GeoreferencedMap>();
 
+    public DbSet<TripType> TripTypes => Set<TripType>();
+
+    public DbSet<TripTypeSchema> TripTypeSchemas => Set<TripTypeSchema>();
+
     public DbSet<TripLog> TripLogs => Set<TripLog>();
 
     public DbSet<TripLogParticipant> TripLogParticipants => Set<TripLogParticipant>();

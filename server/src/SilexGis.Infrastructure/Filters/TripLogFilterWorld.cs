@@ -28,14 +28,24 @@ public sealed class TripLogFilterWorld(SilexGisDbContext db) : FilterWorld<TripL
         ValueTask.FromResult(TripLogFilterFields.Vocabulary);
 
     /// <summary>
-    /// What this caller may see. A trip has no second rule the way a feature does — nothing about
-    /// a trip is withheld from somebody who may read the trip.
+    /// What this caller may see. No <em>row</em> is withheld beyond the visibility walk, so this
+    /// world has no second rule to compose the way a feature world does.
     /// </summary>
     /// <remarks>
+    /// A trip does hold one part that answers to a narrower audience than the row: the account of
+    /// what went wrong is disclosed only to a caller who may change the trip, because it names
+    /// identifiable people making mistakes. That is a decision about a property, taken per caller
+    /// when the row is mapped — it never changes which rows exist, which rows this world returns,
+    /// or what it counts, which is why nothing here has to weigh it. What it does mean is that a
+    /// filter field over that part would be a second way to ask a question the record withholds,
+    /// and so the vocabulary declares none: only whether something went wrong, which every reader
+    /// of the trip is told anyway.
+    /// <para>
     /// A draft is not a hidden trip. Where the write-up has got to is deliberately not consulted
     /// here: who may read a trip is settled in one place, and a draft the trip's own list endpoint
     /// hands to this caller must be handed over here too, or the filter becomes a second way to ask
     /// the same question with a different answer.
+    /// </para>
     /// </remarks>
     protected override ValueTask<IQueryable<TripLog>> VisibleAsync(
         AccessContext caller, CancellationToken ct) =>
@@ -67,10 +77,11 @@ public sealed class TripLogFilterWorld(SilexGisDbContext db) : FilterWorld<TripL
     private static Expression<Func<TripLog, bool>> Leaf(ConditionNode condition) => condition.Field switch
     {
         TripLogFilterFields.Title => FilterLeaves.Text<TripLog>(condition, t => t.Title),
-        TripLogFilterFields.Type => FilterLeaves.NullableEnum<TripLog, TripType>(condition, t => t.Type),
+        TripLogFilterFields.Type => FilterLeaves.Longs<TripLog>(condition, t => t.TripTypeId),
         TripLogFilterFields.State =>
             FilterLeaves.EnumField<TripLog, ActivityState>(condition, t => t.State),
         TripLogFilterFields.TripDate => FilterLeaves.Date<TripLog>(condition, t => t.TripDate),
+        TripLogFilterFields.HadIncident => FilterLeaves.Boolean<TripLog>(condition, t => t.HadIncident),
         TripLogFilterFields.OwnerId => FilterLeaves.Guids<TripLog>(condition, t => t.OwnerUserId),
         TripLogFilterFields.CavingGroupId => FilterLeaves.Guids<TripLog>(condition, t => t.CavingGroupId),
         TripLogFilterFields.OrganizingCavingGroupId =>

@@ -499,27 +499,37 @@ public static class DemoSeeder
         // still being written and one called off so the states that read differently are both on
         // screen without being hunted for. A published trip carries the day it was announced —
         // fixed like the trip dates, for the same reason.
+        // Purposes are rows now, so the demo names them by the code an installation exchanges
+        // them under and looks the identity up; a code missing here means the taxonomy seed did
+        // not run, and a demo trip with no purpose would hide that.
+        var tripTypeIds = await db.TripTypes.ToDictionaryAsync(t => t.Code, t => t.Id, ct);
+
         var trips = new[]
         {
-            ("Demo: exploration push", TripType.Exploration, new DateOnly(2026, 3, 14), Visibility.Public,
+            ("Demo: exploration push", "exploration", new DateOnly(2026, 3, 14), Visibility.Public,
                 ActivityState.Published, (DateTimeOffset?)new DateTimeOffset(2026, 3, 16, 18, 0, 0, TimeSpan.Zero)),
-            ("Demo: survey trip", TripType.Survey, new DateOnly(2026, 4, 2), Visibility.Public,
+            ("Demo: survey trip", "survey", new DateOnly(2026, 4, 2), Visibility.Public,
                 ActivityState.Published, new DateTimeOffset(2026, 4, 5, 18, 0, 0, TimeSpan.Zero)),
-            ("Demo: science trip", TripType.Science, new DateOnly(2026, 5, 23), Visibility.Authenticated,
+            ("Demo: science trip", "science", new DateOnly(2026, 5, 23), Visibility.Authenticated,
                 ActivityState.Published, new DateTimeOffset(2026, 5, 27, 18, 0, 0, TimeSpan.Zero)),
-            ("Demo: training weekend", TripType.Training, new DateOnly(2026, 6, 6), Visibility.CavingGroup,
+            ("Demo: training weekend", "training", new DateOnly(2026, 6, 6), Visibility.CavingGroup,
                 ActivityState.Draft, null),
-            ("Demo: maintenance and rebolting", TripType.Maintenance, new DateOnly(2026, 7, 18), Visibility.Public,
+            ("Demo: maintenance and rebolting", "maintenance", new DateOnly(2026, 7, 18), Visibility.Public,
                 ActivityState.Cancelled, null),
         };
 
         var index = 0;
-        foreach (var (title, type, date, visibility, state, publishedAt) in trips)
+        foreach (var (title, typeCode, date, visibility, state, publishedAt) in trips)
         {
+            if (!tripTypeIds.TryGetValue(typeCode, out var tripTypeId))
+            {
+                throw new InvalidOperationException($"Trip type '{typeCode}' is not seeded.");
+            }
+
             var trip = new TripLog
             {
                 Title = title,
-                Type = type,
+                TripTypeId = tripTypeId,
                 TripDate = date,
                 Description = "Demonstration trip log.",
                 EntryTime = new TimeOnly(9, 30),
@@ -529,6 +539,28 @@ public static class DemoSeeder
                 State = state,
                 PublishedAt = publishedAt,
             };
+            // What a trip is counted by, on the trips that would plausibly produce numbers: a
+            // demo where nothing is ever measured shows none of it, and a demo where everything
+            // is measured suggests the figures are required. Exactly one trip went wrong, so a
+            // search for incidents has both an answer and a counter-example.
+            switch (typeCode)
+            {
+                case "exploration":
+                    trip.DepthReachedM = 218.0m;
+                    trip.RopeMetres = 260m;
+                    break;
+                case "survey":
+                    trip.DepthReachedM = 96.5m;
+                    trip.LengthSurveyedM = 412.5m;
+                    trip.SurveyStations = 47;
+                    break;
+                case "training":
+                    trip.HadIncident = true;
+                    break;
+                default:
+                    break;
+            }
+
             db.TripLogs.Add(trip);
 
             // The person who proposed it and one who was there — enough that the roster is a

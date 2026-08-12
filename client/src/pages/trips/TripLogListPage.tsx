@@ -8,12 +8,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   useCan,
   useTripLogs,
+  useTripTypes,
   type TripLogInfo,
   type TripLogListParams,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
+import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 import TripFormModal from './TripFormModal.tsx';
 
 export default function TripLogListPage() {
@@ -23,6 +25,7 @@ export default function TripLogListPage() {
   const [searchInput, setSearchInput] = useState('');
   const search = useDebouncedValue(searchInput);
   const { data, isFetching } = useTripLogs({ ...params, search: search || undefined });
+  const { data: tripTypes } = useTripTypes();
   // The dashboard's "new trip" action routes here asking for the form to be open on arrival.
   const location = useLocation();
   const [creating, setCreating] = useState(
@@ -93,10 +96,12 @@ export default function TripLogListPage() {
           },
           {
             title: t('trips.type'),
-            dataIndex: 'type',
+            dataIndex: 'tripTypeId',
             width: 150,
-            render: (value: TripLogInfo['type']) =>
-              value ? <Tag>{t(`trips.typeValues.${value}`)}</Tag> : null,
+            render: (value: TripLogInfo['tripTypeId']) => {
+              const label = tripTypeLabelOf(value, tripTypes, t);
+              return label ? <Tag>{label}</Tag> : null;
+            },
           },
           { title: t('trips.location'), dataIndex: 'locationText', width: 200 },
           {

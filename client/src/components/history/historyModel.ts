@@ -113,6 +113,46 @@ export function applyRestore<T extends Record<string, unknown>>(
   return next as T;
 }
 
+/** The three report sections of a trip, which a restore never carries along by accident. */
+const TRIP_SECTION_FIELDS = ['fieldData', 'logistics', 'safety'] as const;
+
+/**
+ * Restore composer for trip logs, which need two entity-specific fixups.
+ *
+ * A section this restore does not name travels as null — no section at all — rather than as the
+ * value the trip currently holds. Echoing an untouched section back would have it measured again
+ * against the schema its purpose carries *now*: correcting a title on a report written under a
+ * looser schema could then be refused over a section nobody opened, and every section's version
+ * stamp would silently move to the current one. The stamp exists precisely so that tightening a
+ * schema does not retroactively invalidate reports already written.
+ *
+ * A section that *is* named is restored on purpose, and is measured — but it arrives from the
+ * audit trail as a jsonb string while the write DTO takes an object, so it is parsed back first.
+ */
+export function applyTripRestore<T extends Record<string, unknown>>(
+  current: T,
+  changes: unknown,
+  props: string[],
+): T {
+  const base: Record<string, unknown> = { ...current };
+  for (const field of TRIP_SECTION_FIELDS) {
+    base[field] = null;
+  }
+
+  const next = applyRestore(base, changes, props);
+  for (const field of TRIP_SECTION_FIELDS) {
+    if (typeof next[field] === 'string') {
+      try {
+        next[field] = JSON.parse(next[field] as string) as unknown;
+      } catch {
+        // Leave a malformed value untouched; the server validator rejects it clearly.
+      }
+    }
+  }
+
+  return next as T;
+}
+
 /**
  * Restore composer for surface features, which need two entity-specific fixups the generic
  * name mapping can't infer: the geometry is audited under the CLR name `Geom` but the write

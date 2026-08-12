@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.Json.Nodes;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Trips;
 
 namespace SilexGis.Domain.Geo;
 
@@ -34,12 +35,14 @@ public static class HistoryProtection
     // (not counted as protection-redacted). The cave feature's Geom is the derived
     // main-entrance cache — location data, removed for everyone as defence in depth (the
     // entrance's own row carries the governed original). AncestorIds/IsProtectedEffective
-    // are write-service bookkeeping. The two schema-version stamps record which version of a
+    // are write-service bookkeeping. The schema-version stamps record which version of a
     // kind's schema a row was validated against — a number the write path moves on its own,
     // so a reader would see it change without anyone having changed anything.
     private static readonly string[] AlwaysNoise =
         ["CreatedAt", "UpdatedAt", nameof(Feature.AncestorIds), nameof(Feature.IsProtectedEffective),
-         nameof(Feature.PropertiesSchemaVersion), nameof(Document.MetadataSchemaVersion)];
+         nameof(Feature.PropertiesSchemaVersion), nameof(Document.MetadataSchemaVersion),
+         nameof(TripLog.FieldDataSchemaVersion), nameof(TripLog.LogisticsSchemaVersion),
+         nameof(TripLog.SafetySchemaVersion)];
     private static readonly string[] CaveNoise = [nameof(Cave.EntranceCount), nameof(Feature.Geom)];
 
     // A stored file's created/deleted snapshot carries its EXIF capture point (Geom), the raw
@@ -115,12 +118,21 @@ public static class HistoryProtection
     /// rather than derived here, so the timeline and the live surfaces cannot come to
     /// different answers about the same pairing. Ignored for every other entity type.
     /// </param>
+    /// <param name="mayWriteSubject">
+    /// Whether the caller may change the entity this timeline is about. Some rows hold a part
+    /// that is told to a narrower audience than the row itself — a trip's account of what went
+    /// wrong names identifiable people making mistakes — and reading it out of a diff would be
+    /// a way around the live rule. Passed in for the same reason the association answer is:
+    /// the timeline does not re-derive a disclosure decision, it is handed the answer.
+    /// Ignored for every entity type that has no such part.
+    /// </param>
     public static RedactionResult Redact(
         string entityType,
         JsonObject? changes,
         bool governingHidden,
         Func<Guid, bool> linkTargetHidden,
-        bool associationHidden)
+        bool associationHidden,
+        bool mayWriteSubject)
     {
         if (changes is null)
         {
@@ -186,6 +198,18 @@ public static class HistoryProtection
             if (governingHidden)
             {
                 RemoveNamed(changes, ResLinkMemberSensitive, redacted);
+            }
+        }
+        else if (entityType == nameof(TripLog))
+        {
+            // The trip's account of what went wrong is told only to whoever may change the
+            // trip, so a diff of it is too — otherwise the timeline would hand a read-only
+            // caller the very text the record withholds from them. Named rather than dropped
+            // as noise, so the page can show an honest "hidden" row instead of pretending the
+            // edit never happened.
+            if (!mayWriteSubject)
+            {
+                RemoveNamed(changes, TripDisclosure.WriterOnly, redacted);
             }
         }
 

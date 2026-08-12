@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
@@ -7,9 +8,11 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Api.Features.TripLogs;
 
@@ -41,6 +44,7 @@ public static class TripLogEndpoints
 
     private static async Task<Results<Ok<PagedResult<TripLogDto>>, UnauthorizedHttpResult>> ListAsync(
         SilexGisDbContext db,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         FeatureProtection protection,
@@ -103,7 +107,7 @@ public static class TripLogEndpoints
         var rows = await query.OrderByDescending(x => x.TripDate).ThenByDescending(x => x.CreatedAt)
             .Skip((p - 1) * size).Take(size).ToListAsync(ct);
 
-        var items = await MapWithChildrenAsync(db, protection, ctx, user, rows, ct);
+        var items = await MapWithChildrenAsync(db, access, protection, ctx, user, rows, ct);
         return TypedResults.Ok(new PagedResult<TripLogDto>(items, p, size, total));
     }
 
@@ -125,7 +129,7 @@ public static class TripLogEndpoints
             return ApiProblems.NotFound("trip_log.not_found");
         }
 
-        var items = await MapWithChildrenAsync(db, protection, ctx!, user!, [trip], ct);
+        var items = await MapWithChildrenAsync(db, access, protection, ctx!, user!, [trip], ct);
         await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
         return TypedResults.Ok(items[0]);
     }
@@ -137,6 +141,7 @@ public static class TripLogEndpoints
         IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         FeatureProtection protection,
+        TripSectionWriter sections,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -159,6 +164,17 @@ public static class TripLogEndpoints
 
         var trip = new TripLog { Title = request.Title, OwnerUserId = user.UserId };
         Apply(trip, request);
+        // A new row has nothing stored, so every section is a first write and is measured
+        // against the purpose's schemas as they stand.
+        try
+        {
+            await sections.ApplyAsync(trip, SectionsOf(request), typeChanged: true, ct);
+        }
+        catch (TripWriteException e)
+        {
+            return ApiProblems.BadRequest(e.Code, e.Message);
+        }
+
         db.TripLogs.Add(trip);
         // No existing children on create, so the reconcile helpers reduce to pure inserts.
         if (request.CaveIds is { } caveIds)
@@ -171,7 +187,7 @@ public static class TripLogEndpoints
         await NotifyParticipantsAsync(db, access, user, trip, added, ct);
         await db.SaveChangesAsync(ct);
 
-        var items = await MapWithChildrenAsync(db, protection, ctx, user, [trip], ct);
+        var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
         return TypedResults.Created($"/api/v1/trip-logs/{trip.Id}", items[0]);
     }
 
@@ -184,6 +200,7 @@ public static class TripLogEndpoints
         IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         FeatureProtection protection,
+        TripSectionWriter sections,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -212,7 +229,20 @@ public static class TripLogEndpoints
             return problem;
         }
 
+        // Read before Apply overwrites it: moving a trip to another purpose re-measures all
+        // three sections, because the schemas they answer to are not the ones they were
+        // measured against any more.
+        var typeChanged = trip.TripTypeId != request.TripTypeId;
         Apply(trip, request);
+        try
+        {
+            await sections.ApplyAsync(trip, SectionsOf(request), typeChanged, ct);
+        }
+        catch (TripWriteException e)
+        {
+            return ApiProblems.BadRequest(e.Code, e.Message);
+        }
+
         if (request.CaveIds is { } caveIds)
         {
             await ReconcileCaveLinksAsync(db, protection, ctx, trip.Id, caveIds, ct);
@@ -223,7 +253,7 @@ public static class TripLogEndpoints
         await NotifyParticipantsAsync(db, access, user, trip, added, ct);
         await db.SaveChangesAsync(ct);
 
-        var items = await MapWithChildrenAsync(db, protection, ctx, user, [trip], ct);
+        var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
         return TypedResults.Ok(items[0]);
     }
 
@@ -396,7 +426,7 @@ public static class TripLogEndpoints
 
         await db.SaveChangesAsync(ct);
 
-        var items = await MapWithChildrenAsync(db, protection, ctx, user, [trip], ct);
+        var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
         return TypedResults.Ok(items[0]);
     }
 
@@ -427,7 +457,7 @@ public static class TripLogEndpoints
     private static void Apply(TripLog trip, TripLogWriteRequest request)
     {
         trip.Title = request.Title;
-        trip.Type = request.Type;
+        trip.TripTypeId = request.TripTypeId;
         trip.TripDate = request.TripDate;
         trip.TripDateEnd = request.TripDateEnd;
         trip.EntryTime = request.EntryTime;
@@ -436,11 +466,27 @@ public static class TripLogEndpoints
         trip.Results = request.Results;
         trip.WeatherConditions = request.WeatherConditions;
         trip.LocationText = request.LocationText;
+        trip.DepthReachedM = request.DepthReachedM;
+        trip.LengthSurveyedM = request.LengthSurveyedM;
+        trip.SurveyStations = request.SurveyStations;
+        trip.RopeMetres = request.RopeMetres;
+        trip.HadIncident = request.HadIncident;
         trip.OrganizingCavingGroupId = request.OrganizingCavingGroupId;
         trip.Geom = request.Geom?.ToGeometryOrNull();
         trip.CavingGroupId = request.CavingGroupId;
         trip.Visibility = request.Visibility;
     }
+
+    /// <summary>
+    /// The three sections as raw text, or null for one the request does not mention. Absent and
+    /// "an empty object" are different answers: the first leaves what is stored alone, the
+    /// second clears it.
+    /// </summary>
+    private static TripSectionWrite SectionsOf(TripLogWriteRequest request) => new(
+        RawSection(request.FieldData), RawSection(request.Logistics), RawSection(request.Safety));
+
+    private static string? RawSection(JsonElement? section) =>
+        section is { ValueKind: JsonValueKind.Object } value ? value.GetRawText() : null;
 
     /// <summary>
     /// The role a bare list of caves is written under. The list says the trip is about those
@@ -652,13 +698,23 @@ public static class TripLogEndpoints
         }
     }
 
-    /// <summary>Geometry validity, cave visibility, participant-user existence.</summary>
+    /// <summary>Geometry validity, trip-purpose and cave existence, participant-user existence.</summary>
     private static async Task<ProblemHttpResult?> ValidateReferencesAsync(
         SilexGisDbContext db, AccessContext ctx, TripLogWriteRequest request, CancellationToken ct)
     {
         if (request.Geom is not null && request.Geom.ToGeometryOrNull() is null)
         {
             return ApiProblems.BadRequest("trip_log.geometry_invalid", "Geometry is malformed or invalid.");
+        }
+
+        // The purpose vocabulary is a row set an installation extends, so an unknown identity is
+        // a plain bad request rather than a shape the request validator could have caught. The
+        // vocabulary is readable by every account, so naming a row that does not exist discloses
+        // nothing that reading the list would not.
+        if (request.TripTypeId is { } tripTypeId
+            && !await db.TripTypes.AnyAsync(t => t.Id == tripTypeId, ct))
+        {
+            return ApiProblems.BadRequest("trip_log.type_unknown", "That trip type does not exist.");
         }
 
         if (request.CavingGroupId is not null
@@ -697,9 +753,13 @@ public static class TripLogEndpoints
         return null;
     }
 
-    /// <summary>Batch-loads caves/participants and applies cave-link redaction.</summary>
+    /// <summary>
+    /// Batch-loads caves/participants, applies cave-link redaction, and holds back the parts of
+    /// a trip that answer to a narrower audience than the trip itself.
+    /// </summary>
     private static async Task<List<TripLogDto>> MapWithChildrenAsync(
         SilexGisDbContext db,
+        IAccessService access,
         FeatureProtection protection,
         AccessContext ctx,
         UserContext user,
@@ -741,31 +801,53 @@ public static class TripLogEndpoints
         var redacted = await protection.RedactedLinkTargetIdsAsync(
             ctx, [.. caveLinks.Select(x => x.FeatureId)], ct);
 
-        return [.. trips.Select(trip => new TripLogDto(
-            trip.Id,
-            trip.Title,
-            trip.Type,
-            trip.TripDate,
-            trip.TripDateEnd,
-            trip.EntryTime,
-            trip.ExitTime,
-            trip.Description,
-            trip.Results,
-            trip.WeatherConditions,
-            trip.LocationText,
-            trip.OrganizingCavingGroupId,
-            trip.Geom is null ? null : GeoJsonGeometry.From(trip.Geom),
-            [.. caveLinks.Where(x => x.TripId == trip.Id && !redacted.Contains(x.FeatureId)).Select(x => x.FeatureId)],
-            [.. participants.Where(x => x.TripLogId == trip.Id && x.Kind == TripParticipantKind.Participant)
-                .Select(x => new TripParticipantDto(x.CaverId, x.Name, x.UserId))],
-            [.. participants.Where(x => x.TripLogId == trip.Id && x.Kind == TripParticipantKind.Proposer)
-                .Select(x => new TripParticipantDto(x.CaverId, x.Name, x.UserId))],
-            trip.OwnerUserId,
-            trip.CavingGroupId,
-            trip.Visibility,
-            trip.CreatedAt,
-            trip.UpdatedAt,
-            trip.State,
-            trip.PublishedAt))];
+        // Which of these trips this caller may change, decided for the whole page at once so a
+        // longer listing does not cost more round trips. It answers one question here: who is
+        // told what went wrong, as against who is told that something did.
+        var writable = await ProtectedWrites.WritableAsync(access, ctx, trips, ct);
+
+        return [.. trips.Select(trip => MapOne(trip, writable.Contains(trip.Id)))];
+
+        TripLogDto MapOne(TripLog trip, bool mayWrite)
+        {
+            var (safety, safetyVersion) = TripDisclosure.Safety(trip, mayWrite);
+            return new TripLogDto(
+                trip.Id,
+                trip.Title,
+                trip.TripTypeId,
+                trip.TripDate,
+                trip.TripDateEnd,
+                trip.EntryTime,
+                trip.ExitTime,
+                trip.Description,
+                trip.Results,
+                trip.WeatherConditions,
+                trip.LocationText,
+                trip.OrganizingCavingGroupId,
+                trip.Geom is null ? null : GeoJsonGeometry.From(trip.Geom),
+                [.. caveLinks.Where(x => x.TripId == trip.Id && !redacted.Contains(x.FeatureId)).Select(x => x.FeatureId)],
+                [.. participants.Where(x => x.TripLogId == trip.Id && x.Kind == TripParticipantKind.Participant)
+                    .Select(x => new TripParticipantDto(x.CaverId, x.Name, x.UserId))],
+                [.. participants.Where(x => x.TripLogId == trip.Id && x.Kind == TripParticipantKind.Proposer)
+                    .Select(x => new TripParticipantDto(x.CaverId, x.Name, x.UserId))],
+                trip.OwnerUserId,
+                trip.CavingGroupId,
+                trip.Visibility,
+                trip.CreatedAt,
+                trip.UpdatedAt,
+                trip.State,
+                trip.PublishedAt,
+                trip.DepthReachedM,
+                trip.LengthSurveyedM,
+                trip.SurveyStations,
+                trip.RopeMetres,
+                trip.HadIncident,
+                JsonSerializer.Deserialize<JsonElement>(trip.FieldData),
+                trip.FieldDataSchemaVersion,
+                JsonSerializer.Deserialize<JsonElement>(trip.Logistics),
+                trip.LogisticsSchemaVersion,
+                safety is null ? null : JsonSerializer.Deserialize<JsonElement>(safety),
+                safetyVersion);
+        }
     }
 }
