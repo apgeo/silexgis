@@ -25,6 +25,7 @@
     "documentTypes": "Document kinds",
     "relationTypes": "Link relations",
     "tripTypes": "Trip purposes",
+    "participantRoles": "Trip roles",
     "termRules": "Detection rules"
   },
   "dashboard": {
@@ -728,6 +729,17 @@
       "science": "Science",
       "other": "Other"
     },
+    "participantRoleValues": {
+      "participant": "Participant",
+      "proposer": "Proposer",
+      "leader": "Leader",
+      "driver": "Driver",
+      "surveyor": "Surveyor",
+      "photographer": "Photographer",
+      "trainee": "Trainee",
+      "instructor": "Instructor",
+      "callout_contact": "Callout contact"
+    },
     "date": "Date",
     "dates": "Dates",
     "entryTime": "Entry time",
@@ -739,6 +751,11 @@
     "participants": "Participants",
     "participantName": "Participant name",
     "participantRequired": "Enter a name",
+    "participantRole": "Role",
+    "participantNote": "Note",
+    "participantDetails": "Role, times and note",
+    "removeParticipant": "Remove from this trip",
+    "participantTimesHint": "Left blank, the trip's own times apply.",
     "addParticipant": "Add participant",
     "proposers": "Proposed by",
     "proposerName": "Proposer name",
@@ -1593,6 +1610,27 @@
         "boolean": "yes/no",
         "enum": "choice"
       }
+    },
+    "participantRoles": {
+      "title": "Trip roles",
+      "intro": "The jobs somebody may be recorded as having done on a trip. The roles that ship with the product are shown in your language and keep their codes — other installations read trips by them — while their wording and ordering are yours to change. Add a role here for a job your club runs that nobody thought of.",
+      "add": "Add a role",
+      "edit": "Edit trip role",
+      "editAction": "Edit",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this role? People already recorded in it keep it, so it can only go once none are left.",
+      "name": "Name",
+      "nameHint": "How this job reads on a roster.",
+      "code": "Code",
+      "codeHint": "Lower-case letters, digits and underscores. Installations exchange trips by this code, so keep it stable.",
+      "description": "Description",
+      "sortOrder": "Sort order",
+      "source": "Where it comes from",
+      "seeded": "Ships with the product",
+      "custom": "Added here",
+      "codeTaken": "Another role already uses that code.",
+      "seededImmutable": "A role that ships with the product keeps its code and cannot be deleted.",
+      "inUse": "People are still recorded in this role; move them first."
     },
     "relationTypes": {
       "title": "Link relations",

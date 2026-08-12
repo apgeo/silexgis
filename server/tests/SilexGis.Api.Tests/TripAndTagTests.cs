@@ -42,6 +42,9 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
     private long entranceTypeId;
     private long surveyTypeId;
     private long explorationTypeId;
+    private long participantRoleId;
+    private long proposerRoleId;
+    private long leaderRoleId;
 
     public TripAndTagTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
@@ -62,6 +65,12 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             entranceTypeId = await db.EntranceTypes.Select(t => t.Id).FirstAsync();
             surveyTypeId = await db.TripTypes.Where(t => t.Code == "survey").Select(t => t.Id).FirstAsync();
             explorationTypeId = await db.TripTypes.Where(t => t.Code == "exploration").Select(t => t.Id).FirstAsync();
+            participantRoleId = await db.TripParticipantRoles
+                .Where(r => r.Code == "participant").Select(r => r.Id).FirstAsync();
+            proposerRoleId = await db.TripParticipantRoles
+                .Where(r => r.Code == "proposer").Select(r => r.Id).FirstAsync();
+            leaderRoleId = await db.TripParticipantRoles
+                .Where(r => r.Code == "leader").Select(r => r.Id).FirstAsync();
 
             // The organizing club is a caving group now, so a trip that names one needs one.
             var cavingGroup = new CavingGroup { Name = $"Trip Club {suffix}", Slug = $"trip-club-{suffix}" };
@@ -263,6 +272,9 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             proposers.ShouldContain(p => p.GetProperty("name").GetString() == "Ana Ionescu");
             proposers.ShouldContain(p => p.GetProperty("userId").ValueKind == JsonValueKind.String
                 && p.GetProperty("name").GetString() != null);
+            // Each row says which job it is, so no reader has to work it out from the list it
+            // arrived in — and the list a proposer arrives in is the one that names the job.
+            proposers.ShouldAllBe(p => p.GetProperty("roleId").GetInt64() == proposerRoleId);
             // The same registered user is independently a participant (attendance ≠ proposing).
             t.GetProperty("participants").GetArrayLength().ShouldBe(1);
         }
@@ -323,6 +335,58 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
             proposers = new object[] { new { caverId = (Guid?)outsiderCaverId, newCaverName = "Also named" } },
             visibility = "private",
         })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    /// <summary>
+    /// Two people on the roster share a name — the state the roster merge exists to resolve — and
+    /// a trip is saved naming it. The name resolves to one of them and the trip is written; a
+    /// coincidence of spelling between two roster entries is not the editor's problem to solve
+    /// before they can record where they went.
+    /// </summary>
+    [Fact]
+    public async Task Typed_roster_name_matching_two_people_saves_the_trip()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var sharedName = $"Ion Popescu {marker}";
+        Guid olderId;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var older = new Caver { FullName = sharedName };
+            var newer = new Caver { FullName = sharedName };
+            db.Cavers.AddRange(older, newer);
+            await db.SaveChangesAsync();
+            // Both rows are stamped with the same instant on insert, so which of them is the
+            // older is set afterwards — the point of the test is that the lookup picks one and
+            // keeps picking it, and that needs an order to exist in the first place.
+            older.CreatedAt = DateTimeOffset.UtcNow.AddDays(-2);
+            await db.SaveChangesAsync();
+            olderId = older.Id;
+        }
+
+        var create = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Shared name {marker}",
+            tripDate = "2026-06-02",
+            caveIds = Array.Empty<Guid>(),
+            participants = new object[] { new { caverId = (Guid?)null, newCaverName = sharedName } },
+            visibility = "private",
+        });
+        create.StatusCode.ShouldBe(HttpStatusCode.Created, await create.Content.ReadAsStringAsync());
+
+        var created = await create.Content.ReadFromJsonAsync<JsonElement>();
+        var roster = created.GetProperty("participants").EnumerateArray().ToList();
+        roster.Count.ShouldBe(1);
+        // Reused rather than made a third time, and always the same one of the two, so retyping
+        // the name later does not scatter one person across several entries.
+        roster[0].GetProperty("caverId").GetGuid().ShouldBe(olderId);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Cavers.CountAsync(c => c.FullName == sharedName)).ShouldBe(2);
+        }
     }
 
     /// <summary>
@@ -730,6 +794,225 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         (await TripNotificationsForAsync(laterUserId)).ShouldBe(1);
         (await TripNotificationsForAsync(outsiderId)).ShouldBe(1);
         (await TripNotificationsForAsync(ownerId)).ShouldBe(0);
+    }
+
+    /// <summary>
+    /// Somebody can hold two jobs on one trip, and taking the second one on tells them nothing:
+    /// they already know they are on the trip, which is all the message says. Whether a person is
+    /// new is therefore asked of the trip and not of the job — a distinction with no shape in the
+    /// code that makes it, and one a rewrite loses in either direction without failing a build.
+    /// <para>
+    /// The positive half is here too, because a reconcile that told nobody anything would pass a
+    /// test that only checked the silence: a person the trip did not name before is told once,
+    /// even when the only job they are named in is one the write path is not built around.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_second_job_on_one_trip_is_a_second_row_and_tells_nobody_again()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var newcomerUserId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"tt-lead-{marker}@t.local");
+        var newcomerCaverId = await RosterHelper.CaverIdForAsync(factory, newcomerUserId);
+
+        var create = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Two jobs {marker}",
+            tripDate = "2026-08-02",
+            caveIds = Array.Empty<Guid>(),
+            participants = new object[] { new { caverId = (Guid?)outsiderCaverId, newCaverName = (string?)null } },
+            visibility = "authenticated",
+        });
+        create.StatusCode.ShouldBe(HttpStatusCode.Created, await create.Content.ReadAsStringAsync());
+        var tripId = (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        (await owner.PostWithIfMatchAsync($"/api/v1/trip-logs/{tripId}/publish"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await TripNotificationsForAsync(outsiderId)).ShouldBe(1);
+
+        // The same person, now also the leader, beside somebody the trip never named before.
+        var promoted = await owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{tripId}", new
+        {
+            title = $"Two jobs {marker}",
+            tripDate = "2026-08-02",
+            caveIds = Array.Empty<Guid>(),
+            participants = new object[]
+            {
+                new { caverId = (Guid?)outsiderCaverId, newCaverName = (string?)null },
+                new { caverId = (Guid?)outsiderCaverId, newCaverName = (string?)null, roleId = (long?)leaderRoleId },
+                new { caverId = (Guid?)newcomerCaverId, newCaverName = (string?)null, roleId = (long?)leaderRoleId },
+            },
+            visibility = "authenticated",
+        });
+        promoted.StatusCode.ShouldBe(HttpStatusCode.OK, await promoted.Content.ReadAsStringAsync());
+
+        (await TripNotificationsForAsync(outsiderId)).ShouldBe(1);
+        (await TripNotificationsForAsync(newcomerUserId)).ShouldBe(1);
+
+        // Two rows, not one displacing the other: the roster keeps both jobs.
+        var read = await ReadTripAsync(owner, tripId);
+        var rows = read.GetProperty("participants").EnumerateArray()
+            .Where(p => p.GetProperty("caverId").GetGuid() == outsiderCaverId)
+            .Select(p => p.GetProperty("roleId").GetInt64())
+            .OrderBy(id => id)
+            .ToList();
+        rows.ShouldBe([.. new[] { participantRoleId, leaderRoleId }.OrderBy(id => id)]);
+    }
+
+    /// <summary>
+    /// A person's own times and the sentence explaining them belong to that person's part in the
+    /// trip, not to the trip: nobody else's row moves when one of them is set, and a row that
+    /// says nothing about times means the trip's own stand for it rather than that they are
+    /// unknown. Changing what a row says brings that row up to date rather than replacing it, so
+    /// re-saving a roster writes nothing into the trip's timeline.
+    /// </summary>
+    [Fact]
+    public async Task Per_person_times_and_a_note_belong_to_the_person_and_editing_one_replaces_nothing()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var create = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Times {marker}",
+            tripDate = "2026-08-03",
+            entryTime = "09:00:00",
+            exitTime = "17:30:00",
+            caveIds = Array.Empty<Guid>(),
+            participants = new object[]
+            {
+                new
+                {
+                    caverId = (Guid?)outsiderCaverId,
+                    newCaverName = (string?)null,
+                    entryTime = "09:00:00",
+                    exitTime = "13:15:00",
+                    note = "  Turned back at the pitch head.  ",
+                },
+                new { caverId = (Guid?)null, newCaverName = $"Guest {marker}" },
+            },
+            visibility = "authenticated",
+        });
+        create.StatusCode.ShouldBe(HttpStatusCode.Created, await create.Content.ReadAsStringAsync());
+        var tripId = (await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        var created = await ReadTripAsync(owner, tripId);
+        var early = created.GetProperty("participants").EnumerateArray()
+            .Single(p => p.GetProperty("caverId").GetGuid() == outsiderCaverId);
+        early.GetProperty("entryTime").GetString().ShouldBe("09:00:00");
+        early.GetProperty("exitTime").GetString().ShouldBe("13:15:00");
+        early.GetProperty("note").GetString().ShouldBe("Turned back at the pitch head.");
+
+        // Everybody else's row says nothing about times, which is the ordinary case and reads as
+        // "the trip's own times stand for them" — not as a gap somebody forgot to fill.
+        var guest = created.GetProperty("participants").EnumerateArray()
+            .Single(p => p.GetProperty("caverId").GetGuid() != outsiderCaverId);
+        guest.GetProperty("entryTime").ValueKind.ShouldBe(JsonValueKind.Null);
+        guest.GetProperty("exitTime").ValueKind.ShouldBe(JsonValueKind.Null);
+        guest.GetProperty("note").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // The trip's own times are untouched by any of it: the two pairs answer different
+        // questions and one is not derived from the other.
+        created.GetProperty("entryTime").GetString().ShouldBe("09:00:00");
+        created.GetProperty("exitTime").GetString().ShouldBe("17:30:00");
+
+        var corrected = await owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{tripId}", new
+        {
+            title = $"Times {marker}",
+            tripDate = "2026-08-03",
+            entryTime = "09:00:00",
+            exitTime = "17:30:00",
+            caveIds = Array.Empty<Guid>(),
+            participants = new object[]
+            {
+                new
+                {
+                    caverId = (Guid?)outsiderCaverId,
+                    newCaverName = (string?)null,
+                    entryTime = "09:00:00",
+                    exitTime = "12:40:00",
+                    note = "Surfaced with the second group.",
+                },
+                new { caverId = (Guid?)null, newCaverName = $"Guest {marker}" },
+            },
+            visibility = "authenticated",
+        });
+        corrected.StatusCode.ShouldBe(HttpStatusCode.OK, await corrected.Content.ReadAsStringAsync());
+
+        var after = await ReadTripAsync(owner, tripId);
+        var amended = after.GetProperty("participants").EnumerateArray()
+            .Single(p => p.GetProperty("caverId").GetGuid() == outsiderCaverId);
+        amended.GetProperty("exitTime").GetString().ShouldBe("12:40:00");
+        amended.GetProperty("note").GetString().ShouldBe("Surfaced with the second group.");
+
+        // Brought up to date, not struck out and written again: one creation each in the trip's
+        // timeline and no deletions, or every correction would read as somebody leaving the trip
+        // and a stranger joining it.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var tripIdStr = tripId.ToString();
+        (await db.AuditEntries.CountAsync(a =>
+            a.EntityType == "TripLogParticipant" && a.RootEntityId == tripIdStr && a.Action == AuditActions.Created))
+            .ShouldBe(2);
+        (await db.AuditEntries.CountAsync(a =>
+            a.EntityType == "TripLogParticipant" && a.RootEntityId == tripIdStr && a.Action == AuditActions.Deleted))
+            .ShouldBe(0);
+    }
+
+    /// <summary>
+    /// The two refusals a roster entry can earn beside the identity rules, each beside a write
+    /// that is not refused: a job the vocabulary does not contain, and a note long enough to be a
+    /// second report rather than a remark about one person's part in the trip.
+    /// </summary>
+    [Fact]
+    public async Task A_roster_entry_naming_an_unknown_job_or_carrying_an_essay_is_refused()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+
+        var unknownRole = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Bad role {marker}",
+            tripDate = "2026-08-04",
+            caveIds = Array.Empty<Guid>(),
+            participants = new object[]
+            {
+                new { caverId = (Guid?)outsiderCaverId, newCaverName = (string?)null, roleId = (long?)987654321 },
+            },
+            visibility = "private",
+        });
+        unknownRole.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemCodeAsync(unknownRole)).ShouldBe("trip_log.participant_role_unknown");
+
+        var essay = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Long note {marker}",
+            tripDate = "2026-08-04",
+            caveIds = Array.Empty<Guid>(),
+            participants = new object[]
+            {
+                new { caverId = (Guid?)outsiderCaverId, newCaverName = (string?)null, note = new string('x', 501) },
+            },
+            visibility = "private",
+        });
+        essay.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // The same two entries written within the rules are accepted, so neither refusal is a
+        // guard that refuses everything.
+        var accepted = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Good roster {marker}",
+            tripDate = "2026-08-04",
+            caveIds = Array.Empty<Guid>(),
+            participants = new object[]
+            {
+                new
+                {
+                    caverId = (Guid?)outsiderCaverId,
+                    newCaverName = (string?)null,
+                    roleId = (long?)leaderRoleId,
+                    note = new string('x', 500),
+                },
+            },
+            visibility = "private",
+        });
+        accepted.StatusCode.ShouldBe(HttpStatusCode.Created, await accepted.Content.ReadAsStringAsync());
     }
 
     /// <summary>

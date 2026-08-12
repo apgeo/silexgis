@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { App, Button, DatePicker, Flex, Form, Input, Modal, Select, TimePicker } from 'antd';
+import { DeleteOutlined, EllipsisOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Button, DatePicker, Flex, Form, Input, Modal, Select, TimePicker, Typography } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {
   useCavingGroups,
   useCreateTripLog,
+  useTripParticipantRoles,
   useTripTypes,
   useUpdateTripLog,
   type TripLogInfo,
   type TripLogWrite,
+  type TripParticipantRole,
 } from '../../api/hooks.ts';
+import { participantRoleLabel } from '../../components/trips/participantRoles.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 import { tripTypeLabel } from '../../components/trips/tripTypes.ts';
 import TripGeometryField from './TripGeometryField.tsx';
@@ -38,21 +41,65 @@ interface FormValues {
   results?: string;
   weather?: string;
   geom?: TripGeometry | null;
-  participants: { caverId?: string; name: string }[];
-  proposers: { caverId?: string; name: string }[];
+  participants: RosterRow[];
+  proposers: RosterRow[];
   visibility: TripLogInfo['visibility'];
 }
 
-// An untouched row still points at its person; a typed one carries a name for the server to add
-// to the roster. Blank rows are dropped rather than creating someone with no name.
-const toParticipants = (rows: { caverId?: string; name: string }[]) =>
+/**
+ * A row of the roster as this form holds it. Only the name is drawn until somebody asks for
+ * more; the job the person did, their own hours and the note against them ride along whether
+ * they are on screen or not, because a write replaces the whole roster — a form that dropped
+ * what it never displayed would retype the trip's leader as an ordinary attendee and throw away
+ * the hours somebody recorded, for the sake of a corrected title.
+ */
+interface RosterRow {
+  caverId?: string;
+  /**
+   * The name this row arrived under. A row still reading it still means the person it was
+   * loaded for; typed over, it means whoever the new text names — see `toParticipants`.
+   */
+  loadedName?: string;
+  name: string;
+  roleId?: number | null;
+  entryTime?: string | null;
+  exitTime?: string | null;
+  note?: string | null;
+}
+
+// A row still reading the name it arrived under still points at its person; one typed over names
+// whoever the new text names, and the server matches that against the roster or adds them to it.
+// Sending the reference back beside a corrected name would store nothing at all — the reference
+// is what the server reads — so a misspelling would survive every attempt to fix it, silently.
+// Comparing against the loaded name rather than clearing on any keystroke matters: the name shown
+// for somebody who holds an account is their profile's, which need not be the name the roster
+// holds, so detaching on an edit that changed nothing would quietly make two people out of one.
+// A row typed in names no job, and the server reads that as simply having been there.
+const toParticipants = (rows: RosterRow[]) =>
   rows
-    .filter((row) => row.caverId != null || row.name.trim().length > 0)
-    .map((row) =>
-      row.caverId != null
-        ? { caverId: row.caverId, newCaverName: null }
-        : { caverId: null, newCaverName: row.name.trim() },
-    );
+    .filter((row) => row.name.trim().length > 0)
+    .map((row) => {
+      const name = row.name.trim();
+      const stillTheirs = row.caverId != null && name === row.loadedName;
+      return {
+        caverId: stillTheirs ? row.caverId! : null,
+        newCaverName: stillTheirs ? null : name,
+        roleId: row.roleId ?? null,
+        entryTime: row.entryTime ?? null,
+        exitTime: row.exitTime ?? null,
+        note: row.note ?? null,
+      };
+    });
+
+const toRosterRow = (person: TripLogInfo['participants'][number]): RosterRow => ({
+  caverId: person.caverId,
+  loadedName: person.name,
+  name: person.name,
+  roleId: person.roleId,
+  entryTime: person.entryTime,
+  exitTime: person.exitTime,
+  note: person.note,
+});
 
 // Server times are wall-clock "HH:mm:ss"; parse via an ISO instant so no dayjs parse plugin is needed.
 const parseTime = (value: string | null | undefined): Dayjs | null =>
@@ -62,23 +109,117 @@ const parseTime = (value: string | null | undefined): Dayjs | null =>
  * A Form.List of people, shared by the participants and proposers fields. A row that came from
  * the trip keeps the person it refers to; a row typed in names someone new, who is added to the
  * roster on save so later trips can pick them rather than retype them.
+ *
+ * A row is one field, because most rows are a name and nothing else and recording an ordinary
+ * trip must not get slower for the sake of the ones that are not. What else a row can say — the
+ * job the person did, the hours they were down if they differ from the party's, a note — opens
+ * on request, one row at a time, and stays out of the way of the rest.
+ *
+ * `roles` is absent for the proposers column: proposing is what that column means, so a role
+ * picker there could only contradict the heading above it.
  */
-function NameListField({ name, addLabel, placeholder }: { name: string; addLabel: string; placeholder: string }) {
+function RosterField({
+  name,
+  addLabel,
+  placeholder,
+  roles,
+}: {
+  name: string;
+  addLabel: string;
+  placeholder: string;
+  roles?: TripParticipantRole[];
+}) {
   const { t } = useTranslation();
+  // Which rows have been opened, by the list's own stable key rather than by index: removing a
+  // row above renumbers the ones below it, and an index would leave the wrong row open.
+  const [opened, setOpened] = useState<number[]>([]);
+  const toggle = (key: number) =>
+    setOpened((keys) => (keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key]));
+
   return (
     <Form.List name={name}>
       {(fields, { add, remove }) => (
         <Flex vertical gap={8}>
           {fields.map((field) => (
-            <Flex key={field.key} gap={8}>
-              <Form.Item
-                name={[field.name, 'name']}
-                noStyle
-                rules={[{ required: true, message: t('trips.participantRequired') }]}
-              >
-                <Input placeholder={placeholder} maxLength={200} />
-              </Form.Item>
-              <Button icon={<DeleteOutlined />} onClick={() => remove(field.name)} />
+            <Flex key={field.key} vertical gap={4}>
+              <Flex gap={8}>
+                <Form.Item
+                  name={[field.name, 'name']}
+                  noStyle
+                  rules={[{ required: true, message: t('trips.participantRequired') }]}
+                >
+                  <Input placeholder={placeholder} maxLength={200} />
+                </Form.Item>
+                <Button
+                  icon={<EllipsisOutlined />}
+                  title={t('trips.participantDetails')}
+                  aria-label={t('trips.participantDetails')}
+                  aria-expanded={opened.includes(field.key)}
+                  onClick={() => toggle(field.key)}
+                />
+                <Button
+                  icon={<DeleteOutlined />}
+                  title={t('trips.removeParticipant')}
+                  aria-label={t('trips.removeParticipant')}
+                  onClick={() => remove(field.name)}
+                />
+              </Flex>
+              {opened.includes(field.key) && (
+                <Flex vertical gap={8} style={{ paddingInlineStart: 8 }} data-testid="roster-row-details">
+                  {roles && (
+                    <Form.Item name={[field.name, 'roleId']} noStyle>
+                      <Select
+                        allowClear
+                        size="small"
+                        placeholder={t('trips.participantRole')}
+                        options={roles.map((role) => ({
+                          value: role.id,
+                          label: participantRoleLabel(role, t),
+                        }))}
+                      />
+                    </Form.Item>
+                  )}
+                  <Flex gap={8}>
+                    {/* The store keeps a wall-clock string, the picker wants an instant: the
+                        conversion lives here so the roster's rows read the same whether they
+                        were loaded from the trip or typed on this screen. */}
+                    <Form.Item
+                      name={[field.name, 'entryTime']}
+                      noStyle
+                      getValueProps={(value: string | null) => ({ value: parseTime(value) })}
+                      normalize={(value: Dayjs | null) => (value ? value.format('HH:mm:ss') : null)}
+                    >
+                      <TimePicker
+                        style={{ flex: 1 }}
+                        size="small"
+                        format="HH:mm"
+                        minuteStep={5}
+                        placeholder={t('trips.entryTime')}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      name={[field.name, 'exitTime']}
+                      noStyle
+                      getValueProps={(value: string | null) => ({ value: parseTime(value) })}
+                      normalize={(value: Dayjs | null) => (value ? value.format('HH:mm:ss') : null)}
+                    >
+                      <TimePicker
+                        style={{ flex: 1 }}
+                        size="small"
+                        format="HH:mm"
+                        minuteStep={5}
+                        placeholder={t('trips.exitTime')}
+                      />
+                    </Form.Item>
+                  </Flex>
+                  <Form.Item name={[field.name, 'note']} noStyle>
+                    <Input size="small" placeholder={t('trips.participantNote')} maxLength={500} />
+                  </Form.Item>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {t('trips.participantTimesHint')}
+                  </Typography.Text>
+                </Flex>
+              )}
             </Flex>
           ))}
           <Button icon={<PlusOutlined />} onClick={() => add({ name: '' })} block>
@@ -108,6 +249,11 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
   const [shown, setShown] = useState(false);
   const { data: cavingGroups } = useCavingGroups();
   const { data: tripTypes } = useTripTypes();
+  const { data: participantRoles } = useTripParticipantRoles();
+  // Proposing is a column of its own here, and the server reads a proposer row out of that
+  // column. Offering the role again beside a name in the attendees column would let a row
+  // contradict the heading above it and then move to the other column on the next read.
+  const attendeeRoles = (participantRoles ?? []).filter((role) => role.code !== 'proposer');
 
   useEffect(() => {
     if (open) {
@@ -125,8 +271,8 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           results: trip.results ?? undefined,
           weather: trip.weatherConditions ?? undefined,
           geom: trip.geom ?? null,
-          participants: trip.participants.map((p) => ({ caverId: p.caverId, name: p.name })),
-          proposers: trip.proposers.map((p) => ({ caverId: p.caverId, name: p.name })),
+          participants: trip.participants.map(toRosterRow),
+          proposers: trip.proposers.map(toRosterRow),
           visibility: trip.visibility,
         });
       } else {
@@ -146,6 +292,11 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
 
   const onOk = async () => {
     const values = await form.validateFields();
+    // Validation answers with the fields it validated, and a roster row carries more than the
+    // one field the form draws for it — the job, the times, the note. Read those from the form's
+    // own store, or every save would send back a row stripped of everything that was not on
+    // screen, and the write replaces the whole roster with what it is sent.
+    const stored = form.getFieldsValue(true) as FormValues;
     const [start, end] = values.dates;
     const tripDate = start.format('YYYY-MM-DD');
     const body: TripLogWrite = {
@@ -164,8 +315,8 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
       // Not a cleared list — no list at all. Which caves the trip is about is recorded on its
       // page, role by role, and this form must not be able to undo that by saving a title.
       caveIds: null,
-      participants: toParticipants(values.participants),
-      proposers: toParticipants(values.proposers),
+      participants: toParticipants(stored.participants),
+      proposers: toParticipants(stored.proposers),
       cavingGroupId: trip?.cavingGroupId ?? null,
       visibility: values.visibility,
       // Carried through untouched. This form does not offer the measured facts, and a write
@@ -270,14 +421,15 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
             list at all, which is what tells the server not to touch them. */}
         <Flex gap={12} align="start">
           <Form.Item label={t('trips.participants')} style={{ flex: 1 }}>
-            <NameListField
+            <RosterField
               name="participants"
               addLabel={t('trips.addParticipant')}
               placeholder={t('trips.participantName')}
+              roles={attendeeRoles}
             />
           </Form.Item>
           <Form.Item label={t('trips.proposers')} style={{ flex: 1 }}>
-            <NameListField
+            <RosterField
               name="proposers"
               addLabel={t('trips.addProposer')}
               placeholder={t('trips.proposerName')}

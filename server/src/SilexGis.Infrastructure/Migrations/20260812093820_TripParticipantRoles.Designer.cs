@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260812093820_TripParticipantRoles")]
+    partial class TripParticipantRoles
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4567,19 +4570,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<Guid>("CaverId")
                         .HasColumnType("uuid")
                         .HasColumnName("caver_id");
-
-                    b.Property<TimeOnly?>("EntryTime")
-                        .HasColumnType("time without time zone")
-                        .HasColumnName("entry_time");
-
-                    b.Property<TimeOnly?>("ExitTime")
-                        .HasColumnType("time without time zone")
-                        .HasColumnName("exit_time");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("note");
 
                     b.Property<long>("RoleId")
                         .HasColumnType("bigint")

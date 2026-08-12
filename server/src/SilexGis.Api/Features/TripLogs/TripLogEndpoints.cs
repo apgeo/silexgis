@@ -30,8 +30,9 @@ public static class TripLogEndpoints
             .WithSummary("Creates a trip log (Create permission on trip logs); the caller becomes owner.");
         trips.MapPut("/{id:guid}", UpdateAsync).WithValidation<TripLogWriteRequest>()
             .WithSummary(
-                "Full update (Write permission). Participants are replaced; the caves are replaced "
-                + "only when a list is supplied, and left as they are when the field is omitted.");
+                "Full update (Write permission). The whole roster is replaced, in every role, so a "
+                + "person left out of both lists is taken off the trip; the caves are replaced only "
+                + "when a list is supplied, and left as they are when the field is omitted.");
         trips.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes a trip log with its links and attachments.");
         trips.MapPost("/{id:guid}/publish", PublishAsync)
@@ -182,8 +183,7 @@ public static class TripLogEndpoints
             await ReconcileCaveLinksAsync(db, protection, ctx, trip.Id, caveIds, ct);
         }
 
-        var added = await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Participant, request.Participants, ct);
-        added.AddRange(await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Proposer, request.Proposers ?? [], ct));
+        var added = await ReconcileRosterAsync(db, trip.Id, request, ct);
         await NotifyParticipantsAsync(db, access, user, trip, added, ct);
         await db.SaveChangesAsync(ct);
 
@@ -248,8 +248,7 @@ public static class TripLogEndpoints
             await ReconcileCaveLinksAsync(db, protection, ctx, trip.Id, caveIds, ct);
         }
 
-        var added = await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Participant, request.Participants, ct);
-        added.AddRange(await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Proposer, request.Proposers ?? [], ct));
+        var added = await ReconcileRosterAsync(db, trip.Id, request, ct);
         await NotifyParticipantsAsync(db, access, user, trip, added, ct);
         await db.SaveChangesAsync(ct);
 
@@ -548,82 +547,161 @@ public static class TripLogEndpoints
         }
     }
 
-    // Reconciles one kind (attendees or proposers) independently; the same person may be both,
-    // as two rows of different kind. Diffs like the cave links so unchanged rows don't churn.
     /// <summary>
-    /// Brings a trip's participants of one kind in line with what was asked for, and reports the
-    /// registered users genuinely newly listed — the only point at which that is knowable, since
-    /// afterwards an added row is indistinguishable from one that was already there.
+    /// The two roles the trip write path names by itself: everyone a trip records was either
+    /// simply there or put it forward, and both are shipped rows precisely so this can rely on
+    /// them existing. Missing means the vocabulary was never seeded, and a write that stored
+    /// nobody while answering 200 is worse than one that fails.
     /// </summary>
-    private static async Task<List<Guid>> ReconcileParticipantsAsync(
-        SilexGisDbContext db, Guid tripId, TripParticipantKind kind, IReadOnlyList<TripParticipantWrite> requested, CancellationToken ct)
+    private static async Task<(long Participant, long Proposer)> ShippedRosterRolesAsync(
+        SilexGisDbContext db, CancellationToken ct)
     {
-        var existing = await db.TripLogParticipants.Where(x => x.TripLogId == tripId && x.Kind == kind).ToListAsync(ct);
+        var ids = await db.TripParticipantRoles.AsNoTracking()
+            .Where(r => r.Code == TripParticipantRoleSeeds.ParticipantCode
+                || r.Code == TripParticipantRoleSeeds.ProposerCode)
+            .ToDictionaryAsync(r => r.Code, r => r.Id, ct);
+
+        if (!ids.TryGetValue(TripParticipantRoleSeeds.ParticipantCode, out var participant)
+            || !ids.TryGetValue(TripParticipantRoleSeeds.ProposerCode, out var proposer))
+        {
+            throw new InvalidOperationException("The shipped participant roles are not seeded.");
+        }
+
+        return (participant, proposer);
+    }
+
+    /// <summary>
+    /// Brings a trip's whole roster in line with what was asked for, and reports the registered
+    /// users genuinely newly listed — the only point at which that is knowable, since afterwards
+    /// an added row is indistinguishable from one that was already there.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The roster is reconciled in one pass over every role, because the two lists together are
+    /// the whole of it: a row in a job neither list mentions has been withdrawn, and leaving it
+    /// standing would make a job impossible to take away once given. What that costs is stated on
+    /// the request itself — a surface showing people must send back the rows it did not show.
+    /// </para>
+    /// <para>
+    /// A row already there in the same job is kept and brought up to date rather than replaced,
+    /// so an unchanged roster writes nothing: the change tracker sees equal values and records no
+    /// history, which is what keeps re-saving a trip out of its timeline.
+    /// </para>
+    /// <para>
+    /// **Newly listed is asked of the trip, not of the job.** Somebody already named on the trip
+    /// who is now also its surveyor learns nothing from being told they are on a trip they are
+    /// already on, so the second row tells nobody. Only a person the trip did not name at all
+    /// before this write is new to it.
+    /// </para>
+    /// </remarks>
+    private static async Task<List<Guid>> ReconcileRosterAsync(
+        SilexGisDbContext db, Guid tripId, TripLogWriteRequest request, CancellationToken ct)
+    {
+        var roles = await ShippedRosterRolesAsync(db, ct);
+
+        // Each list says what its entries are for; an entry naming its own role overrides that,
+        // which is how a job beyond the two the lists are named after gets recorded at all.
+        var requested = new List<(long RoleId, TripParticipantWrite Write)>();
+        requested.AddRange(request.Participants.Select(p => (p.RoleId ?? roles.Participant, p)));
+        requested.AddRange((request.Proposers ?? []).Select(p => (p.RoleId ?? roles.Proposer, p)));
 
         // A name with no roster entry becomes one, so the person can be counted and found again
         // on later trips. Repeating a name already in the roster reuses it rather than making a
         // second entry for the same person.
         var named = requested
-            .Where(p => p.CaverId is null)
-            .Select(p => p.NewCaverName!.Trim())
+            .Where(p => p.Write.CaverId is null)
+            .Select(p => p.Write.NewCaverName!.Trim())
             .Where(name => name.Length > 0)
             .ToList();
 
-        var matched = named.Count == 0
+        // Two people can share a name — that is exactly the state the roster merge exists to
+        // resolve — so the lookup groups before it keys. Keying the query straight by name would
+        // fault on the duplicate and lose the whole trip write over a coincidence of spelling.
+        // The oldest entry wins, so the same typed name resolves to the same person every time
+        // rather than to whichever row the database happened to return first.
+        var matchedRows = named.Count == 0
             ? []
-            : await db.Cavers.Where(c => named.Contains(c.FullName)).ToDictionaryAsync(c => c.FullName, c => c.Id, ct);
+            : await db.Cavers.Where(c => named.Contains(c.FullName))
+                .OrderBy(c => c.CreatedAt).ThenBy(c => c.Id)
+                .ToListAsync(ct);
+        var matched = matchedRows
+            .GroupBy(c => c.FullName)
+            .ToDictionary(g => g.Key, g => g.First().Id);
 
-        var desired = new List<Guid>();
-        foreach (var write in requested)
+        // Keyed on the pair the roster is unique on, so one person in two jobs is two entries and
+        // the same person named twice for one job is one — the last of them, since a request that
+        // says a thing twice means it once.
+        var desired = new Dictionary<(long RoleId, Guid CaverId), TripParticipantWrite>();
+        foreach (var (roleId, write) in requested)
         {
-            if (write.CaverId is { } caverId)
+            var caverId = write.CaverId;
+            if (caverId is null)
             {
-                desired.Add(caverId);
-                continue;
+                var name = write.NewCaverName!.Trim();
+                if (!matched.TryGetValue(name, out var existingId))
+                {
+                    var created = new Caver { FullName = name };
+                    db.Cavers.Add(created);
+                    matched[name] = created.Id;
+                    existingId = created.Id;
+                }
+
+                caverId = existingId;
             }
 
-            var name = write.NewCaverName!.Trim();
-            if (!matched.TryGetValue(name, out var existingId))
-            {
-                var created = new Caver { FullName = name };
-                db.Cavers.Add(created);
-                matched[name] = created.Id;
-                existingId = created.Id;
-            }
-
-            desired.Add(existingId);
+            desired[(roleId, caverId.Value)] = write;
         }
 
-        desired = [.. desired.Distinct()];
+        var existing = await db.TripLogParticipants.Where(x => x.TripLogId == tripId).ToListAsync(ct);
 
-        // Keep one existing row per matching desired slot (by user id / guest name); remove the
-        // rest and add the desired entries that had no match — so unchanged participants neither
-        // churn nor generate spurious history events.
+        // Read before the loop below empties `desired`, and before any row is removed: this is
+        // the trip's roster as it stood when the request arrived, which is the only thing that
+        // can answer whether a person is new to the trip.
+        var alreadyNamed = existing.Select(x => x.CaverId).ToHashSet();
+
         foreach (var participant in existing)
         {
-            if (desired.Remove(participant.CaverId))
+            if (desired.Remove((participant.RoleId, participant.CaverId), out var write))
             {
+                participant.EntryTime = write.EntryTime;
+                participant.ExitTime = write.ExitTime;
+                participant.Note = Trimmed(write.Note);
                 continue;
             }
 
             db.TripLogParticipants.Remove(participant);
         }
 
-        foreach (var caverId in desired)
+        foreach (var (key, write) in desired)
         {
             db.TripLogParticipants.Add(new TripLogParticipant
             {
                 TripLogId = tripId,
-                Kind = kind,
-                CaverId = caverId,
+                RoleId = key.RoleId,
+                CaverId = key.CaverId,
+                EntryTime = write.EntryTime,
+                ExitTime = write.ExitTime,
+                Note = Trimmed(write.Note),
             });
         }
 
+        var newcomers = desired.Keys
+            .Select(key => key.CaverId)
+            .Where(caverId => !alreadyNamed.Contains(caverId))
+            .Distinct()
+            .ToList();
+
         // Only the newly listed people who hold an account: there is nobody to tell for the rest.
         return await db.Cavers
-            .Where(c => desired.Contains(c.Id) && c.UserId != null)
+            .Where(c => newcomers.Contains(c.Id) && c.UserId != null)
             .Select(c => c.UserId!.Value)
             .ToListAsync(ct);
+    }
+
+    private static string? Trimmed(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
     }
 
     /// <summary>
@@ -661,7 +739,8 @@ public static class TripLogEndpoints
             return;
         }
 
-        // The same person can be listed as both participant and proposer in one request.
+        // Load-bearing rather than defensive: one person holds as many roles on a trip as they
+        // did jobs, so one write can newly list the same person several times over.
         var candidates = addedUserIds.Distinct().Where(id => id != user.UserId).ToList();
         var recipients = new List<Guid>();
         foreach (var candidate in candidates)
@@ -739,7 +818,8 @@ public static class TripLogEndpoints
             }
         }
 
-        var caverIds = request.Participants.Concat(request.Proposers ?? [])
+        var roster = request.Participants.Concat(request.Proposers ?? []).ToList();
+        var caverIds = roster
             .Where(x => x.CaverId is not null).Select(x => x.CaverId!.Value).Distinct().ToList();
         if (caverIds.Count > 0)
         {
@@ -747,6 +827,21 @@ public static class TripLogEndpoints
             if (found.Count != caverIds.Count)
             {
                 return ApiProblems.BadRequest("trip_log.participant_unknown", "A participant user does not exist.");
+            }
+        }
+
+        // The role vocabulary is a row set an installation extends, so an unknown identity is a
+        // plain bad request for the same reason the purpose is — and the restricting foreign key
+        // would otherwise refuse it far below anything that could turn it into an answer.
+        var roleIds = roster.Where(x => x.RoleId is not null).Select(x => x.RoleId!.Value).Distinct().ToList();
+        if (roleIds.Count > 0)
+        {
+            var known = await db.TripParticipantRoles.AsNoTracking()
+                .CountAsync(r => roleIds.Contains(r.Id), ct);
+            if (known != roleIds.Count)
+            {
+                return ApiProblems.BadRequest(
+                    "trip_log.participant_role_unknown", "A participant role does not exist.");
             }
         }
 
@@ -774,11 +869,21 @@ public static class TripLogEndpoints
         // here. Distinct because two roles naming one cave are two rows and one cave.
         var caveLinks = await TripRoleLinks.PairsForAsync(db, tripIds, FeatureKind.Cave, ct);
 
+        var roles = await ShippedRosterRolesAsync(db, ct);
         var participantRows = await (
             from participant in db.TripLogParticipants.AsNoTracking()
             join caver in db.Cavers.AsNoTracking() on participant.CaverId equals caver.Id
             where tripIds.Contains(participant.TripLogId)
-            select new { participant.TripLogId, participant.Kind, participant.CaverId, caver.UserId })
+            select new
+            {
+                participant.TripLogId,
+                participant.RoleId,
+                participant.CaverId,
+                caver.UserId,
+                participant.EntryTime,
+                participant.ExitTime,
+                participant.Note,
+            })
             .ToListAsync(ct);
 
         // Resolved rather than joined: the label a participant may be shown under is a rule with
@@ -790,10 +895,15 @@ public static class TripLogEndpoints
             .Select(x => new
             {
                 x.TripLogId,
-                x.Kind,
-                x.CaverId,
-                x.UserId,
-                Name = labels.GetValueOrDefault(x.CaverId) ?? string.Empty,
+                x.RoleId,
+                Dto = new TripParticipantDto(
+                    x.CaverId,
+                    labels.GetValueOrDefault(x.CaverId) ?? string.Empty,
+                    x.UserId,
+                    x.RoleId,
+                    x.EntryTime,
+                    x.ExitTime,
+                    x.Note),
             })
             .ToList();
 
@@ -826,10 +936,11 @@ public static class TripLogEndpoints
                 trip.OrganizingCavingGroupId,
                 trip.Geom is null ? null : GeoJsonGeometry.From(trip.Geom),
                 [.. caveLinks.Where(x => x.TripId == trip.Id && !redacted.Contains(x.FeatureId)).Select(x => x.FeatureId)],
-                [.. participants.Where(x => x.TripLogId == trip.Id && x.Kind == TripParticipantKind.Participant)
-                    .Select(x => new TripParticipantDto(x.CaverId, x.Name, x.UserId))],
-                [.. participants.Where(x => x.TripLogId == trip.Id && x.Kind == TripParticipantKind.Proposer)
-                    .Select(x => new TripParticipantDto(x.CaverId, x.Name, x.UserId))],
+                // Everyone but the proposers, whatever job they did, so a role added to the
+                // vocabulary after this was written shows up as somebody who was there rather
+                // than as nobody at all. The two lists partition the roster between them.
+                [.. participants.Where(x => x.TripLogId == trip.Id && x.RoleId != roles.Proposer).Select(x => x.Dto)],
+                [.. participants.Where(x => x.TripLogId == trip.Id && x.RoleId == roles.Proposer).Select(x => x.Dto)],
                 trip.OwnerUserId,
                 trip.CavingGroupId,
                 trip.Visibility,

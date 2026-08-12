@@ -38,6 +38,7 @@ const PermissionGroupsPage = lazy(() => import('./pages/admin/permissionGroups/P
 const FeatureSetsPage = lazy(() => import('./pages/admin/FeatureSetsPage.tsx'));
 const DocumentTypesPage = lazy(() => import('./pages/admin/DocumentTypesPage.tsx'));
 const TripTypesPage = lazy(() => import('./pages/admin/TripTypesPage.tsx'));
+const TripParticipantRolesPage = lazy(() => import('./pages/admin/TripParticipantRolesPage.tsx'));
 const RelationTypesPage = lazy(() => import('./pages/admin/RelationTypesPage.tsx'));
 const CabinetsPage = lazy(() => import('./pages/documents/CabinetsPage.tsx'));
 const DocumentDetailPage = lazy(() => import('./pages/documents/DocumentDetailPage.tsx'));
@@ -115,6 +116,7 @@ const router = createBrowserRouter([
           { path: '/admin/feature-sets', element: <Loadable><FeatureSetsPage /></Loadable> },
           { path: '/admin/document-types', element: <Loadable><DocumentTypesPage /></Loadable> },
           { path: '/admin/trip-types', element: <Loadable><TripTypesPage /></Loadable> },
+          { path: '/admin/participant-roles', element: <Loadable><TripParticipantRolesPage /></Loadable> },
           { path: '/admin/relation-types', element: <Loadable><RelationTypesPage /></Loadable> },
           { path: '/cabinets', element: <Loadable><CabinetsPage /></Loadable> },
           { path: '/uploads', element: <Loadable><UploadsPage /></Loadable> },

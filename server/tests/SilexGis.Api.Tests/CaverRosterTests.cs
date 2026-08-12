@@ -230,6 +230,69 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable
             .Select(p => p.GetProperty("caverId").GetGuid()).ShouldContain(guestId);
     }
 
+    /// <summary>
+    /// A merge folds one person's rows onto another's, and a trip's roster is unique on the trip,
+    /// the role and the person together. So the fold has to be decided per role: the duplicate row
+    /// for a job the survivor already did on that trip goes, because keeping it would collide, and
+    /// the row for a job the survivor did not do is kept, because dropping it would quietly erase
+    /// that somebody led the trip.
+    /// </summary>
+    [Fact]
+    public async Task Merging_two_entries_for_one_person_keeps_every_job_and_collapses_only_the_repeats()
+    {
+        var tripId = await CreateTripWithGuestAsync(editor, $"Two Jobs {suffix}");
+        var duplicateId = await CreateCaverAsync($"Two Jobs {suffix} (2)");
+
+        Guid survivorId;
+        long leaderRoleId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            survivorId = await db.Cavers.Where(c => c.FullName == $"Two Jobs {suffix}")
+                .Select(c => c.Id).SingleAsync();
+            var participantRoleId = await db.TripParticipantRoles
+                .Where(r => r.Code == "participant").Select(r => r.Id).SingleAsync();
+            leaderRoleId = await db.TripParticipantRoles
+                .Where(r => r.Code == "leader").Select(r => r.Id).SingleAsync();
+
+            // The duplicate entry is on the same trip twice: once for the job the survivor is
+            // already recorded doing, once for a job nobody else on the trip holds.
+            db.TripLogParticipants.Add(new TripLogParticipant
+            {
+                TripLogId = tripId,
+                RoleId = participantRoleId,
+                CaverId = duplicateId,
+            });
+            db.TripLogParticipants.Add(new TripLogParticipant
+            {
+                TripLogId = tripId,
+                RoleId = leaderRoleId,
+                CaverId = duplicateId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var merged = await keeper.PostAsJsonAsync($"/api/v1/cavers/{survivorId}/merge", new
+        {
+            sourceCaverId = duplicateId,
+        });
+        merged.StatusCode.ShouldBe(HttpStatusCode.OK, await merged.Content.ReadAsStringAsync());
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var rows = await db.TripLogParticipants.AsNoTracking()
+                .Where(p => p.TripLogId == tripId)
+                .ToListAsync();
+
+            rows.ShouldAllBe(p => p.CaverId == survivorId);
+            // Two rows, not three and not one: the repeated attendance collapsed, the leading
+            // survived, and one person doing two jobs on one trip is two rows by design.
+            rows.Count.ShouldBe(2);
+            rows.Count(p => p.RoleId == leaderRoleId).ShouldBe(1);
+        }
+    }
+
     [Fact]
     public async Task Two_accounts_are_two_people_and_refuse_to_merge()
     {

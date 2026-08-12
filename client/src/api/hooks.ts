@@ -1357,6 +1357,63 @@ export function useDocumentTypes() {
 }
 
 /**
+ * The jobs a person may be recorded as having done on a trip: the rows that ship, which this
+ * client has its own wording for, plus whatever an installation added, shown as it was written.
+ */
+export function useTripParticipantRoles() {
+  return useQuery({
+    queryKey: queryKeys.taxonomy('trip-participant-roles'),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-participant-roles')),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** A participant role as an administrator authors it. */
+export interface TripParticipantRoleWrite {
+  code: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+}
+
+function useInvalidateTripParticipantRoles() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.taxonomy('trip-participant-roles') });
+    // Every roster row renders its job from this list, so a renamed or removed row leaves the
+    // trips already in cache showing wording that no longer exists.
+    void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+  };
+}
+
+export function useCreateTripParticipantRole() {
+  const invalidate = useInvalidateTripParticipantRoles();
+  return useMutation({
+    mutationFn: (body: TripParticipantRoleWrite) =>
+      unwrap(api.POST('/api/v1/trip-participant-roles', { body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateTripParticipantRole() {
+  const invalidate = useInvalidateTripParticipantRoles();
+  return useMutation({
+    mutationFn: ({ id, ...body }: TripParticipantRoleWrite & { id: number }) =>
+      unwrap(api.PUT('/api/v1/trip-participant-roles/{id}', { params: { path: { id } }, body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteTripParticipantRole() {
+  const invalidate = useInvalidateTripParticipantRoles();
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrapVoid(api.DELETE('/api/v1/trip-participant-roles/{id}', { params: { path: { id } } })),
+    onSuccess: invalidate,
+  });
+}
+
+/**
  * The purposes a trip may be recorded under: the rows that ship, which this client has its own
  * wording for, plus whatever an installation added, which is shown as it was written.
  */
@@ -1884,6 +1941,7 @@ export type TripLogInfo = components['schemas']['TripLogDto'];
 export type TripLogWrite = components['schemas']['TripLogWriteRequest'];
 export type TripType = components['schemas']['TripTypeDto'];
 export type TripParticipant = components['schemas']['TripParticipantDto'];
+export type TripParticipantRole = components['schemas']['TripParticipantRoleDto'];
 export type TripParticipantWrite = components['schemas']['TripParticipantWrite'];
 export type ActivityState = components['schemas']['ActivityState'];
 export type TagInfo = components['schemas']['TagDto'];

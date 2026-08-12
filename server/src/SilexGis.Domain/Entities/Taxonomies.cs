@@ -31,6 +31,18 @@ public class EntranceType : TaxonomyBase;
 public class RockType : TaxonomyBase;
 
 /// <summary>
+/// What somebody did on a trip: was simply there, put it forward, led it, drove, surveyed,
+/// photographed, was being taught or was teaching, or stayed above ground as the person to call.
+/// A row rather than a value fixed at build time, because a club that runs a kind of job nobody
+/// thought of should not need a release to record it.
+/// <para>
+/// A person holds as many of these on one trip as they did jobs — one row each — so being the
+/// leader and the surveyor is two rows rather than a choice between them.
+/// </para>
+/// </summary>
+public class TripParticipantRole : TaxonomyBase;
+
+/// <summary>
 /// Data-level document-kind registry: a survey report, a permit, a trip report. Each kind
 /// may carry a JSON Schema describing the metadata documents of that kind hold, using the
 /// same versioned-schema-over-jsonb mechanism the feature-kind registry uses — one

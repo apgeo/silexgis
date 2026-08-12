@@ -6,6 +6,7 @@ using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.ResLinks;
+using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Metadata;
@@ -28,6 +29,13 @@ public static class DemoSeeder
     /// </summary>
     private static readonly string[] TripRoles =
         ["trip-objective", "trip-surveyed", "trip-visited", "trip-visited", "trip-work-area"];
+
+    /// <summary>
+    /// The jobs the demo hands out beyond simply being there and proposing it, read round and
+    /// round like the link roles above so the list and the trips need not be the same length.
+    /// </summary>
+    private static readonly string[] ExtraParticipantRoles =
+        ["leader", "driver", "surveyor", "photographer", "trainee", "instructor", "callout_contact"];
 
     /// <param name="documents">
     /// Present when the caller can also store bytes. Without it the dataset is caves and
@@ -503,6 +511,11 @@ public static class DemoSeeder
         // them under and looks the identity up; a code missing here means the taxonomy seed did
         // not run, and a demo trip with no purpose would hide that.
         var tripTypeIds = await db.TripTypes.ToDictionaryAsync(t => t.Code, t => t.Id, ct);
+        var roleIds = await db.TripParticipantRoles.ToDictionaryAsync(r => r.Code, r => r.Id, ct);
+
+        long RoleId(string code) => roleIds.TryGetValue(code, out var id)
+            ? id
+            : throw new InvalidOperationException($"Participant role '{code}' is not seeded.");
 
         var trips = new[]
         {
@@ -564,18 +577,44 @@ public static class DemoSeeder
             db.TripLogs.Add(trip);
 
             // The person who proposed it and one who was there — enough that the roster is a
-            // roster and not a single name.
+            // roster and not a single name — plus the jobs those two did besides turning up.
+            // Two rows for one person on one trip is exactly what the roster's uniqueness
+            // allows, and a demo where nobody holds two of them would show a narrowing back to
+            // one job per person as no change at all. The extra jobs rotate two per trip so
+            // every shipped role turns up somewhere in the demo data rather than only the two
+            // the form has always offered.
+            var proposer = caverIds[index % caverIds.Count];
+            var attendee = caverIds[(index + 1) % caverIds.Count];
             db.TripLogParticipants.Add(new TripLogParticipant
             {
                 TripLogId = trip.Id,
-                CaverId = caverIds[index % caverIds.Count],
-                Kind = TripParticipantKind.Proposer,
+                CaverId = proposer,
+                RoleId = RoleId(TripParticipantRoleSeeds.ProposerCode),
             });
             db.TripLogParticipants.Add(new TripLogParticipant
             {
                 TripLogId = trip.Id,
-                CaverId = caverIds[(index + 1) % caverIds.Count],
-                Kind = TripParticipantKind.Participant,
+                CaverId = attendee,
+                RoleId = RoleId(TripParticipantRoleSeeds.ParticipantCode),
+            });
+            db.TripLogParticipants.Add(new TripLogParticipant
+            {
+                TripLogId = trip.Id,
+                CaverId = attendee,
+                RoleId = RoleId(ExtraParticipantRoles[(index * 2) % ExtraParticipantRoles.Length]),
+            });
+            // One person who was not underground for the same span as the trip, with the reason
+            // said in words. Most rows leave the times empty, which is the ordinary case and
+            // means the trip's own times stand for them; a demo where every row carried times
+            // would make a surface that ignores the empty case look correct.
+            db.TripLogParticipants.Add(new TripLogParticipant
+            {
+                TripLogId = trip.Id,
+                CaverId = caverIds[(index + 2) % caverIds.Count],
+                RoleId = RoleId(ExtraParticipantRoles[((index * 2) + 1) % ExtraParticipantRoles.Length]),
+                EntryTime = new TimeOnly(9, 30),
+                ExitTime = new TimeOnly(13, 15),
+                Note = "Turned back at the pitch head and waited at the entrance series.",
             });
 
             // Where the trip went, and what it did there. Several roles rather than one, so a

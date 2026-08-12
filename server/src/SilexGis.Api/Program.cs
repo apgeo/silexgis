@@ -250,6 +250,7 @@ try
     api.MapGeoreferencedMapEndpoints();
     api.MapTripLogEndpoints();
     api.MapTripTypeEndpoints();
+    api.MapTripParticipantRoleEndpoints();
     api.MapTagEndpoints();
     api.MapAuditEndpoints();
     api.MapAccessHistoryEndpoints();

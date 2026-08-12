@@ -25,6 +25,7 @@
     "documentTypes": "Tipuri de documente",
     "relationTypes": "Relații între elemente",
     "tripTypes": "Scopuri de tură",
+    "participantRoles": "Roluri în tură",
     "termRules": "Reguli de detectare"
   },
   "dashboard": {
@@ -728,6 +729,17 @@
       "science": "Știință",
       "other": "Altele"
     },
+    "participantRoleValues": {
+      "participant": "Participant",
+      "proposer": "Propunător",
+      "leader": "Responsabil de tură",
+      "driver": "Șofer",
+      "surveyor": "Topograf",
+      "photographer": "Fotograf",
+      "trainee": "Cursant",
+      "instructor": "Instructor",
+      "callout_contact": "Persoană de contact"
+    },
     "date": "Data",
     "dates": "Perioada",
     "entryTime": "Ora de intrare",
@@ -739,6 +751,11 @@
     "participants": "Participanți",
     "participantName": "Nume participant",
     "participantRequired": "Introduceți un nume",
+    "participantRole": "Rol",
+    "participantNote": "Notă",
+    "participantDetails": "Rol, ore și notă",
+    "removeParticipant": "Elimină din această tură",
+    "participantTimesHint": "Lăsate goale, se aplică orele turei.",
     "addParticipant": "Adaugă participant",
     "proposers": "Propus de",
     "proposerName": "Nume propunător",
@@ -1593,6 +1610,27 @@
         "boolean": "da/nu",
         "enum": "alegere"
       }
+    },
+    "participantRoles": {
+      "title": "Roluri în tură",
+      "intro": "Ce a făcut cineva într-o tură. Rolurile care vin odată cu produsul sunt afișate în limba dumneavoastră și își păstrează codurile — alte instalări citesc turele după ele — însă formularea și ordinea lor vă aparțin. Adăugați aici un rol pentru o sarcină pe care clubul dumneavoastră o are și la care nu s-a gândit nimeni.",
+      "add": "Adaugă un rol",
+      "edit": "Editare rol în tură",
+      "editAction": "Editare",
+      "delete": "Șterge",
+      "deleteConfirm": "Ștergeți acest rol? Persoanele deja înregistrate cu el îl păstrează, așa că poate fi șters abia când nu mai există niciuna.",
+      "name": "Denumire",
+      "nameHint": "Cum se citește această sarcină pe lista participanților.",
+      "code": "Cod",
+      "codeHint": "Litere mici, cifre și liniuțe de subliniere. Instalările schimbă ture după acest cod, așa că păstrați-l neschimbat.",
+      "description": "Descriere",
+      "sortOrder": "Ordine",
+      "source": "De unde provine",
+      "seeded": "Vine cu produsul",
+      "custom": "Adăugat aici",
+      "codeTaken": "Un alt rol folosește deja acest cod.",
+      "seededImmutable": "Un rol care vine cu produsul își păstrează codul și nu poate fi șters.",
+      "inUse": "Există persoane înregistrate cu acest rol; mutați-le mai întâi."
     },
     "relationTypes": {
       "title": "Relații între elemente",

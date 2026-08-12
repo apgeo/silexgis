@@ -93,9 +93,15 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
 
         // What a trip cannot be asked is the load-bearing part: which caves it visited, and who was
         // on it. Either would answer a question about a row the caller may not read — the count
-        // moves, nothing appears, and they have their answer.
+        // moves, nothing appears, and they have their answer. What somebody did on a trip is
+        // refused for the same reason and harder: "trips where this person led" assembles a claim
+        // about that person's competence out of rows the asker may never open.
         var trips = body.Worlds.Single(w => w.World == "tripLog");
-        foreach (var forbidden in new[] { "cave", "caveId", "participant", "participantId", "caver" })
+        foreach (var forbidden in new[]
+        {
+            "cave", "caveId", "participant", "participantId", "caver",
+            "role", "participantRole", "participantRoleId",
+        })
         {
             trips.Fields.Select(f => f.Key).ShouldNotContain(forbidden);
         }

@@ -61,14 +61,24 @@ public sealed class TripLogParticipantConfiguration : IEntityTypeConfiguration<T
     public void Configure(EntityTypeBuilder<TripLogParticipant> builder)
     {
         builder.ToTable("trip_log_participants");
-        builder.Property(x => x.Kind).HasConversion<short>();
+        // A sentence about one person's part in the trip, not a second report: bounded here so an
+        // over-long note is a plain refusal rather than a database error several layers down.
+        builder.Property(x => x.Note).HasMaxLength(500);
         builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
         // Restrict, not cascade: removing someone from the roster must not quietly rewrite the
         // history of the trips they were on. Merging their duplicate entry is the way out.
         builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Restrict);
+        // Restricted for the same reason a trip's purpose is: a role still in use is a role the
+        // vocabulary surface refuses to delete, and letting the database quietly unset it would
+        // turn everybody who held it into somebody whose job on the trip was never recorded.
+        builder.HasOne<TripParticipantRole>().WithMany().HasForeignKey(x => x.RoleId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => x.TripLogId);
         builder.HasIndex(x => x.CaverId);
-        builder.HasIndex(x => new { x.TripLogId, x.Kind, x.CaverId }).IsUnique();
+        builder.HasIndex(x => x.RoleId);
+        // One person, one job, one row — so being the leader and the surveyor is two rows and
+        // neither displaces the other.
+        builder.HasIndex(x => new { x.TripLogId, x.RoleId, x.CaverId }).IsUnique();
     }
 }
 

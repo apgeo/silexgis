@@ -155,23 +155,23 @@ public enum TripSection : short
     Safety = 2,
 }
 
-/// <summary>Whether a person attended the trip or proposed it. Stored as smallint.</summary>
-public enum TripParticipantKind : short
-{
-    Participant = 0,
-    Proposer = 1,
-}
-
 /// <summary>
-/// A person tied to a trip, named through the roster. The same identity model serves both
-/// attendees and proposers, distinguished by <see cref="Kind"/>; one person may appear once
-/// as each.
+/// A person tied to a trip, named through the roster, doing one job on it. The same identity
+/// model serves everybody the trip names — whoever was simply there, whoever put it forward,
+/// whoever led or surveyed or drove — told apart by <see cref="RoleId"/>.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Pointing at a caver rather than carrying an account id beside a free-text name is what makes
 /// per-person history work for the majority who never sign in: "which caves has this person been
 /// to" is one join whether or not they have an account. A caver named on a trip cannot be
 /// deleted — the roster offers merging two entries for the same person instead.
+/// </para>
+/// <para>
+/// One person on one trip is one row per job, not one row: somebody can be the leader and the
+/// surveyor, and asking them to pick would lose one of the two facts. What a row is unique on is
+/// therefore the trip, the role and the person together.
+/// </para>
 /// </remarks>
 public class TripLogParticipant : IAuditable, IAuditChild
 {
@@ -179,9 +179,29 @@ public class TripLogParticipant : IAuditable, IAuditChild
 
     public Guid TripLogId { get; set; }
 
-    public TripParticipantKind Kind { get; set; } = TripParticipantKind.Participant;
+    /// <summary>What they did on the trip, from the club-extensible role vocabulary.</summary>
+    public long RoleId { get; set; }
 
     public Guid CaverId { get; set; }
+
+    /// <summary>
+    /// When this person went underground and came back out, wall-clock and without a zone, the
+    /// same reading the trip's own times carry — so the two can never disagree about what a time
+    /// means. Null is not "unknown": it means the trip's own time stands for them, which is the
+    /// true answer for almost everybody and is why recording an ordinary roster stays a list of
+    /// names. The day a time belongs to comes from the trip's date range, never from the time.
+    /// </summary>
+    public TimeOnly? EntryTime { get; set; }
+
+    /// <inheritdoc cref="EntryTime"/>
+    public TimeOnly? ExitTime { get; set; }
+
+    /// <summary>
+    /// What was particular about this person's part in the trip — "turned back at the pitch
+    /// head", "surfaced early with the second group". Free text on purpose: it is what stops a
+    /// one-off circumstance being invented as a role and left in the vocabulary forever.
+    /// </summary>
+    public string? Note { get; set; }
 
     public string AuditId => Id.ToString();
 

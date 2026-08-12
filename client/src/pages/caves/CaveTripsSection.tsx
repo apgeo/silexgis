@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useTripLogs, useTripTypes, type TripLogInfo } from '../../api/hooks.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
+import { countPeople } from '../../components/trips/roster.ts';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 
@@ -82,7 +83,7 @@ export default function CaveTripsSection({ caveId }: { caveId: string }) {
             key: 'participants',
             width: 120,
             align: 'right',
-            render: (_, trip) => trip.participants.length,
+            render: (_, trip) => countPeople(trip.participants),
           },
         ]}
       />

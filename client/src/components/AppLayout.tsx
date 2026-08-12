@@ -14,6 +14,7 @@ import {
   GoldOutlined,
   GroupOutlined,
   HistoryOutlined,
+  IdcardOutlined,
   LogoutOutlined,
   MailOutlined,
   PictureOutlined,
@@ -205,6 +206,11 @@ export default function AppLayout() {
               // record decides what every trip under it may say.
               ...(hasAccessAction(capabilities?.domains.taxonomies, 'write')
                 ? [{ key: 'admin/trip-types', icon: <CompassOutlined />, label: t('nav.tripTypes') }]
+                : []),
+              // And again for what somebody did on a trip: every roster row renders its job
+              // from this list, so the wording here is what every trip reads by.
+              ...(hasAccessAction(capabilities?.domains.taxonomies, 'write')
+                ? [{ key: 'admin/participant-roles', icon: <IdcardOutlined />, label: t('nav.participantRoles') }]
                 : []),
               ...(isFullAdmin
                 ? [{ key: 'admin/relation-types', icon: <ApartmentOutlined />, label: t('nav.relationTypes') }]

@@ -134,7 +134,15 @@ Previous versions:
   how many stations, how much rope — in metres, once, shown in your own language's numbers. It also
   records **whether anything went wrong**, which anyone who may read the trip can see and search for,
   while the account of *what* went wrong is shown only to the people who may correct the trip: a
-  near-miss names somebody's mistake, and it is not gossip for the whole club.
+  near-miss names somebody's mistake, and it is not gossip for the whole club. **Who was there also
+  says what they did**: the person who led it, drove, surveyed, took the photographs, was being
+  trained or sat by a phone as the callout contact — from a list your club owns and extends, with
+  attending and proposing there from the start and not removable. Somebody who did two jobs is
+  recorded doing both rather than made to choose. Each person can also carry their own hours, for
+  the one who came out early or stayed on, and a line of their own — *turned back at the pitch
+  head* — so nobody has to invent a job to record a circumstance. That detail is part of the trip
+  and goes no further than the trip does: you cannot search for the trips somebody led, because that
+  is a question about a person, assembled out of records the asker may never be allowed to read.
 - **Tags, saved & shareable map views**, and **multi-window** pop-out panels.
 - **Share links** — hand out a revocable link to one feature and what it contains, either
   public or sign-in-only. A share never reveals a protected location.

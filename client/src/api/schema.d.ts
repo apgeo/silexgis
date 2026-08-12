@@ -8621,7 +8621,7 @@ export interface paths {
                 };
             };
         };
-        /** Full update (Write permission). Participants are replaced; the caves are replaced only when a list is supplied, and left as they are when the field is omitted. */
+        /** Full update (Write permission). The whole roster is replaced, in every role, so a person left out of both lists is taken off the trip; the caves are replaced only when a list is supplied, and left as they are when the field is omitted. */
         put: {
             parameters: {
                 query?: never;
@@ -8848,6 +8848,128 @@ export interface paths {
         };
         post?: never;
         /** Deletes an unused club trip purpose; shipped rows cannot be deleted. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-participant-roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The participant roles: shipped rows (translated by code) and club rows (shown as written). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripParticipantRoleDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Adds a participant role. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripParticipantRoleRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripParticipantRoleDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-participant-roles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Updates a participant role; a shipped row keeps its code. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripParticipantRoleRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripParticipantRoleDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes an unused club participant role; shipped rows cannot be deleted. */
         delete: {
             parameters: {
                 query?: never;
@@ -14017,11 +14139,42 @@ export interface components {
             name: string;
             /** Format: uuid */
             userId: null | string;
+            /** Format: int64 */
+            roleId: number;
+            /** Format: time */
+            entryTime: null | string;
+            /** Format: time */
+            exitTime: null | string;
+            note: null | string;
+        };
+        TripParticipantRoleDto: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            isSeeded: boolean;
+        };
+        TripParticipantRoleRequest: {
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
         };
         TripParticipantWrite: {
             /** Format: uuid */
             caverId: null | string;
             newCaverName: null | string;
+            /** Format: int64 */
+            roleId: null | number;
+            /** Format: time */
+            entryTime: null | string;
+            /** Format: time */
+            exitTime: null | string;
+            note: null | string;
         };
         TripTypeDto: {
             /** Format: int64 */

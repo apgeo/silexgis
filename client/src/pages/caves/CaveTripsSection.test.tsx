@@ -20,7 +20,11 @@ vi.mock('../../api/hooks.ts', () => ({
 
 const { default: CaveTripsSection } = await import('./CaveTripsSection.tsx');
 
-function trip(id: string, title: string): TripLogInfo {
+function trip(
+  id: string,
+  title: string,
+  participants: TripLogInfo['participants'] = [],
+): TripLogInfo {
   return {
     id,
     title,
@@ -28,8 +32,12 @@ function trip(id: string, title: string): TripLogInfo {
     tripDateEnd: null,
     state: 'published',
     tripTypeId: 1,
-    participants: [],
+    participants,
   } as unknown as TripLogInfo;
+}
+
+function person(caverId: string, roleId: number): TripLogInfo['participants'][number] {
+  return { caverId, roleId, name: caverId } as unknown as TripLogInfo['participants'][number];
 }
 
 function show() {
@@ -68,5 +76,22 @@ describe('CaveTripsSection', () => {
 
     expect(screen.getByText('No trip logs name this cave.')).toBeTruthy();
     expect(screen.queryByText('Survey push')).toBeNull();
+  });
+
+  /**
+   * A roster row is a person and the job they did, so the leader who also surveyed is two rows.
+   * The column says how many people were underground, and two of them were.
+   */
+  it('counts a person holding two jobs once', () => {
+    page = {
+      items: [trip('a', 'Survey push', [person('ana', 1), person('ana', 3), person('bogdan', 1)])],
+      page: 1,
+      pageSize: 10,
+      totalItems: 1,
+    };
+    show();
+
+    expect(screen.getByText('2')).toBeTruthy();
+    expect(screen.queryByText('3')).toBeNull();
   });
 });

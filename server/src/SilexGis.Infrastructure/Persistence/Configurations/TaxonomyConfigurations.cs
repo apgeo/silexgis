@@ -33,6 +33,12 @@ public sealed class RockTypeConfiguration : IEntityTypeConfiguration<RockType>
     public void Configure(EntityTypeBuilder<RockType> builder) => builder.ConfigureTaxonomy("rock_types");
 }
 
+public sealed class TripParticipantRoleConfiguration : IEntityTypeConfiguration<TripParticipantRole>
+{
+    public void Configure(EntityTypeBuilder<TripParticipantRole> builder) =>
+        builder.ConfigureTaxonomy("trip_participant_roles");
+}
+
 public sealed class TripTypeConfiguration : IEntityTypeConfiguration<TripType>
 {
     public void Configure(EntityTypeBuilder<TripType> builder)

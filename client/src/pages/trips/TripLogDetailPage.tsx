@@ -12,9 +12,12 @@ import {
   useDeleteTripLog,
   useEffectiveAccess,
   useTripLog,
+  useTripParticipantRoles,
   useTripTypes,
   useUpdateTripLog,
+  type TripLogInfo,
   type TripLogWrite,
+  type TripParticipantRole,
 } from '../../api/hooks.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import HistoryPanel, { type HistoryRestore } from '../../components/history/HistoryPanel.tsx';
@@ -23,6 +26,7 @@ import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import { TRIP_ROLE_CODES } from '../../components/reslinks/relations.ts';
 import TagChips from '../../components/tags/TagChips.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
+import { participantRoleLabel } from '../../components/trips/participantRoles.ts';
 import { formatTripDates, formatUndergroundTime, isMultiDay } from '../../components/trips/tripDates.ts';
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 import TripFormModal from './TripFormModal.tsx';
@@ -36,6 +40,55 @@ function CaveLink({ caveId }: { caveId: string }) {
   return <Link to={`/caves/${caveId}`}>{cave?.name ?? caveId}</Link>;
 }
 
+/**
+ * One person on the roster: their name, and only what distinguishes them from everybody else on
+ * the trip. Having simply been there is what the roster already says, so that role is left
+ * unwritten; hours are written only when they were not the party's, and the note is written on
+ * the tag itself rather than spent as a line of its own.
+ *
+ * The note is written out, not hidden behind a hover. "Turned back at the pitch head" is the
+ * reason the hours read the way they do, and a reader who cannot edit the trip has no other way
+ * to reach it — on a touch screen, no way at all. A long one is clipped to keep the row of tags
+ * readable, and the full text is then a tap or a hover away.
+ */
+function PersonTag({
+  person,
+  roles,
+}: {
+  person: TripLogInfo['participants'][number];
+  roles: TripParticipantRole[] | undefined;
+}) {
+  const { t } = useTranslation();
+  const role = roles?.find((r) => r.id === person.roleId);
+  const named = role && role.code !== 'participant' && role.code !== 'proposer';
+  // Wall-clock strings, shown to the minute and never through a date: they carry no zone and
+  // must not be read as though they did.
+  const times =
+    person.entryTime || person.exitTime
+      ? `${person.entryTime?.slice(0, 5) ?? '—'} – ${person.exitTime?.slice(0, 5) ?? '—'}`
+      : null;
+  return (
+    <Tag>
+      {person.name}
+      {named && ` · ${participantRoleLabel(role, t)}`}
+      {times && ` · ${times}`}
+      {person.note && (
+        <>
+          {' · '}
+          <Typography.Text
+            type="secondary"
+            ellipsis={{ tooltip: person.note }}
+            style={{ maxWidth: 220, display: 'inline-block', verticalAlign: 'bottom' }}
+            data-testid="roster-note"
+          >
+            {person.note}
+          </Typography.Text>
+        </>
+      )}
+    </Tag>
+  );
+}
+
 export default function TripLogDetailPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -44,6 +97,7 @@ export default function TripLogDetailPage() {
   const { data: trip, isPending } = useTripLog(id);
   const { data: cavingGroups } = useCavingGroups();
   const { data: tripTypes } = useTripTypes();
+  const { data: participantRoles } = useTripParticipantRoles();
   const organizingCavingGroup = cavingGroups?.find((g) => g.id === trip?.organizingCavingGroupId);
   const deleteTrip = useDeleteTripLog();
   const updateTrip = useUpdateTripLog();
@@ -162,7 +216,7 @@ export default function TripLogDetailPage() {
             <Descriptions.Item label={t('trips.participants')}>
               <Flex gap={4} wrap>
                 {trip.participants.map((p) => (
-                  <Tag key={p.caverId}>{p.name}</Tag>
+                  <PersonTag key={`${p.caverId}-${p.roleId}`} person={p} roles={participantRoles} />
                 ))}
               </Flex>
             </Descriptions.Item>
@@ -171,7 +225,7 @@ export default function TripLogDetailPage() {
             <Descriptions.Item label={t('trips.proposers')}>
               <Flex gap={4} wrap>
                 {trip.proposers.map((p) => (
-                  <Tag key={p.caverId}>{p.name}</Tag>
+                  <PersonTag key={`${p.caverId}-${p.roleId}`} person={p} roles={participantRoles} />
                 ))}
               </Flex>
             </Descriptions.Item>

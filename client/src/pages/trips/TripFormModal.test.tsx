@@ -12,6 +12,12 @@ const updateTrip = vi.fn();
 vi.mock('../../api/hooks.ts', () => ({
   useCavingGroups: () => ({ data: [] }),
   useTripTypes: () => ({ data: [{ id: 1, code: 'survey', name: 'Survey / mapping', isSeeded: true }] }),
+  useTripParticipantRoles: () => ({
+    data: [
+      { id: 1, code: 'participant', name: 'Participant', isSeeded: true, sortOrder: 10 },
+      { id: 3, code: 'leader', name: 'Leader', isSeeded: true, sortOrder: 30 },
+    ],
+  }),
   useSearch: () => ({ data: undefined }),
   useCreateTripLog: () => ({ mutateAsync: createTrip, isPending: false }),
   useUpdateTripLog: () => ({ mutateAsync: updateTrip, isPending: false }),
@@ -166,6 +172,108 @@ describe('TripFormModal dates', () => {
     expect(body.depthReachedM).toBeNull();
     expect(body.surveyStations).toBeNull();
     expect(body.hadIncident).toBe(false);
+  });
+
+  it('sends back the job, the times and the note it never showed', async () => {
+    // The form shows a name and nothing else, and a write replaces the whole roster. So a row it
+    // loaded has to go back carrying what it was carrying: dropping it would retype the trip's
+    // leader as an ordinary attendee and throw away the hours somebody recorded, as the price of
+    // correcting a title.
+    show(
+      trip({
+        participants: [
+          {
+            caverId: 'caver-1',
+            name: 'Ana Ionescu',
+            userId: null,
+            roleId: 3,
+            entryTime: '09:00:00',
+            exitTime: '13:15:00',
+            note: 'Turned back at the pitch head.',
+          },
+        ],
+      }),
+    );
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Digging weekend (4)' } });
+
+    const body = await savedBody(updateTrip);
+    expect(body.participants).toEqual([
+      {
+        caverId: 'caver-1',
+        newCaverName: null,
+        roleId: 3,
+        entryTime: '09:00:00',
+        exitTime: '13:15:00',
+        note: 'Turned back at the pitch head.',
+      },
+    ]);
+  });
+
+  it('names no job for somebody typed in, so the server reads them as simply there', async () => {
+    show(null);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Quick look' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add participant/ }));
+    fireEvent.change(screen.getByPlaceholderText('Participant name'), { target: { value: 'Guest Caver' } });
+
+    const body = await savedBody(createTrip);
+    expect(body.participants).toEqual([
+      { caverId: null, newCaverName: 'Guest Caver', roleId: null, entryTime: null, exitTime: null, note: null },
+    ]);
+  });
+
+  it('correcting a misspelled name means the corrected name, not the person it was typed over', async () => {
+    // The row loaded pointing at somebody. Sending that reference back beside the corrected
+    // text would store nothing at all: the server reads the reference and ignores the name, so
+    // the misspelling would survive every attempt to fix it, silently and without an error.
+    show(
+      trip({
+        participants: [
+          { caverId: 'caver-1', name: 'Ana Popscu', userId: null, roleId: 1, entryTime: null, exitTime: null, note: null },
+        ],
+      }),
+    );
+    fireEvent.change(screen.getByDisplayValue('Ana Popscu'), { target: { value: 'Ana Popescu' } });
+
+    const body = await savedBody(updateTrip);
+    expect(body.participants[0]).toMatchObject({ caverId: null, newCaverName: 'Ana Popescu' });
+  });
+
+  it('keeps the person a row was loaded for when its name is typed back as it was', async () => {
+    // The other half of the same rule, and the reason it is not "any keystroke detaches the
+    // row": a name shown for somebody who holds an account is their profile's, which need not
+    // be the name the roster holds — so detaching on a keystroke that changed nothing would
+    // quietly make a second person out of one.
+    show(
+      trip({
+        participants: [
+          { caverId: 'caver-1', name: 'Ana Popescu', userId: null, roleId: 1, entryTime: null, exitTime: null, note: null },
+        ],
+      }),
+    );
+    const field = screen.getByDisplayValue('Ana Popescu');
+    fireEvent.change(field, { target: { value: 'Ana Pope' } });
+    fireEvent.change(field, { target: { value: 'Ana Popescu' } });
+
+    const body = await savedBody(updateTrip);
+    expect(body.participants[0]).toMatchObject({ caverId: 'caver-1', newCaverName: null });
+  });
+
+  it('records the job a person did and the hours they were down without asking for either', async () => {
+    show(null);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Pitch rigging' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add participant/ }));
+    fireEvent.change(screen.getByPlaceholderText('Participant name'), { target: { value: 'Guest Caver' } });
+    // The row is a name until somebody asks it for more — which is the whole point of the
+    // control, so the test opens the extra fields the same way a person has to.
+    fireEvent.click(screen.getByRole('button', { name: /Role, times and note/ }));
+    fireEvent.change(screen.getByPlaceholderText('Note'), { target: { value: 'Turned back at the pitch head.' } });
+
+    const body = await savedBody(createTrip);
+    expect(body.participants[0]).toMatchObject({
+      caverId: null,
+      newCaverName: 'Guest Caver',
+      note: 'Turned back at the pitch head.',
+    });
   });
 
   it('leaves a one-day trip without an end date rather than a range of itself', async () => {

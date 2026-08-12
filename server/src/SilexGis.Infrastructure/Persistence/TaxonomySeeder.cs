@@ -40,6 +40,7 @@ public static class TaxonomySeeder
             ("other", "Other"));
 
         await SeedTripTypesAsync(db, ct);
+        await SeedTripParticipantRolesAsync(db, ct);
         await SeedLinkKindsAsync(db, ct);
         await SeedResLinkRelationTypesAsync(db, ct);
         await SeedFeatureTypesAsync(db, ct);
@@ -180,6 +181,30 @@ public static class TaxonomySeeder
             if (!existing.Contains(code))
             {
                 db.LinkKinds.Add(new LinkKind { Code = code, Name = name, Locating = locating, SortOrder = sort });
+            }
+        }
+    }
+
+    // What somebody did on a trip. The rows come from the shared seed list so the admin surface
+    // refusing to re-code or delete a shipped row and this insert can never disagree about which
+    // codes those are — and two of them are load-bearing rather than decorative: a roster with no
+    // "participant" row could not record attendance at all, and "proposer" is what the right to
+    // edit a proposed trip is about to be decided by.
+    private static async Task SeedTripParticipantRolesAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var existing = await db.TripParticipantRoles.Select(x => x.Code).ToHashSetAsync(ct);
+        var sort = 0;
+        foreach (var seed in Domain.Trips.TripParticipantRoleSeeds.All)
+        {
+            sort += 10;
+            if (!existing.Contains(seed.Code))
+            {
+                db.TripParticipantRoles.Add(new TripParticipantRole
+                {
+                    Code = seed.Code,
+                    Name = seed.Name,
+                    SortOrder = sort,
+                });
             }
         }
     }

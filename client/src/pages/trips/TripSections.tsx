@@ -67,6 +67,15 @@ const measuredOf = (trip: TripLogInfo): Measured => ({
   hadIncident: trip.hadIncident,
 });
 
+const echoPerson = (person: TripLogInfo['participants'][number]) => ({
+  caverId: person.caverId,
+  newCaverName: null,
+  roleId: person.roleId,
+  entryTime: person.entryTime,
+  exitTime: person.exitTime,
+  note: person.note,
+});
+
 type Bag = Record<string, unknown>;
 
 const asBag = (value: unknown): Bag =>
@@ -159,8 +168,11 @@ export default function TripSections({ trip, canEdit }: { trip: TripLogInfo; can
       // No list at all, not a cleared one: which caves this trip is about is recorded through
       // its roles, and saving a section must not be able to undo that.
       caveIds: null,
-      participants: trip.participants.map((p) => ({ caverId: p.caverId, newCaverName: null })),
-      proposers: trip.proposers.map((p) => ({ caverId: p.caverId, newCaverName: null })),
+      // The roster back exactly as it stands, jobs and times and notes included: a write replaces
+      // every row the trip has, so echoing only the people would strip what was recorded about
+      // them for the sake of saving one section.
+      participants: trip.participants.map(echoPerson),
+      proposers: trip.proposers.map(echoPerson),
       cavingGroupId: trip.cavingGroupId,
       visibility: trip.visibility,
       depthReachedM: measured.depthReachedM,

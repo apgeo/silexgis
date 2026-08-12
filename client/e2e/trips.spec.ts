@@ -318,14 +318,82 @@ test('what a trip measured and what it found are stored on it, not held by the p
   // purpose's schema, so what is asked for is the installation's decision.
   await openSection(page, 'Field data');
   await page.getByTestId('trip-section-field-instrument').fill('DistoX2');
+  // Waited for on the write itself rather than on the confirmation: the save a few lines above
+  // puts the same word on screen for a few seconds, so matching that text again can match the
+  // earlier save's and let the reload below cancel this one while it is still in flight.
+  const written = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && /\/api\/v1\/trip-logs\//.test(response.url()),
+  );
   await page.getByTestId('trip-section-save-fieldData').click();
-  await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
+  expect((await written).status()).toBe(200);
 
   // Both survive a reload, which is the whole claim: they are on the row, not in the page.
   await page.reload();
   await expect(page.getByTestId('trip-depth-reached')).toContainText('218', { timeout: 15_000 });
   await openSection(page, 'Field data');
   await expect(page.getByTestId('trip-section-field-instrument')).toHaveValue('DistoX2');
+
+  await page.getByRole('button', { name: /Delete/ }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
+});
+
+test('a trip records who was there, what one of them did, and when they came out', async ({
+  page,
+  consoleErrors,
+}) => {
+  const title = `E2E Roster Trip ${Date.now()}`;
+  allowDeletedTripRefetch(consoleErrors);
+  await login(page);
+
+  await page.goto('/trip-logs');
+  await page.getByRole('button', { name: /New trip log/ }).click();
+  await page.getByLabel('Title', { exact: true }).fill(title);
+
+  // Two people, and the ordinary one is a name and nothing else — the row asks for nothing
+  // more, which is the bar this control has to keep: most rows are exactly this.
+  await page.getByRole('button', { name: /Add participant/ }).click();
+  await page.getByPlaceholder('Participant name').first().fill('E2E Roster One');
+  await page.getByRole('button', { name: /Add participant/ }).click();
+  await page.getByPlaceholder('Participant name').nth(1).fill('E2E Roster Two');
+
+  // The second did a job and came out on her own schedule. Both are behind the row's own
+  // control rather than in front of everybody: opening it is what the flow has to do because
+  // it is what a person has to do.
+  await page.getByRole('button', { name: 'Role, times and note' }).nth(1).click();
+  // Scoped to the row that was opened: the form draws several selects and two times of its
+  // own, and the party's hours are a different question from this person's.
+  const details = page.getByTestId('roster-row-details');
+  await details.getByRole('combobox').click();
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option[title="Leader"]').click();
+  const exit = details.getByPlaceholder('Exit time');
+  await exit.fill('18:45');
+  await page.keyboard.press('Enter');
+  await expect(exit).toHaveValue('18:45');
+  // The time panel carries an OK of its own, which answers to the same name as the dialog's and
+  // sits above it. Moving on to the note is what dismisses it, and the flow waits for that.
+  await details.getByPlaceholder('Note').click();
+  await expect(page.locator('.ant-picker-dropdown:visible')).toHaveCount(0);
+  // Why the hours read the way they do. It is not a job, and it has to be readable by somebody
+  // who cannot open this form at all — which is what the assertion after the reload checks.
+  await details.getByPlaceholder('Note').fill('turned back at the pitch head');
+
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  const tripUrl = page.url();
+
+  // Loaded fresh, because the claim is about rows on the server and not about what the form
+  // was still holding. Having simply been there is what the roster already says, so the plain
+  // attendee is a bare name; the other carries the job and the hour that set her apart.
+  await page.goto(tripUrl);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  const roster = page.locator('.ant-tag');
+  await expect(roster.filter({ hasText: 'E2E Roster One' })).toHaveText('E2E Roster One');
+  await expect(roster.filter({ hasText: 'E2E Roster Two' })).toContainText('Leader');
+  await expect(roster.filter({ hasText: 'E2E Roster Two' })).toContainText('18:45');
+  // Read from the page itself, not from a hover: the note is the explanation of the hours, and
+  // a reader without the edit button must be able to see it.
+  await expect(page.getByTestId('roster-note')).toHaveText('turned back at the pitch head');
 
   await page.getByRole('button', { name: /Delete/ }).click();
   await page.getByRole('button', { name: 'OK' }).click();

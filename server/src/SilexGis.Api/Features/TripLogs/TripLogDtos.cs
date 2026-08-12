@@ -8,15 +8,50 @@ using SilexGis.Domain.ResLinks;
 
 namespace SilexGis.Api.Features.TripLogs;
 
-/// <summary>A person on a trip: their roster id, the name to show, and their account if any.</summary>
-public sealed record TripParticipantDto(Guid CaverId, string Name, Guid? UserId);
+/// <summary>
+/// A person on a trip: their roster id, the name to show, their account if any, and what they
+/// did there.
+/// </summary>
+/// <remarks>
+/// Appended to, never inserted into: this record is positional and now carries two nullable
+/// times side by side, which would swap silently if anything were put between them. The times
+/// and the note answer to the trip's own visibility and nothing narrower — they are told to
+/// whoever may read the trip, and they travel in nothing the trip itself would not travel in.
+/// </remarks>
+public sealed record TripParticipantDto(
+    Guid CaverId,
+    string Name,
+    Guid? UserId,
+    long RoleId,
+    TimeOnly? EntryTime,
+    TimeOnly? ExitTime,
+    string? Note);
 
 /// <summary>
 /// Someone to put on a trip: an existing roster entry, or a name to add one for. Naming a person
 /// who is not in the roster yet is how a trip records the people who never sign in — the author
 /// needs no roster-keeping rights for it, only the right to write the trip.
 /// </summary>
-public sealed record TripParticipantWrite(Guid? CaverId, string? NewCaverName);
+/// <remarks>
+/// <para>
+/// <c>RoleId</c> omitted means the role of the list the entry arrived in, which is what keeps an
+/// ordinary roster a list of names: most people were simply there. Naming a role puts the person
+/// on the trip in that job instead, and the same person named twice in two jobs is two rows,
+/// which is what the roster is unique on.
+/// </para>
+/// <para>
+/// The times mean "the trip's, unless stated" — they are not a record of what is unknown, and
+/// leaving them out is the normal case rather than an omission. Appended, never inserted, for
+/// the reason the reading above gives.
+/// </para>
+/// </remarks>
+public sealed record TripParticipantWrite(
+    Guid? CaverId,
+    string? NewCaverName,
+    long? RoleId,
+    TimeOnly? EntryTime,
+    TimeOnly? ExitTime,
+    string? Note);
 
 public sealed record TripLogDto(
     Guid Id,
@@ -40,6 +75,11 @@ public sealed record TripLogDto(
     // roles themselves, so this list has no counterpart on the write request — one place to
     // write it, one reading of it here.
     IReadOnlyList<Guid> CaveIds,
+    // The roster, split where the surfaces that read it split: everybody who was there in
+    // whatever job, and separately whoever put the trip forward. Between them they are every row
+    // — a job the vocabulary grew after this was written still arrives in the first list rather
+    // than vanishing — and each row says which role it holds, so nothing has to be guessed from
+    // which list it came in.
     IReadOnlyList<TripParticipantDto> Participants,
     IReadOnlyList<TripParticipantDto> Proposers,
     Guid OwnerUserId,
@@ -99,6 +139,10 @@ public sealed record TripLogWriteRequest(
     // what the roles say. Supplied, it is the plain list of caves the trip is about, reconciled
     // under the plainest role that carries that meaning.
     IReadOnlyList<Guid>? CaveIds,
+    // The roster, whole: the two lists together replace every row the trip has, in every role,
+    // so a job left out of them is a job withdrawn. That is what makes the lists a roster rather
+    // than an edit to part of one — and it is why a surface that shows people must send back the
+    // rows it did not show. Each list supplies the role its entries take when they name none.
     IReadOnlyList<TripParticipantWrite> Participants,
     IReadOnlyList<TripParticipantWrite>? Proposers,
     Guid? CavingGroupId,
@@ -198,5 +242,13 @@ public sealed class TripParticipantValidator : AbstractValidator<TripParticipant
         RuleFor(p => p.NewCaverName)
             .MaximumLength(200)
             .WithMessage("Names are limited to 200 characters.");
+        RuleFor(p => p.Note)
+            .MaximumLength(500)
+            .WithMessage("A note about one person's part in the trip is limited to 500 characters.");
+
+        // No rule that the exit follows the entry, deliberately, and for the reason the trip's
+        // own pair has none: a time carries no day, so coming out at 02:00 having gone in at
+        // 21:00 is an ordinary night trip rather than a mistake. Which day either time belongs to
+        // is read from the trip's date range by whoever works out how long somebody was under.
     }
 }

@@ -17,6 +17,7 @@ import {
   SEEDED_TRIP_SECTION_ENUM_VALUES,
   SEEDED_TRIP_SECTION_FIELD_CODES,
 } from '../components/trips/tripSectionFields.ts';
+import { SEEDED_PARTICIPANT_ROLE_CODES } from '../components/trips/participantRoles.ts';
 import { SEEDED_TRIP_TYPE_CODES } from '../components/trips/tripTypes.ts';
 import en from './locales/en.json';
 import ro from './locales/ro.json';
@@ -219,6 +220,17 @@ describe('i18n locales', () => {
     const expected = [...SEEDED_TRIP_TYPE_CODES].sort();
     for (const locale of [en, ro]) {
       expect(Object.keys(locale.trips.typeValues).sort()).toEqual(expected);
+    }
+  });
+
+  // What somebody did on a trip is the same kind of vocabulary: rows an installation may extend,
+  // with the shipped ones translated by code. A shipped code with no wording renders as a raw key
+  // beside a person's name, and wording left behind for a code the application no longer ships is
+  // an offer nothing can take up.
+  it('every shipped participant role has wording in both locales, and no wording outlives its code', () => {
+    const expected = [...SEEDED_PARTICIPANT_ROLE_CODES].sort();
+    for (const locale of [en, ro]) {
+      expect(Object.keys(locale.trips.participantRoleValues).sort()).toEqual(expected);
     }
   });
 

@@ -454,14 +454,19 @@ public static class CaverEndpoints
         var sourceTrips = await db.TripLogParticipants.Where(p => p.CaverId == source.Id).ToListAsync(ct);
         var targetSlots = await db.TripLogParticipants
             .Where(p => p.CaverId == target.Id)
-            .Select(p => new { p.TripLogId, p.Kind })
+            .Select(p => new { p.TripLogId, p.RoleId })
             .ToListAsync(ct);
 
         foreach (var row in sourceTrips)
         {
-            // The survivor may already be on that trip in that capacity; the duplicate row goes
-            // rather than colliding with the uniqueness of (trip, kind, person).
-            if (targetSlots.Any(s => s.TripLogId == row.TripLogId && s.Kind == row.Kind))
+            // The survivor may already be on that trip doing that job; the duplicate row goes
+            // rather than colliding with the uniqueness of (trip, role, person). Matched on the
+            // role and not just the trip, so somebody who surveyed under one entry and led under
+            // the other keeps both jobs instead of losing one to the merge. Where two rows do
+            // collide, the survivor's own times and note stand: the entry being merged away is
+            // the duplicate, and preferring what it says would let a stray entry overwrite what
+            // somebody deliberately recorded against the person who is being kept.
+            if (targetSlots.Any(s => s.TripLogId == row.TripLogId && s.RoleId == row.RoleId))
             {
                 db.TripLogParticipants.Remove(row);
             }

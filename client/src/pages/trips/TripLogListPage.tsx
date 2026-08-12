@@ -14,6 +14,7 @@ import {
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
+import { countPeople } from '../../components/trips/roster.ts';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 import TripFormModal from './TripFormModal.tsx';
@@ -109,7 +110,7 @@ export default function TripLogListPage() {
             key: 'participants',
             width: 120,
             align: 'right',
-            render: (_, trip) => trip.participants.length,
+            render: (_, trip) => countPeople(trip.participants),
           },
           {
             title: t('features.visibility'),
