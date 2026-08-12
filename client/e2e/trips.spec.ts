@@ -147,8 +147,24 @@ test('a trip records what it worked in, and the record survives a reload and can
   await expect(reloaded.getByText('Falia Demo')).toHaveCount(0, { timeout: 15_000 });
   await expect(reloaded.getByText('Work areas')).toBeVisible();
 
+  // Removing a membership invalidates every role field's query at once, so the page refetches a
+  // handful of them. A confirmation opened while those are landing is unmounted under the click,
+  // and the flow times out on a button that keeps detaching — so wait for the page to go quiet
+  // first, and answer inside the popover that asked.
+  await page.waitForLoadState('networkidle');
+
+  // Then check this is still the trip's own page before asking anything to delete itself.
+  // A chip names a feature and is a link to it, so a click that lands beside the close icon
+  // navigates; "Delete" then means the feature's delete, and the confirmation says something
+  // else while looking the same. That has already removed a shared demo feature twice, and it
+  // is silent — the run fails later, somewhere unrelated, and the data is simply gone.
+  await expect(page).toHaveURL(tripUrl);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
   await page.getByRole('button', { name: /Delete/ }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  const confirm = page.locator('.ant-popover:visible');
+  await expect(confirm.getByText('Delete this trip log?')).toBeVisible();
+  await confirm.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
 });
 

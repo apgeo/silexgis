@@ -52,13 +52,26 @@ export default function MemberChip({
     ? {
         closable: true,
         closeIcon: (
-          <Popconfirm
-            title={t('resLinks.removeMemberConfirm')}
-            okButtonProps={{ danger: true }}
-            onConfirm={onRemove}
+          // The refusal is here, on a wrapper the click passes through on its way out, rather
+          // than only on the tag's own close handler: the confirmation takes the click at the
+          // icon, so the tag never learns it was closed and never gets to refuse anything. Left
+          // to bubble, the click reaches the surrounding link and the reader is taken to the
+          // thing they were trying to unname — the membership goes, and the page they are then
+          // looking at is the target's, which is a bad place to be holding a delete button.
+          <span
+            onClick={(event: MouseEvent<HTMLElement>) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
           >
-            <CloseOutlined aria-label={t('resLinks.removeMember')} />
-          </Popconfirm>
+            <Popconfirm
+              title={t('resLinks.removeMemberConfirm')}
+              okButtonProps={{ danger: true }}
+              onConfirm={onRemove}
+            >
+              <CloseOutlined aria-label={t('resLinks.removeMember')} />
+            </Popconfirm>
+          </span>
         ),
         onClose: (event: MouseEvent<HTMLElement>) => {
           // The tag would remove itself and follow any surrounding navigation; the
