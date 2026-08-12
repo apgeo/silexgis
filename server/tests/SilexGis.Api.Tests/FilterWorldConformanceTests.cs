@@ -182,7 +182,26 @@ public sealed class FeatureWorldFixture : WorldFixture
     }
 }
 
-/// <summary>A trip nobody but its owner may see.</summary>
+/// <summary>
+/// A trip nobody but its owner may see.
+///
+/// No <c>SeedWithheldAsync</c>, deliberately, and the reason was re-checked when which caves a
+/// trip is about stopped being a column of its own and became links like any other.
+///
+/// A trip row is disclosed whole to whoever may read the trip: nothing about the row itself is
+/// held back beyond visibility, so there is no row this world's list would withhold and nothing
+/// to seed. What is held back is a trip's <em>children</em> — the caves it names are taken out
+/// of the reading for a caller who may not place them, and asking the trip list for the trips at
+/// a particular cave answers with an empty page rather than a partial one. Neither is a rule
+/// about which trips exist, and this world offers no way to ask either question: the vocabulary
+/// declares no field naming a cave, on purpose, because a caller who may read a trip but not the
+/// cave it went to could otherwise read the answer off a count of rows they never see.
+///
+/// So the world stays a plain visibility walk, and a trip stays not placeable — that is still
+/// waiting on a rule about who may be shown a trip's own geometry, which no part of this
+/// changes. If a cave field is ever admitted to the vocabulary, or a trip's geometry gains a
+/// protection rule, both of those decisions move and this override arrives with them.
+/// </summary>
 public sealed class TripLogWorldFixture : WorldFixture
 {
     public override string World => TripLogFilterWorld.Key;

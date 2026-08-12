@@ -229,7 +229,13 @@ public sealed class PhotoCommitService(
         hung.AddRange(Attach(candidate, item.FeatureId.Value, RoleFor(kind), ctx));
         hung.AddRange(AttachToTrip(candidate, options, ctx));
         item.AttachmentIds = ImportBatchAttachments.Write(hung);
-        LinkCreatedCaveToTrip(kind, item.FeatureId.Value, options);
+        // An entrance added to a cave already in the registry produces an entrance feature, and it
+        // is the cave that the trip is about: naming the entrance would be invisible to every
+        // reader that asks which caves a trip names, and to the cave's own list of trips.
+        var namedOnTrip = kind == ImportTargetKind.CaveEntrance
+            ? decision.AttachToFeatureId ?? item.FeatureId.Value
+            : item.FeatureId.Value;
+        await LinkCreatedCaveToTripAsync(kind, namedOnTrip, options, ctx, ct);
 
         foreach (var tagId in tagIds)
         {
@@ -299,14 +305,18 @@ public sealed class PhotoCommitService(
     }
 
     /// <summary>
-    /// Names a cave the drop created among the trip's caves. Only a cave: the trip's cave list
-    /// is a list of caves visited, and adding a spring to it would be a different claim.
+    /// Records on the trip the cave a drop produced — the cave itself, never one of its
+    /// entrances. The role says photographed rather than
+    /// visited or discovered, because a photograph is exactly what is known here: the drop
+    /// carries a picture of the place and nothing that says the trip was the first to reach it
+    /// or what it did once there. The claim the import can prove is the one it makes.
     /// </summary>
-    private void LinkCreatedCaveToTrip(ImportTargetKind kind, Guid featureId, PhotoImportOptions options)
+    private async Task LinkCreatedCaveToTripAsync(
+        ImportTargetKind kind, Guid featureId, PhotoImportOptions options, AccessContext ctx, CancellationToken ct)
     {
         if (options.TripLogId is { } tripId && kind is ImportTargetKind.Cave or ImportTargetKind.CaveEntrance)
         {
-            db.TripLogCaves.Add(new TripLogCave { TripLogId = tripId, CaveId = featureId });
+            await TripRoleLinks.NameFeatureAsync(db, tripId, featureId, "trip-photographed", ctx.UserId, ct);
         }
     }
 

@@ -48,6 +48,7 @@ import PermissionsModal from '../../components/permissions/PermissionsModal.tsx'
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
+import CaveTripsSection from './CaveTripsSection.tsx';
 import CenterlineSection from './CenterlineSection.tsx';
 import EntranceEditorModal from '../../components/caves/EntranceEditorModal.tsx';
 import SurveyModelSection from './SurveyModelSection.tsx';
@@ -322,6 +323,8 @@ export default function CaveDetailPage() {
       {id && <SurveyModelSection caveId={id} canEdit={canEdit} />}
 
       {id && <CenterlineSection caveId={id} canEdit={canEdit} />}
+
+      {id && <CaveTripsSection caveId={id} />}
 
       {id && (
         <AttachmentSection

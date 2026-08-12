@@ -121,7 +121,10 @@ Previous versions:
   areas worked in, the passages surveyed, dug, photographed or discovered, the leads left for next
   time — each as a labelled field you fill in as the trip earns it, rather than a form of empty
   boxes to stare at. A work area shows what contains it, so two passages of the same name are told
-  apart. What one person records, everybody who may maintain the thing it is about can correct.
+  apart. What one person records, everybody who may maintain the thing it is about can correct. Those
+  fields are also the *only* way a trip is tied to a place — there is no separate cave list to keep in
+  step — and a cave's own page returns the favour with a **Trips** section listing the trips that named
+  it, newest first, counted by the same rule that decides what the list may show.
 - **Tags, saved & shareable map views**, and **multi-window** pop-out panels.
 - **Share links** — hand out a revocable link to one feature and what it contains, either
   public or sign-in-only. A share never reveals a protected location.

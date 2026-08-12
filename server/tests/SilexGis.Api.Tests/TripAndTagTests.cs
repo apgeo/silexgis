@@ -413,14 +413,22 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var tripIdStr = tripId.ToString();
-        (await db.AuditEntries.CountAsync(a =>
-            a.EntityType == "TripLogCave" && a.RootEntityId == tripIdStr && a.Action == AuditActions.Created))
-            .ShouldBe(1);
+        var caveIdStr = caveId.ToString();
         (await db.AuditEntries.CountAsync(a =>
             a.EntityType == "TripLogParticipant" && a.RootEntityId == tripIdStr && a.Action == AuditActions.Created))
             .ShouldBe(1);
+
+        // Naming a cave is an association, and each end of one is recorded in its own timeline:
+        // the trip's membership on the trip, the cave's on the cave. Both must be written once
+        // and never rewritten, which is the same claim in two places rather than one twice.
         (await db.AuditEntries.CountAsync(a =>
-            a.EntityType == "TripLogCave" && a.RootEntityId == tripIdStr && a.Action == AuditActions.Deleted))
+            a.EntityType == "ResLinkMember" && a.RootEntityId == tripIdStr && a.Action == AuditActions.Created))
+            .ShouldBe(1);
+        (await db.AuditEntries.CountAsync(a =>
+            a.EntityType == "ResLinkMember" && a.RootEntityId == caveIdStr && a.Action == AuditActions.Created))
+            .ShouldBe(1);
+        (await db.AuditEntries.CountAsync(a =>
+            a.EntityType == "ResLinkMember" && a.RootEntityId == caveIdStr && a.Action == AuditActions.Deleted))
             .ShouldBe(0);
     }
 

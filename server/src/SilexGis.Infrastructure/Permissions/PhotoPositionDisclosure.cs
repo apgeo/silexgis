@@ -98,16 +98,16 @@ public sealed class PhotoPositionDisclosure(SilexGisDbContext db, FeatureProtect
             AddPartner(link.ToId, link.FromId);
         }
 
-        // A trip names the caves it visited, so a photo on the trip is as placed as one on
-        // the cave itself.
-        var tripCaves = tripIds.Count == 0
-            ? []
-            : await db.TripLogCaves.AsNoTracking()
-                .Where(x => tripIds.Contains(x.TripLogId))
-                .Select(x => new { x.TripLogId, x.CaveId })
-                .ToListAsync(ct);
-        var tripToCaves = tripCaves.GroupBy(x => x.TripLogId)
-            .ToDictionary(g => g.Key, g => g.Select(x => x.CaveId).ToList());
+        // A trip names where it went, so a photo on the trip is as placed as one on those
+        // places themselves. Every role counts: which of them the trip carried out there says
+        // nothing about whether the photograph is placed by it, and a chain narrowed to one
+        // role would hand over the bytes for every place named under any other — silently,
+        // since nothing about a photograph says which trip role put it where it is. Every kind
+        // of feature counts too, for the same reason: a guarded shaft places a picture exactly
+        // as a guarded cave does.
+        var tripFeatures = await TripRoleLinks.PairsForAsync(db, tripIds, kind: null, ct);
+        var tripToCaves = tripFeatures.GroupBy(x => x.TripId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.FeatureId).ToList());
 
         foreach (var link in links)
         {

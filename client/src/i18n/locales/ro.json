@@ -254,7 +254,8 @@
       "surveyModels": "{{count}} modele 3D",
       "attachments": "{{count}} atașamente",
       "tripLogs": "{{count}} jurnale de tură"
-    }
+    },
+    "tripLogsEmpty": "Nicio tură nu numește această peșteră."
   },
   "entrances": {
     "add": "Adaugă intrare",
@@ -828,7 +829,6 @@
       "SurveyModel": "Model topografic",
       "Attachment": "Atașament",
       "Tagging": "Etichetă",
-      "TripLogCave": "Peșteră asociată",
       "TripLogParticipant": "Participant"
     },
     "field": {

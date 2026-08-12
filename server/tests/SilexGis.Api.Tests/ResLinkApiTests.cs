@@ -1604,7 +1604,7 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var caveId = await CreateCaveAsync(owner, "Role Cave", "authenticated");
-        var tripId = await CreateTripLogAsync($"Roles {suffix}", caveId, "authenticated");
+        var tripId = await CreateTripLogAsync($"Roles {suffix}", caveId: null, "authenticated");
 
         // Three links between the same two things, differing only in what the trip did:
         // exactly the case a filtered field has to tell apart.
@@ -1946,7 +1946,7 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
     public async Task Every_trip_role_links_its_targets_with_the_trip_as_the_main_member()
     {
         var cave = await CreateCaveAsync(owner, "Role Cave", "authenticated");
-        var tripId = await CreateTripLogAsync("Role trip", cave, "authenticated");
+        var tripId = await CreateTripLogAsync("Role trip", caveId: null, "authenticated");
 
         var links = new Dictionary<string, Guid>();
         foreach (var role in TripRoleCodes)
@@ -2730,13 +2730,18 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateTripLogAsync(string title, Guid caveId, string visibility)
+    /// <summary>
+    /// A trip, optionally already naming a cave. Naming one is itself recorded as a role
+    /// link, so a test counting the links it created for itself passes null and gets a trip
+    /// with none.
+    /// </summary>
+    private async Task<Guid> CreateTripLogAsync(string title, Guid? caveId, string visibility)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
         {
             title,
             tripDate = "2026-05-01",
-            caveIds = new[] { caveId },
+            caveIds = caveId is { } named ? new[] { named } : Array.Empty<Guid>(),
             participants = Array.Empty<object>(),
             visibility,
         });

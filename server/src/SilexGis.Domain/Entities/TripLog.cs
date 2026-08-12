@@ -85,23 +85,6 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
     public string AuditId => Id.ToString();
 }
 
-/// <summary>Trip ↔ cave link (unique pair; joins to caves for display).</summary>
-public class TripLogCave : IAuditable, IAuditChild
-{
-    public long Id { get; set; }
-
-    public Guid TripLogId { get; set; }
-
-    public Guid CaveId { get; set; }
-
-    public string AuditId => Id.ToString();
-
-    // Cave links surface in their trip's timeline.
-    public string RootEntityType => nameof(TripLog);
-
-    public string RootEntityId => TripLogId.ToString();
-}
-
 /// <summary>Whether a person attended the trip or proposed it. Stored as smallint.</summary>
 public enum TripParticipantKind : short
 {

@@ -8621,7 +8621,7 @@ export interface paths {
                 };
             };
         };
-        /** Full update incl. caves/participants replacement (Write permission). */
+        /** Full update (Write permission). Participants are replaced; the caves are replaced only when a list is supplied, and left as they are when the field is omitted. */
         put: {
             parameters: {
                 query?: never;
@@ -13850,7 +13850,7 @@ export interface components {
             /** Format: uuid */
             organizingCavingGroupId: null | string;
             geom: null | components["schemas"]["GeoJsonGeometry"];
-            caveIds: string[];
+            caveIds: null | string[];
             participants: components["schemas"]["TripParticipantWrite"][];
             proposers: null | components["schemas"]["TripParticipantWrite"][];
             /** Format: uuid */

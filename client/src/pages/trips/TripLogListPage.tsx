@@ -12,9 +12,9 @@ import {
   type TripLogListParams,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import TripStateTag from '../../components/trips/TripStateTag.tsx';
+import { formatTripDates } from '../../components/trips/tripDates.ts';
 import TripFormModal from './TripFormModal.tsx';
-import TripStateTag from './TripStateTag.tsx';
-import { formatTripDates } from './tripDates.ts';
 
 export default function TripLogListPage() {
   const { t, i18n } = useTranslation();

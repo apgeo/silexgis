@@ -82,5 +82,18 @@ public sealed class ResLinkMemberConfiguration : IEntityTypeConfiguration<ResLin
         builder.HasIndex(x => new { x.ResLinkId, x.EntityType, x.EntityId }).IsUnique()
             .HasFilter("entity_type IS NOT NULL AND anchor_kind = 0")
             .HasDatabaseName("ix_res_link_members_whole_entity");
+
+        // Walking from one end of a link to the other. Asking which trips a cave is named on,
+        // or which places a trip named, starts at a target and needs the links it is in; the
+        // two indexes above answer only the first half of that from the index and go to the
+        // table for the link id, once per row, on a join that is then walked back the other
+        // way. These carry the link id, so both hops stay in the index. Named explicitly
+        // because they are second indexes on columns that already lead one.
+        builder.HasIndex(x => new { x.FeatureId, x.ResLinkId }, "ix_res_link_members_feature_link")
+            .HasFilter("feature_id IS NOT NULL")
+            .HasDatabaseName("ix_res_link_members_feature_link");
+        builder.HasIndex(x => new { x.EntityType, x.EntityId, x.ResLinkId }, "ix_res_link_members_entity_link")
+            .HasFilter("entity_type IS NOT NULL")
+            .HasDatabaseName("ix_res_link_members_entity_link");
     }
 }

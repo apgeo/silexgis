@@ -51,6 +51,20 @@ public static class ResLinkRelationTypeSeeds
         new("trip-follows-on-from", "Follows on from", true, "Followed up by"),
     ];
 
+    /// <summary>
+    /// The shipped codes that say what a trip did to what it named, derived from the list
+    /// above by the prefix the trip vocabulary is built on. This is the single answer to
+    /// "which features is this trip about": the roles record what was done there, and every
+    /// reader that only wants the association itself asks over all of them at once. Narrowing
+    /// such a read to one role would answer a different, smaller question without saying so.
+    ///
+    /// Seeded rows only. An installation that adds its own <c>trip-…</c> code gets it in the
+    /// general link panel, not in the set the trip surfaces are built from — a field is a
+    /// designed surface, and an extensible vocabulary does not make one.
+    /// </summary>
+    public static readonly string[] TripRoleCodes =
+        [.. All.Select(s => s.Code).Where(c => c.StartsWith("trip-", StringComparison.Ordinal))];
+
     private static readonly HashSet<string> Codes = [.. All.Select(s => s.Code)];
 
     /// <summary>Whether a code names a shipped row (code and directedness immutable,

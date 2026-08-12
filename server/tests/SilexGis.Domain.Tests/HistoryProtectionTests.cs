@@ -125,18 +125,6 @@ public class HistoryProtectionTests
         result.Redacted.ShouldBeEmpty();
     }
 
-    [Fact]
-    public void Trip_cave_link_redacted_under_the_same_rule()
-    {
-        var hiddenCave = Guid.NewGuid();
-        var changes = Changes(("CaveId", hiddenCave.ToString(), null));
-
-        var result = HistoryProtection.Redact("TripLogCave", changes, governingHidden: false, id => id == hiddenCave, associationHidden: false);
-
-        result.Changes.ShouldBeNull(); // only prop, removed → empty → null
-        result.Redacted.ShouldBe(["CaveId"]);
-    }
-
     /// <summary>
     /// An attachment row names the document it pairs with exactly when the association rule
     /// says the pairing may be disclosed — and that is the only thing that decides it here.

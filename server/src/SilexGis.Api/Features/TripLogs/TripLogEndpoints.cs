@@ -26,7 +26,9 @@ public static class TripLogEndpoints
         trips.MapPost("/", CreateAsync).WithValidation<TripLogWriteRequest>()
             .WithSummary("Creates a trip log (Create permission on trip logs); the caller becomes owner.");
         trips.MapPut("/{id:guid}", UpdateAsync).WithValidation<TripLogWriteRequest>()
-            .WithSummary("Full update incl. caves/participants replacement (Write permission).");
+            .WithSummary(
+                "Full update (Write permission). Participants are replaced; the caves are replaced "
+                + "only when a list is supplied, and left as they are when the field is omitted.");
         trips.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes a trip log with its links and attachments.");
         trips.MapPost("/{id:guid}/publish", PublishAsync)
@@ -84,7 +86,10 @@ public static class TripLogEndpoints
                 return TypedResults.Ok(new PagedResult<TripLogDto>([], emptyPage, emptySize, 0));
             }
 
-            query = query.Where(x => db.TripLogCaves.Any(l => l.TripLogId == x.Id && l.CaveId == caveId));
+            // Role-agnostic: the question is which trips this cave is named on, not what they
+            // did there. Narrowing it to one role would quietly answer a smaller question.
+            var namingTrips = TripRoleLinks.TripIdsNaming(db, caveId.Value);
+            query = query.Where(x => namingTrips.Contains(x.Id));
         }
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -156,7 +161,11 @@ public static class TripLogEndpoints
         Apply(trip, request);
         db.TripLogs.Add(trip);
         // No existing children on create, so the reconcile helpers reduce to pure inserts.
-        await ReconcileCaveLinksAsync(db, protection, ctx, trip.Id, request.CaveIds, ct);
+        if (request.CaveIds is { } caveIds)
+        {
+            await ReconcileCaveLinksAsync(db, protection, ctx, trip.Id, caveIds, ct);
+        }
+
         var added = await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Participant, request.Participants, ct);
         added.AddRange(await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Proposer, request.Proposers ?? [], ct));
         await NotifyParticipantsAsync(db, access, user, trip, added, ct);
@@ -204,7 +213,11 @@ public static class TripLogEndpoints
         }
 
         Apply(trip, request);
-        await ReconcileCaveLinksAsync(db, protection, ctx, trip.Id, request.CaveIds, ct);
+        if (request.CaveIds is { } caveIds)
+        {
+            await ReconcileCaveLinksAsync(db, protection, ctx, trip.Id, caveIds, ct);
+        }
+
         var added = await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Participant, request.Participants, ct);
         added.AddRange(await ReconcileParticipantsAsync(db, trip.Id, TripParticipantKind.Proposer, request.Proposers ?? [], ct));
         await NotifyParticipantsAsync(db, access, user, trip, added, ct);
@@ -241,15 +254,42 @@ public static class TripLogEndpoints
             return stale;
         }
 
-        // Cave/participant links cascade; polymorphic rows are cleaned here.
+        // Participant rows cascade; polymorphic rows are cleaned here.
         await db.Attachments
             .Where(a => a.EntityType == AttachedEntityType.TripLog && a.EntityId == trip.Id)
             .ExecuteDeleteAsync(ct);
         await db.Taggings
             .Where(x => x.EntityType == AttachedEntityType.TripLog && x.EntityId == trip.Id)
             .ExecuteDeleteAsync(ct);
+        // The trip's memberships go, and so do the links that cannot mean anything without it.
+        //
+        // A link typed with one of the trip roles goes whole, however many features it still
+        // names: the role says what *this trip* did there, so the surviving members are not
+        // related to each other by anything once the trip is gone. Leaving it would also leave a
+        // directed link with no distinguished member, which the link rules refuse — the result
+        // would show on every named cave's links panel as a relation to the other caves, and no
+        // later edit of it would be accepted.
+        //
+        // A link of any other kind the trip merely joined keeps whatever it still relates, and
+        // goes only when one member is left: an association with one end is a thing no surface
+        // offers and no delete path would ever reach again. Remaining members cascade with it.
+        var roleIds = TripRoleLinks.RoleIds(db);
+        var linkIds = await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.TripLog && m.EntityId == trip.Id)
+            .Select(m => m.ResLinkId)
+            .Distinct()
+            .ToListAsync(ct);
+        var roleLinkIds = await db.ResLinks
+            .Where(l => linkIds.Contains(l.Id)
+                && l.RelationTypeId != null && roleIds.Contains(l.RelationTypeId.Value))
+            .Select(l => l.Id)
+            .ToListAsync(ct);
         await db.ResLinkMembers
             .Where(m => m.EntityType == AttachedEntityType.TripLog && m.EntityId == trip.Id)
+            .ExecuteDeleteAsync(ct);
+        await db.ResLinks
+            .Where(l => roleLinkIds.Contains(l.Id)
+                || (linkIds.Contains(l.Id) && db.ResLinkMembers.Count(m => m.ResLinkId == l.Id) < 2))
             .ExecuteDeleteAsync(ct);
         db.TripLogs.Remove(trip);
         await db.SaveChangesAsync(ct);
@@ -402,11 +442,29 @@ public static class TripLogEndpoints
         trip.Visibility = request.Visibility;
     }
 
-    // Reconcile links with a diff (add/remove only what changed) rather than delete-all +
-    // recreate-all. ExecuteDelete bypasses the audit interceptor and a full recreate logs a
-    // "created" event for every unchanged child on every save, so the diff keeps the entity's
-    // history timeline honest. Also preserves cave links the caller could not see: those were
-    // redacted out of the DTO they edited, so a full-replace list would silently drop them.
+    /// <summary>
+    /// The role a bare list of caves is written under. The list says the trip is about those
+    /// caves and nothing finer, so it is recorded as the plainest of the roles that carries
+    /// that meaning; a trip that did something more particular there says so through the role
+    /// it was recorded under, and this path never overwrites that.
+    /// </summary>
+    private const string CaveListRole = "trip-visited";
+
+    // Reconcile with a diff (add/remove only what changed) rather than delete-all +
+    // recreate-all: a full recreate logs a "created" event for every unchanged child on every
+    // save, so the diff keeps the timeline honest. Also preserves caves the caller could not
+    // see: those were redacted out of the list they edited, so treating the submitted list as
+    // the whole truth would silently drop them.
+    //
+    // That last guard is why a list is only reconciled when one is actually supplied. Naming a
+    // cave one at a time — which is how it is done now — cannot express "forget everything not
+    // in this list", so the hazard simply does not arise there; it arises only here, where an
+    // absence has to be read as an instruction, and here it is guarded.
+    //
+    // Reads over every role, writes under one. A cave the trip already names — whatever it did
+    // there — is left exactly as it is rather than named a second time, and a cave dropped from
+    // the list is unnamed only from the role this path writes: a list with no roles in it is not
+    // an instruction to forget that the trip surveyed somewhere.
     private static async Task ReconcileCaveLinksAsync(
         SilexGisDbContext db,
         FeatureProtection protection,
@@ -415,20 +473,32 @@ public static class TripLogEndpoints
         IReadOnlyList<Guid> requestedCaveIds,
         CancellationToken ct)
     {
-        var existing = await db.TripLogCaves.Where(x => x.TripLogId == tripId).ToListAsync(ct);
-        var redacted = await protection.RedactedLinkTargetIdsAsync(ctx, [.. existing.Select(x => x.CaveId)], ct);
-        var desired = requestedCaveIds
-            .Concat(existing.Where(x => redacted.Contains(x.CaveId)).Select(x => x.CaveId))
-            .ToHashSet();
+        // Read through exactly the narrowing the caller was answered through, caves only. A role
+        // names any linkable target, and a spring or a shaft named under one of them can never
+        // appear in a list of caves — so a view any wider here would read those as absences and
+        // unname them, on a request that never mentioned them. What the caller could not have
+        // been shown, they cannot be taken to have dropped.
+        var named = (await TripRoleLinks.PairsForAsync(db, [tripId], FeatureKind.Cave, ct))
+            .Select(pair => pair.FeatureId)
+            .Distinct()
+            .ToList();
+        var redacted = await protection.RedactedLinkTargetIdsAsync(ctx, named, ct);
+        var desired = requestedCaveIds.Concat(named.Where(redacted.Contains)).ToHashSet();
 
-        foreach (var link in existing.Where(x => !desired.Contains(x.CaveId)))
+        foreach (var caveId in named.Where(id => !desired.Contains(id)))
         {
-            db.TripLogCaves.Remove(link);
+            await TripRoleLinks.UnnameFeatureAsync(db, tripId, caveId, CaveListRole, ct);
         }
 
-        foreach (var caveId in desired.Where(id => existing.All(x => x.CaveId != id)))
+        foreach (var caveId in desired.Where(id => !named.Contains(id)))
         {
-            db.TripLogCaves.Add(new TripLogCave { TripLogId = tripId, CaveId = caveId });
+            // A role code that is not in the vocabulary means the installation's link types were
+            // never seeded — the naming would silently record nothing, and answering 200 to a
+            // write that stored nothing is worse than failing.
+            if (!await TripRoleLinks.NameFeatureAsync(db, tripId, caveId, CaveListRole, ctx.UserId, ct))
+            {
+                throw new InvalidOperationException($"Relation type '{CaveListRole}' is not seeded.");
+            }
         }
     }
 
@@ -600,7 +670,7 @@ public static class TripLogEndpoints
         // A cave is a feature row, so existence and readability are one filtered count; an id
         // the caller cannot read is reported exactly like a nonexistent one, so linking cannot
         // be used to probe for caves.
-        var caveIds = request.CaveIds.Distinct().ToList();
+        var caveIds = (request.CaveIds ?? []).Distinct().ToList();
         if (caveIds.Count > 0)
         {
             var readable = await db.Features.AsNoTracking()
@@ -638,9 +708,11 @@ public static class TripLogEndpoints
     {
         var tripIds = trips.Select(x => x.Id).ToList();
 
-        var caveLinks = await db.TripLogCaves.AsNoTracking()
-            .Where(x => tripIds.Contains(x.TripLogId))
-            .ToListAsync(ct);
+        // Every role at once — the list means "caves this trip is about", which is what the
+        // roles collectively say. Narrowed to caves because that is what the field promises and
+        // what its readers resolve; a role naming a spring or a shaft belongs to the roles, not
+        // here. Distinct because two roles naming one cave are two rows and one cave.
+        var caveLinks = await TripRoleLinks.PairsForAsync(db, tripIds, FeatureKind.Cave, ct);
 
         var participantRows = await (
             from participant in db.TripLogParticipants.AsNoTracking()
@@ -667,7 +739,7 @@ public static class TripLogEndpoints
 
         // Exact trip geometry + protected-cave link would disclose the cave; hide those links.
         var redacted = await protection.RedactedLinkTargetIdsAsync(
-            ctx, [.. caveLinks.Select(x => x.CaveId)], ct);
+            ctx, [.. caveLinks.Select(x => x.FeatureId)], ct);
 
         return [.. trips.Select(trip => new TripLogDto(
             trip.Id,
@@ -683,7 +755,7 @@ public static class TripLogEndpoints
             trip.LocationText,
             trip.OrganizingCavingGroupId,
             trip.Geom is null ? null : GeoJsonGeometry.From(trip.Geom),
-            [.. caveLinks.Where(x => x.TripLogId == trip.Id && !redacted.Contains(x.CaveId)).Select(x => x.CaveId)],
+            [.. caveLinks.Where(x => x.TripId == trip.Id && !redacted.Contains(x.FeatureId)).Select(x => x.FeatureId)],
             [.. participants.Where(x => x.TripLogId == trip.Id && x.Kind == TripParticipantKind.Participant)
                 .Select(x => new TripParticipantDto(x.CaverId, x.Name, x.UserId))],
             [.. participants.Where(x => x.TripLogId == trip.Id && x.Kind == TripParticipantKind.Proposer)

@@ -242,25 +242,34 @@ public sealed class HistoryTests : IAsyncLifetime, IDisposable
         (await ProblemCodeAsync(gone)).ShouldBe("history.entity_not_found");
     }
 
+    /// <summary>
+    /// Naming a cave on a trip is recorded as an association, and an association is recorded in
+    /// the timeline of what it names rather than the one doing the naming. So the trip's own
+    /// timeline never carries the cave's id — for anybody, including the caller who may place
+    /// the cave perfectly well — and there is nothing there left to redact.
+    ///
+    /// Asserted for both callers together because "the id is absent" is satisfied just as well
+    /// by a timeline that came back empty, and the events counted beside it are what refuses
+    /// that reading: the trip was written, its writing was recorded, and the cave is still not
+    /// in it.
+    /// </summary>
     [Fact]
-    public async Task Trip_timeline_redacts_the_reference_to_a_protected_cave()
+    public async Task A_trips_timeline_does_not_name_the_caves_the_trip_names()
     {
         var caveId = await CreateCaveAsync(owner, protectedLocation: true, closestAddress: SecretAddress);
         var tripId = await CreateTripAsync(owner, caveId);
 
-        // The owner may place the cave, so the link record reads as written.
-        var (ownerBody, _) = await HistoryAsync(owner, "tripLog", tripId);
-        ownerBody.ShouldContain(caveId.ToString());
+        var (ownerBody, ownerEvents) = await HistoryAsync(owner, "tripLog", tripId);
+        ownerEvents.ShouldContain(e => EntityType(e) == "TripLog" && Action(e) == "created");
+        ownerBody.ShouldNotContain(caveId.ToString());
 
-        // For everyone else the reference alone would place the protected cave by proximity:
-        // the id goes, the fact that a cave link changed stays.
         var (outsiderBody, outsiderEvents) = await HistoryAsync(outsider, "tripLog", tripId);
+        outsiderEvents.ShouldContain(e => EntityType(e) == "TripLog" && Action(e) == "created");
         outsiderBody.ShouldNotContain(caveId.ToString());
 
-        var link = outsiderEvents.Single(e => EntityType(e) == "TripLogCave");
-        Redacted(link).ShouldContain("CaveId");
-        HasChange(link, "CaveId").ShouldBeFalse();
-        HasChange(link, "TripLogId").ShouldBeTrue();
+        // The record of the naming lives on the cave, where the cave's own rules govern it.
+        var (_, caveEvents) = await HistoryAsync(owner, "feature", caveId);
+        caveEvents.ShouldContain(e => EntityType(e) == "ResLinkMember" && Action(e) == "created");
     }
 
     /// <summary>

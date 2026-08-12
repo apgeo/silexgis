@@ -52,7 +52,7 @@ public static class HistoryEndpoints
     /// independently of the row's own protection.
     /// </summary>
     private static readonly string[] ReferenceProperties =
-        [nameof(FeatureLink.FromId), nameof(FeatureLink.ToId), nameof(TripLogCave.CaveId)];
+        [nameof(FeatureLink.FromId), nameof(FeatureLink.ToId)];
 
     public static RouteGroupBuilder MapHistoryEndpoints(this RouteGroupBuilder api)
     {

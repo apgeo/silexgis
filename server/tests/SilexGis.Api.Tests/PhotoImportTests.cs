@@ -441,6 +441,123 @@ public sealed class PhotoImportTests : IAsyncLifetime, IDisposable
         theirs.GetProperty("photo").GetProperty("cameraMake").GetString().ShouldBe("SilexTest");
     }
 
+    // ---------- filing a drop under a trip ----------
+
+    /// <summary>
+    /// Filing a drop under a trip writes on the trip twice: the pictures become part of its
+    /// record, and a cave the drop brought into existence is named among the caves the trip is
+    /// about. The second half is the one nothing else asserts — it happens in the commit
+    /// service, far from the trip's own write path, and a trip that silently stopped naming the
+    /// caves its own photographs created would look exactly like a trip nobody had filed
+    /// anything under.
+    /// </summary>
+    [Fact]
+    public async Task A_drop_filed_under_a_trip_names_the_cave_it_created_among_the_trips_caves()
+    {
+        var tripId = await CreateTripAsync($"Filing {tag}");
+
+        // Fixture proof: the trip names nothing before the drop, so what it names afterwards
+        // came from the drop rather than from the way it was created.
+        (await TripCavesAsync(tripId)).ShouldBeEmpty();
+
+        var photo = await UploadAsync("IMG_7000.jpg", At(45.640000, 25.540000, Noon));
+        var options = DefaultOptions();
+        options["tripLogId"] = tripId;
+
+        var preview = await PreviewAsync(editor, [photo], options);
+        var key = Items(preview).Single().GetProperty("key").GetGuid();
+        var commit = await CommitAsync(editor, [photo], [key], new Dictionary<string, object>
+        {
+            [key.ToString()] = new { action = "create", kind = "cave", name = $"Filed {tag}" },
+        }, options);
+        commit.GetProperty("failures").EnumerateArray().ShouldBeEmpty();
+
+        var caveId = await FeatureIdAsync($"Filed {tag}");
+        (await TripCavesAsync(tripId)).ShouldBe([caveId]);
+
+        // The pictures reach the trip as well, which is the half a reader would notice first —
+        // asserted here so a fixture that stopped filing under the trip at all cannot pass the
+        // naming assertion by accident.
+        using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.Attachments.AsNoTracking().CountAsync(
+            a => a.EntityType == AttachedEntityType.TripLog && a.EntityId == tripId))
+            .ShouldBe(1);
+    }
+
+    /// <summary>
+    /// An entrance added to a cave already in the registry names <em>the cave</em> on the trip.
+    /// The drop produces an entrance object, and naming that instead would be invisible to every
+    /// reader: the trip would list no caves, the cave would count no trips, and the photographs
+    /// would lose the placement the cave's protection gives them — all of it silently, since an
+    /// entrance is a linkable target like any other and nothing would refuse it.
+    /// </summary>
+    [Fact]
+    public async Task An_entrance_added_to_an_existing_cave_under_a_trip_names_that_cave()
+    {
+        var tripId = await CreateTripAsync($"Entrance filing {tag}");
+        var caveId = await CreateCaveWithEntranceAsync($"Second mouth {tag}", 45.680000, 25.580000);
+        (await TripCavesAsync(tripId)).ShouldBeEmpty();
+
+        // Far enough from the existing entrance to be a candidate of its own rather than a
+        // proximity hit on it, so the decision below is what files it onto the cave.
+        var photo = await UploadAsync("IMG_7200.jpg", At(45.684000, 25.584000, Noon));
+        var options = DefaultOptions();
+        options["tripLogId"] = tripId;
+
+        var preview = await PreviewAsync(editor, [photo], options);
+        var key = Items(preview).Single().GetProperty("key").GetGuid();
+        var commit = await CommitAsync(editor, [photo], [key], new Dictionary<string, object>
+        {
+            [key.ToString()] = new
+            {
+                action = "create",
+                kind = "caveEntrance",
+                name = $"Upper entrance {tag}",
+                attachToFeatureId = caveId,
+            },
+        }, options);
+        commit.GetProperty("failures").EnumerateArray().ShouldBeEmpty();
+
+        // The entrance really was created on that cave — so the naming below is about which of
+        // the two objects the trip records, not about a commit that did nothing.
+        (await FeatureNamesAsync()).ShouldContain($"Upper entrance {tag}");
+        (await TripCavesAsync(tripId)).ShouldBe([caveId]);
+    }
+
+    /// <summary>
+    /// A surface feature the drop created is not a cave the trip visited, so it is not named
+    /// among them. The distinction is deliberate and easy to lose: the trip's cave list is a
+    /// list of caves, and a spring added to it would be a different claim about the trip.
+    /// </summary>
+    [Fact]
+    public async Task A_surface_feature_a_drop_created_is_not_named_among_the_trips_caves()
+    {
+        var tripId = await CreateTripAsync($"Surface {tag}");
+        var photo = await UploadAsync("IMG_7100.jpg", At(45.660000, 25.560000, Noon));
+        var options = DefaultOptions();
+        options["tripLogId"] = tripId;
+
+        var preview = await PreviewAsync(editor, [photo], options);
+        var key = Items(preview).Single().GetProperty("key").GetGuid();
+        var commit = await CommitAsync(editor, [photo], [key], new Dictionary<string, object>
+        {
+            [key.ToString()] = new
+            {
+                action = "create",
+                kind = "surfaceFeature",
+                featureTypeCode = "sinkhole",
+                name = $"Doline {tag}",
+            },
+        }, options);
+        commit.GetProperty("failures").EnumerateArray().ShouldBeEmpty();
+
+        // The feature exists — so the empty cave list below is a claim the import declined to
+        // make, not a commit that quietly did nothing.
+        (await FeatureNamesAsync()).ShouldContain($"Doline {tag}");
+        (await TripCavesAsync(tripId)).ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task A_review_needs_an_account()
     {
@@ -668,6 +785,28 @@ public sealed class PhotoImportTests : IAsyncLifetime, IDisposable
             .Select(f => f.GetProperty("name").GetString())
             .Where(n => n is not null)
             .Select(n => n!)];
+    }
+
+    private async Task<Guid> CreateTripAsync(string title)
+    {
+        var response = await editor.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title,
+            tripDate = "2026-08-08",
+            caveIds = Array.Empty<Guid>(),
+            participants = Array.Empty<object>(),
+            visibility = "authenticated",
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>The caves a trip names, as the trip itself reports them to the caller who owns it.</summary>
+    private async Task<List<Guid>> TripCavesAsync(Guid tripId)
+    {
+        var trip = await ReadJsonAsync(await editor.GetAsync($"/api/v1/trip-logs/{tripId}"));
+        return [.. trip.GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid())];
     }
 
     private async Task<Guid> FeatureIdAsync(string name)

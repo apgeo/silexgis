@@ -120,6 +120,12 @@ test('a trip records what it worked in, and the record survives a reload and can
 
   await expect(workAreas.getByText('Falia Demo')).toBeVisible({ timeout: 15_000 });
 
+  // And it appears once. The general links card below shows everything else the trip is tied
+  // to, but not the roles — those have a field each, saying what was done as well as where, so
+  // a bare chip repeating one underneath is a duplicate a reader cannot recognise as one. The
+  // trip is tied to nothing else, so the card has nothing to head at all.
+  await expect(page.getByText(/^Linked items \(/)).toHaveCount(0);
+
   // The role is a link on the server, not a thing the page was holding: it comes back the
   // same on a page that was loaded fresh.
   await page.goto(tripUrl);

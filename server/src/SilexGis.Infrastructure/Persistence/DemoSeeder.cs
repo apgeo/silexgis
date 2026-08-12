@@ -21,6 +21,14 @@ namespace SilexGis.Infrastructure.Persistence;
 /// </summary>
 public static class DemoSeeder
 {
+    /// <summary>
+    /// What each seeded trip did where it went, in the order the trips are listed. Read round and
+    /// round, so adding a trip further down needs no matching entry here and cannot walk off the
+    /// end of it — which it would do at run time on a fresh installation, not at compile time.
+    /// </summary>
+    private static readonly string[] TripRoles =
+        ["trip-objective", "trip-surveyed", "trip-visited", "trip-visited", "trip-work-area"];
+
     /// <param name="documents">
     /// Present when the caller can also store bytes. Without it the dataset is caves and
     /// features only, which is what a caller with no file store can honestly produce.
@@ -538,13 +546,22 @@ public static class DemoSeeder
                 Kind = TripParticipantKind.Participant,
             });
 
-            if (caveIds.Count > 0)
+            // Where the trip went, and what it did there. Several roles rather than one, so a
+            // surface that answers over all of them can be told apart from one that only ever
+            // looked at the first: with a single role in the data, the two are indistinguishable
+            // and a narrowing would go unnoticed. The protected cave keeps its place on a public
+            // announced trip — that pairing is the only one showing a link being held back.
+            if (caveIds.Count > 0
+                && !await TripRoleLinks.NameFeatureAsync(
+                    db,
+                    trip.Id,
+                    caveIds[index % caveIds.Count],
+                    TripRoles[index % TripRoles.Length],
+                    ownerUserId,
+                    ct))
             {
-                db.TripLogCaves.Add(new TripLogCave
-                {
-                    TripLogId = trip.Id,
-                    CaveId = caveIds[index % caveIds.Count],
-                });
+                throw new InvalidOperationException(
+                    $"Relation type '{TripRoles[index % TripRoles.Length]}' is not seeded.");
             }
 
             index++;

@@ -32,18 +32,6 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
     }
 }
 
-public sealed class TripLogCaveConfiguration : IEntityTypeConfiguration<TripLogCave>
-{
-    public void Configure(EntityTypeBuilder<TripLogCave> builder)
-    {
-        builder.ToTable("trip_log_caves");
-        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne<Cave>().WithMany().HasForeignKey(x => x.CaveId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasIndex(x => new { x.TripLogId, x.CaveId }).IsUnique();
-        builder.HasIndex(x => x.CaveId);
-    }
-}
-
 public sealed class TripLogParticipantConfiguration : IEntityTypeConfiguration<TripLogParticipant>
 {
     public void Configure(EntityTypeBuilder<TripLogParticipant> builder)

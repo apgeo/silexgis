@@ -221,10 +221,22 @@ public static class CaveEndpoints
                     + Uri.EscapeDataString(tokens.CreateToken(headlineRow.FileId, FileDelivery.DerivativesOnly)),
                 headlineRow.Caption);
 
-        // Trip links are visibility-filtered — two callers may legitimately see different counts.
-        var visibleTrips = db.TripLogs.AsNoTracking().VisibleTo(ctx!, AccessDomain.TripLogs);
-        var tripLogCount = await db.TripLogCaves.CountAsync(
-            l => l.CaveId == id && visibleTrips.Any(t => t.Id == l.TripLogId), ct);
+        // Counted the same way the list of them is filtered, through both of the rules that
+        // filter it. A caller who may read this cave but not place it is answered with an empty
+        // page when they ask for its trips, because the trips carry their own geometries and
+        // listing them would place the cave; a count taken past that rule would tell the same
+        // caller exactly how many trips there are above a list showing none of them.
+        //
+        // Every role counts and each trip counts once: two roles naming this cave on one trip
+        // are two ways of saying the trip went there, not two trips.
+        var tripLogCount = 0;
+        if (!await protection.ShouldRedactLinkAsync(ctx, id, ct))
+        {
+            var namingTrips = TripRoleLinks.TripIdsNaming(db, id);
+            tripLogCount = await db.TripLogs.AsNoTracking()
+                .VisibleTo(ctx!, AccessDomain.TripLogs)
+                .CountAsync(t => namingTrips.Contains(t.Id), ct);
+        }
 
         var main = await db.CaveEntrances.AsNoTracking()
             .Include(e => e.Feature)

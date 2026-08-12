@@ -19,13 +19,14 @@ import AttachmentSection from '../../components/attachments/AttachmentSection.ts
 import HistoryPanel, { type HistoryRestore } from '../../components/history/HistoryPanel.tsx';
 import { applyRestore } from '../../components/history/historyModel.ts';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
+import { TRIP_ROLE_CODES } from '../../components/reslinks/relations.ts';
 import TagChips from '../../components/tags/TagChips.tsx';
+import TripStateTag from '../../components/trips/TripStateTag.tsx';
+import { formatTripDates, formatUndergroundTime, isMultiDay } from '../../components/trips/tripDates.ts';
 import TripFormModal from './TripFormModal.tsx';
 import TripGeometryField from './TripGeometryField.tsx';
 import TripPublishControl from './TripPublishControl.tsx';
 import TripRoleFields from './TripRoleFields.tsx';
-import TripStateTag from './TripStateTag.tsx';
-import { formatTripDates, formatUndergroundTime, isMultiDay } from './tripDates.ts';
 
 function CaveLink({ caveId }: { caveId: string }) {
   const { data: cave } = useCave(caveId);
@@ -212,12 +213,20 @@ export default function TripLogDetailPage() {
         </Card>
       )}
 
-      {/* What the trip did to what it names, role by role. The general links list stays
-          below it and still shows the same links among everything else the trip is tied to
-          — these fields are a reading of that list, not a second store. */}
+      {/* What the trip did to what it names, role by role — a reading of the one links list,
+          not a second store. */}
       <TripRoleFields tripId={trip.id} tripTitle={trip.title} canEdit={canEdit} />
 
-      <LinksSection entityType="tripLog" entityId={trip.id} canAdd entityTitle={trip.title} />
+      {/* Everything else the trip is tied to. The roles above are left out of it: they are the
+          same links, already shown where they say more, and repeating each one here as a bare
+          chip is a duplicate a reader has no way to recognise as one. */}
+      <LinksSection
+        entityType="tripLog"
+        entityId={trip.id}
+        canAdd
+        entityTitle={trip.title}
+        excludeRelations={TRIP_ROLE_CODES}
+      />
 
       <AttachmentSection entityType="tripLog" entityId={trip.id} canEdit={canEdit} reportSlot />
 

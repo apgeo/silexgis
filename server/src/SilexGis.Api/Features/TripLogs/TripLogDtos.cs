@@ -3,6 +3,7 @@ using FluentValidation;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.ResLinks;
 
 namespace SilexGis.Api.Features.TripLogs;
 
@@ -30,6 +31,10 @@ public sealed record TripLogDto(
     string? LocationText,
     Guid? OrganizingCavingGroupId,
     GeoJsonGeometry? Geom,
+    // Read-only, and derived: the caves any of the trip's roles names, whatever it did there,
+    // with the ones this caller may not place taken out. Recording a cave is done through the
+    // roles themselves, so this list has no counterpart on the write request — one place to
+    // write it, one reading of it here.
     IReadOnlyList<Guid> CaveIds,
     IReadOnlyList<TripParticipantDto> Participants,
     IReadOnlyList<TripParticipantDto> Proposers,
@@ -59,7 +64,12 @@ public sealed record TripLogWriteRequest(
     string? LocationText,
     Guid? OrganizingCavingGroupId,
     GeoJsonGeometry? Geom,
-    IReadOnlyList<Guid> CaveIds,
+    // Omitted means "not editing which caves this trip is about" — the trip's roles keep
+    // whatever they name. A surface that records caves through the roles themselves leaves it
+    // out rather than echoing a list back, so saving a trip from such a surface cannot disturb
+    // what the roles say. Supplied, it is the plain list of caves the trip is about, reconciled
+    // under the plainest role that carries that meaning.
+    IReadOnlyList<Guid>? CaveIds,
     IReadOnlyList<TripParticipantWrite> Participants,
     IReadOnlyList<TripParticipantWrite>? Proposers,
     Guid? CavingGroupId,
@@ -80,7 +90,13 @@ public sealed class TripLogWriteRequestValidator : AbstractValidator<TripLogWrit
             .GreaterThanOrEqualTo(x => x.TripDate)
             .When(x => x.TripDateEnd is not null)
             .WithMessage("Trip end date must not precede the start date.");
-        RuleFor(x => x.CaveIds).NotNull();
+        // A cave list is recorded as link memberships, which are bounded — every read of a link
+        // resolves all of them at once. Refusing an over-long list here says so plainly, rather
+        // than accepting it and spreading one trip's caves over links a reader has to reassemble.
+        RuleFor(x => x.CaveIds!)
+            .Must(caves => caves.Count <= ResLinkRules.MaxMembers)
+            .When(x => x.CaveIds is not null)
+            .WithMessage($"A trip records at most {ResLinkRules.MaxMembers} caves.");
         RuleFor(x => x.Participants).NotNull();
         // Proposers are optional (a trip needn't record who proposed it); a null list is
         // treated as empty. Each supplied entry still follows the shared identity rules.

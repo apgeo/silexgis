@@ -1,21 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { App, Button, DatePicker, Flex, Form, Input, Modal, Select, TimePicker } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {
   useCavingGroups,
-  useSearch,
   useCreateTripLog,
   useUpdateTripLog,
   type TripLogInfo,
   type TripLogWrite,
   type TripType,
 } from '../../api/hooks.ts';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 import TripGeometryField from './TripGeometryField.tsx';
-import { tripDateEndForWrite } from './tripDates.ts';
 import type { TripGeometry } from './tripGeometry.ts';
 
 const { RangePicker } = DatePicker;
@@ -39,7 +37,6 @@ interface FormValues {
   results?: string;
   weather?: string;
   geom?: TripGeometry | null;
-  caveIds: string[];
   participants: { caverId?: string; name: string }[];
   proposers: { caverId?: string; name: string }[];
   visibility: TripLogInfo['visibility'];
@@ -116,35 +113,10 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
   const createTrip = useCreateTripLog();
   const updateTrip = useUpdateTripLog();
 
-  const [caveQuery, setCaveQuery] = useState('');
   // The map inside the form can only be built once the dialog's open transition has put the
   // content in the document — a map built against a container with no size renders nothing.
   const [shown, setShown] = useState(false);
   const { data: cavingGroups } = useCavingGroups();
-  const debouncedCaveQuery = useDebouncedValue(caveQuery);
-  // A trip is logged against caves, and the server's hit budget is shared across kinds —
-  // ask for caves so commoner kinds cannot crowd them out of the answer.
-  const { data: caveResults } = useSearch(debouncedCaveQuery, 'cave');
-  // Options accumulate across searches so selected entries keep their labels.
-  const [knownCaves, setKnownCaves] = useState<Map<string, string>>(new Map());
-  useEffect(() => {
-    if (caveResults) {
-      setKnownCaves((previous) => {
-        const next = new Map(previous);
-        for (const hit of caveResults.features) {
-          if (hit.name) {
-            next.set(hit.id, hit.name);
-          }
-        }
-        return next;
-      });
-    }
-  }, [caveResults]);
-
-  const caveOptions = useMemo(
-    () => [...knownCaves.entries()].map(([value, label]) => ({ value, label })),
-    [knownCaves],
-  );
 
   useEffect(() => {
     if (open) {
@@ -162,7 +134,6 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           results: trip.results ?? undefined,
           weather: trip.weatherConditions ?? undefined,
           geom: trip.geom ?? null,
-          caveIds: [...trip.caveIds],
           participants: trip.participants.map((p) => ({ caverId: p.caverId, name: p.name })),
           proposers: trip.proposers.map((p) => ({ caverId: p.caverId, name: p.name })),
           visibility: trip.visibility,
@@ -173,13 +144,11 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           // and the field is a range, so a bare day would leave it failing its own required rule.
           dates: [dayjs(), dayjs()],
           geom: null,
-          caveIds: [],
           participants: [],
           proposers: [],
           visibility: 'private',
         });
       }
-      setCaveQuery('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reinitialize only when the modal opens
   }, [open]);
@@ -201,7 +170,9 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
       locationText: values.locationText?.trim() || null,
       organizingCavingGroupId: values.organizingCavingGroupId ?? null,
       geom: values.geom ?? null,
-      caveIds: values.caveIds,
+      // Not a cleared list — no list at all. Which caves the trip is about is recorded on its
+      // page, role by role, and this form must not be able to undo that by saving a title.
+      caveIds: null,
       participants: toParticipants(values.participants),
       proposers: toParticipants(values.proposers),
       cavingGroupId: trip?.cavingGroupId ?? null,
@@ -280,17 +251,11 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
             />
           </Form.Item>
         </Flex>
-        <Form.Item name="caveIds" label={t('trips.caves')}>
-          <Select
-            mode="multiple"
-            showSearch
-            filterOption={false}
-            onSearch={setCaveQuery}
-            placeholder={t('features.linkedCavePlaceholder')}
-            options={caveOptions}
-            notFoundContent={null}
-          />
-        </Form.Item>
+        {/* Where the trip went is recorded on the trip's page, role by role, so that what it
+            did there is recorded with it. A plain list of caves here as well would be a second
+            way to say the same thing, saying less, and the two would have to be kept in step by
+            whoever happened to remember. This form leaves the caves alone entirely — it sends no
+            list at all, which is what tells the server not to touch them. */}
         <Flex gap={12} align="start">
           <Form.Item label={t('trips.participants')} style={{ flex: 1 }}>
             <NameListField

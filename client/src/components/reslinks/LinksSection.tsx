@@ -49,6 +49,16 @@ export interface LinksSectionProps {
   canAdd?: boolean;
   /** How this entity should read as a member while the link is being composed. */
   entityTitle?: string | null;
+  /**
+   * Relation codes this section leaves out, because the page already draws them somewhere
+   * better. A page with a designed field per role would otherwise repeat every one of those
+   * links here as an undifferentiated chip, and a reader cannot tell the repeat from a second
+   * link that happens to look the same.
+   *
+   * Left out of the count as well as the rows: a heading that counted what it does not show
+   * would be the one number on the page nobody could account for.
+   */
+  excludeRelations?: readonly string[];
 }
 
 function LinkRow({
@@ -179,6 +189,7 @@ export default function LinksSection({
   canAdd,
   entityTitle,
   open,
+  excludeRelations,
 }: LinksSectionProps) {
   const { t } = useTranslation();
   const [selfExpanded, setSelfExpanded] = useState(false);
@@ -197,8 +208,15 @@ export default function LinksSection({
     !controlled || open,
   );
 
-  const links = data?.items ?? [];
-  const total = data?.totalItems ?? 0;
+  const fetched = data?.items ?? [];
+  const links = excludeRelations?.length
+    ? fetched.filter((link) => !excludeRelations.includes(link.relationType?.code ?? ''))
+    : fetched;
+  // The excluded rows come off the server's total too, so the heading counts what is under it.
+  // Only the rows this page received can be told apart, so a page cut short by paging keeps
+  // whatever it did not receive in the total — which is exactly what the "showing first" line
+  // below exists to say.
+  const total = (data?.totalItems ?? 0) - (fetched.length - links.length);
   const withheldByPaging = total - links.length;
 
   const addButton = canAdd && (

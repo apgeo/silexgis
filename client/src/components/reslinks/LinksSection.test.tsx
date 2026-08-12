@@ -66,15 +66,45 @@ function link(overrides: Partial<ResLink> = {}): ResLink {
   };
 }
 
-function show(total: number, items: ResLink[], canAdd?: boolean) {
+function show(total: number, items: ResLink[], canAdd?: boolean, excludeRelations?: readonly string[]) {
   panel = { items, page: 1, pageSize: 50, totalItems: total };
   return render(
     <MemoryRouter>
       <App>
-        <LinksSection entityType="feature" entityId="self" canAdd={canAdd} entityTitle="This cave" />
+        <LinksSection
+          entityType="feature"
+          entityId="self"
+          canAdd={canAdd}
+          entityTitle="This cave"
+          excludeRelations={excludeRelations}
+        />
       </App>
     </MemoryRouter>,
   );
+}
+
+function roleLink(id: string, code: string, title: string): ResLink {
+  return link({
+    id,
+    relationType: {
+      id: 2,
+      code,
+      name: code,
+      description: null,
+      sortOrder: 10,
+      directed: true,
+      inverseName: null,
+      seeded: true,
+    },
+    members: [
+      member({ id: `${id}-self`, targetId: 'self', isMain: true }),
+      member({
+        id: `${id}-other`,
+        targetId: id,
+        display: { title, subtitle: null, route: null, thumbnailUrl: null },
+      }),
+    ],
+  });
 }
 
 describe('LinksSection', () => {
@@ -103,6 +133,59 @@ describe('LinksSection', () => {
     expect(screen.getByText('p. 7')).toBeInTheDocument();
     // The entity whose page this is does not repeat itself in its own row.
     expect(screen.queryByText('Other thing')).not.toBeInTheDocument();
+  });
+
+  // A page that draws a designed field per role hands those codes over, and the rows are
+  // dropped from the count as well as the list: a heading that counted rows it does not show
+  // is the one number on such a page nobody can account for.
+  it('leaves out the relations the page draws elsewhere, and does not count them', () => {
+    show(
+      3,
+      [
+        roleLink('r1', 'trip-visited', 'A cave the trip visited'),
+        roleLink('r2', 'trip-surveyed', 'A cave the trip surveyed'),
+        roleLink('k1', 'documents', 'A report about it'),
+      ],
+      false,
+      ['trip-visited', 'trip-surveyed'],
+    );
+
+    expect(screen.getByText('Linked items (1)')).toBeInTheDocument();
+    expect(screen.getByText('A report about it')).toBeInTheDocument();
+    expect(screen.queryByText('A cave the trip visited')).not.toBeInTheDocument();
+    expect(screen.queryByText('A cave the trip surveyed')).not.toBeInTheDocument();
+  });
+
+  // The complement of the case above, in the same shape: with nothing excluded the very same
+  // rows are all present and all counted, so the case above is evidence about the exclusion
+  // rather than about the fixture.
+  it('shows every relation when the page asks for no exclusions', () => {
+    show(3, [
+      roleLink('r1', 'trip-visited', 'A cave the trip visited'),
+      roleLink('r2', 'trip-surveyed', 'A cave the trip surveyed'),
+      roleLink('k1', 'documents', 'A report about it'),
+    ]);
+
+    expect(screen.getByText('Linked items (3)')).toBeInTheDocument();
+    expect(screen.getByText('A cave the trip visited')).toBeInTheDocument();
+    expect(screen.getByText('A cave the trip surveyed')).toBeInTheDocument();
+    expect(screen.getByText('A report about it')).toBeInTheDocument();
+  });
+
+  // Every row is excluded and none was cut by paging, so there is nothing left to head — the
+  // server's total must not resurrect a heading over an empty list.
+  it('disappears when every link it received is one the page draws elsewhere', () => {
+    show(1, [roleLink('r1', 'trip-visited', 'A cave the trip visited')], false, ['trip-visited']);
+    expect(screen.queryByText(/^Linked items \(/)).not.toBeInTheDocument();
+  });
+
+  // Only rows that arrived can be told apart, so a total cut short by paging keeps whatever it
+  // did not send. Claiming those were excluded too would be a guess, and the line under the
+  // rows already exists to say the count is ahead of the list.
+  it('keeps what paging withheld in the count, and says the list is short of it', () => {
+    show(2, [roleLink('r1', 'trip-visited', 'A cave the trip visited')], false, ['trip-visited']);
+    expect(screen.getByText('Linked items (1)')).toBeInTheDocument();
+    expect(screen.getByText('Showing the first 0 of 1.')).toBeInTheDocument();
   });
 
   it('shows nothing but the add action when the panel counts no links', () => {

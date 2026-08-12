@@ -188,11 +188,6 @@ public static class HistoryProtection
                 RemoveNamed(changes, ResLinkMemberSensitive, redacted);
             }
         }
-        else if (entityType == nameof(TripLogCave))
-        {
-            // The trip's own data stays; only the cave reference is hidden.
-            RemoveHiddenReference(changes, nameof(TripLogCave.CaveId), linkTargetHidden, redacted);
-        }
 
         return new RedactionResult(changes.Count == 0 ? null : changes, redacted);
     }

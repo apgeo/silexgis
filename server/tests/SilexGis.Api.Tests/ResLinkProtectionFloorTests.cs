@@ -781,11 +781,13 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable
 
         // The trip's own side pages in the database rather than in memory, and the
         // identity has to hold there too: every role link is listed from the trip, with
-        // the guarded cave's name absent from every byte of the filtered answer.
-        var fromTrip = await ShouldAgreeWithItsRowsAsync(viewer, tripId, "trip-visited", 2, "tripLog");
+        // the guarded cave's name absent from every byte of the filtered answer. Three
+        // visits from this side, not two: writing the trip's cave list is itself recorded
+        // as a visit, so the open cave the trip was created naming has a link of its own.
+        var fromTrip = await ShouldAgreeWithItsRowsAsync(viewer, tripId, "trip-visited", 3, "tripLog");
         fromTrip.GetRawText().ShouldNotContain(guardedName);
         await ShouldAgreeWithItsRowsAsync(viewer, tripId, "trip-surveyed", 1, "tripLog");
-        await ShouldAgreeWithItsRowsAsync(viewer, tripId, null, 3, "tripLog");
+        await ShouldAgreeWithItsRowsAsync(viewer, tripId, null, 4, "tripLog");
 
         await SetRevealAsync(true);
         try

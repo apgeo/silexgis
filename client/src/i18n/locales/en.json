@@ -254,7 +254,8 @@
       "surveyModels": "{{count}} 3D models",
       "attachments": "{{count}} attachments",
       "tripLogs": "{{count}} trip logs"
-    }
+    },
+    "tripLogsEmpty": "No trip logs name this cave."
   },
   "entrances": {
     "add": "Add entrance",
@@ -828,7 +829,6 @@
       "SurveyModel": "Survey model",
       "Attachment": "Attachment",
       "Tagging": "Tag",
-      "TripLogCave": "Linked cave",
       "TripLogParticipant": "Participant"
     },
     "field": {
