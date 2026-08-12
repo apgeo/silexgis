@@ -25,6 +25,8 @@ import { applyTripRestore } from '../../components/history/historyModel.ts';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import { TRIP_ROLE_CODES } from '../../components/reslinks/relations.ts';
 import TagChips from '../../components/tags/TagChips.tsx';
+import TripCover from '../../components/trips/TripCover.tsx';
+import TripGallerySection from '../../components/trips/TripGallerySection.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { participantRoleLabel } from '../../components/trips/participantRoles.ts';
 import { formatTripDates, formatUndergroundTime, isMultiDay } from '../../components/trips/tripDates.ts';
@@ -184,6 +186,12 @@ export default function TripLogDetailPage() {
         />
       )}
 
+      {/* The one picture the trip is known by, where a reader meets it first. Chosen by the star
+          on the attachments section below rather than here — one control, one answer — and read
+          through that section's own request, so a cover cannot survive a rule that hides the
+          picture it is made of. */}
+      <TripCover tripId={trip.id} tripTitle={trip.title} />
+
       <Card size="small">
         <Descriptions column={1} size="small">
           {tripTypeLabel && (
@@ -325,6 +333,12 @@ export default function TripLogDetailPage() {
         entityTitle={trip.title}
         excludeRelations={TRIP_ROLE_CODES}
       />
+
+      {/* The trip's photographs and the albums made from them. The cover is not chosen here: it
+          is the starred attachment, drawn at the head of the page and set from the attachments
+          section below, and giving the same choice a second control would leave two places
+          disagreeing about which picture the trip is known by. */}
+      <TripGallerySection tripId={trip.id} tripTitle={trip.title} />
 
       <AttachmentSection entityType="tripLog" entityId={trip.id} canEdit={canEdit} reportSlot />
 

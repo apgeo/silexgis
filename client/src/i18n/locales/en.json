@@ -855,6 +855,9 @@
     "deleteConfirm": "Delete this trip log?",
     "searchPlaceholder": "Search by title…",
     "organizingCavingGroup": "Organizing caving group",
+    "gallery": "Photographs",
+    "noPhotographs": "No photographs are filed against this trip yet.",
+    "galleryVisibleToYou": "The photographs you may see. Somebody else may see more, or fewer.",
     "geometry": "Trip sketch",
     "geometryHint": "Pick a shape, then draw on the map. A new shape replaces the one before it.",
     "drawHint": "Click the map to place points — double-click finishes a line or an area.",
@@ -973,6 +976,23 @@
     "mergeHint": "Pick the duplicate entry to fold in. Their trips and caving groups move across, and the duplicate is removed.",
     "deleteConfirm": "Remove this person from the roster?",
     "deleteRefused": "This person is named on trips. Merge their duplicate entry instead."
+  },
+  "statistics": {
+    "title": "Trip statistics",
+    "open": "Statistics",
+    "asVisibleToYou": "Counted over the trips you may read. Somebody with different access sees different totals for the same subject, and both are right.",
+    "hoursPartial": "Hours cover the {{counted}} of {{total}} times somebody went where entry and exit times were written down.",
+    "span": "From {{from}} to {{to}}.",
+    "trips": "Trips",
+    "people": "People",
+    "places": "Places",
+    "firstVisits": "First visits",
+    "hoursUnderground": "Hours underground",
+    "hours": "{{value, number}} h",
+    "metresSurveyed": "Surveyed",
+    "metresOfRope": "Rope",
+    "surveyStations": "Survey stations",
+    "incidents": "Trips with an incident"
   },
   "permissions": {
     "title": "Permissions",

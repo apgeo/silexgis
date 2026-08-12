@@ -46,6 +46,7 @@ import HistoryPanel, { type HistoryRestore } from '../../components/history/Hist
 import { applyRestore } from '../../components/history/historyModel.ts';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
+import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
 import CaveTripsSection from './CaveTripsSection.tsx';
@@ -325,6 +326,9 @@ export default function CaveDetailPage() {
       {id && <CenterlineSection caveId={id} canEdit={canEdit} />}
 
       {id && <CaveTripsSection caveId={id} />}
+
+      {/* Counted over the same trips the section above lists, so the number and the rows agree. */}
+      {id && <TripStatisticsPanel subject="cave" id={id} />}
 
       {id && (
         <AttachmentSection

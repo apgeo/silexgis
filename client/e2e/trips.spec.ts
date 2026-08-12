@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Locator, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { gotoRoute, login } from './helpers.ts';
+import { uniquePng } from './png.ts';
 
 /**
  * A trip written up the way a caver writes one up: several days long, with a shape drawn on a
@@ -286,6 +287,91 @@ test('a trip logged without touching the date control is a day trip today', asyn
 
   await page.getByRole('button', { name: /Delete/ }).click();
   await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
+});
+
+test('a photograph attached to a trip appears in the trip’s own gallery, and the person on it is counted', async ({
+  page,
+  consoleErrors,
+}) => {
+  const stamp = `${Date.now()}`;
+  const title = `E2E Gallery Trip ${stamp}`;
+  const person = `E2E Counted ${stamp}`;
+  allowDeletedTripRefetch(consoleErrors);
+  await login(page);
+
+  await page.goto('/trip-logs');
+  await page.getByRole('button', { name: /New trip log/ }).click();
+  await page.getByLabel('Title', { exact: true }).fill(title);
+  // One person, named for this run only, so the totals below are about a caver whose whole
+  // history is the trip this flow just wrote — an assertion of exactly one, rather than of
+  // "more than before", which would pass on a page that had stopped filtering entirely.
+  await page.getByRole('button', { name: /Add participant/ }).click();
+  await page.getByPlaceholder('Participant name').first().fill(person);
+  await page.getByRole('button', { name: 'OK' }).click();
+
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  const tripUrl = page.url();
+
+  // Nothing is filed against the trip yet, and the section says so rather than drawing an
+  // empty grid that looks like something failed to load.
+  const gallery = page.getByTestId('trip-gallery');
+  await expect(gallery).toContainText('No photographs are filed against this trip yet.');
+
+  // ---- a photograph, attached to the trip through the trip's own attachments
+  // Pixels unique to the run: the archive refuses content it already holds, so a fixed fixture
+  // would be accepted the first time the suite ever ran and refused every time after.
+  // Waited on the write rather than on the confirmation, and on the SECOND of the two writes
+  // the drop makes: the bytes are stored first and tied to the trip afterwards, so leaving the
+  // page when the upload answers abandons the request that makes it the trip's picture — and
+  // the toast says the same word an earlier save may still be showing, so it cannot stand in
+  // for either of them.
+  const attached = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' && /\/api\/v1\/attachments(\?|$)/.test(response.url()),
+  );
+  await page
+    .locator('.ant-upload input[type=file]')
+    .last()
+    .setInputFiles({ name: `trip-${stamp}.png`, mimeType: 'image/png', buffer: uniquePng() });
+  expect((await attached).status()).toBe(201);
+
+  // ---- and it is the trip's photograph, on a page loaded fresh
+  await page.goto(tripUrl);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  const tiles = page.getByTestId('trip-gallery').getByTestId('photo-tile');
+  await expect(tiles).toHaveCount(1, { timeout: 30_000 });
+  // A rendering, never the upload: a trip page must not hand out the original bytes of a
+  // picture whose subject the reader may not be allowed to place.
+  await expect(tiles.locator('img')).toHaveAttribute('src', /\/thumbnail\?/);
+  // The section says whose photographs these are, for the same reason the totals below do.
+  await expect(page.getByTestId('trip-gallery')).toContainText('The photographs you may see');
+
+  // ---- the person on it, counted across the trips this reader may read
+  await gotoRoute(page, '/cavers');
+  await page.getByPlaceholder('Search by name…').fill(person);
+  const row = page.getByRole('row', { name: new RegExp(person) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.getByRole('button', { name: 'Statistics' }).click();
+
+  const totals = page.getByTestId('trip-statistics');
+  await expect(totals).toBeVisible({ timeout: 15_000 });
+  // Nothing is stored: this figure is worked out from the trip written a moment ago, and this
+  // person went on exactly one. Matched on the tile's own heading rather than on the word
+  // anywhere inside it — "Trips with an incident" is a second tile that also says "Trips".
+  const tripsTile = totals.locator('.ant-statistic').filter({
+    has: page.locator('.ant-statistic-title', { hasText: /^Trips$/ }),
+  });
+  await expect(tripsTile).toContainText('1', { timeout: 15_000 });
+  // The sentence that stops two colleagues comparing screens from filing the difference as a
+  // bug — and stops the repair being to take the filter off.
+  await expect(totals).toContainText('Counted over the trips you may read');
+
+  await page.goto(tripUrl);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: /Delete/ }).click();
+  const confirm = page.locator('.ant-popover:visible');
+  await confirm.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
 });
 

@@ -62,6 +62,59 @@ public static class TripRoleLinks
     }
 
     /// <summary>
+    /// Every (trip, feature) pair named by a trip role across a set of trips, as a subquery over
+    /// whatever query produced those trips. The point of taking a query rather than a list of ids
+    /// is that a caller's visibility walk stays inside the statement: a total over these pairs is
+    /// then counted over the same rows the caller would be handed, in one pass, and cannot drift
+    /// from them.
+    ///
+    /// Pairs repeat when two roles or two links name the same feature on one trip, so a caller
+    /// counting anything reduces them first — the retired pairing was unique per (trip, cave) and
+    /// a naive count would now say two where it used to say one.
+    /// </summary>
+    /// <remarks>
+    /// The narrowing to particular features is a parameter rather than something a caller adds
+    /// afterwards, and so is every other condition: the pair is built in the projection, and a
+    /// database cannot be asked about a member of a value the projection is still constructing.
+    /// What comes back is therefore read, not composed on further.
+    /// </remarks>
+    public static IQueryable<TripFeaturePair> PairsIn(
+        SilexGisDbContext db, IQueryable<Guid> tripIds, IReadOnlyCollection<Guid>? featureIds = null)
+    {
+        var roleIds = RoleIds(db);
+        return from tripMember in db.ResLinkMembers.AsNoTracking()
+               where tripMember.EntityType == AttachedEntityType.TripLog
+                   && tripMember.EntityId != null
+                   && tripIds.Contains(tripMember.EntityId.Value)
+               join link in db.ResLinks.AsNoTracking() on tripMember.ResLinkId equals link.Id
+               where link.RelationTypeId != null && roleIds.Contains(link.RelationTypeId.Value)
+               join featureMember in db.ResLinkMembers.AsNoTracking()
+                   on tripMember.ResLinkId equals featureMember.ResLinkId
+               where featureMember.FeatureId != null
+                   && (featureIds == null || featureIds.Contains(featureMember.FeatureId.Value))
+               select new TripFeaturePair(tripMember.EntityId!.Value, featureMember.FeatureId!.Value);
+    }
+
+    /// <summary>
+    /// The features any trip role names across a set of trips, as a subquery over the query that
+    /// produced them. Ids repeat and a caller reduces them.
+    /// </summary>
+    public static IQueryable<Guid> FeatureIdsNamedIn(SilexGisDbContext db, IQueryable<Guid> tripIds)
+    {
+        var roleIds = RoleIds(db);
+        return from tripMember in db.ResLinkMembers.AsNoTracking()
+               where tripMember.EntityType == AttachedEntityType.TripLog
+                   && tripMember.EntityId != null
+                   && tripIds.Contains(tripMember.EntityId.Value)
+               join link in db.ResLinks.AsNoTracking() on tripMember.ResLinkId equals link.Id
+               where link.RelationTypeId != null && roleIds.Contains(link.RelationTypeId.Value)
+               join featureMember in db.ResLinkMembers.AsNoTracking()
+                   on tripMember.ResLinkId equals featureMember.ResLinkId
+               where featureMember.FeatureId != null
+               select featureMember.FeatureId!.Value;
+    }
+
+    /// <summary>
     /// Every (trip, feature) pair named by a trip role across a set of trips, deduplicated, in
     /// one read. Optionally narrowed to one kind of feature, for a caller whose surface promises
     /// a particular kind; left open otherwise, because a role names any linkable target and

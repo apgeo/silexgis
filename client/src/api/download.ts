@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { userManager } from '../auth/auth.tsx';
+import type { StatisticsSubject } from './hooks.ts';
 
 /**
  * Authenticated file download. Export endpoints require a bearer token, which plain
@@ -67,4 +68,22 @@ export function featureExportUrl(
 /** GET /api/v1/geofiles/{id}/export — an imported geofile's rows re-exported. */
 export function geofileExportUrl(id: string, format: string): string {
   return buildUrl(`/api/v1/geofiles/${encodeURIComponent(id)}/export`, { format });
+}
+
+/** The route segment each statistics subject lives under. */
+const statisticsSegments: Record<StatisticsSubject, string> = {
+  caver: 'cavers',
+  cave: 'caves',
+  cavingGroup: 'caving-groups',
+};
+
+/**
+ * GET /api/v1/stats/{subject}/{id}/export — the same figures the page shows, as a spreadsheet.
+ *
+ * The file is built from the same query the page asked, for the same caller, so a saved copy says
+ * what the screen said. It also carries the statement that the figures are that reader's own: a
+ * spreadsheet outlives the page it came from, and two people's copies legitimately disagree.
+ */
+export function tripStatisticsExportUrl(subject: StatisticsSubject, id: string): string {
+  return `/api/v1/stats/${statisticsSegments[subject]}/${encodeURIComponent(id)}/export`;
 }

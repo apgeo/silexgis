@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
-import { DeleteOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
+import { BarChartOutlined, DeleteOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
 import {
   App,
   Button,
@@ -16,6 +16,7 @@ import {
   Typography,
 } from 'antd';
 import List from '../../components/List.tsx';
+import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCan,
@@ -132,6 +133,7 @@ export default function CavingGroupsPage() {
   const createCavingGroup = useCreateCavingGroup();
   const [creating, setCreating] = useState(false);
   const [managing, setManaging] = useState<CavingGroupInfo | null>(null);
+  const [counting, setCounting] = useState<CavingGroupInfo | null>(null);
   const [form] = Form.useForm<{
     name: string;
     type: CavingGroupInfo['type'];
@@ -197,11 +199,18 @@ export default function CavingGroupsPage() {
           {
             title: '',
             key: 'actions',
-            width: 140,
+            width: 260,
             render: (_, group) => (
-              <Button size="small" onClick={() => setManaging(group)}>
-                {t('cavingGroups.manage')}
-              </Button>
+              <Flex gap={8}>
+                <Button size="small" onClick={() => setManaging(group)}>
+                  {t('cavingGroups.manage')}
+                </Button>
+                {/* What the club has done is counted over the trips this reader may see, so it
+                    needs no gate of its own beyond being able to read the club at all. */}
+                <Button size="small" icon={<BarChartOutlined />} onClick={() => setCounting(group)}>
+                  {t('statistics.open')}
+                </Button>
+              </Flex>
             ),
           },
         ]}
@@ -237,6 +246,16 @@ export default function CavingGroupsPage() {
       </Modal>
 
       {managing && <MemberDrawer group={managing} onClose={() => setManaging(null)} />}
+
+      <Drawer
+        title={counting?.name}
+        open={counting !== null}
+        onClose={() => setCounting(null)}
+        size={520}
+        destroyOnHidden
+      >
+        {counting && <TripStatisticsPanel subject="cavingGroup" id={counting.id} />}
+      </Drawer>
     </div>
   );
 }

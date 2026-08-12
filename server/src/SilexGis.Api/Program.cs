@@ -39,6 +39,7 @@ using SilexGis.Api.Features.Filters;
 using SilexGis.Api.Features.ResLinks;
 using SilexGis.Api.Features.FeatureShares;
 using SilexGis.Api.Features.Search;
+using SilexGis.Api.Features.Statistics;
 using SilexGis.Api.Features.Tags;
 using SilexGis.Api.Features.Taxonomies;
 using SilexGis.Api.Features.Cavers;
@@ -251,6 +252,7 @@ try
     api.MapTripLogEndpoints();
     api.MapTripTypeEndpoints();
     api.MapTripParticipantRoleEndpoints();
+    api.MapTripStatisticsEndpoints();
     api.MapTagEndpoints();
     api.MapAuditEndpoints();
     api.MapAccessHistoryEndpoints();

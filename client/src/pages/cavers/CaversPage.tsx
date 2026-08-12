@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DeleteOutlined, MergeCellsOutlined, PlusOutlined } from '@ant-design/icons';
+import { BarChartOutlined, DeleteOutlined, MergeCellsOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   App,
   Button,
+  Drawer,
   Flex,
   Form,
   Input,
@@ -25,6 +26,7 @@ import {
   useUpdateCaver,
   type CaverInfo,
 } from '../../api/hooks.ts';
+import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 
 interface CaverForm {
@@ -100,6 +102,7 @@ export default function CaversPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<CaverInfo | null>(null);
   const [merging, setMerging] = useState<CaverInfo | null>(null);
+  const [counting, setCounting] = useState<CaverInfo | null>(null);
   const [form] = Form.useForm<CaverForm>();
 
   // Contact fields and roster edits sit behind Cavers · Write (the label level every
@@ -193,6 +196,18 @@ export default function CaversPage() {
               </Space>
             ),
           },
+          {
+            // Open to anyone who may read the roster: what comes back is already cut to the
+            // trips this reader may see, so there is nothing further to gate here.
+            title: '',
+            key: 'statistics',
+            width: 140,
+            render: (_: unknown, caver: CaverInfo) => (
+              <Button size="small" icon={<BarChartOutlined />} onClick={() => setCounting(caver)}>
+                {t('statistics.open')}
+              </Button>
+            ),
+          },
           ...(canKeepRoster
             ? [
                 {
@@ -257,6 +272,16 @@ export default function CaversPage() {
       </Modal>
 
       {merging && <MergeModal target={merging} onClose={() => setMerging(null)} />}
+
+      <Drawer
+        title={counting?.name}
+        open={counting !== null}
+        onClose={() => setCounting(null)}
+        size={520}
+        destroyOnHidden
+      >
+        {counting && <TripStatisticsPanel subject="caver" id={counting.id} />}
+      </Drawer>
     </div>
   );
 }

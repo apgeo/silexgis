@@ -165,6 +165,7 @@ public static class DependencyInjection
         services.AddScoped<ContentIntake>();
         services.AddSingleton<IVectorIO, GdalVectorIO>();
         services.AddSingleton<RasterCogService>();
+        services.AddSingleton<Documents.ISpreadsheetWriter, Documents.XlsxSpreadsheetWriter>();
 
         // Readers of stored files' text layers. Stateless, so one of each serves everything;
         // the selector is what turns a stored format into the reader that understands it.

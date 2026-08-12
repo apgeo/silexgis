@@ -855,6 +855,9 @@
     "deleteConfirm": "Ștergeți acest jurnal de tură?",
     "searchPlaceholder": "Caută după titlu…",
     "organizingCavingGroup": "Grupul organizator",
+    "gallery": "Fotografii",
+    "noPhotographs": "Nicio fotografie nu este atașată încă acestei ture.",
+    "galleryVisibleToYou": "Fotografiile pe care le puteți vedea. Altcineva poate vedea mai multe sau mai puține.",
     "geometry": "Schița turei",
     "geometryHint": "Alegeți o formă, apoi desenați pe hartă. O formă nouă o înlocuiește pe cea dinainte.",
     "drawHint": "Faceți clic pe hartă pentru a pune puncte — dublu-clic încheie o linie sau o suprafață.",
@@ -973,6 +976,23 @@
     "mergeHint": "Alegeți înregistrarea duplicat. Turele și grupurile sale trec la aceasta, iar duplicatul este eliminat.",
     "deleteConfirm": "Eliminați această persoană din listă?",
     "deleteRefused": "Persoana apare în ture. Unificați înregistrarea duplicat în loc."
+  },
+  "statistics": {
+    "title": "Statistici din ture",
+    "open": "Statistici",
+    "asVisibleToYou": "Numărate peste turele pe care le puteți citi. Cineva cu alt acces vede alte totaluri pentru același subiect, iar amândouă sunt corecte.",
+    "hoursPartial": "Orele acoperă {{counted}} din {{total}} participări în care au fost notate ora intrării și ora ieșirii.",
+    "span": "Din {{from}} până în {{to}}.",
+    "trips": "Ture",
+    "people": "Persoane",
+    "places": "Locuri",
+    "firstVisits": "Primele vizite",
+    "hoursUnderground": "Ore în subteran",
+    "hours": "{{value, number}} h",
+    "metresSurveyed": "Cartat",
+    "metresOfRope": "Coardă",
+    "surveyStations": "Puncte topografice",
+    "incidents": "Ture cu incident"
   },
   "permissions": {
     "title": "Permisiuni",

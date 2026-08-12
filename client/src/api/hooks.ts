@@ -145,6 +145,7 @@ export const queryKeys = {
   cavingGroups: ['cavingGroups'] as const,
   cavers: ['cavers'] as const,
   cavingGroupMembers: (cavingGroupId: string) => ['teams', cavingGroupId, 'members'] as const,
+  tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
   objectAccess: (entityType: string, entityId: string) => ['object-access', entityType, entityId] as const,
   history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
   mfa: ['mfa'] as const,
@@ -3863,5 +3864,48 @@ export function useFilterResolve(world: string, ids: readonly string[]) {
     enabled: ids.length > 0,
     // Names change rarely and this is asked every time a form with a stored value opens.
     staleTime: 5 * 60_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Trip statistics
+// ---------------------------------------------------------------------------
+
+/**
+ * What a person, a cave or a club adds up to across trips.
+ *
+ * Every figure is counted over the trips the caller may read, so two people legitimately see
+ * different totals for the same subject. That is a fact about the answer, not about the request —
+ * whatever shows these has to say so on the screen beside them, or the difference is reported as a
+ * bug and repaired by removing the filter.
+ */
+export type TripStatistics = components['schemas']['TripStatisticsDto'];
+
+/** Which of the three things is being added up. */
+export type StatisticsSubject = 'caver' | 'cave' | 'cavingGroup';
+
+export function useTripStatistics(
+  subject: StatisticsSubject,
+  id: string | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.tripStatistics(subject, id ?? ''),
+    queryFn: () => {
+      const path = { id: id! };
+      if (subject === 'caver') {
+        return unwrap(api.GET('/api/v1/stats/cavers/{id}', { params: { path } }));
+      }
+      if (subject === 'cave') {
+        return unwrap(api.GET('/api/v1/stats/caves/{id}', { params: { path } }));
+      }
+      return unwrap(api.GET('/api/v1/stats/caving-groups/{id}', { params: { path } }));
+    },
+    enabled: enabled && !!id,
+    // Derived on every request from trips that change slowly; a page revisited within the minute
+    // does not need to ask again.
+    staleTime: 30_000,
+    // A caller who may not read the subject is refused, and the surface simply does not appear.
+    retry: false,
   });
 }

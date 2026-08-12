@@ -143,6 +143,17 @@ Previous versions:
   head* — so nobody has to invent a job to record a circumstance. That detail is part of the trip
   and goes no further than the trip does: you cannot search for the trips somebody led, because that
   is a question about a person, assembled out of records the asker may never be allowed to read.
+- **What it all adds up to** — a person, a cave and a club each get their totals: trips, hours
+  underground, metres surveyed, first visits, how many people, how many trips had an incident. Every
+  one of them is counted **over the trips you may read**, and the screen says so, because two people
+  with different access legitimately see different totals for the same person and both are right.
+  Nothing is stored: hours are worked out from the times recorded, over however many days the trip
+  really ran, and a first visit is simply the earliest trip that took somebody somewhere — so typing
+  up an older trip from the archive corrects the figures instead of leaving a stale flag behind.
+  Any of the three can be saved as a spreadsheet, which carries exactly what the screen carried and
+  says whose totals they are, because a file gets forwarded and read months later.
+- **A trip has a gallery and a cover** — the photographs taken on it, the albums made of them, and a
+  headline picture chosen with the same star that names a cave's.
 - **Tags, saved & shareable map views**, and **multi-window** pop-out panels.
 - **Share links** — hand out a revocable link to one feature and what it contains, either
   public or sign-in-only. A share never reveals a protected location.
