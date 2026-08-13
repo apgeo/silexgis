@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
+using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Persistence;
@@ -93,6 +94,13 @@ public static class AccessEntryMapping
     /// anchor still binds them — both the allow that lets them delegate below it and the
     /// deny that must keep them out.
     /// </summary>
+    /// <remarks>
+    /// The facts an anchored row contributes are its access columns, never a shortened set:
+    /// who owns it and who it is shown to are two of the reasons the author may hold an
+    /// action there, and a fact left unbuilt is indistinguishable from a fact that is
+    /// genuinely absent — an unread owner column reads as "owned by nobody" and refuses the
+    /// owner.
+    /// </remarks>
     public static async Task<AccessTargetFacts?> AnchorFactsAsync(
         SilexGisDbContext db, AccessEntry entry, CancellationToken ct)
     {
@@ -109,6 +117,21 @@ public static class AccessEntryMapping
 
             var setIds = await db.FeatureSetMembers.AsNoTracking()
                 .Where(m => m.FeatureId == featureId).Select(m => m.FeatureSetId).ToArrayAsync(ct);
+
+            // A feature is readable when its own audience or any ancestor's admits the
+            // caller, so the chain has to carry the ancestors too: a private cave under an
+            // area everybody signed in may see is readable, and an author whose read comes
+            // only from that area would otherwise be refused permission to pass it on one
+            // step after the guard deciding whether they may administer the cave at all had
+            // admitted them on exactly that reading.
+            var ancestorsAbove = feature.AncestorIds.Where(id => id != feature.Id).ToArray();
+            List<VisibilityFact> ancestorAudience = ancestorsAbove.Length == 0
+                ? []
+                : await db.Features.AsNoTracking()
+                    .Where(a => ancestorsAbove.Contains(a.Id))
+                    .Select(a => new VisibilityFact(a.Visibility, a.CavingGroupId))
+                    .ToListAsync(ct);
+
             return new AccessTargetFacts
             {
                 ObjectId = feature.Id,
@@ -118,7 +141,11 @@ public static class AccessEntryMapping
                 FeatureKind = feature.Kind,
                 FeatureTypeId = feature.FeatureTypeId,
                 FeatureSetIds = setIds,
-                VisibilityChain = [new VisibilityFact(feature.Visibility, feature.CavingGroupId)],
+                VisibilityChain =
+                [
+                    new VisibilityFact(feature.Visibility, feature.CavingGroupId),
+                    .. ancestorAudience,
+                ],
             };
         }
 
@@ -146,24 +173,93 @@ public static class AccessEntryMapping
             // Where a document is filed is part of what the author holds over it, so it
             // rides along here too: without it a rule denying an archive could be walked
             // around one document at a time, by anchoring on the document instead of the
-            // shelf it sits on.
+            // shelf it sits on. Its own access columns ride along for the same reason they
+            // do everywhere else — a document's owner holds every action on it by owning
+            // it, and its audience can admit a read.
             var filedUnder = await db.CabinetDocuments.AsNoTracking()
                 .Where(m => m.DocumentId == documentId)
                 .Join(db.Cabinets.AsNoTracking(), m => m.CabinetId, c => c.Id, (_, c) => c.AncestorIds)
                 .ToListAsync(ct);
-            return new AccessTargetFacts
+            Guid[] cabinetIds = [.. filedUnder.SelectMany(ids => ids).Distinct()];
+
+            // Read past the soft-delete filter, as the feature anchor above is: a rule the
+            // author carries over a document that has been sent to the bin still binds
+            // them, and reading nothing there would quietly turn that rule off.
+            var documentColumns = await AccessColumnsAsync(
+                db.Documents.IgnoreQueryFilters(), documentId, ct);
+            return documentColumns is null
+                ? new AccessTargetFacts { ObjectId = documentId, CabinetIds = cabinetIds }
+                : AccessTargetFacts.Of(documentColumns) with { CabinetIds = cabinetIds };
+        }
+
+        if (entry.ScopeKind == AccessScopeKind.Object && entry.ScopeId is { } objectId)
+        {
+            // Everything anchored on a row that is neither a feature nor a document. Four
+            // of those kinds carry the owner/club/audience columns, and most of what an
+            // author holds over such a row is made of them: its owner holds every action on
+            // it by ownership alone, and its audience can admit a read. Naming only the id
+            // hid both, and the author of a trip was refused permission to share their own
+            // trip one step after the guard deciding whether they may manage it at all had
+            // let them through on exactly that ownership. The remaining kinds a rule may be
+            // anchored on here — a stored file, a club, a ruleset, a feature set — carry no
+            // owner and no audience column, so an id really is all there is to say.
+            var columns = entry.Domain switch
             {
-                ObjectId = documentId,
-                CabinetIds = [.. filedUnder.SelectMany(ids => ids).Distinct()],
+                AccessDomain.TripLogs => await AccessColumnsAsync(db.TripLogs, objectId, ct),
+                AccessDomain.Geofiles => await AccessColumnsAsync(db.Geofiles, objectId, ct),
+                AccessDomain.GeoreferencedMaps => await AccessColumnsAsync(db.GeoreferencedMaps, objectId, ct),
+                AccessDomain.MapViews => await AccessColumnsAsync(db.MapViews, objectId, ct),
+                _ => null,
             };
+
+            return columns is null
+                ? new AccessTargetFacts { ObjectId = objectId }
+                : AccessTargetFacts.Of(columns);
         }
 
         return entry.ScopeKind switch
         {
             AccessScopeKind.CavingGroup => new AccessTargetFacts { CavingGroupId = entry.ScopeId },
-            AccessScopeKind.Object => new AccessTargetFacts { ObjectId = entry.ScopeId },
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// One row's access columns and nothing else — read rather than materialized whole
+    /// because the rows behind them carry geometry and whole written reports this decision
+    /// has no use for. Null when the row is genuinely gone — which a rule outlives, since
+    /// deleting what a rule is anchored on does not delete the rule — and the id-only facts
+    /// that result can only refuse, so nothing is admitted on the strength of a row nobody
+    /// could read.
+    /// </summary>
+    private static Task<ProtectedColumns?> AccessColumnsAsync<TRow>(
+        IQueryable<TRow> rows, Guid id, CancellationToken ct)
+        where TRow : class, IProtectedEntity =>
+        rows.AsNoTracking()
+            .Where(row => row.Id == id)
+            .Select(row => new ProtectedColumns
+            {
+                Id = row.Id,
+                OwnerUserId = row.OwnerUserId,
+                CavingGroupId = row.CavingGroupId,
+                Visibility = row.Visibility,
+            })
+            .FirstOrDefaultAsync(ct);
+
+    /// <summary>
+    /// The access columns of a protected row, carried in the shape the fact builder every
+    /// other caller uses already accepts — so the facts of an anchored row are described in
+    /// one place rather than two that can drift apart.
+    /// </summary>
+    private sealed class ProtectedColumns : IProtectedEntity
+    {
+        public required Guid Id { get; init; }
+
+        public Guid OwnerUserId { get; set; }
+
+        public Guid? CavingGroupId { get; set; }
+
+        public Visibility Visibility { get; set; }
     }
 
     private static async Task<bool> AnchorExistsAsync(
