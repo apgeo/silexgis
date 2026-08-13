@@ -372,6 +372,26 @@ public static class TaxonomySeeder
             }}
             """;
 
+        // A continuation is an open way on: the thing an exploring club chases across years, and
+        // the reason a trip's account of it is not enough on its own.
+        //
+        // The state belongs here, on the place, and not on the trip that named it. A continuation
+        // outlives the trip that found it and is answered by a different trip, often years later;
+        // held per trip, "is this one still open" would have as many answers as visits and no way
+        // to tell which is current. A trip's link to it records what that trip saw — the state
+        // records what is true now.
+        //
+        // The grade is how promising it looked, on the scale exploring clubs already keep their
+        // question marks by, so a season can be planned from the register rather than from memory.
+        const string continuationSchema =
+            """
+            {"type":"object","properties":{
+              "state":{"type":"string","title":"State","enum":["open","checked","dead-end","continues"]},
+              "grade":{"type":"string","title":"Promise","enum":["A","B","C","D"]},
+              "note":{"type":"string","title":"What is left to do"}
+            }}
+            """;
+
         // Accepted geometry classes follow the legacy loose semantics: a kind accepts its
         // class plus the matching Multi* (imported multi-part features round-trip).
         GeometryClass[] point = [GeometryClass.Point, GeometryClass.MultiPoint];
@@ -403,7 +423,7 @@ public static class TaxonomySeeder
             ("bivouac", "Bivouac", FeatureCategory.Surface, point, false, "bivouac.png", null),
             ("exploration_point", "Exploration point", FeatureCategory.Surface, point, false, "exploration_point.png", null),
             ("desobstruction", "Desobstruction", FeatureCategory.Surface, point, false, "desobstruction.png", null),
-            ("continuation", "Continuation", FeatureCategory.Surface, point, false, "continuation.png", null),
+            ("continuation", "Continuation", FeatureCategory.Surface, point, false, "continuation.png", continuationSchema),
             ("calm", "Calm", FeatureCategory.Surface, point, false, "calm.png", null),
             ("detritus", "Detritus", FeatureCategory.Surface, point, false, "dedritus.png", null),
             ("driller", "Drilling point", FeatureCategory.Surface, point, false, "driller.png", null),

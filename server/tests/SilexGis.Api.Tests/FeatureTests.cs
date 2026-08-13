@@ -343,6 +343,48 @@ public sealed class FeatureTests : IAsyncLifetime, IDisposable
             .ShouldBe("feature.not_found");
     }
 
+    /// <summary>
+    /// A lead is a place, and whether it is still open is a fact about that place.
+    ///
+    /// <para>
+    /// A trip's link to a continuation records what that trip saw; the state here records what is
+    /// true now. Held per trip instead, "is this one still going" would have as many answers as
+    /// visits and nothing to say which of them is current — which is the whole reason an exploring
+    /// club keeps a register rather than re-reading its logbooks.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_continuation_records_whether_it_is_still_going_and_how_promising_it_looked()
+    {
+        long continuationTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            continuationTypeId = await db.FeatureTypes
+                .Where(t => t.Code == "continuation").Select(t => t.Id).SingleAsync();
+        }
+
+        var marker = Guid.NewGuid().ToString("N")[..8];
+
+        // The positive half: a lead worth going back for, written as the register would hold it.
+        var id = await CreateAsync(owner, Body(
+            $"Continuation {marker}", continuationTypeId,
+            properties: new { state = "open", grade = "A", note = "draughting, needs two hours of digging" }));
+
+        var read = (await owner.GetFromJsonAsync<JsonObject>($"/api/v1/features/{id}"))!;
+        read["feature"]!["properties"]!["state"]!.GetValue<string>().ShouldBe("open");
+        read["feature"]!["properties"]!["grade"]!.GetValue<string>().ShouldBe("A");
+
+        // And the negative half in the same test, so the positive is not passing for some reason
+        // unrelated to the schema: a state outside the vocabulary is refused rather than stored,
+        // which is what stops the register filling with words only its author understands.
+        var nonsense = await owner.PostAsJsonAsync("/api/v1/features", Body(
+            $"Continuation bad {marker}", continuationTypeId, properties: new { state = "maybe?" }));
+        nonsense.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await nonsense.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
+            .ShouldBe("feature.properties_invalid");
+    }
+
     private static object Body(
         string name, long featureTypeId, string visibility = "private",
         object? geometry = null, object? properties = null) => new
