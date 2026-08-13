@@ -114,6 +114,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<TripParticipantRole> TripParticipantRoles => Set<TripParticipantRole>();
 
+    public DbSet<TripReportTemplate> TripReportTemplates => Set<TripReportTemplate>();
+
     public DbSet<TripLog> TripLogs => Set<TripLog>();
 
     public DbSet<TripLogParticipant> TripLogParticipants => Set<TripLogParticipant>();

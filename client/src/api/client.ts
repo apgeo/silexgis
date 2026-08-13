@@ -9,11 +9,22 @@ export class ApiError extends Error {
   readonly status: number;
   readonly code?: string;
 
-  constructor(status: number, code?: string) {
+  /**
+   * What the server wrote about this particular refusal, when it wrote anything.
+   *
+   * Kept because a few refusals are only useful in their own words — a layout the parser could
+   * not read names the line that is wrong, and no wording this client holds could say that. Never
+   * shown by default: a screen that has a phrase of its own for a code shows that phrase, and this
+   * is for the cases where the server knows something the client cannot.
+   */
+  readonly detail?: string;
+
+  constructor(status: number, code?: string, detail?: string) {
     super(`API error ${status}${code ? ` (${code})` : ''}`);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
+    this.detail = detail;
   }
 }
 

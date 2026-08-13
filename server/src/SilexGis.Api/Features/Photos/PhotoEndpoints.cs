@@ -82,7 +82,7 @@ public static class PhotoEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var photographs = (await PhotoQueries.VisiblePhotographsAsync(db, ctx, ct)).Narrow(db, query);
+        var photographs = (await PhotographReads.VisiblePhotographsAsync(db, ctx, ct)).Narrow(db, query);
 
         if (!string.IsNullOrWhiteSpace(query.Bbox))
         {
@@ -267,7 +267,7 @@ public static class PhotoEndpoints
         }
 
         var groups = Math.Clamp(limit ?? 50, 1, 200);
-        var photographs = await PhotoQueries.VisiblePhotographsAsync(db, ctx, ct);
+        var photographs = await PhotographReads.VisiblePhotographsAsync(db, ctx, ct);
 
         // The hashes worth looking at first: computed over what this caller may read, so a
         // hash shared with a picture they cannot see is not a group at all.
@@ -625,7 +625,7 @@ public static class PhotoEndpoints
         IReadOnlyList<Document> documents,
         CancellationToken ct)
     {
-        var rows = await PhotoQueries.RowsAsync(db, documents, ct);
+        var rows = await PhotographReads.RowsAsync(db, documents, ct);
         var disclosable = await disclosure.DisclosableIdsAsync(ctx, [.. rows.Select(r => r.File.Id)], ct);
         return [.. rows.Select(r => r.ToDto(tokens, disclosable.Contains(r.File.Id)))];
     }

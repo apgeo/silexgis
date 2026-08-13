@@ -601,7 +601,7 @@ public static class AlbumEndpoints
         }
 
         var ids = albums.Select(a => a.Id).ToList();
-        var photographs = await PhotoQueries.VisiblePhotographsAsync(db, ctx, ct);
+        var photographs = await PhotographReads.VisiblePhotographsAsync(db, ctx, ct);
 
         // One grouped statement rather than a count per album: the access walk inside it would
         // otherwise become a correlated subplan run once per row of a page.

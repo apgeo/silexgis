@@ -87,3 +87,26 @@ const statisticsSegments: Record<StatisticsSubject, string> = {
 export function tripStatisticsExportUrl(subject: StatisticsSubject, id: string): string {
   return `/api/v1/stats/${statisticsSegments[subject]}/${encodeURIComponent(id)}/export`;
 }
+
+/**
+ * GET /api/v1/trip-logs/{id}/report — one trip written up as a document.
+ *
+ * The server builds it from the same reading of the trip this caller's report page was drawn
+ * from, so the file says what the screen said and nothing more: the caves it names are that
+ * reader's list, the pictures are that reader's pictures, and the account of what went wrong is
+ * in it only when that reader may change the trip.
+ */
+export function tripReportUrl(id: string, templateId?: string): string {
+  return buildUrl(`/api/v1/trip-logs/${encodeURIComponent(id)}/report`, { templateId });
+}
+
+/**
+ * GET /api/v1/trip-report-templates/default — the layout the system ships, as a file to edit.
+ *
+ * It is the starting point for a club's own layout and it documents the whole substitution
+ * vocabulary in its own comments, which is why it is handed over as a file rather than described
+ * on a page: the person editing it reads the vocabulary in the editor they are editing in.
+ */
+export function tripReportTemplateDefaultUrl(): string {
+  return '/api/v1/trip-report-templates/default';
+}

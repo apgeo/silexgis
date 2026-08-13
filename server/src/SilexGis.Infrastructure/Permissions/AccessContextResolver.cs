@@ -16,6 +16,14 @@ namespace SilexGis.Infrastructure.Permissions;
 public static class AccessContextResolver
 {
     /// <summary>
+    /// Stands in for "some account, no particular one". Drawn once per process rather than
+    /// written down as a constant: ownership is decided by comparing this against a row's owner,
+    /// and a fixed value — an all-zero one above all — is the kind that eventually equals a real
+    /// column somewhere.
+    /// </summary>
+    private static readonly Guid NoAccountInParticular = Guid.NewGuid();
+
+    /// <summary>
     /// The context a hypothetical member of one caving group would have — what the rule
     /// editor previews before saving. It carries no user identity on purpose: an answer
     /// that depended on whose account it was would not be an answer about the group.
@@ -48,6 +56,21 @@ public static class AccessContextResolver
         return new AccessContext(
             Guid.Empty, isFullAdmin, [cavingGroupId], [.. entries.Select(e => e.ToSnapshot())]);
     }
+
+    /// <summary>
+    /// The context every signed-in account has and no account has less of: no personal grant,
+    /// no caving group, nothing owned — only what an account holds by virtue of being one.
+    /// </summary>
+    /// <remarks>
+    /// What a copy made for a whole audience may contain. A file built from one person's reading
+    /// and then filed where a wider audience reaches it would hand that audience their reading;
+    /// built from this one, it holds only what any of them could have obtained alone. It errs
+    /// narrow by construction — an entry someone holds can widen their own reading and never this
+    /// one — which is the direction an artifact that leaves the system has to err in.
+    /// </remarks>
+    public static Task<AccessContext> ResolveForAnyAccountAsync(
+        SilexGisDbContext db, CancellationToken ct = default) =>
+        ResolveAsync(db, NoAccountInParticular, ct);
 
     public static async Task<AccessContext> ResolveAsync(
         SilexGisDbContext db, Guid userId, CancellationToken ct = default)

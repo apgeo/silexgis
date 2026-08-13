@@ -4,20 +4,11 @@ using SilexGis.Api.Features.Import;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Permissions;
 
 namespace SilexGis.Api.Features.Photos;
-
-/// <summary>
-/// A photograph and everything a response about it is built from, gathered once so a listing
-/// does not fetch the same rows per item.
-/// </summary>
-public sealed record PhotoRow(
-    Document Document,
-    StoredFile File,
-    PhotoDetails? Details,
-    string? PhotographerLabel);
 
 /// <summary>
 /// One place that turns a photograph into what a caller is shown.

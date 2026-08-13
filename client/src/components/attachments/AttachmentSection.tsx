@@ -33,8 +33,8 @@ interface AttachmentSectionProps {
   entityId: string;
   canEdit: boolean;
   /**
-   * When set, a distinct "Report document" slot is shown for the single report-role
-   * attachment (the completed trip report) and it is kept out of the generic lists.
+   * When set, a distinct "Report document" slot is shown for the report-role attachments (the
+   * trip's completed report) and they are kept out of the generic lists.
    */
   reportSlot?: boolean;
   /**
@@ -74,10 +74,14 @@ export default function AttachmentSection({
   const deleteAttachment = useDeleteAttachment();
   const setPrimary = useSetPrimaryAttachment();
 
-  // The report document (if any) lives in its own slot and is kept out of the generic lists.
-  const report = reportSlot ? (attachments ?? []).find((a) => a.role === 'report') : undefined;
-  const photos = (attachments ?? []).filter((a) => a.file.kind === 'image' && a.id !== report?.id);
-  const documents = (attachments ?? []).filter((a) => a.file.kind !== 'image' && a.id !== report?.id);
+  // The report documents live in their own slot and are kept out of the generic lists. Usually
+  // one, but a club that uploaded the report it wrote keeps it when a write-up is generated
+  // beside it — the generated one replaces the generated one, and nothing silently removes a
+  // document somebody put here by hand.
+  const reports = reportSlot ? (attachments ?? []).filter((a) => a.role === 'report') : [];
+  const inSlot = new Set(reports.map((a) => a.id));
+  const photos = (attachments ?? []).filter((a) => a.file.kind === 'image' && !inSlot.has(a.id));
+  const documents = (attachments ?? []).filter((a) => a.file.kind !== 'image' && !inSlot.has(a.id));
 
   /**
    * Asks whether to store content the archive already holds.
@@ -153,10 +157,10 @@ export default function AttachmentSection({
       {reportSlot && (
         <div style={{ marginBottom: 16 }}>
           <Typography.Text strong>{t('attachments.reportDocument')}</Typography.Text>
-          {report ? (
+          {reports.length > 0 ? (
             <List
               size="small"
-              dataSource={[report]}
+              dataSource={reports}
               renderItem={(attachment) => (
                 <List.Item
                   actions={[

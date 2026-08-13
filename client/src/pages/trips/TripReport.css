@@ -1,0 +1,92 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+
+/*
+ * The report view, and the only stylesheet in this application that is about paper.
+ *
+ * Deliberately only what a stylesheet can express and inline styles cannot: a measure for running
+ * text, and the print rules, which no component prop can carry. Everything with a colour in it is
+ * left to the theme tokens the components already use.
+ */
+
+.trip-report {
+  /* A measure rather than a width: running prose is read, not scanned, and a line of text much
+     wider than this is one the eye loses its place in. */
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.trip-report figure {
+  margin: 0;
+}
+
+.trip-report-plates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.trip-report-plate {
+  width: 220px;
+}
+
+.trip-report-plate img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+}
+
+/* The sketch written out. Hidden while there is a map to look at; it is what the printer gets. */
+.trip-report-map-fallback {
+  display: none;
+}
+
+@media print {
+  /* The chrome is not part of the document. The application's header and navigation, and every
+     control on the report itself, are for the person at the screen. */
+  body.trip-report-page .ant-layout-header,
+  body.trip-report-page .ant-layout-sider,
+  body.trip-report-page .trip-report-noprint {
+    display: none !important;
+  }
+
+  /* The application fills the window and scrolls inside it, which on paper is one sheet and then
+     nothing at all. Unset that chain so the document flows over as many sheets as it takes. */
+  html:has(body.trip-report-page) {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  body.trip-report-page,
+  body.trip-report-page #root,
+  body.trip-report-page .ant-layout,
+  body.trip-report-page .ant-layout-content {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  body.trip-report-page .trip-report {
+    max-width: none;
+    padding: 0;
+  }
+
+  /* The map goes, its written form arrives. An OpenLayers view is painted onto a canvas as the
+     page is looked at; a print is taken of the document, so what a canvas contributes to it is
+     whatever was rendered at that moment — often nothing. The coordinates and the shape are
+     printed instead, and they are the trip's own, which every reader of the trip already sees
+     exactly. */
+  body.trip-report-page .trip-report-map {
+    display: none !important;
+  }
+
+  body.trip-report-page .trip-report-map-fallback {
+    display: block;
+  }
+
+  /* A section split across a page break reads as two half-sections. */
+  body.trip-report-page .trip-report-section,
+  body.trip-report-page .trip-report-plate {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

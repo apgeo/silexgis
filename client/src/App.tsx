@@ -31,6 +31,7 @@ const PhotoImportWorkspacePage = lazy(() => import('./pages/geodata/PhotoImportW
 const TermRulesPage = lazy(() => import('./pages/admin/TermRulesPage.tsx'));
 const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
+const TripReportPage = lazy(() => import('./pages/trips/TripReportPage.tsx'));
 const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
 const MessagingSettingsPage = lazy(() => import('./pages/admin/MessagingSettingsPage.tsx'));
 const MessageTemplatesPage = lazy(() => import('./pages/admin/MessageTemplatesPage.tsx'));
@@ -39,6 +40,7 @@ const FeatureSetsPage = lazy(() => import('./pages/admin/FeatureSetsPage.tsx'));
 const DocumentTypesPage = lazy(() => import('./pages/admin/DocumentTypesPage.tsx'));
 const TripTypesPage = lazy(() => import('./pages/admin/TripTypesPage.tsx'));
 const TripParticipantRolesPage = lazy(() => import('./pages/admin/TripParticipantRolesPage.tsx'));
+const TripReportTemplatesPage = lazy(() => import('./pages/admin/TripReportTemplatesPage.tsx'));
 const RelationTypesPage = lazy(() => import('./pages/admin/RelationTypesPage.tsx'));
 const CabinetsPage = lazy(() => import('./pages/documents/CabinetsPage.tsx'));
 const DocumentDetailPage = lazy(() => import('./pages/documents/DocumentDetailPage.tsx'));
@@ -109,6 +111,7 @@ const router = createBrowserRouter([
           { path: '/admin/term-rules', element: <Loadable><TermRulesPage /></Loadable> },
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
+          { path: '/trip-logs/:id/report', element: <Loadable><TripReportPage /></Loadable> },
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
           { path: '/admin/messaging', element: <Loadable><MessagingSettingsPage /></Loadable> },
           { path: '/admin/message-templates', element: <Loadable><MessageTemplatesPage /></Loadable> },
@@ -117,6 +120,7 @@ const router = createBrowserRouter([
           { path: '/admin/document-types', element: <Loadable><DocumentTypesPage /></Loadable> },
           { path: '/admin/trip-types', element: <Loadable><TripTypesPage /></Loadable> },
           { path: '/admin/participant-roles', element: <Loadable><TripParticipantRolesPage /></Loadable> },
+          { path: '/admin/report-templates', element: <Loadable><TripReportTemplatesPage /></Loadable> },
           { path: '/admin/relation-types', element: <Loadable><RelationTypesPage /></Loadable> },
           { path: '/cabinets', element: <Loadable><CabinetsPage /></Loadable> },
           { path: '/uploads', element: <Loadable><UploadsPage /></Loadable> },

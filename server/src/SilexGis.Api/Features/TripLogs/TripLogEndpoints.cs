@@ -39,6 +39,14 @@ public static class TripLogEndpoints
             .WithSummary("Announces a trip log and tells the people named on it (Write permission).");
         trips.MapPost("/{id:guid}/unpublish", UnpublishAsync)
             .WithSummary("Returns a trip log to draft — the reverse of publishing (Write permission).");
+        trips.MapGet("/{id:guid}/report", TripReportEndpoints.DownloadAsync)
+            .WithSummary(
+                "The trip written up as a document, built from this caller's own reading of the "
+                + "trip — the same one the page shows.");
+        trips.MapPost("/{id:guid}/report", TripReportEndpoints.KeepAsync)
+            .WithSummary(
+                "Writes the trip up and files the document against the trip, replacing any report "
+                + "kept there before (Write permission).");
 
         return api;
     }
@@ -852,7 +860,14 @@ public static class TripLogEndpoints
     /// Batch-loads caves/participants, applies cave-link redaction, and holds back the parts of
     /// a trip that answer to a narrower audience than the trip itself.
     /// </summary>
-    private static async Task<List<TripLogDto>> MapWithChildrenAsync(
+    /// <remarks>
+    /// Reachable from the rest of this slice on purpose, and the only way into a trip's contents:
+    /// what a caller may be told about a trip is decided here, once, so a surface that renders a
+    /// trip some other way — a written-up document, say — inherits every one of these decisions
+    /// instead of restating them. A second reading of the tables is how two surfaces come to
+    /// disagree about who may see what, long after both were written.
+    /// </remarks>
+    internal static async Task<List<TripLogDto>> MapWithChildrenAsync(
         SilexGisDbContext db,
         IAccessService access,
         FeatureProtection protection,

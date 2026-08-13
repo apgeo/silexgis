@@ -84,6 +84,27 @@ export function tripSectionEnumLabel(fieldKey: string, value: string, t: TFuncti
 }
 
 /**
+ * How a stored section value reads to somebody who is not editing it.
+ *
+ * One home, because a section is shown read-only in two places — the trip's own page and the
+ * report made from it — and a value written one way there and another way here would have two
+ * surfaces disagreeing about what the same record says. An unset field reads as a dash, which
+ * the report takes as its cue to leave the row out entirely.
+ */
+export function tripSectionValueText(field: SchemaField, value: unknown, t: TFunction): string {
+  if (value === undefined || value === null || value === '') {
+    return '—';
+  }
+  if (typeof value === 'boolean') {
+    return t(value ? 'trips.sections.yes' : 'trips.sections.no');
+  }
+  if (field.kind === 'enum' && typeof value === 'string') {
+    return tripSectionEnumLabel(field.key, value, t);
+  }
+  return String(value);
+}
+
+/**
  * Whether a field holds a person from the roster rather than a line of text.
  *
  * A permit holder, a key holder or a landowner contact is a roster identity, with a free-text

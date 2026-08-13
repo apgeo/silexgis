@@ -485,3 +485,49 @@ test('a trip records who was there, what one of them did, and when they came out
   await page.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
 });
+
+test('a trip is written up as a document, and the document is filed against the trip', async ({
+  page,
+  consoleErrors,
+}) => {
+  const title = `E2E Report Trip ${Date.now()}`;
+  allowDeletedTripRefetch(consoleErrors);
+  await login(page);
+
+  await page.goto('/trip-logs');
+  await page.getByRole('button', { name: /New trip log/ }).click();
+  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('button', { name: 'OK' }).click();
+
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  const tripUrl = page.url();
+
+  // The report view is the same trip arranged to be read: the title heads it, and the notice
+  // saying whose reading it is stays on the screen and off the paper.
+  await page.getByTestId('trip-open-report').click();
+  await expect(page.getByTestId('trip-report')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  // Filing the write-up. Waited on by its own response rather than by a message on the screen:
+  // an earlier save's confirmation can still be up, and it would answer for this one.
+  const filed = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      /\/api\/v1\/trip-logs\/[^/]+\/report/.test(response.url()),
+    { timeout: 30_000 },
+  );
+  await page.getByTestId('trip-report-keep').click();
+  expect((await filed).status()).toBe(200);
+
+  // And it is on the trip, in the slot the trip's report lives in, named as a write-up of that
+  // trip rather than by anybody or anywhere it mentions.
+  await page.goto(tripUrl);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/trip-report-[0-9a-f]{8}-\d{8}\.docx/).first()).toBeVisible({
+    timeout: 15_000,
+  });
+
+  await page.getByRole('button', { name: /Delete/ }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });
+});

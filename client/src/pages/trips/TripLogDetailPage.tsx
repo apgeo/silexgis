@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { CameraOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { CameraOutlined, DeleteOutlined, EditOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Alert, App, Button, Card, Descriptions, Flex, Popconfirm, Spin, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -8,7 +8,6 @@ import {
   parseAccessActions,
   useCan,
   useCavingGroups,
-  useCave,
   useDeleteTripLog,
   useEffectiveAccess,
   useTripLog,
@@ -25,6 +24,7 @@ import { applyTripRestore } from '../../components/history/historyModel.ts';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import { TRIP_ROLE_CODES } from '../../components/reslinks/relations.ts';
 import TagChips from '../../components/tags/TagChips.tsx';
+import TripCaveLink from '../../components/trips/TripCaveLink.tsx';
 import TripCover from '../../components/trips/TripCover.tsx';
 import TripGallerySection from '../../components/trips/TripGallerySection.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
@@ -36,11 +36,6 @@ import TripGeometryField from './TripGeometryField.tsx';
 import TripPublishControl from './TripPublishControl.tsx';
 import TripRoleFields from './TripRoleFields.tsx';
 import TripSections from './TripSections.tsx';
-
-function CaveLink({ caveId }: { caveId: string }) {
-  const { data: cave } = useCave(caveId);
-  return <Link to={`/caves/${caveId}`}>{cave?.name ?? caveId}</Link>;
-}
 
 /**
  * One person on the roster: their name, and only what distinguishes them from everybody else on
@@ -153,23 +148,32 @@ export default function TripLogDetailPage() {
           </Typography.Title>
           <TripStateTag state={trip.state} />
         </Flex>
-        {(canEdit || canDelete) && (
-          <Flex gap={8}>
-            <TripPublishControl tripId={trip.id} state={trip.state} canEdit={canEdit} />
-            {canEdit && (
-              <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
-                {t('trips.edit')}
-              </Button>
-            )}
-            {canDelete && (
-              <Popconfirm title={t('trips.deleteConfirm')} onConfirm={() => void onDelete()}>
-                <Button danger icon={<DeleteOutlined />}>
-                  {t('features.delete')}
+        <Flex gap={8}>
+          {/* The write-up as a document rather than a form, for anybody who may read the trip:
+              circulating one is not an act of editing it. */}
+          <Link to={`/trip-logs/${trip.id}/report`}>
+            <Button icon={<FileTextOutlined />} data-testid="trip-open-report">
+              {t('trips.report.open')}
+            </Button>
+          </Link>
+          {(canEdit || canDelete) && (
+            <>
+              <TripPublishControl tripId={trip.id} state={trip.state} canEdit={canEdit} />
+              {canEdit && (
+                <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
+                  {t('trips.edit')}
                 </Button>
-              </Popconfirm>
-            )}
-          </Flex>
-        )}
+              )}
+              {canDelete && (
+                <Popconfirm title={t('trips.deleteConfirm')} onConfirm={() => void onDelete()}>
+                  <Button danger icon={<DeleteOutlined />}>
+                    {t('features.delete')}
+                  </Button>
+                </Popconfirm>
+              )}
+            </>
+          )}
+        </Flex>
       </Flex>
 
       {/* Said in words as well as shown as a badge, and only to somebody who could act on it.
@@ -215,7 +219,7 @@ export default function TripLogDetailPage() {
             <Descriptions.Item label={t('trips.caves')}>
               <Flex gap={8} wrap>
                 {trip.caveIds.map((caveId) => (
-                  <CaveLink key={caveId} caveId={caveId} />
+                  <TripCaveLink key={caveId} caveId={caveId} />
                 ))}
               </Flex>
             </Descriptions.Item>

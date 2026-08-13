@@ -154,6 +154,19 @@ Previous versions:
   says whose totals they are, because a file gets forwarded and read months later.
 - **A trip has a gallery and a cover** — the photographs taken on it, the albums made of them, and a
   headline picture chosen with the same star that names a cave's.
+- **A trip writes itself up** — every trip has a report view: the whole trip laid out as a document,
+  with a print stylesheet over it, and a **Word document** you can download or file against the trip
+  itself. The write-up is built from *your* reading of the trip and nothing else, so it can never
+  contain something the page would not have shown you — no cave you may not place, no account of an
+  incident if you are only a reader of the trip, and photographs go in as the same renderings the
+  gallery shows you, with their camera metadata stripped. A copy filed against the trip is narrower
+  still: it is written for whoever may read the trip at all, not for the person who filed it. There
+  is no map picture in it — the trip's sketch is written out in words instead — and there is no
+  public address for a report: it is downloaded by somebody signed in who may read the trip.
+  A club can write **its own layout** for the document: download the standard one, which is a short
+  text file that explains itself in its own comments, edit it, upload it, and choose it. A layout can
+  only ask for things the reader was already given, and a line whose contents turn out to be empty
+  simply disappears — so the same layout produces an honest document for a member and for an editor.
 - **Tags, saved & shareable map views**, and **multi-window** pop-out panels.
 - **Share links** — hand out a revocable link to one feature and what it contains, either
   public or sign-in-only. A share never reveals a protected location.

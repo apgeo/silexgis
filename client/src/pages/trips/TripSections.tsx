@@ -26,6 +26,7 @@ import {
   isCaverReferenceField,
   tripSectionEnumLabel,
   tripSectionFieldLabel,
+  tripSectionValueText,
 } from '../../components/trips/tripSectionFields.ts';
 import TypedField from '../../components/typedProperties/TypedField.tsx';
 import { parsePropertiesSchema, type SchemaField } from '../../components/typedProperties/propertiesSchema.ts';
@@ -362,13 +363,7 @@ function SectionField({
         />
       ) : (
         <Typography.Text data-testid={`trip-section-value-${field.key}`}>
-          {value === undefined || value === null || value === ''
-            ? '—'
-            : typeof value === 'boolean'
-              ? t(value ? 'trips.sections.yes' : 'trips.sections.no')
-              : field.kind === 'enum' && typeof value === 'string'
-                ? tripSectionEnumLabel(field.key, value, t)
-                : String(value)}
+          {tripSectionValueText(field, value, t)}
         </Typography.Text>
       )}
     </Flex>

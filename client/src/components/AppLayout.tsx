@@ -10,6 +10,7 @@ import {
   DatabaseOutlined,
   EnvironmentOutlined,
   FileTextOutlined,
+  FileWordOutlined,
   FolderOutlined,
   GoldOutlined,
   GroupOutlined,
@@ -211,6 +212,11 @@ export default function AppLayout() {
               // from this list, so the wording here is what every trip reads by.
               ...(hasAccessAction(capabilities?.domains.taxonomies, 'write')
                 ? [{ key: 'admin/participant-roles', icon: <IdcardOutlined />, label: t('nav.participantRoles') }]
+                : []),
+              // And once more for the layout a trip is written up in: a club's own layout
+              // decides what every write-up it circulates says, and how.
+              ...(hasAccessAction(capabilities?.domains.taxonomies, 'write')
+                ? [{ key: 'admin/report-templates', icon: <FileWordOutlined />, label: t('nav.reportTemplates') }]
                 : []),
               ...(isFullAdmin
                 ? [{ key: 'admin/relation-types', icon: <ApartmentOutlined />, label: t('nav.relationTypes') }]

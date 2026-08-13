@@ -250,6 +250,7 @@ try
     api.MapResLinkRelationTypeEndpoints();
     api.MapGeoreferencedMapEndpoints();
     api.MapTripLogEndpoints();
+    api.MapTripReportTemplateEndpoints();
     api.MapTripTypeEndpoints();
     api.MapTripParticipantRoleEndpoints();
     api.MapTripStatisticsEndpoints();

@@ -140,6 +140,7 @@ export const queryKeys = {
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
+  tripReportTemplates: ['trip-report-templates'] as const,
   taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
   tags: (search: string) => ['tags', search] as const,
   cavingGroups: ['cavingGroups'] as const,
@@ -182,7 +183,8 @@ async function unwrap<T>(
 ): Promise<T> {
   const { data, error, response } = await call;
   if (error !== undefined || data === undefined) {
-    throw new ApiError(response.status, (error as { code?: string } | undefined)?.code);
+    const problem = error as { code?: string; detail?: string } | undefined;
+    throw new ApiError(response.status, problem?.code, problem?.detail);
   }
   return data;
 }
@@ -193,7 +195,8 @@ async function unwrapVoid(
 ): Promise<void> {
   const { error, response } = await call;
   if (error !== undefined) {
-    throw new ApiError(response.status, (error as { code?: string } | undefined)?.code);
+    const problem = error as { code?: string; detail?: string } | undefined;
+    throw new ApiError(response.status, problem?.code, problem?.detail);
   }
 }
 
@@ -396,7 +399,8 @@ export function useDataExport() {
         return null;
       }
       if (error !== undefined || data === undefined) {
-        throw new ApiError(response.status, (error as { code?: string } | undefined)?.code);
+        const problem = error as { code?: string; detail?: string } | undefined;
+        throw new ApiError(response.status, problem?.code, problem?.detail);
       }
       return data;
     },
@@ -2004,6 +2008,78 @@ export function useDeleteTripLog() {
   return useMutation({
     mutationFn: (id: string) => unwrapVoid(api.DELETE('/api/v1/trip-logs/{id}', { params: { path: { id } } })),
     onSuccess: () => invalidate(),
+  });
+}
+
+export type TripReportTemplate = components['schemas']['TripReportTemplateDto'];
+
+/** The layouts a write-up may be built in. Every account may read them: choosing one is not editing one. */
+export function useTripReportTemplates(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripReportTemplates,
+    queryFn: () => unwrap(api.GET('/api/v1/trip-report-templates')),
+    enabled,
+  });
+}
+
+export type TripReportTemplateWrite = components['schemas']['TripReportTemplateRequest'];
+
+function useInvalidateTripReportTemplates() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: queryKeys.tripReportTemplates });
+}
+
+/**
+ * Stores a layout. A body whose lines cannot be read is refused by the server, which says which
+ * line is at fault — the message is passed through rather than replaced, because the person
+ * editing the layout is the only one who can act on it.
+ */
+export function useCreateTripReportTemplate() {
+  const invalidate = useInvalidateTripReportTemplates();
+  return useMutation({
+    mutationFn: (body: TripReportTemplateWrite) =>
+      unwrap(api.POST('/api/v1/trip-report-templates', { body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateTripReportTemplate() {
+  const invalidate = useInvalidateTripReportTemplates();
+  return useMutation({
+    mutationFn: ({ id, ...body }: TripReportTemplateWrite & { id: string }) =>
+      unwrap(api.PUT('/api/v1/trip-report-templates/{id}', { params: { path: { id } }, body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteTripReportTemplate() {
+  const invalidate = useInvalidateTripReportTemplates();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/trip-report-templates/{id}', { params: { path: { id } } })),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Writes the trip up and files the document in the trip's report slot.
+ *
+ * The document is built server-side, so nothing here hands it any of the trip's content — an
+ * argument carrying what to write would be a second place the question of who may see what is
+ * answered. What is filed is not this caller's own copy: a file attached to a trip is reachable
+ * by everybody who may read that trip, so the server builds the filed one from the reading any
+ * account has. The fuller copy is the download.
+ */
+export function useKeepTripReport() {
+  const invalidateAttachments = useInvalidateAttachments();
+  return useMutation({
+    mutationFn: ({ id, templateId }: { id: string; templateId?: string }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{id}/report', {
+          params: { path: { id }, query: templateId ? { templateId } : {} },
+        }),
+      ),
+    onSuccess: () => invalidateAttachments(),
   });
 }
 

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Photos;
@@ -171,7 +172,7 @@ public static class PublicPhotoEndpoints
         IReadOnlyList<Document> documents,
         CancellationToken ct)
     {
-        var rows = await PhotoQueries.RowsAsync(db, documents, ct);
+        var rows = await PhotographReads.RowsAsync(db, documents, ct);
 
         return
         [

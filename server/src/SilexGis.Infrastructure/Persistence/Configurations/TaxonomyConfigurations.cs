@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Trips;
 
 namespace SilexGis.Infrastructure.Persistence.Configurations;
 
@@ -121,5 +122,24 @@ public sealed class FeatureTypeConfiguration : IEntityTypeConfiguration<FeatureT
         builder.Property(x => x.SymbolFile).HasMaxLength(100);
         builder.Property(x => x.Style).HasColumnType("jsonb");
         builder.Property(x => x.PropertiesSchema).HasColumnType("jsonb");
+    }
+}
+
+public sealed class TripReportTemplateConfiguration : IEntityTypeConfiguration<TripReportTemplate>
+{
+    public void Configure(EntityTypeBuilder<TripReportTemplate> builder)
+    {
+        builder.ToTable("trip_report_templates");
+        builder.Property(x => x.Name).HasMaxLength(120);
+        builder.Property(x => x.Body).HasMaxLength(ReportTemplateFormat.MaxLength);
+
+        // At most one layout may be the one a write-up gets when nobody names one. Left to the
+        // write path alone it would be a rule that holds until two people press save at once,
+        // and then "which one is current" would be decided by whichever row happened to be read
+        // first — the same reason a headline picture is unique in the database rather than in a
+        // handler.
+        builder.HasIndex(x => x.IsDefault).IsUnique()
+            .HasFilter("is_default")
+            .HasDatabaseName("ux_trip_report_templates_default");
     }
 }
