@@ -248,7 +248,8 @@ To put the caves under real hillsides, you bake elevation data into a tile pyram
 it as static files. It is entirely local afterwards: no account, no key, and no request leaves
 your installation while somebody is looking at a cave.
 
-You need Docker (for the pre-baker) and Node 18+ (for the script). Budget roughly **45 MB of
+You need Docker (for the pre-baker, and for GDAL if you bring your own rasters) and Node 18+ (for
+the script). Nothing is installed on the host itself. Budget roughly **45 MB of
 download and 40 MB of tiles per 1°×1° cell**, and about **6 minutes** of one machine's time per
 cell at full detail. Romania is about 30 cells.
 
@@ -268,6 +269,49 @@ only the one an interruption caught in the middle. Nothing that stops a run part
 terminal, a dropped link, a disk that filled — can leave behind a fragment that a later run
 mistakes for a finished cell.
 
+### 1b. Or prepare elevation data you already have
+
+`fetch` knows one source, and Copernicus GLO-30 is 30 m worldwide. If you have something better —
+a national LiDAR delivery, an aerial survey, a regional model — it will not be in degrees, it will
+not use the same value for "no data", and it may be far finer than is worth baking over a whole
+region. `prepare` fixes all three, and needs no GDAL installed on the machine:
+
+```bash
+node deploy/terrain.mjs prepare --in ./rasters --out ./dem
+```
+
+It reprojects every raster it finds, at any depth below `--in`, to EPSG:4326, writes the voids as
+the value the pre-baker recognises, and leaves the result in the same form `fetch` produces — so
+the two are interchangeable, and can be pointed at one `./dem` directory to **mix a coarse
+national fill with fine local data**. Each raster is converted on its own rather than merged into
+one: the pre-baker mosaics the directory itself, prefers the finer raster wherever two overlap,
+and only goes deep where the data actually supports it. Merging first would flatten precisely
+that.
+
+Useful options:
+
+| Option | When you need it |
+| --- | --- |
+| `--pixel-size 30m` | Coarsen everything to one resolution. Half-metre LiDAR otherwise asks the pre-baker for a depth that multiplies the tile count many times over. Accepts metres or degrees. |
+| `--resampling average` | Use when coarsening a long way; it keeps a summit from being sampled away. `bilinear` is the default and is right otherwise. Never `near`, which aliases ridges. |
+| `--source-srs EPSG:3844` | The raster carries no projection of its own — plain ASCII grids usually do not. `EPSG:3844` is the Romanian national grid. |
+| `--source-nodata -32768` | The raster uses a void value without declaring it, which would otherwise be reprojected as an ordinary height and drawn as a pit. |
+
+Re-running skips what is already prepared, and nothing half-converted is ever left under a
+finished name, so an interrupted run costs only the raster it was working on. Add `--force` to
+convert everything again. `--in` and `--out` must be separate directories, neither inside the
+other: the input is searched at any depth, so an output directory below it would be read as its
+own input on the next run and converted a second time under a new name.
+
+**A directory holding more than one source is baked with `--attribution`.** `prepare` cannot know
+where your rasters came from, so it marks the directory as holding data it cannot speak for. If
+`fetch` wrote there too, no recorded credit is true of everything in it — and `bake` says so and
+stops rather than crediting the whole pyramid to one of the two. Give it one credit naming both;
+see **Attribution** below.
+
+**Reprojection here is for drawing ground, not for surveying.** It is accurate to a few metres,
+which is invisible under a hillside and is not a coordinate to put a cave entrance at.
+
 ### 2. Bake the pyramid
 
 ```bash
@@ -275,9 +319,57 @@ node deploy/terrain.mjs bake --in ./dem --out /srv/silexgis/terrain
 ```
 
 This runs `gaia3d/mago-3d-terrainer` (MPL-2.0; the image carries its own Java) and writes a static
-tile pyramid. Add `--max-depth 9` for a quick first run — every extra level roughly quadruples
-both the tile count and the time. The pre-baker asks for a good deal of memory; give Docker 8 GB
-or more before baking a large area.
+tile pyramid. The pre-baker asks for a good deal of memory; give Docker 8 GB or more before baking
+a large area.
+
+**Say whose data it is.** Anything baked from rasters you brought yourself needs
+`--attribution "…"` — the credit its licence requires, which is written into the pyramid and shown
+on the 3D scene:
+
+```bash
+node deploy/terrain.mjs bake --in ./dem --out /srv/silexgis/terrain \
+  --attribution "Elevation data © National Mapping Agency, 2024"
+```
+
+A directory holding nothing but what `fetch` downloaded needs nothing: that command records the
+Copernicus credit beside the cells, and the bake picks it up from there. A directory holding data
+from more than one source needs a credit that covers all of it, and `bake` stops and asks for one
+rather than choosing. A bake with a credit from none of those routes says so and leaves the
+pyramid with none at all — better than the pre-baker's placeholder, which is a sentence reading
+`insert attribution here` displayed to everyone looking at the scene, but not a licence you can
+rely on.
+
+**How deep to go.** Every extra level roughly quadruples both the tile count and the time, so the
+depth is the one number worth choosing deliberately. It is not an abstract quality setting: each
+level is a ground resolution, and past the resolution of your data it buys nothing at all.
+
+| `--max-depth` | Ground per screen pixel | What it looks like |
+| --- | --- | --- |
+| 9 | about 150 m | a mountain range as a broad swell; individual hillsides are flat |
+| 10 | about 75 m | the shape of a valley, but not its sides |
+| 11 | about 40 m | every ridge and side valley that 30 m elevation data actually holds |
+| 12 | about 20 m | the same relief, smoother, at four times the tiles |
+| 13 (the default) | about 10 m | finer than a 30 m source — the last level it can still fill honestly |
+| 15 | about 2.5 m | worth having only with data finer than 10 m |
+| 17 | about 0.6 m | half-metre airborne LiDAR, and a very large pyramid |
+
+**Add `--max-depth 11` for a quick first run.** That is about 40 m of ground per screen pixel —
+real hillsides, with the caves properly on them — for roughly a sixteenth of the tiles and the
+time of the default. Depth 9 and coarser is where relief flattens into featureless swells, which
+looks like the terrain failed rather than like a first look at it.
+
+**Ask for the depth your finest raster supports, not your coarsest.** The pre-baker works out, per
+input raster, the depth that raster's pixel size can honestly carry, and advertises the deeper
+levels only over the ground that has the finer data. Measured on this stack: a bake asked for
+`--max-depth 16` over a 30 m regional fill with a 3.86 m raster covering a small part of it
+published levels 14, 15 and 16 **only over that small part** — the coarse region simply stops at
+13, and nothing anywhere was interpolated up to a detail it did not have. Roughly one level per
+halving of the pixel size: 30 m reaches 13, 4 m reaches 16.
+
+So asking for more than the coarse data supports costs nothing over the coarse ground, and asking
+for less than the fine data supports throws away exactly the local detail that mixing the two was
+for. The depth still governs cost where the fine data actually is, which is why a first run over a
+plain Copernicus directory is a different number from a bake over a national LiDAR delivery.
 
 When it finishes it verifies what it produced and **prints the exact `.env` lines for it**. Paste
 those into `deploy/.env` rather than writing them by hand — the vertical datum in particular is
@@ -385,9 +477,35 @@ that far below its hillside; the API says so in its log at startup, and so does 
 
 ### Attribution
 
-Copernicus GLO-30 requires a credit, and the pre-baker writes a placeholder into the pyramid's own
-metadata rather than a real one. `bake` replaces it, and also prints the credit as
-`SILEXGIS__Terrain__Attribution`, which is what the 3D view shows on screen. Keep it.
+Almost every elevation source requires a credit, and the pre-baker writes a placeholder into the
+pyramid's own metadata rather than a real one — a placeholder is worse than nothing, because it is
+displayed. `bake` always replaces it, and prints the credit as `SILEXGIS__Terrain__Attribution`,
+which is what the 3D view shows on screen. Keep that line.
+
+The credit is the one thing here that no command can work out for you, because it belongs to the
+data rather than to the pyramid:
+
+- **A directory of nothing but `fetch` output** carries the Copernicus GLO-30 credit, recorded in a
+  small `source-credit.json` beside the downloaded cells so a bake days later still stamps the
+  right one. Nothing to do.
+- **Data you prepared yourself** needs `bake --attribution "…"`, in the words its own licence asks
+  for. What you pass replaces anything else, including a credit left in that directory by an
+  earlier bake from different data.
+- **A directory holding both** — the recommended mix of a coarse national fill with fine local
+  rasters — needs one credit naming every source in it. `prepare` marks the directory as holding
+  data it cannot speak for, `fetch` adds its credit to that mark rather than writing over it, and
+  `bake` refuses to stamp a pyramid it cannot honestly credit. It prints what was recorded so you
+  can join it to your own:
+
+  ```bash
+  node deploy/terrain.mjs bake --in ./dem --out /srv/silexgis/terrain \
+    --attribution "Copernicus DEM GLO-30 — © DLR e.V. … · Elevation data © National Mapping Agency, 2024"
+  ```
+
+- **None of those** leaves the pyramid with no credit, and `check` says so every time it reads it.
+
+A credit naming data the pyramid does not actually hold is worse than none: it is a false licence
+statement, on screen, that nobody looking at it can tell is false.
 
 ## Backups
 
