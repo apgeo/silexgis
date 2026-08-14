@@ -65,6 +65,7 @@ const accessDomains: Record<AccessDomainName, true> = {
   mapViews: true,
   files: true,
   documents: true,
+  expeditions: true,
   mapLayers: true,
   tags: true,
   hierarchies: true,

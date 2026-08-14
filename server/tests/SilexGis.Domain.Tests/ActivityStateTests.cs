@@ -95,6 +95,128 @@ public class ActivityStateTests
         All.ShouldAllBe(state => !MayTripLogTransition(state, state));
 
     [Fact]
+    public void An_expedition_holds_every_state_in_the_vocabulary()
+    {
+        ExpeditionStates.ShouldBe(All, ignoreOrder: true);
+
+        // Stated the other way round as well, so a state added to the enum is admitted to a camp
+        // by somebody deciding it, not by the list happening to be the whole vocabulary.
+        All.Where(IsExpeditionState).ShouldBe(All, ignoreOrder: true);
+    }
+
+    [Fact]
+    public void The_two_tables_are_independent_of_each_other()
+    {
+        // A camp is organised before it happens and a trip is written up after, so the states
+        // kept for planning are exactly what tells the two apart. If admitting them to one ever
+        // admits them to the other, this is where it shows.
+        foreach (var planning in new[] { Proposed, Planned, Confirmed, Delayed })
+        {
+            IsExpeditionState(planning).ShouldBeTrue($"{planning} is a state a camp holds.");
+            IsTripLogState(planning).ShouldBeFalse($"{planning} is not a state a trip holds.");
+        }
+
+        MayExpeditionTransition(Draft, Proposed).ShouldBeTrue();
+        MayTripLogTransition(Draft, Proposed).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void No_legal_expedition_move_touches_a_state_an_expedition_cannot_hold()
+    {
+        foreach (var from in All)
+        {
+            foreach (var to in All.Where(to => MayExpeditionTransition(from, to)))
+            {
+                IsExpeditionState(from).ShouldBeTrue($"{from} is an origin of a legal move.");
+                IsExpeditionState(to).ShouldBeTrue($"{to} is a destination of a legal move.");
+            }
+        }
+    }
+
+    [Fact]
+    public void An_expedition_climbs_the_planning_ladder_one_rung_at_a_time()
+    {
+        MayExpeditionTransition(Draft, Proposed).ShouldBeTrue();
+        MayExpeditionTransition(Proposed, Planned).ShouldBeTrue();
+        MayExpeditionTransition(Planned, Confirmed).ShouldBeTrue();
+        MayExpeditionTransition(Confirmed, Done).ShouldBeTrue();
+        MayExpeditionTransition(Done, Published).ShouldBeTrue();
+
+        // Each rung is a decision somebody takes, so none of them is reachable by skipping the
+        // one before it. Joining the ladder late is allowed; climbing two rungs at once is not.
+        MayExpeditionTransition(Draft, Confirmed).ShouldBeFalse();
+        MayExpeditionTransition(Proposed, Confirmed).ShouldBeFalse();
+        MayExpeditionTransition(Planned, Done).ShouldBeFalse();
+        MayExpeditionTransition(Proposed, Done).ShouldBeFalse();
+
+        // Except into the workshop, which is where a camp that already happened is entered from
+        // — a camp run before this system existed has no rungs left to climb.
+        MayExpeditionTransition(Draft, Done).ShouldBeTrue();
+        MayExpeditionTransition(Draft, Published).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void A_camp_is_called_off_while_it_has_not_happened_and_not_afterwards()
+    {
+        // The ordinary cancellation is a confirmed camp abandoned three weeks out, so calling it
+        // off is reachable from every state where it still lies ahead.
+        foreach (var live in new[] { Draft, Proposed, Planned, Confirmed, Delayed })
+        {
+            MayExpeditionTransition(live, Cancelled).ShouldBeTrue($"{live} lies before the camp.");
+        }
+
+        // Afterwards it is not: a camp that happened cannot be made not to have happened, and
+        // removing the record is a different act taken through a different button.
+        MayExpeditionTransition(Done, Cancelled).ShouldBeFalse();
+        MayExpeditionTransition(Published, Cancelled).ShouldBeFalse();
+
+        // Reinstating one returns it to the workshop rather than to the rung it fell from.
+        MayExpeditionTransition(Cancelled, Draft).ShouldBeTrue();
+        MayExpeditionTransition(Cancelled, Confirmed).ShouldBeFalse();
+        MayExpeditionTransition(Cancelled, Published).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Only_a_camp_with_dates_to_move_is_put_back()
+    {
+        MayExpeditionTransition(Planned, Delayed).ShouldBeTrue();
+        MayExpeditionTransition(Confirmed, Delayed).ShouldBeTrue();
+
+        // An idea nobody has dated yet is still an idea, not a postponement; and a camp that
+        // happened has nothing left to put back.
+        MayExpeditionTransition(Draft, Delayed).ShouldBeFalse();
+        MayExpeditionTransition(Proposed, Delayed).ShouldBeFalse();
+        MayExpeditionTransition(Done, Delayed).ShouldBeFalse();
+        MayExpeditionTransition(Published, Delayed).ShouldBeFalse();
+
+        // New dates return it to being organised: announcing it is on again is a second decision.
+        MayExpeditionTransition(Delayed, Planned).ShouldBeTrue();
+        MayExpeditionTransition(Delayed, Confirmed).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Everything_live_returns_to_the_workshop()
+    {
+        foreach (var state in All.Where(state => state != Draft))
+        {
+            MayExpeditionTransition(state, Draft).ShouldBeTrue($"{state} returns to the workshop.");
+        }
+    }
+
+    [Fact]
+    public void An_expedition_state_is_not_a_move_to_itself() =>
+        All.ShouldAllBe(state => !MayExpeditionTransition(state, state));
+
+    [Fact]
+    public void The_two_refusals_name_the_thing_that_refused_them()
+    {
+        // A caller reading a refusal has to be able to tell which activity refused it, so the
+        // codes are not shared between the two tables.
+        TripLogTransitionInvalidCode.ShouldBe("trip_log.state_transition_invalid");
+        ExpeditionTransitionInvalidCode.ShouldBe("expedition.state_transition_invalid");
+    }
+
+    [Fact]
     public void A_draft_and_a_cancelled_trip_tell_nobody()
     {
         // The partition rather than the two cases, so a state added to the enum and left out of

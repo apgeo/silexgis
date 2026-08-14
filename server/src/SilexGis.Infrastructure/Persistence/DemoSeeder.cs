@@ -69,6 +69,7 @@ public static class DemoSeeder
         await db.SaveChangesAsync(ct);
 
         await SeedTripLogsAsync(db, ownerUserId, ct);
+        await SeedExpeditionsAsync(db, ownerUserId, ct);
         await SeedMapViewsAsync(db, ownerUserId, ct);
         await db.SaveChangesAsync(ct);
 
@@ -635,6 +636,75 @@ public static class DemoSeeder
                     $"Relation type '{TripRoles[index % TripRoles.Length]}' is not seeded.");
             }
 
+            index++;
+        }
+    }
+
+    /// <summary>
+    /// A handful of camps spread across the lifecycle, so a page listing them shows every reading.
+    /// </summary>
+    private static async Task SeedExpeditionsAsync(
+        SilexGisDbContext db, Guid ownerUserId, CancellationToken ct)
+    {
+        if (await db.Expeditions.AnyAsync(x => x.Name.StartsWith("Demo:"), ct))
+        {
+            return;
+        }
+
+        // Fixed dates rather than relative to now, for the reason the trips above give: a demo
+        // that drifts is a demo whose screenshots stop matching it.
+        //
+        // The lifecycle spread is the point of the block. A camp exists long before it happens,
+        // so the demo shows one that has been written up and announced, one going ahead with its
+        // dates settled, one still somebody's idea, and one put back — the four readings that
+        // look different on a page, without anybody having to drive the transitions to see them.
+        // A single-day camp is here too, holding no end date at all, because that is the row
+        // every reader of the date range is written against.
+        var camps = new[]
+        {
+            ("Demo: Bihor summer camp", "A fortnight on the plateau: exploration, survey and rigging.",
+                new DateOnly(2026, 7, 18), (DateOnly?)new DateOnly(2026, 8, 1), Visibility.Public,
+                ActivityState.Published,
+                (DateTimeOffset?)new DateTimeOffset(2026, 8, 10, 18, 0, 0, TimeSpan.Zero)),
+            ("Demo: autumn survey camp", "Finishing the survey of the lower series.",
+                new DateOnly(2026, 10, 10), new DateOnly(2026, 10, 18), Visibility.Authenticated,
+                ActivityState.Confirmed, null),
+            ("Demo: winter recce", "One day looking at the entrances above the valley.",
+                new DateOnly(2026, 12, 5), null, Visibility.CavingGroup, ActivityState.Proposed, null),
+            ("Demo: spring camp (postponed)", "Put back until the access permit is renewed.",
+                new DateOnly(2027, 4, 3), new DateOnly(2027, 4, 12), Visibility.Public,
+                ActivityState.Delayed, null),
+        };
+
+        // Roughly the plateau the demo caves sit on. A working area is drawn on the plan and
+        // stays what it was drawn as — it is not derived from where the trips ended up.
+        var factory = new GeometryFactory(new PrecisionModel(), 4326);
+        var workingArea = factory.CreatePolygon(
+        [
+            new Coordinate(25.40, 45.50),
+            new Coordinate(25.50, 45.50),
+            new Coordinate(25.50, 45.56),
+            new Coordinate(25.40, 45.56),
+            new Coordinate(25.40, 45.50),
+        ]);
+
+        var index = 0;
+        foreach (var (name, description, start, end, visibility, state, publishedAt) in camps)
+        {
+            db.Expeditions.Add(new Expedition
+            {
+                Name = name,
+                Description = description,
+                StartDate = start,
+                EndDate = DayRange.EndForStorage(start, end),
+                // Only the first carries one, so a surface that draws the area has something to
+                // draw and one that must cope with its absence has that too.
+                Geom = index == 0 ? workingArea : null,
+                OwnerUserId = ownerUserId,
+                Visibility = visibility,
+                State = state,
+                PublishedAt = publishedAt,
+            });
             index++;
         }
     }

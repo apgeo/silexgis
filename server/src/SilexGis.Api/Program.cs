@@ -19,6 +19,7 @@ using SilexGis.Api.Features.Crs;
 using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Dashboard;
 using SilexGis.Api.Features.Documents;
+using SilexGis.Api.Features.Expeditions;
 using SilexGis.Api.Features.Export;
 using SilexGis.Api.Features.Files;
 using SilexGis.Api.Features.Geofiles;
@@ -250,6 +251,7 @@ try
     api.MapResLinkRelationTypeEndpoints();
     api.MapGeoreferencedMapEndpoints();
     api.MapTripLogEndpoints();
+    api.MapExpeditionEndpoints();
     api.MapTripReportTemplateEndpoints();
     api.MapTripTypeEndpoints();
     api.MapTripParticipantRoleEndpoints();

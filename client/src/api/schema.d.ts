@@ -8813,6 +8813,195 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expeditions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paged expeditions, most recent first; visibility-filtered. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfExpeditionDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates an expedition (Create permission); the caller becomes owner. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExpeditionWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expeditions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A single expedition. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionDto"];
+                    };
+                };
+            };
+        };
+        /** Full update (Write permission). The lifecycle state is not part of it. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExpeditionWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes an expedition and the rules anchored on it. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expeditions/{id}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Moves an expedition to another lifecycle state (Write permission). One endpoint rather than a verb per state: a camp has eight states and the moves between them are a table, not a handful of named acts. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExpeditionTransitionRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-report-templates": {
         parameters: {
             query?: never;
@@ -11484,7 +11673,7 @@ export interface components {
             actions: components["schemas"]["AccessAction"][];
         };
         /** @enum {unknown} */
-        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents";
+        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "expeditions";
         /** @enum {unknown} */
         AccessEffect: "allow" | "deny";
         AccessEntryDto: {
@@ -12283,6 +12472,44 @@ export interface components {
             positionQuality: components["schemas"]["PositionQuality"];
             /** Format: date */
             surveyedAt: null | string;
+        };
+        ExpeditionDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description?: null | string;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate?: null | string;
+            geom?: null | components["schemas"]["GeoJsonGeometry"];
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            visibility: components["schemas"]["Visibility"];
+            state: components["schemas"]["ActivityState"];
+            /** Format: date-time */
+            publishedAt?: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ExpeditionTransitionRequest: {
+            state?: null | components["schemas"]["ActivityState"];
+        };
+        ExpeditionWriteRequest: {
+            name?: string;
+            description?: null | string;
+            /** Format: date */
+            startDate?: string;
+            /** Format: date */
+            endDate?: null | string;
+            geom?: null | components["schemas"]["GeoJsonGeometry"];
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            visibility?: components["schemas"]["Visibility"];
         };
         /** @enum {unknown} */
         ExplorationStatus: "unknown" | "ongoing" | "finished" | "abandoned";
@@ -13452,6 +13679,15 @@ export interface components {
         };
         PagedResultOfDocumentCommentDto: {
             items: components["schemas"]["DocumentCommentDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfExpeditionDto: {
+            items: components["schemas"]["ExpeditionDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */

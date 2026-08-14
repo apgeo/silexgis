@@ -69,4 +69,22 @@ public enum AccessDomain : short
     /// other uploader is measured against.
     /// </summary>
     Documents = 19,
+
+    /// <summary>
+    /// Expeditions: a camp or a project that gathers many trips into one thing with one
+    /// report. Expedition rows carry the owner/caving-group/visibility trio, so an
+    /// expedition is governed like any other owned content.
+    /// <para>
+    /// It is a domain of its own rather than an arrangement governed through the trips
+    /// inside it, the way an album is governed through its documents. An expedition is the
+    /// natural boundary a partner club is invited across — "share this camp with them" is
+    /// one act — and sharing one object needs an entry scoped to that object. An entry
+    /// scoped to one object resolves what it is anchored to against the table its domain
+    /// names, so an expedition id written under the trip-log domain names nothing and the
+    /// entry is refused. Riding the trip domain would therefore mean giving up per-object
+    /// grants on the expedition itself, which is the one thing the sharing it exists for
+    /// needs.
+    /// </para>
+    /// </summary>
+    Expeditions = 20,
 }

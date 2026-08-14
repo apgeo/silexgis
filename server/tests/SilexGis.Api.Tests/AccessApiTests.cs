@@ -103,6 +103,14 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable
             ["all", "own", "cavingGroup", "cabinet", "object"], ignoreOrder: true);
         documents.GetProperty("supportsKindNarrowing").GetBoolean().ShouldBeFalse();
 
+        // An expedition is owned content too, and the object scope is the reason it has a
+        // domain of its own: sharing one camp with a partner club is one act on one object,
+        // and only a rule scoped to that object says it. It belongs to no collection of any
+        // kind, so all three collection scopes stay off its menu.
+        var expeditions = DomainOf("expeditions");
+        ScopesOf(expeditions).ShouldBe(["all", "own", "cavingGroup", "object"], ignoreOrder: true);
+        expeditions.GetProperty("supportsKindNarrowing").GetBoolean().ShouldBeFalse();
+
         List<string> ActionsOf(JsonElement domain, string scopeKind) =>
             [.. domain.GetProperty("scopes").EnumerateArray()
                 .First(s => s.GetProperty("scopeKind").GetString() == scopeKind)

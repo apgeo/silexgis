@@ -31,7 +31,7 @@ public static class PermissionGroupSeeder
     [
         AccessDomain.Features, AccessDomain.TripLogs, AccessDomain.Geofiles,
         AccessDomain.GeoreferencedMaps, AccessDomain.MapViews, AccessDomain.Files,
-        AccessDomain.Documents, AccessDomain.Tags,
+        AccessDomain.Documents, AccessDomain.Expeditions, AccessDomain.Tags,
     ];
 
     /// <summary>Regular admin runs the installation but cannot rewrite the security

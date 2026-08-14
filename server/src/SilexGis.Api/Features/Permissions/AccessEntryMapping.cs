@@ -194,7 +194,7 @@ public static class AccessEntryMapping
 
         if (entry.ScopeKind == AccessScopeKind.Object && entry.ScopeId is { } objectId)
         {
-            // Everything anchored on a row that is neither a feature nor a document. Four
+            // Everything anchored on a row that is neither a feature nor a document. Some
             // of those kinds carry the owner/club/audience columns, and most of what an
             // author holds over such a row is made of them: its owner holds every action on
             // it by ownership alone, and its audience can admit a read. Naming only the id
@@ -209,6 +209,7 @@ public static class AccessEntryMapping
                 AccessDomain.Geofiles => await AccessColumnsAsync(db.Geofiles, objectId, ct),
                 AccessDomain.GeoreferencedMaps => await AccessColumnsAsync(db.GeoreferencedMaps, objectId, ct),
                 AccessDomain.MapViews => await AccessColumnsAsync(db.MapViews, objectId, ct),
+                AccessDomain.Expeditions => await AccessColumnsAsync(db.Expeditions, objectId, ct),
                 _ => null,
             };
 
@@ -294,6 +295,7 @@ public static class AccessEntryMapping
                 AccessDomain.MapViews => await db.MapViews.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.Files => await db.StoredFiles.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.Documents => await db.Documents.AnyAsync(x => x.Id == scopeId, ct),
+                AccessDomain.Expeditions => await db.Expeditions.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.CavingGroups => await db.CavingGroups.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.PermissionGroups => await db.PermissionGroups.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.FeatureSets => await db.FeatureSets.AnyAsync(x => x.Id == scopeId, ct),

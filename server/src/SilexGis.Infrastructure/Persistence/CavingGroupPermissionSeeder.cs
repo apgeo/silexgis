@@ -25,12 +25,17 @@ public static class CavingGroupPermissionSeeder
     [
         AccessDomain.Features, AccessDomain.TripLogs, AccessDomain.Geofiles,
         AccessDomain.GeoreferencedMaps, AccessDomain.MapViews, AccessDomain.Documents,
+        AccessDomain.Expeditions,
     ];
 
     /// <summary>
     /// What the starter ruleset grants over a domain. Documents differ in one bit: they
     /// carry no position, so the right to see an exact location says nothing about them and
-    /// granting it would be noise in a ruleset an operator has to read and edit.
+    /// granting it would be noise in a ruleset an operator has to read and edit. Every other
+    /// domain here holds rows with a geometry of their own — an expedition's working area as
+    /// much as a trip's — and so keeps the bit. It decides nothing about the caves those rows
+    /// reach: whether a caller sees a cave's exact position is asked in the feature domain
+    /// against that cave's own protected roots, and no entry written here is consulted there.
     /// </summary>
     private static AccessAction StarterActions(AccessDomain domain) =>
         AccessAction.Read | AccessAction.Write | AccessAction.Create

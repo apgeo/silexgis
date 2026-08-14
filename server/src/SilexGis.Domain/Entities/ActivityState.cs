@@ -140,4 +140,121 @@ public static class ActivityStates
     /// <summary>Whether a trip log may move from one state to another.</summary>
     public static bool MayTripLogTransition(ActivityState from, ActivityState to) =>
         TripLogMoves.Any(move => move.From == from && move.To == to);
+
+    // ---- expeditions ----
+
+    /// <summary>Refusal: the activity does not go from the state it is in to the one asked for.</summary>
+    public const string ExpeditionTransitionInvalidCode = "expedition.state_transition_invalid";
+
+    /// <summary>
+    /// The states an expedition may hold — all of them, which is the difference between a camp
+    /// and a trip and not an oversight.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A trip is written up after it happened, so the four planning states say nothing about one
+    /// and are refused. An expedition is the opposite: it exists months before it happens, which
+    /// is what it is for. People book leave against it, a club commits money to it and a partner
+    /// club is invited to it, and every one of those decisions asks a question only these states
+    /// answer — is this somebody's idea, is it being organised, is it going ahead, has it been
+    /// put back. Without them a camp being organised would sit in the state that means "nobody
+    /// has been told", for half a year, while the whole point of the record is that people have
+    /// been told.
+    /// </para>
+    /// <para>
+    /// So every value is one somebody acts on, which is the bar for admitting a state at all.
+    /// They are written out rather than taken from the whole vocabulary, so that a state added
+    /// to the enum later is not admitted here by accident: whether a camp may hold it is a
+    /// decision somebody has to take, the same way it is for a trip.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<ActivityState> ExpeditionStates { get; } =
+    [
+        ActivityState.Draft,
+        ActivityState.Proposed,
+        ActivityState.Planned,
+        ActivityState.Confirmed,
+        ActivityState.Done,
+        ActivityState.Published,
+        ActivityState.Cancelled,
+        ActivityState.Delayed,
+    ];
+
+    /// <summary>Whether an expedition may hold this state at all, whatever it is in now.</summary>
+    public static bool IsExpeditionState(ActivityState state) => ExpeditionStates.Contains(state);
+
+    /// <summary>
+    /// The moves an expedition may make. The planning states are a ladder — floated, organised,
+    /// going ahead — which may be joined at any rung but is climbed one rung at a time, because
+    /// each rung is a decision somebody takes and a table that let one imply the next would take
+    /// them both on one click. Draft is the hub the trip's table already makes it: everything
+    /// live returns there, so "how do I get at this again" has one answer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two differences from a trip's table, both from the camp existing before it happens.
+    /// Calling it off is reachable from every state where it has not happened yet, rather than
+    /// from the workshop alone — a confirmed camp abandoned three weeks out is the ordinary
+    /// cancellation, not an edge case. And it is not reachable from Done or Published: a camp
+    /// that happened cannot be made not to have happened, and "delete the record" is a different
+    /// act with a different button.
+    /// </para>
+    /// <para>
+    /// Putting it back is reachable only from the two states that had dates to put back. Coming
+    /// out of it goes to Planned rather than Confirmed, because new dates have to be settled
+    /// before anybody is told the camp is on again.
+    /// </para>
+    /// <para>
+    /// A state is not a transition to itself, so no pair here repeats a state.
+    /// </para>
+    /// </remarks>
+    private static readonly (ActivityState From, ActivityState To)[] ExpeditionMoves =
+    [
+        // Out of the workshop: floated to the club, or straight to being organised when it has
+        // already been agreed elsewhere.
+        (ActivityState.Draft, ActivityState.Proposed),
+        (ActivityState.Draft, ActivityState.Planned),
+
+        // A camp that already happened is recorded from the workshop — that is how one from
+        // before this system existed is entered, write-up and all.
+        (ActivityState.Draft, ActivityState.Done),
+        (ActivityState.Draft, ActivityState.Published),
+        (ActivityState.Draft, ActivityState.Cancelled),
+
+        // An idea is adopted, sent back for more thought, or turned down.
+        (ActivityState.Proposed, ActivityState.Planned),
+        (ActivityState.Proposed, ActivityState.Draft),
+        (ActivityState.Proposed, ActivityState.Cancelled),
+
+        // Being organised: it goes ahead, is put back, or does not happen.
+        (ActivityState.Planned, ActivityState.Confirmed),
+        (ActivityState.Planned, ActivityState.Delayed),
+        (ActivityState.Planned, ActivityState.Draft),
+        (ActivityState.Planned, ActivityState.Cancelled),
+
+        // Going ahead: it happens, or it is put back or called off after all.
+        (ActivityState.Confirmed, ActivityState.Done),
+        (ActivityState.Confirmed, ActivityState.Delayed),
+        (ActivityState.Confirmed, ActivityState.Draft),
+        (ActivityState.Confirmed, ActivityState.Cancelled),
+
+        // Put back: new dates return it to being organised, not to going ahead.
+        (ActivityState.Delayed, ActivityState.Planned),
+        (ActivityState.Delayed, ActivityState.Draft),
+        (ActivityState.Delayed, ActivityState.Cancelled),
+
+        // It happened: the write-up is announced when it is ready, or it goes back for work.
+        (ActivityState.Done, ActivityState.Published),
+        (ActivityState.Done, ActivityState.Draft),
+
+        // The reverse of announcing, and the only one.
+        (ActivityState.Published, ActivityState.Draft),
+
+        // Reinstating a called-off camp returns it to the workshop, not to the rung it fell from.
+        (ActivityState.Cancelled, ActivityState.Draft),
+    ];
+
+    /// <summary>Whether an expedition may move from one state to another.</summary>
+    public static bool MayExpeditionTransition(ActivityState from, ActivityState to) =>
+        ExpeditionMoves.Any(move => move.From == from && move.To == to);
 }

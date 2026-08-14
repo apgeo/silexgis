@@ -140,10 +140,14 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable
             && e.ScopeKind == AccessScopeKind.CavingGroup && e.ScopeId == groupId
             && (e.Actions & (AccessAction.Read | AccessAction.Write | AccessAction.Create))
                 == (AccessAction.Read | AccessAction.Write | AccessAction.Create));
+        // Expeditions are on the list for the reason trips are: a club's camps are club
+        // content, and a starter ruleset that left them out would give a club members who may
+        // write every trip of a camp and not the camp holding them.
         starter.Select(e => e.Domain).ShouldBe(
             [
                 AccessDomain.Features, AccessDomain.TripLogs, AccessDomain.Geofiles,
                 AccessDomain.GeoreferencedMaps, AccessDomain.MapViews, AccessDomain.Documents,
+                AccessDomain.Expeditions,
             ],
             ignoreOrder: true);
 

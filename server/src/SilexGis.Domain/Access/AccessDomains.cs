@@ -18,6 +18,7 @@ public static class AccessDomains
         // "the club's photographs" should reach the albums made of them, and a second domain
         // would mean writing every rule twice.
         Album => AccessDomain.Documents,
+        Expedition => AccessDomain.Expeditions,
         _ => throw new ArgumentException($"No access domain for {entity.GetType().Name}.", nameof(entity)),
     };
 }
