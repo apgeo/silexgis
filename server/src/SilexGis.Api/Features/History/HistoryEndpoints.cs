@@ -139,6 +139,16 @@ public static class HistoryEndpoints
         // carry a part told to a narrower audience than the row itself.
         var mayWriteSubject = await MayWriteSubjectAsync(db, access, ctx, entityType, entityId, ct);
 
+        // A camp's membership rows name the trip that joined or left, and a camp reaches a wider
+        // audience than the trips gathered into it. Which of those the caller may read is resolved
+        // once for the page, by the same walk the camp's trip listing and its roll-up use, so the
+        // timeline cannot become the one surface that hands over a member the others withhold.
+        var readableMembers = await ReadableMemberTripIdsAsync(
+            db,
+            ctx,
+            parsed.Where(x => x.Row.EntityType == nameof(ExpeditionTrip)).Select(x => x.Changes),
+            ct);
+
         var items = parsed.Select(r =>
         {
             var governing = GoverningFeatureId(r.Row);
@@ -150,7 +160,7 @@ public static class HistoryEndpoints
                     revealAssociations);
             var (changes, redacted) = HistoryProtection.Redact(
                 r.Row.EntityType!, r.Changes, governingHidden, hidden.Contains, associationHidden,
-                mayWriteSubject);
+                mayWriteSubject, id => !readableMembers.Contains(id));
             return new HistoryEventDto(
                 r.Row.Id, r.Row.At, r.Row.UserId, r.UserName, r.Row.Action,
                 r.Row.EntityType!, r.Row.EntityId!,
@@ -182,6 +192,35 @@ public static class HistoryEndpoints
 
         var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, ct);
         return trip is not null && (await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed;
+    }
+
+    /// <summary>
+    /// Of the trips named by the membership rows on this page, the ones this caller may read.
+    /// </summary>
+    /// <remarks>
+    /// Asked as one question for the page rather than one per row, and only about the ids the
+    /// membership rows actually name — a timeline holding none of them asks nothing.
+    /// </remarks>
+    private static async Task<HashSet<Guid>> ReadableMemberTripIdsAsync(
+        SilexGisDbContext db, AccessContext ctx, IEnumerable<JsonObject?> membershipChanges, CancellationToken ct)
+    {
+        var named = new HashSet<Guid>();
+        foreach (var change in membershipChanges)
+        {
+            CollectReferencedIds(change, nameof(ExpeditionTrip.TripLogId), named);
+        }
+
+        if (named.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = named.ToList();
+        return [.. await db.TripLogs.AsNoTracking()
+            .VisibleTo(ctx, AccessDomain.TripLogs)
+            .Where(t => ids.Contains(t.Id))
+            .Select(t => t.Id)
+            .ToListAsync(ct)];
     }
 
     /// <summary>
@@ -263,18 +302,24 @@ public static class HistoryEndpoints
 
         foreach (var property in ReferenceProperties)
         {
-            if (changes[property] is not JsonObject pair)
-            {
-                continue;
-            }
+            CollectReferencedIds(changes, property, ids);
+        }
+    }
 
-            foreach (var side in new[] { pair["old"], pair["new"] })
+    /// <summary>Both sides of one id-bearing property in a diff, where they parse as ids.</summary>
+    private static void CollectReferencedIds(JsonObject? changes, string property, HashSet<Guid> ids)
+    {
+        if (changes?[property] is not JsonObject pair)
+        {
+            return;
+        }
+
+        foreach (var side in new[] { pair["old"], pair["new"] })
+        {
+            if (side is JsonValue value && value.TryGetValue<string>(out var text)
+                && Guid.TryParse(text, out var id))
             {
-                if (side is JsonValue value && value.TryGetValue<string>(out var text)
-                    && Guid.TryParse(text, out var id))
-                {
-                    ids.Add(id);
-                }
+                ids.Add(id);
             }
         }
     }

@@ -66,6 +66,8 @@ public sealed class ApiSmokeTests : IDisposable
         document.ShouldContain("/api/v1/stats/cavers/{id}/export");
         document.ShouldContain("/api/v1/stats/caves/{id}/export");
         document.ShouldContain("/api/v1/stats/caving-groups/{id}/export");
+        document.ShouldContain("/api/v1/stats/expeditions/{id}");
+        document.ShouldContain("/api/v1/stats/expeditions/{id}/export");
         document.ShouldContain("/api/v1/export/features");
         document.ShouldContain("/api/v1/shared/features/{token}");
 

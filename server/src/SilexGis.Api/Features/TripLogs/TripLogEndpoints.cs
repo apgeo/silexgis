@@ -62,6 +62,7 @@ public static class TripLogEndpoints
         DateOnly? from,
         DateOnly? to,
         Guid? caveId,
+        Guid? expeditionId,
         string? search,
         CancellationToken ct)
     {
@@ -103,6 +104,31 @@ public static class TripLogEndpoints
             // did there. Narrowing it to one role would quietly answer a smaller question.
             var namingTrips = TripRoleLinks.TripIdsNaming(db, caveId.Value);
             query = query.Where(x => namingTrips.Contains(x.Id));
+        }
+
+        if (expeditionId is not null)
+        {
+            // This is the camp's own trip list, so it is filtered like every other listing here
+            // and shows only what the caller may read — the same camp therefore lists different
+            // trips to different people, and both listings are right.
+            //
+            // A camp the caller may not read answers as though it gathered nothing, rather than
+            // filtering by it: the trips are readable, so filtering would tell the caller which
+            // of them a camp they cannot open holds, and an id that answers differently from one
+            // that does not exist is an id anybody can go looking for.
+            var readableCamp = await db.Expeditions.AsNoTracking()
+                .VisibleTo(ctx, AccessDomain.Expeditions)
+                .AnyAsync(x => x.Id == expeditionId.Value, ct);
+            if (!readableCamp)
+            {
+                var (emptyPage, emptySize) = Paging.Normalize(page, pageSize);
+                return TypedResults.Ok(new PagedResult<TripLogDto>([], emptyPage, emptySize, 0));
+            }
+
+            var members = db.ExpeditionTrips.AsNoTracking()
+                .Where(m => m.ExpeditionId == expeditionId.Value)
+                .Select(m => m.TripLogId);
+            query = query.Where(x => members.Contains(x.Id));
         }
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -292,6 +318,10 @@ public static class TripLogEndpoints
         }
 
         // Participant rows cascade; polymorphic rows are cleaned here.
+        //
+        // The trip's place in a camp goes with it, and the camp is otherwise untouched: a camp
+        // that gathered this trip has one fewer member, which is what deleting the trip means.
+        await db.ExpeditionTrips.Where(m => m.TripLogId == trip.Id).ExecuteDeleteAsync(ct);
         await db.Attachments
             .Where(a => a.EntityType == AttachedEntityType.TripLog && a.EntityId == trip.Id)
             .ExecuteDeleteAsync(ct);
@@ -884,6 +914,18 @@ public static class TripLogEndpoints
         // here. Distinct because two roles naming one cave are two rows and one cave.
         var caveLinks = await TripRoleLinks.PairsForAsync(db, tripIds, FeatureKind.Cave, ct);
 
+        // Which camp gathered each trip, narrowed to the camps this caller may read. A camp is
+        // governed in its own right, so naming one on a trip a caller may read would hand them
+        // the identity of a thing they have no right to open — and the identity is enough to ask
+        // for it. Filtered in the statement, not after it, for the reason every other listing
+        // here is: a filter applied to results is a filter somebody later forgets to apply.
+        var readableCampIds = db.Expeditions.AsNoTracking()
+            .VisibleTo(ctx, AccessDomain.Expeditions).Select(e => e.Id);
+        var campOfTrip = await db.ExpeditionTrips.AsNoTracking()
+            .Where(m => tripIds.Contains(m.TripLogId) && readableCampIds.Contains(m.ExpeditionId))
+            .Select(m => new { m.TripLogId, m.ExpeditionId })
+            .ToDictionaryAsync(m => m.TripLogId, m => m.ExpeditionId, ct);
+
         var roles = await ShippedRosterRolesAsync(db, ct);
         var participantRows = await (
             from participant in db.TripLogParticipants.AsNoTracking()
@@ -973,7 +1015,8 @@ public static class TripLogEndpoints
                 JsonSerializer.Deserialize<JsonElement>(trip.Logistics),
                 trip.LogisticsSchemaVersion,
                 safety is null ? null : JsonSerializer.Deserialize<JsonElement>(safety),
-                safetyVersion);
+                safetyVersion,
+                campOfTrip.TryGetValue(trip.Id, out var campId) ? campId : null);
         }
     }
 }

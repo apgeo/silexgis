@@ -107,6 +107,48 @@ public sealed record ExpeditionTransitionRequest
     public ActivityState? State { get; init; }
 }
 
+/// <summary>Which trip to put in a camp.</summary>
+public sealed record ExpeditionTripRequest
+{
+    public Guid TripLogId { get; init; }
+}
+
+/// <summary>
+/// Which camp a trip belongs to, written from the trip's own side. Null takes it out of
+/// whatever camp it is in, which is also what a body naming nothing means: this request is
+/// about one thing, so "no camp named" and "no camp" are the same answer and there is nothing
+/// for the shape to tell apart.
+/// </summary>
+public sealed record TripExpeditionRequest
+{
+    public Guid? ExpeditionId { get; init; }
+}
+
+/// <summary>
+/// A trip's place in a camp, as it travels back to whoever just made it.
+/// </summary>
+/// <remarks>
+/// <see cref="MovedFromAnotherExpedition"/> is a flag and never an identifier, deliberately. A
+/// trip belongs to at most one camp, so putting it in this one takes it out of any other — and
+/// the caller is entitled to know that happened without being told which camp it was, since
+/// they may have no right to read it.
+/// </remarks>
+public sealed record ExpeditionTripDto
+{
+    public required Guid ExpeditionId { get; init; }
+
+    public required Guid TripLogId { get; init; }
+
+    public required DateTimeOffset JoinedAt { get; init; }
+
+    public required bool MovedFromAnotherExpedition { get; init; }
+}
+
+public sealed class ExpeditionTripRequestValidator : AbstractValidator<ExpeditionTripRequest>
+{
+    public ExpeditionTripRequestValidator() => RuleFor(x => x.TripLogId).NotEmpty();
+}
+
 public sealed class ExpeditionWriteRequestValidator : AbstractValidator<ExpeditionWriteRequest>
 {
     public ExpeditionWriteRequestValidator()

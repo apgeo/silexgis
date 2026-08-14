@@ -3948,7 +3948,7 @@ export function useFilterResolve(world: string, ids: readonly string[]) {
 // ---------------------------------------------------------------------------
 
 /**
- * What a person, a cave or a club adds up to across trips.
+ * What a person, a cave, a club or a camp adds up to across trips.
  *
  * Every figure is counted over the trips the caller may read, so two people legitimately see
  * different totals for the same subject. That is a fact about the answer, not about the request —
@@ -3957,8 +3957,8 @@ export function useFilterResolve(world: string, ids: readonly string[]) {
  */
 export type TripStatistics = components['schemas']['TripStatisticsDto'];
 
-/** Which of the three things is being added up. */
-export type StatisticsSubject = 'caver' | 'cave' | 'cavingGroup';
+/** Which thing is being added up. */
+export type StatisticsSubject = 'caver' | 'cave' | 'cavingGroup' | 'expedition';
 
 export function useTripStatistics(
   subject: StatisticsSubject,
@@ -3969,13 +3969,18 @@ export function useTripStatistics(
     queryKey: queryKeys.tripStatistics(subject, id ?? ''),
     queryFn: () => {
       const path = { id: id! };
-      if (subject === 'caver') {
-        return unwrap(api.GET('/api/v1/stats/cavers/{id}', { params: { path } }));
+      // A named branch per subject rather than a trailing fallthrough: a subject added to the
+      // union without a branch of its own would otherwise be asked about as a club, and answered.
+      switch (subject) {
+        case 'caver':
+          return unwrap(api.GET('/api/v1/stats/cavers/{id}', { params: { path } }));
+        case 'cave':
+          return unwrap(api.GET('/api/v1/stats/caves/{id}', { params: { path } }));
+        case 'cavingGroup':
+          return unwrap(api.GET('/api/v1/stats/caving-groups/{id}', { params: { path } }));
+        case 'expedition':
+          return unwrap(api.GET('/api/v1/stats/expeditions/{id}', { params: { path } }));
       }
-      if (subject === 'cave') {
-        return unwrap(api.GET('/api/v1/stats/caves/{id}', { params: { path } }));
-      }
-      return unwrap(api.GET('/api/v1/stats/caving-groups/{id}', { params: { path } }));
     },
     enabled: enabled && !!id,
     // Derived on every request from trips that change slowly; a page revisited within the minute

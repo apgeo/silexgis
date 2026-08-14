@@ -118,7 +118,12 @@ public sealed record TripLogDto(
     // always an object, so nothing at all can only mean "not yours to read", and a surface
     // drawing it can say so rather than show an empty section reading as "nothing happened".
     JsonElement? Safety,
-    int? SafetySchemaVersion);
+    int? SafetySchemaVersion,
+    // The camp this trip was gathered into, or absent when it was not gathered into one — and
+    // absent, too, when the camp is one this caller may not read, so a trip never names a thing
+    // its reader has no right to know exists. Read-only: membership is written through the
+    // camp's own doors, which is where the rule that a trip belongs to at most one lives.
+    Guid? ExpeditionId);
 
 public sealed record TripLogWriteRequest(
     string Title,

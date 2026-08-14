@@ -4,18 +4,25 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Trips;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
-namespace SilexGis.Api.Features.Statistics;
+namespace SilexGis.Infrastructure.Trips;
 
 /// <summary>
 /// The one place a trip total is worked out. Every surface that shows a figure — a person's page,
-/// a cave's, a club's, and the file any of them is saved as — asks here, so a number saved to disk
-/// and the number on the screen above it cannot come to disagree: a second query written for a
-/// second surface is how a report ends up answering a question the screen refuses.
+/// a cave's, a club's, a camp's, and the file any of them is saved as — asks here, so a number
+/// saved to disk and the number on the screen above it cannot come to disagree: a second query
+/// written for a second surface is how a report ends up answering a question the screen refuses.
 /// </summary>
 /// <remarks>
+/// It lives below the surfaces that call it, and it has to: more than one of them adds up the same
+/// trips, and the alternative to a shared home is either one surface reaching into another's
+/// internals or a second copy of the arithmetic. A second copy is how a page comes to state a
+/// figure another page declines to give — and the traps below are exactly the kind that a copy
+/// reproduces incorrectly and silently.
+///
 /// The caller's visibility walk is composed into the statements rather than applied to their
 /// results. That is the whole design: a count taken past the walk would state how many rows the
 /// caller was not shown, and repeated over enough subjects it reconstructs them.
@@ -25,7 +32,7 @@ namespace SilexGis.Api.Features.Statistics;
 /// and a role link names a feature once per link and per role, so every count of trips or places
 /// reduces the pairs before counting them.
 /// </remarks>
-internal static class TripStatisticsQuery
+public static class TripStatisticsQuery
 {
     /// <summary>
     /// Adds up the trips a scope selects, out of the trips this caller may read.
@@ -41,7 +48,7 @@ internal static class TripStatisticsQuery
     /// would put another cave's figures on this cave's page — "two places reached, two first
     /// visits" printed beside a single name.
     /// </param>
-    internal static async Task<TripStatisticsDto> ComputeAsync(
+    public static async Task<TripStatisticsDto> ComputeAsync(
         SilexGisDbContext db,
         FeatureProtection protection,
         AccessContext ctx,
@@ -50,6 +57,9 @@ internal static class TripStatisticsQuery
         Guid? subjectCaveId,
         CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(protection);
+
         var visible = db.TripLogs.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs);
         var scoped = visible.Where(scope);
         var scopedIds = scoped.Select(t => t.Id);
@@ -84,6 +94,7 @@ internal static class TripStatisticsQuery
         var (undergroundMinutes, personTrips, timedPersonTrips) =
             await HoursAsync(db, scoped, subjectCaverId, ct);
         var placeIds = await PlaceIdsAsync(db, protection, ctx, scopedIds, subjectCaveId, ct);
+        var photographs = await PhotographsAsync(db, ctx, scopedIds, ct);
         var firstVisits = await FirstVisitsAsync(
             db,
             visible,
@@ -105,7 +116,8 @@ internal static class TripStatisticsQuery
             totals.RopeMetresM,
             totals.SurveyStations,
             totals.Earliest,
-            totals.Latest);
+            totals.Latest,
+            photographs);
     }
 
     /// <summary>
@@ -220,6 +232,35 @@ internal static class TripStatisticsQuery
 
         var redacted = await protection.RedactedLinkTargetIdsAsync(ctx, readable, ct);
         return [.. readable.Where(id => !redacted.Contains(id))];
+    }
+
+    /// <summary>
+    /// How many pictures hang on these trips, out of the pictures this caller may see.
+    /// </summary>
+    /// <remarks>
+    /// Narrowed from the ordinary photograph read rule rather than assembled beside it, so the
+    /// figure counts exactly what the galleries on those trips would show this caller. A count
+    /// taken over the pins instead would state how many pictures were being withheld — the same
+    /// disclosure every other figure here is composed to avoid.
+    ///
+    /// Photographs, not pins: one picture hanging on two of the trips in scope is one picture, and
+    /// counting the pins would make a camp's figure grow by re-pinning rather than by photography.
+    /// The read rule resolves reach-through-an-attachment before it can be composed on, so this is
+    /// a statement of its own rather than a term of the grouped pass above.
+    ///
+    /// The trips are handed to the read rule rather than applied to its result, so the part of that
+    /// rule which cannot be composed into a query is asked about the pictures on these trips rather
+    /// than about every picture in the installation. Every page here would otherwise pay the same
+    /// whole-registry walk whatever its subject was worth.
+    /// </remarks>
+    private static async Task<int> PhotographsAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        IQueryable<Guid> scopedIds,
+        CancellationToken ct)
+    {
+        var photographs = await PhotographReads.VisiblePhotographsOnTripsAsync(db, ctx, scopedIds, ct);
+        return await photographs.CountAsync(ct);
     }
 
     /// <summary>

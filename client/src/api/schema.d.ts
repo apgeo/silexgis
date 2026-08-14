@@ -8540,6 +8540,7 @@ export interface paths {
                     from?: string;
                     to?: string;
                     caveId?: string;
+                    expeditionId?: string;
                     search?: string;
                 };
                 header?: never;
@@ -8996,6 +8997,134 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expeditions/{id}/trips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Puts a trip in this camp. A trip belongs to at most one camp, so a trip that was in another is moved out of it and the answer says so. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExpeditionTripRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionTripDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expeditions/{id}/trips/{tripLogId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Takes a trip out of this camp. The trip itself is untouched. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{id}/expedition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sets which camp a trip belongs to, or takes it out of one when no camp is named. Putting it in a camp takes the right to write both; taking it out takes the right to write the trip. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripExpeditionRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionTripDto"];
+                    };
+                };
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9596,6 +9725,80 @@ export interface paths {
             cookie?: never;
         };
         /** The same figures for one club, as a spreadsheet. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/expeditions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What one camp adds up to across the trips in it the caller may read. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripStatisticsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/expeditions/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same figures for one camp, as a spreadsheet. */
         get: {
             parameters: {
                 query?: never;
@@ -12499,6 +12702,19 @@ export interface components {
         ExpeditionTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];
         };
+        ExpeditionTripDto: {
+            /** Format: uuid */
+            expeditionId: string;
+            /** Format: uuid */
+            tripLogId: string;
+            /** Format: date-time */
+            joinedAt: string;
+            movedFromAnotherExpedition: boolean;
+        };
+        ExpeditionTripRequest: {
+            /** Format: uuid */
+            tripLogId?: string;
+        };
         ExpeditionWriteRequest: {
             name?: string;
             description?: null | string;
@@ -14716,6 +14932,10 @@ export interface components {
         };
         /** @enum {unknown} */
         TextExtractionState: "notApplicable" | "pending" | "extracted" | "noText" | "failed" | "unsupported";
+        TripExpeditionRequest: {
+            /** Format: uuid */
+            expeditionId?: null | string;
+        };
         TripLogDto: {
             /** Format: uuid */
             id: string;
@@ -14770,6 +14990,8 @@ export interface components {
             safety: null | components["schemas"]["JsonElement"];
             /** Format: int32 */
             safetySchemaVersion: null | number;
+            /** Format: uuid */
+            expeditionId: null | string;
         };
         TripLogWriteRequest: {
             title: string;
@@ -14902,6 +15124,8 @@ export interface components {
             earliestTripDate: null | string;
             /** Format: date */
             latestTripDate: null | string;
+            /** Format: int32 */
+            photographs: number;
         };
         TripTypeDto: {
             /** Format: int64 */

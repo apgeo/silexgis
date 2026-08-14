@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-namespace SilexGis.Api.Features.Statistics;
+namespace SilexGis.Infrastructure.Trips;
 
 /// <summary>
 /// What a set of trips adds up to, for the caller asking. Every figure is counted over the trips
@@ -17,6 +17,9 @@ namespace SilexGis.Api.Features.Statistics;
 /// Nothing here is stored. Every figure is derived when it is asked for, so a corrected trip
 /// corrects the totals in the same moment, and an older trip typed up years later takes its place
 /// in the history rather than contradicting a flag written before it existed.
+///
+/// It sits beside the query that fills it rather than in the surface that returns it, because more
+/// than one surface returns it and the answer has to be the same object each time.
 ///
 /// Positional, and appended to rather than inserted into: it carries runs of same-typed members
 /// that would absorb one another silently if anything were put between them.
@@ -56,6 +59,12 @@ namespace SilexGis.Api.Features.Statistics;
 /// <param name="SurveyStations">Survey stations set, summed over the trips.</param>
 /// <param name="EarliestTripDate">The first day any of these trips began.</param>
 /// <param name="LatestTripDate">The last day any of them ended.</param>
+/// <param name="Photographs">
+/// Pictures hanging on those trips that this caller may see — counted through the same rule the
+/// galleries obey, and counted as photographs rather than as the pins that hold them, so one
+/// picture on two of the trips is one picture. A figure assembled from the pins instead would
+/// state how many pictures were being withheld.
+/// </param>
 public sealed record TripStatisticsDto(
     int Trips,
     int People,
@@ -69,9 +78,10 @@ public sealed record TripStatisticsDto(
     decimal RopeMetresM,
     int SurveyStations,
     DateOnly? EarliestTripDate,
-    DateOnly? LatestTripDate)
+    DateOnly? LatestTripDate,
+    int Photographs)
 {
     /// <summary>What a scope with nothing readable in it adds up to.</summary>
     public static TripStatisticsDto Empty { get; } =
-        new(0, 0, 0, 0, 0, 0, 0, 0, 0m, 0m, 0, null, null);
+        new(0, 0, 0, 0, 0, 0, 0, 0, 0m, 0m, 0, null, null, 0);
 }

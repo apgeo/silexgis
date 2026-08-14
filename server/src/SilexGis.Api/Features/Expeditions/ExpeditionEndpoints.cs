@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -14,6 +15,19 @@ namespace SilexGis.Api.Features.Expeditions;
 public static class ExpeditionEndpoints
 {
     private const string NotFoundCode = "expedition.not_found";
+
+    // The trip's own refusal code, spelled here because it is a wire contract rather than
+    // something the trips' handlers own: a caller told a trip is missing must be told it in the
+    // same words wherever they asked.
+    private const string TripNotFoundCode = "trip_log.not_found";
+
+    private const string NotAMemberCode = "expedition.trip_not_in_expedition";
+
+    private const string MembershipConflictCode = "expedition.trip_membership_conflict";
+
+    // The index that carries "a trip is in at most one camp". Named here so a violation of that
+    // one rule is told apart from any other write that happens to reach the database as a conflict.
+    private const string MembershipUniqueIndex = "ix_expedition_trips_trip_log_id";
 
     public static RouteGroupBuilder MapExpeditionEndpoints(this RouteGroupBuilder api)
     {
@@ -35,6 +49,25 @@ public static class ExpeditionEndpoints
                 "Moves an expedition to another lifecycle state (Write permission). One endpoint "
                 + "rather than a verb per state: a camp has eight states and the moves between "
                 + "them are a table, not a handful of named acts.");
+
+        expeditions.MapPost("/{id:guid}/trips", AddTripAsync).WithValidation<ExpeditionTripRequest>()
+            .WithSummary(
+                "Puts a trip in this camp. A trip belongs to at most one camp, so a trip that "
+                + "was in another is moved out of it and the answer says so.");
+        expeditions.MapDelete("/{id:guid}/trips/{tripLogId:guid}", RemoveTripAsync)
+            .WithSummary("Takes a trip out of this camp. The trip itself is untouched.");
+
+        // The trip's own side of the same relationship, mapped from here rather than beside the
+        // trip's other routes. Joining and leaving are one rule with one set of refusals, and a
+        // rule written out in two slices is a rule that drifts — the day one side grows a check
+        // the other lacks is the day the same act is allowed from one page and refused from the
+        // other. The camp is the thing that has members, so its slice answers for both doors.
+        var trips = api.MapGroup("/trip-logs").WithTags("Expeditions");
+        trips.MapPut("/{id:guid}/expedition", SetExpeditionAsync).WithValidation<TripExpeditionRequest>()
+            .WithSummary(
+                "Sets which camp a trip belongs to, or takes it out of one when no camp is "
+                + "named. Putting it in a camp takes the right to write both; taking it out "
+                + "takes the right to write the trip.");
 
         return api;
     }
@@ -203,6 +236,11 @@ public static class ExpeditionEndpoints
             .ToListAsync(ct);
         db.AccessEntries.RemoveRange(anchored);
 
+        // The membership rows go with the camp, and nothing else does: the trips it gathered
+        // stand alone perfectly well and are what the people who wrote them still have. That is
+        // carried by the membership row's own foreign keys, so a camp deleted by any route — a
+        // handler, a repair script, a cascade from somewhere else — releases its trips rather
+        // than taking them.
         db.Expeditions.Remove(expedition);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
@@ -270,6 +308,265 @@ public static class ExpeditionEndpoints
 
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(Map(expedition));
+    }
+
+    /// <summary>
+    /// Puts a trip in this camp.
+    /// </summary>
+    /// <remarks>
+    /// Forming the membership takes the right to write <em>both</em> rows: the camp gains a
+    /// member its roll-up counts, and the trip gains a camp it is shown as belonging to. Neither
+    /// party is joined to the other by somebody with authority over only one of them.
+    /// </remarks>
+    private static async Task<Results<Ok<ExpeditionTripDto>, ProblemHttpResult>> AddTripAsync(
+        Guid id,
+        ExpeditionTripRequest request,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var expedition = await db.Expeditions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (expedition is null)
+        {
+            return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        if (await RefuseUnlessWritableAsync(access, ctx, expedition, ct) is { } refusal)
+        {
+            return refusal;
+        }
+
+        var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == request.TripLogId, ct);
+        if (trip is null)
+        {
+            return ApiProblems.NotFound(TripNotFoundCode);
+        }
+
+        if (await RefuseUnlessTripWritableAsync(access, ctx, trip, ct) is { } tripRefusal)
+        {
+            return tripRefusal;
+        }
+
+        var (row, conflict) = await JoinAsync(db, expedition.Id, trip.Id, ct);
+        return conflict ?? (Results<Ok<ExpeditionTripDto>, ProblemHttpResult>)TypedResults.Ok(row!);
+    }
+
+    /// <summary>
+    /// Takes a trip out of this camp.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Either party may end it: the right to write the camp, or the right to write the trip. A
+    /// relationship needs both to form and one to end, and the alternative strands rows — a camp
+    /// whose organiser cannot edit a trip could never evict it, and a trip whose owner cannot
+    /// reach the camp could never get out of it.
+    /// </para>
+    /// <para>
+    /// A trip the caller may not read answers as though it were not a member, exactly as the
+    /// camp's own trip listing withholds it: a refusal that distinguished "not in this camp"
+    /// from "in it and not yours to touch" would answer a question the listing refuses to.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<NoContent, ProblemHttpResult>> RemoveTripAsync(
+        Guid id,
+        Guid tripLogId,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var expedition = await db.Expeditions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (expedition is null || ctx is null
+            || !(await access.DecideAsync(ctx, AccessAction.Read, expedition, ct)).Allowed)
+        {
+            return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == tripLogId, ct);
+        if (trip is null || !(await access.DecideAsync(ctx, AccessAction.Read, trip, ct)).Allowed)
+        {
+            return ApiProblems.NotFound(TripNotFoundCode);
+        }
+
+        var row = await db.ExpeditionTrips
+            .FirstOrDefaultAsync(x => x.ExpeditionId == id && x.TripLogId == tripLogId, ct);
+        if (row is null)
+        {
+            return ApiProblems.NotFound(NotAMemberCode);
+        }
+
+        var mayWriteCamp = (await access.DecideAsync(ctx, AccessAction.Write, expedition, ct)).Allowed;
+        if (!mayWriteCamp && !(await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed)
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        db.ExpeditionTrips.Remove(row);
+        await db.SaveChangesAsync(ct);
+        return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// Sets which camp a trip belongs to, from the trip's own side, or takes it out of one.
+    /// </summary>
+    /// <remarks>
+    /// A full write of one fact, so naming no camp means the trip is in none — there is no
+    /// second reading for an absent field to carry here, unlike a request that edits many things
+    /// at once and has to tell "not editing this" from "clear it".
+    /// </remarks>
+    private static async Task<Results<Ok<ExpeditionTripDto>, NoContent, ProblemHttpResult>> SetExpeditionAsync(
+        Guid id,
+        TripExpeditionRequest request,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (trip is null)
+        {
+            return ApiProblems.NotFound(TripNotFoundCode);
+        }
+
+        if (await RefuseUnlessTripWritableAsync(access, ctx, trip, ct) is { } refusal)
+        {
+            return refusal;
+        }
+
+        if (request.ExpeditionId is not { } expeditionId)
+        {
+            // Leaving takes authority over the trip alone, which the check above established.
+            var current = await db.ExpeditionTrips.FirstOrDefaultAsync(x => x.TripLogId == trip.Id, ct);
+            if (current is not null)
+            {
+                db.ExpeditionTrips.Remove(current);
+                await db.SaveChangesAsync(ct);
+            }
+
+            return TypedResults.NoContent();
+        }
+
+        var expedition = await db.Expeditions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == expeditionId, ct);
+        if (expedition is null)
+        {
+            return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        if (await RefuseUnlessWritableAsync(access, ctx, expedition, ct) is { } campRefusal)
+        {
+            return campRefusal;
+        }
+
+        var (row, conflict) = await JoinAsync(db, expedition.Id, trip.Id, ct);
+        return conflict
+            ?? (Results<Ok<ExpeditionTripDto>, NoContent, ProblemHttpResult>)TypedResults.Ok(row!);
+    }
+
+    /// <summary>
+    /// Writes the membership row, having established that the caller may. The one place the
+    /// "at most one camp" rule is maintained, so both doors into it behave identically.
+    /// </summary>
+    /// <remarks>
+    /// It reads which camp the trip is in and then writes, so two people acting on the same trip at
+    /// the same moment can both act on a state that stopped being true between the two. The
+    /// database is what refuses the second of them — the unique index on the trip, or a delete that
+    /// finds the row already gone — and this translates that refusal into the answer a client can
+    /// act on, rather than letting a race the schema correctly caught surface as a server fault
+    /// with no code on it. The caller's remedy is to re-read the trip and ask again.
+    /// </remarks>
+    private static async Task<(ExpeditionTripDto? Row, ProblemHttpResult? Problem)> JoinAsync(
+        SilexGisDbContext db, Guid expeditionId, Guid tripLogId, CancellationToken ct)
+    {
+        var existing = await db.ExpeditionTrips.FirstOrDefaultAsync(x => x.TripLogId == tripLogId, ct);
+        if (existing is not null && existing.ExpeditionId == expeditionId)
+        {
+            // Already where it is being put, and the joining date stays as it was: restating a
+            // fact does not make it new, and something later asks that date what the camp held
+            // at a moment in the past.
+            return (Map(existing, movedFromAnother: false), null);
+        }
+
+        // Left and rejoined in two acts rather than repointed in one. The unique index is on the
+        // trip, so the row leaving and the row arriving cannot both stand for an instant; and a
+        // move recorded as a departure and an arrival appears on both camps' histories, while a
+        // row edited in place appears only on the one it ended up in. The transaction is what
+        // keeps a failure between the two from leaving the trip in neither.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var moved = existing is not null;
+        var row = new ExpeditionTrip
+        {
+            ExpeditionId = expeditionId,
+            TripLogId = tripLogId,
+            JoinedAt = DateTimeOffset.UtcNow,
+        };
+
+        try
+        {
+            if (existing is not null)
+            {
+                db.ExpeditionTrips.Remove(existing);
+                await db.SaveChangesAsync(ct);
+            }
+
+            db.ExpeditionTrips.Add(row);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch (Exception e) when (IsMembershipRace(e))
+        {
+            // Nothing is rolled back by hand: disposing the transaction undoes whichever leg had
+            // already run, and an explicit rollback on a connection that has just failed is one
+            // more way for the handler to throw instead of answering.
+            return (null, ApiProblems.Conflict(
+                MembershipConflictCode,
+                "This trip's camp was changed by somebody else while this request was being "
+                + "handled. Read the trip again and repeat the change if it is still wanted."));
+        }
+
+        return (Map(row, moved), null);
+    }
+
+    /// <summary>
+    /// Whether a failed membership write is somebody else having moved the same trip in the
+    /// meantime: the unique index on the trip refusing a second camp for it, or the row this
+    /// request meant to remove having already been removed.
+    /// </summary>
+    private static bool IsMembershipRace(Exception e) =>
+        e is DbUpdateConcurrencyException
+        || (e is DbUpdateException
+            && e.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: MembershipUniqueIndex,
+            });
+
+    private static ExpeditionTripDto Map(ExpeditionTrip row, bool movedFromAnother) => new()
+    {
+        ExpeditionId = row.ExpeditionId,
+        TripLogId = row.TripLogId,
+        JoinedAt = row.JoinedAt,
+        MovedFromAnotherExpedition = movedFromAnother,
+    };
+
+    /// <summary>
+    /// The refusal a caller who may not write a trip gets, in the trip's own words: 403 when
+    /// they can read it, 404 when they cannot.
+    /// </summary>
+    private static async Task<ProblemHttpResult?> RefuseUnlessTripWritableAsync(
+        IAccessService access, AccessContext? ctx, TripLog trip, CancellationToken ct)
+    {
+        if (ctx is not null && (await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed)
+        {
+            return null;
+        }
+
+        return (await access.DecideAsync(ctx, AccessAction.Read, trip, ct)).Allowed
+            ? ApiProblems.Forbidden()
+            : ApiProblems.NotFound(TripNotFoundCode);
     }
 
     /// <summary>

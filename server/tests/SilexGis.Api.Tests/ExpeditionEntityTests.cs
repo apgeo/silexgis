@@ -94,6 +94,43 @@ public sealed class ExpeditionEntityTests : IAsyncLifetime, IDisposable
         stored.Geom!.SRID.ShouldBe(4326);
     }
 
+    [Fact]
+    public async Task A_trip_is_in_one_camp_and_the_table_is_what_says_so()
+    {
+        // "At most one camp" is an index, not a convention: a handler holds it only until the
+        // second writer, and a bulk path or an import is exactly the second writer. The row it
+        // would leave behind reads as a trip in two camps, and every roll-up over either would
+        // then count it.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        var first = New("First camp", new DateOnly(2026, 7, 14));
+        var second = New("Second camp", new DateOnly(2026, 7, 14));
+        var trip = new TripLog
+        {
+            Title = "A trip in one camp",
+            TripDate = new DateOnly(2026, 7, 15),
+            OwnerUserId = ownerId,
+        };
+        db.Expeditions.AddRange(first, second);
+        db.TripLogs.Add(trip);
+        db.ExpeditionTrips.Add(new ExpeditionTrip
+        {
+            ExpeditionId = first.Id,
+            TripLogId = trip.Id,
+            JoinedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        db.ExpeditionTrips.Add(new ExpeditionTrip
+        {
+            ExpeditionId = second.Id,
+            TripLogId = trip.Id,
+            JoinedAt = DateTimeOffset.UtcNow,
+        });
+        await Should.ThrowAsync<DbUpdateException>(() => db.SaveChangesAsync());
+    }
+
     private Expedition New(string name, DateOnly start) =>
         new() { Name = name, StartDate = start, OwnerUserId = ownerId };
 

@@ -1015,7 +1015,8 @@
     "metresSurveyed": "Surveyed",
     "metresOfRope": "Rope",
     "surveyStations": "Survey stations",
-    "incidents": "Trips with an incident"
+    "incidents": "Trips with an incident",
+    "photographs": "Photographs"
   },
   "permissions": {
     "title": "Permissions",

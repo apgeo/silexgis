@@ -75,6 +75,7 @@ const statisticsSegments: Record<StatisticsSubject, string> = {
   caver: 'cavers',
   cave: 'caves',
   cavingGroup: 'caving-groups',
+  expedition: 'expeditions',
 };
 
 /**

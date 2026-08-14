@@ -10,6 +10,8 @@ public class HistoryProtectionTests
 {
     private static readonly Func<Guid, bool> NoLinkHidden = _ => false;
 
+    private static readonly Func<Guid, bool> NoMemberHidden = _ => false;
+
     private static JsonObject Changes(params (string Prop, string? Old, string? New)[] props)
     {
         var obj = new JsonObject();
@@ -33,7 +35,7 @@ public class HistoryProtectionTests
             ("Geom", "POINT (25 45)", "POINT (26 46)"),
             ("UpdatedAt", "t1", "t2"));
 
-        var result = HistoryProtection.Redact("Feature:Cave", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false);
+        var result = HistoryProtection.Redact("Feature:Cave", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
 
         result.Changes!.ContainsKey("Name").ShouldBeTrue();
         result.Changes.ContainsKey("ClosestAddress").ShouldBeFalse();
@@ -50,7 +52,7 @@ public class HistoryProtectionTests
     {
         var changes = Changes(("ClosestAddress", "Str. X", "Str. Y"));
 
-        var result = HistoryProtection.Redact("Feature:Cave", changes, governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: false);
+        var result = HistoryProtection.Redact("Feature:Cave", changes, governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
 
         result.Changes!.ContainsKey("ClosestAddress").ShouldBeTrue();
         result.Redacted.ShouldBeEmpty();
@@ -65,7 +67,7 @@ public class HistoryProtectionTests
             ("Altitude", "100", "200"),
             ("PositionQuality", "Gps", "Estimated"));
 
-        var result = HistoryProtection.Redact("Feature:CaveEntrance", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false);
+        var result = HistoryProtection.Redact("Feature:CaveEntrance", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
 
         result.Changes!.ContainsKey("Name").ShouldBeTrue();
         result.Redacted.ShouldBe(["Geom", "Altitude", "PositionQuality"], ignoreOrder: true);
@@ -79,7 +81,7 @@ public class HistoryProtectionTests
             ("Geom", null, "MULTILINESTRING ((25 45, 26 46))"),
             ("Name", null, "Survey A"));
 
-        var result = HistoryProtection.Redact("Feature:Centerline", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false);
+        var result = HistoryProtection.Redact("Feature:Centerline", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
 
         result.Changes.ShouldBeNull();
         result.Redacted.ShouldContain("Geom");
@@ -91,7 +93,7 @@ public class HistoryProtectionTests
     {
         var changes = Changes(("Geom", "POINT (25 45)", "POINT (26 46)"), ("Name", "a", "b"));
 
-        var result = HistoryProtection.Redact("Feature:Generic", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false);
+        var result = HistoryProtection.Redact("Feature:Generic", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
 
         result.Changes!.ContainsKey("Name").ShouldBeTrue();
         result.Redacted.ShouldBe(["Geom"]);
@@ -107,7 +109,7 @@ public class HistoryProtectionTests
             ("ToId", null, hidden.ToString()),
             ("Note", null, "spring connection"));
 
-        var result = HistoryProtection.Redact("FeatureLink", changes, governingHidden: false, id => id == hidden, associationHidden: false, mayWriteSubject: false);
+        var result = HistoryProtection.Redact("FeatureLink", changes, governingHidden: false, id => id == hidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
 
         result.Changes!.ContainsKey("ToId").ShouldBeFalse();
         result.Changes.ContainsKey("FromId").ShouldBeTrue(); // that endpoint is not hidden
@@ -120,7 +122,7 @@ public class HistoryProtectionTests
     {
         var changes = Changes(("FromId", null, Guid.NewGuid().ToString()), ("ToId", null, Guid.NewGuid().ToString()));
 
-        var result = HistoryProtection.Redact("FeatureLink", changes, governingHidden: false, _ => false, associationHidden: false, mayWriteSubject: false);
+        var result = HistoryProtection.Redact("FeatureLink", changes, governingHidden: false, _ => false, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
 
         result.Changes!.Count.ShouldBe(2);
         result.Redacted.ShouldBeEmpty();
@@ -148,7 +150,7 @@ public class HistoryProtectionTests
         // Withheld: the event stays — something was attached — while which document it was
         // does not.
         var hidden = HistoryProtection.Redact(
-            "Attachment", Row(), governingHidden: true, NoLinkHidden, associationHidden: true, mayWriteSubject: false);
+            "Attachment", Row(), governingHidden: true, NoLinkHidden, associationHidden: true, mayWriteSubject: false, memberHidden: NoMemberHidden);
         hidden.Redacted.Order().ShouldBe(["Caption", "FileId"]);
         hidden.Changes!.ContainsKey("FileId").ShouldBeFalse();
         hidden.Changes.ContainsKey("SortOrder").ShouldBeTrue();
@@ -156,7 +158,7 @@ public class HistoryProtectionTests
         // Disclosed, with the location still protected: the pairing is a name, and naming it
         // is a decision the association rule takes, not this one.
         var shown = HistoryProtection.Redact(
-            "Attachment", Row(), governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false);
+            "Attachment", Row(), governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
         shown.Redacted.ShouldBeEmpty();
         shown.Changes!.Count.ShouldBe(3);
     }
@@ -180,7 +182,7 @@ public class HistoryProtectionTests
         // timeline can consult neither the reveal setting nor the link's siblings, so it is
         // strictly more restrictive than the live answer, the only direction it may differ in.
         var hidden = HistoryProtection.Redact(
-            "ResLinkMember", Changes(props), governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false);
+            "ResLinkMember", Changes(props), governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
         hidden.Redacted.Order().ShouldBe(["AddedBy", "Note", "ResLinkId"]);
         hidden.Changes!.ContainsKey("ResLinkId").ShouldBeFalse();
         hidden.Changes.ContainsKey("SortOrder").ShouldBeTrue();
@@ -188,7 +190,7 @@ public class HistoryProtectionTests
 
         // And a caller who may place the feature exactly reads the whole row.
         var shown = HistoryProtection.Redact(
-            "ResLinkMember", Changes(props), governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: false);
+            "ResLinkMember", Changes(props), governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
         shown.Redacted.ShouldBeEmpty();
         shown.Changes!.ContainsKey("ResLinkId").ShouldBeTrue();
         shown.Changes.ContainsKey("Note").ShouldBeTrue();
@@ -211,7 +213,7 @@ public class HistoryProtectionTests
         // from the same caller and a diff would be the way around that.
         var reader = HistoryProtection.Redact(
             nameof(TripLog), Changes(props), governingHidden: false, NoLinkHidden,
-            associationHidden: false, mayWriteSubject: false);
+            associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
         reader.Redacted.ShouldBe(["Safety"]);
         reader.Changes!.ContainsKey("Safety").ShouldBeFalse();
         reader.Changes.ContainsKey("HadIncident").ShouldBeTrue();
@@ -222,15 +224,64 @@ public class HistoryProtectionTests
         // rule is a rule about the audience and not about the field always being dropped.
         var writer = HistoryProtection.Redact(
             nameof(TripLog), Changes(props), governingHidden: false, NoLinkHidden,
-            associationHidden: false, mayWriteSubject: true);
+            associationHidden: false, mayWriteSubject: true, memberHidden: NoMemberHidden);
         writer.Redacted.ShouldBeEmpty();
         writer.Changes!.ToJsonString().ShouldContain(incident);
+    }
+
+    /// <summary>
+    /// A camp's timeline is read by everybody who may read the camp, which is routinely a wider
+    /// audience than the trips gathered into it — so a membership row names the trip only to
+    /// somebody who may read that trip. Without this, an id the camp's trip listing and its
+    /// roll-up both withhold arrives by a side door, which is the enumeration those two are
+    /// composed to prevent.
+    /// </summary>
+    [Fact]
+    public void Camp_membership_names_a_trip_only_to_somebody_who_may_read_it()
+    {
+        var closed = Guid.CreateVersion7();
+        var open = Guid.CreateVersion7();
+        var campId = Guid.CreateVersion7().ToString();
+
+        JsonObject Joining(Guid tripId) => Changes(
+            ("ExpeditionId", null, campId),
+            ("TripLogId", null, tripId.ToString()),
+            ("JoinedAt", null, "2026-07-18T09:00:00+00:00"));
+
+        // Withheld: the event stays — a trip joined the camp, and when — while which trip it
+        // was does not, and the camp it joined is the timeline's own subject.
+        var hidden = HistoryProtection.Redact(
+            nameof(ExpeditionTrip), Joining(closed), governingHidden: false, NoLinkHidden,
+            associationHidden: false, mayWriteSubject: false, memberHidden: id => id == closed);
+        hidden.Redacted.ShouldBe([nameof(ExpeditionTrip.TripLogId)]);
+        hidden.Changes!.ContainsKey(nameof(ExpeditionTrip.TripLogId)).ShouldBeFalse();
+        hidden.Changes.ToJsonString().ShouldNotContain(closed.ToString());
+        hidden.Changes.ContainsKey("JoinedAt").ShouldBeTrue();
+        hidden.Changes.ContainsKey("ExpeditionId").ShouldBeTrue();
+
+        // And a trip the caller may read is named, which is what proves the removal is driven by
+        // the predicate rather than by the property name.
+        var shown = HistoryProtection.Redact(
+            nameof(ExpeditionTrip), Joining(open), governingHidden: false, NoLinkHidden,
+            associationHidden: false, mayWriteSubject: false, memberHidden: id => id == closed);
+        shown.Redacted.ShouldBeEmpty();
+        shown.Changes!.ToJsonString().ShouldContain(open.ToString());
+
+        // A trip leaving discloses exactly as much as one joining, so the departure row is read
+        // on the same side of the diff.
+        var left = HistoryProtection.Redact(
+            nameof(ExpeditionTrip),
+            Changes(("ExpeditionId", campId, null), ("TripLogId", closed.ToString(), null)),
+            governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: false,
+            memberHidden: id => id == closed);
+        left.Redacted.ShouldBe([nameof(ExpeditionTrip.TripLogId)]);
+        left.Changes?.ToJsonString().ShouldNotContain(closed.ToString());
     }
 
     [Fact]
     public void Null_changes_pass_through()
     {
-        var result = HistoryProtection.Redact("Feature:Cave", null, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false);
+        var result = HistoryProtection.Redact("Feature:Cave", null, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
 
         result.Changes.ShouldBeNull();
         result.Redacted.ShouldBeEmpty();

@@ -122,6 +122,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<Expedition> Expeditions => Set<Expedition>();
 
+    public DbSet<ExpeditionTrip> ExpeditionTrips => Set<ExpeditionTrip>();
+
     public DbSet<Tag> Tags => Set<Tag>();
 
     public DbSet<Tagging> Taggings => Set<Tagging>();

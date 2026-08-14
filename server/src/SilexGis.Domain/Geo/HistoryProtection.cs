@@ -126,13 +126,21 @@ public static class HistoryProtection
     /// the timeline does not re-derive a disclosure decision, it is handed the answer.
     /// Ignored for every entity type that has no such part.
     /// </param>
+    /// <param name="memberHidden">
+    /// Predicate over a referenced trip id: whether this caller may not read that trip. A camp's
+    /// membership rows are rooted at the camp, so they reach everybody who may read the camp — an
+    /// audience wider than the trips gathered into it, which are each governed in their own right.
+    /// The camp's trip listing and its roll-up both withhold a member the caller may not read, and
+    /// the timeline says the same thing rather than handing over the id by a side door.
+    /// </param>
     public static RedactionResult Redact(
         string entityType,
         JsonObject? changes,
         bool governingHidden,
         Func<Guid, bool> linkTargetHidden,
         bool associationHidden,
-        bool mayWriteSubject)
+        bool mayWriteSubject,
+        Func<Guid, bool> memberHidden)
     {
         if (changes is null)
         {
@@ -211,6 +219,14 @@ public static class HistoryProtection
             {
                 RemoveNamed(changes, TripDisclosure.WriterOnly, redacted);
             }
+        }
+        else if (entityType == nameof(ExpeditionTrip))
+        {
+            // Which trip joined or left, named only to somebody who may read that trip. The row
+            // hangs on the camp, and a camp is routinely readable by a wider audience than the
+            // trips in it; the event — a membership changed, and when — is activity metadata and
+            // stays, exactly as it does for a hidden resource-link membership.
+            RemoveHiddenReference(changes, nameof(ExpeditionTrip.TripLogId), memberHidden, redacted);
         }
 
         return new RedactionResult(changes.Count == 0 ? null : changes, redacted);

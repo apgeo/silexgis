@@ -39,3 +39,26 @@ public sealed class ExpeditionConfiguration : IEntityTypeConfiguration<Expeditio
         builder.HasIndex(x => x.OwnerUserId);
     }
 }
+
+public sealed class ExpeditionTripConfiguration : IEntityTypeConfiguration<ExpeditionTrip>
+{
+    public void Configure(EntityTypeBuilder<ExpeditionTrip> builder)
+    {
+        builder.ToTable("expedition_trips");
+
+        // "A trip belongs to at most one camp" is this index and nothing else. Stated as a rule
+        // in a handler it would hold until the second writer, and the second writer is a bulk
+        // path or an import — the row it would leave behind reads as a trip in two camps, and
+        // every roll-up over either camp would then count it.
+        builder.HasIndex(x => x.TripLogId).IsUnique();
+        builder.HasIndex(x => x.ExpeditionId);
+
+        // Both sides cascade the *membership row* and nothing else: deleting a camp releases its
+        // trips, which stand alone perfectly well, and deleting a trip takes its place in the
+        // camp with it. Neither ever reaches through to the other row.
+        builder.HasOne<Expedition>().WithMany().HasForeignKey(x => x.ExpeditionId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
