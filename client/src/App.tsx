@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { lazy, Suspense, type ReactNode } from 'react';
 import { Spin } from 'antd';
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider, type RouteObject } from 'react-router-dom';
 import { AuthProvider } from './auth/auth.tsx';
 import RequireAuth from './auth/RequireAuth.tsx';
 import AppLayout from './components/AppLayout.tsx';
@@ -42,6 +42,7 @@ const TripTypesPage = lazy(() => import('./pages/admin/TripTypesPage.tsx'));
 const TripParticipantRolesPage = lazy(() => import('./pages/admin/TripParticipantRolesPage.tsx'));
 const TripReportTemplatesPage = lazy(() => import('./pages/admin/TripReportTemplatesPage.tsx'));
 const RelationTypesPage = lazy(() => import('./pages/admin/RelationTypesPage.tsx'));
+const TerrainPage = lazy(() => import('./pages/admin/TerrainPage.tsx'));
 const CabinetsPage = lazy(() => import('./pages/documents/CabinetsPage.tsx'));
 const DocumentDetailPage = lazy(() => import('./pages/documents/DocumentDetailPage.tsx'));
 const UploadsPage = lazy(() => import('./pages/documents/UploadsPage.tsx'));
@@ -72,7 +73,13 @@ function Loadable({ children }: { children: ReactNode }) {
   );
 }
 
-const router = createBrowserRouter([
+/**
+ * The route table, named so it can be checked against what the sidebar offers. There is no
+ * catch-all and no error element by design — an unmatched path is a bug in whoever linked to
+ * it, and it costs the entire shell, so what must be guaranteed is that nothing the
+ * application itself navigates to is missing from this list.
+ */
+export const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
   { path: '/auth/callback', element: <CallbackPage /> },
   { path: '/confirm-email', element: <ConfirmEmailPage /> },
@@ -122,6 +129,7 @@ const router = createBrowserRouter([
           { path: '/admin/participant-roles', element: <Loadable><TripParticipantRolesPage /></Loadable> },
           { path: '/admin/report-templates', element: <Loadable><TripReportTemplatesPage /></Loadable> },
           { path: '/admin/relation-types', element: <Loadable><RelationTypesPage /></Loadable> },
+          { path: '/admin/terrain', element: <Loadable><TerrainPage /></Loadable> },
           { path: '/cabinets', element: <Loadable><CabinetsPage /></Loadable> },
           { path: '/uploads', element: <Loadable><UploadsPage /></Loadable> },
           { path: '/gallery', element: <Loadable><GalleryPage /></Loadable> },
@@ -151,7 +159,9 @@ const router = createBrowserRouter([
       },
     ],
   },
-]);
+];
+
+const router = createBrowserRouter(routes);
 
 export default function App() {
   return (

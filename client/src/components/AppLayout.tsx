@@ -12,6 +12,7 @@ import {
   FileTextOutlined,
   FileWordOutlined,
   FolderOutlined,
+  GlobalOutlined,
   GoldOutlined,
   GroupOutlined,
   HistoryOutlined,
@@ -74,6 +75,7 @@ export default function AppLayout() {
     'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
     'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'admin/term-rules',
+    'admin/terrain',
     'settings',
   ] as const;
   const section = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
@@ -226,6 +228,12 @@ export default function AppLayout() {
               // installation inherits is, and that is refused on the server.
               ...(hasAccessAction(capabilities?.domains.features, 'create')
                 ? [{ key: 'admin/term-rules', icon: <TagsOutlined />, label: t('nav.termRules') }]
+                : []),
+              // The elevation surface is one installation-wide asset, not content anybody
+              // owns, so the right to see the builds is held over the domain and read is
+              // what the page needs — starting one is a separate right the page asks for.
+              ...(can('terrain')
+                ? [{ key: 'admin/terrain', icon: <GlobalOutlined />, label: t('nav.terrain') }]
                 : []),
             ]}
           />

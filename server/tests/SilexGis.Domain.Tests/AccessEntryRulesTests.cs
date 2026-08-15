@@ -180,6 +180,48 @@ public class AccessEntryRulesTests
             .ShouldBe(AccessEntryRules.ScopeInvalidCode);
     }
 
+    /// <summary>
+    /// The terrain surface is an installation asset with no owner, no caving group and no
+    /// audience, so the whole installation is the only thing an entry on it can mean. The
+    /// refusals are not written anywhere as a list — they fall out of the domain being
+    /// absent from the trio and per-object predicates — which is exactly why they are
+    /// asserted: a well-meant addition to either predicate would open a scope whose anchor
+    /// nothing resolves and whose orphans nothing reports, and no test would notice.
+    /// </summary>
+    [Fact]
+    public void Terrain_entries_exist_only_at_the_whole_installation_scope()
+    {
+        foreach (var action in new[] { AccessAction.Read, AccessAction.Execute, AccessAction.Delete })
+        {
+            AccessEntryRules.Validate(Entry(AccessDomain.Terrain, action, AccessScopeKind.All))
+                .ShouldBeNull();
+        }
+
+        AccessEntryRules.Validate(Entry(AccessDomain.Terrain, AccessAction.Read, AccessScopeKind.Own))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Terrain, AccessAction.Read, AccessScopeKind.CavingGroup, scopeId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Terrain, AccessAction.Read, AccessScopeKind.Object, scopeId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Terrain, AccessAction.Read, AccessScopeKind.Subtree, scopeFeatureId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Terrain, AccessAction.Read, AccessScopeKind.FeatureSet, scopeId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Terrain, AccessAction.Read, AccessScopeKind.Cabinet, scopeId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+
+        // Narrowing by feature kind or type is meaningless here for the same reason: there
+        // are no rows carrying either.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Terrain, AccessAction.Read, AccessScopeKind.All, kind: FeatureKind.Cave))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+    }
+
     [Fact]
     public void Narrowing_is_rejected_outside_all_and_own_in_the_feature_domain()
     {

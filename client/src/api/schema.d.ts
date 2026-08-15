@@ -2095,6 +2095,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terrain/builds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Terrain builds, newest first, with their status and size; requires Read on the Terrain domain. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfTerrainBuildDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terrain/builds/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One terrain build with its sources and the tail of its log; requires Read on the Terrain domain. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TerrainBuildDetailDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -11484,7 +11561,7 @@ export interface components {
             actions: components["schemas"]["AccessAction"][];
         };
         /** @enum {unknown} */
-        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents";
+        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "terrain";
         /** @enum {unknown} */
         AccessEffect: "allow" | "deny";
         AccessEntryDto: {
@@ -13567,6 +13644,15 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfTerrainBuildDto: {
+            items: components["schemas"]["TerrainBuildDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfTripLogDto: {
             items: components["schemas"]["TripLogDto"][];
             /** Format: int32 */
@@ -14465,6 +14551,57 @@ export interface components {
         };
         /** @enum {unknown} */
         TermStripMode: "none" | "leading" | "trailing" | "anywhere";
+        TerrainBuildDetailDto: {
+            build: components["schemas"]["TerrainBuildDto"];
+            logTail: null | string;
+            sources: components["schemas"]["TerrainBuildSourceDto"][];
+        };
+        TerrainBuildDto: {
+            /** Format: uuid */
+            id: string;
+            extent: components["schemas"]["GeoJsonGeometry"];
+            /** Format: int32 */
+            requestedMaxDepth: number;
+            status: components["schemas"]["TerrainBuildStatus"];
+            phase: components["schemas"]["TerrainBuildPhase"];
+            /** Format: int32 */
+            progress: number;
+            message: null | string;
+            errorCode: null | string;
+            /** Format: int64 */
+            sizeBytes: null | number;
+            pyramidVersion: null | string;
+            heightDatum: components["schemas"]["TerrainHeightDatum"];
+            /** Format: double */
+            geoidHeightM: number;
+            /** Format: double */
+            surveyHeightOffsetM: number;
+            isActive: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            startedAt: null | string;
+            /** Format: date-time */
+            finishedAt: null | string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {unknown} */
+        TerrainBuildPhase: "pending" | "fetch" | "prepare" | "bake" | "validate" | "publish";
+        TerrainBuildSourceDto: {
+            /** Format: int64 */
+            id: number;
+            kind: components["schemas"]["TerrainBuildSourceKind"];
+            reference: string;
+            attribution: string;
+            licence: null | string;
+        };
+        /** @enum {unknown} */
+        TerrainBuildSourceKind: "fetched" | "uploaded" | "serverDirectory";
+        /** @enum {unknown} */
+        TerrainBuildStatus: "queued" | "running" | "succeeded" | "failed";
+        /** @enum {unknown} */
+        TerrainHeightDatum: "orthometric" | "ellipsoidal";
         TerrainSourceDto: {
             url: string;
             attribution: null | string;

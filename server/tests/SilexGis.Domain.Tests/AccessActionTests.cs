@@ -60,5 +60,10 @@ public class AccessActionTests
         ((short)AccessDomain.Features).ShouldBe((short)0);
         ((short)AccessDomain.Jobs).ShouldBe((short)18);
         ((short)AccessDomain.Documents).ShouldBe((short)19);
+        // 21, not the next unused number: 20 is claimed by a domain being added in
+        // parallel. The catalogue is append-only, and two members sharing a value would
+        // neither fail to compile nor violate a database constraint — it would surface
+        // only as one domain's rules quietly governing the other's rows.
+        ((short)AccessDomain.Terrain).ShouldBe((short)21);
     }
 }

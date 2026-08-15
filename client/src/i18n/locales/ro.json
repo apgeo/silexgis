@@ -27,7 +27,12 @@
     "tripTypes": "Scopuri de tură",
     "participantRoles": "Roluri în tură",
     "reportTemplates": "Modele de raport",
-    "termRules": "Reguli de detectare"
+    "termRules": "Reguli de detectare",
+    "terrain": "Relief"
+  },
+  "terrain": {
+    "title": "Relief",
+    "noBuilds": "Pentru această instalare nu a fost generată încă nicio suprafață de altitudine."
   },
   "dashboard": {
     "title": "Panou de bord",
@@ -1088,7 +1093,8 @@
       "settings": "Setările instalării",
       "messageTemplates": "Texte mesaje",
       "audit": "Istoricul de audit",
-      "jobs": "Sarcini"
+      "jobs": "Sarcini",
+      "terrain": "Relief"
     },
     "sources": {
       "fullAdministrators": "Administrare deplină: apartenența decide înainte de orice regulă.",

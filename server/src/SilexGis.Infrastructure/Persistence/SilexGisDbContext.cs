@@ -156,6 +156,10 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<MessageTemplate> MessageTemplates => Set<MessageTemplate>();
 
+    public DbSet<TerrainBuild> TerrainBuilds => Set<TerrainBuild>();
+
+    public DbSet<TerrainBuildSource> TerrainBuildSources => Set<TerrainBuildSource>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

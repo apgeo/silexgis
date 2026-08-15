@@ -69,4 +69,18 @@ public enum AccessDomain : short
     /// other uploader is measured against.
     /// </summary>
     Documents = 19,
+
+    /// <summary>
+    /// Terrain: the elevation surface the 3D scene draws, and the builds that produce it.
+    /// An installation-level domain like <see cref="Settings"/>, <see cref="Audit"/> and
+    /// <see cref="Jobs"/> — a terrain build has no owner, no caving group and no audience,
+    /// because it is an installation asset made from public elevation data and carries no
+    /// cave position. So its rows hold none of the owner/caving-group/visibility facts,
+    /// entries here are only ever valid at the whole-installation scope, and every check
+    /// is asked of the domain rather than of a row. Execute starts a build and publishes
+    /// one, Read lists builds with their status and size, Delete removes a retained build.
+    /// Value 20 is deliberately skipped: it belongs to a domain being added in parallel,
+    /// and this catalogue is append-only — a value is never renumbered or reused.
+    /// </summary>
+    Terrain = 21,
 }

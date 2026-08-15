@@ -27,7 +27,12 @@
     "tripTypes": "Trip purposes",
     "participantRoles": "Trip roles",
     "reportTemplates": "Report layouts",
-    "termRules": "Detection rules"
+    "termRules": "Detection rules",
+    "terrain": "Terrain"
+  },
+  "terrain": {
+    "title": "Terrain",
+    "noBuilds": "No elevation surface has been built for this installation yet."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1088,7 +1093,8 @@
       "settings": "Installation settings",
       "messageTemplates": "Message texts",
       "audit": "Audit log",
-      "jobs": "Jobs"
+      "jobs": "Jobs",
+      "terrain": "Terrain"
     },
     "sources": {
       "fullAdministrators": "Full administration: membership decides before any rule is consulted.",

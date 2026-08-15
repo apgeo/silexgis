@@ -78,6 +78,7 @@ const accessDomains: Record<AccessDomainName, true> = {
   messageTemplates: true,
   audit: true,
   jobs: true,
+  terrain: true,
 };
 
 /**

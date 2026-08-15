@@ -42,6 +42,7 @@ using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.Statistics;
 using SilexGis.Api.Features.Tags;
 using SilexGis.Api.Features.Taxonomies;
+using SilexGis.Api.Features.Terrain;
 using SilexGis.Api.Features.Cavers;
 using SilexGis.Api.Features.CavingGroups;
 using SilexGis.Api.Features.TripLogs;
@@ -267,6 +268,7 @@ try
     api.MapMapViewEndpoints();
     api.MapAdminSettingsEndpoints();
     api.MapAdminTemplateEndpoints();
+    api.MapTerrainBuildEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {
