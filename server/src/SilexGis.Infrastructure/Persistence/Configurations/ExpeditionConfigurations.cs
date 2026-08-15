@@ -62,3 +62,47 @@ public sealed class ExpeditionTripConfiguration : IEntityTypeConfiguration<Exped
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
+
+public sealed class ExpeditionRosterEntryConfiguration : IEntityTypeConfiguration<ExpeditionRosterEntry>
+{
+    public void Configure(EntityTypeBuilder<ExpeditionRosterEntry> builder)
+    {
+        // A stored end means "and they stayed on to", exactly as the camp's own end date does, so
+        // it is either absent or strictly after the first day. Held in the database and not only
+        // in the write path, because every reader of the interval is written against it: a row
+        // whose end equalled its start would make one day read as a range of itself everywhere at
+        // once, and no reader would notice.
+        builder.ToTable("expedition_roster", t => t.HasCheckConstraint(
+            "ck_expedition_roster_dates", "to_date IS NULL OR to_date > from_date"));
+
+        builder.Property(x => x.Note).HasMaxLength(500);
+
+        // The presence record goes with the camp: who was where for a fortnight means nothing once
+        // the camp it belonged to is gone.
+        builder.HasOne<Expedition>().WithMany().HasForeignKey(x => x.ExpeditionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Restrict, not cascade, for the reason a trip's people are restricted: removing somebody
+        // from the club's directory must not quietly erase the record that they were at a camp for
+        // a fortnight. Merging their duplicate entry is the way out, and the delete handler
+        // refuses first so the answer is a reason rather than a constraint violation.
+        builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Restricted for the same reason a trip's role is: a role somebody is still recorded under
+        // is a role the vocabulary surface refuses to delete, and letting the database quietly
+        // unset it would turn everybody who held it into somebody who was there as nothing.
+        builder.HasOne<ExpeditionRosterRole>().WithMany().HasForeignKey(x => x.RoleId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(x => x.ExpeditionId);
+        builder.HasIndex(x => x.CaverId);
+        builder.HasIndex(x => x.RoleId);
+
+        // Deliberately no uniqueness over (camp, person, role): a person may leave and come back,
+        // so two rows for one person in one role on one camp is an ordinary record of two stays.
+        // The trip's own people are unique on (trip, role, person) because a trip is an afternoon
+        // and nobody attends one twice; a fortnight is not that, and copying the index would
+        // refuse the very thing this table is for.
+    }
+}

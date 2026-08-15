@@ -41,6 +41,7 @@ public static class TaxonomySeeder
 
         await SeedTripTypesAsync(db, ct);
         await SeedTripParticipantRolesAsync(db, ct);
+        await SeedExpeditionRosterRolesAsync(db, ct);
         await SeedLinkKindsAsync(db, ct);
         await SeedResLinkRelationTypesAsync(db, ct);
         await SeedFeatureTypesAsync(db, ct);
@@ -200,6 +201,31 @@ public static class TaxonomySeeder
             if (!existing.Contains(seed.Code))
             {
                 db.TripParticipantRoles.Add(new TripParticipantRole
+                {
+                    Code = seed.Code,
+                    Name = seed.Name,
+                    SortOrder = sort,
+                });
+            }
+        }
+    }
+
+    // What somebody was at a camp as. A vocabulary of its own rather than the trip's, because
+    // cooking and keeping the base camp are not jobs underground and would mean nothing offered on
+    // a trip form. The rows come from the shared seed list so the admin surface refusing to
+    // re-code or delete a shipped row and this insert can never disagree about which codes those
+    // are — and one of them is load-bearing rather than decorative: a camp's roster with no
+    // "member" row could not record that somebody was simply there.
+    private static async Task SeedExpeditionRosterRolesAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var existing = await db.ExpeditionRosterRoles.Select(x => x.Code).ToHashSetAsync(ct);
+        var sort = 0;
+        foreach (var seed in Domain.Expeditions.ExpeditionRosterRoleSeeds.All)
+        {
+            sort += 10;
+            if (!existing.Contains(seed.Code))
+            {
+                db.ExpeditionRosterRoles.Add(new ExpeditionRosterRole
                 {
                     Code = seed.Code,
                     Name = seed.Name,

@@ -9131,6 +9131,134 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expeditions/{expeditionId}/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everybody recorded as having been at this camp, with the days of each stay and how many people that comes to. Takes the right to read the camp and the right to read people. Accepts no filter by person. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    expeditionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionRosterDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Records that somebody was at this camp for a stretch of days (Write permission on the camp). Stays may overlap and one person may have several. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    expeditionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExpeditionRosterEntryWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionRosterEntryDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expeditions/{expeditionId}/roster/{entryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Rewrites one recorded stay whole (Write permission on the camp). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    expeditionId: string;
+                    entryId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExpeditionRosterEntryWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionRosterEntryDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Removes one recorded stay (Write permission on the camp). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    expeditionId: string;
+                    entryId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-report-templates": {
         parameters: {
             query?: never;
@@ -9506,6 +9634,128 @@ export interface paths {
         };
         post?: never;
         /** Deletes an unused club participant role; shipped rows cannot be deleted. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expedition-roster-roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The camp-roster roles: shipped rows (translated by code) and club rows (shown as written). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionRosterRoleDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Adds a camp-roster role. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExpeditionRosterRoleRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionRosterRoleDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expedition-roster-roles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Updates a camp-roster role; a shipped row keeps its code. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExpeditionRosterRoleRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionRosterRoleDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes an unused club camp-roster role; shipped rows cannot be deleted. */
         delete: {
             parameters: {
                 query?: never;
@@ -11078,7 +11328,7 @@ export interface paths {
             };
         };
         post?: never;
-        /** Removes a person, refused while trips still name them. */
+        /** Removes a person, refused while trips or a camp's roster still name them. */
         delete: {
             parameters: {
                 query?: never;
@@ -12698,6 +12948,61 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        ExpeditionRosterDto: {
+            /** Format: uuid */
+            expeditionId: string;
+            entries: components["schemas"]["ExpeditionRosterEntryDto"][];
+            /** Format: int32 */
+            people: number;
+        };
+        ExpeditionRosterEntryDto: {
+            /** Format: int64 */
+            id: number;
+            /** Format: uuid */
+            expeditionId: string;
+            /** Format: uuid */
+            caverId: string;
+            caverName: string;
+            /** Format: int64 */
+            roleId: number;
+            /** Format: date */
+            fromDate: string;
+            /** Format: date */
+            toDate?: null | string;
+            note?: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ExpeditionRosterEntryWriteRequest: {
+            /** Format: uuid */
+            caverId?: string;
+            /** Format: int64 */
+            roleId?: number;
+            /** Format: date */
+            fromDate?: string;
+            /** Format: date */
+            toDate?: null | string;
+            note?: null | string;
+        };
+        ExpeditionRosterRoleDto: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            isSeeded: boolean;
+        };
+        ExpeditionRosterRoleRequest: {
+            code: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
         };
         ExpeditionTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];

@@ -17,6 +17,7 @@ import {
   SEEDED_TRIP_SECTION_ENUM_VALUES,
   SEEDED_TRIP_SECTION_FIELD_CODES,
 } from '../components/trips/tripSectionFields.ts';
+import { SEEDED_EXPEDITION_ROSTER_ROLE_CODES } from '../components/expeditions/rosterRoles.ts';
 import { SEEDED_PARTICIPANT_ROLE_CODES } from '../components/trips/participantRoles.ts';
 import { SEEDED_TRIP_TYPE_CODES } from '../components/trips/tripTypes.ts';
 import en from './locales/en.json';
@@ -232,6 +233,18 @@ describe('i18n locales', () => {
     const expected = [...SEEDED_PARTICIPANT_ROLE_CODES].sort();
     for (const locale of [en, ro]) {
       expect(Object.keys(locale.trips.participantRoleValues).sort()).toEqual(expected);
+    }
+  });
+
+  // What somebody was at a camp as is a third vocabulary of the same kind, and a separate one on
+  // purpose: cooking and keeping the base camp are not jobs underground. Its wording is checked
+  // the same way and for the same two reasons — a shipped code with no wording renders as a raw
+  // key beside a person's name, and wording left behind for a code the application no longer
+  // ships is an offer nothing can take up.
+  it('every shipped camp-roster role has wording in both locales, and no wording outlives its code', () => {
+    const expected = [...SEEDED_EXPEDITION_ROSTER_ROLE_CODES].sort();
+    for (const locale of [en, ro]) {
+      expect(Object.keys(locale.expeditions.rosterRoleValues).sort()).toEqual(expected);
     }
   });
 

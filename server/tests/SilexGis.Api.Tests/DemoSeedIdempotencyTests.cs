@@ -135,6 +135,48 @@ public sealed class DemoSeedIdempotencyTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A database seeded before a section existed picks that section up on the next run.
+    ///
+    /// The trap is a section guarded on somebody else's evidence: a block that skips when the
+    /// camps are already there never runs again on any installation that has camps, which is
+    /// every installation the earlier version was run on — and it fails silently, as an empty
+    /// list nobody can distinguish from a broken route. The camp's roster is the section this is
+    /// written against, and the state is built by removing its rows from a seeded database, which
+    /// is exactly what such an installation looks like.
+    /// </summary>
+    [Fact]
+    public async Task A_database_seeded_before_the_camp_roster_existed_gains_it_on_the_next_run()
+    {
+        await using (var db = CreateContext())
+        {
+            await DemoSeeder.SeedAsync(db, Owner);
+        }
+
+        int seeded;
+        await using (var strip = CreateContext())
+        {
+            seeded = await strip.ExpeditionRoster.CountAsync();
+            seeded.ShouldBeGreaterThan(0);
+            await strip.Database.ExecuteSqlRawAsync("DELETE FROM expedition_roster");
+        }
+
+        await using (var again = CreateContext())
+        {
+            await DemoSeeder.SeedAsync(again, Owner);
+        }
+
+        await using var read = CreateContext();
+        (await read.ExpeditionRoster.CountAsync()).ShouldBe(seeded);
+
+        // And it is the numbers the block exists to show: more rows than people, so a surface
+        // counting rows where it meant people is visibly wrong against this dataset rather than
+        // merely slightly high.
+        var rows = await read.ExpeditionRoster.Select(r => r.CaverId).ToListAsync();
+        rows.Count.ShouldBe(6);
+        rows.Distinct().Count().ShouldBe(4);
+    }
+
+    /// <summary>
     /// Every table the schema has, by name, with its row count. Read from the catalogue rather
     /// than from a list somebody maintains, so a table added tomorrow is covered without anyone
     /// remembering to add it here.

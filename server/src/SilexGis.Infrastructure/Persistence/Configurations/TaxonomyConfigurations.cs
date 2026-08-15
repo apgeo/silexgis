@@ -40,6 +40,12 @@ public sealed class TripParticipantRoleConfiguration : IEntityTypeConfiguration<
         builder.ConfigureTaxonomy("trip_participant_roles");
 }
 
+public sealed class ExpeditionRosterRoleConfiguration : IEntityTypeConfiguration<ExpeditionRosterRole>
+{
+    public void Configure(EntityTypeBuilder<ExpeditionRosterRole> builder) =>
+        builder.ConfigureTaxonomy("expedition_roster_roles");
+}
+
 public sealed class TripTypeConfiguration : IEntityTypeConfiguration<TripType>
 {
     public void Configure(EntityTypeBuilder<TripType> builder)

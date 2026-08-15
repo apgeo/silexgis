@@ -73,7 +73,7 @@ public static class CaverEndpoints
         cavers.MapPut("/{id:guid}", UpdateAsync).WithValidation<CaverWriteRequest>()
             .WithSummary("Edits a person's roster entry.");
         cavers.MapDelete("/{id:guid}", DeleteAsync)
-            .WithSummary("Removes a person, refused while trips still name them.");
+            .WithSummary("Removes a person, refused while trips or a camp's roster still name them.");
         cavers.MapPost("/{id:guid}/account-link", LinkAccountAsync).WithValidation<CaverAccountLinkRequest>()
             .WithSummary("Attaches a user account to this person.");
         cavers.MapDelete("/{id:guid}/account-link", UnlinkAccountAsync)
@@ -272,6 +272,18 @@ public static class CaverEndpoints
             return ApiProblems.BadRequest(
                 "caver.referenced_by_trips",
                 "This person is named on trips. Merge their duplicate entry instead of deleting it.");
+        }
+
+        // A stay at a camp is the same kind of fact and gets the same refusal: it records where
+        // somebody was for a fortnight, and tidying a duplicate entry away must not quietly take
+        // that record with it. Kept as its own branch rather than folded into the one above so the
+        // answer names what actually blocks the delete; like that one it counts nothing and names
+        // nothing, so it cannot become a way to learn about camps the caller may not read.
+        if (await db.ExpeditionRoster.AnyAsync(r => r.CaverId == id, ct))
+        {
+            return ApiProblems.BadRequest(
+                "caver.referenced_by_expeditions",
+                "This person is on a camp's roster. Merge their duplicate entry instead of deleting it.");
         }
 
         // Deleting the person cascades their memberships, which can sever an account's
@@ -474,6 +486,21 @@ public static class CaverEndpoints
             {
                 row.CaverId = target.Id;
             }
+        }
+
+        // A camp's roster follows the fold whole, and unlike the trips above nothing is dropped.
+        // There is no uniqueness to collide with — a person may leave a camp and come back, so two
+        // rows for one person in one role on one camp is an ordinary record of two stays — and
+        // where the survivor already holds an overlapping stay on the same camp the answer is both
+        // rows, overlapping, which is exactly what the table allows. Collapsing them would mean
+        // deciding that two intervals recorded against two entries were one stay, and the merge
+        // has no evidence of that: a duplicate entry exists precisely because somebody wrote the
+        // same fortnight down twice, or wrote two different ones down. Whoever keeps the camp can
+        // correct an interval afterwards; a row this path dropped is not recoverable.
+        var sourceStays = await db.ExpeditionRoster.Where(r => r.CaverId == source.Id).ToListAsync(ct);
+        foreach (var stay in sourceStays)
+        {
+            stay.CaverId = target.Id;
         }
 
         var sourceMemberships = await db.CavingGroupMemberships.Where(m => m.CaverId == source.Id).ToListAsync(ct);

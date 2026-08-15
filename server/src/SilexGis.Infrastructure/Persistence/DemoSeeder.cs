@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Expeditions;
 using SilexGis.Domain.ResLinks;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
@@ -71,6 +72,13 @@ public static class DemoSeeder
         await SeedTripLogsAsync(db, ownerUserId, ct);
         await SeedExpeditionsAsync(db, ownerUserId, ct);
         await SeedMapViewsAsync(db, ownerUserId, ct);
+        await db.SaveChangesAsync(ct);
+
+        // After the camps are saved and on its own guard, not inside theirs: a database seeded
+        // before this block existed already holds the camps, so anything gated on their absence
+        // would never run there — the demo would quietly stay as it was on every machine that had
+        // already seen it.
+        await SeedExpeditionRosterAsync(db, ct);
         await db.SaveChangesAsync(ct);
 
         if (documents is not null && fileStore is not null)
@@ -641,6 +649,11 @@ public static class DemoSeeder
     }
 
     /// <summary>
+    /// The long camp, named once: the roster block finds it by this and nothing else.
+    /// </summary>
+    private const string FortnightCampName = "Demo: Bihor summer camp";
+
+    /// <summary>
     /// A handful of camps spread across the lifecycle, so a page listing them shows every reading.
     /// </summary>
     private static async Task SeedExpeditionsAsync(
@@ -662,7 +675,7 @@ public static class DemoSeeder
         // every reader of the date range is written against.
         var camps = new[]
         {
-            ("Demo: Bihor summer camp", "A fortnight on the plateau: exploration, survey and rigging.",
+            (FortnightCampName, "A fortnight on the plateau: exploration, survey and rigging.",
                 new DateOnly(2026, 7, 18), (DateOnly?)new DateOnly(2026, 8, 1), Visibility.Public,
                 ActivityState.Published,
                 (DateTimeOffset?)new DateTimeOffset(2026, 8, 10, 18, 0, 0, TimeSpan.Zero)),
@@ -691,7 +704,7 @@ public static class DemoSeeder
         var index = 0;
         foreach (var (name, description, start, end, visibility, state, publishedAt) in camps)
         {
-            db.Expeditions.Add(new Expedition
+            var camp = new Expedition
             {
                 Name = name,
                 Description = description,
@@ -704,9 +717,89 @@ public static class DemoSeeder
                 Visibility = visibility,
                 State = state,
                 PublishedAt = publishedAt,
-            });
+            };
+            db.Expeditions.Add(camp);
             index++;
         }
+    }
+
+    /// <summary>
+    /// Who was at the fortnight camp, and for which days.
+    /// </summary>
+    /// <remarks>
+    /// Against the long camp because that is the one a camp's roster reads as anything: a single-day
+    /// recce with a presence list is a list of everybody who turned up, which shows none of what
+    /// the table is for.
+    /// <para>
+    /// Deliberately not the people on the demo trips. A camp's roster is not derived from its
+    /// trips — the cook and whoever kept the base camp went underground on none of it — and a demo
+    /// where the two lists matched would make a surface that quietly computed one from the other
+    /// look correct. Four people in six rows, one of them holding two roles over overlapping days
+    /// and one leaving and coming back, so anything counting rows instead of people reports six
+    /// where four were there.
+    /// </para>
+    /// <para>
+    /// Guarded on rows of its own rather than on the camps' absence, so a database seeded before
+    /// this block existed picks the rows up on the next run instead of being skipped forever by a
+    /// guard written about something else.
+    /// </para>
+    /// </remarks>
+    private static async Task SeedExpeditionRosterAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var camp = await db.Expeditions.FirstOrDefaultAsync(x => x.Name == FortnightCampName, ct);
+        if (camp is null || await db.ExpeditionRoster.AnyAsync(r => r.ExpeditionId == camp.Id, ct))
+        {
+            return;
+        }
+
+        var caverIds = await db.Cavers
+            .Where(c => c.FullName.EndsWith(" Demo"))
+            .OrderBy(c => c.FullName)
+            .Select(c => c.Id)
+            .ToListAsync(ct);
+        if (caverIds.Count < 4)
+        {
+            return;
+        }
+
+        var roleIds = await db.ExpeditionRosterRoles.ToDictionaryAsync(r => r.Code, r => r.Id, ct);
+        long RoleId(string code) => roleIds.TryGetValue(code, out var id)
+            ? id
+            : throw new InvalidOperationException($"Camp-roster role '{code}' is not seeded.");
+
+        var start = camp.StartDate;
+        var end = camp.EndDate ?? camp.StartDate;
+
+        void Add(Guid caverId, string role, DateOnly from, DateOnly? to, string? note = null) =>
+            db.ExpeditionRoster.Add(new ExpeditionRosterEntry
+            {
+                ExpeditionId = camp.Id,
+                CaverId = caverId,
+                RoleId = RoleId(role),
+                FromDate = from,
+                ToDate = DayRange.EndForStorage(from, to),
+                Note = note,
+            });
+
+        // One person, two roles, over spans that overlap: nothing forbids it, and it is what a
+        // count of rows gets wrong.
+        Add(caverIds[0], ExpeditionRosterRoleSeeds.MemberCode, start, end);
+        Add(caverIds[0], "cook", start, start.AddDays(7));
+
+        // Left in the middle of the fortnight and came back for the last days — two rows for one
+        // person in one role, which is an ordinary record and not a duplicate.
+        Add(caverIds[1], ExpeditionRosterRoleSeeds.MemberCode, start, start.AddDays(4),
+            "Went back for the mid-camp resupply.");
+        Add(caverIds[1], ExpeditionRosterRoleSeeds.MemberCode, end.AddDays(-4), end);
+
+        // There for one day, which stores no end at all — the row every reader of the interval is
+        // written against.
+        Add(caverIds[2], "base_camp", start.AddDays(2), start.AddDays(2),
+            "Drove the food up and stayed the day.");
+
+        // A fourth person, so the six rows are four people and the gap between the two numbers is
+        // large enough to be obvious on a surface that counted the wrong one.
+        Add(caverIds[3], "driver", start, start.AddDays(1), "Brought the gear up and went home.");
     }
 
     /// <summary>

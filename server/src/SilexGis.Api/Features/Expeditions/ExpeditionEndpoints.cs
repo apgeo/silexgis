@@ -14,7 +14,10 @@ namespace SilexGis.Api.Features.Expeditions;
 
 public static class ExpeditionEndpoints
 {
-    private const string NotFoundCode = "expedition.not_found";
+    // Visible to the camp's other route files rather than private, so every door into a camp — the
+    // camp itself, its trips, its roster — refuses a camp nobody may reach in the same words. A
+    // second spelling of it is a second answer waiting to drift from this one.
+    internal const string NotFoundCode = "expedition.not_found";
 
     // The trip's own refusal code, spelled here because it is a wire contract rather than
     // something the trips' handlers own: a caller told a trip is missing must be told it in the
@@ -573,7 +576,12 @@ public static class ExpeditionEndpoints
     /// The refusal a caller who may not write this camp gets: 403 when they can see it, 404 when
     /// they cannot — so a refusal never tells somebody a camp exists that they may not read.
     /// </summary>
-    private static async Task<ProblemHttpResult?> RefuseUnlessWritableAsync(
+    /// <remarks>
+    /// Shared with the camp's other route files: the ladder a write to anything belonging to a
+    /// camp climbs is one rule, and the day it is written out twice is the day one copy grows a
+    /// check the other lacks.
+    /// </remarks>
+    internal static async Task<ProblemHttpResult?> RefuseUnlessWritableAsync(
         IAccessService access, AccessContext? ctx, Expedition expedition, CancellationToken ct)
     {
         if (ctx is not null && (await access.DecideAsync(ctx, AccessAction.Write, expedition, ct)).Allowed)

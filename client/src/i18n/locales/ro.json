@@ -909,6 +909,18 @@
       "trip-follows-on-from": "Continuă tura"
     }
   },
+  "expeditions": {
+    "rosterRoleValues": {
+      "member": "Membru",
+      "organiser": "Organizator",
+      "cook": "Bucătar",
+      "base_camp": "Tabăra de bază",
+      "driver": "Șofer",
+      "medic": "Sanitar",
+      "equipment": "Echipament",
+      "guest": "Invitat"
+    }
+  },
   "tags": {
     "title": "Etichete",
     "add": "Adaugă etichetă",

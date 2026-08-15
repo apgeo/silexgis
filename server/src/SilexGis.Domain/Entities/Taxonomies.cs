@@ -43,6 +43,18 @@ public class RockType : TaxonomyBase;
 public class TripParticipantRole : TaxonomyBase;
 
 /// <summary>
+/// What somebody was at a camp as: simply there, organising it, cooking, keeping the base camp,
+/// driving, carrying the first-aid kit, looking after the gear, or visiting.
+/// <para>
+/// A vocabulary of its own rather than the jobs people are recorded under on a trip, because being
+/// at a camp is not a job underground: the cook who never went below was there for the fortnight,
+/// and offering "cook" on the trip form would mean nothing. A row rather than a value fixed at
+/// build time, for the same reason every other lookup here is one.
+/// </para>
+/// </summary>
+public class ExpeditionRosterRole : TaxonomyBase;
+
+/// <summary>
 /// Data-level document-kind registry: a survey report, a permit, a trip report. Each kind
 /// may carry a JSON Schema describing the metadata documents of that kind hold, using the
 /// same versioned-schema-over-jsonb mechanism the feature-kind registry uses — one

@@ -909,6 +909,18 @@
       "trip-follows-on-from": "Follows on from"
     }
   },
+  "expeditions": {
+    "rosterRoleValues": {
+      "member": "Member",
+      "organiser": "Organiser",
+      "cook": "Cook",
+      "base_camp": "Base camp",
+      "driver": "Driver",
+      "medic": "Medic",
+      "equipment": "Equipment",
+      "guest": "Guest"
+    }
+  },
   "tags": {
     "title": "Tags",
     "add": "Add tag",

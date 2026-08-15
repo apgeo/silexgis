@@ -252,9 +252,11 @@ try
     api.MapGeoreferencedMapEndpoints();
     api.MapTripLogEndpoints();
     api.MapExpeditionEndpoints();
+    api.MapExpeditionRosterEndpoints();
     api.MapTripReportTemplateEndpoints();
     api.MapTripTypeEndpoints();
     api.MapTripParticipantRoleEndpoints();
+    api.MapExpeditionRosterRoleEndpoints();
     api.MapTripStatisticsEndpoints();
     api.MapTagEndpoints();
     api.MapAuditEndpoints();
