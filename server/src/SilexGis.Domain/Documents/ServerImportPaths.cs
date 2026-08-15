@@ -27,6 +27,22 @@ public static class ServerImportPaths
     /// <summary>Refusal: the path is not inside any configured root.</summary>
     public const string OutsideRootsCode = "import.path_not_allowed";
 
+    /// <summary>
+    /// Whether this caller may make the server read a location on its own disk at all.
+    /// </summary>
+    /// <remarks>
+    /// Full administrators only, and deliberately not a grantable right: there is no object to
+    /// scope one to, and the question is about the machine rather than about any content on it.
+    /// Every feature that names a directory for the server to read asks this one predicate — two
+    /// features answering it differently would mean the same capability had two bars, and the
+    /// lower one would be the real one.
+    /// </remarks>
+    public static bool MayReadServerDisk(Access.AccessContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return context.IsFullAdmin;
+    }
+
     /// <summary>Refusal: the installation lists no roots, so the feature is off.</summary>
     public const string NoRootsCode = "import.no_roots_configured";
 

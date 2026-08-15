@@ -2127,7 +2127,31 @@ export interface paths {
             };
         };
         put?: never;
-        post?: never;
+        /** Starts a terrain build over a rectangle; requires Execute on the Terrain domain. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TerrainBuildSubmitRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TerrainBuildDto"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -2160,6 +2184,84 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["TerrainBuildDetailDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terrain/rasters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends one raster for a build to be made from; requires Execute on the Terrain domain. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        file: components["schemas"]["IFormFile"];
+                    };
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TerrainRasterUploadDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terrain/source-directories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Directories on the server this installation may read rasters from; requires Execute on the Terrain domain. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TerrainSourceDirectoriesDto"];
                     };
                 };
             };
@@ -14598,10 +14700,41 @@ export interface components {
         };
         /** @enum {unknown} */
         TerrainBuildSourceKind: "fetched" | "uploaded" | "serverDirectory";
+        TerrainBuildSourceRequest: {
+            kind: components["schemas"]["TerrainBuildSourceKind"];
+            reference: string;
+            attribution: string;
+            licence: null | string;
+        };
         /** @enum {unknown} */
         TerrainBuildStatus: "queued" | "running" | "succeeded" | "failed";
+        TerrainBuildSubmitRequest: {
+            /** Format: double */
+            west: number;
+            /** Format: double */
+            south: number;
+            /** Format: double */
+            east: number;
+            /** Format: double */
+            north: number;
+            /** Format: int32 */
+            maxDepth: number;
+            heightDatum: null | components["schemas"]["TerrainHeightDatum"];
+            /** Format: double */
+            geoidHeightM: null | number;
+            fetchCoverage?: null | boolean;
+            sources?: null | components["schemas"]["TerrainBuildSourceRequest"][];
+        };
         /** @enum {unknown} */
         TerrainHeightDatum: "orthometric" | "ellipsoidal";
+        TerrainRasterUploadDto: {
+            reference: string;
+            /** Format: int64 */
+            sizeBytes: number;
+        };
+        TerrainSourceDirectoriesDto: {
+            roots: string[];
+        };
         TerrainSourceDto: {
             url: string;
             attribution: null | string;

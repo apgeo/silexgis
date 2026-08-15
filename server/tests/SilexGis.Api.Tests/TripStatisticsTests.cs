@@ -12,7 +12,6 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Trips;
-using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -47,18 +46,14 @@ public sealed class TripStatisticsTests : IAsyncLifetime
     private long participantRoleId;
     private long surveyorRoleId;
 
-    // Nothing here queues work, so this host does not run the job drain. Every test class shares
+    // Nothing here queues work, so this host runs none of the job drains. Every test class shares
     // one PostGIS container and the queue lives in it, so a drain started here would claim a file
     // reading or an import queued by another class — and fail it, because the file sits under that
     // class's own storage root and not under this one's.
     public TripStatisticsTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
-            configureServices: services =>
-            {
-                var worker = services.Single(s => s.ImplementationType == typeof(ProcessingJobWorker));
-                services.Remove(worker);
-            });
+            configureServices: JobWorkers.RemoveFrom);
 
     public async Task InitializeAsync()
     {

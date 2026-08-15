@@ -15,11 +15,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
-# Mount points for the uploads and data-protection-key volumes. Both must exist in the
-# image and be owned by the non-root app user: Docker seeds a fresh named volume from the
-# image directory it covers, ownership included. A path missing here is created root-owned
-# and the app cannot write it — for the key ring that breaks every cookie/token encryption.
-RUN mkdir -p /data/files /data/keys && chown -R app:app /data
+# Mount points for the uploads, data-protection-key and terrain volumes. Every one must exist
+# in the image and be owned by the non-root app user: Docker seeds a fresh named volume from
+# the image directory it covers, ownership included. A path missing here is created root-owned
+# and the app cannot write it — for the key ring that breaks every cookie/token encryption, and
+# for terrain it stops the first build before it has done anything.
+RUN mkdir -p /data/files /data/keys /data/terrain && chown -R app:app /data
 USER app
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "SilexGis.Api.dll"]

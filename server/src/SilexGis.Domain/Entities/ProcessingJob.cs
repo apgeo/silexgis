@@ -106,4 +106,32 @@ public static class ProcessingJobKinds
     /// Delete documents whose restore window has run out, and the bytes they hold. Scheduled.
     /// </summary>
     public const string DocumentPurge = "document-purge";
+
+    /// <summary>
+    /// Build the terrain the 3D scene draws over one rectangle: obtain the elevation rasters,
+    /// prepare them, bake the pyramid, check it and publish it. One row drives the whole chain
+    /// and reports which step it has reached.
+    /// </summary>
+    public const string TerrainBuild = "terrain-build";
+
+    /// <summary>
+    /// The kinds that run on a worker of their own rather than on the general one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The queue hands out one job at a time, oldest first, with no time limit. A terrain build
+    /// takes minutes to hours, so a build left in the general queue would stand in front of every
+    /// document conversion, text reading, raster conversion and upload sweep behind it for its
+    /// whole duration.
+    /// </para>
+    /// <para>
+    /// Two workers therefore divide the same table by this one list: the general worker claims
+    /// every kind that is <b>not</b> named here, the terrain worker claims only the kinds that
+    /// are. Both predicates are built from this list and from nothing else — a worker claiming by
+    /// a list of its own would drift from the other, and a kind that ended up in both lists is
+    /// run twice while a kind in neither is never run at all, both of which look exactly like an
+    /// idle queue.
+    /// </para>
+    /// </remarks>
+    public static readonly IReadOnlyList<string> TerrainLane = [TerrainBuild];
 }

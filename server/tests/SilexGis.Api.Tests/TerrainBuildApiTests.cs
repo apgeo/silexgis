@@ -11,7 +11,6 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
-using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -40,17 +39,13 @@ public sealed class TerrainBuildApiTests : IAsyncLifetime, IDisposable
     private HttpClient anonymous = null!;
     private Guid holderId;
 
-    // Nothing here queues work, so this host does not run the job drain. Every test class shares
+    // Nothing here queues work, so this host runs none of the job drains. Every test class shares
     // one PostGIS container and the queue lives in it, so a drain started here would claim work
     // queued by another class and fail it against storage this class does not have.
     public TerrainBuildApiTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
-            configureServices: services =>
-            {
-                var worker = services.Single(s => s.ImplementationType == typeof(ProcessingJobWorker));
-                services.Remove(worker);
-            });
+            configureServices: JobWorkers.RemoveFrom);
 
     public async Task InitializeAsync()
     {
@@ -156,7 +151,8 @@ public sealed class TerrainBuildApiTests : IAsyncLifetime, IDisposable
     {
         // The listing has no filter — deliberately, since a build belongs to nobody and there is
         // no audience to narrow it to — so "these six rows are the whole listing" has to be made
-        // true rather than assumed. Only this class writes builds, and its tests run one at a time.
+        // true rather than assumed. The classes sharing this database run one at a time, and the
+        // other one that writes builds clears them again when it finishes.
         await ClearBuildsAsync();
 
         var sameInstant = DateTimeOffset.UtcNow;

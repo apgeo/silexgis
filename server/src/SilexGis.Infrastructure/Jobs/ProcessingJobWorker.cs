@@ -11,13 +11,19 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Jobs;
 
 /// <summary>
-/// Polls the processing_jobs table and dispatches to the registered handler for the
-/// job's kind. One job at a time per worker; failures are recorded on the row and
+/// Polls the processing_jobs table for the jobs of one lane and dispatches to the registered
+/// handler for the job's kind. One job at a time per worker; failures are recorded on the row and
 /// never crash the host. A DB-backed queue keeps the seam open for external workers.
 /// </summary>
-public sealed class ProcessingJobWorker(
+/// <remarks>
+/// There is one worker per lane and the lanes divide the table between them, so work measured in
+/// hours cannot hold up the short work queued behind it. Nothing else about the two differs, which
+/// is why the loop lives here and the lane is the whole of what a worker says about itself.
+/// </remarks>
+public abstract class ProcessingJobWorkerBase(
+    JobLane lane,
     IServiceScopeFactory scopeFactory,
-    ILogger<ProcessingJobWorker> logger) : BackgroundService
+    ILogger logger) : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
 
@@ -30,7 +36,7 @@ public sealed class ProcessingJobWorker(
         using (var startupScope = scopeFactory.CreateScope())
         {
             var db = startupScope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-            await JobsSql.RequeueInterruptedAsync(db, stoppingToken);
+            await JobsSql.RequeueInterruptedAsync(db, lane, stoppingToken);
         }
 
         using var timer = new PeriodicTimer(PollInterval);
@@ -62,7 +68,7 @@ public sealed class ProcessingJobWorker(
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
 
-        var jobId = await JobsSql.ClaimNextAsync(db, ct);
+        var jobId = await JobsSql.ClaimNextAsync(db, lane, ct);
         if (jobId is null)
         {
             return false;
@@ -152,3 +158,25 @@ public sealed class ProcessingJobWorker(
         }
     }
 }
+
+/// <summary>
+/// The worker for everything that does not have a lane of its own — which is every kind of work
+/// this installation queues except the terrain builds below.
+/// </summary>
+public sealed class ProcessingJobWorker(
+    IServiceScopeFactory scopeFactory,
+    ILogger<ProcessingJobWorker> logger)
+    : ProcessingJobWorkerBase(JobLane.General, scopeFactory, logger);
+
+/// <summary>
+/// The worker for terrain builds, which have an instance to themselves.
+/// </summary>
+/// <remarks>
+/// A build runs for minutes to hours, and a worker takes one job at a time with no time limit. On
+/// the general worker a single build would therefore stand in front of every conversion, reading,
+/// import and sweep queued behind it until it finished.
+/// </remarks>
+public sealed class TerrainProcessingJobWorker(
+    IServiceScopeFactory scopeFactory,
+    ILogger<TerrainProcessingJobWorker> logger)
+    : ProcessingJobWorkerBase(JobLane.Terrain, scopeFactory, logger);

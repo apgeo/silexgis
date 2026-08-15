@@ -199,7 +199,30 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, DirectoryImportHandler>();
         services.AddScoped<IProcessingJobHandler, UploadSessionSweepHandler>();
         services.AddScoped<IProcessingJobHandler, DocumentPurgeHandler>();
+
+        // The terrain chain: the handler that walks a build through the steps, and the directories
+        // it works in. The steps themselves are registered as each is built — the walk runs the
+        // ones that are there, in order, and stops at the first one nothing implements yet.
+        services.Configure<Terrain.TerrainBuildOptions>(
+            configuration.GetSection(Terrain.TerrainBuildOptions.SectionName));
+        services.AddSingleton<Terrain.TerrainWorkspace>();
+        services.AddSingleton<Terrain.TerrainUploads>();
+        services.AddScoped<IProcessingJobHandler, TerrainBuildHandler>();
+
+        // Obtaining the rasters: a client for the open elevation dataset, and the step that puts
+        // everything a build was given — downloaded, uploaded or read from a directory the operator
+        // listed — into the one directory the rest of the chain reads.
+        services.AddHttpClient(Terrain.CopernicusFetcher.HttpClientName);
+        services.AddScoped<Terrain.CopernicusFetcher>();
+        services.AddScoped<Terrain.ITerrainPhase, Terrain.TerrainFetchPhase>();
+
         services.AddHostedService<ProcessingJobWorker>();
+
+        // Terrain builds are claimed by a worker of their own against the same table. A worker
+        // takes one job at a time with no time limit, and a build runs for minutes to hours, so on
+        // the general worker one build would hold up every conversion, reading and sweep behind it
+        // for its whole duration.
+        services.AddHostedService<TerrainProcessingJobWorker>();
         services.AddHostedService<UploadSessionScheduler>();
 
         services.Configure<DocumentRetentionOptions>(

@@ -806,6 +806,8 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Terrain__HeightDatum` | `Orthometric` | what the tile heights are measured from: `Orthometric` (above sea level) or `Ellipsoidal` (converted when baked). Wrong here puts every cave about 40 m off its hillside |
 | `SILEXGIS__Terrain__GeoidHeightM` | `0` | the local geoid undulation in metres, used **only** with `Ellipsoidal`. +39 to +45 over Romanian karst |
 | `SILEXGIS__Terrain__Attribution` | *(empty)* | credit the elevation data's licence requires; shown on the 3D scene |
+| `SILEXGIS__Terrain__BuildRoot` | `data/terrain/builds` (the compose stack sets `/data/terrain/builds`) | where a terrain build started from inside the application does its work. A build keeps the rasters it was given until somebody deletes it, so this wants a disk chosen for size — under Docker it must be a path on a mounted volume, or those tens of gigabytes sit in the container's own writable layer and disappear the next time it is recreated |
+| `SILEXGIS__Terrain__CellTimeoutSeconds` | `1200` (20 min) | how long one cell of elevation may take to arrive before that attempt is abandoned. Values outside 30 s to 2 h are brought back inside that range |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB) |
 | `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys (must persist across restarts) |

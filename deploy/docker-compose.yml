@@ -49,11 +49,20 @@ services:
       # the expired ones runs.
       SILEXGIS__DocumentRetention__RetentionDays: ${SILEXGIS_RETENTION_DAYS:-30}
       SILEXGIS__Keys__Path: /data/keys
+      # Where a terrain build works. It must be a volume rather than the default beside the
+      # application: a build keeps the rasters it was given until somebody deletes it, which is
+      # tens of gigabytes that would otherwise grow the container's own writable layer and then
+      # disappear the next time the container is recreated. Nothing is written until somebody
+      # starts a build, so an installation that never builds terrain pays nothing for this.
+      SILEXGIS__Terrain__BuildRoot: /data/terrain/builds
     volumes:
       - silexgis-files:/data/files
       # Data-protection keys must survive container recreation, or every deploy would
       # invalidate outstanding file-access tokens and cookies.
       - silexgis-keys:/data/keys
+      # Terrain. Bind-mount a directory on a large disk here instead of using the named volume
+      # if the machine's system disk is small — a national build is tens of gigabytes.
+      - silexgis-terrain:/data/terrain
     depends_on:
       db:
         condition: service_healthy
@@ -71,3 +80,4 @@ volumes:
   silexgis-db:
   silexgis-files:
   silexgis-keys:
+  silexgis-terrain:

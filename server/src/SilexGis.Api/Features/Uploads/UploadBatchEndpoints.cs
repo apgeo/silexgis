@@ -312,9 +312,11 @@ public static class UploadBatchEndpoints
     /// <summary>
     /// Whether this caller may make the server read its own disk. Full administrators only —
     /// deliberately not a domain right, because there is no object to scope one to and the
-    /// question is about the machine rather than about any content on it.
+    /// question is about the machine rather than about any content on it. Answered by the one
+    /// predicate every feature that names a directory for the server to read asks, so that the
+    /// bar cannot drift between two of them.
     /// </summary>
-    private static bool MayImportFromDisk(AccessContext ctx) => ctx.IsFullAdmin;
+    private static bool MayImportFromDisk(AccessContext ctx) => ServerImportPaths.MayReadServerDisk(ctx);
 
     private static Task<UploadBatch?> OwnAsync(
         SilexGisDbContext db, AccessContext ctx, Guid id, CancellationToken ct) =>
