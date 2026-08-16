@@ -55,6 +55,13 @@ services:
       # disappear the next time the container is recreated. Nothing is written until somebody
       # starts a build, so an installation that never builds terrain pays nothing for this.
       SILEXGIS__Terrain__BuildRoot: /data/terrain/builds
+      # Where the application asks for a bake, and where the answer comes back. It is a directory
+      # rather than an address because the program that bakes is a command-line tool and not a
+      # server, and the application is deliberately given no way to start containers of its own.
+      # Set here whether or not a bake worker is running: it costs an empty directory, and the
+      # alternative is two halves of one handover configured in two places, agreeing right up
+      # until the day somebody changes one of them.
+      SILEXGIS__Terrain__SpoolRoot: /data/terrain/spool
     volumes:
       - silexgis-files:/data/files
       # Data-protection keys must survive container recreation, or every deploy would
@@ -72,6 +79,22 @@ services:
     build: ../client
     ports:
       - "${SILEXGIS_HTTP_PORT:-8080}:80"
+    volumes:
+      # The terrain volume, read-only: a pyramid the application baked itself is served from here
+      # as static files. It is mounted unconditionally, and in this file rather than in the
+      # overlay that adds the bake worker, because a pyramid built once must keep being served
+      # after the builder is switched off — and the builder is a 1.4 GB image nobody should have
+      # to keep running in order to look at ground that already exists.
+      #
+      # Mounted outside the directory nginx serves, on purpose. A build keeps the source rasters
+      # it was given beside what it made of them, and anything under the served root is one
+      # careless location block away from being downloadable; here nothing is reachable except
+      # what a block deliberately names.
+      #
+      # The api service creates these directories in its own image and owns them, and starts
+      # first because of the dependency below, so a volume created fresh takes its ownership
+      # rather than root's.
+      - silexgis-terrain:/srv/terrain:ro
     depends_on:
       - api
     restart: unless-stopped

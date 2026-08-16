@@ -223,6 +223,20 @@ public static class DependencyInjection
         services.AddSingleton<Domain.Terrain.ITerrainRasterPreparer, Terrain.GdalTerrainRasterPreparer>();
         services.AddScoped<Terrain.ITerrainPhase, Terrain.TerrainPreparePhase>();
 
+        // Turning those rasters into tiles. The program that does that is a command-line tool, run
+        // by a service of its own that this application never speaks to directly — the two meet on
+        // a directory they share — and that service is optional. So the step is registered whether
+        // or not anything is deployed to answer it, and says plainly when nothing is: a step left
+        // out of the container instead makes every build stop at the one before it and report
+        // success, having made nothing.
+        services.AddScoped<Terrain.ITerrainPhase, Terrain.TerrainBakePhase>();
+
+        // Reading the tiles back before anything is allowed to believe in them. Every way a pyramid
+        // can be wrong is silent — a damaged tile, a level advertised and empty, tiles held and
+        // advertised nowhere all end up drawing plausible ground at the wrong height with no error
+        // anywhere — so this step is not optional and is never skipped.
+        services.AddScoped<Terrain.ITerrainPhase, Terrain.TerrainValidatePhase>();
+
         services.AddHostedService<ProcessingJobWorker>();
 
         // Terrain builds are claimed by a worker of their own against the same table. A worker

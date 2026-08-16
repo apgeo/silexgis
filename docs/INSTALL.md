@@ -537,6 +537,53 @@ data rather than to the pyramid:
 A credit naming data the pyramid does not actually hold is worse than none: it is a false licence
 statement, on screen, that nobody looking at it can tell is false.
 
+### Baking from inside the application
+
+Everything above is the command-line path: you run the script yourself and the overlay in step 3
+serves what it produced. SilexGIS can also do that work itself — somebody holding the terrain right
+picks an area, and the application fetches the elevation data, prepares it and bakes it, saying
+where it has got to as it goes.
+
+The tile-making step then needs a service of its own:
+
+```bash
+cd deploy
+# in .env:
+#   SILEXGIS__Terrain__BakeEnabled=true
+docker compose -f docker-compose.yml -f docker-compose.terrain-worker.yml up -d
+```
+
+It is a separate service for two mechanical reasons rather than for tidiness. The tool that makes
+the tiles is a 1.4 GB image, which an installation that never bakes terrain should not have to
+download; and it is a command that runs once and exits rather than a server, so something has to
+keep it alive and hand it work. That something is the worker this overlay adds. It publishes no
+port, holds no database credentials and cannot start containers of its own: it watches one
+directory on the terrain volume, bakes what it finds there, and writes the answer back beside the
+request.
+
+**Give it memory.** The tile-maker takes its heap as a percentage of the container's memory limit
+and offers no other setting for it, so that limit is the only control there is — and running short
+of memory is not something it reports as a failure. It stops refining and writes coarser tiles than
+were asked for. The default here is 8 GB, against a measured peak of about 2.5 GB for a couple of
+hundred square kilometres with one fine-resolution island in it; lower it with
+`SILEXGIS_TERRAIN_WORKER_MEMORY` only if you know the machine cannot spare that.
+
+**It is entirely optional.** Without it, everything above is unchanged: terrain baked from the
+command line is still served exactly as before, and the application says plainly that this
+installation cannot bake rather than accepting a build it will never finish.
+
+Two things worth knowing:
+
+- **Every later `docker compose` command must repeat the same `-f` list** — `down`, `logs`, `ps`
+  and the rest all act on the files they are given, so one that leaves the overlay out is talking
+  about a different stack and will happily report the worker as gone. Setting `COMPOSE_FILE` in
+  `.env` (`COMPOSE_FILE=docker-compose.yml:docker-compose.terrain-worker.yml`) fixes the chain once
+  and applies to every command afterwards. The same applies to any other overlay you run.
+- Turning it off again: stop the `terrain-worker` service **and** remove
+  `SILEXGIS__Terrain__BakeEnabled` from `.env`, or the application keeps handing bakes to a service
+  that is no longer there. Stopping it while a bake is running abandons that bake; the build is
+  told so when the worker comes back, and can be started again.
+
 ## Backups
 
 `deploy/scripts/backup.sh` dumps the database and the uploaded-files volume:
@@ -838,6 +885,10 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Terrain__Attribution` | *(empty)* | credit the elevation data's licence requires; shown on the 3D scene |
 | `SILEXGIS__Terrain__BuildRoot` | `data/terrain/builds` (the compose stack sets `/data/terrain/builds`) | where a terrain build started from inside the application does its work. A build keeps both the rasters it was given and the reprojected raster it makes of each one, until somebody deletes the build — each source is converted once, at its own pixel size and cut down to the rectangle asked for, so budget for roughly twice what the sources alone occupy. So this wants a disk chosen for size — under Docker it must be a path on a mounted volume, or those tens of gigabytes sit in the container's own writable layer and disappear the next time it is recreated |
 | `SILEXGIS__Terrain__CellTimeoutSeconds` | `1200` (20 min) | how long one cell of elevation may take to arrive before that attempt is abandoned. Values outside 30 s to 2 h are brought back inside that range |
+| `SILEXGIS__Terrain__BakeEnabled` | `false` | whether this installation has anything that can turn rasters into tiles. Set by the same deployment that starts the terrain worker; switched on with no worker running, a build waits for a bake nothing will ever do |
+| `SILEXGIS__Terrain__SpoolRoot` | `data/terrain/spool` (the compose stack sets `/data/terrain/spool`) | the directory the application and the terrain worker leave files for each other in. Both sides must name the same directory, on a volume they share, and both compose files already do |
+| `SILEXGIS__Terrain__BakePickupSeconds` | `300` (5 min) | how long a build waits for the worker to take its bake before deciding nothing is going to. Generous, because an image this size takes a while to start and a request left waiting costs nothing. Values outside 5 s to 1 h are brought back inside that range — `0` does **not** mean "wait indefinitely" and becomes 5 s, which reports a worker that is merely starting as absent |
+| `SILEXGIS__Terrain__BakeTimeoutSeconds` | `43200` (12 h) | how long one bake may run before it is abandoned. The queue a build runs on has no limit of its own, so this is the only one there is, and it is meant to catch a bake that has stopped making progress rather than to cap a large one. Values outside 60 s to 7 days are brought back inside that range — `0` does **not** mean "no limit" and becomes 60 s, which abandons every real bake after a minute |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB) |
 | `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys (must persist across restarts) |

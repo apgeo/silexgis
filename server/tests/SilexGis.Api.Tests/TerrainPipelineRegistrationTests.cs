@@ -53,6 +53,15 @@ public sealed class TerrainPipelineRegistrationTests : IAsyncLifetime
         phases.Select(p => p.Phase).ShouldContain(TerrainBuildPhase.Fetch);
         phases.Select(p => p.Phase).ShouldContain(TerrainBuildPhase.Prepare);
 
+        // Registered whether or not this installation has anything to make tiles with. The step is
+        // what says so; without it a build would stop at the step before and report success.
+        phases.Select(p => p.Phase).ShouldContain(TerrainBuildPhase.Bake);
+
+        // The step that reads the tiles back. Left out, a build would end as succeeded the moment
+        // the tile-maker exited, with nothing having looked at what it produced — and what it
+        // produces when it goes wrong answers every request and draws nothing.
+        phases.Select(p => p.Phase).ShouldContain(TerrainBuildPhase.Validate);
+
         // One implementation per step, because the walk takes the first that claims a step and a
         // second one would simply never run — silently, and differently depending on the order the
         // container happened to be built in.

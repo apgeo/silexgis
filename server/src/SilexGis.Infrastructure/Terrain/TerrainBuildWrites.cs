@@ -36,6 +36,7 @@ public static class TerrainBuildWrites
     private const int MessageLength = 500;
     private const int ErrorCodeLength = 100;
     private const int LogTailLength = 8000;
+    private const int PyramidVersionLength = 64;
 
     /// <summary>Marks a build as picked up, keeping the first start time if it had one.</summary>
     /// <remarks>
@@ -104,6 +105,29 @@ public static class TerrainBuildWrites
                 .SetProperty(b => b.Message, words)
                 .SetProperty(b => b.ErrorCode, (string?)null)
                 .SetProperty(b => b.FinishedAt, now)
+                .SetProperty(b => b.UpdatedAt, now), ct);
+    }
+
+    /// <summary>
+    /// Records what a checked pyramid turned out to be: what it takes up, and the version every
+    /// address into it carries.
+    /// </summary>
+    /// <remarks>
+    /// Written only once the pyramid has passed every check, because both values are read as
+    /// statements that it did. The version in particular is the string a viewer's cache is keyed on,
+    /// so a build carrying one is a build something may be asked to draw.
+    /// </remarks>
+    public static Task RecordPyramidAsync(
+        SilexGisDbContext db, Guid buildId, long sizeBytes, string version, CancellationToken ct)
+    {
+        var bounded = Head(version, PyramidVersionLength);
+        var now = DateTimeOffset.UtcNow;
+
+        return db.TerrainBuilds
+            .Where(b => b.Id == buildId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(b => b.SizeBytes, Math.Max(sizeBytes, 0))
+                .SetProperty(b => b.PyramidVersion, bounded)
                 .SetProperty(b => b.UpdatedAt, now), ct);
     }
 

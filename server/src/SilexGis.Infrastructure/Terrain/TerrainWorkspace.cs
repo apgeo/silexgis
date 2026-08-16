@@ -34,6 +34,49 @@ public sealed class TerrainBuildOptions
     /// a failure.
     /// </remarks>
     public int CellTimeoutSeconds { get; set; } = 1200;
+
+    /// <summary>
+    /// Whether this installation has anything that can turn rasters into tiles.
+    /// </summary>
+    /// <remarks>
+    /// Off by default, and an installation that leaves it off is a supported installation rather
+    /// than a broken one: making tiles needs a program of its own, which is a very large image and
+    /// several gigabytes of memory, and terrain baked elsewhere is served here exactly as before
+    /// without it. Set by the same deployment that starts that program, so that an application told
+    /// to bake and a machine with nothing to bake with cannot be arranged separately.
+    /// </remarks>
+    public bool BakeEnabled { get; set; }
+
+    /// <summary>
+    /// The directory this application and the tile-maker meet in.
+    /// </summary>
+    /// <remarks>
+    /// A directory rather than an address because the tile-maker is a command-line tool and not a
+    /// server, and because what passes between them is gigabytes of files already sitting on a
+    /// volume they share — not something to put in a request body. It must be a path both of them
+    /// see under the same name.
+    /// </remarks>
+    public string SpoolRoot { get; set; } = Path.Combine("data", "terrain", "spool");
+
+    /// <summary>
+    /// How long to wait for something to pick a bake up before deciding nothing is going to.
+    /// </summary>
+    /// <remarks>
+    /// This is what tells a service that is absent apart from one that is merely busy starting.
+    /// Generous, because an image of this size takes a while to come up and a request left waiting
+    /// costs nothing while it does; and bounded, because the alternative is a build that waits for
+    /// ever on a container somebody stopped last week.
+    /// </remarks>
+    public int BakePickupSeconds { get; set; } = 300;
+
+    /// <summary>How long one bake may run before the attempt is abandoned.</summary>
+    /// <remarks>
+    /// The queue a build runs on has no time limit of its own, deliberately, so this is the only
+    /// one there is. Half a day is far beyond anything measured — a couple of hundred square
+    /// kilometres with a fine island in it takes about two minutes — and is meant to catch a bake
+    /// that has stopped making progress rather than to cap a large one.
+    /// </remarks>
+    public int BakeTimeoutSeconds { get; set; } = 43_200;
 }
 
 /// <summary>
@@ -60,7 +103,13 @@ public sealed class TerrainBuildOptions
 /// survive a failure has to be somewhere that is swept, or a failed run leaves gigabytes behind
 /// that nobody will ever look at and nothing will ever delete.
 /// </param>
-public sealed record TerrainBuildDirectories(string Root, string Input, string Prepared, string Scratch);
+/// <param name="Tiles">
+/// The pyramid itself: the manifest describing what ground is covered and at what detail, and the
+/// tiles under it. This is the only part of a build a browser ever asks for, and it is served as
+/// plain files by whatever is in front of the application rather than through it.
+/// </param>
+public sealed record TerrainBuildDirectories(
+    string Root, string Input, string Prepared, string Scratch, string Tiles);
 
 /// <summary>
 /// Hands a build the directories it works in, and creates them.
@@ -68,9 +117,24 @@ public sealed record TerrainBuildDirectories(string Root, string Input, string P
 public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options)
 {
     private readonly string root = Path.GetFullPath(options.Value.BuildRoot, AppContext.BaseDirectory);
+    private readonly string spool = Path.GetFullPath(options.Value.SpoolRoot, AppContext.BaseDirectory);
 
     /// <summary>The root every build's folder sits under.</summary>
     public string Root => root;
+
+    /// <summary>The directory this application and the tile-maker leave files for each other in.</summary>
+    public string SpoolRoot => spool;
+
+    /// <summary>
+    /// Where this build's request for a bake, and the answer to it, are left.
+    /// </summary>
+    /// <remarks>
+    /// Outside the build's own folder, because the other side of this handover is given the shared
+    /// volume and nothing else about how builds are arranged: it watches one directory and does not
+    /// need to know that a build has an identity, sources, or anywhere it keeps them. Named after
+    /// the build all the same, so that an operator looking at a stalled bake can tell whose it is.
+    /// </remarks>
+    public string SpoolFor(Guid buildId) => Path.Combine(spool, buildId.ToString("N"));
 
     /// <summary>
     /// This build's directories, created if they are not there yet.
@@ -87,7 +151,8 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options)
             buildRoot,
             Path.Combine(buildRoot, "input"),
             Path.Combine(buildRoot, "prepared"),
-            Path.Combine(buildRoot, "scratch"));
+            Path.Combine(buildRoot, "scratch"),
+            Path.Combine(buildRoot, "tiles"));
 
         Directory.CreateDirectory(directories.Input);
 
@@ -97,6 +162,12 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options)
         // the next run and prepared again from itself.
         Directory.CreateDirectory(directories.Prepared);
         Directory.CreateDirectory(directories.Scratch);
+
+        // Created here rather than left to the tile-maker so that the directory belongs to this
+        // application on a fresh volume. The two run as the same user, but the one that creates a
+        // path owns it, and a pyramid nobody but the tile-maker can write to is a build that fails
+        // at the very last step of a long run.
+        Directory.CreateDirectory(directories.Tiles);
         return directories;
     }
 }

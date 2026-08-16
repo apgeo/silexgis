@@ -1,0 +1,62 @@
+# Terrain bake worker overlay: lets the application turn an area chosen on the map into a tile
+# pyramid of its own, instead of an operator running the bake by hand.
+#
+# Entirely optional, and absent unless you start it. Without it everything else works as it did:
+# terrain baked from the command line is still served, the 3D view still draws it, and the
+# application says plainly that it cannot bake rather than accepting work it will never do.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.terrain-worker.yml up -d
+#
+# Requires in .env (or `up` stops and says so):
+#   SILEXGIS__Terrain__BakeEnabled=true
+#
+# Optional in .env:
+#   SILEXGIS_TERRAIN_WORKER_MEMORY=8g               # see the sizing note below
+#   SILEXGIS_TERRAIN_WORKER_POLL_SECONDS=2          # how often it looks for work
+#
+# The worker publishes no port and answers nothing: it watches a directory on the terrain volume
+# that the application writes into, and writes its answer back beside the request. It is given no
+# database credentials and no access to the container engine, because it needs neither.
+#
+# **Size it deliberately.** The pre-baker inside it takes its heap as a percentage of this
+# container's memory limit and has no other setting for it, so the limit below is the only knob
+# there is — and short of memory the tool does not fail, it stops refining and writes coarser
+# tiles. A bake of a couple of hundred square kilometres with one fine island in it was measured
+# peaking around 2.5 GB, so the default leaves real headroom rather than tracking that number.
+#
+# It is a large image — about 1.4 GB — which is the reason it is an overlay rather than part of
+# the stack. An installation that never bakes terrain should never download it.
+#
+# Stop it again with:
+#   docker compose -f docker-compose.yml -f docker-compose.terrain-worker.yml stop terrain-worker
+# and remove SILEXGIS__Terrain__BakeEnabled from .env, or the application will keep handing bakes
+# to a service that is no longer there. Stopping it while a bake is running abandons that bake;
+# the build it belonged to is told so when the worker comes back, and can be started again.
+name: silexgis
+
+services:
+  api:
+    environment:
+      # Guarded rather than merely documented. A worker running beside an application that has
+      # not been told to use it looks exactly like no worker at all — every build waits for a
+      # bake nobody ever asks for — and that is a silence, not an error message. This turns it
+      # into a sentence at `up`.
+      SILEXGIS__Terrain__BakeEnabled: ${SILEXGIS__Terrain__BakeEnabled:?set SILEXGIS__Terrain__BakeEnabled=true in .env so the application hands its bakes to the worker}
+
+  terrain-worker:
+    build:
+      context: ./terrain-worker
+    restart: unless-stopped
+    # No published ports on purpose — see the note above.
+    #
+    # The whole of the terrain volume, writable: the worker reads the rasters the application
+    # prepared and writes the pyramid back into the same build directory. Both containers run as
+    # the same user and both create this path in their own image, so neither cares which of them
+    # a fresh volume is seeded from.
+    volumes:
+      - silexgis-terrain:/data/terrain
+    environment:
+      SILEXGIS_TERRAIN_ROOT: /data/terrain
+      SILEXGIS_TERRAIN_POLL_SECONDS: ${SILEXGIS_TERRAIN_WORKER_POLL_SECONDS:-2}
+    mem_limit: ${SILEXGIS_TERRAIN_WORKER_MEMORY:-8g}

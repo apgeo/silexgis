@@ -20,7 +20,12 @@ COPY --from=build /app/publish .
 # the image directory it covers, ownership included. A path missing here is created root-owned
 # and the app cannot write it — for the key ring that breaks every cookie/token encryption, and
 # for terrain it stops the first build before it has done anything.
-RUN mkdir -p /data/files /data/keys /data/terrain && chown -R app:app /data
+#
+# The two terrain directories are named separately because the bake worker, when an installation
+# runs one, shares this volume and writes into both of them as the same user this image declares.
+# Seeding them here means a fresh volume comes up correct whichever of the two containers happens
+# to mount it first.
+RUN mkdir -p /data/files /data/keys /data/terrain/builds /data/terrain/spool && chown -R app:app /data
 USER app
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "SilexGis.Api.dll"]

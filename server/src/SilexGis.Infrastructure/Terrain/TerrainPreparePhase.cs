@@ -117,32 +117,12 @@ public sealed class TerrainPreparePhase(
         await context.ReportAsync(100, null, ct);
     }
 
-    /// <summary>The rasters this build gathered, in a fixed order.</summary>
-    /// <remarks>
-    /// Filtered by what counts as a raster rather than taken wholesale. The directory can also hold
-    /// the leavings of a transfer that did not finish, under a name of its own precisely so that
-    /// nothing mistakes one for data.
-    /// </remarks>
     private static List<string> Sources(TerrainBuildContext context) =>
-        [.. Directory.EnumerateFiles(context.Directories.Input)
-            .Where(TerrainRasterFiles.IsRaster)
-            .Order(StringComparer.Ordinal)];
+        TerrainPreparedSet.Sources(context);
 
-    /// <summary>
-    /// What this build asks the raster chain for — the same request whether it is being run or only
-    /// being asked whether it has already been run, because the two answers have to be about the
-    /// same set of files.
-    /// </summary>
     private static TerrainRasterPrepareRequest RequestFor(
-        TerrainBuildContext context, IReadOnlyList<string> inputs)
-    {
-        var box = context.Build.Extent.EnvelopeInternal;
-
-        return new TerrainRasterPrepareRequest(
-            inputs,
-            context.Directories.Prepared,
-            new TerrainArea(box.MinX, box.MinY, box.MaxX, box.MaxY));
-    }
+        TerrainBuildContext context, IReadOnlyList<string> inputs) =>
+        TerrainPreparedSet.RequestFor(context, inputs);
 
     /// <summary>
     /// A coordinate as a line of a log wants it: enough places to say which valley, not enough to
