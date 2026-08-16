@@ -46,6 +46,12 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         managerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Manager, ManagerEmail);
         recipientId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, RecipientEmail);
 
+        // Leaving a caving group is refused outright when the installation would be left with no
+        // live full administrator, so a class that never mints one can only pass while some other
+        // class happens to have run first and left one behind in the shared database. This class
+        // creates only a manager and an editor, so it seeds its own and depends on nobody.
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"notify-adm-{suffix}@t.local");
+
         manager = await AuthHelper.BearerClientAsync(factory, ManagerEmail);
         recipient = await AuthHelper.BearerClientAsync(factory, RecipientEmail);
 
