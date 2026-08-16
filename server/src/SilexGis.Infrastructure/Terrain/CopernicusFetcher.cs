@@ -32,7 +32,7 @@ public sealed class CopernicusFetcher(
     public const string HttpClientName = "terrain-elevation";
 
     /// <summary>What a transfer still in flight is called.</summary>
-    public const string PartialSuffix = ".part";
+    public const string PartialSuffix = TerrainRasterFiles.PartialSuffix;
 
     /// <summary>
     /// Obtains one named cell into <paramref name="target"/>, answering the number of bytes

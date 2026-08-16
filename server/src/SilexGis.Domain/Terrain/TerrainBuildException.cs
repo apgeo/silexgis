@@ -44,6 +44,28 @@ public static class TerrainBuildFailures
     /// build waited its turn.
     /// </remarks>
     public const string NoRasters = "terrain_build.no_rasters";
+
+    /// <summary>
+    /// A raster the build was given does not say where on the earth it is.
+    /// </summary>
+    /// <remarks>
+    /// A fact about the file rather than about anything this pipeline did, and one only a person can
+    /// settle: an image with no grid or no coordinate system attached could be placed anywhere, and
+    /// guessing would put a mountain range in the wrong country. Kept apart from a failure of the
+    /// raster tools because the answer is different — this one is fixed by supplying the missing
+    /// georeferencing or by leaving the file out, and never by trying again.
+    /// </remarks>
+    public const string RasterNotGeoreferenced = "terrain_build.raster_not_georeferenced";
+
+    /// <summary>
+    /// Reprojecting or merging the rasters into the one form the rest of the chain reads failed.
+    /// </summary>
+    /// <remarks>
+    /// The raster library reports its refusals by returning nothing and writing its reasons to a log
+    /// of its own, so the words that explain this are fetched deliberately and put in the build's
+    /// log tail. The code stays short because the column holding it is.
+    /// </remarks>
+    public const string PrepareFailed = "terrain_build.prepare_failed";
 }
 
 /// <summary>

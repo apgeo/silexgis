@@ -216,6 +216,13 @@ public static class DependencyInjection
         services.AddScoped<Terrain.CopernicusFetcher>();
         services.AddScoped<Terrain.ITerrainPhase, Terrain.TerrainFetchPhase>();
 
+        // Turning those rasters into the one form everything after them reads. Stateless and holding
+        // nothing between calls, so one instance serves whoever asks. The step is registered after
+        // the one that obtains the rasters because the walk takes the first implementation claiming
+        // a given step, so registration order is what decides which one that is.
+        services.AddSingleton<Domain.Terrain.ITerrainRasterPreparer, Terrain.GdalTerrainRasterPreparer>();
+        services.AddScoped<Terrain.ITerrainPhase, Terrain.TerrainPreparePhase>();
+
         services.AddHostedService<ProcessingJobWorker>();
 
         // Terrain builds are claimed by a worker of their own against the same table. A worker

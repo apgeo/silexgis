@@ -27,6 +27,17 @@ public static class TerrainRasterFiles
         ".tif", ".tiff", ".img", ".asc", ".hgt", ".dem",
     };
 
+    /// <summary>What a file still being written is called, until it is whole.</summary>
+    /// <remarks>
+    /// One name for the whole pipeline, because the rule it enforces is one rule: bytes sitting at
+    /// the name a finished file would have are indistinguishable from a finished file. Anything that
+    /// produces a raster — a transfer from the network, a copy off the server's own disk, a
+    /// reprojection — writes under this name and renames only once the result has been read back and
+    /// found whole. Deliberately not one of <see cref="Accepted"/>, so a fragment left behind by an
+    /// interrupted run is never picked up as an input.
+    /// </remarks>
+    public const string PartialSuffix = ".part";
+
     /// <summary>Whether this name looks like a raster worth opening.</summary>
     public static bool IsRaster(string fileName) =>
         !string.IsNullOrWhiteSpace(fileName) && Extensions.Contains(Path.GetExtension(fileName));

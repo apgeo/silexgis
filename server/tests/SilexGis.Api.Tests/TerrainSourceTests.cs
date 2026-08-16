@@ -78,6 +78,18 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable
                 // deleted again when it finishes, for the mirror-image reason.
                 JobWorkers.RemoveFrom(services);
 
+                // Only the step that obtains rasters, which is the one under test here. The walk
+                // runs every step this installation has, so leaving the rest registered would make
+                // every assertion below depend on what the steps after this one make of files that
+                // stand in for rasters and are not ones. Removed and re-added rather than filtered
+                // out, because the walk takes the first implementation claiming a given step.
+                foreach (var step in services.Where(s => s.ServiceType == typeof(ITerrainPhase)).ToList())
+                {
+                    services.Remove(step);
+                }
+
+                services.AddScoped<ITerrainPhase, TerrainFetchPhase>();
+
                 services.AddHttpClient(CopernicusFetcher.HttpClientName)
                     .ConfigurePrimaryHttpMessageHandler(() => new SeaAndLand());
             });

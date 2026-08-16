@@ -297,6 +297,17 @@ Useful options:
 | `--source-srs EPSG:3844` | The raster carries no projection of its own — plain ASCII grids usually do not. `EPSG:3844` is the Romanian national grid. |
 | `--source-nodata -32768` | The raster uses a void value without declaring it, which would otherwise be reprojected as an ordinary height and drawn as a pit. |
 
+**How accurate the reprojection is.** Moving a national projected grid — the Romanian one, or any
+other — onto WGS 84 is done from a handful of averaged parameters, with no transformation grids
+installed and none added. That places the ground to within a few metres horizontally, which is
+invisible on a hillside seen from above and is entirely acceptable for terrain that exists to be
+looked at. It is **not** accurate enough for survey coordinates, and it is not what this
+application uses for them: cave entrances and survey stations are converted by a different part of
+the application, and nothing sends them through this one. Data whose positions have to be better
+than a few metres should be converted with the transformation grids for its country before it is
+brought here. The same limit applies to elevation data prepared inside the application by a terrain
+build, which runs the same conversion.
+
 Re-running skips what is already prepared, and nothing half-converted is ever left under a
 finished name, so an interrupted run costs only the raster it was working on. Add `--force` to
 convert everything again. `--in` and `--out` must be separate directories, neither inside the
@@ -311,6 +322,25 @@ see **Attribution** below.
 
 **Reprojection here is for drawing ground, not for surveying.** It is accurate to a few metres,
 which is invisible under a hillside and is not a coordinate to put a cave entrance at.
+
+**A build started from inside the application prepares its own rasters**, and needs neither this
+script nor Docker nor GDAL on the machine. It reads whatever reached the build and converts it the
+same way, to the same limits, and one raster at a time — a coarse regional fill and a fine local
+survey stay two files, each keeping its own pixel size, for the same reason the script keeps them
+apart. Two things it does that the script does not: it leaves out any raster covering none of the
+rectangle the build was drawn over, and it cuts down one that reaches well beyond it, so a
+directory holding a whole country's data does not produce a whole country's output for a box drawn
+over one hillside.
+
+Those rasters are kept for as long as the build is, under the directory named by
+`SILEXGIS__Terrain__BuildRoot`. They are what makes building the tiles again over ground that did
+not change cost minutes instead of hours, so that directory wants room for the sources over again:
+each is converted once, at its own pixel size, so what is written is comparable to what it was made
+from rather than a multiple of it. A build that was interrupted reuses them only after opening each
+one and reading a pixel out of its far corner, because a raster cut short by a machine that went
+down describes itself perfectly well and would otherwise be meshed into smooth ground exactly where
+its data ran out — and only when the whole set is there, since a run killed with three of ten
+converted leaves three perfectly good files behind.
 
 ### 2. Bake the pyramid
 
@@ -806,7 +836,7 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Terrain__HeightDatum` | `Orthometric` | what the tile heights are measured from: `Orthometric` (above sea level) or `Ellipsoidal` (converted when baked). Wrong here puts every cave about 40 m off its hillside |
 | `SILEXGIS__Terrain__GeoidHeightM` | `0` | the local geoid undulation in metres, used **only** with `Ellipsoidal`. +39 to +45 over Romanian karst |
 | `SILEXGIS__Terrain__Attribution` | *(empty)* | credit the elevation data's licence requires; shown on the 3D scene |
-| `SILEXGIS__Terrain__BuildRoot` | `data/terrain/builds` (the compose stack sets `/data/terrain/builds`) | where a terrain build started from inside the application does its work. A build keeps the rasters it was given until somebody deletes it, so this wants a disk chosen for size — under Docker it must be a path on a mounted volume, or those tens of gigabytes sit in the container's own writable layer and disappear the next time it is recreated |
+| `SILEXGIS__Terrain__BuildRoot` | `data/terrain/builds` (the compose stack sets `/data/terrain/builds`) | where a terrain build started from inside the application does its work. A build keeps both the rasters it was given and the reprojected raster it makes of each one, until somebody deletes the build — each source is converted once, at its own pixel size and cut down to the rectangle asked for, so budget for roughly twice what the sources alone occupy. So this wants a disk chosen for size — under Docker it must be a path on a mounted volume, or those tens of gigabytes sit in the container's own writable layer and disappear the next time it is recreated |
 | `SILEXGIS__Terrain__CellTimeoutSeconds` | `1200` (20 min) | how long one cell of elevation may take to arrive before that attempt is abandoned. Values outside 30 s to 2 h are brought back inside that range |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB) |

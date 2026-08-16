@@ -45,13 +45,22 @@ public sealed class TerrainBuildOptions
 /// all of them: what happens next takes a directory of rasters and does not care where each came
 /// from, and a separate tree per source kind would mean every later step learning the difference.
 /// </param>
+/// <param name="Prepared">
+/// The rasters as everything after the first step reads them: one coordinate system, one value
+/// standing for a hole, one pixel size. Kept rather than swept, for three reasons that each hold on
+/// their own — building the mesh again over ground that did not change costs nothing if these are
+/// still here; anything that later asks what a build was actually made from has one answer to read
+/// rather than a pile of sources in whatever form they arrived in; and they are the form a
+/// different way of serving this data would start from, so throwing them away would be closing a
+/// door for the sake of disk that the sources themselves already cost.
+/// </param>
 /// <param name="Scratch">
 /// Working space for one run, emptied when the run ends however it ends. Everything else here is
 /// deliberately kept — that is what makes resuming cheap — so anything that must <i>not</i>
 /// survive a failure has to be somewhere that is swept, or a failed run leaves gigabytes behind
 /// that nobody will ever look at and nothing will ever delete.
 /// </param>
-public sealed record TerrainBuildDirectories(string Root, string Input, string Scratch);
+public sealed record TerrainBuildDirectories(string Root, string Input, string Prepared, string Scratch);
 
 /// <summary>
 /// Hands a build the directories it works in, and creates them.
@@ -77,9 +86,16 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options)
         var directories = new TerrainBuildDirectories(
             buildRoot,
             Path.Combine(buildRoot, "input"),
+            Path.Combine(buildRoot, "prepared"),
             Path.Combine(buildRoot, "scratch"));
 
         Directory.CreateDirectory(directories.Input);
+
+        // Beside the sources rather than inside them: what is written here is a raster with an
+        // accepted extension, and the step that gathers sources reads its own directory back to see
+        // whether anything arrived. Prepared output sitting in there would be read as a source on
+        // the next run and prepared again from itself.
+        Directory.CreateDirectory(directories.Prepared);
         Directory.CreateDirectory(directories.Scratch);
         return directories;
     }
