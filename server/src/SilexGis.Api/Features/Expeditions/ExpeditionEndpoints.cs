@@ -239,6 +239,47 @@ public static class ExpeditionEndpoints
             .ToListAsync(ct);
         db.AccessEntries.RemoveRange(anchored);
 
+        // The polymorphic rows a camp can carry — files attached to it, tags on it, and its
+        // place in a relation — have no foreign key to follow, so nothing removes them unless
+        // this does. Left behind they are exactly what the integrity check reports as orphans,
+        // and a tag on a camp that no longer exists would keep counting towards that tag's use.
+        //
+        // A relation the camp merely joined keeps whatever it still relates and goes only when
+        // one member is left: an association with one end is a thing no surface offers and no
+        // later edit would be accepted for. Remaining members cascade with it.
+        //
+        // A directed relation the camp was the distinguished member of goes whatever is left of
+        // it: a directed link reads from its main member, and one with none is a state the link
+        // rules refuse, so leaving it would leave a relation that renders on every other
+        // member's panel and that no later edit of it — not even one appointing a new main —
+        // would be accepted for.
+        await db.Attachments
+            .Where(a => a.EntityType == AttachedEntityType.Expedition && a.EntityId == expedition.Id)
+            .ExecuteDeleteAsync(ct);
+        await db.Taggings
+            .Where(t => t.EntityType == AttachedEntityType.Expedition && t.EntityId == expedition.Id)
+            .ExecuteDeleteAsync(ct);
+        var memberships = await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.Expedition && m.EntityId == expedition.Id)
+            .Select(m => new { m.ResLinkId, m.IsMain })
+            .ToListAsync(ct);
+        var linkIds = memberships.Select(m => m.ResLinkId).Distinct().ToList();
+        var mainOfIds = memberships.Where(m => m.IsMain).Select(m => m.ResLinkId).Distinct().ToList();
+        var headlessIds = mainOfIds.Count == 0
+            ? []
+            : await db.ResLinks
+                .Where(l => mainOfIds.Contains(l.Id)
+                    && db.ResLinkRelationTypes.Any(t => t.Id == l.RelationTypeId && t.Directed))
+                .Select(l => l.Id)
+                .ToListAsync(ct);
+        await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.Expedition && m.EntityId == expedition.Id)
+            .ExecuteDeleteAsync(ct);
+        await db.ResLinks
+            .Where(l => headlessIds.Contains(l.Id)
+                || (linkIds.Contains(l.Id) && db.ResLinkMembers.Count(m => m.ResLinkId == l.Id) < 2))
+            .ExecuteDeleteAsync(ct);
+
         // The membership rows go with the camp, and nothing else does: the trips it gathered
         // stand alone perfectly well and are what the people who wrote them still have. That is
         // carried by the membership row's own foreign keys, so a camp deleted by any route — a

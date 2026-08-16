@@ -126,12 +126,22 @@ public static class HistoryProtection
     /// the timeline does not re-derive a disclosure decision, it is handed the answer.
     /// Ignored for every entity type that has no such part.
     /// </param>
+    /// <param name="peopleHidden">
+    /// Whether this caller may not read people at all. Asked as one flag rather than per id
+    /// because that is the shape of the right: reading people is held across the board or not
+    /// held, which is exactly the question the live roster asks before it will answer at all. A
+    /// caller who fails it is refused the whole roster listing — and a roster row on the camp's
+    /// timeline carries the same stay, so keeping its dates, its note and its role while striking
+    /// out the person would still say how many people were at the camp and when, and a per-person
+    /// note frequently names the person the redaction just removed. The row's whole change set
+    /// goes; the event stays, so the page can show an honest hidden row.
+    /// </param>
     /// <param name="memberHidden">
-    /// Predicate over a referenced trip id: whether this caller may not read that trip. A camp's
-    /// membership rows are rooted at the camp, so they reach everybody who may read the camp — an
-    /// audience wider than the trips gathered into it, which are each governed in their own right.
-    /// The camp's trip listing and its roll-up both withhold a member the caller may not read, and
-    /// the timeline says the same thing rather than handing over the id by a side door.
+    /// Predicate over an id a camp's membership row names — the trip it joined — answering whether
+    /// this caller may not read that trip. Those rows are rooted at the camp, so they reach
+    /// everybody who may read the camp, an audience wider than the trips gathered into it, each
+    /// governed in its own right. The camp's own listing withholds what the caller may not read,
+    /// and the timeline says the same thing rather than handing the id over by a side door.
     /// </param>
     public static RedactionResult Redact(
         string entityType,
@@ -140,6 +150,7 @@ public static class HistoryProtection
         Func<Guid, bool> linkTargetHidden,
         bool associationHidden,
         bool mayWriteSubject,
+        bool peopleHidden,
         Func<Guid, bool> memberHidden)
     {
         if (changes is null)
@@ -227,6 +238,22 @@ public static class HistoryProtection
             // trips in it; the event — a membership changed, and when — is activity metadata and
             // stays, exactly as it does for a hidden resource-link membership.
             RemoveHiddenReference(changes, nameof(ExpeditionTrip.TripLogId), memberHidden, redacted);
+        }
+        else if (entityType == nameof(ExpeditionRosterEntry))
+        {
+            // Who was at the camp, and every other thing the stay records, told only to somebody
+            // who may read people at all. The live roster is stricter than the camp itself on
+            // purpose — it answers a caller who holds the read over the camp and the read over
+            // people, and refuses the one who holds only the first, giving as its reason that rows
+            // with the names struck out would still say how many people were there and when. The
+            // timeline is the same rows, so it withholds the same thing: the whole change set
+            // goes, not just the id. Anything less and the free-text note beside the id — "half
+            // days only, drove the van" — hands back the identity the redaction just removed.
+            if (peopleHidden && changes.Count > 0)
+            {
+                redacted.AddRange(changes.Select(kv => kv.Key));
+                return new RedactionResult(null, redacted);
+            }
         }
 
         return new RedactionResult(changes.Count == 0 ? null : changes, redacted);

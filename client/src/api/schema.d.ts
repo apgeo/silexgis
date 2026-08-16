@@ -10265,7 +10265,7 @@ export interface paths {
         };
         /**
          * Rules written directly onto this object (ManagePermissions).
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition' (case-insensitive).
          */
         get: {
             parameters: {
@@ -10292,7 +10292,7 @@ export interface paths {
         };
         /**
          * Replaces this object's direct rules, bounded by what the caller holds.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition' (case-insensitive).
          */
         put: {
             parameters: {
@@ -10337,7 +10337,7 @@ export interface paths {
         };
         /**
          * What the caller may do here; ?explain=true names the deciding rule.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition' (case-insensitive).
          */
         get: {
             parameters: {

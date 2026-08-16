@@ -885,3 +885,63 @@ public sealed class GeofileTargetResolver(SilexGisDbContext db, IAccessService a
     private IQueryable<Geofile> Readable(AccessContext ctx) =>
         db.Geofiles.AsNoTracking().VisibleTo(ctx, AccessDomain.Geofiles);
 }
+
+/// <summary>Camps, through their own visibility filter and their own write rule — a camp is
+/// governed in its own right, so neither answer here is derived from the trips it gathers.
+/// The subtitle is the span of days, written the way the row stores it: a camp that never ran
+/// on past its first day has no end and reads as that one day.</summary>
+public sealed class ExpeditionTargetResolver(SilexGisDbContext db, IAccessService access) : IResLinkTargetResolver
+{
+    public AttachedEntityType? TargetType => AttachedEntityType.Expedition;
+
+    public async Task<HashSet<Guid>> WritableIdsAsync(
+        AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var camps = await db.Expeditions.AsNoTracking().Where(e => ids.Contains(e.Id)).ToListAsync(ct);
+        return await ProtectedWrites.WritableAsync(access, ctx, camps, ct);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
+        AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
+    {
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, ResLinkTargetDisplayDto>();
+        }
+
+        var rows = await Readable(ctx).Where(e => ids.Contains(e.Id)).ToListAsync(ct);
+        return rows.ToDictionary(
+            e => e.Id,
+            // No route: a camp has no page in the client yet, and naming one that does not
+            // exist puts the reader on the router's own error screen instead of leaving the
+            // chip un-navigable, which is what every other kind without a page does. The route
+            // comes back the day the page ships.
+            e => new ResLinkTargetDisplayDto(e.Name, Subtitle(e), null, null));
+    }
+
+    public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
+        AccessContext ctx, string query, int limit, CancellationToken ct)
+    {
+        var pattern = $"%{query}%";
+        var rows = await Readable(ctx)
+            .Where(e => EF.Functions.ILike(EF.Functions.Unaccent(e.Name), EF.Functions.Unaccent(pattern)))
+            .OrderByDescending(e => e.StartDate)
+            .ThenBy(e => e.Id)
+            .Take(limit)
+            .ToListAsync(ct);
+        return [.. rows.Select(e => new ResLinkTargetHitDto(e.Id, e.Name, Subtitle(e)))];
+    }
+
+    private IQueryable<Expedition> Readable(AccessContext ctx) =>
+        db.Expeditions.AsNoTracking().VisibleTo(ctx, AccessDomain.Expeditions);
+
+    private static string Subtitle(Expedition e) =>
+        e.EndDate is { } end
+            ? $"{e.StartDate:yyyy-MM-dd} – {end:yyyy-MM-dd}"
+            : e.StartDate.ToString("yyyy-MM-dd");
+}

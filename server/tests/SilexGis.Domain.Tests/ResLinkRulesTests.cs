@@ -37,6 +37,7 @@ public class ResLinkRulesTests
     [InlineData(AttachedEntityType.SurveyModel)]
     [InlineData(AttachedEntityType.Caver)]
     [InlineData(AttachedEntityType.Cabinet)]
+    [InlineData(AttachedEntityType.Expedition)]
     public void Linkable_types_may_join_and_admit_whole(AttachedEntityType type)
     {
         IsLinkableType(type).ShouldBeTrue();
@@ -47,6 +48,7 @@ public class ResLinkRulesTests
     [InlineData(AttachedEntityType.StoredFile)]
     [InlineData(AttachedEntityType.GeoreferencedMap)]
     [InlineData(AttachedEntityType.Comment)]
+    [InlineData(AttachedEntityType.Album)]
     [InlineData((AttachedEntityType)99)]
     public void Non_linkable_types_are_refused_even_for_whole(AttachedEntityType type)
     {

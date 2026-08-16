@@ -145,6 +145,7 @@ try
     builder.Services.AddScoped<IResLinkTargetResolver, CabinetTargetResolver>();
     builder.Services.AddScoped<IResLinkTargetResolver, SurveyModelTargetResolver>();
     builder.Services.AddScoped<IResLinkTargetResolver, GeofileTargetResolver>();
+    builder.Services.AddScoped<IResLinkTargetResolver, ExpeditionTargetResolver>();
     builder.Services.AddScoped<ResLinkTargetDirectory>();
     // Credential-guessing protection: per-IP fixed window on the auth surface.
     // Limit is configurable for installations behind shared NATs.

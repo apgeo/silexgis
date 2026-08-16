@@ -35,7 +35,7 @@ public class HistoryProtectionTests
             ("Geom", "POINT (25 45)", "POINT (26 46)"),
             ("UpdatedAt", "t1", "t2"));
 
-        var result = HistoryProtection.Redact("Feature:Cave", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
+        var result = HistoryProtection.Redact("Feature:Cave", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
 
         result.Changes!.ContainsKey("Name").ShouldBeTrue();
         result.Changes.ContainsKey("ClosestAddress").ShouldBeFalse();
@@ -52,7 +52,7 @@ public class HistoryProtectionTests
     {
         var changes = Changes(("ClosestAddress", "Str. X", "Str. Y"));
 
-        var result = HistoryProtection.Redact("Feature:Cave", changes, governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
+        var result = HistoryProtection.Redact("Feature:Cave", changes, governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
 
         result.Changes!.ContainsKey("ClosestAddress").ShouldBeTrue();
         result.Redacted.ShouldBeEmpty();
@@ -67,7 +67,7 @@ public class HistoryProtectionTests
             ("Altitude", "100", "200"),
             ("PositionQuality", "Gps", "Estimated"));
 
-        var result = HistoryProtection.Redact("Feature:CaveEntrance", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
+        var result = HistoryProtection.Redact("Feature:CaveEntrance", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
 
         result.Changes!.ContainsKey("Name").ShouldBeTrue();
         result.Redacted.ShouldBe(["Geom", "Altitude", "PositionQuality"], ignoreOrder: true);
@@ -81,7 +81,7 @@ public class HistoryProtectionTests
             ("Geom", null, "MULTILINESTRING ((25 45, 26 46))"),
             ("Name", null, "Survey A"));
 
-        var result = HistoryProtection.Redact("Feature:Centerline", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
+        var result = HistoryProtection.Redact("Feature:Centerline", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
 
         result.Changes.ShouldBeNull();
         result.Redacted.ShouldContain("Geom");
@@ -93,7 +93,7 @@ public class HistoryProtectionTests
     {
         var changes = Changes(("Geom", "POINT (25 45)", "POINT (26 46)"), ("Name", "a", "b"));
 
-        var result = HistoryProtection.Redact("Feature:Generic", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
+        var result = HistoryProtection.Redact("Feature:Generic", changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
 
         result.Changes!.ContainsKey("Name").ShouldBeTrue();
         result.Redacted.ShouldBe(["Geom"]);
@@ -109,7 +109,7 @@ public class HistoryProtectionTests
             ("ToId", null, hidden.ToString()),
             ("Note", null, "spring connection"));
 
-        var result = HistoryProtection.Redact("FeatureLink", changes, governingHidden: false, id => id == hidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
+        var result = HistoryProtection.Redact("FeatureLink", changes, governingHidden: false, id => id == hidden, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
 
         result.Changes!.ContainsKey("ToId").ShouldBeFalse();
         result.Changes.ContainsKey("FromId").ShouldBeTrue(); // that endpoint is not hidden
@@ -122,7 +122,7 @@ public class HistoryProtectionTests
     {
         var changes = Changes(("FromId", null, Guid.NewGuid().ToString()), ("ToId", null, Guid.NewGuid().ToString()));
 
-        var result = HistoryProtection.Redact("FeatureLink", changes, governingHidden: false, _ => false, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
+        var result = HistoryProtection.Redact("FeatureLink", changes, governingHidden: false, _ => false, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
 
         result.Changes!.Count.ShouldBe(2);
         result.Redacted.ShouldBeEmpty();
@@ -150,7 +150,7 @@ public class HistoryProtectionTests
         // Withheld: the event stays — something was attached — while which document it was
         // does not.
         var hidden = HistoryProtection.Redact(
-            "Attachment", Row(), governingHidden: true, NoLinkHidden, associationHidden: true, mayWriteSubject: false, memberHidden: NoMemberHidden);
+            "Attachment", Row(), governingHidden: true, NoLinkHidden, associationHidden: true, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
         hidden.Redacted.Order().ShouldBe(["Caption", "FileId"]);
         hidden.Changes!.ContainsKey("FileId").ShouldBeFalse();
         hidden.Changes.ContainsKey("SortOrder").ShouldBeTrue();
@@ -158,7 +158,7 @@ public class HistoryProtectionTests
         // Disclosed, with the location still protected: the pairing is a name, and naming it
         // is a decision the association rule takes, not this one.
         var shown = HistoryProtection.Redact(
-            "Attachment", Row(), governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
+            "Attachment", Row(), governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
         shown.Redacted.ShouldBeEmpty();
         shown.Changes!.Count.ShouldBe(3);
     }
@@ -182,7 +182,7 @@ public class HistoryProtectionTests
         // timeline can consult neither the reveal setting nor the link's siblings, so it is
         // strictly more restrictive than the live answer, the only direction it may differ in.
         var hidden = HistoryProtection.Redact(
-            "ResLinkMember", Changes(props), governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
+            "ResLinkMember", Changes(props), governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
         hidden.Redacted.Order().ShouldBe(["AddedBy", "Note", "ResLinkId"]);
         hidden.Changes!.ContainsKey("ResLinkId").ShouldBeFalse();
         hidden.Changes.ContainsKey("SortOrder").ShouldBeTrue();
@@ -190,7 +190,7 @@ public class HistoryProtectionTests
 
         // And a caller who may place the feature exactly reads the whole row.
         var shown = HistoryProtection.Redact(
-            "ResLinkMember", Changes(props), governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
+            "ResLinkMember", Changes(props), governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
         shown.Redacted.ShouldBeEmpty();
         shown.Changes!.ContainsKey("ResLinkId").ShouldBeTrue();
         shown.Changes.ContainsKey("Note").ShouldBeTrue();
@@ -213,7 +213,7 @@ public class HistoryProtectionTests
         // from the same caller and a diff would be the way around that.
         var reader = HistoryProtection.Redact(
             nameof(TripLog), Changes(props), governingHidden: false, NoLinkHidden,
-            associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
+            associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
         reader.Redacted.ShouldBe(["Safety"]);
         reader.Changes!.ContainsKey("Safety").ShouldBeFalse();
         reader.Changes.ContainsKey("HadIncident").ShouldBeTrue();
@@ -224,7 +224,7 @@ public class HistoryProtectionTests
         // rule is a rule about the audience and not about the field always being dropped.
         var writer = HistoryProtection.Redact(
             nameof(TripLog), Changes(props), governingHidden: false, NoLinkHidden,
-            associationHidden: false, mayWriteSubject: true, memberHidden: NoMemberHidden);
+            associationHidden: false, mayWriteSubject: true, peopleHidden: false, memberHidden: NoMemberHidden);
         writer.Redacted.ShouldBeEmpty();
         writer.Changes!.ToJsonString().ShouldContain(incident);
     }
@@ -252,7 +252,7 @@ public class HistoryProtectionTests
         // was does not, and the camp it joined is the timeline's own subject.
         var hidden = HistoryProtection.Redact(
             nameof(ExpeditionTrip), Joining(closed), governingHidden: false, NoLinkHidden,
-            associationHidden: false, mayWriteSubject: false, memberHidden: id => id == closed);
+            associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: id => id == closed);
         hidden.Redacted.ShouldBe([nameof(ExpeditionTrip.TripLogId)]);
         hidden.Changes!.ContainsKey(nameof(ExpeditionTrip.TripLogId)).ShouldBeFalse();
         hidden.Changes.ToJsonString().ShouldNotContain(closed.ToString());
@@ -263,7 +263,7 @@ public class HistoryProtectionTests
         // the predicate rather than by the property name.
         var shown = HistoryProtection.Redact(
             nameof(ExpeditionTrip), Joining(open), governingHidden: false, NoLinkHidden,
-            associationHidden: false, mayWriteSubject: false, memberHidden: id => id == closed);
+            associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: id => id == closed);
         shown.Redacted.ShouldBeEmpty();
         shown.Changes!.ToJsonString().ShouldContain(open.ToString());
 
@@ -273,15 +273,76 @@ public class HistoryProtectionTests
             nameof(ExpeditionTrip),
             Changes(("ExpeditionId", campId, null), ("TripLogId", closed.ToString(), null)),
             governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: false,
-            memberHidden: id => id == closed);
+            peopleHidden: false, memberHidden: id => id == closed);
         left.Redacted.ShouldBe([nameof(ExpeditionTrip.TripLogId)]);
         left.Changes?.ToJsonString().ShouldNotContain(closed.ToString());
+    }
+
+    /// <summary>
+    /// The live roster is stricter than the camp that holds it: it answers a caller who may read
+    /// the camp and may read people, and refuses the whole listing to the one who holds only the
+    /// first. A roster row on the camp's timeline is read by everybody who may read the camp, so
+    /// it says exactly what the live route says under the same condition — nothing — otherwise
+    /// the timeline is the way around a refusal the roster route makes on purpose.
+    /// </summary>
+    [Fact]
+    public void Camp_roster_names_a_person_only_to_somebody_who_may_read_people()
+    {
+        var caver = Guid.CreateVersion7();
+        var campId = Guid.CreateVersion7().ToString();
+
+        JsonObject Stay() => Changes(
+            ("ExpeditionId", null, campId),
+            ("CaverId", null, caver.ToString()),
+            ("FromDate", null, "2026-07-18"),
+            ("ToDate", null, "2026-07-25"));
+
+        // Withheld: the whole stay goes, not only the name on it. The live route refuses the
+        // listing outright and says why — rows with the names struck out would still say how many
+        // people were there and when — so keeping the dates here would be the softer answer the
+        // route deliberately does not give. The event that a stay was recorded remains.
+        var hidden = HistoryProtection.Redact(
+            nameof(ExpeditionRosterEntry), Stay(), governingHidden: false, NoLinkHidden,
+            associationHidden: false, mayWriteSubject: false, peopleHidden: true, memberHidden: NoMemberHidden);
+        hidden.Changes.ShouldBeNull();
+        hidden.Redacted.ShouldBe(
+            ["ExpeditionId", nameof(ExpeditionRosterEntry.CaverId), "FromDate", "ToDate"],
+            ignoreOrder: true);
+
+        // A per-person note is free text on the row beside the name, so it is the property that
+        // most often gives back the identity the redaction removed. It goes with the rest.
+        var noteOnly = HistoryProtection.Redact(
+            nameof(ExpeditionRosterEntry),
+            Changes(("Note", "half days only", "drove the van")),
+            governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: false,
+            peopleHidden: true, memberHidden: NoMemberHidden);
+        noteOnly.Changes.ShouldBeNull();
+        noteOnly.Redacted.ShouldBe(["Note"]);
+
+        // And a caller who may read people is told everything, which is what proves the removal
+        // is driven by the right rather than by the entity type.
+        var shown = HistoryProtection.Redact(
+            nameof(ExpeditionRosterEntry), Stay(), governingHidden: false, NoLinkHidden,
+            associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
+        shown.Redacted.ShouldBeEmpty();
+        shown.Changes!.ToJsonString().ShouldContain(caver.ToString());
+        shown.Changes.ContainsKey("FromDate").ShouldBeTrue();
+
+        // Somebody removed from the roster discloses exactly as much as somebody added, so the
+        // departure row is read on the same side of the diff.
+        var removed = HistoryProtection.Redact(
+            nameof(ExpeditionRosterEntry),
+            Changes(("ExpeditionId", campId, null), ("CaverId", caver.ToString(), null)),
+            governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: false,
+            peopleHidden: true, memberHidden: NoMemberHidden);
+        removed.Changes.ShouldBeNull();
+        removed.Redacted.ShouldContain(nameof(ExpeditionRosterEntry.CaverId));
     }
 
     [Fact]
     public void Null_changes_pass_through()
     {
-        var result = HistoryProtection.Redact("Feature:Cave", null, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, memberHidden: NoMemberHidden);
+        var result = HistoryProtection.Redact("Feature:Cave", null, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
 
         result.Changes.ShouldBeNull();
         result.Redacted.ShouldBeEmpty();

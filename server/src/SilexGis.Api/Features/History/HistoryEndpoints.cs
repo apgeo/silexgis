@@ -139,15 +139,18 @@ public static class HistoryEndpoints
         // carry a part told to a narrower audience than the row itself.
         var mayWriteSubject = await MayWriteSubjectAsync(db, access, ctx, entityType, entityId, ct);
 
-        // A camp's membership rows name the trip that joined or left, and a camp reaches a wider
-        // audience than the trips gathered into it. Which of those the caller may read is resolved
-        // once for the page, by the same walk the camp's trip listing and its roll-up use, so the
-        // timeline cannot become the one surface that hands over a member the others withhold.
+        // A camp's child rows name things governed apart from the camp — the trip a membership row
+        // joined, the person a roster row records — and a camp reaches a wider audience than
+        // either. Which of them this caller may read is resolved once for the page, by the same
+        // questions the camp's own listings ask, so the timeline cannot become the one surface
+        // that hands over what the others withhold. The two are asked differently because they
+        // are governed differently: a trip is protected in its own right, so the readable ones
+        // are picked out by the visibility walk the camp's trip listing uses, while reading
+        // people is a right held across the board or not at all — one answer for the page, the
+        // same one the live roster demands before it will name anybody.
         var readableMembers = await ReadableMemberTripIdsAsync(
-            db,
-            ctx,
-            parsed.Where(x => x.Row.EntityType == nameof(ExpeditionTrip)).Select(x => x.Changes),
-            ct);
+            db, ctx, parsed.Select(x => (x.Row.EntityType, x.Changes)), ct);
+        var peopleHidden = !AccessEvaluator.Decide(ctx, AccessDomain.Cavers, AccessAction.Read, null).Allowed;
 
         var items = parsed.Select(r =>
         {
@@ -160,7 +163,7 @@ public static class HistoryEndpoints
                     revealAssociations);
             var (changes, redacted) = HistoryProtection.Redact(
                 r.Row.EntityType!, r.Changes, governingHidden, hidden.Contains, associationHidden,
-                mayWriteSubject, id => !readableMembers.Contains(id));
+                mayWriteSubject, peopleHidden, id => !readableMembers.Contains(id));
             return new HistoryEventDto(
                 r.Row.Id, r.Row.At, r.Row.UserId, r.UserName, r.Row.Action,
                 r.Row.EntityType!, r.Row.EntityId!,
@@ -195,27 +198,34 @@ public static class HistoryEndpoints
     }
 
     /// <summary>
-    /// Of the trips named by the membership rows on this page, the ones this caller may read.
+    /// Of the trips this page's camp-membership rows name, the ones this caller may read.
     /// </summary>
     /// <remarks>
-    /// Asked as one question for the page rather than one per row, and only about the ids the
-    /// membership rows actually name — a timeline holding none of them asks nothing.
+    /// Asked once for the whole page rather than once per row, and only about the ids those rows
+    /// actually name — a timeline holding none of them asks nothing. A trip is protected in its
+    /// own right, so the answer comes from the same visibility walk the camp's trip listing uses.
     /// </remarks>
     private static async Task<HashSet<Guid>> ReadableMemberTripIdsAsync(
-        SilexGisDbContext db, AccessContext ctx, IEnumerable<JsonObject?> membershipChanges, CancellationToken ct)
+        SilexGisDbContext db,
+        AccessContext ctx,
+        IEnumerable<(string? EntityType, JsonObject? Changes)> rows,
+        CancellationToken ct)
     {
-        var named = new HashSet<Guid>();
-        foreach (var change in membershipChanges)
+        var trips = new HashSet<Guid>();
+        foreach (var (entityType, changes) in rows)
         {
-            CollectReferencedIds(change, nameof(ExpeditionTrip.TripLogId), named);
+            if (entityType == nameof(ExpeditionTrip))
+            {
+                CollectReferencedIds(changes, nameof(ExpeditionTrip.TripLogId), trips);
+            }
         }
 
-        if (named.Count == 0)
+        if (trips.Count == 0)
         {
             return [];
         }
 
-        var ids = named.ToList();
+        var ids = trips.ToList();
         return [.. await db.TripLogs.AsNoTracking()
             .VisibleTo(ctx, AccessDomain.TripLogs)
             .Where(t => ids.Contains(t.Id))

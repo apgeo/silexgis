@@ -6,8 +6,8 @@ namespace SilexGis.Domain.Entities;
 /// taggings, ACL rows and resource-link members. Physical features are addressed by the
 /// real `feature_id` FK instead and have no member here. The enum is the shared
 /// vocabulary; which values a given consumer actually accepts is that consumer's own
-/// validity rule (attachments and taggings accept none of the values from
-/// <see cref="Document"/> up — those exist for resource links). Stored as smallint;
+/// validity rule — attachments and taggings take a narrow set of it, resource links a
+/// wider one, and neither may widen the other by accident. Stored as smallint;
 /// values are a schema contract — append only, never renumber (0–2 were the feature
 /// kinds, retired with the supertype).
 /// </summary>
@@ -35,6 +35,9 @@ public enum AttachedEntityType : short
 
     /// <summary>A named, ordered set of photographs.</summary>
     Album = 14,
+
+    /// <summary>A camp: the one thing a fortnight of trips is gathered into.</summary>
+    Expedition = 15,
 }
 
 /// <summary>Maps non-feature protected entity instances to their polymorphic discriminator.</summary>
@@ -46,6 +49,7 @@ public static class ProtectedEntityTypes
         TripLog => AttachedEntityType.TripLog,
         GeoreferencedMap => AttachedEntityType.GeoreferencedMap,
         MapView => AttachedEntityType.MapView,
+        Expedition => AttachedEntityType.Expedition,
         _ => throw new ArgumentException($"No entity-type mapping for {entity.GetType().Name}.", nameof(entity)),
     };
 }
@@ -72,6 +76,7 @@ public static class AttachedEntityTypes
         AttachedEntityType.Cabinet => nameof(AttachedEntityType.Cabinet),
         AttachedEntityType.Comment => nameof(AttachedEntityType.Comment),
         AttachedEntityType.Album => nameof(AttachedEntityType.Album),
+        AttachedEntityType.Expedition => nameof(AttachedEntityType.Expedition),
         _ => type.ToString(),
     };
 }

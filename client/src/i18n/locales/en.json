@@ -957,7 +957,10 @@
       "SurveyModel": "Survey model",
       "Attachment": "Attachment",
       "Tagging": "Tag",
-      "TripLogParticipant": "Participant"
+      "TripLogParticipant": "Participant",
+      "Expedition": "Expedition",
+      "ExpeditionTrip": "Expedition trip",
+      "ExpeditionRosterEntry": "Roster entry"
     },
     "field": {
       "name": "Name",
@@ -1841,6 +1844,7 @@
       "surveyModel": "3D survey model",
       "geofile": "Geodata file",
       "cabinet": "Cabinet",
+      "expedition": "Expedition",
       "unknown": "Item"
     },
     "anchors": {

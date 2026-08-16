@@ -80,7 +80,7 @@ public static class ObjectAccessEndpoints
 
     private const string TargetVocabulary =
         "entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', " +
-        "'georeferencedMap', 'mapView' (case-insensitive).";
+        "'georeferencedMap', 'mapView', 'expedition' (case-insensitive).";
 
     public const string NotFoundCode = "access.entity_not_found";
 
@@ -359,6 +359,7 @@ public static class ObjectAccessEndpoints
         Geofile geofile => geofile.Name,
         GeoreferencedMap map => map.Name,
         MapView view => view.Name,
+        Expedition expedition => expedition.Name,
         _ => string.Empty,
     };
 
@@ -368,6 +369,8 @@ public static class ObjectAccessEndpoints
         AttachedEntityType.TripLog => $"/trip-logs/{target.Entity.Id}",
         AttachedEntityType.Geofile or AttachedEntityType.GeoreferencedMap => "/geodata",
         AttachedEntityType.MapView => "/map",
+        // A camp has no page in the client yet, so a notification about one leads to the home
+        // page rather than to a URL that renders the router's error screen.
         _ => "/",
     };
 
@@ -396,6 +399,8 @@ public static class ObjectAccessEndpoints
             AttachedEntityType.GeoreferencedMap =>
                 await db.GeoreferencedMaps.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
             AttachedEntityType.MapView => await db.MapViews.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
+            AttachedEntityType.Expedition =>
+                await db.Expeditions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
             _ => null,
         };
 
@@ -429,6 +434,9 @@ public static class ObjectAccessEndpoints
                 return true;
             case "mapview":
                 type = AttachedEntityType.MapView;
+                return true;
+            case "expedition":
+                type = AttachedEntityType.Expedition;
                 return true;
             default:
                 type = null;

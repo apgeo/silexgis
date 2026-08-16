@@ -96,15 +96,17 @@ public static class ResLinkRules
     /// cref="AttachedEntityType.StoredFile"/> never joins — parts of a document are
     /// addressed by anchor on the document, never by file id, because file ids change
     /// with every version — <see cref="AttachedEntityType.GeoreferencedMap"/> has no
-    /// resolver yet, and <see cref="AttachedEntityType.Comment"/> is reserved for an
-    /// entity that does not exist yet.
+    /// resolver yet, <see cref="AttachedEntityType.Comment"/> is reserved for an
+    /// entity that does not exist yet, and <see cref="AttachedEntityType.Album"/> is an
+    /// arrangement of photographs whose members are what a relation would be about.
     /// </summary>
     public static bool IsLinkableType(AttachedEntityType type) => type switch
     {
         AttachedEntityType.TripLog or AttachedEntityType.CavingGroup
             or AttachedEntityType.Geofile or AttachedEntityType.MapView
             or AttachedEntityType.Document or AttachedEntityType.SurveyModel
-            or AttachedEntityType.Caver or AttachedEntityType.Cabinet => true,
+            or AttachedEntityType.Caver or AttachedEntityType.Cabinet
+            or AttachedEntityType.Expedition => true,
         _ => false,
     };
 

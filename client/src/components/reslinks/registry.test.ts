@@ -92,6 +92,7 @@ describe('member type registry', () => {
 
   it('leaves a chip un-navigable when neither side has a page for it', () => {
     expect(memberRoute('cabinet', 'c1', null)).toBeNull();
+    expect(memberRoute('expedition', 'e1', null)).toBeNull();
     expect(
       memberRoute('caver', 'p1', { title: 'Someone', subtitle: null, route: null, thumbnailUrl: null }),
     ).toBeNull();
@@ -256,7 +257,15 @@ describe('relation phrasing', () => {
     ]);
     expect(admittedAnchorKinds('geofile')).toEqual(['whole', 'waypoint', 'waypointRange']);
     // Types with no parts, and a type this client has never heard of, all link whole.
-    for (const type of ['tripLog', 'caver', 'cavingGroup', 'mapView', 'cabinet', 'somethingNew']) {
+    for (const type of [
+      'tripLog',
+      'caver',
+      'cavingGroup',
+      'mapView',
+      'cabinet',
+      'expedition',
+      'somethingNew',
+    ]) {
       expect(admittedAnchorKinds(type), type).toEqual(['whole']);
     }
     for (const type of RESLINK_TARGET_TYPES) {

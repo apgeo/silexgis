@@ -1148,7 +1148,13 @@ export type AttachmentInfo = components['schemas']['AttachmentDto'];
  * cave, entrance or centerline — is addressed as 'feature' with its feature id. The wire
  * type is a plain string; this union is the documented set of accepted values.
  */
-export type EntityType = 'feature' | 'tripLog' | 'geofile' | 'georeferencedMap' | 'mapView';
+export type EntityType =
+  | 'feature'
+  | 'tripLog'
+  | 'geofile'
+  | 'georeferencedMap'
+  | 'mapView'
+  | 'expedition';
 // Stored files additionally carry taggings (never attachments or grants) — the tag
 // endpoints accept the extra target; the server rejects it everywhere else.
 export type AttachedEntityType = EntityType | 'storedFile';

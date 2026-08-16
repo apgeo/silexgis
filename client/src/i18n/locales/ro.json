@@ -957,7 +957,10 @@
       "SurveyModel": "Model topografic",
       "Attachment": "Atașament",
       "Tagging": "Etichetă",
-      "TripLogParticipant": "Participant"
+      "TripLogParticipant": "Participant",
+      "Expedition": "Expediție",
+      "ExpeditionTrip": "Tură din expediție",
+      "ExpeditionRosterEntry": "Participant la expediție"
     },
     "field": {
       "name": "Nume",
@@ -1841,6 +1844,7 @@
       "surveyModel": "Model topo 3D",
       "geofile": "Fișier de geodate",
       "cabinet": "Dulap",
+      "expedition": "Expediție",
       "unknown": "Element"
     },
     "anchors": {

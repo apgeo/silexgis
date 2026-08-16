@@ -158,6 +158,10 @@ public static class FileAccessRules
             db.MapViews.AsNoTracking().VisibleTo(ctx, AccessDomain.MapViews).Select(v => v.Id),
             EntityIdsOf(links, AttachedEntityType.MapView),
             ct);
+        var readableExpeditionIds = await ReadableIdsAsync(
+            db.Expeditions.AsNoTracking().VisibleTo(ctx, AccessDomain.Expeditions).Select(e => e.Id),
+            EntityIdsOf(links, AttachedEntityType.Expedition),
+            ct);
 
         // Repeated until nothing new turns up, because one file becoming readable can be the
         // reason another one is, and the two can appear in either order. The set only grows
@@ -184,6 +188,7 @@ public static class FileAccessRules
                         AttachedEntityType.Geofile => readableGeofileIds.Contains(l.EntityId!.Value),
                         AttachedEntityType.GeoreferencedMap => readableMapIds.Contains(l.EntityId!.Value),
                         AttachedEntityType.MapView => readableViewIds.Contains(l.EntityId!.Value),
+                        AttachedEntityType.Expedition => readableExpeditionIds.Contains(l.EntityId!.Value),
                         AttachedEntityType.StoredFile => readable.Contains(l.EntityId!.Value),
                         _ => false,
                     });
@@ -304,6 +309,9 @@ public static class FileAccessRules
             case AttachedEntityType.MapView:
                 return await CanEntityAsync(db, access, ctx, db.MapViews, entityId, AccessAction.Read, ct);
 
+            case AttachedEntityType.Expedition:
+                return await CanEntityAsync(db, access, ctx, db.Expeditions, entityId, AccessAction.Read, ct);
+
             case AttachedEntityType.StoredFile:
                 // A file (as a tag target) inherits the access of the objects it is
                 // attached to — the same rule the file endpoints use.
@@ -336,6 +344,9 @@ public static class FileAccessRules
 
             case AttachedEntityType.MapView:
                 return await CanEntityAsync(db, access, ctx, db.MapViews, entityId, AccessAction.Write, ct);
+
+            case AttachedEntityType.Expedition:
+                return await CanEntityAsync(db, access, ctx, db.Expeditions, entityId, AccessAction.Write, ct);
 
             case AttachedEntityType.StoredFile:
                 // Writing a file's tags is governed by the file-write rule, evaluated against

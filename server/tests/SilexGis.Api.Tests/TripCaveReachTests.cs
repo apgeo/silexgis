@@ -127,6 +127,71 @@ public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>
+    /// The same reach, one level up. A camp gathers a named set of trips, and a photograph filed
+    /// under the camp rather than under one of them was taken on those same journeys — which of
+    /// the two places the uploader chose says nothing about where the camera was. So the caves the
+    /// camp's member trips name have to place it exactly as they place a picture on the trip
+    /// itself. They are separate reaches in the code: a camp is visible in its own right, quite
+    /// apart from the trips in it, so a camp readable by a wider audience than its trips is the
+    /// short way round the trip rule if the camp is not followed through to them.
+    ///
+    /// Both directions over one fixture again: the camp holding only the open trip serves the
+    /// bytes, and the same camp with the guarded trip added does not, so the refusal is the caves
+    /// speaking rather than a build that had stopped placing camp photographs at all.
+    /// </summary>
+    [Fact]
+    public async Task A_photo_filed_under_a_camp_is_placed_by_the_caves_its_trips_name()
+    {
+        var openCaveId = await CreateCaveAsync(locationProtected: false);
+        var guardedCaveId = await CreateCaveAsync(locationProtected: true);
+        var openTripId = await CreateTripAsync("Camp open leg", openCaveId);
+        var guardedTripId = await CreateTripAsync("Camp guarded leg", guardedCaveId);
+
+        var campId = await CreateCampAsync("Summer camp");
+        await AddTripToCampAsync(campId, openTripId);
+
+        var photoId = await UploadAsync("camp.jpg", GeotaggedJpeg(45.41, 25.41));
+        await AttachToCampAsync(photoId, campId);
+
+        // Fixture proof: the upload really did read a capture point out of the image, and the
+        // camp really does reach this caller, so the refusal below is neither an empty file nor
+        // a file nobody can get to.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.StoredFiles.AsNoTracking().SingleAsync(f => f.Id == photoId)).Geom
+                .ShouldNotBeNull();
+        }
+
+        // Only the open trip is in the camp: nothing is being kept back, so the original is
+        // served. This is the half that would still pass on a build that never followed the camp
+        // to its trips, which is why the guarded leg comes next over the same file.
+        var before = await ReadJsonAsync(await reader.GetAsync($"/api/v1/files/{photoId}"));
+        before.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeTrue();
+        before.GetProperty("position").ValueKind.ShouldNotBe(JsonValueKind.Null);
+        (await reader.GetAsync(before.GetProperty("contentUrl").GetString()))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await AddTripToCampAsync(campId, guardedTripId);
+
+        // The capture point itself, not only the bytes: the fix the camera wrote is the thing the
+        // guarded cave's position rule exists to keep, and it travels in the payload beside the
+        // delivery token rather than inside the file.
+        var after = await ReadJsonAsync(await reader.GetAsync($"/api/v1/files/{photoId}"));
+        after.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeFalse();
+        after.GetProperty("position").ValueKind.ShouldBe(JsonValueKind.Null);
+        (await reader.GetAsync(after.GetProperty("contentUrl").GetString()))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // And the owner, who may place the guarded cave exactly, is served the original over the
+        // same camp — the bytes are withheld from this caller, not from everybody.
+        var held = await ReadJsonAsync(await owner.GetAsync($"/api/v1/files/{photoId}"));
+        held.GetProperty("mayDownloadOriginal").GetBoolean().ShouldBeTrue();
+        (await owner.GetAsync(held.GetProperty("contentUrl").GetString()))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
     /// A trip naming two caves, one guarded and one open, is the case where a reach that was
     /// narrowed rather than lost still passes every single-cave test. The strictest of the
     /// caves a trip names has to win, or filing the photograph under a trip that also went
@@ -489,18 +554,49 @@ public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    private async Task AttachToTripAsync(Guid fileId, Guid tripId)
+    private async Task AttachToTripAsync(Guid fileId, Guid tripId) =>
+        await AttachAsync(fileId, "tripLog", tripId);
+
+    private async Task AttachToCampAsync(Guid fileId, Guid campId) =>
+        await AttachAsync(fileId, "expedition", campId);
+
+    private async Task AttachAsync(Guid fileId, string entityType, Guid entityId)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/attachments/", new
         {
             fileId,
-            entityType = "tripLog",
-            entityId = tripId,
+            entityType,
+            entityId,
             role = "other",
             sortOrder = 0,
         });
         response.StatusCode.ShouldBe(
             HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+    }
+
+    private async Task<Guid> CreateCampAsync(string name)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/expeditions/", new
+        {
+            name = $"{name} {Guid.NewGuid():N}"[..30],
+            description = (string?)null,
+            startDate = "2026-07-01",
+            endDate = (string?)null,
+            geom = (object?)null,
+            cavingGroupId = (Guid?)null,
+            visibility = "authenticated",
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    private async Task AddTripToCampAsync(Guid campId, Guid tripId)
+    {
+        var response = await owner.PostAsJsonAsync(
+            $"/api/v1/expeditions/{campId}/trips", new { tripLogId = tripId });
+        response.StatusCode.ShouldBe(
+            HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
     private static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage response)
