@@ -221,6 +221,29 @@ public static class TerrainBuildEndpoints
     public const string RasterSizeInvalidCode = "terrain_build.raster_size_invalid";
 
     /// <summary>
+    /// The build has produced no pyramid that anything could draw, so it cannot become the terrain.
+    /// </summary>
+    /// <remarks>
+    /// Two things have to be true and neither implies the other: the build must carry the version
+    /// stamped on its manifest when its tiles were read back and found whole — which is the only
+    /// mark saying anything was ever checked — and the pyramid must actually be at the address it
+    /// would be served from. A build whose status says it succeeded and whose bytes somebody has
+    /// since removed would otherwise become the terrain and draw nothing, with no error anywhere.
+    /// </remarks>
+    public const string NotPublishedCode = "terrain_build.not_published";
+
+    /// <summary>The build is the terrain the scene draws, and so cannot be deleted.</summary>
+    /// <remarks>
+    /// A refusal rather than a quiet deactivation. Removing the ground everyone is looking at is a
+    /// separate decision from removing a build nobody is using, and it should be taken deliberately
+    /// and be visible in the trail as two acts.
+    /// </remarks>
+    public const string ActiveCode = "terrain_build.active";
+
+    /// <summary>The build is waiting to run or running, so its files are not anybody's to remove.</summary>
+    public const string RunningCode = "terrain_build.running";
+
+    /// <summary>
     /// The largest single raster that may be sent through the browser.
     /// </summary>
     /// <remarks>
@@ -252,6 +275,15 @@ public static class TerrainBuildEndpoints
         api.MapGet("/terrain/source-directories", SourceDirectoriesAsync)
             .WithTags("Terrain")
             .WithSummary("Directories on the server this installation may read rasters from; requires Execute on the Terrain domain.");
+        api.MapPost("/terrain/builds/{id:guid}/active", ActivateAsync)
+            .WithTags("Terrain")
+            .WithSummary("Makes this build the terrain the 3D scene draws; requires Execute on the Terrain domain.");
+        api.MapDelete("/terrain/builds/{id:guid}/active", DeactivateAsync)
+            .WithTags("Terrain")
+            .WithSummary("Stops drawing this build's terrain, leaving the scene on bare ground; requires Execute on the Terrain domain.");
+        api.MapDelete("/terrain/builds/{id:guid}", DeleteAsync)
+            .WithTags("Terrain")
+            .WithSummary("Removes a build and everything it left on disk; requires Delete on the Terrain domain.");
         return api;
     }
 
@@ -573,6 +605,205 @@ public static class TerrainBuildEndpoints
         }
 
         return TypedResults.Ok(new TerrainSourceDirectoriesDto(serverDirectories.Roots()));
+    }
+
+    /// <summary>
+    /// Makes this build the terrain the scene draws.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two writes inside one transaction, because at most one build may carry the mark and the
+    /// database holds that rule itself. Whatever held it has to let go in a write of its own before
+    /// this row can take it: presented with both changes at once the database sees two rows claiming
+    /// the mark at the same instant and refuses the pair. One transaction, so an interruption
+    /// between the two cannot leave an installation drawing nothing.
+    /// </para>
+    /// <para>
+    /// Serialised by a lock taken first, because this is a read followed by a write and the case it
+    /// has to survive — two people choosing terrain in the same moment — is exactly the pair that
+    /// slips between them.
+    /// </para>
+    /// <para>
+    /// Tracked and saved rather than updated in place, deliberately: choosing what everyone sees is
+    /// one of the few acts on a build a person actually takes, and the trail only records saves it
+    /// is given to see.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<TerrainBuildDto>, UnauthorizedHttpResult, ProblemHttpResult>> ActivateAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        TerrainWorkspace workspace,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        // The same right that starts a build. Choosing which finished one everybody sees is the
+        // other half of the same job, and there is nothing else on a build to hold a right over.
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Terrain, AccessAction.Execute, null).Allowed)
+        {
+            return ApiProblems.Forbidden(ForbiddenCode);
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await TerrainBuildSql.TakeActivationLockAsync(db, ct);
+
+        var build = await db.TerrainBuilds.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (build is null)
+        {
+            return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        if (string.IsNullOrWhiteSpace(build.PyramidVersion) || !workspace.HasPublishedPyramid(build.Id))
+        {
+            return ApiProblems.Conflict(
+                NotPublishedCode,
+                "This build has no pyramid to draw. Either its tiles were never read back and "
+                + "found whole, or what it produced is no longer where terrain is served from — "
+                + "and terrain that is not there is drawn as smooth bare ground with nothing "
+                + "anywhere saying so.");
+        }
+
+        var held = await db.TerrainBuilds.Where(x => x.IsActive && x.Id != id).ToListAsync(ct);
+        foreach (var other in held)
+        {
+            other.IsActive = false;
+        }
+
+        build.IsActive = false;
+        await db.SaveChangesAsync(ct);
+
+        build.IsActive = true;
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+
+        return TypedResults.Ok(ToDto(build));
+    }
+
+    /// <summary>
+    /// Stops drawing this build, leaving the scene on bare ground until something else is chosen.
+    /// </summary>
+    /// <remarks>
+    /// One write, and no lock: letting the mark go can only ever end with fewer rows holding it, so
+    /// there is no pair of requests whose interleaving produces a state the database would refuse.
+    /// A build that is not the current one is answered with itself rather than with a refusal —
+    /// what was asked for is already true.
+    /// </remarks>
+    private static async Task<Results<Ok<TerrainBuildDto>, UnauthorizedHttpResult, ProblemHttpResult>> DeactivateAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Terrain, AccessAction.Execute, null).Allowed)
+        {
+            return ApiProblems.Forbidden(ForbiddenCode);
+        }
+
+        var build = await db.TerrainBuilds.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (build is null)
+        {
+            return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        if (build.IsActive)
+        {
+            build.IsActive = false;
+            await db.SaveChangesAsync(ct);
+        }
+
+        return TypedResults.Ok(ToDto(build));
+    }
+
+    /// <summary>
+    /// Removes a build and everything it left on disk.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The rows go first and the bytes afterwards, which is the order everything here that owns
+    /// files uses: once nothing can reach a file, a file that will not delete is litter rather than
+    /// a fault, and reporting a failure to whoever pressed delete would be reporting it about work
+    /// that has already been done. The rasters the build was made from go with it, by the database's
+    /// own rule about rows that belong to a parent.
+    /// </para>
+    /// <para>
+    /// Nothing running is deleted, because its files are being written while this asks for them, and
+    /// nothing current is deleted, because that would take the ground out from under everyone
+    /// looking at the scene without anybody having said to.
+    /// </para>
+    /// <para>
+    /// That second refusal is a read followed by a write, so it takes the same lock choosing
+    /// terrain does and holds it, in one transaction, across the removal. Without it one
+    /// administrator's delete can read a build as not being drawn in the moment before another's
+    /// activation makes it the one that is, and then take the row and the pyramid out from under
+    /// the scene — which is exactly the state the refusal exists to prevent, arrived at with
+    /// nothing anywhere recording that a refusal was due. The bytes are swept after the transaction
+    /// commits, because a rollback must not find them already gone.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        TerrainWorkspace workspace,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Terrain, AccessAction.Delete, null).Allowed)
+        {
+            return ApiProblems.Forbidden(ForbiddenCode);
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await TerrainBuildSql.TakeActivationLockAsync(db, ct);
+
+        var build = await db.TerrainBuilds.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (build is null)
+        {
+            return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        if (build.IsActive)
+        {
+            return ApiProblems.Conflict(
+                ActiveCode,
+                "This build is the terrain the scene is drawing. Choose other terrain, or stop "
+                + "drawing this one, before removing it.");
+        }
+
+        if (build.Status is TerrainBuildStatus.Queued or TerrainBuildStatus.Running)
+        {
+            return ApiProblems.Conflict(
+                RunningCode,
+                "This build has not finished. Its files are being written while this is being "
+                + "asked, so it can be removed once it has stopped, whichever way it stops.");
+        }
+
+        db.TerrainBuilds.Remove(build);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+
+        // Nothing can reach these bytes any more, so the sweep is not the caller's to wait on being
+        // cancelled: a request abandoned halfway through would leave gigabytes behind that no row
+        // names and nothing will ever come back for.
+        workspace.Remove(id);
+
+        return TypedResults.NoContent();
     }
 
     /// <summary>

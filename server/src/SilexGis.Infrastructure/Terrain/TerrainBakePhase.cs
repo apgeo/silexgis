@@ -386,13 +386,14 @@ public sealed class TerrainBakePhase(
     /// and found good.
     /// </summary>
     /// <remarks>
-    /// Two separate things rest on it happening here and nowhere else. Nothing else ever deletes a
-    /// spool directory — it deliberately sits outside the build's own folder, so deleting a build
-    /// does not reach it — and each one holds the whole of the tool's log, so keeping them all
-    /// would pile up without limit on the same volume the pyramids compete for. And its absence is
-    /// a statement: a finished pyramid with no spool beside it is one whose log some run of this
-    /// step read. A bake that ended badly keeps everything, because that is when its account is
-    /// wanted most, and the next attempt replaces the directory rather than reading it.
+    /// Two separate things rest on it happening here. Each spool directory holds the whole of the
+    /// tool's log, so keeping them all would pile up without limit on the same volume the pyramids
+    /// compete for. And its absence is a statement: a finished pyramid with no spool beside it is
+    /// one whose log some run of this step read. That reading holds only while the build's row
+    /// exists — deleting a build takes its spool directory away along with everything else it left
+    /// on disk, so a bake's log does not outlive the build it belongs to. A bake that ended badly
+    /// keeps everything, because that is when its account is wanted most, and the next attempt
+    /// replaces the directory rather than reading it.
     /// </remarks>
     private static void Forget(string spool)
     {

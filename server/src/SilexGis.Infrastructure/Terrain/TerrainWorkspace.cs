@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SilexGis.Domain.Terrain;
 
 namespace SilexGis.Infrastructure.Terrain;
 
@@ -22,6 +24,20 @@ public sealed class TerrainBuildOptions
     /// disk chosen for size rather than on the one holding everything a person uploaded.
     /// </remarks>
     public string BuildRoot { get; set; } = Path.Combine("data", "terrain", "builds");
+
+    /// <summary>
+    /// The directory a finished, checked pyramid is moved into to be served from.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not inside a build's own folder, and this is a security boundary rather than a
+    /// matter of tidiness. A build keeps the rasters it was given and the intermediates it made of
+    /// them beside its tiles, and whatever serves the tiles is pointed at a directory and serves
+    /// everything under it to anyone who can reach the site, with no account and no request ever
+    /// reaching this application. A rule aimed one directory too high would therefore publish an
+    /// operator's own source data. Only pyramids are ever moved here, so only pyramids can be
+    /// served.
+    /// </remarks>
+    public string PublishRoot { get; set; } = Path.Combine("data", "terrain", "published");
 
     /// <summary>
     /// How long one cell of elevation may take to arrive before the attempt is abandoned.
@@ -114,16 +130,213 @@ public sealed record TerrainBuildDirectories(
 /// <summary>
 /// Hands a build the directories it works in, and creates them.
 /// </summary>
-public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options)
+public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILogger<TerrainWorkspace> logger)
 {
+    /// <summary>What a pyramid being moved into place is called until it is in place.</summary>
+    private const string StagingSuffix = ".partial";
+
+    /// <summary>What the pyramid being replaced is called while it is being taken away.</summary>
+    private const string DisplacedSuffix = ".replaced";
+
+    /// <summary>What a build's own pyramid directory is called inside its folder.</summary>
+    private const string TilesDirectoryName = "tiles";
+
     private readonly string root = Path.GetFullPath(options.Value.BuildRoot, AppContext.BaseDirectory);
     private readonly string spool = Path.GetFullPath(options.Value.SpoolRoot, AppContext.BaseDirectory);
+    private readonly string published = Path.GetFullPath(options.Value.PublishRoot, AppContext.BaseDirectory);
 
     /// <summary>The root every build's folder sits under.</summary>
     public string Root => root;
 
     /// <summary>The directory this application and the tile-maker leave files for each other in.</summary>
     public string SpoolRoot => spool;
+
+    /// <summary>The one directory whatever serves terrain is pointed at.</summary>
+    public string PublishRoot => published;
+
+    /// <summary>Everything one build owns, whether or not any of it has been created yet.</summary>
+    /// <remarks>
+    /// Separate from <see cref="For"/> because that one creates what it names, which is right for a
+    /// step about to write and exactly wrong for anything asking where a build's files were so it
+    /// can remove them — asking would put them back.
+    /// </remarks>
+    public string RootFor(Guid buildId) => Path.Combine(root, TerrainPyramid.PublishedName(buildId));
+
+    /// <summary>
+    /// Where this build's pyramid is served from once it has one, named the same as the address a
+    /// viewer asks for it at.
+    /// </summary>
+    public string PublishedFor(Guid buildId) =>
+        Path.Combine(published, TerrainPyramid.PublishedName(buildId));
+
+    /// <summary>
+    /// Where a pyramid on its way to the served address waits until it is in place.
+    /// </summary>
+    /// <remarks>
+    /// Beside its destination rather than anywhere else, so that the last act of publishing is
+    /// always a rename within one directory — which is the only move that cannot fail halfway on
+    /// any file system, and the only one that stays atomic when an operator has put the served
+    /// directory on a disk of its own. Named here rather than inside the step that does the moving,
+    /// because these are directories on the served volume that outlive an interrupted run and
+    /// something has to be able to find them again to take them away.
+    /// </remarks>
+    public string StagingFor(Guid buildId) => PublishedFor(buildId) + StagingSuffix;
+
+    /// <summary>Where the pyramid being replaced waits while it is being taken away.</summary>
+    public string ReplacedFor(Guid buildId) => PublishedFor(buildId) + DisplacedSuffix;
+
+    /// <summary>This build's pyramid inside its own folder, whether or not it has been made yet.</summary>
+    public string TilesFor(Guid buildId) => Path.Combine(RootFor(buildId), TilesDirectoryName);
+
+    /// <summary>Whether this build's pyramid is where terrain is served from, asked of the disk.</summary>
+    /// <remarks>
+    /// The manifest rather than the directory, and this is the one place that question is answered:
+    /// a directory can exist because a move was interrupted part way, and treating that as published
+    /// is how a build reports success over a pyramid nothing can read.
+    /// </remarks>
+    public bool HasPublishedPyramid(Guid buildId) => HasManifest(PublishedFor(buildId));
+
+    /// <summary>
+    /// Takes everything a build left on disk away: the published pyramid first, then the build's
+    /// own folder, then whatever it left in the handover directory.
+    /// </summary>
+    /// <remarks>
+    /// The published pyramid goes first so that the address stops answering before the rest is
+    /// pulled out from under it, and every step is best-effort: the row is already gone by the time
+    /// this runs, so nothing can reach any of these files any more and a file some other process
+    /// still holds open is litter rather than a failure to report to whoever pressed delete.
+    /// <para>
+    /// The half-finished siblings of the published directory go too. A publication interrupted
+    /// between its two renames leaves a whole pyramid beside the address it was going to, under a
+    /// name no row mentions — so a build deleted rather than retried would otherwise leave a
+    /// pyramid's worth of bytes that nothing will ever name, on the volume disk is tightest on, and
+    /// reachable at an address whatever serves the published root answers.
+    /// </para>
+    /// </remarks>
+    public void Remove(Guid buildId)
+    {
+        Discard(PublishedFor(buildId));
+        Discard(StagingFor(buildId));
+        Discard(ReplacedFor(buildId));
+        Discard(RootFor(buildId));
+        Discard(SpoolFor(buildId));
+    }
+
+    /// <summary>
+    /// Puts back a pyramid that publishing was interrupted in the middle of moving out of the
+    /// build's own folder.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Publishing moves rather than copies, because a pyramid is tens of gigabytes and the machine
+    /// this runs on runs out of disk before it runs out of anything else. That leaves one moment —
+    /// between the pyramid arriving beside the served address and being renamed into it — in which
+    /// the build's own folder no longer holds it and the address does not hold it yet. A process
+    /// killed in that moment leaves a complete pyramid under a name nothing looks for, and the run
+    /// that resumes finds an empty tiles directory, decides the meshing was never done, and starts
+    /// hours of it again — or, on an installation with no tile maker of its own, fails outright and
+    /// says so about a build that had actually finished.
+    /// </para>
+    /// <para>
+    /// So the first thing a run does, before any step asks the disk what is already there, is undo
+    /// that. Only ever a pyramid with a manifest in it, and only when neither the address nor the
+    /// build's own folder already holds one: a staging directory left by a copy that stopped part
+    /// way is worth nothing and is left for the publishing step to discard.
+    /// </para>
+    /// </remarks>
+    public void RecoverInterruptedPublication(Guid buildId)
+    {
+        var staging = StagingFor(buildId);
+        var tiles = TilesFor(buildId);
+
+        if (!HasManifest(staging) || HasManifest(tiles) || HasPublishedPyramid(buildId))
+        {
+            return;
+        }
+
+        try
+        {
+            // Created empty by the call that hands a build its directories, so it is in the way of
+            // the move rather than holding anything.
+            if (Directory.Exists(tiles) && !Directory.EnumerateFileSystemEntries(tiles).Any())
+            {
+                Directory.Delete(tiles);
+            }
+
+            Move(staging, tiles);
+            logger.LogWarning(
+                "Terrain build {BuildId} had a publication interrupted; its tiles were put back",
+                buildId);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Left where it is. The run that follows will fail at the meshing step or ask for it
+            // again, which is what would have happened without this, and the pyramid is still on
+            // disk for an operator to move by hand.
+            logger.LogWarning(e, "Could not put back the interrupted publication of {BuildId}", buildId);
+        }
+    }
+
+    /// <summary>
+    /// Gets a directory from one place to another, by renaming it if the two are on one volume and
+    /// by copying it across if they are not.
+    /// </summary>
+    /// <remarks>
+    /// Renaming is what this wants: it is instant whatever the pyramid weighs, and it leaves one
+    /// copy rather than two on a machine where disk is the thing that runs out first. It is also
+    /// only possible within a volume, and an operator may well have put the served directory on a
+    /// disk chosen for size — so the copy is there to keep that arrangement working rather than to
+    /// fail a build at the very last step of an hours-long run.
+    /// </remarks>
+    public static void Move(string source, string destination)
+    {
+        try
+        {
+            Directory.Move(source, destination);
+            return;
+        }
+        catch (IOException)
+        {
+            // Both platforms report a rename between volumes this way and no other way; anything
+            // else wrong with the source or the destination fails the copy below just as loudly.
+        }
+
+        Copy(source, destination);
+        Directory.Delete(source, recursive: true);
+    }
+
+    private static void Copy(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+
+        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        {
+            Directory.CreateDirectory(Path.Combine(destination, Path.GetRelativePath(source, directory)));
+        }
+
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            File.Copy(file, Path.Combine(destination, Path.GetRelativePath(source, file)), overwrite: true);
+        }
+    }
+
+    private static bool HasManifest(string directory) =>
+        File.Exists(Path.Combine(directory, TerrainPyramid.ManifestFileName));
+
+    private void Discard(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not remove the terrain directory {Directory}", directory);
+        }
+    }
 
     /// <summary>
     /// Where this build's request for a bake, and the answer to it, are left.
@@ -146,13 +359,13 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options)
     /// </remarks>
     public TerrainBuildDirectories For(Guid buildId)
     {
-        var buildRoot = Path.Combine(root, buildId.ToString("N"));
+        var buildRoot = RootFor(buildId);
         var directories = new TerrainBuildDirectories(
             buildRoot,
             Path.Combine(buildRoot, "input"),
             Path.Combine(buildRoot, "prepared"),
             Path.Combine(buildRoot, "scratch"),
-            Path.Combine(buildRoot, "tiles"));
+            Path.Combine(buildRoot, TilesDirectoryName));
 
         Directory.CreateDirectory(directories.Input);
 

@@ -107,13 +107,16 @@ public static class MapEndpoints
     /// <para>
     /// The elevation model rides along here for the same reason and one more: the client is built
     /// once and deployed everywhere, so it cannot carry a terrain URL, and this is already the
-    /// request the 3D view makes before it draws anything.
+    /// request the 3D view makes before it draws anything. Which model that is can change while
+    /// people are looking at the scene — somebody chooses a different build — so it is resolved
+    /// per request rather than settled once at startup.
     /// </para>
     /// </summary>
     private static async Task<Results<Ok<MapConfigDto>, UnauthorizedHttpResult>> MapConfigAsync(
         IUserContextAccessor userAccessor,
         IOptions<MapOptions> mapOptions,
         IOptions<TerrainOptions> terrainOptions,
+        SilexGisDbContext db,
         CancellationToken ct)
     {
         if (await userAccessor.GetAsync(ct) is null)
@@ -122,19 +125,13 @@ public static class MapEndpoints
         }
 
         var options = mapOptions.Value;
-        var terrain = terrainOptions.Value;
         return TypedResults.Ok(new MapConfigDto(
             options.CenterlineDetailZoom,
             options.CenterlineMaxPaths,
             options.CenterlineMaxPathsLimit,
             options.CenterlineGateZoom,
             ClusterMaxZoom,
-            terrain.IsConfigured
-                ? new TerrainSourceDto(
-                    terrain.ResolvedUrl,
-                    string.IsNullOrWhiteSpace(terrain.Attribution) ? null : terrain.Attribution.Trim(),
-                    terrain.SurveyHeightOffsetM)
-                : null));
+            await TerrainSourceResolver.ResolveAsync(terrainOptions.Value, db, ct)));
     }
 
     /// <summary>

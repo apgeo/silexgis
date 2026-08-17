@@ -583,6 +583,17 @@ Two things worth knowing:
   `SILEXGIS__Terrain__BakeEnabled` from `.env`, or the application keeps handing bakes to a service
   that is no longer there. Stopping it while a bake is running abandons that bake; the build is
   told so when the worker comes back, and can be started again.
+- **Serving what the application bakes needs an up-to-date web image.** A build that finishes is
+  moved into `SILEXGIS__Terrain__PublishRoot` and served at an address of its own,
+  `/terrain/builds/<build id>/`, which the web container's configuration is what knows about. That
+  configuration is **baked into the image at build time**, so an installation picks it up by
+  rebuilding the web image (`docker compose build web`), not by restarting the container.
+- **Point nothing at the terrain volume's root.** If you write a serving rule by hand — the
+  standalone reverse-proxy example is the place it happens — its `alias` must end at the published
+  directory (`/srv/terrain/published/` inside the container) and nowhere above it. One level higher
+  are the rasters each build was made from; terrain is the only thing here the application itself
+  never serves, so a rule aimed too high hands those files to anyone who can reach the site, with no
+  sign-in and nothing in the application's log.
 
 ## Backups
 
@@ -879,11 +890,12 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Auth__DefaultPermissionGroups` | *(empty)* | comma-separated permission-group slugs (e.g. `editors`) every new account joins at registration or first external sign-in |
 | `SILEXGIS__Map__CenterlineDetailZoom` | `18` | zoom at which cave centerlines switch from passage outlines to full survey detail |
 | `SILEXGIS__Map__CenterlineMaxPaths` | `25000` | line budget per centerline request; over it, outlines are served instead |
-| `SILEXGIS__Terrain__Url` | *(empty)* | where the baked elevation tiles are served from, e.g. `/terrain/`. Empty means the 3D view draws a smooth globe, which needs nothing installed. See [Terrain](#terrain-optional) |
+| `SILEXGIS__Terrain__Url` | *(empty)* | where the baked elevation tiles are served from, e.g. `/terrain/`. Empty means the 3D view draws a smooth globe, which needs nothing installed. **Set, it wins over anything built inside the application** — a build chosen as the current one is ignored while this has a value, deliberately, so an installation that already had terrain does not change under it. Leave it empty if you intend to use builds. See [Terrain](#terrain-optional) |
 | `SILEXGIS__Terrain__HeightDatum` | `Orthometric` | what the tile heights are measured from: `Orthometric` (above sea level) or `Ellipsoidal` (converted when baked). Wrong here puts every cave about 40 m off its hillside |
 | `SILEXGIS__Terrain__GeoidHeightM` | `0` | the local geoid undulation in metres, used **only** with `Ellipsoidal`. +39 to +45 over Romanian karst |
 | `SILEXGIS__Terrain__Attribution` | *(empty)* | credit the elevation data's licence requires; shown on the 3D scene |
 | `SILEXGIS__Terrain__BuildRoot` | `data/terrain/builds` (the compose stack sets `/data/terrain/builds`) | where a terrain build started from inside the application does its work. A build keeps both the rasters it was given and the reprojected raster it makes of each one, until somebody deletes the build — each source is converted once, at its own pixel size and cut down to the rectangle asked for, so budget for roughly twice what the sources alone occupy. So this wants a disk chosen for size — under Docker it must be a path on a mounted volume, or those tens of gigabytes sit in the container's own writable layer and disappear the next time it is recreated |
+| `SILEXGIS__Terrain__PublishRoot` | `data/terrain/published` (the compose stack sets `/data/terrain/published`) | where a finished, checked pyramid is **moved** so the web server can serve it, at `/terrain/builds/<build id>/`. Deliberately a directory of its own, holding nothing but finished tiles: this is the **only** directory a serving rule may be pointed at, because one level up are the rasters the builds were made from and there is no sign-in in front of any of it. Much smaller than the build root — the tiles are a fraction of the sources they came from |
 | `SILEXGIS__Terrain__CellTimeoutSeconds` | `1200` (20 min) | how long one cell of elevation may take to arrive before that attempt is abandoned. Values outside 30 s to 2 h are brought back inside that range |
 | `SILEXGIS__Terrain__BakeEnabled` | `false` | whether this installation has anything that can turn rasters into tiles. Set by the same deployment that starts the terrain worker; switched on with no worker running, a build waits for a bake nothing will ever do |
 | `SILEXGIS__Terrain__SpoolRoot` | `data/terrain/spool` (the compose stack sets `/data/terrain/spool`) | the directory the application and the terrain worker leave files for each other in. Both sides must name the same directory, on a volume they share, and both compose files already do |

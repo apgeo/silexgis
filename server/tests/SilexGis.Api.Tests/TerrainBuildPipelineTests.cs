@@ -33,6 +33,7 @@ public sealed class TerrainBuildPipelineTests : IAsyncLifetime, IDisposable
 {
     private readonly SilexGisApiFactory factory;
     private readonly string buildRoot;
+    private readonly string publishRoot;
     private readonly RecordingPhase fetchPhase = new();
 
     private HttpClient starter = null!;   // an ordinary account granted Execute on the terrain domain
@@ -44,13 +45,22 @@ public sealed class TerrainBuildPipelineTests : IAsyncLifetime, IDisposable
     {
         buildRoot = Path.Combine(Path.GetTempPath(), $"silexgis-terrain-{Guid.NewGuid():N}");
 
+        // Named here rather than left at its default, which resolves against the test host's own
+        // directory: a published pyramid is what tells a run that a build has already finished, so
+        // one left in a shared directory would be a fact about the machine rather than the test.
+        publishRoot = buildRoot + "-published";
+
         // This class queues terrain work, so it runs none of the drains itself: every test class
         // shares one PostGIS container and the queue lives in it, so a drain started here would
         // claim work another class queued and fail it against storage this class does not have.
         // What this class queues is deleted again when it finishes, for the mirror-image reason.
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
-            new Dictionary<string, string?> { ["Terrain:BuildRoot"] = buildRoot },
+            new Dictionary<string, string?>
+            {
+                ["Terrain:BuildRoot"] = buildRoot,
+                ["Terrain:PublishRoot"] = publishRoot,
+            },
             services =>
             {
                 JobWorkers.RemoveFrom(services);
@@ -251,6 +261,50 @@ public sealed class TerrainBuildPipelineTests : IAsyncLifetime, IDisposable
         // The clock still says when the build first started, not when the machine came back —
         // otherwise "how long has this been going" hides exactly the thing it is asked about.
         resumed.StartedAt.ShouldBe(after.StartedAt);
+    }
+
+    /// <summary>
+    /// A build handed back after it had already published is recorded as finished rather than
+    /// walked again.
+    /// </summary>
+    /// <remarks>
+    /// Publishing moves the pyramid out of the build's own folder rather than copying it, so a
+    /// process that died between putting it at its address and writing down that it had leaves a
+    /// build whose folder holds no tiles at all. Walked again, the meshing step asks that folder
+    /// whether the work is done, is told no, and either repeats hours of it — leaving the second
+    /// pyramid stranded, since the address already answers — or, on an installation with no tile
+    /// maker of its own, fails a build that had actually succeeded and may be the terrain on
+    /// screen.
+    /// </remarks>
+    [Fact]
+    public async Task A_build_that_had_already_published_is_finished_rather_than_started_again()
+    {
+        var id = await SubmitAsync(SomeRequest(23.40, 47.40));
+
+        // The machine died between the last rename and the row being written: the pyramid is at its
+        // address, the build's own folder has none, and the row still says running.
+        var published = Path.Combine(publishRoot, id.ToString("N"));
+        Directory.CreateDirectory(published);
+        await File.WriteAllTextAsync(
+            Path.Combine(published, TerrainPyramid.ManifestFileName),
+            """{"format":"quantized-mesh-1.0","version":"1.1.0-abcdef123456"}""");
+        await InterruptAsync(id);
+
+        await RunAsync(id, attempts: 2);
+
+        // Nothing was walked at all — not run, and not even asked whether it was already done.
+        fetchPhase.Runs.ShouldBe(0);
+        fetchPhase.Skips.ShouldBe(0);
+
+        var after = await ReadAsync(id);
+        after.Status.ShouldBe(TerrainBuildStatus.Succeeded);
+        after.Phase.ShouldBe(TerrainBuildPhase.Publish);
+        after.Progress.ShouldBe(100);
+        after.ErrorCode.ShouldBeNull();
+
+        // And the pyramid is still where terrain is served from: finishing the row must not have
+        // touched it.
+        File.Exists(Path.Combine(published, TerrainPyramid.ManifestFileName)).ShouldBeTrue();
     }
 
     /// <summary>
@@ -581,6 +635,11 @@ public sealed class TerrainBuildPipelineTests : IAsyncLifetime, IDisposable
         if (Directory.Exists(buildRoot))
         {
             Directory.Delete(buildRoot, recursive: true);
+        }
+
+        if (Directory.Exists(publishRoot))
+        {
+            Directory.Delete(publishRoot, recursive: true);
         }
     }
 

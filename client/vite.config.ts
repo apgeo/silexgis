@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /// <reference types="vitest/config" />
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, createReadStream, existsSync, mkdirSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
@@ -161,10 +162,111 @@ function clientErrorSink(): Plugin {
   };
 }
 
+/**
+ * Serves the elevation pyramids the API published, the way a deployment's web server serves them.
+ *
+ * A deployment has nginx in front, and terrain is the one thing it answers entirely on its own —
+ * the API never sees a request for a tile. Development has no such server, so without this the
+ * address a published build is served at falls through to the single-page fallback and is answered
+ * with the application's own HTML and a 200 status. Nothing errors: the manifest fails to parse and
+ * the scene reports a damaged pyramid, which reads as a bad bake rather than as "there is no web
+ * server here". So terrain could not be looked at, or browser-tested, in development at all.
+ *
+ * Deliberately narrow. It answers one prefix, reads files and nothing else, never falls through to
+ * the application (a path with nothing behind it is a 404 here, which is what the deployment does
+ * and what the scene can report honestly), and exists only while the development server is running,
+ * so nothing about it ships. The directory it reads is the one the API is configured to publish
+ * into; the default below is where the API puts it when nothing says otherwise.
+ */
+function publishedTerrain(): Plugin {
+  // The same prefix the API hands the client, and the same one the deployment's server matches.
+  const route = '/terrain/builds';
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const published = path.resolve(
+    process.env.SILEXGIS_TERRAIN_PUBLISHED ??
+      // Where the API writes them when nothing configures it otherwise: beside the built
+      // application, which in development is its output directory.
+      path.join(
+        here,
+        '..',
+        'server',
+        'src',
+        'SilexGis.Api',
+        'bin',
+        'Debug',
+        'net10.0',
+        'data',
+        'terrain',
+        'published',
+      ),
+  );
+
+  // Whatever is declared here has to describe the bytes on disk exactly. A tile is a binary mesh,
+  // and a browser handed one whose declared type or encoding is wrong reports no error of any kind
+  // — the request answers 200, the console stays empty, and the only symptom is a globe with no
+  // ground on it. Nothing here sets Content-Encoding, because nothing here compresses.
+  const types: Record<string, string> = {
+    '.json': 'application/json',
+    '.terrain': 'application/octet-stream',
+  };
+
+  return {
+    name: 'silexgis:published-terrain',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use(route, (request, response, next) => {
+        if (request.method !== 'GET' && request.method !== 'HEAD') {
+          next();
+          return;
+        }
+
+        // Tile addresses carry the pyramid's version as a query string, so the path has to be
+        // taken apart rather than used whole.
+        const requested = decodeURIComponent((request.url ?? '/').split('?')[0]);
+        const file = path.resolve(published, `.${path.posix.normalize(requested)}`);
+        // Containment is this middleware's own job: what arrives here is a raw request path, and
+        // one climbing out of the published directory would read whatever it landed on.
+        if (file !== published && !file.startsWith(published + path.sep)) {
+          response.statusCode = 403;
+          response.end();
+          return;
+        }
+
+        let size: number;
+        try {
+          const found = statSync(file);
+          if (!found.isFile()) {
+            throw new Error('not a file');
+          }
+          size = found.size;
+        } catch {
+          response.statusCode = 404;
+          response.end();
+          return;
+        }
+
+        response.setHeader('Content-Type', types[path.extname(file)] ?? 'application/octet-stream');
+        response.setHeader('Content-Length', size);
+        // Development is where a pyramid is replaced most often, and a browser holding on to one
+        // file of a replaced pyramid is exactly the confusion this is here to remove. What a
+        // deployment caches, and why the manifest is cached differently from its tiles, is decided
+        // by the web server configurations that ship.
+        response.setHeader('Cache-Control', 'no-store');
+        if (request.method === 'HEAD') {
+          response.end();
+          return;
+        }
+        createReadStream(file).pipe(response);
+      });
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     react(),
     clientErrorSink(),
+    publishedTerrain(),
     viteStaticCopy({
       targets: [
         ...cesiumAssetTrees.map((tree) => ({

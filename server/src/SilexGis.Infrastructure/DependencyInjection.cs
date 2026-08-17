@@ -237,6 +237,12 @@ public static class DependencyInjection
         // anywhere — so this step is not optional and is never skipped.
         services.AddScoped<Terrain.ITerrainPhase, Terrain.TerrainValidatePhase>();
 
+        // Moving the checked pyramid to where it is served from, in one rename, into an address of
+        // this build's own. Registered last because the walk runs the steps in order and stops at
+        // the first one nothing implements: without it a build ends as a success whose tiles sit in
+        // a directory nothing serves.
+        services.AddScoped<Terrain.ITerrainPhase, Terrain.TerrainPublishPhase>();
+
         services.AddHostedService<ProcessingJobWorker>();
 
         // Terrain builds are claimed by a worker of their own against the same table. A worker

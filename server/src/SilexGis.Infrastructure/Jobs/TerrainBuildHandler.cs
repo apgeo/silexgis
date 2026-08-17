@@ -124,6 +124,31 @@ public sealed class TerrainBuildHandler(
             // queued, and a build stuck at queued for ever says nothing at all about why.
             directories = workspace.For(build.Id);
 
+            // A pyramid beside the address it was going to, left there by a run that was killed
+            // between the two renames publishing is made of, is moved back into this build's own
+            // folder before any step is asked what is already done. Done here rather than inside
+            // the publishing step because the steps before it decide from the build's folder: an
+            // empty tiles directory reads as "never meshed", which sends an installation with a
+            // tile maker through hours of meshing again and an installation without one — the
+            // ordinary arrangement — into failing a build that had actually finished.
+            workspace.RecoverInterruptedPublication(build.Id);
+
+            if (workspace.HasPublishedPyramid(build.Id))
+            {
+                // Handed back after it had already published: the process died between putting the
+                // pyramid at its address and writing down that it had. There is nothing left to do
+                // and nothing left to check the disk for — publishing is the last step, and it
+                // moves the pyramid out of the build's folder, so walking the chain again would
+                // find no tiles and mesh them all over again.
+                logger.LogInformation(
+                    "Terrain build {BuildId} was already published; recording it as finished", build.Id);
+
+                await TerrainBuildWrites.SucceedAsync(
+                    db, build.Id, TerrainBuildPhase.Publish,
+                    TerrainPhases.Overall(TerrainBuildPhase.Publish, 100), null, ct);
+                return;
+            }
+
             // What whoever asked for this may do now, rather than what they could when they asked.
             // The build row deliberately names nobody — who started one is answered from the audit
             // trail — so the queue row is where the requester is, and a build queued by the

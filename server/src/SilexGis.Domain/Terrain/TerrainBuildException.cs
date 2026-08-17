@@ -201,6 +201,15 @@ public static class TerrainBuildFailures
     /// are served under has to change with it before any of this can be drawn.
     /// </remarks>
     public const string PyramidCompressed = "terrain_build.pyramid_compressed";
+
+    /// <summary>The checked pyramid could not be moved to where it is served from.</summary>
+    /// <remarks>
+    /// A fact about the disk rather than about the data: no room, a directory nothing may write to,
+    /// or the two roots sitting on different volumes with something in the way of copying between
+    /// them. Everything the build made is still there, so the answer is to fix the disk and run it
+    /// again rather than to build anything a second time.
+    /// </remarks>
+    public const string PublishFailed = "terrain_build.publish_failed";
 }
 
 /// <summary>

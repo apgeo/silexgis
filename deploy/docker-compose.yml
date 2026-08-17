@@ -62,6 +62,13 @@ services:
       # alternative is two halves of one handover configured in two places, agreeing right up
       # until the day somebody changes one of them.
       SILEXGIS__Terrain__SpoolRoot: /data/terrain/spool
+      # The one directory terrain is served out of. A finished, checked pyramid is moved here and
+      # nothing else ever is: a build's own folder holds the rasters the operator supplied and the
+      # intermediates made from them beside its tiles, and whatever serves the tiles serves
+      # everything beneath the directory it is pointed at — to anyone who can reach the site,
+      # without a request ever reaching the application. Pointing that one directory higher would
+      # publish the operator's own data.
+      SILEXGIS__Terrain__PublishRoot: /data/terrain/published
     volumes:
       - silexgis-files:/data/files
       # Data-protection keys must survive container recreation, or every deploy would

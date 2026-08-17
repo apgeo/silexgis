@@ -176,6 +176,7 @@ export const queryKeys = {
   resLinkTargets: (targetType: string, q: string) => ['reslinks', 'targets', targetType, q] as const,
   resLinkRelationTypes: ['reslinks', 'relation-types'] as const,
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
+  terrainBuilds: ['terrain', 'builds'] as const,
 };
 
 async function unwrap<T>(
@@ -3983,5 +3984,61 @@ export function useTripStatistics(
     staleTime: 30_000,
     // A caller who may not read the subject is refused, and the surface simply does not appear.
     retry: false,
+  });
+}
+
+export type TerrainBuild = components['schemas']['TerrainBuildDto'];
+
+/**
+ * Everything that changes which elevation model the 3D scene draws.
+ *
+ * The invalidation is the load-bearing part, not decoration. What the scene draws arrives with the
+ * map configuration, which is treated as fresh for five minutes — so without this, choosing terrain
+ * answers immediately, changes nothing on screen, and the wait looks like a bad bake rather than a
+ * cached answer. The scene picks the new ground up on its own once the configuration is re-read:
+ * each build is served from an address of its own, and a terrain source whose address has changed
+ * is what makes the engine load one at all.
+ */
+export function useChooseTerrainBuild() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST('/api/v1/terrain/builds/{id}/active', { params: { path: { id } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mapConfig });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainBuilds });
+    },
+  });
+}
+
+/** Stops drawing a build, which leaves the scene on bare ground until something else is chosen. */
+export function useStopDrawingTerrainBuild() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.DELETE('/api/v1/terrain/builds/{id}/active', { params: { path: { id } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mapConfig });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainBuilds });
+    },
+  });
+}
+
+/**
+ * Removes a build and the disk it was keeping.
+ *
+ * The map configuration goes with it even though the build being drawn cannot be deleted: another
+ * account may have chosen different terrain since this list was read, and a delete is the moment
+ * this browser is talking to the server anyway.
+ */
+export function useDeleteTerrainBuild() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/terrain/builds/{id}', { params: { path: { id } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainBuilds });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mapConfig });
+    },
   });
 }

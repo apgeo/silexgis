@@ -43,4 +43,24 @@ public static class TerrainBuildSql
     public static Task TakeSubmissionLockAsync(SilexGisDbContext db, CancellationToken ct) =>
         db.Database.ExecuteSqlRawAsync(
             "SELECT pg_advisory_xact_lock({0})", [SubmissionLockKey], ct);
+
+    /// <summary>
+    /// The key every change of which build the scene draws takes. One decision, one key.
+    /// </summary>
+    private const long ActivationLockKey = 0x54455252_41494e02L; // "TERRAIN" + 2
+
+    /// <summary>
+    /// Holds every other attempt to change which build the scene draws back until this transaction
+    /// ends.
+    /// </summary>
+    /// <remarks>
+    /// At most one build carries that mark, and the database holds the rule with a unique index — so
+    /// two people pressing the button at the same instant do not produce two current builds, they
+    /// produce one constraint violation, which is the rule working correctly and an answer nobody
+    /// can act on. Taking one lock first makes the pair of writes that moves the mark indivisible,
+    /// so the second attempt waits, sees where the first left it, and moves it on from there.
+    /// </remarks>
+    public static Task TakeActivationLockAsync(SilexGisDbContext db, CancellationToken ct) =>
+        db.Database.ExecuteSqlRawAsync(
+            "SELECT pg_advisory_xact_lock({0})", [ActivationLockKey], ct);
 }

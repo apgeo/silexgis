@@ -62,6 +62,11 @@ public sealed class TerrainPipelineRegistrationTests : IAsyncLifetime
         // produces when it goes wrong answers every request and draws nothing.
         phases.Select(p => p.Phase).ShouldContain(TerrainBuildPhase.Validate);
 
+        // The step that moves the checked pyramid to where it is served from. Left out, every build
+        // would end as a success whose tiles sit in a directory nothing serves, and the symptom
+        // would be an installation that bakes perfectly and never draws any ground.
+        phases.Select(p => p.Phase).ShouldContain(TerrainBuildPhase.Publish);
+
         // One implementation per step, because the walk takes the first that claims a step and a
         // second one would simply never run — silently, and differently depending on the order the
         // container happened to be built in.

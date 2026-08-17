@@ -30,4 +30,11 @@ services:
       #
       # The directory this lands on is served by the /terrain/ block in the web image's nginx
       # configuration, which states the serving rule these tiles must be served under.
+      #
+      # Pyramids the application built for itself are served from a different address on the same
+      # host, /terrain/builds/, out of the volume it writes them into — so the only place the two
+      # overlap is a `builds` directory inside a hand-baked pyramid, which would be unreachable.
+      # Which of the two an installation actually draws is decided by the API, not here: a pyramid
+      # named in the configuration, as this overlay names one, wins over anything chosen inside the
+      # application.
       - ${SILEXGIS_TERRAIN_DIR:?set SILEXGIS_TERRAIN_DIR in .env (the directory holding layer.json)}:/usr/share/nginx/html/terrain:ro
