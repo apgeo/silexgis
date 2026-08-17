@@ -18,6 +18,7 @@ import TagChips from '../../components/tags/TagChips.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates, isMultiDay } from '../../components/trips/tripDates.ts';
 import ExpeditionFilesTab from './ExpeditionFilesTab.tsx';
+import ExpeditionLeadsTab from './ExpeditionLeadsTab.tsx';
 import ExpeditionMapTab from './ExpeditionMapTab.tsx';
 import ExpeditionRosterTab from './ExpeditionRosterTab.tsx';
 import ExpeditionTripsTab from './ExpeditionTripsTab.tsx';
@@ -28,7 +29,7 @@ import ExpeditionTripsTab from './ExpeditionTripsTab.tsx';
  * survives a reload. Adding a section to the camp is one more entry here and one more component —
  * nothing else about the page has to move.
  */
-const TAB_KEYS = ['trips', 'map', 'roster', 'files', 'history'] as const;
+const TAB_KEYS = ['trips', 'map', 'leads', 'roster', 'files', 'history'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 const DEFAULT_TAB: TabKey = 'trips';
 
@@ -157,6 +158,11 @@ export default function ExpeditionDetailPage() {
             // opened — so being mounted is not the same question as being visible, and this is
             // the answer to the second one.
             children: <ExpeditionMapTab expeditionId={camp.id} active={activeTab === 'map'} />,
+          },
+          {
+            key: 'leads',
+            label: t('expeditions.tabLeads'),
+            children: <ExpeditionLeadsTab expeditionId={camp.id} />,
           },
           {
             key: 'roster',

@@ -47,10 +47,25 @@ const hits = [
   },
 ];
 
+/** A camp that ran a fortnight, and one that lasted the day it started. */
+const camps = [
+  { id: 'camp-long', name: 'Bihor summer camp', startDate: '2026-07-18', endDate: '2026-08-01' },
+  { id: 'camp-day', name: 'Winter recce', startDate: '2026-12-05', endDate: null },
+];
+
+/** Everything matched at once: features are covered elsewhere, so this fixture leaves them out. */
+const everything = {
+  features: [] as unknown[],
+  trips: [] as unknown[],
+  expeditions: camps as unknown[],
+  documents: { items: hits as unknown[], totalItems: hits.length, page: 1, pageSize: 10 },
+};
+
+/** What the box is told the server answered. Reset after each test to the fixture above. */
+let searchData: typeof everything = everything;
+
 vi.mock('../../api/hooks.ts', () => ({
-  useSearch: () => ({
-    data: { features: [], trips: [], documents: { items: hits, totalItems: hits.length, page: 1, pageSize: 10 } },
-  }),
+  useSearch: () => ({ data: searchData }),
   useNominatim: () => ({ data: [] }),
 }));
 vi.mock('../../hooks/useDebouncedValue.ts', () => ({ useDebouncedValue: (value: string) => value }));
@@ -58,14 +73,17 @@ vi.mock('../../map/mapContext.ts', () => ({ flyTo: vi.fn() }));
 
 const { default: MapSearch } = await import('./MapSearch.tsx');
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  searchData = everything;
+});
 
 function Where() {
   const location = useLocation();
   return <div data-testid="where">{`${location.pathname}${location.search}`}</div>;
 }
 
-function pick(label: string) {
+function show() {
   render(
     <MemoryRouter initialEntries={['/map']}>
       <App>
@@ -75,6 +93,10 @@ function pick(label: string) {
     </MemoryRouter>,
   );
   fireEvent.change(screen.getByRole('combobox'), { target: { value: 'terminal' } });
+}
+
+function pick(label: string) {
+  show();
   fireEvent.click(screen.getByText(label));
   return screen.getByTestId('where').textContent;
 }
@@ -90,6 +112,45 @@ describe('MapSearch', () => {
     // A text file is stored as one page row, but it has no pages — saying "page 1" would be
     // this interface inventing a fact the file never stated.
     expect(pick('Notiță')).toBe('/documents/doc-whole');
+  });
+
+  it('opens a camp on its own page, and dates a one-day camp with one date', () => {
+    // A camp is not a feature and does not resolve through the feature router, so the section
+    // is proved by following it rather than by its label being present.
+    expect(pick('Bihor summer camp — 2026-07-18 – 2026-08-01')).toBe('/expeditions/camp-long');
+    cleanup();
+
+    // No end date means the camp lasted one day — printing a range with the same date twice
+    // would say something the record never said.
+    expect(pick('Winter recce — 2026-12-05')).toBe('/expeditions/camp-day');
+  });
+
+  it('says nothing about the text index when a camp is what the search found', () => {
+    // The sentence about scanned pages is an answer to "why did this find nothing", and it is
+    // only true when the search found nothing. Beside a camp it names, it reads as a fault.
+    // Every section the box renders has to be consulted here, or a section added later leaves
+    // this hint firing on a search that plainly succeeded.
+    searchData = {
+      ...everything,
+      documents: { items: [], totalItems: 0, page: 1, pageSize: 10 },
+    };
+    show();
+
+    expect(screen.getByText('Bihor summer camp — 2026-07-18 – 2026-08-01')).toBeTruthy();
+    expect(screen.queryByText(/No document text matched/)).toBeNull();
+  });
+
+  it('still owns up to the text index when nothing at all matched', () => {
+    // Paired with the case above, so a fix that simply stopped ever saying it could not pass.
+    searchData = {
+      features: [],
+      trips: [],
+      expeditions: [],
+      documents: { items: [], totalItems: 0, page: 1, pageSize: 10 },
+    };
+    show();
+
+    expect(screen.getByText(/No document text matched/)).toBeTruthy();
   });
 
   it('carries no page for a division that does not index the pictures a reader is shown', () => {

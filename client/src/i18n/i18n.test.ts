@@ -17,6 +17,7 @@ import {
   SEEDED_TRIP_SECTION_ENUM_VALUES,
   SEEDED_TRIP_SECTION_FIELD_CODES,
 } from '../components/trips/tripSectionFields.ts';
+import { SEEDED_CONTINUATION_STATE_CODES } from '../components/expeditions/continuationStates.ts';
 import { SEEDED_EXPEDITION_ROSTER_ROLE_CODES } from '../components/expeditions/rosterRoles.ts';
 import { SEEDED_PARTICIPANT_ROLE_CODES } from '../components/trips/participantRoles.ts';
 import { SEEDED_TRIP_TYPE_CODES } from '../components/trips/tripTypes.ts';
@@ -245,6 +246,18 @@ describe('i18n locales', () => {
     const expected = [...SEEDED_EXPEDITION_ROSTER_ROLE_CODES].sort();
     for (const locale of [en, ro]) {
       expect(Object.keys(locale.expeditions.rosterRoleValues).sort()).toEqual(expected);
+    }
+  });
+
+  // Whether a way on is still going is a fourth vocabulary of the same kind — declared by the
+  // shipped kind of place rather than by a table of rows, but read the same way and reached by a
+  // key built from the code, which is exactly the shape nothing else can check. A state renamed on
+  // the server would otherwise put a raw code on the leads board in both languages, and wording
+  // left behind for a state nothing records any more is an answer nobody can be given.
+  it('every recorded lead state has wording in both locales, and no wording outlives its state', () => {
+    const expected = [...SEEDED_CONTINUATION_STATE_CODES].sort();
+    for (const locale of [en, ro]) {
+      expect(Object.keys(locale.expeditions.leadStates).sort()).toEqual(expected);
     }
   });
 

@@ -176,9 +176,11 @@ export const queryKeys = {
   resLinkTargets: (targetType: string, q: string) => ['reslinks', 'targets', targetType, q] as const,
   resLinkRelationTypes: ['reslinks', 'relation-types'] as const,
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
+  expeditions: (params: ExpeditionListParams) => ['expeditions', 'list', params] as const,
   expedition: (id: string) => ['expeditions', 'detail', id] as const,
   expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,
   expeditionMap: (id: string) => ['expeditions', 'map', id] as const,
+  expeditionLeads: (id: string) => ['expeditions', 'leads', id] as const,
 };
 
 async function unwrap<T>(
@@ -4013,6 +4015,32 @@ export function useTripStatistics(
 export type ExpeditionInfo = components['schemas']['ExpeditionDto'];
 
 /**
+ * How the camp list is narrowed. The window asks what a camp overlapped rather than what it
+ * started inside, so a fortnight camp running across the end of a month is in both months; the
+ * word is looked for in the name; the state is one of the camp lifecycle's own, and a word the
+ * server does not have is refused rather than ignored.
+ */
+export interface ExpeditionListParams {
+  page?: number;
+  pageSize?: number;
+  from?: string;
+  to?: string;
+  search?: string;
+  state?: string;
+}
+
+/** Camps, most recent first, narrowed by the filters the list offers. */
+export function useExpeditions(params: ExpeditionListParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.expeditions(params),
+    queryFn: () => unwrap(api.GET('/api/v1/expeditions', { params: { query: params } })),
+    // Paging or retyping a filter keeps the rows on screen while the next answer arrives, rather
+    // than emptying the table under whoever is reading it.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
  * One camp. A camp the caller may not read answers exactly as one that does not exist does —
  * the server spells both `expedition.not_found` — so the page has no way to tell them apart and
  * must not try: an address that answered differently for the two would be an address anybody
@@ -4083,6 +4111,29 @@ export function useExpeditionMap(expeditionId: string | undefined, enabled = tru
     queryFn: () =>
       unwrap(api.GET('/api/v1/expeditions/{id}/map', { params: { path: { id: expeditionId! } } })),
     enabled: !!expeditionId && enabled,
+    retry: false,
+  });
+}
+
+export type ExpeditionLeads = components['schemas']['ExpeditionLeadsDto'];
+export type ExpeditionLeadGroup = components['schemas']['ExpeditionLeadGroupDto'];
+export type ExpeditionLead = components['schemas']['ExpeditionLeadDto'];
+
+/**
+ * What a camp's trips left open, grouped by whether each way on is still going.
+ *
+ * Nothing here is derived on the client and nothing here is filtered on it: which leads are on
+ * the board is decided per lead on the server, against the same rule any single place is judged
+ * by, and a lead this caller may not place exactly never arrives. So the board is drawn from what
+ * came back and the count beside it is the count of what came back — two readers of the same camp
+ * see different boards, and the page says so rather than leaving the numbers to imply otherwise.
+ */
+export function useExpeditionLeads(expeditionId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.expeditionLeads(expeditionId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/expeditions/{id}/leads', { params: { path: { id: expeditionId! } } })),
+    enabled: !!expeditionId,
     retry: false,
   });
 }

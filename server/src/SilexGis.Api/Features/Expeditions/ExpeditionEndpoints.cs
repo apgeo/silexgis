@@ -26,6 +26,9 @@ public static class ExpeditionEndpoints
 
     private const string NotAMemberCode = "expedition.trip_not_in_expedition";
 
+    // A lifecycle state the list was asked to narrow by that this application does not have.
+    private const string StateInvalidCode = "expedition.state_invalid";
+
     private const string MembershipConflictCode = "expedition.trip_membership_conflict";
 
     // The index that carries "a trip is in at most one camp". Named here so a violation of that
@@ -37,7 +40,9 @@ public static class ExpeditionEndpoints
         var expeditions = api.MapGroup("/expeditions").WithTags("Expeditions");
 
         expeditions.MapGet("/", ListAsync)
-            .WithSummary("Paged expeditions, most recent first; visibility-filtered.");
+            .WithSummary(
+                "Paged expeditions, most recent first; visibility-filtered. Narrowed by a date "
+                + "window the camp overlaps, by a word in its name, and by lifecycle state.");
         expeditions.MapGet("/{id:guid}", GetAsync)
             .WithSummary("A single expedition.");
         expeditions.MapPost("/", CreateAsync).WithValidation<ExpeditionWriteRequest>()
@@ -75,11 +80,15 @@ public static class ExpeditionEndpoints
         return api;
     }
 
-    private static async Task<Results<Ok<PagedResult<ExpeditionDto>>, UnauthorizedHttpResult>> ListAsync(
+    private static async Task<Results<Ok<PagedResult<ExpeditionDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         int? page,
         int? pageSize,
+        DateOnly? from,
+        DateOnly? to,
+        string? search,
+        string? state,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -88,7 +97,56 @@ public static class ExpeditionEndpoints
             return TypedResults.Unauthorized();
         }
 
+        // Lifecycle states arrive as the camelCase words the rest of the contract spells them
+        // with, parsed here rather than by route binding: binding a bad word would answer with a
+        // bare 400 carrying no code, and a client cannot tell that apart from any other refusal.
+        // The parse is deliberately not "unknown means no filter" — a caller who asked for
+        // something this application does not have wants to be told, not handed the whole list.
+        ActivityState? stateFilter = null;
+        if (!string.IsNullOrWhiteSpace(state))
+        {
+            if (!Enum.TryParse<ActivityState>(state, ignoreCase: true, out var stateValue)
+                || !Enum.IsDefined(stateValue))
+            {
+                return ApiProblems.BadRequest(StateInvalidCode, $"Unknown state '{state}'.");
+            }
+
+            stateFilter = stateValue;
+        }
+
         var query = db.Expeditions.AsNoTracking().VisibleTo(ctx, AccessDomain.Expeditions);
+
+        // The window asks whether the camp overlapped it rather than whether it started inside
+        // it, which is what somebody looking at a season means: a fortnight camp running across
+        // the end of July is part of both halves of the summer. A camp with no end date ran for
+        // one day, so its end is its start — reading the stored end alone would drop every
+        // single-day camp out of every window.
+        if (from is not null)
+        {
+            var windowStart = from.Value;
+            query = query.Where(x => (x.EndDate ?? x.StartDate) >= windowStart);
+        }
+
+        if (to is not null)
+        {
+            var windowEnd = to.Value;
+            query = query.Where(x => x.StartDate <= windowEnd);
+        }
+
+        if (stateFilter is { } wantedState)
+        {
+            query = query.Where(x => x.State == wantedState);
+        }
+
+        // Accent-insensitive, over the name only — the same reach the trip list gives its title.
+        // A description is a paragraph, and a word that matches one is as likely to be a passing
+        // mention as the camp somebody is looking for.
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var pattern = $"%{search.Trim()}%";
+            query = query.Where(x =>
+                EF.Functions.ILike(EF.Functions.Unaccent(x.Name), EF.Functions.Unaccent(pattern)));
+        }
 
         var (p, size) = Paging.Normalize(page, pageSize);
         var total = await query.CountAsync(ct);

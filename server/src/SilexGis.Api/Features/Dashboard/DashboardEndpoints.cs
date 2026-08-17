@@ -47,6 +47,7 @@ public static class DashboardEndpoints
         var features = db.Features.AsNoTracking().VisibleTo(ctx, db.Features, db.FeatureSetMembers);
         var trips = db.TripLogs.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs);
         var geofiles = db.Geofiles.AsNoTracking().VisibleTo(ctx, AccessDomain.Geofiles);
+        var expeditions = db.Expeditions.AsNoTracking().VisibleTo(ctx, AccessDomain.Expeditions);
 
         // Every feature kind lives in one table, so the per-kind figures are one grouped scan
         // rather than a count query per kind.
@@ -75,10 +76,20 @@ public static class DashboardEndpoints
             .Select(t => new DashboardActivityItemDto(DashboardActivityKind.TripLog, t.Id, t.Title, t.UpdatedAt))
             .ToListAsync(ct);
 
+        // A camp is a third source rather than something derived from its trips: touching a camp
+        // does not touch them, so a feed built from trips alone would never mention the camp that
+        // gathers them. Read to the same limit as the others, for the reason stated above.
+        var recentExpeditions = await expeditions
+            .OrderByDescending(x => x.UpdatedAt)
+            .Take(ActivityLimit)
+            .Select(x => new DashboardActivityItemDto(DashboardActivityKind.Expedition, x.Id, x.Name, x.UpdatedAt))
+            .ToListAsync(ct);
+
         var recentActivity = recentFeatures
             .Select(f => new DashboardActivityItemDto(
                 DashboardActivityKinds.Of(f.Kind), f.Id, f.Name, f.UpdatedAt))
             .Concat(recentTrips)
+            .Concat(recentExpeditions)
             .OrderByDescending(x => x.UpdatedAt)
             .Take(ActivityLimit)
             .ToList();

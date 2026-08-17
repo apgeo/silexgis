@@ -254,6 +254,7 @@ try
     api.MapTripLogEndpoints();
     api.MapExpeditionEndpoints();
     api.MapExpeditionMapEndpoints();
+    api.MapExpeditionLeadsEndpoints();
     api.MapExpeditionRosterEndpoints();
     api.MapTripReportTemplateEndpoints();
     api.MapTripTypeEndpoints();

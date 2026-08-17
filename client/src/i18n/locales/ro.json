@@ -27,7 +27,8 @@
     "tripTypes": "Scopuri de tură",
     "participantRoles": "Roluri în tură",
     "reportTemplates": "Modele de raport",
-    "termRules": "Reguli de detectare"
+    "termRules": "Reguli de detectare",
+    "expeditions": "Tabere"
   },
   "dashboard": {
     "title": "Panou de bord",
@@ -51,7 +52,8 @@
       "tripLog": "Jurnal de tură",
       "feature": "Fenomen",
       "caveEntrance": "Intrare de peșteră",
-      "centerline": "Poligonație"
+      "centerline": "Poligonație",
+      "expedition": "Tabără"
     }
   },
   "auth": {
@@ -912,11 +914,17 @@
   "expeditions": {
     "notFound": "Nicio astfel de tabără",
     "notFoundDetail": "Fie nu există, fie nu o puteți citi. Această pagină nu poate deosebi cele două cazuri și nici nu încearcă.",
+    "title": "Tabere",
+    "searchPlaceholder": "Caută tabere",
+    "nameField": "Nume",
+    "state": "Stare",
+    "stateFilter": "Orice stare",
     "date": "Ziua",
     "dates": "Zilele",
     "cavingGroup": "Club organizator",
     "tabTrips": "Ture",
     "tabMap": "Hartă",
+    "tabLeads": "Continuări",
     "tabRoster": "Cine a fost",
     "tabFiles": "Fișiere",
     "tabHistory": "Istoric",
@@ -940,6 +948,20 @@
       "medic": "Sanitar",
       "equipment": "Echipament",
       "guest": "Invitat"
+    },
+    "leadsCount": "Continuări în această listă: {{count}} — numărate o singură dată, oricâte ture ale taberei le-au numit.",
+    "leadsEmpty": "Turele acestei tabere nu au lăsat nimic deschis — sau nimic ce vi se poate arăta.",
+    "leadsAsVisible": "Afișat așa cum îl vedeți dumneavoastră: continuări găsite pe turele pe care le puteți citi și numai cele al căror loc vi se poate spune.",
+    "leadsUnavailable": "Continuările nu au putut fi citite.",
+    "leadsTruncated": "Tabăra are mai multe continuări decât arată lista.",
+    "leadUnnamed": "Continuare fără nume",
+    "leadGrade": "Promisiune {{grade}}",
+    "leadStateUnrecorded": "Neînregistrată",
+    "leadStates": {
+      "open": "Deschisă",
+      "checked": "Verificată",
+      "dead-end": "Înfundătură",
+      "continues": "Continuă"
     }
   },
   "tags": {
@@ -1797,6 +1819,7 @@
   "search": {
     "features": "Fenomene",
     "trips": "Jurnale de tură",
+    "expeditions": "Tabere",
     "documents": "În textul documentelor",
     "moreDocuments": "Se afișează {{shown}} din {{total}} documente găsite",
     "noTextLayerHint": "Niciun text de document nu se potrivește. Paginile scanate nu conțin text care să poată fi căutat până când nu sunt transcrise.",

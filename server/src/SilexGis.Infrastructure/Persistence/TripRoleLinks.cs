@@ -153,6 +153,61 @@ public static class TripRoleLinks
     }
 
     /// <summary>
+    /// Every (trip, feature) pair named by a trip role across a set of trips, deduplicated, in one
+    /// read, narrowed to the features of one data-level type.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A sibling of the kind-narrowed read above rather than an extra parameter on it, because the
+    /// two narrow on different columns and neither can be asked the other's question. The schema
+    /// discriminator holds one member per subtype table plus a single member for everything
+    /// data-driven, so a continuation, a sinkhole and a spring all carry the same value there and
+    /// narrowing to it is no narrowing at all. What tells them apart is the type row the feature
+    /// points at, and that is what this one asks about.
+    /// </para>
+    /// <para>
+    /// Role-agnostic like every other reader here: a continuation somebody recorded as merely
+    /// visited is the same open way on as one recorded as a lead, and a read narrowed to the
+    /// obvious role would drop it silently.
+    /// </para>
+    /// <para>
+    /// The type is a database identity, so a caller resolves it from its code and never carries a
+    /// number — the same row has a different id on a fresh installation than on an upgraded one.
+    /// </para>
+    /// </remarks>
+    public static async Task<List<TripFeaturePair>> PairsOfTypeForAsync(
+        SilexGisDbContext db,
+        IReadOnlyCollection<Guid> tripIds,
+        long featureTypeId,
+        CancellationToken ct)
+    {
+        if (tripIds.Count == 0)
+        {
+            return [];
+        }
+
+        var roleIds = RoleIds(db);
+        var rows = from tripMember in db.ResLinkMembers.AsNoTracking()
+                   where tripMember.EntityType == AttachedEntityType.TripLog
+                       && tripMember.EntityId != null
+                       && tripIds.Contains(tripMember.EntityId.Value)
+                   join link in db.ResLinks.AsNoTracking() on tripMember.ResLinkId equals link.Id
+                   where link.RelationTypeId != null && roleIds.Contains(link.RelationTypeId.Value)
+                   join featureMember in db.ResLinkMembers.AsNoTracking()
+                       on tripMember.ResLinkId equals featureMember.ResLinkId
+                   where featureMember.FeatureId != null
+                       && db.Features.Any(f =>
+                           f.Id == featureMember.FeatureId && f.FeatureTypeId == featureTypeId)
+                   select new { TripId = tripMember.EntityId!.Value, FeatureId = featureMember.FeatureId!.Value };
+
+        return
+        [
+            .. (await rows.Distinct().ToListAsync(ct))
+                .Select(r => new TripFeaturePair(r.TripId, r.FeatureId)),
+        ];
+    }
+
+    /// <summary>
     /// Records that a trip did something to a feature, by extending the trip's existing link of
     /// that role or opening one when there is none. Extending is what a person doing it by hand
     /// would do — a second link of the same role between the same two ends says nothing the

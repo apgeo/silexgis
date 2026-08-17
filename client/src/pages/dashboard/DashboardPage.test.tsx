@@ -12,6 +12,7 @@ const summary: DashboardSummary = {
     { kind: 'cave', id: 'c1', name: 'Peștera Mare', updatedAt: '2026-07-14T10:00:00Z' },
     { kind: 'feature', id: 'f1', name: null, updatedAt: '2026-07-13T10:00:00Z' },
     { kind: 'caveEntrance', id: 'e1', name: 'Intrarea de sus', updatedAt: '2026-07-12T10:00:00Z' },
+    { kind: 'expedition', id: 'x1', name: 'Bihor summer camp', updatedAt: '2026-07-11T10:00:00Z' },
   ],
 };
 
@@ -93,6 +94,16 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Intrarea de sus')).toBeInTheDocument();
     // Generic features are often unnamed; the row must still be readable.
     expect(screen.getByText('Untitled')).toBeInTheDocument();
+  });
+
+  it('opens a camp row on the camp, not through the feature resolver', () => {
+    renderPage();
+    fireEvent.click(screen.getByText('Bihor summer camp'));
+    // A camp is not a feature: routed through the feature resolver this row would ask the
+    // server about a feature that does not exist and land on an error message instead of a
+    // page. The label beside it names the kind so the row reads as a camp, not a trip.
+    expect(screen.getByTestId('location')).toHaveTextContent('/expeditions/x1');
+    expect(screen.getAllByText(/^Camp · /).length).toBe(1);
   });
 
   it('sends a saved view to the map as a view request', () => {

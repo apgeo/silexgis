@@ -1364,7 +1364,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Searches features of every kind, trip logs and document text (accent-insensitive). */
+        /** Searches features of every kind, trip logs, camps and document text (accent-insensitive). */
         get: {
             parameters: {
                 query: {
@@ -8821,12 +8821,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Paged expeditions, most recent first; visibility-filtered. */
+        /** Paged expeditions, most recent first; visibility-filtered. Narrowed by a date window the camp overlaps, by a word in its name, and by lifecycle state. */
         get: {
             parameters: {
                 query?: {
                     page?: number;
                     pageSize?: number;
+                    from?: string;
+                    to?: string;
+                    search?: string;
+                    state?: string;
                 };
                 header?: never;
                 path?: never;
@@ -9157,6 +9161,44 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["FeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expeditions/{id}/leads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The open ways on that this camp's trips named, grouped by whether each is still going. Read over every trip role, counted once per place, and limited to the leads this caller may both read and place exactly. Takes no filter. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionLeadsDto"];
                     };
                 };
             };
@@ -12747,7 +12789,7 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {unknown} */
-        DashboardActivityKind: "feature" | "cave" | "caveEntrance" | "centerline" | "tripLog";
+        DashboardActivityKind: "feature" | "cave" | "caveEntrance" | "centerline" | "tripLog" | "expedition";
         DashboardCountsDto: {
             /** Format: int32 */
             caves: number;
@@ -12986,6 +13028,25 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        ExpeditionLeadDto: {
+            /** Format: uuid */
+            id: string;
+            name?: null | string;
+            grade?: null | string;
+            note?: null | string;
+        };
+        ExpeditionLeadGroupDto: {
+            state?: null | string;
+            leads: components["schemas"]["ExpeditionLeadDto"][];
+        };
+        ExpeditionLeadsDto: {
+            /** Format: uuid */
+            expeditionId: string;
+            groups: components["schemas"]["ExpeditionLeadGroupDto"][];
+            /** Format: int32 */
+            leads: number;
+            truncated: boolean;
         };
         ExpeditionRosterDto: {
             /** Format: uuid */
@@ -14944,6 +15005,15 @@ export interface components {
             division: components["schemas"]["PageDivision"];
             snippet: string;
         };
+        SearchExpeditionItemDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: null | string;
+        };
         SearchFeatureItemDto: {
             /** Format: uuid */
             id: string;
@@ -14954,6 +15024,7 @@ export interface components {
         SearchResultDto: {
             features: components["schemas"]["SearchFeatureItemDto"][];
             trips: components["schemas"]["SearchTripItemDto"][];
+            expeditions: components["schemas"]["SearchExpeditionItemDto"][];
             documents: components["schemas"]["PagedResultOfSearchDocumentItemDto"];
         };
         SearchTripItemDto: {

@@ -32,6 +32,7 @@ const TermRulesPage = lazy(() => import('./pages/admin/TermRulesPage.tsx'));
 const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
 const TripReportPage = lazy(() => import('./pages/trips/TripReportPage.tsx'));
+const ExpeditionListPage = lazy(() => import('./pages/expeditions/ExpeditionListPage.tsx'));
 const ExpeditionDetailPage = lazy(() => import('./pages/expeditions/ExpeditionDetailPage.tsx'));
 const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
 const MessagingSettingsPage = lazy(() => import('./pages/admin/MessagingSettingsPage.tsx'));
@@ -121,9 +122,7 @@ export const routes: RouteObject[] = [
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
           { path: '/trip-logs/:id/report', element: <Loadable><TripReportPage /></Loadable> },
-          // A camp's own page. There is no list route beside it yet: nothing links to one, and a
-          // resolver or a notification naming a route this table does not carry lands the reader
-          // on the router's error screen — so the two are only ever added together.
+          { path: '/expeditions', element: <Loadable><ExpeditionListPage /></Loadable> },
           { path: '/expeditions/:id', element: <Loadable><ExpeditionDetailPage /></Loadable> },
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
           { path: '/admin/messaging', element: <Loadable><MessagingSettingsPage /></Loadable> },

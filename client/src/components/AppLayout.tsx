@@ -11,6 +11,7 @@ import {
   EnvironmentOutlined,
   FileTextOutlined,
   FileWordOutlined,
+  FlagOutlined,
   FolderOutlined,
   GoldOutlined,
   GroupOutlined,
@@ -66,9 +67,10 @@ export default function AppLayout() {
   // offered the page that authors it.
   const isFullAdmin = useIsFullAdmin();
 
-  // "settings" and "expeditions" are listed so an unmatched path does not fall through to
-  // highlighting the map. Neither matches a menu item, so nothing lights up while one is open —
-  // settings is not a sidebar destination, and a camp is reached from what names it.
+  // "settings" is listed so an unmatched path does not fall through to highlighting the map; it
+  // matches no menu item, so nothing lights up while it is open, which is deliberate — it is not
+  // a sidebar destination. Every other entry here is one, including a camp: the list is a
+  // destination and a camp's own page stays under it, so opening one keeps the camps item lit.
   const sections = [
     'map3d', 'dashboard', 'caves', 'features', 'geodata', 'gallery', 'albums', 'cabinets',
     'uploads', 'documents', 'trip-logs', 'expeditions',
@@ -175,6 +177,7 @@ export default function AppLayout() {
                   ]
                 : []),
               { key: 'trip-logs', icon: <CarOutlined />, label: t('nav.trips') },
+              { key: 'expeditions', icon: <FlagOutlined />, label: t('nav.expeditions') },
               { key: 'caving-groups', icon: <TeamOutlined />, label: t('nav.cavingGroups') },
               { key: 'cavers', icon: <UserOutlined />, label: t('nav.cavers') },
               // Each admin destination follows its own domain — "admin" is not a rank

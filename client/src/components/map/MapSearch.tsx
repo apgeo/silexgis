@@ -59,6 +59,7 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
     results !== undefined &&
     results.features.length === 0 &&
     results.trips.length === 0 &&
+    results.expeditions.length === 0 &&
     results.documents.totalItems === 0;
 
   if (foundNothing) {
@@ -107,6 +108,19 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
       })),
     },
     {
+      label: t('search.expeditions'),
+      options: (results?.expeditions ?? []).map((expedition) => ({
+        value: `expedition:${expedition.id}`,
+        // A camp with no end date ran a single day, so it is shown as one date rather than
+        // as a range whose two halves are the same.
+        label: `${expedition.name} — ${
+          expedition.endDate === null || expedition.endDate === expedition.startDate
+            ? expedition.startDate
+            : `${expedition.startDate} – ${expedition.endDate}`
+        }`,
+      })),
+    },
+    {
       label: t('search.documents'),
       options: documentOptions,
     },
@@ -130,6 +144,10 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
     }
     if (value.startsWith('trip:')) {
       navigate(`/trip-logs/${value.slice('trip:'.length)}`);
+      return;
+    }
+    if (value.startsWith('expedition:')) {
+      navigate(`/expeditions/${value.slice('expedition:'.length)}`);
       return;
     }
     if (value.startsWith('document:')) {

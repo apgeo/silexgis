@@ -4,6 +4,7 @@ import {
   CarOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
+  FlagOutlined,
   GoldOutlined,
   NodeIndexOutlined,
   PlusOutlined,
@@ -42,6 +43,7 @@ const activityIcon: Record<DashboardActivityItem['kind'], ReactNode> = {
   caveEntrance: <EnvironmentOutlined />,
   centerline: <NodeIndexOutlined />,
   tripLog: <CarOutlined />,
+  expedition: <FlagOutlined />,
 };
 
 export default function DashboardPage() {
@@ -61,11 +63,17 @@ export default function DashboardPage() {
 
   const formatWhen = (iso: string) => new Date(iso).toLocaleString(i18n.resolvedLanguage);
 
-  // Feed rows link where the record lives. Trip logs have their own pages; everything else
-  // is a feature and resolves by kind (entrances/centerlines land on their parent cave).
+  // Feed rows link where the record lives. Trip logs and camps have their own pages; everything
+  // else is a feature and resolves by kind (entrances/centerlines land on their parent cave).
+  // The two named kinds are answered before the fallthrough deliberately: neither is a feature,
+  // so handing one to the feature resolver fails at the server and the row goes nowhere.
   const openActivity = (item: DashboardActivityItem) => {
     if (item.kind === 'tripLog') {
       navigate(`/trip-logs/${item.id}`);
+      return;
+    }
+    if (item.kind === 'expedition') {
+      navigate(`/expeditions/${item.id}`);
       return;
     }
     featureDetailPath(item.kind === 'feature' ? 'generic' : item.kind, item.id)

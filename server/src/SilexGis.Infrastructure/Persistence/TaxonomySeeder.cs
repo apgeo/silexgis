@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Infrastructure.Persistence;
@@ -449,7 +450,10 @@ public static class TaxonomySeeder
             ("bivouac", "Bivouac", FeatureCategory.Surface, point, false, "bivouac.png", null),
             ("exploration_point", "Exploration point", FeatureCategory.Surface, point, false, "exploration_point.png", null),
             ("desobstruction", "Desobstruction", FeatureCategory.Surface, point, false, "desobstruction.png", null),
-            ("continuation", "Continuation", FeatureCategory.Surface, point, false, "continuation.png", continuationSchema),
+            // By the shared constant rather than a literal: something else resolves this kind by
+            // code and answers with an empty board if it is not found, which a rename here would
+            // otherwise do silently.
+            (FeatureTypeSeeds.Continuation, "Continuation", FeatureCategory.Surface, point, false, "continuation.png", continuationSchema),
             ("calm", "Calm", FeatureCategory.Surface, point, false, "calm.png", null),
             ("detritus", "Detritus", FeatureCategory.Surface, point, false, "dedritus.png", null),
             ("driller", "Drilling point", FeatureCategory.Surface, point, false, "driller.png", null),

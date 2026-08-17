@@ -27,7 +27,8 @@
     "tripTypes": "Trip purposes",
     "participantRoles": "Trip roles",
     "reportTemplates": "Report layouts",
-    "termRules": "Detection rules"
+    "termRules": "Detection rules",
+    "expeditions": "Camps"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -51,7 +52,8 @@
       "tripLog": "Trip log",
       "feature": "Feature",
       "caveEntrance": "Cave entrance",
-      "centerline": "Centerline"
+      "centerline": "Centerline",
+      "expedition": "Camp"
     }
   },
   "auth": {
@@ -912,11 +914,17 @@
   "expeditions": {
     "notFound": "No such camp",
     "notFoundDetail": "Either it is not there, or it is not yours to read. This page cannot tell the two apart, and does not try.",
+    "title": "Camps",
+    "searchPlaceholder": "Search camps",
+    "nameField": "Name",
+    "state": "State",
+    "stateFilter": "Any state",
     "date": "Day",
     "dates": "Days",
     "cavingGroup": "Organising club",
     "tabTrips": "Trips",
     "tabMap": "Map",
+    "tabLeads": "Leads",
     "tabRoster": "Who was there",
     "tabFiles": "Files",
     "tabHistory": "History",
@@ -940,6 +948,20 @@
       "medic": "Medic",
       "equipment": "Equipment",
       "guest": "Guest"
+    },
+    "leadsCount": "Leads on this board: {{count}} — counted once each, however many of this camp's trips named them.",
+    "leadsEmpty": "This camp's trips left nothing open — or nothing you may be shown.",
+    "leadsAsVisible": "Read as visible to you: leads found on trips you may read, and only the ones you may be told the place of.",
+    "leadsUnavailable": "The leads could not be read.",
+    "leadsTruncated": "This camp has more leads than the board shows.",
+    "leadUnnamed": "Unnamed lead",
+    "leadGrade": "Promise {{grade}}",
+    "leadStateUnrecorded": "Not recorded",
+    "leadStates": {
+      "open": "Open",
+      "checked": "Checked",
+      "dead-end": "Dead end",
+      "continues": "Continues"
     }
   },
   "tags": {
@@ -1797,6 +1819,7 @@
   "search": {
     "features": "Features",
     "trips": "Trip logs",
+    "expeditions": "Camps",
     "documents": "In document text",
     "moreDocuments": "Showing {{shown}} of {{total}} matching documents",
     "noTextLayerHint": "No document text matched. Scanned pages hold no text to search until they are typed up.",
