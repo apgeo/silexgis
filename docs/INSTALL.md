@@ -248,10 +248,33 @@ To put the caves under real hillsides, you bake elevation data into a tile pyram
 it as static files. It is entirely local afterwards: no account, no key, and no request leaves
 your installation while somebody is looking at a cave.
 
-You need Docker (for the pre-baker, and for GDAL if you bring your own rasters) and Node 18+ (for
-the script). Nothing is installed on the host itself. Budget roughly **45 MB of
-download and 40 MB of tiles per 1°×1° cell**, and about **6 minutes** of one machine's time per
-cell at full detail. Romania is about 30 cells.
+**There are two routes to a pyramid, and they produce the same thing.**
+
+- **From inside the application.** Somebody signed in draws a rectangle on a map and the
+  application does the whole job — obtains the elevation data, converts it, bakes the tiles,
+  checks them and serves them — saying where it has got to as it goes. This is
+  [Building terrain from the map](#building-terrain-from-the-map), below. It needs one extra
+  service on the server, which a plain installation does not run.
+- **From the command line.** You run `deploy/terrain.mjs` yourself, on any machine, and point the
+  stack at what it produced. This is steps 1–3 below. It needs no extra service, and it is the
+  right instrument for a first regional bake, for a machine that is not the server, and for
+  anything you want to do once and never think about again.
+
+Neither excludes the other, and an installation can end up running both: an environment variable
+naming a directory of hand-baked tiles keeps working exactly as it always has, and **wins** over
+anything built inside the application, deliberately, so switching the feature on changes nothing
+about an installation that already had terrain.
+
+The command-line route needs Docker (for the pre-baker, and for GDAL if you bring your own
+rasters) and Node 18+ (for the script). Nothing is installed on the host itself. Budget roughly
+**45 MB of download and 40 MB of tiles per 1°×1° cell**, and about **6 minutes** of one machine's
+time per cell at full detail. Romania is about 30 cells.
+
+### The command-line route
+
+Three steps: download the data, bake it, serve it. Everything under
+[Building terrain from the map](#building-terrain-from-the-map) is the alternative to these, and
+the sections after them — the serving rule, re-baking, height datums, attribution — apply to both.
 
 ### 1. Download the elevation data
 
@@ -459,8 +482,11 @@ is the only way to get the pairing right that cannot also get it wrong. **Never 
 place**, and never add a `Content-Encoding` header by hand.
 
 If the tiles cannot be used, the 3D view says so on screen and falls back to the smooth globe
-rather than showing an empty one. `node deploy/terrain.mjs check` reports the same thing from the
-files themselves.
+rather than showing an empty one. `node deploy/terrain.mjs check` reports most of the same things
+from the files themselves — but not all of them: the check a build runs before it publishes is the
+stricter of the two, and refuses one shape the script accepts. A pyramid the script passes may
+therefore still be one a build would refuse. The script is the right instrument for a pyramid you
+baked yourself and are about to serve yourself; it is not a second opinion on a build.
 
 ### Re-baking later
 
@@ -537,14 +563,114 @@ data rather than to the pyramid:
 A credit naming data the pyramid does not actually hold is worse than none: it is a false licence
 statement, on screen, that nobody looking at it can tell is false.
 
-### Baking from inside the application
+### Building terrain from the map
 
-Everything above is the command-line path: you run the script yourself and the overlay in step 3
-serves what it produced. SilexGIS can also do that work itself — somebody holding the terrain right
-picks an area, and the application fetches the elevation data, prepares it and bakes it, saying
-where it has got to as it goes.
+**Administration → Terrain** is the other route. It is a page with a map on it: somebody draws a
+rectangle over the ground they want, says how much detail to bake and where the elevation data
+should come from, and presses the button. The application then does every step the command-line
+route does — obtain, convert, bake, check, publish — and reports which one it is in and how far
+through it is, on a list of builds that survives leaving the page and coming back.
 
-The tile-making step then needs a service of its own:
+**A build that has started cannot be called off.** There is no cancel control on the page and no
+route behind one: a build runs to its own end, whether that end is success, failure, or stopping at
+a step this installation cannot do. Only then can it be removed. So the moment to reconsider a
+rectangle is before the button, not after it — which is what the area reported beside the rectangle
+is for.
+
+**Who may use it — two different bars, on purpose.**
+
+| What | What it needs |
+|---|---|
+| Seeing the page, the list of builds, their status and their size on disk | the **Terrain** permission with **Read** |
+| Starting a build, choosing which finished build the 3D view draws, clearing that choice | the **Terrain** permission with **Execute** |
+| Deleting a build and getting its disk back | the **Terrain** permission with **Delete** |
+| Naming a **directory on the server** as the source of elevation data | **Full Administrator** — nothing less |
+
+The last row is the one that surprises people, and it is deliberate. An administrator account is
+not the same thing as the person who owns the machine, and an account somebody else has got into
+must not become a way to read the database's data directory. Uploading rasters through the browser
+needs only the terrain right; naming a path on the server does not. The control is not offered to
+an account that may not use it.
+
+Terrain is an ordinary permission domain, so it is granted the ordinary way: **Administration →
+Permission groups**, add a rule over *Terrain*. Some accounts hold it already, without anybody
+having granted anything, and it is worth knowing which:
+
+- A **Full Administrator** holds it, as they hold everything.
+- On an installation seeded **after** this feature existed, so does the seeded **Administrators**
+  group — with every action, read, execute and delete alike. That group is seeded with every
+  permission domain except permission groups, feature sets and installation secrets, and terrain is
+  not one of those exceptions. So adding somebody to Administrators does convey terrain: they can
+  start builds, which spends the machine's disk and its bandwidth, choose what the 3D view draws,
+  and delete a build — which, as the backups section below says, destroys the only copy of any
+  raster that was uploaded through the browser. Remove the terrain rule from that group if that is
+  not what you want.
+- On an installation whose groups were seeded **before** this feature existed, nobody but a Full
+  Administrator holds it: the seeded rules were written when the right did not exist to be given,
+  and seeded groups are not rewritten afterwards. There, somebody has to grant it.
+
+**Where the data comes from.** A build may take any mix of three:
+
+- **Copernicus GLO-30** for the rectangle, downloaded by the application when the build runs. Free
+  for any use, attribution required, no account and no key. 30 m worldwide.
+- **Rasters uploaded through the browser** — the right instrument up to a few hundred megabytes.
+- **A directory on the server** the operator has already filled — the multi-gigabyte national
+  LiDAR case, where a browser upload is the wrong tool. The directory must be inside one of the
+  paths the `SILEXGIS__Files__ImportRoots__0`, `__1`, … settings name; that one list governs both
+  document import and terrain sources.
+
+Mixing is the point of it: a coarse fill over the whole rectangle with fine local rasters on top
+gives deep detail exactly where the data supports it and no more, which is how the pyramid ends up
+sparse rather than uniformly deep.
+
+**What a build costs.** Measured on this project's own machine, so these are real numbers rather
+than a range:
+
+| | Time | Result | Disk |
+|---|---|---|---|
+| ≈ 59 km², Copernicus only, detail 12 | **11.8 s** end to end (4.4 s to obtain, 4 s to bake) | 13 levels, 342 tiles | 1.1 MB published, ≈ 46 MB of build kept beside it |
+| ≈ 197 km² of 30 m fill plus 3.5 km² of 3.86 m data, detail 16 | **104 s** | 835 tiles | 3.19 MiB published |
+| the same 197 km² fill alone, detail 13 | **62 s** | 536 tiles | — |
+
+Read those the right way round: **cost follows the number of tiles, and the number of tiles follows
+how much fine data there is — not how large the region is.** A modest regional detail over a few
+hundred square kilometres is a couple of minutes; the fine-data islands set the price. Do not
+extrapolate those figures linearly to a country. Every extra level of detail roughly quadruples
+both the tile count and the time, and 30 m data cannot usefully go past detail 13 whatever is
+asked for, so asking for more than the finest raster supports buys nothing but time. Peak memory
+measured over that 197 km² run was **2.47 GiB**.
+
+The published tiles are the small part. A build also keeps everything it was given and everything
+it converted, under `SILEXGIS__Terrain__BuildRoot`, until somebody deletes the build — 46 MB
+against 1.1 MB in the run above. That is what makes re-baking ground that did not change cost
+minutes instead of hours.
+
+**Read the size column as "disk this build is responsible for", not "disk in the build root now".**
+It is measured once, over the build's own directory, at the moment the tiles are checked — so it
+counts the sources, the reprojected copies and the pyramid as they all stood together at that
+moment. It is not measured again afterwards, and publishing **moves** the pyramid out into
+`SILEXGIS__Terrain__PublishRoot`, so the figure does not drop when a build is published and is not
+meant to. It stays as the honest total of what deleting that build would get back: the run above
+reads 46 MB before and after publication, and deleting it does free about that much, 1.1 MB of it
+from the published directory and the rest from the build root.
+
+**Choosing which build the scene draws.** Finished builds sit in the list until somebody makes one
+current; the 3D view then draws it, immediately, with no restart and no `.env` edit. Only one is
+current at a time, and the choice can be cleared again. A build that is current cannot be deleted
+until it is not.
+
+**What happens on a plain installation — which is to say, by default.** Turning rasters into tiles
+needs a service this stack does not start unless it is asked to, so on a default installation a
+build gets as far as the tile-making step and stops there. The page says so **before** the button
+is pressed as well as after, names the setting and the exact command that enables it, and is plain
+about what has happened: the work already done stands and its data is on disk under that build,
+there is no way to carry that build any further, and once the service is running a new build must
+be started and the stopped one removed to get the disk back. That is the honest state of it —
+nothing re-queues a stopped build.
+
+### Running the tile-making service
+
+The tile-making step needs a service of its own:
 
 ```bash
 cd deploy
@@ -568,9 +694,11 @@ were asked for. The default here is 8 GB, against a measured peak of about 2.5 G
 hundred square kilometres with one fine-resolution island in it; lower it with
 `SILEXGIS_TERRAIN_WORKER_MEMORY` only if you know the machine cannot spare that.
 
-**It is entirely optional.** Without it, everything above is unchanged: terrain baked from the
-command line is still served exactly as before, and the application says plainly that this
-installation cannot bake rather than accepting a build it will never finish.
+**It is entirely optional, and not running it is the default.** Without it the command-line route
+is unchanged — terrain baked by hand is still served exactly as before — and the terrain page is
+still there and still works: a build still obtains its data and converts it, and still keeps what
+it converted. What it cannot do is turn that into tiles, and the page says so in those words
+rather than accepting a build it will never finish.
 
 Two things worth knowing:
 
@@ -620,6 +748,34 @@ A cron example that keeps nightly backups:
 
 Both outputs are unencrypted. If a copy leaves the host — offsite, object storage, a USB disk —
 encrypt it first; see [Encryption at rest](#encryption-at-rest).
+
+**Terrain is deliberately not backed up.** The script covers the database and the uploaded-files
+volume and nothing else; the terrain volume — baked pyramids, the rasters each build was given,
+the reprojected copies it made of them, and rasters uploaded but not yet built — is left out on
+purpose, and this is the reasoning so that you can disagree with it knowingly:
+
+- **It is derived data with a recipe that survives.** The database is backed up, and the database
+  is where a build's rectangle, its detail, its sources and which build the scene was drawing all
+  live. What is lost is the output, not the decision that produced it.
+- **It is the largest thing here and the least valuable per byte.** A build keeps its sources
+  beside its tiles, so the volume is dominated by copies of data that came from somewhere else —
+  forty times the size of the tiles themselves, in the measured case. Nightly-copying tens of
+  gigabytes of regenerable raster to protect a pyramid that rebakes in minutes is a poor trade,
+  and it is the trade an operator would silently be making.
+- **Nothing waits on it.** Losing the volume costs the 3D view its ground until a build is run
+  again: the smooth globe comes back, the application says so on screen, and everything else works
+  exactly as before. No cave record, no document, no photo and no survey depends on a terrain tile.
+
+What that leaves you responsible for, if it matters to you: **rasters that exist nowhere else.**
+Elevation data downloaded from Copernicus can always be downloaded again, and a directory on the
+server you filled yourself is yours and is presumably already in whatever backs that machine up —
+but a raster somebody uploaded through the browser has exactly one copy, on this volume, and no
+copy in the file store. If your installation is fed that way, add the volume:
+
+```bash
+docker run --rm -v silexgis_silexgis-terrain:/data:ro -v "$PWD/backups":/backup \
+  alpine tar czf /backup/terrain.tar.gz -C /data .
+```
 
 ## Browsing the database
 
@@ -805,6 +961,18 @@ but it cannot create shared content until somebody adds it to a group that allow
 `editors`). Every group, including the seeded ones except Full Administrators and All Users,
 is editable — rename them, change their rules, or add your own.
 
+**Terrain is a right of its own.** On a freshly seeded installation the *Administrators* group
+above receives it automatically, with every action, along with every other domain that is not
+permission groups, feature sets or installation secrets — so an account added to Administrators can
+already start builds and delete them. Only an installation whose groups were seeded **before** this
+feature existed lacks it, because the seeded rules were written when the right did not exist to be
+given and seeded groups are not rewritten afterwards; there, nobody but a Full Administrator holds
+it until somebody grants it. Grant it — or take it away — like any other, over the *Terrain*
+domain: *Read* to see the builds, *Execute* to start one and to choose which one the 3D view draws,
+*Delete* to remove one. Naming a directory **on the server** as a source of elevation data is the
+one part of it that stays with Full Administrators whatever is granted. See
+[Building terrain from the map](#building-terrain-from-the-map).
+
 ## Sign-in security
 
 Users choose their own second factor under *Settings → Security*: an authenticator app (scan the
@@ -864,8 +1032,11 @@ cross-platform.
 
 ## Configuration reference
 
-All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The commented
-`server/src/SilexGis.Api/appsettings.json` is the authoritative list. Common keys:
+All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. **This table is the
+list to read**: `server/src/SilexGis.Api/appsettings.json` carries only the settings whose default
+depends on the deployment, and the rest take their defaults from the code, so a key can be entirely
+valid and absent from that file. `deploy/.env.example` says the same things at greater length, with
+the reasoning beside each one.
 
 | Variable | Default | Meaning |
 |---|---|---|

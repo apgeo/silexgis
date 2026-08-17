@@ -217,7 +217,10 @@ public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable
         // A second installation of the same version, with nothing deployed to lay documents
         // out. This is the ordinary case, and it must not read as a damaged document.
         var bareRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-noconvert-{Guid.NewGuid():N}");
-        using var bare = new SilexGisApiFactory(
+        // Deliberately not a `using` declaration: that would dispose the application at the end
+        // of the method, which is after the cleanup below has already deleted the directory it
+        // stores files in. The application has to be shut down first — see the finally block.
+        var bare = new SilexGisApiFactory(
             connectionString,
             new Dictionary<string, string?>
             {
@@ -225,12 +228,20 @@ public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable
                 ["Keys:Path"] = Path.Combine(bareRoot, "keys"),
             });
 
-        var suffix = Guid.NewGuid().ToString("N")[..8];
-        await AuthHelper.CreateUserAsync(bare, GlobalRoles.Editor, $"cv-bare-{suffix}@t.local");
-        var bareOwner = await AuthHelper.BearerClientAsync(bare, $"cv-bare-{suffix}@t.local");
+        // Everything from here on is inside the try, including creating the account. Touching this
+        // factory starts a second, complete application — background job workers and all — against
+        // the database every other class in this assembly is sharing. A setup call that threw
+        // outside the try would leave that application running for the rest of the run, still
+        // claiming rows from the shared job table, and the tests it then broke would be in classes
+        // with nothing to do with this one.
+        HttpClient? bareOwner = null;
 
         try
         {
+            var suffix = Guid.NewGuid().ToString("N")[..8];
+            await AuthHelper.CreateUserAsync(bare, GlobalRoles.Editor, $"cv-bare-{suffix}@t.local");
+            bareOwner = await AuthHelper.BearerClientAsync(bare, $"cv-bare-{suffix}@t.local");
+
             var officeId = await UploadAsync(bareOwner, "notes.doc", WordDocument(), WordMediaType);
 
             await using (var scope = bare.Services.CreateAsyncScope())
@@ -259,7 +270,14 @@ public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable
         }
         finally
         {
-            bareOwner.Dispose();
+            bareOwner?.Dispose();
+
+            // The application owns everything under bareRoot, and its background workers
+            // keep uploaded files open while they read them. Windows refuses to delete a file
+            // another process still holds a handle to, so shutting the application down is part
+            // of the cleanup rather than something that can be left to happen afterwards.
+            bare.Dispose();
+
             if (Directory.Exists(bareRoot))
             {
                 Directory.Delete(bareRoot, recursive: true);

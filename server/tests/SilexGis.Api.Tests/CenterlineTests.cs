@@ -618,6 +618,18 @@ public sealed class CenterlineTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task Map_config_publishes_no_elevation_model_for_an_installation_that_has_none()
     {
+        // "An installation that has none" is a state this test has to put the installation into,
+        // not one it may assume. Which pyramid a scene draws is a property of the whole
+        // installation rather than of any one caller — one table, one chosen row — and the
+        // classes that cover choosing one leave their choice standing when they finish. Sharing
+        // a database with them, this test would otherwise assert against whatever was chosen
+        // last, and pass or fail on the order the classes happened to run in.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TerrainBuilds.ExecuteDeleteAsync();
+        }
+
         // The shipped state, asserted over real HTTP. An installation that has not baked a tile
         // pyramid publishes null rather than an empty object, and the 3D view then draws the
         // smooth reference ellipsoid — which needs no elevation server, no download and no

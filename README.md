@@ -107,8 +107,11 @@ Previous versions:
   configured, so an air-gapped install needs one it can reach.
 - **Real relief, if you want it** — that globe is a smooth sphere out of the box, needing no
   elevation server and nothing downloaded. An operator who wants the caves under actual
-  hillsides bakes free elevation data into a tile pyramid in one documented step and serves it
-  as static files from the same installation. Everyone who does not is unaffected.
+  hillsides bakes free elevation data into a tile pyramid and serves it as static files from the
+  same installation — either from the command line in one documented step, or from inside the
+  application: draw a rectangle on a map, and it obtains the data, converts it, bakes the tiles
+  and checks them, saying where it has got to as it goes. That last route needs one extra service
+  a plain installation does not run. Everyone who wants none of it is unaffected.
 - **Trips** — a trip is logged over the days it actually ran, with who was there, what came of it
   and how long was spent underground, and it can be sketched on a map: a point, a line or an area
   for where it happened. That sketch is shown exactly to everyone who may read the trip, including
@@ -213,8 +216,8 @@ to set it up is in [Encryption at rest](docs/INSTALL.md#encryption-at-rest).
 ```
 server/   ASP.NET Core API (.NET solution: Api / Domain / Infrastructure + tests)
 client/   React + TypeScript SPA (Vite, Ant Design, OpenLayers)
-deploy/   Docker Compose, TLS and terrain overlays, reverse-proxy configs, backup/restore
-          and terrain pre-bake scripts
+deploy/   Docker Compose, TLS and terrain overlays (serving, and the optional tile-making
+          worker), reverse-proxy configs, backup/restore and terrain pre-bake scripts
 docs/     Installation and operations documentation
 ```
 

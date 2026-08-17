@@ -38,6 +38,24 @@ public sealed class PerformanceTests : IDisposable
     private const double East = 25.15;
     private const double North = 45.6;
 
+    /// <summary>
+    /// The box the seeded entrances are scattered across, at full double precision and with no
+    /// location protection on them.
+    /// </summary>
+    /// <remarks>
+    /// Public because another class in this assembly depends on it and cannot see that it does.
+    /// A test that asserts no protected coordinate reaches a caller has to search whole payloads
+    /// for the digits of its own point, and a hundred thousand unprotected points scattered here
+    /// will sooner or later put those same digits in a payload legitimately — which that search
+    /// cannot tell from a disclosure. Its point therefore has to sit outside this box, and it
+    /// asserts that against these constants so that widening the box fails there immediately,
+    /// naming the real cause, rather than surfacing later as an apparent security regression.
+    /// </remarks>
+    public const double SeedWest = 20;
+    public const double SeedEast = 29;
+    public const double SeedSouth = 43.6;
+    public const double SeedNorth = 48;
+
     private readonly SilexGisApiFactory factory;
     private readonly ITestOutputHelper output;
 
@@ -302,7 +320,11 @@ public sealed class PerformanceTests : IDisposable
                     gen_random_uuid() AS entrance_id,
                     c.cave_id,
                     e,
-                    ST_SetSRID(ST_MakePoint(20 + random() * 9, 43.6 + random() * 4.4), 4326) AS geom
+                    ST_SetSRID(
+                        ST_MakePoint(
+                            {SeedWest} + random() * {SeedEast - SeedWest},
+                            {SeedSouth} + random() * {SeedNorth - SeedSouth}),
+                        4326) AS geom
                 FROM cave_rows c, generate_series(1, {EntrancesPerCave}) e
             ),
             cave_features AS (

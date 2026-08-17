@@ -43,8 +43,22 @@ public sealed class DocumentSurfaceProtectionSweepTests : IAsyncLifetime, IDispo
     // belong to this test alone: the database is shared, the sweep reads whole collections,
     // and a cave some other test placed at the same point — legitimately unprotected there —
     // would put these digits in a payload and be read here as a disclosure.
-    private const double ExactLat = 46.81953;
-    private const double ExactLon = 22.76314;
+    //
+    // Unusual digits are not on their own enough to earn "this test alone". PerformanceTests
+    // bulk-seeds two thousand caves whose points are drawn at random, at full double
+    // precision, from longitude 20..29 and latitude 43.6..48 — and it seeds them visible and
+    // genuinely unprotected, so the whole-collection export hands their exact coordinates to
+    // any signed-in caller, correctly. For a point inside that box, a random neighbour lands
+    // on the same five decimals often enough to matter, and a text search cannot tell that
+    // neighbour's coordinate from a disclosure of this test's own. So this point sits outside
+    // that box on both axes with room to spare, and has to stay outside it — which is asserted
+    // rather than left to this comment, because the failure it prevents is intermittent, is
+    // order-dependent, and reads as "a protected position was emitted" rather than as what it is.
+    private const double ExactLat = 48.61953;
+    private const double ExactLon = 19.06314;
+
+    /// <summary>How far outside the bulk-seeded box this test's point has to stay, in degrees.</summary>
+    private const double SeedClearanceDegrees = 0.5;
 
     private static readonly string[] Coordinates =
         [ExactLat.ToString("0.#####", System.Globalization.CultureInfo.InvariantCulture),
@@ -72,6 +86,24 @@ public sealed class DocumentSurfaceProtectionSweepTests : IAsyncLifetime, IDispo
 
     public async Task InitializeAsync()
     {
+        // Checked here so that moving either side of the relationship fails at once, with a
+        // sentence naming the real cause. The alternative is what happened before: the bulk
+        // seeder's box is widened, this test starts failing on some runs and not others with
+        // "emitted a protected position", and somebody spends a morning looking for a leak.
+        var clearOfSeeding =
+            ExactLon < PerformanceTests.SeedWest - SeedClearanceDegrees
+            || ExactLon > PerformanceTests.SeedEast + SeedClearanceDegrees
+            || ExactLat < PerformanceTests.SeedSouth - SeedClearanceDegrees
+            || ExactLat > PerformanceTests.SeedNorth + SeedClearanceDegrees;
+
+        clearOfSeeding.ShouldBeTrue(
+            $"This sweep searches payloads for the text of ({ExactLat}, {ExactLon}), so that point "
+            + "must belong to it alone. The performance fixture bulk-seeds unprotected caves at "
+            + $"random across ({PerformanceTests.SeedWest}, {PerformanceTests.SeedSouth}) to "
+            + $"({PerformanceTests.SeedEast}, {PerformanceTests.SeedNorth}), and one of those "
+            + "landing on the same five decimals would be read here as a disclosure. Move this "
+            + "test's point back outside that box, or narrow the box — do not relax the sweep.");
+
         var suffix = Guid.NewGuid().ToString("N")[..8];
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"sw-own-{suffix}@t.local");
         owner = await AuthHelper.BearerClientAsync(factory, $"sw-own-{suffix}@t.local");
