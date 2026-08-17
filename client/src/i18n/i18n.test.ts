@@ -6,6 +6,9 @@ import type {
   AccessScopeKind,
   ActivityState,
   SearchDocumentItem,
+  TerrainBuildPhase,
+  TerrainBuildSourceKind,
+  TerrainBuildStatus,
 } from '../api/hooks.ts';
 import { RESLINK_ANCHOR_KINDS, RESLINK_TARGET_TYPES } from '../components/reslinks/registry.ts';
 import {
@@ -19,6 +22,8 @@ import {
 } from '../components/trips/tripSectionFields.ts';
 import { SEEDED_PARTICIPANT_ROLE_CODES } from '../components/trips/participantRoles.ts';
 import { SEEDED_TRIP_TYPE_CODES } from '../components/trips/tripTypes.ts';
+import { TERRAIN_PROBLEM_MESSAGE_KEYS } from '../pages/admin/terrain/terrainProblems.ts';
+import type { TerrainDepthBand } from '../pages/admin/terrain/terrainDepth.ts';
 import en from './locales/en.json';
 import ro from './locales/ro.json';
 
@@ -127,6 +132,47 @@ const activityStates: Record<ActivityState, true> = {
   delayed: true,
 };
 
+/**
+ * The vocabularies a terrain build is described by. The list and the pipeline view look each
+ * label up by the value the server sent, so an unnamed one ships as a raw lookup key in the column
+ * that says whether a build worked — and the scanner that checks written-out keys cannot see these,
+ * because they are built from the value rather than typed out.
+ */
+const terrainBuildStatuses: Record<TerrainBuildStatus, true> = {
+  queued: true,
+  running: true,
+  succeeded: true,
+  failed: true,
+};
+
+const terrainBuildPhases: Record<TerrainBuildPhase, true> = {
+  pending: true,
+  fetch: true,
+  prepare: true,
+  bake: true,
+  validate: true,
+  publish: true,
+};
+
+const terrainSourceKinds: Record<TerrainBuildSourceKind, true> = {
+  fetched: true,
+  uploaded: true,
+  serverDirectory: true,
+};
+
+/**
+ * The sentence that says what a chosen depth is asking for is looked up the same way, from a band
+ * this application decides rather than from anything the server sends. It is the one line on the
+ * form that explains the number, so an unnamed band renders as its own key exactly where somebody
+ * is trying to understand what they are about to ask for.
+ */
+const terrainDepthBands: Record<TerrainDepthBand, true> = {
+  coarse: true,
+  coverage: true,
+  fine: true,
+  survey: true,
+};
+
 // EN and RO must be maintained together.
 describe('i18n locales', () => {
   it('en and ro define exactly the same keys', () => {
@@ -151,6 +197,41 @@ describe('i18n locales', () => {
     // The reverse direction too: a leftover label for a domain the server dropped would
     // sit unnoticed in both files forever.
     expect(Object.keys(enDomains).sort()).toEqual(names.sort());
+  });
+
+  it('every terrain build status, phase, source kind and depth band is named in both locales', () => {
+    const cases: [string[], Record<string, string>, Record<string, string>][] = [
+      [Object.keys(terrainBuildStatuses), en.terrain.statuses, ro.terrain.statuses],
+      [Object.keys(terrainBuildPhases), en.terrain.phases, ro.terrain.phases],
+      [Object.keys(terrainSourceKinds), en.terrain.sourceKinds, ro.terrain.sourceKinds],
+      [Object.keys(terrainDepthBands), en.terrain.depthBands, ro.terrain.depthBands],
+    ];
+    for (const [names, enNames, roNames] of cases) {
+      expect(names.filter((name) => !enNames[name])).toEqual([]);
+      expect(names.filter((name) => !roNames[name])).toEqual([]);
+      // And the reverse: a label kept for a value the server no longer sends would sit unnoticed.
+      expect(Object.keys(enNames).sort()).toEqual(names.sort());
+      expect(Object.keys(roNames).sort()).toEqual(names.sort());
+    }
+  });
+
+  /**
+   * The refusals the terrain endpoints answer with are worded through a lookup table rather than
+   * written out one by one at the call, so the scan below — which reads keys straight out of the
+   * source text — cannot see any of them. Without this, a refusal nobody translated would appear
+   * on screen as its own key at the exact moment somebody needs to be told why the server said no.
+   */
+  it('every terrain refusal has wording in both locales, and none is left over', () => {
+    const keys = Object.values(TERRAIN_PROBLEM_MESSAGE_KEYS);
+    expect(keys.length).toBeGreaterThan(10);
+    for (const locale of [en, ro]) {
+      expect(keys.filter((key) => typeof lookup(locale, key) !== 'string')).toEqual([]);
+    }
+    // And the reverse: wording kept for a code the server no longer answers with would sit here
+    // unread, and nothing else would ever say so.
+    const named = keys.map((key) => key.replace('terrain.problems.', '')).sort();
+    expect(Object.keys(en.terrain.problems).sort()).toEqual(named);
+    expect(Object.keys(ro.terrain.problems).sort()).toEqual(named);
   });
 
   it('every access scope kind the server publishes is named in both locales', () => {

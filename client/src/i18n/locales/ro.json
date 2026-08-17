@@ -32,7 +32,126 @@
   },
   "terrain": {
     "title": "Relief",
-    "noBuilds": "Pentru această instalare nu a fost generată încă nicio suprafață de altitudine."
+    "noBuilds": "Pentru această instalare nu a fost generată încă nicio suprafață de altitudine.",
+    "noBuildsHint": "Trasează un dreptunghi mai sus și pornește prima generare.",
+    "intro": "Trasează un dreptunghi, spune de unde vin datele de altitudine, iar instalarea generează terenul pe care îl desenează scena 3D.",
+    "area": {
+      "draw": "Trasează dreptunghi",
+      "clear": "Șterge dreptunghiul",
+      "hint": "Trage un dreptunghi pe hartă pentru a spune ce teren acoperă această generare.",
+      "chosen": "Vest, sud, est, nord: {{extent}} — {{area}} grade pătrate."
+    },
+    "depthBands": {
+      "coarse": "Nivelul {{depth}}: forma generală a reliefului. Se generează repede și ocupă puțin, dar un versant apare ca o singură pantă.",
+      "coverage": "Nivelul {{depth}}: tot detaliul pe care îl conține acoperirea de treizeci de metri pe care o obține aplicația. Aceasta este valoarea obișnuită.",
+      "fine": "Nivelul {{depth}}: mai fin decât acoperirea obținută. Merită cerut doar acolo unde dreptunghiul este acoperit de rastre de câțiva metri.",
+      "survey": "Nivelul {{depth}}: ceea ce justifică datele de măsurătoare de o jumătate de metru. Fiecare nivel aproximativ împătrește atât numărul de dale scrise, cât și timpul necesar."
+    },
+    "heightDatums": {
+      "orthometric": "Deasupra nivelului mării",
+      "ellipsoidal": "Deasupra elipsoidului"
+    },
+    "form": {
+      "title": "Generare nouă",
+      "area": "Zonă",
+      "areaRequired": "Trasează dreptunghiul pe care îl acoperă această generare.",
+      "areaTooLarge": "Dreptunghiul este mai mare decât generează această instalare dintr-o dată. Generează-l ca mai multe zone mai mici.",
+      "sources": "De unde vin datele de altitudine",
+      "fetchCoverage": "Obține acoperirea pentru acest dreptunghi",
+      "fetchCoverageHint": "Date de altitudine de treizeci de metri care acoperă întreaga suprafață uscată, aduse de aplicație. Marea nu întoarce nimic, ceea ce este un răspuns normal, nu o eroare.",
+      "upload": "Rastre de pe acest calculator",
+      "uploadHint": "Trage aici rastre de altitudine sau apasă pentru a le alege.",
+      "uploadFormats": "Acceptate: {{formats}}. Cel mult 512 MB fiecare — ce este mai mare își are locul într-un director de pe server.",
+      "rasterTooLarge": "Fișierul depășește 512 MB. Pune-l într-un director de pe server.",
+      "uploadsPending": "Aceste fișiere nu au ajuns încă, așa că o generare pornită acum s-ar face fără ele: {{files}}. Așteaptă-le sau scoate-le din listă.",
+      "directory": "Director pe server",
+      "directoryHint": "Un director pe care operatorul l-a declarat ca fiind citibil, sau unul aflat sub el. Se citește tot ce arată acolo a rastru de altitudine.",
+      "directoryPlaceholder": "Alege sau scrie un director",
+      "attribution": "Sursa datelor",
+      "attributionHint": "Cui îi aparțin datele. Se scrie în suprafața publicată, așa că o generare nu trebuie să poarte niciodată o mențiune care nu îi aparține.",
+      "attributionRequired": "Spune cui îi aparțin rastrele pe care le-ai furnizat.",
+      "licence": "Licență",
+      "depth": "Adâncime",
+      "depthCapped": "Nimic de aici nu poate umple acele niveluri.",
+      "depthCappedDetail": "Această generare se face doar din acoperirea de treizeci de metri obținută de aplicație, care nu mai are detaliu în jurul nivelului 13. Nivelurile mai adânci nu sunt refuzate și nici raportate: suprafața pur și simplu încetează să le ofere, iar nimic nu spune asta ulterior. Adaugă rastre mai fine sau alege o adâncime mai mică.",
+      "heights": "Altitudini",
+      "heightDatum": "Altitudinile sunt măsurate de la",
+      "heightDatumHint": "Ce înseamnă numerele din aceste rastre. O alegere greșită ridică sau coboară întreaga suprafață cu zeci de metri.",
+      "geoidHeight": "Înălțimea geoidului (m)",
+      "geoidHeightHint": "Cât de sus se află aici suprafața locală a nivelului mării față de elipsoid. Se folosește doar pentru altitudini elipsoidale.",
+      "start": "Pornește generarea",
+      "started": "Generarea a fost pusă la coadă.",
+      "bakeService": "Transformarea acestor date în dale are nevoie de un serviciu separat, pe care o instalare obișnuită nu îl rulează. Dacă aceasta nu îl rulează, generarea se oprește la pasul acela, iar pagina spune atunci ce trebuie scris ca să fie pornit; tot ce se face înainte de pasul acela se face oricum."
+    },
+    "statuses": {
+      "queued": "La coadă",
+      "running": "În curs",
+      "succeeded": "Încheiată",
+      "failed": "Eșuată"
+    },
+    "phases": {
+      "pending": "Așteaptă să îi vină rândul — încă nu a început nimic.",
+      "fetch": "Obținere",
+      "prepare": "Pregătire",
+      "bake": "Generare",
+      "validate": "Verificare",
+      "publish": "Publicare"
+    },
+    "sourceKinds": {
+      "fetched": "Acoperire obținută",
+      "uploaded": "Raster încărcat",
+      "serverDirectory": "Director pe server"
+    },
+    "list": {
+      "title": "Generări",
+      "state": "Stare",
+      "current": "Se desenează",
+      "area": "Zonă",
+      "depth": "Adâncime",
+      "when": "Trimisă",
+      "size": "Pe disc",
+      "sizeHint": "Tot ce a lăsat în urmă generarea: dalele publicate și rasterele convertite păstrate lângă ele.",
+      "sizeUnknown": "nimic deocamdată",
+      "actions": "Acțiuni",
+      "activate": "Desenează aceasta",
+      "activated": "Scena desenează acum această generare.",
+      "stop": "Nu mai desena",
+      "stopped": "Scena desenează din nou teren gol.",
+      "delete": "Șterge",
+      "deleteConfirm": "Ștergi această generare și cei {{size}} pe care îi ține pe disc pentru {{area}}?"
+    },
+    "detail": {
+      "title": "Această generare",
+      "sources": "Făcută din",
+      "noSources": "Pentru această generare nu s-a înregistrat încă nimic.",
+      "failed": "Această generare s-a oprit înainte să se încheie.",
+      "log": "Ce a spus unealta",
+      "noLog": "Încă nu s-a spus nimic."
+    },
+    "worker": {
+      "title": "Această instalare nu are cu ce să transforme rasterele în dale",
+      "body": "Obținerea datelor de altitudine și pregătirea lor funcționează așa cum sunt. Transformarea lor în dale are nevoie de un serviciu separat, pe care o instalare obișnuită nu îl pornește: imaginea lui trece binișor de un gigabyte, iar o instalare care nu generează niciodată relief nu are de ce să o țină.",
+      "setting": "În fișierul de mediu de lângă fișierele compose ale instalării:",
+      "command": "Apoi, din același director:",
+      "resumes": "Tot ce s-a întâmplat înainte de acest pas rămâne făcut, iar ce a obținut și a pregătit generarea este în continuare pe disc sub ea. Generarea aceea nu poate fi dusă mai departe de aici: după ce serviciul rulează, pornește din nou o generare peste același dreptunghi și șterge-o pe cea oprită ca să recuperezi discul pe care îl ține."
+    },
+    "problems": {
+      "notFound": "Generarea nu mai există.",
+      "forbidden": "Nu ai voie să faci asta.",
+      "alreadyBuilding": "Zona respectivă este deja în lucru. Așteaptă să se termine.",
+      "noSources": "O generare trebuie făcută din ceva: fie obții acoperirea dreptunghiului, fie furnizezi rastre proprii.",
+      "sourceInvalid": "Unul dintre rastre nu este printre cele păstrate de această instalare. Trimite-l din nou.",
+      "directoryUnavailable": "Din acel director nu se poate citi: fie nu există, fie nu este unul pe care această instalare are voie să îl citească.",
+      "noRoots": "Această instalare nu citește rastre din niciun director de pe server.",
+      "rasterUnsupported": "Fișierul nu este un rastru de altitudine pe care această instalare îl citește.",
+      "rasterSizeInvalid": "Fișierul este gol sau mai mare decât poate fi o încărcare.",
+      "extentInvalid": "Dreptunghiul acela nu este un dreptunghi pe Pământ. Trasează-l din nou.",
+      "extentTooLarge": "Dreptunghiul este mai mare decât generează această instalare dintr-o dată. Generează-l ca mai multe zone mai mici.",
+      "depthInvalid": "Adâncimea aceea este în afara a ceea ce generează această instalare.",
+      "notPublished": "Generarea nu are nicio suprafață de desenat. Fie dalele nu au fost niciodată recitite și găsite întregi, fie nu mai sunt acolo de unde se servește relieful.",
+      "active": "Generarea aceasta este relieful pe care îl desenează scena. Alege alt relief sau oprește desenarea acestuia înainte de a-l șterge.",
+      "running": "Generarea nu s-a încheiat. Fișierele ei se scriu chiar acum, așa că poate fi ștearsă după ce se oprește, oricum s-ar opri."
+    }
   },
   "dashboard": {
     "title": "Panou de bord",

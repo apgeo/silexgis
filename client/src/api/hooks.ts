@@ -176,7 +176,13 @@ export const queryKeys = {
   resLinkTargets: (targetType: string, q: string) => ['reslinks', 'targets', targetType, q] as const,
   resLinkRelationTypes: ['reslinks', 'relation-types'] as const,
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
+  // Every terrain key starts with this list key, so the mutations that invalidate it also reach
+  // the paged list and each build's own detail. A key that did not would leave the page showing
+  // a build's old phase for as long as its query stayed fresh.
   terrainBuilds: ['terrain', 'builds'] as const,
+  terrainBuildList: (params: TerrainBuildPageParams) => ['terrain', 'builds', 'page', params] as const,
+  terrainBuild: (id: string) => ['terrain', 'builds', 'detail', id] as const,
+  terrainSourceDirectories: ['terrain', 'source-directories'] as const,
 };
 
 async function unwrap<T>(
@@ -3988,6 +3994,147 @@ export function useTripStatistics(
 }
 
 export type TerrainBuild = components['schemas']['TerrainBuildDto'];
+export type TerrainBuildDetail = components['schemas']['TerrainBuildDetailDto'];
+export type TerrainBuildSource = components['schemas']['TerrainBuildSourceDto'];
+export type TerrainBuildSourceRequest = components['schemas']['TerrainBuildSourceRequest'];
+export type TerrainBuildSubmitRequest = components['schemas']['TerrainBuildSubmitRequest'];
+export type TerrainRasterUpload = components['schemas']['TerrainRasterUploadDto'];
+export type TerrainBuildStatus = components['schemas']['TerrainBuildStatus'];
+export type TerrainBuildPhase = components['schemas']['TerrainBuildPhase'];
+export type TerrainBuildSourceKind = components['schemas']['TerrainBuildSourceKind'];
+export type TerrainHeightDatum = components['schemas']['TerrainHeightDatum'];
+
+export interface TerrainBuildPageParams {
+  page: number;
+  pageSize: number;
+}
+
+/** Whether a build is still going, which is the only thing worth asking the server again about. */
+export function terrainBuildUnsettled(status: TerrainBuildStatus): boolean {
+  return status === 'queued' || status === 'running';
+}
+
+/**
+ * How long to wait before asking again, or `false` for "stop asking".
+ *
+ * Exported and pure so the rule that a settled build is left alone can be asserted directly,
+ * rather than inferred from a live query that would have to be watched for two seconds to prove
+ * it did nothing.
+ */
+export function terrainBuildPollInterval(
+  status: TerrainBuildStatus | undefined,
+): number | false {
+  return status !== undefined && terrainBuildUnsettled(status) ? 2000 : false;
+}
+
+/**
+ * The same rule for a page of builds: ask again only while something on it is unfinished.
+ *
+ * A rule of its own rather than the one above applied to a row, and exported for the same reason:
+ * a list left open on nothing but finished builds must stop asking, and that is only provable by
+ * naming the rule the list actually uses.
+ */
+export function terrainListPollInterval(
+  items: { status: TerrainBuildStatus }[] | undefined,
+): number | false {
+  return (items ?? []).some((build) => terrainBuildUnsettled(build.status)) ? 2000 : false;
+}
+
+/**
+ * Every build this installation has made, newest first.
+ *
+ * A bake takes eleven seconds over a pilot rectangle and hours over a country, so the list keeps
+ * asking while anything on it is unfinished and stops the moment nothing is — the interval
+ * disables itself rather than being cleared by whoever navigated away.
+ */
+export function useTerrainBuilds(params: TerrainBuildPageParams, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.terrainBuildList(params),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/terrain/builds', {
+          params: { query: { page: params.page, pageSize: params.pageSize } },
+        }),
+      ),
+    enabled,
+    placeholderData: keepPreviousData,
+    refetchInterval: (query) => terrainListPollInterval(query.state.data?.items),
+    // Newest first is the server's own ordering; there is nothing to sort by here.
+  });
+}
+
+/**
+ * One build with its sources and the tail of what the tool itself said.
+ *
+ * The log tail and the source list live only on this response, so a running build is watched
+ * through here rather than through the list — and only while it is running.
+ */
+export function useTerrainBuild(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.terrainBuild(id ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/terrain/builds/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+    refetchInterval: (query) => terrainBuildPollInterval(query.state.data?.build.status),
+  });
+}
+
+/**
+ * Starts a build over a rectangle.
+ *
+ * The answer is the build row, not the queue row, so the list is asked again rather than seeded:
+ * the server decides where a new build sorts and what phase it starts in.
+ */
+export function useSubmitTerrainBuild() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: TerrainBuildSubmitRequest) =>
+      unwrap(api.POST('/api/v1/terrain/builds', { body: request })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainBuilds });
+    },
+  });
+}
+
+/**
+ * Sends one raster up, and answers the reference a build declares it by.
+ *
+ * Nothing is invalidated: an uploaded file is not a build and does not appear anywhere until a
+ * submit names it.
+ */
+export function useUploadTerrainRaster() {
+  return useMutation({
+    mutationFn: async (file: File): Promise<TerrainRasterUpload> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      // Multipart: hand the FormData through untouched (the browser sets the boundary).
+      return unwrap(
+        api.POST('/api/v1/terrain/rasters', {
+          body: form as never,
+          bodySerializer: (b: unknown) => b as FormData,
+        }),
+      );
+    },
+  });
+}
+
+/**
+ * The directories on the server this installation may read rasters from.
+ *
+ * Refused outright to anyone who is not a full administrator, because the answer is the operator's
+ * own directory layout — a fact about the machine rather than about anything in it. Callers gate
+ * on that before enabling this, so the request is never made and never refused; `retry` is off
+ * regardless, since a refusal will not become an acceptance by being asked twice.
+ */
+export function useTerrainSourceDirectories(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.terrainSourceDirectories,
+    queryFn: () => unwrap(api.GET('/api/v1/terrain/source-directories')),
+    enabled,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+}
 
 /**
  * Everything that changes which elevation model the 3D scene draws.

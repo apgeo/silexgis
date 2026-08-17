@@ -32,7 +32,126 @@
   },
   "terrain": {
     "title": "Terrain",
-    "noBuilds": "No elevation surface has been built for this installation yet."
+    "noBuilds": "No elevation surface has been built for this installation yet.",
+    "noBuildsHint": "Draw a rectangle above and start the first one.",
+    "intro": "Draw a rectangle, say where its elevation data comes from, and the installation builds the ground the 3D scene draws.",
+    "area": {
+      "draw": "Draw rectangle",
+      "clear": "Clear rectangle",
+      "hint": "Drag a rectangle on the map to say which ground this build covers.",
+      "chosen": "West, south, east, north: {{extent}} — {{area}} square degrees."
+    },
+    "depthBands": {
+      "coarse": "Level {{depth}}: a broad shape of the landscape. Quick to build and small on disk, but a hillside reads as one slope.",
+      "coverage": "Level {{depth}}: as much detail as the thirty-metre coverage this application obtains actually holds. This is the working default.",
+      "fine": "Level {{depth}}: finer than obtained coverage. Worth asking for only where rasters of a few metres cover the rectangle.",
+      "survey": "Level {{depth}}: what half-metre survey data earns. Each level roughly quadruples both the tiles written and the time taken."
+    },
+    "heightDatums": {
+      "orthometric": "Above sea level",
+      "ellipsoidal": "Above the ellipsoid"
+    },
+    "form": {
+      "title": "New build",
+      "area": "Area",
+      "areaRequired": "Draw the rectangle this build covers.",
+      "areaTooLarge": "That rectangle is larger than this installation builds in one go. Build it as several smaller areas.",
+      "sources": "Where the elevation data comes from",
+      "fetchCoverage": "Obtain coverage for this rectangle",
+      "fetchCoverageHint": "Thirty-metre elevation data covering the whole land surface, fetched by the application. Sea returns nothing, which is a normal answer rather than a failure.",
+      "upload": "Rasters from this computer",
+      "uploadHint": "Drop elevation rasters here, or click to choose them.",
+      "uploadFormats": "Accepted: {{formats}}. Up to 512 MB each — anything larger belongs in a directory on the server.",
+      "rasterTooLarge": "That file is larger than 512 MB. Put it in a directory on the server instead.",
+      "uploadsPending": "These files have not arrived yet, so a build started now would be made without them: {{files}}. Wait for them, or take them off the list.",
+      "directory": "Directory on the server",
+      "directoryHint": "A directory the operator has listed as readable, or one below it. Everything in it that looks like an elevation raster is read.",
+      "directoryPlaceholder": "Choose or type a directory",
+      "attribution": "Credit",
+      "attributionHint": "Who the data belongs to. It is written into the published surface, so a build must never carry a credit that is not its own.",
+      "attributionRequired": "Say who the rasters you supplied belong to.",
+      "licence": "Licence",
+      "depth": "Depth",
+      "depthCapped": "Nothing here can fill those levels.",
+      "depthCappedDetail": "This build is made only from the thirty-metre coverage the application obtains, which runs out of detail around level 13. Deeper levels are not refused and not reported: the surface simply stops offering them, and nothing afterwards says so. Add finer rasters, or choose a shallower depth.",
+      "heights": "Heights",
+      "heightDatum": "Heights are measured from",
+      "heightDatumHint": "What the numbers in these rasters mean. Getting it wrong lifts or drops the whole surface by tens of metres.",
+      "geoidHeight": "Geoid height (m)",
+      "geoidHeightHint": "How far the local sea-level surface sits above the ellipsoid here. Used only for ellipsoidal heights.",
+      "start": "Start build",
+      "started": "The build has been queued.",
+      "bakeService": "Turning that data into tiles needs a service of its own, which a plain installation does not run. If this one does not, the build stops at that step and this page then says what to type to enable it; everything before that step still happens."
+    },
+    "statuses": {
+      "queued": "Queued",
+      "running": "Running",
+      "succeeded": "Finished",
+      "failed": "Failed"
+    },
+    "phases": {
+      "pending": "Waiting its turn — nothing has started yet.",
+      "fetch": "Obtain",
+      "prepare": "Prepare",
+      "bake": "Bake",
+      "validate": "Check",
+      "publish": "Publish"
+    },
+    "sourceKinds": {
+      "fetched": "Obtained coverage",
+      "uploaded": "Uploaded raster",
+      "serverDirectory": "Directory on the server"
+    },
+    "list": {
+      "title": "Builds",
+      "state": "State",
+      "current": "Being drawn",
+      "area": "Area",
+      "depth": "Depth",
+      "when": "Submitted",
+      "size": "On disk",
+      "sizeHint": "Everything the build left behind: the published tiles and the converted rasters kept beside them.",
+      "sizeUnknown": "nothing yet",
+      "actions": "Actions",
+      "activate": "Draw this",
+      "activated": "The scene now draws this build.",
+      "stop": "Stop drawing",
+      "stopped": "The scene draws bare ground again.",
+      "delete": "Delete",
+      "deleteConfirm": "Remove this build and the {{size}} it is keeping on disk for {{area}}?"
+    },
+    "detail": {
+      "title": "This build",
+      "sources": "Made from",
+      "noSources": "Nothing has been recorded for this build yet.",
+      "failed": "This build stopped before it finished.",
+      "log": "What the tool said",
+      "noLog": "Nothing has been said yet."
+    },
+    "worker": {
+      "title": "This installation has nothing that can turn rasters into tiles",
+      "body": "Obtaining elevation data and preparing it work as they are. Making tiles out of it needs a service of its own, which a plain installation does not start: its image is well over a gigabyte, and an installation that never builds terrain should not have to hold it.",
+      "setting": "In the environment file beside the deployment's compose files:",
+      "command": "Then, from that same directory:",
+      "resumes": "Everything before this step still happened, and what the build obtained and prepared is still on disk under it. There is no way to take that build further from here: once the service is running, start a build again over the same rectangle, and remove the stopped one to get back the disk it is holding."
+    },
+    "problems": {
+      "notFound": "That build is no longer here.",
+      "forbidden": "You are not allowed to do that.",
+      "alreadyBuilding": "That area is already being built. Wait for it to finish.",
+      "noSources": "A build has to be made from something: either obtain the coverage of the rectangle, or supply rasters of your own.",
+      "sourceInvalid": "One of those rasters is not one this installation is holding. Send it again.",
+      "directoryUnavailable": "That directory cannot be read from: it is not there, or it is not one this installation may read.",
+      "noRoots": "This installation reads rasters from no directory on the server.",
+      "rasterUnsupported": "That file is not an elevation raster this installation reads.",
+      "rasterSizeInvalid": "That file is empty, or larger than an upload may be.",
+      "extentInvalid": "That rectangle is not a rectangle on the Earth. Draw it again.",
+      "extentTooLarge": "That rectangle is larger than this installation builds in one go. Build it as several smaller areas.",
+      "depthInvalid": "That depth is outside what this installation builds.",
+      "notPublished": "That build has no surface to draw. Its tiles were either never read back and found whole, or they are no longer where terrain is served from.",
+      "active": "That build is the terrain the scene is drawing. Choose other terrain, or stop drawing this one, before removing it.",
+      "running": "That build has not finished. Its files are being written right now, so it can be removed once it has stopped, whichever way it stops."
+    }
   },
   "dashboard": {
     "title": "Dashboard",
