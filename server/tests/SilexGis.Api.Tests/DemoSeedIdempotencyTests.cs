@@ -177,6 +177,54 @@ public sealed class DemoSeedIdempotencyTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The same, for the trips a camp gathered — and for the trips themselves.
+    ///
+    /// A camp holding no trips is the state every surface built over the membership reads as
+    /// empty in, and an installation seeded before those trips existed is exactly where that would
+    /// be permanent: the trips block used to stop at the first demo trip it found, so a trip added
+    /// to the demo later reached no machine that had already run it. The state is built by
+    /// removing both the memberships and the trips they point at.
+    /// </summary>
+    [Fact]
+    public async Task A_database_seeded_before_the_camps_trips_existed_gains_them_on_the_next_run()
+    {
+        await using (var db = CreateContext())
+        {
+            await DemoSeeder.SeedAsync(db, Owner);
+        }
+
+        int members;
+        await using (var strip = CreateContext())
+        {
+            members = await strip.ExpeditionTrips.CountAsync();
+            members.ShouldBeGreaterThan(0);
+
+            // A camp whose trips were never seeded, on a database that has everything else.
+            await strip.Database.ExecuteSqlRawAsync("DELETE FROM expedition_trips");
+            await strip.Database.ExecuteSqlRawAsync(
+                "DELETE FROM trip_logs WHERE title LIKE 'Demo: camp %'");
+        }
+
+        await using (var again = CreateContext())
+        {
+            await DemoSeeder.SeedAsync(again, Owner);
+        }
+
+        await using var read = CreateContext();
+        (await read.ExpeditionTrips.CountAsync()).ShouldBe(members);
+
+        // And the trips are back with what makes them worth gathering: the figures the camp's
+        // totals are made of, and a sketch for its map to draw.
+        var trips = await read.TripLogs
+            .Where(t => t.Title.StartsWith("Demo: camp "))
+            .Select(t => new { t.Id, t.Geom, t.DepthReachedM })
+            .ToListAsync();
+        trips.Count.ShouldBe(members);
+        trips.ShouldContain(t => t.Geom != null);
+        trips.ShouldContain(t => t.DepthReachedM != null);
+    }
+
+    /// <summary>
     /// Every table the schema has, by name, with its row count. Read from the catalogue rather
     /// than from a list somebody maintains, so a table added tomorrow is covered without anyone
     /// remembering to add it here.

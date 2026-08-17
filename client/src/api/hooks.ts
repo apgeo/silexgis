@@ -176,6 +176,9 @@ export const queryKeys = {
   resLinkTargets: (targetType: string, q: string) => ['reslinks', 'targets', targetType, q] as const,
   resLinkRelationTypes: ['reslinks', 'relation-types'] as const,
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
+  expedition: (id: string) => ['expeditions', 'detail', id] as const,
+  expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,
+  expeditionMap: (id: string) => ['expeditions', 'map', id] as const,
 };
 
 async function unwrap<T>(
@@ -1965,6 +1968,12 @@ export interface TripLogListParams {
   to?: string;
   caveId?: string;
   search?: string;
+  /**
+   * The camp's own trip list. It is filtered like every other listing, so the same camp lists
+   * different trips to different people; a camp the caller may not read answers as though it
+   * gathered nothing rather than refusing, so an id cannot be probed for existence here.
+   */
+  expeditionId?: string;
 }
 
 export function useTripLogs(params: TripLogListParams) {
@@ -3993,6 +4002,87 @@ export function useTripStatistics(
     // does not need to ask again.
     staleTime: 30_000,
     // A caller who may not read the subject is refused, and the surface simply does not appear.
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Expeditions
+// ---------------------------------------------------------------------------
+
+export type ExpeditionInfo = components['schemas']['ExpeditionDto'];
+
+/**
+ * One camp. A camp the caller may not read answers exactly as one that does not exist does —
+ * the server spells both `expedition.not_found` — so the page has no way to tell them apart and
+ * must not try: an address that answered differently for the two would be an address anybody
+ * could probe for the existence of a camp they cannot see.
+ */
+export function useExpedition(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.expedition(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/expeditions/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+    // A refusal here is a settled answer about the caller, not a transient failure: retrying it
+    // three times only delays the page saying so.
+    retry: false,
+  });
+}
+
+export type ExpeditionRoster = components['schemas']['ExpeditionRosterDto'];
+export type ExpeditionRosterEntry = components['schemas']['ExpeditionRosterEntryDto'];
+export type ExpeditionRosterRole = components['schemas']['ExpeditionRosterRoleDto'];
+
+/** What somebody may be recorded as having been at a camp as. Seeded rows plus an installation's own. */
+export function useExpeditionRosterRoles() {
+  return useQuery({
+    queryKey: queryKeys.taxonomy('expedition-roster-roles'),
+    queryFn: () => unwrap(api.GET('/api/v1/expedition-roster-roles')),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * Who was at a camp, and for which days.
+ *
+ * Two rights, not one: the right to read the camp *and* the right to read people. A caller
+ * holding the first and not the second is refused outright, with a code of its own, rather than
+ * being handed rows with the names struck out — a struck-out list still says how many people were
+ * there and when. That refusal is a designed answer and the surface showing it renders it as a
+ * state of the page, which is why it must not be retried: the identical request cannot produce
+ * anything else, and three attempts only hold the screen in its loading state meanwhile.
+ */
+export function useExpeditionRoster(expeditionId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.expeditionRoster(expeditionId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/expeditions/{expeditionId}/roster', {
+          params: { path: { expeditionId: expeditionId! } },
+        }),
+      ),
+    enabled: !!expeditionId,
+    retry: false,
+  });
+}
+
+/**
+ * Everything one camp draws on a map, as one answer.
+ *
+ * Three kinds of shape come back together — the camp's working area, the sketches of the member
+ * trips this caller may read, and the entrances of the caves those trips name whose positions
+ * this caller may see — because they are governed by three different rules and only the server
+ * can apply them. Nothing here filters what arrives: whatever reached the client was cleared to.
+ *
+ * Fetched only once the map tab is the one on screen, so opening a camp does not pay for a map
+ * nobody looked at.
+ */
+export function useExpeditionMap(expeditionId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.expeditionMap(expeditionId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/expeditions/{id}/map', { params: { path: { id: expeditionId! } } })),
+    enabled: !!expeditionId && enabled,
     retry: false,
   });
 }

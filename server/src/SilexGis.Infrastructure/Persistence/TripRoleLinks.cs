@@ -405,8 +405,19 @@ public static class TripRoleLinks
             }
         }
 
+        // A link opened earlier in this same unit of work has no row to find, so it is looked for
+        // in the tracker — but only the ones this trip is a member of. A link of the same role
+        // opened for a different trip is not this trip's naming, and counting it would make two
+        // trips naming the same cave in one save leave the second trip naming nothing at all.
+        var pendingTripLinks = db.ChangeTracker.Entries<ResLinkMember>()
+            .Where(e => e.State == EntityState.Added)
+            .Select(e => e.Entity)
+            .Where(m => m.EntityType == AttachedEntityType.TripLog && m.EntityId == tripId)
+            .Select(m => m.ResLinkId)
+            .ToHashSet();
         var pendingLinks = db.ChangeTracker.Entries<ResLink>()
-            .Where(e => e.State == EntityState.Added && e.Entity.RelationTypeId == roleId)
+            .Where(e => e.State == EntityState.Added && e.Entity.RelationTypeId == roleId
+                && pendingTripLinks.Contains(e.Entity.Id))
             .Select(e => e.Entity.Id)
             .ToHashSet();
         return db.ChangeTracker.Entries<ResLinkMember>().Any(e =>

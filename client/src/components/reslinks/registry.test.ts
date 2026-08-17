@@ -90,9 +90,22 @@ describe('member type registry', () => {
     ).toBe('/documents/d1');
   });
 
+  it('routes a camp to its own page, from either side', () => {
+    // Both halves, because either one alone decides where a chip goes: the server names the
+    // route for a camp it resolved, and this table answers for one it did not.
+    expect(memberRoute('expedition', 'e1', null)).toBe('/expeditions/e1');
+    expect(
+      memberRoute('expedition', 'e1', {
+        title: 'Bihor summer camp',
+        subtitle: null,
+        route: '/expeditions/e1',
+        thumbnailUrl: null,
+      }),
+    ).toBe('/expeditions/e1');
+  });
+
   it('leaves a chip un-navigable when neither side has a page for it', () => {
     expect(memberRoute('cabinet', 'c1', null)).toBeNull();
-    expect(memberRoute('expedition', 'e1', null)).toBeNull();
     expect(
       memberRoute('caver', 'p1', { title: 'Someone', subtitle: null, route: null, thumbnailUrl: null }),
     ).toBeNull();

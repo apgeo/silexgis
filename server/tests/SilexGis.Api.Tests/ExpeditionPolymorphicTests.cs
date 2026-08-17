@@ -217,10 +217,11 @@ public sealed class ExpeditionPolymorphicTests : IAsyncLifetime, IDisposable
             .Single(m => m.GetProperty("targetType").GetString() == "expedition");
         member.GetProperty("display").GetProperty("title").GetString().ShouldBe("Linked camp");
 
-        // Named but not navigable: this client has no page for a camp, and a resolver that
-        // answered with one would send the reader to a URL the router cannot match. Every other
-        // kind without a page answers the same way, so the chip renders and does not navigate.
-        member.GetProperty("display").GetProperty("route").ValueKind.ShouldBe(JsonValueKind.Null);
+        // Named *and* navigable, because the client carries this address. The pair is what is
+        // being asserted: a resolver naming a route the application does not have would send the
+        // reader to the router's error screen, so this expectation is what stops the route being
+        // taken out of the client without the resolver following it.
+        member.GetProperty("display").GetProperty("route").GetString().ShouldBe($"/expeditions/{camp}");
     }
 
     [Fact]
@@ -384,6 +385,19 @@ public sealed class ExpeditionPolymorphicTests : IAsyncLifetime, IDisposable
         // reads the camelCase name out of a payload and puts it back into a URL.
         (await owner.GetAsync($"/api/v1/objects/EXPEDITION/{camp}/access"))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The person told about the grant is given somewhere to go, and it is the camp's own
+        // page. A notification carrying an address this application does not answer is worse than
+        // one carrying none: it reads as a working link and lands on the router's error screen.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var placeholders = await db.NotificationOutbox.AsNoTracking()
+            .Where(n => n.UserId == outsiderId && n.Category == NotificationCategory.PermissionGranted)
+            .OrderByDescending(n => n.Id)
+            .Select(n => n.Placeholders)
+            .FirstAsync();
+        JsonDocument.Parse(placeholders).RootElement
+            .GetProperty("url").GetString().ShouldBe($"/expeditions/{camp}");
     }
 
     [Fact]

@@ -79,6 +79,7 @@ public static class DemoSeeder
         // would never run there — the demo would quietly stay as it was on every machine that had
         // already seen it.
         await SeedExpeditionRosterAsync(db, ct);
+        await SeedExpeditionTripsAsync(db, ct);
         await db.SaveChangesAsync(ct);
 
         if (documents is not null && fileStore is not null)
@@ -478,10 +479,14 @@ public static class DemoSeeder
     private static async Task SeedTripLogsAsync(
         SilexGisDbContext db, Guid ownerUserId, CancellationToken ct)
     {
-        if (await db.TripLogs.AnyAsync(t => t.Title.StartsWith("Demo:"), ct))
-        {
-            return;
-        }
+        // Per trip rather than "any demo trip at all". A block that stops at the first sign of
+        // itself never runs again on an installation the earlier version was run on, so a trip
+        // added later would exist only on machines that had never seeded — and the section built
+        // over it would read as empty there, which is indistinguishable from broken.
+        var alreadySeeded = await db.TripLogs
+            .Where(t => t.Title.StartsWith("Demo:"))
+            .Select(t => t.Title)
+            .ToListAsync(ct);
 
         var caverIds = new List<Guid>();
         foreach (var fullName in new[] { "Ana Demo", "Bogdan Demo", "Cristina Demo", "Dan Demo" })
@@ -538,6 +543,23 @@ public static class DemoSeeder
                 ActivityState.Draft, null),
             ("Demo: maintenance and rebolting", "maintenance", new DateOnly(2026, 7, 18), Visibility.Public,
                 ActivityState.Cancelled, null),
+
+            // The three that were done from the long camp, and dated inside its fortnight so the
+            // camp reads as a fortnight of caving rather than as a folder somebody dropped
+            // unrelated trips into. They are prefixed so the block that joins them to the camp can
+            // find them by name and nothing else. Two of them carry figures, so the camp's totals
+            // are numbers rather than zeroes; one is only visible to accounts, so the same camp
+            // shows a signed-in reader a larger total than a visitor — which is the whole reason
+            // the totals are shown with a caveat instead of as bare truth.
+            (CampTripPrefix + "exploration push", "exploration", new DateOnly(2026, 7, 20),
+                Visibility.Public, ActivityState.Published,
+                new DateTimeOffset(2026, 7, 22, 18, 0, 0, TimeSpan.Zero)),
+            (CampTripPrefix + "survey day", "survey", new DateOnly(2026, 7, 24),
+                Visibility.Public, ActivityState.Published,
+                new DateTimeOffset(2026, 7, 26, 18, 0, 0, TimeSpan.Zero)),
+            (CampTripPrefix + "hydrology round", "science", new DateOnly(2026, 7, 28),
+                Visibility.Authenticated, ActivityState.Published,
+                new DateTimeOffset(2026, 7, 30, 18, 0, 0, TimeSpan.Zero)),
         };
 
         var index = 0;
@@ -546,6 +568,14 @@ public static class DemoSeeder
             if (!tripTypeIds.TryGetValue(typeCode, out var tripTypeId))
             {
                 throw new InvalidOperationException($"Trip type '{typeCode}' is not seeded.");
+            }
+
+            if (alreadySeeded.Contains(title))
+            {
+                // The counter still moves: which cave and which role a trip gets is read off it,
+                // and a top-up that shifted them would give the new trips somebody else's pairing.
+                index++;
+                continue;
             }
 
             var trip = new TripLog
@@ -560,6 +590,12 @@ public static class DemoSeeder
                 Visibility = visibility,
                 State = state,
                 PublishedAt = publishedAt,
+                // Where the camp's own trips went, sketched on the plateau the camp works. Only
+                // those trips carry one: a sketch is optional on every trip, and a demo where
+                // every trip had one would make a surface that ignores the empty case look right.
+                Geom = title.StartsWith(CampTripPrefix, StringComparison.Ordinal)
+                    ? new Point(25.42 + (index % 3 * 0.02), 45.51 + (index % 3 * 0.01)) { SRID = 4326 }
+                    : null,
             };
             // What a trip is counted by, on the trips that would plausibly produce numbers: a
             // demo where nothing is ever measured shows none of it, and a demo where everything
@@ -654,6 +690,12 @@ public static class DemoSeeder
     private const string FortnightCampName = "Demo: Bihor summer camp";
 
     /// <summary>
+    /// What the trips done from the long camp are called, so the block that joins them to it finds
+    /// them by name rather than by guessing from their dates.
+    /// </summary>
+    private const string CampTripPrefix = "Demo: camp ";
+
+    /// <summary>
     /// A handful of camps spread across the lifecycle, so a page listing them shows every reading.
     /// </summary>
     private static async Task SeedExpeditionsAsync(
@@ -720,6 +762,60 @@ public static class DemoSeeder
             };
             db.Expeditions.Add(camp);
             index++;
+        }
+    }
+
+    /// <summary>
+    /// Which trips the fortnight camp gathered.
+    /// </summary>
+    /// <remarks>
+    /// Without this the demo's camps hold no trips at all, and every surface built over the
+    /// membership — the trips list, the totals, the map's sketches and the entrances of the caves
+    /// those trips name — reads as empty. An empty answer and a broken one look the same on a
+    /// page, so a demo that only ever shows the empty one proves nothing about either.
+    /// <para>
+    /// Not every demo trip: the ones left out include one dated the day the camp began, which is
+    /// what shows that a camp's trips are the ones joined to it and not simply the ones whose
+    /// dates happen to fall inside it. One of the three joined is visible to accounts only, so a
+    /// visitor and a signed-in reader get different totals for the same camp — the difference the
+    /// totals are captioned about.
+    /// </para>
+    /// <para>
+    /// Guarded on membership rows of its own rather than on the camps' absence, so a database
+    /// seeded before this block existed picks the rows up on the next run instead of being skipped
+    /// forever by a guard written about something else.
+    /// </para>
+    /// </remarks>
+    private static async Task SeedExpeditionTripsAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var camp = await db.Expeditions.FirstOrDefaultAsync(x => x.Name == FortnightCampName, ct);
+        if (camp is null || await db.ExpeditionTrips.AnyAsync(m => m.ExpeditionId == camp.Id, ct))
+        {
+            return;
+        }
+
+        var tripIds = await db.TripLogs
+            .Where(t => t.Title.StartsWith(CampTripPrefix))
+            .OrderBy(t => t.TripDate)
+            .Select(t => t.Id)
+            .ToListAsync(ct);
+
+        // A trip is in at most one camp, and the database is what holds that rule. Skipping the
+        // ones already placed keeps a re-seed from being refused by the unique index.
+        var alreadyPlaced = await db.ExpeditionTrips
+            .Where(m => tripIds.Contains(m.TripLogId))
+            .Select(m => m.TripLogId)
+            .ToListAsync(ct);
+
+        var joinedAt = new DateTimeOffset(2026, 7, 17, 12, 0, 0, TimeSpan.Zero);
+        foreach (var tripId in tripIds.Except(alreadyPlaced))
+        {
+            db.ExpeditionTrips.Add(new ExpeditionTrip
+            {
+                ExpeditionId = camp.Id,
+                TripLogId = tripId,
+                JoinedAt = joinedAt,
+            });
         }
     }
 

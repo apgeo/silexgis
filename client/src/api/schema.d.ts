@@ -9131,6 +9131,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expeditions/{id}/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What one camp draws on a map, as GeoJSON: its working area, the sketches of the member trips this caller may read, and the entrances of the caves those trips name whose exact position this caller may see. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expeditions/{expeditionId}/roster": {
         parameters: {
             query?: never;

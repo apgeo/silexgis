@@ -369,8 +369,10 @@ public static class ObjectAccessEndpoints
         AttachedEntityType.TripLog => $"/trip-logs/{target.Entity.Id}",
         AttachedEntityType.Geofile or AttachedEntityType.GeoreferencedMap => "/geodata",
         AttachedEntityType.MapView => "/map",
-        // A camp has no page in the client yet, so a notification about one leads to the home
-        // page rather than to a URL that renders the router's error screen.
+        AttachedEntityType.Expedition => $"/expeditions/{target.Entity.Id}",
+        // A kind with no page in the client leads to the home page rather than to a URL that
+        // renders the router's error screen. An arm is added here the day that page ships, never
+        // before it.
         _ => "/",
     };
 

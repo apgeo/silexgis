@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { lazy, Suspense, type ReactNode } from 'react';
 import { Spin } from 'antd';
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider, type RouteObject } from 'react-router-dom';
 import { AuthProvider } from './auth/auth.tsx';
 import RequireAuth from './auth/RequireAuth.tsx';
 import AppLayout from './components/AppLayout.tsx';
@@ -32,6 +32,7 @@ const TermRulesPage = lazy(() => import('./pages/admin/TermRulesPage.tsx'));
 const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
 const TripReportPage = lazy(() => import('./pages/trips/TripReportPage.tsx'));
+const ExpeditionDetailPage = lazy(() => import('./pages/expeditions/ExpeditionDetailPage.tsx'));
 const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
 const MessagingSettingsPage = lazy(() => import('./pages/admin/MessagingSettingsPage.tsx'));
 const MessageTemplatesPage = lazy(() => import('./pages/admin/MessageTemplatesPage.tsx'));
@@ -72,7 +73,15 @@ function Loadable({ children }: { children: ReactNode }) {
   );
 }
 
-const router = createBrowserRouter([
+/**
+ * Every address this application answers.
+ *
+ * Exported so a test can ask the reverse question: whether an address the application *hands out*
+ * — a chip's route, the link in a notification about a grant — is one this table matches. A route
+ * named somewhere and missing here does not fail to navigate; it lands the reader on the router's
+ * own error screen, which is worse than a chip that does not move.
+ */
+export const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
   { path: '/auth/callback', element: <CallbackPage /> },
   { path: '/confirm-email', element: <ConfirmEmailPage /> },
@@ -112,6 +121,10 @@ const router = createBrowserRouter([
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
           { path: '/trip-logs/:id/report', element: <Loadable><TripReportPage /></Loadable> },
+          // A camp's own page. There is no list route beside it yet: nothing links to one, and a
+          // resolver or a notification naming a route this table does not carry lands the reader
+          // on the router's error screen — so the two are only ever added together.
+          { path: '/expeditions/:id', element: <Loadable><ExpeditionDetailPage /></Loadable> },
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
           { path: '/admin/messaging', element: <Loadable><MessagingSettingsPage /></Loadable> },
           { path: '/admin/message-templates', element: <Loadable><MessageTemplatesPage /></Loadable> },
@@ -151,7 +164,9 @@ const router = createBrowserRouter([
       },
     ],
   },
-]);
+];
+
+const router = createBrowserRouter(routes);
 
 export default function App() {
   return (

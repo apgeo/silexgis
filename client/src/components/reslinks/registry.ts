@@ -87,7 +87,7 @@ export const RESLINK_TARGET_TYPES = [
 export type ResLinkTargetType = (typeof RESLINK_TARGET_TYPES)[number];
 
 /**
- * Seven of the ten worlds have no detail page in this client yet; their entries route to
+ * Six of the ten worlds have no detail page in this client yet; their entries route to
  * null on purpose. A chip for one of them renders without navigation rather than dropping
  * the reader on a list page that is not the thing they clicked. The count is a fact about
  * this client, not about the vocabulary: an entry stops routing to null the day the page
@@ -115,7 +115,11 @@ const targetTypes: Record<ResLinkTargetType, TargetTypeEntry> = {
   surveyModel: { icon: NodeIndexOutlined, labelKey: 'resLinks.targetTypes.surveyModel', route: null },
   geofile: { icon: PushpinOutlined, labelKey: 'resLinks.targetTypes.geofile', route: null },
   cabinet: { icon: FolderOutlined, labelKey: 'resLinks.targetTypes.cabinet', route: null },
-  expedition: { icon: FlagOutlined, labelKey: 'resLinks.targetTypes.expedition', route: null },
+  expedition: {
+    icon: FlagOutlined,
+    labelKey: 'resLinks.targetTypes.expedition',
+    route: (id) => `/expeditions/${id}`,
+  },
 };
 
 /** What a member of a type this client has never heard of falls back to. */

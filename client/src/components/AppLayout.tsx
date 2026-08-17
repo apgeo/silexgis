@@ -66,11 +66,12 @@ export default function AppLayout() {
   // offered the page that authors it.
   const isFullAdmin = useIsFullAdmin();
 
-  // "settings" is listed so an unmatched path does not fall through to highlighting the map.
-  // It matches no menu item, so nothing lights up — settings is not a sidebar destination.
+  // "settings" and "expeditions" are listed so an unmatched path does not fall through to
+  // highlighting the map. Neither matches a menu item, so nothing lights up while one is open —
+  // settings is not a sidebar destination, and a camp is reached from what names it.
   const sections = [
     'map3d', 'dashboard', 'caves', 'features', 'geodata', 'gallery', 'albums', 'cabinets',
-    'uploads', 'documents', 'trip-logs',
+    'uploads', 'documents', 'trip-logs', 'expeditions',
     'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
     'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'admin/term-rules',

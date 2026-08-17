@@ -917,11 +917,10 @@ public sealed class ExpeditionTargetResolver(SilexGisDbContext db, IAccessServic
         var rows = await Readable(ctx).Where(e => ids.Contains(e.Id)).ToListAsync(ct);
         return rows.ToDictionary(
             e => e.Id,
-            // No route: a camp has no page in the client yet, and naming one that does not
-            // exist puts the reader on the router's own error screen instead of leaving the
-            // chip un-navigable, which is what every other kind without a page does. The route
-            // comes back the day the page ships.
-            e => new ResLinkTargetDisplayDto(e.Name, Subtitle(e), null, null));
+            // The camp's own page. Only ever named while that page exists in the client: a route
+            // this application does not carry puts the reader on the router's error screen, which
+            // is worse than leaving the chip un-navigable, so the two are changed together.
+            e => new ResLinkTargetDisplayDto(e.Name, Subtitle(e), $"/expeditions/{e.Id}", null));
     }
 
     public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
