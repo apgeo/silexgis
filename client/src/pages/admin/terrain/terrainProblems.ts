@@ -25,6 +25,7 @@ export const TERRAIN_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'import.no_roots_configured': 'terrain.problems.noRoots',
   'terrain_build.raster_unsupported': 'terrain.problems.rasterUnsupported',
   'terrain_build.raster_size_invalid': 'terrain.problems.rasterSizeInvalid',
+  'terrain_build.raster_unplaceable': 'terrain.problems.rasterUnplaceable',
   'terrain_build.extent_invalid': 'terrain.problems.extentInvalid',
   'terrain_build.extent_too_large': 'terrain.problems.extentTooLarge',
   'terrain_build.depth_invalid': 'terrain.problems.depthInvalid',

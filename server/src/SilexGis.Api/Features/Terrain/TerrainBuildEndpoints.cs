@@ -221,6 +221,12 @@ public static class TerrainBuildEndpoints
     public const string RasterSizeInvalidCode = "terrain_build.raster_size_invalid";
 
     /// <summary>
+    /// The file sent is an elevation format that states its position nowhere but in its name, under
+    /// a name that does not state one — or does, and the bytes are not the square it claims.
+    /// </summary>
+    public const string RasterUnplaceableCode = "terrain_build.raster_unplaceable";
+
+    /// <summary>
     /// The build has produced no pyramid that anything could draw, so it cannot become the terrain.
     /// </summary>
     /// <remarks>
@@ -574,11 +580,36 @@ public static class TerrainBuildEndpoints
                 + "Larger data belongs in a directory on the server the operator has listed.");
         }
 
+        // A tile says where it is only by what it is called, and the store issues names of its own
+        // — so a name that does not describe a square is refused here, while somebody is still
+        // looking at the file they chose. Left to be found later it would surface minutes into a
+        // build, as a file the raster library reports it cannot read at all.
+        if (ElevationTileConversion.NeedsConversion(file.FileName)
+            && SrtmTileName.Parse(file.FileName) is null)
+        {
+            return ApiProblems.BadRequest(
+                RasterUnplaceableCode,
+                "An elevation tile carries no position inside it, only in its name, in the form "
+                + "N45E024.hgt for the square whose corner is 45°N 24°E. This file's name does not "
+                + "say which square it covers, so nothing can place it on the earth. Rename it, or "
+                + "send it in a format that carries its own position.");
+        }
+
         await using var content = file.OpenReadStream();
-        var reference = await uploads.SaveAsync(content, file.FileName, ct);
+
+        TerrainStoredRaster stored;
+        try
+        {
+            stored = await uploads.SaveAsync(content, file.FileName, ct);
+        }
+        catch (InvalidDataException e)
+        {
+            return ApiProblems.BadRequest(RasterUnplaceableCode, e.Message);
+        }
 
         return TypedResults.Created(
-            $"/api/v1/terrain/rasters/{reference}", new TerrainRasterUploadDto(reference, file.Length));
+            $"/api/v1/terrain/rasters/{stored.Reference}",
+            new TerrainRasterUploadDto(stored.Reference, stored.SizeBytes));
     }
 
     /// <summary>

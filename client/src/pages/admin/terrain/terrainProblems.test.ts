@@ -22,6 +22,7 @@ const codes = [
   'import.no_roots_configured',
   'terrain_build.raster_unsupported',
   'terrain_build.raster_size_invalid',
+  'terrain_build.raster_unplaceable',
   'terrain_build.extent_invalid',
   'terrain_build.extent_too_large',
   'terrain_build.depth_invalid',

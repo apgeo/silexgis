@@ -145,6 +145,7 @@
       "noRoots": "This installation reads rasters from no directory on the server.",
       "rasterUnsupported": "That file is not an elevation raster this installation reads.",
       "rasterSizeInvalid": "That file is empty, or larger than an upload may be.",
+      "rasterUnplaceable": "An elevation tile says where it is only by what it is called, in the form N45E024.hgt for the square whose corner is 45°N 24°E. That file's name does not say which square it covers, so nothing can place it on the earth. Rename it to the square it covers, or send it in a format that carries its own position.",
       "extentInvalid": "That rectangle is not a rectangle on the Earth. Draw it again.",
       "extentTooLarge": "That rectangle is larger than this installation builds in one go. Build it as several smaller areas.",
       "depthInvalid": "That depth is outside what this installation builds.",

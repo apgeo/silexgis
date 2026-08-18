@@ -145,6 +145,7 @@
       "noRoots": "Această instalare nu citește rastre din niciun director de pe server.",
       "rasterUnsupported": "Fișierul nu este un rastru de altitudine pe care această instalare îl citește.",
       "rasterSizeInvalid": "Fișierul este gol sau mai mare decât poate fi o încărcare.",
+      "rasterUnplaceable": "O dală de altitudine spune unde se află doar prin numele ei, în forma N45E024.hgt pentru pătratul al cărui colț este 45°N 24°E. Numele acestui fișier nu spune ce pătrat acoperă, așa că nimic nu îl poate așeza pe hartă. Redenumiți-l după pătratul pe care îl acoperă sau trimiteți-l într-un format care își poartă singur poziția.",
       "extentInvalid": "Dreptunghiul acela nu este un dreptunghi pe Pământ. Trasează-l din nou.",
       "extentTooLarge": "Dreptunghiul este mai mare decât generează această instalare dintr-o dată. Generează-l ca mai multe zone mai mici.",
       "depthInvalid": "Adâncimea aceea este în afara a ceea ce generează această instalare.",
