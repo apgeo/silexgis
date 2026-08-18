@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.IO.Compression;
 using System.Text.Json;
-using MaxRev.Gdal.Core;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 using OSGeo.GDAL;
@@ -22,7 +21,7 @@ public sealed class GdalVectorIO : IVectorIO
 {
     static GdalVectorIO()
     {
-        GdalBase.ConfigureAll();
+        GdalRuntime.Configure();
         // GPX elevations become geometry Z only with this option; otherwise the driver
         // exposes them as an attribute on the *_points layers we skip. Centerlines (and
         // any imported track) would silently lose altitude without it.

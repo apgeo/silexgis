@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Globalization;
 using ImageMagick;
-using MaxRev.Gdal.Core;
 using OSGeo.GDAL;
 using SilexGis.Domain;
+using SilexGis.Infrastructure.Geodata;
 
 namespace SilexGis.Infrastructure.Files;
 
@@ -34,7 +34,7 @@ namespace SilexGis.Infrastructure.Files;
 /// </remarks>
 public sealed class PageRenderService(IFileStore fileStore)
 {
-    static PageRenderService() => GdalBase.ConfigureAll();
+    static PageRenderService() => GdalRuntime.Configure();
 
     /// <summary>
     /// Allowed bounding-box sizes (px) for a page picture — a fixed set keeps the cache small.

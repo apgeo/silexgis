@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Collections.Concurrent;
 using System.Globalization;
-using MaxRev.Gdal.Core;
 using OSGeo.OSR;
 
 namespace SilexGis.Infrastructure.Geodata;
@@ -23,7 +22,7 @@ namespace SilexGis.Infrastructure.Geodata;
 /// </summary>
 public sealed class ProjCrsRegistry : ICrsRegistry
 {
-    static ProjCrsRegistry() => GdalBase.ConfigureAll();
+    static ProjCrsRegistry() => GdalRuntime.Configure();
 
     private readonly ConcurrentDictionary<int, string?> cache = new();
 

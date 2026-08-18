@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using MaxRev.Gdal.Core;
 using NetTopologySuite.Geometries;
 using OSGeo.GDAL;
 using OSGeo.OSR;
@@ -15,7 +14,7 @@ public sealed record RasterInfo(Polygon Bbox4326, int Width, int Height);
 /// </summary>
 public sealed class RasterCogService
 {
-    static RasterCogService() => GdalBase.ConfigureAll();
+    static RasterCogService() => GdalRuntime.Configure();
 
     /// <summary>True when the bundled GDAL exposes the COG driver (sanity check for tests).</summary>
     public static bool CogDriverAvailable => Gdal.GetDriverByName("COG") is not null;

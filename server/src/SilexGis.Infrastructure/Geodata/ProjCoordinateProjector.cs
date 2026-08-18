@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using MaxRev.Gdal.Core;
 using OSGeo.OSR;
 
 namespace SilexGis.Infrastructure.Geodata;
@@ -10,7 +9,7 @@ namespace SilexGis.Infrastructure.Geodata;
 /// </summary>
 public sealed class ProjCoordinateProjector : ICoordinateProjector
 {
-    static ProjCoordinateProjector() => GdalBase.ConfigureAll();
+    static ProjCoordinateProjector() => GdalRuntime.Configure();
 
     /// <summary>
     /// How far north a step is taken to measure which way the grid's north points.

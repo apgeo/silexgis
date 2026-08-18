@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Globalization;
-using MaxRev.Gdal.Core;
 using OSGeo.GDAL;
 using OSGeo.OSR;
 using SilexGis.Domain.Terrain;
+using SilexGis.Infrastructure.Geodata;
 
 namespace SilexGis.Infrastructure.Terrain;
 
@@ -43,7 +43,7 @@ namespace SilexGis.Infrastructure.Terrain;
 /// </remarks>
 public sealed class GdalTerrainRasterPreparer : ITerrainRasterPreparer
 {
-    static GdalTerrainRasterPreparer() => GdalBase.ConfigureAll();
+    static GdalTerrainRasterPreparer() => GdalRuntime.Configure();
 
     /// <summary>
     /// Working memory the reprojection is allowed, in megabytes.
@@ -91,6 +91,15 @@ public sealed class GdalTerrainRasterPreparer : ITerrainRasterPreparer
     {
         var plan = Plan(request, ct);
         Directory.CreateDirectory(request.OutputDirectory);
+
+        // The cloud-optimised writer cannot know a raster's overviews until it has written the image
+        // once, so every conversion below goes through a scratch file the size of its own output —
+        // gigabytes, for a build over any real amount of ground. Left to itself the library puts that
+        // beside whatever the machine calls temporary, which in a container is the image's own
+        // writable layer: it grows with the build, it is not the disk the operator sized for terrain,
+        // and it disappears when the container is recreated. Here it goes where the finished raster
+        // is going anyway, which is that disk.
+        using var scratch = GdalScratchDirectory.At(request.OutputDirectory);
 
         var produced = new List<PreparedTerrainRaster>(plan.Count);
         foreach (var step in plan)
