@@ -8678,7 +8678,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trip-logs/{id}/publish": {
+    "/api/v1/trip-logs/{id}/state": {
         parameters: {
             query?: never;
             header?: never;
@@ -8687,7 +8687,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Announces a trip log and tells the people named on it (Write permission). */
+        /** Moves a trip log to another lifecycle state (Write permission). One endpoint rather than a verb per state: the moves a trip may make are a table, and a verb per move can only ever offer the handful somebody thought to name. */
         post: {
             parameters: {
                 query?: never;
@@ -8697,45 +8697,11 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["TripLogDto"];
-                    };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripLogTransitionRequest"];
                 };
             };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/trip-logs/{id}/unpublish": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Returns a trip log to draft — the reverse of publishing (Write permission). */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
             responses: {
                 /** @description OK */
                 200: {
@@ -15634,6 +15600,9 @@ export interface components {
             safetySchemaVersion: null | number;
             /** Format: uuid */
             expeditionId: null | string;
+        };
+        TripLogTransitionRequest: {
+            state?: null | components["schemas"]["ActivityState"];
         };
         TripLogWriteRequest: {
             title: string;

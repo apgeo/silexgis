@@ -58,8 +58,7 @@ public sealed class ApiSmokeTests : IDisposable
         document.ShouldContain("/api/v1/features/{id}/parents");
         document.ShouldContain("/api/v1/features/{id}/links");
         document.ShouldContain("/api/v1/centerlines/{id}");
-        document.ShouldContain("/api/v1/trip-logs/{id}/publish");
-        document.ShouldContain("/api/v1/trip-logs/{id}/unpublish");
+        document.ShouldContain("/api/v1/trip-logs/{id}/state");
         document.ShouldContain("/api/v1/stats/cavers/{id}");
         document.ShouldContain("/api/v1/stats/caves/{id}");
         document.ShouldContain("/api/v1/stats/caving-groups/{id}");
@@ -74,6 +73,12 @@ public sealed class ApiSmokeTests : IDisposable
         // Routes the feature supertype replaced must be gone, not merely unused.
         document.ShouldNotContain("surface-features");
         document.ShouldNotContain("/api/v1/cave-centerlines/");
+
+        // A trip's lifecycle is one route naming the state it moves to, so the two verbs it
+        // replaced must be gone rather than left beside it: two roads into the same table are how
+        // the two come to disagree.
+        document.ShouldNotContain("/api/v1/trip-logs/{id}/publish");
+        document.ShouldNotContain("/api/v1/trip-logs/{id}/unpublish");
     }
 
     public void Dispose() => factory.Dispose();

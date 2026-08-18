@@ -35,10 +35,12 @@ public static class TripLogEndpoints
                 + "when a list is supplied, and left as they are when the field is omitted.");
         trips.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes a trip log with its links and attachments.");
-        trips.MapPost("/{id:guid}/publish", PublishAsync)
-            .WithSummary("Announces a trip log and tells the people named on it (Write permission).");
-        trips.MapPost("/{id:guid}/unpublish", UnpublishAsync)
-            .WithSummary("Returns a trip log to draft — the reverse of publishing (Write permission).");
+        trips.MapPost("/{id:guid}/state", TransitionAsync)
+            .WithValidation<TripLogTransitionRequest>()
+            .WithSummary(
+                "Moves a trip log to another lifecycle state (Write permission). One endpoint "
+                + "rather than a verb per state: the moves a trip may make are a table, and a "
+                + "verb per move can only ever offer the handful somebody thought to name.");
         trips.MapGet("/{id:guid}/report", TripReportEndpoints.DownloadAsync)
             .WithSummary(
                 "The trip written up as a document, built from this caller's own reading of the "
@@ -380,36 +382,6 @@ public static class TripLogEndpoints
         return TypedResults.NoContent();
     }
 
-    /// <summary>
-    /// Announces a trip: the point at which the people named on it are told about it.
-    /// </summary>
-    private static Task<Results<Ok<TripLogDto>, ProblemHttpResult>> PublishAsync(
-        Guid id,
-        HttpContext http,
-        SilexGisDbContext db,
-        IAccessService access,
-        IAccessContextAccessor accessAccessor,
-        IUserContextAccessor userAccessor,
-        FeatureProtection protection,
-        CancellationToken ct) =>
-        TransitionAsync(id, ActivityState.Published, http, db, access, accessAccessor, userAccessor, protection, ct);
-
-    /// <summary>
-    /// The reverse of publishing. It takes the trip back for more work; it does not undo the
-    /// announcement, and the date of the first one is kept. It is also the door a trip that was
-    /// called off comes back through, so there is one answer to "how do I get at this again".
-    /// </summary>
-    private static Task<Results<Ok<TripLogDto>, ProblemHttpResult>> UnpublishAsync(
-        Guid id,
-        HttpContext http,
-        SilexGisDbContext db,
-        IAccessService access,
-        IAccessContextAccessor accessAccessor,
-        IUserContextAccessor userAccessor,
-        FeatureProtection protection,
-        CancellationToken ct) =>
-        TransitionAsync(id, ActivityState.Draft, http, db, access, accessAccessor, userAccessor, protection, ct);
-
     // ---- shared pieces ----
 
     /// <summary>
@@ -424,7 +396,7 @@ public static class TripLogEndpoints
     /// </remarks>
     private static async Task<Results<Ok<TripLogDto>, ProblemHttpResult>> TransitionAsync(
         Guid id,
-        ActivityState target,
+        TripLogTransitionRequest request,
         HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
@@ -453,6 +425,14 @@ public static class TripLogEndpoints
             return stale;
         }
 
+        // One question, not two: a target the vocabulary admits but a trip may not hold appears in
+        // no pair of the table, so asking the table refuses it for the same reason and under the
+        // same code as an illegal move. Asking whether the state is an admitted one first would be
+        // a second rule saying the same thing, free to drift from it.
+        //
+        // The state is present because the validator filter runs before this and requires it; a
+        // body that names none is a 400 and never arrives here.
+        var target = request.State!.Value;
         if (!ActivityStates.MayTripLogTransition(trip.State, target))
         {
             return ApiProblems.Conflict(

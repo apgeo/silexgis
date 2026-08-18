@@ -258,6 +258,11 @@ test('a trip is written as a draft and stays one until it is published', async (
   await expect(page.getByTestId('trip-state')).toHaveText('Draft', { timeout: 15_000 });
   await expect(page.getByText('Published on')).toBeVisible();
 
+  // A state a trip has always been allowed to hold and that no call could produce while
+  // announcing and withdrawing were the only two verbs: recorded as having happened.
+  await page.getByRole('button', { name: /Mark as done$/ }).click();
+  await expect(page.getByTestId('trip-state')).toHaveText('Done', { timeout: 15_000 });
+
   await page.getByRole('button', { name: /Delete/ }).click();
   await page.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText('Deleted.').first()).toBeVisible({ timeout: 15_000 });

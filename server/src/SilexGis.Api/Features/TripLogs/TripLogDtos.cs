@@ -90,7 +90,7 @@ public sealed record TripLogDto(
     // Appended, and appended only. This record is constructed positionally and has runs of
     // members of the same type, so a value inserted in the middle is absorbed silently by the
     // neighbour it displaces. The lifecycle pair is deliberately absent from the write request
-    // below: a state moves through the transition endpoints, which is the only place the legal
+    // below: a state moves through the transition endpoint, which is the only place the legal
     // moves are checked.
     ActivityState State,
     DateTimeOffset? PublishedAt,
@@ -169,6 +169,19 @@ public sealed record TripLogWriteRequest(
     JsonElement? FieldData,
     JsonElement? Logistics,
     JsonElement? Safety);
+
+/// <summary>The state to move a trip log into.</summary>
+/// <remarks>
+/// Nullable, and it has to be. The state is the whole of this request, and the vocabulary's first
+/// member is the zero value, so a non-nullable field would read a body that names no state at all
+/// as naming the draft — and since every live state has a legal move back there, an empty body
+/// would quietly take a trip's announcement back and answer 200. Nullable lets the shape tell
+/// "absent" from "draft" and refuse the first.
+/// </remarks>
+public sealed record TripLogTransitionRequest
+{
+    public ActivityState? State { get; init; }
+}
 
 public sealed class TripLogWriteRequestValidator : AbstractValidator<TripLogWriteRequest>
 {
@@ -255,5 +268,18 @@ public sealed class TripParticipantValidator : AbstractValidator<TripParticipant
         // own pair has none: a time carries no day, so coming out at 02:00 having gone in at
         // 21:00 is an ordinary night trip rather than a mistake. Which day either time belongs to
         // is read from the trip's date range by whoever works out how long somebody was under.
+    }
+}
+
+public sealed class TripLogTransitionRequestValidator : AbstractValidator<TripLogTransitionRequest>
+{
+    public TripLogTransitionRequestValidator()
+    {
+        // That a state was named at all, and that the value is one the vocabulary has. Whether a
+        // trip may hold it, and whether it may get there from where it is, are the transition
+        // table's to answer — and it answers both with one refusal, so there is no second place a
+        // state can be judged. The presence check cannot be left to the table: an absent field
+        // arrives as the enum's zero value, which is a state the table admits.
+        RuleFor(x => x.State).NotNull().IsInEnum();
     }
 }

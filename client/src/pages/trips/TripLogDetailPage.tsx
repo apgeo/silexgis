@@ -33,7 +33,7 @@ import { formatTripDates, formatUndergroundTime, isMultiDay } from '../../compon
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 import TripFormModal from './TripFormModal.tsx';
 import TripGeometryField from './TripGeometryField.tsx';
-import TripPublishControl from './TripPublishControl.tsx';
+import TripStateControl from './TripStateControl.tsx';
 import TripRoleFields from './TripRoleFields.tsx';
 import TripSections from './TripSections.tsx';
 
@@ -158,7 +158,7 @@ export default function TripLogDetailPage() {
           </Link>
           {(canEdit || canDelete) && (
             <>
-              <TripPublishControl tripId={trip.id} state={trip.state} canEdit={canEdit} />
+              <TripStateControl tripId={trip.id} state={trip.state} canEdit={canEdit} />
               {canEdit && (
                 <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
                   {t('trips.edit')}
