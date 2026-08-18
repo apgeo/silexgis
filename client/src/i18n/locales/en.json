@@ -751,6 +751,8 @@
     "location": "Location",
     "organizingClub": "Organizing club",
     "caves": "Caves",
+    "cavesWithheld": "{{count}} not shown to you",
+    "cavesWithheldDetail": "This trip names caves you may not open, or whose position you may not be told — they are counted here rather than listed, because naming one would be as good as showing it.",
     "participants": "Participants",
     "participantName": "Participant name",
     "participantRequired": "Enter a name",

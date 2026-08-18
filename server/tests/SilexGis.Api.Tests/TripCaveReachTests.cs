@@ -8,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -24,6 +26,12 @@ namespace SilexGis.Api.Tests;
 /// the same fixture. The reader is a Viewer, who holds no exact-location right anywhere; the
 /// owner is an Editor who created the cave, so ownership gives them one. The seeded Editors
 /// group reads past visibility by design, which is why the withheld side is never an Editor.
+///
+/// Two independent things can be withheld about a cave and the cases here say which they mean:
+/// whether the reader may <em>open</em> it, and whether they may be told <em>where</em> it is.
+/// A cave that is readable but guarded proves nothing about the first, and one that is unopenable
+/// but unguarded proves nothing about the second — so caves are built with both said out loud,
+/// and a case that means one of them creates a cave that fails only that gate.
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable
@@ -33,6 +41,7 @@ public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable
 
     private HttpClient owner = null!;   // Editor — creates the caves and the trips, may place them
     private HttpClient reader = null!;  // Viewer — reads them, may not place them
+    private Guid readerId;
     private long caveTypeId;
     private long genericTypeId;
 
@@ -52,7 +61,8 @@ public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable
         await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tcr-own-{suffix}@t.local");
         owner = await AuthHelper.BearerClientAsync(factory, $"tcr-own-{suffix}@t.local");
 
-        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"tcr-read-{suffix}@t.local");
+        readerId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Viewer, $"tcr-read-{suffix}@t.local");
         reader = await AuthHelper.BearerClientAsync(factory, $"tcr-read-{suffix}@t.local");
 
         await using var scope = factory.Services.CreateAsyncScope();
@@ -346,15 +356,272 @@ public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable
         var openCaveId = await CreateCaveAsync(locationProtected: false);
         var tripId = await CreateTripAsync("Both", guardedCaveId, openCaveId);
 
+        // The reader may open the guarded cave perfectly well — it is readable by every account
+        // — so nothing but its position is being withheld here. That is what makes this case
+        // about placement rather than about readability.
+        (await reader.GetAsync($"/api/v1/caves/{guardedCaveId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
         var seen = await ReadJsonAsync(await reader.GetAsync($"/api/v1/trip-logs/{tripId}"));
         var seenCaves = seen.GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid()).ToList();
         seenCaves.ShouldBe([openCaveId]);
+        seen.GetProperty("cavesWithheld").GetInt32().ShouldBe(1);
 
         // The owner sees both over the same trip, so the shorter list is a redaction rather
         // than a trip that only ever named one cave.
         var held = await ReadJsonAsync(await owner.GetAsync($"/api/v1/trip-logs/{tripId}"));
         held.GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid())
             .OrderBy(x => x).ShouldBe(new[] { guardedCaveId, openCaveId }.OrderBy(x => x));
+        held.GetProperty("cavesWithheld").GetInt32().ShouldBe(0);
+    }
+
+    /// <summary>
+    /// A trip hands back only the caves the caller may <em>open</em>, which is a different
+    /// question from whether they may place one. A cave nobody but its owner may read can be
+    /// named on a trip half the club reads, and the identifier alone is enough to go and ask for
+    /// that cave by it — on this endpoint, on the map, on every surface that takes an identifier.
+    /// </summary>
+    /// <remarks>
+    /// The withheld cave here carries no location protection at all, which is the whole point:
+    /// the position rule reads its rows past every visibility filter and returns the lot when
+    /// nothing in the set is guarded, so a list filtered by position alone hands this cave over
+    /// to every reader of the trip. Both caves sit on one trip and both readings are taken over
+    /// the one fixture, so a build that withheld everything fails here exactly as loudly as one
+    /// that withheld nothing.
+    /// </remarks>
+    [Fact]
+    public async Task A_trips_cave_list_comes_back_without_the_caves_the_caller_may_not_open()
+    {
+        var hiddenCaveId = await CreateCaveAsync(locationProtected: false, visibility: "private");
+        var openCaveId = await CreateCaveAsync(locationProtected: false);
+        var tripId = await CreateTripAsync("Objectives", hiddenCaveId, openCaveId);
+
+        // The fixture, stated rather than assumed: this reader genuinely cannot open the cave,
+        // and is a Viewer rather than an Editor because the seeded Editors group reads past
+        // visibility by design and would prove nothing here.
+        (await reader.GetAsync($"/api/v1/caves/{hiddenCaveId}")).StatusCode
+            .ShouldBe(HttpStatusCode.NotFound);
+        (await reader.GetAsync($"/api/v1/caves/{openCaveId}")).StatusCode
+            .ShouldBe(HttpStatusCode.OK);
+
+        var seen = await ReadJsonAsync(await reader.GetAsync($"/api/v1/trip-logs/{tripId}"));
+        var seenCaves = seen.GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid()).ToList();
+        seenCaves.ShouldBe([openCaveId]);
+
+        // Counted, never named: the reader is told the list is short, and nothing more.
+        seen.GetProperty("cavesWithheld").GetInt32().ShouldBe(1);
+
+        // Whole payload, not just the field — the identifier must not travel anywhere on this
+        // answer, and a future field carrying it would pass an assertion made on `caveIds` alone.
+        var payload = await (await reader.GetAsync($"/api/v1/trip-logs/{tripId}")).Content.ReadAsStringAsync();
+        payload.ShouldNotContain(hiddenCaveId.ToString());
+        payload.ShouldContain(openCaveId.ToString());
+
+        // The owner sees both over the same trip, so the shorter list is a withholding rather
+        // than a trip that only ever named one cave.
+        var held = await ReadJsonAsync(await owner.GetAsync($"/api/v1/trip-logs/{tripId}"));
+        held.GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid())
+            .OrderBy(x => x).ShouldBe(new[] { hiddenCaveId, openCaveId }.OrderBy(x => x));
+        held.GetProperty("cavesWithheld").GetInt32().ShouldBe(0);
+    }
+
+    /// <summary>
+    /// The same withholding on the listing, not only on the single read. A page of trips is
+    /// built by a different call than one trip is, and a rule applied in only one of them is a
+    /// rule that holds until somebody opens the list.
+    /// </summary>
+    [Fact]
+    public async Task A_trip_listing_withholds_the_same_caves_the_single_read_does()
+    {
+        var hiddenCaveId = await CreateCaveAsync(locationProtected: false, visibility: "private");
+        var openCaveId = await CreateCaveAsync(locationProtected: false);
+        var tripId = await CreateTripAsync("Listed", hiddenCaveId, openCaveId);
+
+        var listed = await ReadJsonAsync(
+            await reader.GetAsync($"/api/v1/trip-logs/?caveId={openCaveId}"));
+        var row = listed.GetProperty("items").EnumerateArray()
+            .Single(x => x.GetProperty("id").GetGuid() == tripId);
+        row.GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid()).ShouldBe([openCaveId]);
+        row.GetProperty("cavesWithheld").GetInt32().ShouldBe(1);
+
+        var ownersRow = (await ReadJsonAsync(
+                await owner.GetAsync($"/api/v1/trip-logs/?caveId={openCaveId}")))
+            .GetProperty("items").EnumerateArray()
+            .Single(x => x.GetProperty("id").GetGuid() == tripId);
+        ownersRow.GetProperty("caveIds").GetArrayLength().ShouldBe(2);
+        ownersRow.GetProperty("cavesWithheld").GetInt32().ShouldBe(0);
+    }
+
+    /// <summary>
+    /// Withholding a cave from the rows is worth nothing while the same endpoint will take that
+    /// cave as a filter: holding the identifier is the ordinary case — it survives access being
+    /// narrowed, and people send each other links — and an id that answers differently from one
+    /// that does not exist is an id anybody can go looking for. Worse, the answer is the trips
+    /// that reached it, each carrying its own exact geometry, so the filter would place the very
+    /// cave the rows decline to name.
+    /// </summary>
+    /// <remarks>
+    /// Both halves over one fixture: the same caller filtering by the cave they may open still
+    /// gets the trip, so a build that empties every filtered page fails here as loudly as one
+    /// that empties none.
+    /// </remarks>
+    [Fact]
+    public async Task Filtering_a_trip_listing_by_a_cave_the_caller_may_not_open_finds_nothing()
+    {
+        var hiddenCaveId = await CreateCaveAsync(locationProtected: false, visibility: "private");
+        var openCaveId = await CreateCaveAsync(locationProtected: false);
+        var tripId = await CreateTripAsync("Filtered", hiddenCaveId, openCaveId);
+
+        // Fixture proof: the cave really is unopenable for this caller, and really is unguarded
+        // — so a refusal below is the readability gate speaking, not the position one.
+        (await reader.GetAsync($"/api/v1/caves/{hiddenCaveId}")).StatusCode
+            .ShouldBe(HttpStatusCode.NotFound);
+
+        var byHidden = await ReadJsonAsync(
+            await reader.GetAsync($"/api/v1/trip-logs/?caveId={hiddenCaveId}"));
+        byHidden.GetProperty("totalItems").GetInt32().ShouldBe(0);
+        byHidden.GetProperty("items").GetArrayLength().ShouldBe(0);
+
+        var byOpen = await ReadJsonAsync(
+            await reader.GetAsync($"/api/v1/trip-logs/?caveId={openCaveId}"));
+        byOpen.GetProperty("items").EnumerateArray()
+            .ShouldContain(x => x.GetProperty("id").GetGuid() == tripId);
+
+        // And the cave is findable by the person it is not hidden from, so the empty page above
+        // is about this caller rather than about the link never having been written.
+        var ownersByHidden = await ReadJsonAsync(
+            await owner.GetAsync($"/api/v1/trip-logs/?caveId={hiddenCaveId}"));
+        ownersByHidden.GetProperty("items").EnumerateArray()
+            .ShouldContain(x => x.GetProperty("id").GetGuid() == tripId);
+    }
+
+    /// <summary>
+    /// Somebody may hold write on a trip and still be unable to open one of the caves it names,
+    /// and that stops being a corner case the moment a trip's readership is a list somebody
+    /// types. The list such a writer is handed is short of that cave, so a save that echoes the
+    /// list back must not have the absence read as an instruction: whatever the read took out,
+    /// the write puts back.
+    /// </summary>
+    /// <remarks>
+    /// The other half is asserted over the same fixture, and it is what keeps the guard from
+    /// degenerating into "a cave list can no longer remove anything" — the cave this writer
+    /// <em>was</em> shown goes when they leave it out, by exactly the request shape that leaves
+    /// the withheld one alone.
+    /// </remarks>
+    [Fact]
+    public async Task A_writer_who_cannot_open_one_of_the_trips_caves_still_saves_it()
+    {
+        var hiddenCaveId = await CreateCaveAsync(locationProtected: false, visibility: "private");
+        var openCaveId = await CreateCaveAsync(locationProtected: false);
+        var tripId = await CreateTripAsync("Stranger", hiddenCaveId, openCaveId);
+        await GrantTripAsync(tripId, readerId, AccessAction.Read | AccessAction.Write);
+
+        // The fixture, stated rather than assumed: this writer genuinely cannot open the cave,
+        // and genuinely was handed a list without it.
+        (await reader.GetAsync($"/api/v1/caves/{hiddenCaveId}")).StatusCode
+            .ShouldBe(HttpStatusCode.NotFound);
+        var seen = await ReadJsonAsync(await reader.GetAsync($"/api/v1/trip-logs/{tripId}"));
+        seen.GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid()).ShouldBe([openCaveId]);
+        seen.GetProperty("cavesWithheld").GetInt32().ShouldBe(1);
+
+        var saved = await reader.PutWithIfMatchAsync(
+            $"/api/v1/trip-logs/{tripId}", TripBody("Stranger edited", [openCaveId]));
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+
+        var afterSave = await ReadJsonAsync(await owner.GetAsync($"/api/v1/trip-logs/{tripId}"));
+        afterSave.GetProperty("title").GetString().ShouldBe("Stranger edited");
+        afterSave.GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid())
+            .OrderBy(x => x).ShouldBe(new[] { hiddenCaveId, openCaveId }.OrderBy(x => x));
+
+        var dropped = await reader.PutWithIfMatchAsync(
+            $"/api/v1/trip-logs/{tripId}", TripBody("Stranger dropped one", []));
+        dropped.StatusCode.ShouldBe(HttpStatusCode.OK, await dropped.Content.ReadAsStringAsync());
+
+        var afterDrop = await ReadJsonAsync(await owner.GetAsync($"/api/v1/trip-logs/{tripId}"));
+        afterDrop.GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid())
+            .ShouldBe([hiddenCaveId]);
+    }
+
+    /// <summary>
+    /// Putting a record back the way it was handed over is the shape a restore takes, and it is
+    /// offered to anybody holding write — so the least considered edit a trip can receive is
+    /// also the one most likely to come from somebody who cannot open one of its caves. Every
+    /// field travels, read-only ones included, and none of them may cost the trip a link.
+    /// </summary>
+    [Fact]
+    public async Task Posting_a_trip_back_whole_keeps_the_cave_its_author_may_not_open()
+    {
+        var hiddenCaveId = await CreateCaveAsync(locationProtected: false, visibility: "private");
+        var openCaveId = await CreateCaveAsync(locationProtected: false);
+        var tripId = await CreateTripAsync("Whole", hiddenCaveId, openCaveId);
+        await GrantTripAsync(tripId, readerId, AccessAction.Read | AccessAction.Write);
+
+        (await reader.GetAsync($"/api/v1/caves/{hiddenCaveId}")).StatusCode
+            .ShouldBe(HttpStatusCode.NotFound);
+        var seen = await ReadJsonAsync(await reader.GetAsync($"/api/v1/trip-logs/{tripId}"));
+
+        // The trip exactly as this reader received it, with the one field a restore puts back to
+        // an older value — the withheld count included, because a whole record posted back
+        // carries the fields nobody writes as well as the ones somebody does.
+        var body = new Dictionary<string, object?>
+        {
+            ["title"] = "Title as it was",
+            ["tripDate"] = seen.GetProperty("tripDate").GetString(),
+            ["visibility"] = seen.GetProperty("visibility").GetString(),
+            ["participants"] = Array.Empty<object>(),
+            ["caveIds"] = seen.GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid()).ToArray(),
+            ["cavesWithheld"] = seen.GetProperty("cavesWithheld").GetInt32(),
+        };
+
+        var restored = await reader.PutWithIfMatchAsync($"/api/v1/trip-logs/{tripId}", body);
+        restored.StatusCode.ShouldBe(HttpStatusCode.OK, await restored.Content.ReadAsStringAsync());
+
+        var after = await ReadJsonAsync(await owner.GetAsync($"/api/v1/trip-logs/{tripId}"));
+        after.GetProperty("title").GetString().ShouldBe("Title as it was");
+        after.GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid())
+            .OrderBy(x => x).ShouldBe(new[] { hiddenCaveId, openCaveId }.OrderBy(x => x));
+    }
+
+    /// <summary>
+    /// The bare cave list is a coarse instrument, and deliberately so. It reads over every role a
+    /// trip can name a cave under — "which caves was this trip about" has never meant one of
+    /// them — while it writes and unnames under the plainest role alone. So a cave the trip
+    /// holds only as an objective survives a list posted without it: one coarse list must not be
+    /// able to erase a finer statement somebody made on purpose elsewhere, and the way to take
+    /// such a cave off a trip is through the role that put it there.
+    /// </summary>
+    /// <remarks>
+    /// Both halves are in one case, because the rule is only meaningful as a distinction: the
+    /// same request that leaves the objective alone drops the cave held under the list's own
+    /// role. Nothing about the outcome is concealed either — the write answers with the trip
+    /// read afresh, so a caller who asked for the drop is told in that same round trip that the
+    /// cave is still named.
+    /// </remarks>
+    [Fact]
+    public async Task A_cave_the_trip_holds_only_as_an_objective_outlives_a_list_that_omits_it()
+    {
+        var listedCaveId = await CreateCaveAsync(locationProtected: false);
+        var objectiveCaveId = await CreateCaveAsync(locationProtected: false);
+        var tripId = await CreateTripAsync("Roles", listedCaveId);
+        await NameAsync(tripId, objectiveCaveId, "trip-objective");
+
+        // The trip names both, and the list says nothing about which role holds which — which
+        // is precisely why the write has to decide what an omission means.
+        var before = await ReadJsonAsync(await owner.GetAsync($"/api/v1/trip-logs/{tripId}"));
+        before.GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid())
+            .OrderBy(x => x).ShouldBe(new[] { listedCaveId, objectiveCaveId }.OrderBy(x => x));
+
+        var response = await owner.PutWithIfMatchAsync(
+            $"/api/v1/trip-logs/{tripId}", TripBody("Roles", []));
+        var answered = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, answered);
+
+        JsonDocument.Parse(answered).RootElement
+            .GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid())
+            .ShouldBe([objectiveCaveId]);
+
+        var after = await ReadJsonAsync(await owner.GetAsync($"/api/v1/trip-logs/{tripId}"));
+        after.GetProperty("caveIds").EnumerateArray().Select(x => x.GetGuid())
+            .ShouldBe([objectiveCaveId]);
     }
 
     /// <summary>
@@ -503,13 +770,20 @@ public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
-    private async Task<Guid> CreateCaveAsync(bool locationProtected)
+    /// <summary>
+    /// A cave, said in the two dimensions that decide what a trip may say about it: whether the
+    /// reader may open it at all, and whether they may be told where it is. They are independent,
+    /// and a fixture that fixed either of them would prove only half the rule — a suite in which
+    /// every cave is readable can never catch a list that withholds by position alone.
+    /// </summary>
+    private async Task<Guid> CreateCaveAsync(
+        bool locationProtected, string visibility = "authenticated")
     {
         var response = await owner.PostAsJsonAsync("/api/v1/caves", new
         {
             name = $"Reach {Guid.NewGuid():N}"[..30],
             caveTypeId,
-            visibility = "authenticated",
+            visibility,
             locationProtected,
             explorationStatus = "Unknown",
             isShowCave = false,
@@ -532,6 +806,75 @@ public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable
         var response = await owner.PutWithIfMatchAsync(
             $"/api/v1/trip-logs/{tripId}", TripBody("Mixed", caveIds));
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// Gives somebody who is nobody in particular the right to read and change one trip, which
+    /// is how a trip acquires a writer who was never given anything on the caves it names.
+    /// </summary>
+    private async Task GrantTripAsync(Guid tripId, Guid userId, AccessAction actions)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = userId,
+            Effect = AccessEffect.Allow,
+            Domain = AccessDomain.TripLogs,
+            Actions = actions,
+            ScopeKind = AccessScopeKind.Object,
+            // Non-feature domains anchor object scope in ScopeId; ScopeFeatureId is the
+            // feature-domain foreign key and means nothing here.
+            ScopeId = tripId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Records that a trip is about a place under one named role, the way the trip page's role
+    /// fields do — which is the only way to put a cave on a trip under anything but the
+    /// plainest role.
+    /// </summary>
+    private async Task NameAsync(Guid tripId, Guid featureId, string roleCode)
+    {
+        var types = await owner.GetFromJsonAsync<JsonElement>("/api/v1/reslinks/relation-types");
+        var roleId = types.EnumerateArray()
+            .Single(r => r.GetProperty("code").GetString() == roleCode)
+            .GetProperty("id").GetInt64();
+
+        var response = await owner.PostAsJsonAsync("/api/v1/reslinks", new
+        {
+            relationTypeId = roleId,
+            description = (string?)null,
+            members = new object[]
+            {
+                new
+                {
+                    targetType = "tripLog",
+                    targetId = tripId,
+                    isMain = true,
+                    sortOrder = 0,
+                    note = (string?)null,
+                    anchorKind = "whole",
+                    anchor = (object?)null,
+                    anchorFileId = (Guid?)null,
+                },
+                new
+                {
+                    targetType = "feature",
+                    targetId = featureId,
+                    isMain = false,
+                    sortOrder = 1,
+                    note = (string?)null,
+                    anchorKind = "whole",
+                    anchor = (object?)null,
+                    anchorFileId = (Guid?)null,
+                },
+            },
+        });
+        response.StatusCode.ShouldBe(
+            HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
     }
 
     private static object TripBody(string title, Guid[] caveIds) => new

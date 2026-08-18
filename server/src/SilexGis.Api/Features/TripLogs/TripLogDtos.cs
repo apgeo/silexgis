@@ -71,9 +71,11 @@ public sealed record TripLogDto(
     Guid? OrganizingCavingGroupId,
     GeoJsonGeometry? Geom,
     // Read-only, and derived: the caves any of the trip's roles names, whatever it did there,
-    // with the ones this caller may not place taken out. Recording a cave is done through the
-    // roles themselves, so this list has no counterpart on the write request — one place to
-    // write it, one reading of it here.
+    // with two sorts taken out — the ones this caller may not read, and the ones they may not
+    // place. Both, and in that order: naming a cave is a read of the cave, and a trip's audience
+    // is not the cave's, so an identifier here would be a way of asking for a cave nobody meant
+    // this reader to have. Recording a cave is done through the roles themselves, so this list
+    // has no counterpart on the write request — one place to write it, one reading of it here.
     IReadOnlyList<Guid> CaveIds,
     // The roster, split where the surfaces that read it split: everybody who was there in
     // whatever job, and separately whoever put the trip forward. Between them they are every row
@@ -123,7 +125,12 @@ public sealed record TripLogDto(
     // absent, too, when the camp is one this caller may not read, so a trip never names a thing
     // its reader has no right to know exists. Read-only: membership is written through the
     // camp's own doors, which is where the rule that a trip belongs to at most one lives.
-    Guid? ExpeditionId);
+    Guid? ExpeditionId,
+    // How many of the caves this trip names were left off the list above, for either reason. A
+    // count and never an identifier: the number lets a surface say the list is short instead of
+    // letting it read as the whole truth, and it says nothing about which caves are missing —
+    // an identifier is exactly what the withholding was for. Zero for a caller shown everything.
+    int CavesWithheld);
 
 public sealed record TripLogWriteRequest(
     string Title,

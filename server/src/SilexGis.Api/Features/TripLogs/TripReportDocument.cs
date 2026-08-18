@@ -21,8 +21,9 @@ internal sealed record TripReportPlate(byte[] Image, string? Caption);
 /// Every field here was produced by the same request the trip page makes, and the names beside
 /// the identifiers come from vocabularies every account may read. Nothing in this record is a
 /// second answer to a question the trip read already answered: the caves are the list that read
-/// returned, which is the redacted one, and the account of what went wrong is present exactly
-/// when that read decided this caller may have it.
+/// returned — already stripped of every cave this reader may not open and every cave they may
+/// not place, and carrying its own count of what was taken out — and the account of what went
+/// wrong is present exactly when that read decided this caller may have it.
 /// </remarks>
 internal sealed record TripReportContent(
     TripLogDto Trip,
@@ -299,18 +300,32 @@ internal static class TripReportDocument
 
     private static string? Caves(TripReportContent content)
     {
-        // The caves this trip names, as the trip read itself gave them: a cave whose position
-        // this reader may not place is not on that list at all, and looking one up by any other
-        // route is how it would come back.
-        if (content.Trip.CaveIds.Count == 0)
+        // Names, and never an identifier. The trip read has already taken out of its list every
+        // cave this reader may not open and every cave they may not place; what is left resolves
+        // to a name, and anything that did not would be printed as the identifier itself — which
+        // is the one thing worth withholding, because it is enough to go and ask for the cave by
+        // it. So a name that will not resolve takes its cave out of the line instead.
+        //
+        // What is missing is stated as a count, the way the pictures are: a circulated file that
+        // simply listed fewer caves would read as a trip that went to fewer places, and the
+        // difference between two people's copies would look like a fault in whoever produced one.
+        var names = content.Trip.CaveIds
+            .Select(id => content.CaveNames.GetValueOrDefault(id))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .OrderBy(name => name, StringComparer.CurrentCulture)
+            .ToList();
+        var withheld = content.Trip.CavesWithheld;
+
+        var shortfall = withheld == 0 ? null
+            : withheld == 1 ? "1 cave not shown to you"
+            : $"{withheld} caves not shown to you";
+
+        if (names.Count == 0)
         {
-            return null;
+            return shortfall;
         }
 
-        var names = content.Trip.CaveIds
-            .Select(id => content.CaveNames.GetValueOrDefault(id, id.ToString()))
-            .OrderBy(name => name, StringComparer.CurrentCulture);
-        return string.Join(", ", names);
+        return shortfall is null ? string.Join(", ", names) : $"{string.Join(", ", names)} (+{shortfall})";
     }
 
     /// <summary>

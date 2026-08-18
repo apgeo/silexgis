@@ -15600,6 +15600,8 @@ export interface components {
             safetySchemaVersion: null | number;
             /** Format: uuid */
             expeditionId: null | string;
+            /** Format: int32 */
+            cavesWithheld: number;
         };
         TripLogTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];

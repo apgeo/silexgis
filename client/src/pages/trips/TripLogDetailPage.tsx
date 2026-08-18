@@ -24,7 +24,7 @@ import { applyTripRestore } from '../../components/history/historyModel.ts';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import { TRIP_ROLE_CODES } from '../../components/reslinks/relations.ts';
 import TagChips from '../../components/tags/TagChips.tsx';
-import TripCaveLink from '../../components/trips/TripCaveLink.tsx';
+import TripCaveList from '../../components/trips/TripCaveList.tsx';
 import TripCover from '../../components/trips/TripCover.tsx';
 import TripGallerySection from '../../components/trips/TripGallerySection.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
@@ -215,13 +215,9 @@ export default function TripLogDetailPage() {
               {organizingCavingGroup.name}
             </Descriptions.Item>
           )}
-          {trip.caveIds.length > 0 && (
+          {(trip.caveIds.length > 0 || trip.cavesWithheld > 0) && (
             <Descriptions.Item label={t('trips.caves')}>
-              <Flex gap={8} wrap>
-                {trip.caveIds.map((caveId) => (
-                  <TripCaveLink key={caveId} caveId={caveId} />
-                ))}
-              </Flex>
+              <TripCaveList caveIds={trip.caveIds} withheld={trip.cavesWithheld} />
             </Descriptions.Item>
           )}
           {trip.participants.length > 0 && (
@@ -369,7 +365,10 @@ export default function TripLogDetailPage() {
                 entityType: 'TripLog',
                 // Only what the restore names: a section it does not name is left out of the
                 // write entirely rather than sent back as it stands, so putting an old title
-                // back cannot be refused over a report section nobody opened.
+                // back cannot be refused over a report section nobody opened. The cave list is
+                // left out for a stronger reason still — it is not restorable at all, and the
+                // copy loaded here is short of every cave this reader may not be told about, so
+                // echoing it back would read as an instruction to forget those.
                 onRestore: async (event, props) => {
                   await updateTrip.mutateAsync({
                     id: trip.id,

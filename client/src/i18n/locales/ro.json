@@ -751,6 +751,8 @@
     "location": "Locație",
     "organizingClub": "Club organizator",
     "caves": "Peșteri",
+    "cavesWithheld": "{{count}} nearătate dumneavoastră",
+    "cavesWithheldDetail": "Această tură menționează peșteri pe care nu le puteți deschide sau a căror poziție nu vă poate fi comunicată — sunt numărate aici, nu enumerate, pentru că a le numi ar echivala cu a le arăta.",
     "participants": "Participanți",
     "participantName": "Nume participant",
     "participantRequired": "Introduceți un nume",

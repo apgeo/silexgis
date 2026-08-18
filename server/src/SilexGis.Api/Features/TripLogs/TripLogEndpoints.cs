@@ -94,9 +94,16 @@ public static class TripLogEndpoints
 
         if (caveId is not null)
         {
-            // Filtering trips by a location-protected cave would place the cave through
-            // the trips' geometries — behave as if nothing is linked.
-            if (await protection.ShouldRedactLinkAsync(ctx, caveId, ct))
+            // Asked through the same rule the rows themselves are mapped by, and for the same
+            // reason in both directions. A cave this caller may not open is one the listing
+            // will not name, so it must not be usable as a filter either: an id that answers
+            // differently from one that does not exist is an id anybody can go looking for,
+            // and the answer would be the trips that reached it — each carrying its own exact
+            // geometry, which places the cave the filter would not name. The position gate is
+            // the other half of the same question: filtering by a guarded cave places it
+            // through the trips' geometries even when the cave itself is readable. Either one
+            // failing behaves as if nothing is linked.
+            if ((await DisclosableCaveIdsAsync(db, protection, ctx, [caveId.Value], ct)).Count == 0)
             {
                 var (emptyPage, emptySize) = Paging.Normalize(page, pageSize);
                 return TypedResults.Ok(new PagedResult<TripLogDto>([], emptyPage, emptySize, 0));
@@ -530,21 +537,82 @@ public static class TripLogEndpoints
     /// </summary>
     private const string CaveListRole = "trip-visited";
 
+    /// <summary>
+    /// Of the caves a trip's roles name, the ones this caller may be told about at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two gates, in this order. The first is readability: <em>naming a cave is a read of the
+    /// cave</em>. A trip's own audience is not the cave's — a cave nobody but its owner may open
+    /// can be named on a trip half the club reads, and a trip's readership is in general a list
+    /// somebody types. Handing over the identifier of such a cave hands over the one thing that
+    /// is enough to go and ask for the cave elsewhere, so the identifier is withheld rather than
+    /// the name alone — on the trip's own cave list and on everything built from it, which is
+    /// what this rule governs and the whole of what it claims. A trip carries other panels with
+    /// withholding rules of their own, and they answer for themselves.
+    /// </para>
+    /// <para>
+    /// The second is placement, and it is a separate question with a separate answer: a trip
+    /// carries its own exact geometry, so "this trip reached that cave" places a guarded cave by
+    /// proximity even when the cave itself is perfectly readable. Neither gate implies the other
+    /// — the placement walk deliberately answers only about position and reads its rows past
+    /// every visibility filter, so it can never stand in for the first.
+    /// </para>
+    /// <para>
+    /// This is the one home of that rule for a trip's cave list. Every surface carrying the list
+    /// asks here — the read that produces it and the write that reconciles it alike — because
+    /// the write has to put back exactly what the read took out, and two copies of the predicate
+    /// are two answers waiting to drift apart.
+    /// </para>
+    /// </remarks>
+    internal static async Task<HashSet<Guid>> DisclosableCaveIdsAsync(
+        SilexGisDbContext db,
+        FeatureProtection protection,
+        AccessContext ctx,
+        IReadOnlyCollection<Guid> namedCaveIds,
+        CancellationToken ct)
+    {
+        var ids = namedCaveIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        // Narrowed in the statement rather than after it, and narrowed to caves in the same
+        // predicate: the list promises caves, and a role naming a spring belongs to the roles.
+        var readable = await db.Features.AsNoTracking()
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+            .Where(f => ids.Contains(f.Id) && f.Kind == FeatureKind.Cave)
+            .Select(f => f.Id)
+            .ToListAsync(ct);
+
+        // Asked over what survived the first gate, never over the whole named set: the position
+        // rule cannot be expressed in the same statement, and asking it first would let an
+        // unguarded private cave through on the strength of having no position to guard.
+        var redacted = await protection.RedactedLinkTargetIdsAsync(ctx, readable, ct);
+        return [.. readable.Where(id => !redacted.Contains(id))];
+    }
+
     // Reconcile with a diff (add/remove only what changed) rather than delete-all +
     // recreate-all: a full recreate logs a "created" event for every unchanged child on every
-    // save, so the diff keeps the timeline honest. Also preserves caves the caller could not
-    // see: those were redacted out of the list they edited, so treating the submitted list as
-    // the whole truth would silently drop them.
+    // save, so the diff keeps the timeline honest. Also preserves caves the caller was never
+    // shown, for either of the two reasons a cave is kept off the list they edited: treating a
+    // list handed over short as the whole truth would silently drop them.
     //
     // That last guard is why a list is only reconciled when one is actually supplied. Naming a
     // cave one at a time — which is how it is done now — cannot express "forget everything not
     // in this list", so the hazard simply does not arise there; it arises only here, where an
     // absence has to be read as an instruction, and here it is guarded.
     //
-    // Reads over every role, writes under one. A cave the trip already names — whatever it did
-    // there — is left exactly as it is rather than named a second time, and a cave dropped from
-    // the list is unnamed only from the role this path writes: a list with no roles in it is not
-    // an instruction to forget that the trip surveyed somewhere.
+    // Reads over every role, writes under one, and that asymmetry is chosen rather than
+    // tolerated. A cave the trip already names — whatever it did there — is left exactly as it is
+    // rather than named a second time, and a cave dropped from the list is unnamed only from the
+    // role this path writes: a list with no roles in it is not an instruction to forget that the
+    // trip surveyed somewhere, and one coarse list must not be able to erase a finer statement
+    // somebody made on purpose elsewhere. The consequence, accepted with the rule: dropping a
+    // cave the trip holds only under some other role does nothing. Nothing is hidden by that —
+    // this write answers with the trip read afresh, whose list still names that cave — and the
+    // way to take such a cave off a trip is through the role that put it there.
     private static async Task ReconcileCaveLinksAsync(
         SilexGisDbContext db,
         FeatureProtection protection,
@@ -562,8 +630,17 @@ public static class TripLogEndpoints
             .Select(pair => pair.FeatureId)
             .Distinct()
             .ToList();
-        var redacted = await protection.RedactedLinkTargetIdsAsync(ctx, named, ct);
-        var desired = requestedCaveIds.Concat(named.Where(redacted.Contains)).ToHashSet();
+
+        // Put back everything this caller was never shown, decided by the very function that
+        // decided what to show them. The two have to agree exactly: whatever the read takes out,
+        // the write puts back. A narrower re-add is not a smaller safeguard — it is a silent
+        // deletion, because the caller omits a cave they were never offered and the trip loses a
+        // link nobody asked to drop. That is why this asks the shared rule rather than the
+        // position rule alone: the position rule reads its rows past every visibility filter and
+        // answers only about where a cave is, so a cave held back for being unreadable is not
+        // among the ones it names.
+        var disclosable = await DisclosableCaveIdsAsync(db, protection, ctx, named, ct);
+        var desired = requestedCaveIds.Concat(named.Where(id => !disclosable.Contains(id))).ToHashSet();
 
         foreach (var caveId in named.Where(id => !desired.Contains(id)))
         {
@@ -839,7 +916,10 @@ public static class TripLogEndpoints
 
         // A cave is a feature row, so existence and readability are one filtered count; an id
         // the caller cannot read is reported exactly like a nonexistent one, so linking cannot
-        // be used to probe for caves.
+        // be used to probe for caves. Nobody is ever forced to send one: the list a caller was
+        // handed holds only caves they may be told about, and the ones kept off it are put back
+        // by the reconcile rather than expected back from them — so refusing an unreadable id
+        // here cannot turn into a save that fails over a cave the caller never saw.
         var caveIds = (request.CaveIds ?? []).Distinct().ToList();
         if (caveIds.Count > 0)
         {
@@ -961,9 +1041,11 @@ public static class TripLogEndpoints
             })
             .ToList();
 
-        // Exact trip geometry + protected-cave link would disclose the cave; hide those links.
-        var redacted = await protection.RedactedLinkTargetIdsAsync(
-            ctx, [.. caveLinks.Select(x => x.FeatureId)], ct);
+        // Which of the caves these trips name this caller may be told about — readable first,
+        // then placeable. Decided for the whole page at once; what is left out is counted per
+        // trip below rather than named.
+        var disclosableCaves = await DisclosableCaveIdsAsync(
+            db, protection, ctx, [.. caveLinks.Select(x => x.FeatureId)], ct);
 
         // Which of these trips this caller may change, decided for the whole page at once so a
         // longer listing does not cost more round trips. It answers one question here: who is
@@ -975,6 +1057,7 @@ public static class TripLogEndpoints
         TripLogDto MapOne(TripLog trip, bool mayWrite)
         {
             var (safety, safetyVersion) = TripDisclosure.Safety(trip, mayWrite);
+            var named = caveLinks.Where(x => x.TripId == trip.Id).Select(x => x.FeatureId).ToList();
             return new TripLogDto(
                 trip.Id,
                 trip.Title,
@@ -989,7 +1072,7 @@ public static class TripLogEndpoints
                 trip.LocationText,
                 trip.OrganizingCavingGroupId,
                 trip.Geom is null ? null : GeoJsonGeometry.From(trip.Geom),
-                [.. caveLinks.Where(x => x.TripId == trip.Id && !redacted.Contains(x.FeatureId)).Select(x => x.FeatureId)],
+                [.. named.Where(disclosableCaves.Contains)],
                 // Everyone but the proposers, whatever job they did, so a role added to the
                 // vocabulary after this was written shows up as somebody who was there rather
                 // than as nobody at all. The two lists partition the roster between them.
@@ -1013,7 +1096,8 @@ public static class TripLogEndpoints
                 trip.LogisticsSchemaVersion,
                 safety is null ? null : JsonSerializer.Deserialize<JsonElement>(safety),
                 safetyVersion,
-                campOfTrip.TryGetValue(trip.Id, out var campId) ? campId : null);
+                campOfTrip.TryGetValue(trip.Id, out var campId) ? campId : null,
+                named.Count(id => !disclosableCaves.Contains(id)));
         }
     }
 }

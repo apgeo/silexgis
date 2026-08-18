@@ -124,7 +124,10 @@ Previous versions:
   apart. What one person records, everybody who may maintain the thing it is about can correct. Those
   fields are also the *only* way a trip is tied to a place — there is no separate cave list to keep in
   step — and a cave's own page returns the favour with a **Trips** section listing the trips that named
-  it, newest first, counted by the same rule that decides what the list may show. **What a trip was
+  it, newest first, counted by the same rule that decides what the list may show. A trip **names only the
+  caves its reader is allowed to open**, and tells them how many it is not naming rather than leaving a
+  list quietly short — on the page, in the report and in the document it generates — because naming a
+  cave, even by its bare identifier, is as good as showing it to somebody a trip invited in. **What a trip was
   for is a list your club owns**, not a list we chose: the eight kinds we ship are there from the
   start and cannot be renamed out from under the software, but a club that runs something nobody
   thought of adds it themselves, and it is filterable and countable from that moment. Each kind also

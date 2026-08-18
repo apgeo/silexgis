@@ -35,7 +35,7 @@ import {
   type TripLogInfo,
   type TripParticipantRole,
 } from '../../api/hooks.ts';
-import TripCaveLink from '../../components/trips/TripCaveLink.tsx';
+import TripCaveList from '../../components/trips/TripCaveList.tsx';
 import TripCover from '../../components/trips/TripCover.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { participantRoleLabel } from '../../components/trips/participantRoles.ts';
@@ -313,16 +313,13 @@ export default function TripReportPage() {
           {trip.locationText && (
             <Descriptions.Item label={t('trips.location')}>{trip.locationText}</Descriptions.Item>
           )}
-          {/* The caves this trip names, as the trip itself gives them: a cave whose position this
-              reader may not place is not in that list at all, and asking for one by another route
-              is how it would come back. */}
-          {trip.caveIds.length > 0 && (
+          {/* The caves this trip names, as the trip itself gives them: a cave this reader may not
+              open, and a cave whose position they may not place, are both off that list already,
+              and asking for one by another route is how either would come back. What was left off
+              arrives as a number beside it, so the shortfall is stated rather than shown. */}
+          {(trip.caveIds.length > 0 || trip.cavesWithheld > 0) && (
             <Descriptions.Item label={t('trips.caves')}>
-              <Flex gap={8} wrap>
-                {trip.caveIds.map((caveId) => (
-                  <TripCaveLink key={caveId} caveId={caveId} />
-                ))}
-              </Flex>
+              <TripCaveList caveIds={trip.caveIds} withheld={trip.cavesWithheld} />
             </Descriptions.Item>
           )}
           {trip.weatherConditions && (
