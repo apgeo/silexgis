@@ -243,18 +243,19 @@ internal static class TripReportEndpoints
         // Which layout the document is written in. A layout that was named and is not there is a
         // refusal rather than a quiet fall back to another one: somebody asking for the club's
         // bulletin layout and being handed the shipped one would not be told.
-        var body = await TripReportTemplateEndpoints.BodyForAsync(db, templateId, ct);
+        var body = await ReportTemplateReads.BodyForAsync(db, templateId, ReportTemplateKind.Trip, ct);
         if (body is null)
         {
-            return new BuiltReport(
-                null, null, ApiProblems.NotFound(TripReportTemplateEndpoints.NotFoundCode));
+            return new BuiltReport(null, null, ApiProblems.NotFound(ReportTemplateReads.NotFoundCode));
         }
 
         // Read here rather than trusted: a layout is checked when it is stored, and one that has
         // since become unreadable falls back to the shipped layout so a broken row cannot stop a
         // club producing its write-ups.
-        var read = ReportTemplateFormat.Parse(body);
-        var parts = read.Ok ? read.Parts : ReportTemplateFormat.Parse(ReportTemplateFormat.Default).Parts;
+        var read = ReportTemplateFormat.Parse(body, ReportTemplateKind.Trip);
+        var parts = read.Ok
+            ? read.Parts
+            : ReportTemplateFormat.Parse(ReportTemplateFormat.Default, ReportTemplateKind.Trip).Parts;
 
         // The one read of the trip, exactly as the page makes it. Everything the document says
         // about who may see what was decided here.

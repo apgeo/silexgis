@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Trips;
+
 namespace SilexGis.Domain.Entities;
 
 /// <summary>
@@ -23,6 +25,13 @@ public class TripReportTemplate : ITimestamped, IAuditable
 
     /// <summary>What the club calls this layout when choosing between them.</summary>
     public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// What this layout writes up. A layout is only ever offered for, and only ever read against,
+    /// the kind it was written for — the two vocabularies differ, so a camp layout applied to a
+    /// trip would name fields that trip has no answer for.
+    /// </summary>
+    public ReportTemplateKind Kind { get; set; } = ReportTemplateKind.Trip;
 
     /// <summary>The layout itself, in the small line-per-instruction language.</summary>
     public string Body { get; set; } = string.Empty;

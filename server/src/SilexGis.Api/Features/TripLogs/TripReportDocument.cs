@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
@@ -147,37 +146,7 @@ internal static class TripReportDocument
             }
         }
 
-        return Pruned(blocks);
-    }
-
-    /// <summary>
-    /// Takes out every heading nothing came out under.
-    /// </summary>
-    /// <remarks>
-    /// A layout asks for a part before it can know whether the trip has anything to put in it, so
-    /// an empty part is ordinary rather than a mistake — and a bare "Safety" heading on a
-    /// circulated document reads as "nothing happened", which is a different statement from the
-    /// one the record actually makes.
-    /// </remarks>
-    private static List<DocumentBlock> Pruned(List<DocumentBlock> blocks)
-    {
-        var kept = new List<DocumentBlock>(blocks.Count);
-        for (var index = 0; index < blocks.Count; index++)
-        {
-            if (blocks[index].Kind != DocumentBlockKind.Heading)
-            {
-                kept.Add(blocks[index]);
-                continue;
-            }
-
-            var next = index + 1;
-            if (next < blocks.Count && blocks[next].Kind != DocumentBlockKind.Heading)
-            {
-                kept.Add(blocks[index]);
-            }
-        }
-
-        return kept;
+        return ReportComposition.Pruned(blocks);
     }
 
     private static void AppendRoster(List<DocumentBlock> blocks, TripReportContent content)
@@ -262,56 +231,12 @@ internal static class TripReportDocument
     /// nothing and the line should not be written at all.
     /// </summary>
     /// <remarks>
-    /// A name with nothing behind it takes the punctuation written next to it with it, so a line
-    /// reading "{purpose} · {dates} · {club}" on a trip with no club comes out without a dangling
-    /// separator. Only punctuation standing on its own between two names is touched; nothing
-    /// alters the words a person wrote, and nothing collapses the line breaks inside prose.
+    /// How a line behaves when one of its names comes back empty is a rule about the language
+    /// rather than about trips, so it is applied from one place; what each name means is answered
+    /// here, out of the reading this document's producer already has.
     /// </remarks>
-    private static string? Fill(TripReportContent content, string text)
-    {
-        var written = new StringBuilder();
-        string? waiting = null;
-        var anything = false;
-
-        foreach (var token in ReportTemplateFormat.Tokens(text))
-        {
-            if (!token.IsPlaceholder)
-            {
-                waiting += token.Text;
-                continue;
-            }
-
-            var value = Resolve(content, token.Text);
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                if (waiting is not null && !HasWords(waiting))
-                {
-                    waiting = null;
-                }
-
-                continue;
-            }
-
-            if (waiting is not null && (anything || HasWords(waiting)))
-            {
-                written.Append(waiting);
-            }
-
-            waiting = null;
-            written.Append(value);
-            anything = true;
-        }
-
-        if (waiting is not null && HasWords(waiting))
-        {
-            written.Append(waiting);
-        }
-
-        var filled = written.ToString().Trim();
-        return HasWords(filled) ? filled : null;
-    }
-
-    private static bool HasWords(string text) => text.Any(char.IsLetterOrDigit);
+    private static string? Fill(TripReportContent content, string text) =>
+        ReportComposition.Fill(text, name => Resolve(content, name));
 
     private static string? Resolve(TripReportContent content, string name)
     {

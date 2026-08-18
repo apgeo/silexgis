@@ -1865,12 +1865,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Audit trail, filterable by entity ("Feature" selects every feature kind); requires Read on the Audit domain. */
+        /** Audit trail, filterable by entity ("Feature" selects every feature kind) and by the entity a row belongs to; requires Read on the Audit domain. */
         get: {
             parameters: {
                 query?: {
                     entityType?: string;
                     entityId?: string;
+                    rootEntityType?: string;
+                    rootEntityId?: string;
                     action?: string;
                     page?: number;
                     pageSize?: number;
@@ -9135,6 +9137,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expeditions/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The camp written up as one document, in the layout named or the club's chosen one. Built from what this caller may read: a trip they may not open contributes nothing to it. */
+        get: {
+            parameters: {
+                query?: {
+                    templateId?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Files the write-up against the camp, superseding the last one this route produced. Built from the reading any account has, because everybody who may read the camp reaches what is filed on it. */
+        post: {
+            parameters: {
+                query?: {
+                    templateId?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionReportSavedDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expeditions/{id}/map": {
         parameters: {
             query?: never;
@@ -9346,10 +9410,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The layouts write-ups may be built in, and which one is used by default. */
+        /** The layouts write-ups may be built in, and which one is used by default. Narrowed by what a layout writes up when a kind is named. */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    kind?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -9406,10 +9472,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The layout the system ships, as a file to edit and upload back. It documents the whole vocabulary in its own comments. */
+        /** The layout the system ships for the named kind, as a file to edit and upload back. It documents that kind's whole vocabulary in its own comments. */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    kind?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -10344,7 +10412,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Rules written directly onto this object (ManagePermissions).
+         * Rules anchored on this object (ManagePermissions). A rule carrying a camp was written by that camp's sharing: it is shown here and withdrawn there.
          * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition' (case-insensitive).
          */
         get: {
@@ -10371,7 +10439,7 @@ export interface paths {
             };
         };
         /**
-         * Replaces this object's direct rules, bounded by what the caller holds.
+         * Replaces the rules authored here, bounded by what the caller holds. A rule a camp's sharing wrote is left exactly as it is.
          * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition' (case-insensitive).
          */
         put: {
@@ -10446,6 +10514,128 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expeditions/{id}/sharing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What this camp's sharing grants, and how many of its trips carry it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionSharingDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Shares this camp: one rule onto every trip it gathers, bounded at each trip by what the caller holds there. Adds and restates; never removes. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExpeditionShareRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionSharingDto"];
+                    };
+                };
+            };
+        };
+        /** Withdraws every rule this camp's sharing wrote, and only those: a rule of the same shape authored on a trip's own tab stays. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expeditions/{id}/sharing/re-apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Carries this camp's sharing onto the trips that joined since it was applied. A trip joining is not covered by itself — this is the act that covers it. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpeditionSharingDto"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -12382,6 +12572,8 @@ export interface components {
             action: string;
             entityType: null | string;
             entityId: null | string;
+            rootEntityType: null | string;
+            rootEntityId: null | string;
             changes: null | components["schemas"]["JsonElement"];
         };
         AuthConfigDto: {
@@ -13048,6 +13240,13 @@ export interface components {
             leads: number;
             truncated: boolean;
         };
+        ExpeditionReportSavedDto: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            fileId: string;
+            fileName: string;
+        };
         ExpeditionRosterDto: {
             /** Format: uuid */
             expeditionId: string;
@@ -13102,6 +13301,31 @@ export interface components {
             description: null | string;
             /** Format: int32 */
             sortOrder: number;
+        };
+        ExpeditionSharedRuleDto: {
+            subjectKind: components["schemas"]["AccessSubjectKind"];
+            /** Format: uuid */
+            subjectId: string;
+            subjectName: null | string;
+            effect: components["schemas"]["AccessEffect"];
+            actions: components["schemas"]["AccessAction"];
+            /** Format: int32 */
+            trips: number;
+        };
+        ExpeditionShareEntryWrite: {
+            subjectKind: components["schemas"]["AccessSubjectKind"];
+            /** Format: uuid */
+            subjectId: string;
+            effect: components["schemas"]["AccessEffect"];
+            actions: components["schemas"]["AccessAction"];
+        };
+        ExpeditionShareRequest: {
+            entries: components["schemas"]["ExpeditionShareEntryWrite"][];
+        };
+        ExpeditionSharingDto: {
+            /** Format: int32 */
+            memberTrips: number;
+            rules: components["schemas"]["ExpeditionSharedRuleDto"][];
         };
         ExpeditionTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];
@@ -14238,6 +14462,8 @@ export interface components {
             effect: components["schemas"]["AccessEffect"];
             actions: components["schemas"]["AccessAction"];
             scopeKind: components["schemas"]["AccessScopeKind"];
+            /** Format: uuid */
+            grantedViaExpeditionId: null | string;
         };
         ObjectAccessEntryWrite: {
             subjectKind: components["schemas"]["AccessSubjectKind"];
@@ -14847,6 +15073,8 @@ export interface components {
             password: string;
             displayName: null | string;
         };
+        /** @enum {unknown} */
+        ReportTemplateKind: "trip" | "expedition";
         ResetPasswordRequest: {
             email: string;
             token: string;
@@ -15499,6 +15727,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            kind: components["schemas"]["ReportTemplateKind"];
             body: string;
             isDefault: boolean;
             /** Format: date-time */
@@ -15510,6 +15739,7 @@ export interface components {
             name: string;
             body: string;
             isDefault: boolean;
+            kind: null | components["schemas"]["ReportTemplateKind"];
         };
         TripStatisticsDto: {
             /** Format: int32 */

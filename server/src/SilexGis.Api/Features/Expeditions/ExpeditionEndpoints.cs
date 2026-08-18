@@ -286,14 +286,22 @@ public static class ExpeditionEndpoints
         // anchor cannot be resolved is exactly what the integrity check reports as an orphan.
         // Deleting them here is what keeps a routine delete from leaving one behind.
         //
+        // The rules the camp's sharing wrote onto the trips it gathered go with it too. They
+        // are anchored on those trips, not on the camp, so nothing above finds them — the
+        // marker is what does, and it is the only thing that can: a rule matching one of them
+        // action for action may equally have been authored by hand on that trip's own tab, and
+        // that one stays. Without this sweep the camp's grants would outlive the camp with no
+        // surface left that could name, review or withdraw them.
+        //
         // Loaded and removed rather than deleted in one statement, because a rule disappearing
         // is a change to who may reach what, and every other place rules are withdrawn records
         // that. A set-based delete never reaches the change tracker, so the withdrawal would
         // happen with nothing in the trail to say it had.
         var anchored = await db.AccessEntries
-            .Where(e => e.Domain == AccessDomain.Expeditions
-                && e.ScopeKind == AccessScopeKind.Object
-                && e.ScopeId == expedition.Id)
+            .Where(e => (e.Domain == AccessDomain.Expeditions
+                    && e.ScopeKind == AccessScopeKind.Object
+                    && e.ScopeId == expedition.Id)
+                || e.GrantedViaExpeditionId == expedition.Id)
             .ToListAsync(ct);
         db.AccessEntries.RemoveRange(anchored);
 
@@ -507,8 +515,40 @@ public static class ExpeditionEndpoints
         }
 
         db.ExpeditionTrips.Remove(row);
+        await ReleaseCampRulesAsync(db, id, tripLogId, ct);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// Takes back the rules a camp's sharing wrote onto a trip, now that the trip has left it.
+    /// </summary>
+    /// <remarks>
+    /// A camp's sharing reaches a trip because the trip is in the camp; once it is not, the grant
+    /// has lost the thing it was justified by. Leaving it would be worse than untidy: it is
+    /// anchored on the trip and marked with a camp the trip no longer belongs to, so the trip's own
+    /// permissions surface does not offer it — that surface deliberately leaves the camp's rules to
+    /// the camp — and the only route that could withdraw it asks for authority over a camp the
+    /// trip's owner may not hold. The access would be permanent and nobody could see it, let alone
+    /// remove it.
+    ///
+    /// The marker, and nothing but the marker, exactly as a withdrawal from the camp matches: a
+    /// rule of the same shape somebody authored on this trip's own tab is theirs and stays.
+    ///
+    /// Loaded and removed rather than deleted in one statement, because a rule disappearing is a
+    /// change to who may reach what and the trail has to carry it; a set-based delete never reaches
+    /// the change tracker.
+    /// </remarks>
+    private static async Task ReleaseCampRulesAsync(
+        SilexGisDbContext db, Guid expeditionId, Guid tripLogId, CancellationToken ct)
+    {
+        var granted = await db.AccessEntries
+            .Where(e => e.GrantedViaExpeditionId == expeditionId && e.ScopeId == tripLogId)
+            .ToListAsync(ct);
+        if (granted.Count > 0)
+        {
+            db.AccessEntries.RemoveRange(granted);
+        }
     }
 
     /// <summary>
@@ -546,6 +586,7 @@ public static class ExpeditionEndpoints
             if (current is not null)
             {
                 db.ExpeditionTrips.Remove(current);
+                await ReleaseCampRulesAsync(db, current.ExpeditionId, trip.Id, ct);
                 await db.SaveChangesAsync(ct);
             }
 
@@ -611,6 +652,11 @@ public static class ExpeditionEndpoints
             if (existing is not null)
             {
                 db.ExpeditionTrips.Remove(existing);
+
+                // A move is a departure as well as an arrival, so what the camp it left had
+                // granted on this trip goes with the leaving — the new camp grants nothing by
+                // gaining a member, and the old one's grant has lost what justified it.
+                await ReleaseCampRulesAsync(db, existing.ExpeditionId, tripLogId, ct);
                 await db.SaveChangesAsync(ct);
             }
 
@@ -721,7 +767,11 @@ public static class ExpeditionEndpoints
         expedition.Visibility = request.Visibility;
     }
 
-    private static ExpeditionDto Map(Expedition expedition) => new()
+    /// <summary>
+    /// The camp as every reading of it gives it. Shared with the camp's own write-up, which states
+    /// only what a reading already produced rather than going to the row a second time.
+    /// </summary>
+    internal static ExpeditionDto Map(Expedition expedition) => new()
     {
         Id = expedition.Id,
         Name = expedition.Name,

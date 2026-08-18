@@ -107,7 +107,11 @@ export function tripReportUrl(id: string, templateId?: string): string {
  * It is the starting point for a club's own layout and it documents the whole substitution
  * vocabulary in its own comments, which is why it is handed over as a file rather than described
  * on a page: the person editing it reads the vocabulary in the editor they are editing in.
+ *
+ * The kind is part of the ask, because the two vocabularies are different — a camp's layout writes
+ * up a fortnight day by day and team by team, which a trip has no answer for — and the file being
+ * edited is the only place either vocabulary is written down.
  */
-export function tripReportTemplateDefaultUrl(): string {
-  return '/api/v1/trip-report-templates/default';
+export function tripReportTemplateDefaultUrl(kind: string): string {
+  return buildUrl('/api/v1/trip-report-templates/default', { kind });
 }

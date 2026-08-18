@@ -15,7 +15,14 @@ using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Permissions;
 
-/// <summary>One rule written straight onto an object, as the Permissions tab edits it.</summary>
+/// <summary>One rule written straight onto an object, as the Permissions tab shows it.</summary>
+/// <param name="GrantedViaExpeditionId">
+/// The camp whose sharing wrote this rule, or null when somebody authored it here. A rule with a
+/// camp on it is shown but is not this surface's to rewrite — a replace here leaves it alone — and
+/// it is withdrawn from the camp that granted it. Shown rather than hidden because the alternative
+/// is a trip whose permissions page says nobody has access while a partner club holds Read on it,
+/// with no surface anywhere that would tell its owner.
+/// </param>
 public sealed record ObjectAccessEntryDto(
     long Id,
     AccessSubjectKind SubjectKind,
@@ -23,7 +30,8 @@ public sealed record ObjectAccessEntryDto(
     string? SubjectName,
     AccessEffect Effect,
     AccessAction Actions,
-    AccessScopeKind ScopeKind);
+    AccessScopeKind ScopeKind,
+    Guid? GrantedViaExpeditionId);
 
 public sealed record ObjectAccessEntryWrite(
     AccessSubjectKind SubjectKind,
@@ -89,10 +97,14 @@ public static class ObjectAccessEndpoints
         var objects = api.MapGroup("/objects/{entityType}/{id:guid}").WithTags("Permissions");
 
         objects.MapGet("/access", GetAsync)
-            .WithSummary("Rules written directly onto this object (ManagePermissions).")
+            .WithSummary(
+                "Rules anchored on this object (ManagePermissions). A rule carrying a camp was "
+                + "written by that camp's sharing: it is shown here and withdrawn there.")
             .WithDescription(TargetVocabulary);
         objects.MapPut("/access", ReplaceAsync).WithValidation<ObjectAccessReplaceRequest>()
-            .WithSummary("Replaces this object's direct rules, bounded by what the caller holds.")
+            .WithSummary(
+                "Replaces the rules authored here, bounded by what the caller holds. A rule a "
+                + "camp's sharing wrote is left exactly as it is.")
             .WithDescription(TargetVocabulary);
         objects.MapGet("/effective-access", EffectiveAsync)
             .WithSummary("What the caller may do here; ?explain=true names the deciding rule.")
@@ -447,11 +459,10 @@ public static class ObjectAccessEndpoints
     }
 
     /// <summary>
-    /// The rules this surface owns: direct ones, anchored on this object — at object or
-    /// subtree reach. Ruleset entries are somebody else's page and survive a replace here
-    /// untouched.
+    /// Every rule anchored on this object, at object or subtree reach, whoever wrote it. What
+    /// the page shows. Ruleset entries are somebody else's page and are not here.
     /// </summary>
-    private static IQueryable<AccessEntry> DirectRulesOf(SilexGisDbContext db, AccessTarget target)
+    private static IQueryable<AccessEntry> RulesAnchoredOn(SilexGisDbContext db, AccessTarget target)
     {
         var id = target.Entity.Id;
         var domain = AccessDomains.Of(target.Entity);
@@ -463,6 +474,21 @@ public static class ObjectAccessEndpoints
             ? query.Where(e => e.ScopeFeatureId == id)
             : query.Where(e => e.ScopeId == id);
     }
+
+    /// <summary>
+    /// The subset this surface owns and may rewrite: the ones authored here.
+    /// </summary>
+    /// <remarks>
+    /// A rule a camp's sharing wrote onto a trip it gathered is anchored on the trip and so
+    /// belongs to the set above — but not to this one, because this surface replaces the whole
+    /// set it reads, and that would mean the first person to edit the trip's own rules silently
+    /// revoked the camp's. It is withdrawn where it was granted, from the camp that granted it,
+    /// and until then it is not this page's to rewrite. It is still shown: read and rewrite are
+    /// two different questions, and hiding a live grant from the page whose whole subject is who
+    /// may reach this object answers the second by lying about the first.
+    /// </remarks>
+    private static IQueryable<AccessEntry> DirectRulesOf(SilexGisDbContext db, AccessTarget target) =>
+        RulesAnchoredOn(db, target).Where(e => e.GrantedViaExpeditionId == null);
 
     private static AccessEntry ToEntity(AccessTarget target, ObjectAccessEntryWrite write, Guid grantedBy) => new()
     {
@@ -480,7 +506,7 @@ public static class ObjectAccessEndpoints
     private static async Task<List<ObjectAccessEntryDto>> LoadAsync(
         SilexGisDbContext db, UserContext user, AccessTarget target, CancellationToken ct)
     {
-        var rows = await DirectRulesOf(db, target).AsNoTracking()
+        var rows = await RulesAnchoredOn(db, target).AsNoTracking()
             .OrderBy(e => e.SubjectKind).ThenBy(e => e.Id)
             .ToListAsync(ct);
 
@@ -506,7 +532,8 @@ public static class ObjectAccessEndpoints
                     : cavingGroupNames.GetValueOrDefault(e.SubjectId!.Value),
                 e.Effect,
                 e.Actions,
-                e.ScopeKind)),
+                e.ScopeKind,
+                e.GrantedViaExpeditionId)),
         ];
     }
 

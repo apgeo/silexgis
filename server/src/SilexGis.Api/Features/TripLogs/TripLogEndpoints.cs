@@ -322,6 +322,23 @@ public static class TripLogEndpoints
         // The trip's place in a camp goes with it, and the camp is otherwise untouched: a camp
         // that gathered this trip has one fewer member, which is what deleting the trip means.
         await db.ExpeditionTrips.Where(m => m.TripLogId == trip.Id).ExecuteDeleteAsync(ct);
+
+        // Every rule anchored on this trip goes with it — the ones authored on its own
+        // permissions tab and the ones a camp's sharing wrote onto it alike. A rule whose
+        // anchor no longer exists is what the integrity check reports as an orphan, and it
+        // reads as a live grant on every surface that lists rules by subject.
+        //
+        // Loaded and removed rather than deleted in one statement, because a rule
+        // disappearing is a change to who may reach what, and every other place rules are
+        // withdrawn records that. A set-based delete never reaches the change tracker, so the
+        // withdrawal would happen with nothing in the trail to say it had.
+        var anchored = await db.AccessEntries
+            .Where(e => e.Domain == AccessDomain.TripLogs
+                && e.ScopeKind == AccessScopeKind.Object
+                && e.ScopeId == trip.Id)
+            .ToListAsync(ct);
+        db.AccessEntries.RemoveRange(anchored);
+
         await db.Attachments
             .Where(a => a.EntityType == AttachedEntityType.TripLog && a.EntityId == trip.Id)
             .ExecuteDeleteAsync(ct);

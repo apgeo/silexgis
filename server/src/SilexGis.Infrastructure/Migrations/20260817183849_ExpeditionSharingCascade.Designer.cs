@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260817183849_ExpeditionSharingCascade")]
+    partial class ExpeditionSharingCascade
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4918,10 +4921,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_default");
 
-                    b.Property<short>("Kind")
-                        .HasColumnType("smallint")
-                        .HasColumnName("kind");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)
@@ -4935,7 +4934,7 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_trip_report_templates");
 
-                    b.HasIndex("Kind", "IsDefault")
+                    b.HasIndex("IsDefault")
                         .IsUnique()
                         .HasDatabaseName("ux_trip_report_templates_default")
                         .HasFilter("is_default");

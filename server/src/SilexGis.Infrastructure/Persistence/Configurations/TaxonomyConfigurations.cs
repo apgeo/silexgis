@@ -138,13 +138,16 @@ public sealed class TripReportTemplateConfiguration : IEntityTypeConfiguration<T
         builder.ToTable("trip_report_templates");
         builder.Property(x => x.Name).HasMaxLength(120);
         builder.Property(x => x.Body).HasMaxLength(ReportTemplateFormat.MaxLength);
+        builder.Property(x => x.Kind).HasConversion<short>();
 
-        // At most one layout may be the one a write-up gets when nobody names one. Left to the
-        // write path alone it would be a rule that holds until two people press save at once,
-        // and then "which one is current" would be decided by whichever row happened to be read
-        // first — the same reason a headline picture is unique in the database rather than in a
-        // handler.
-        builder.HasIndex(x => x.IsDefault).IsUnique()
+        // At most one layout <em>of each kind</em> may be the one a write-up gets when nobody
+        // names one. Left to the write path alone it would be a rule that holds until two people
+        // press save at once, and then "which one is current" would be decided by whichever row
+        // happened to be read first — the same reason a headline picture is unique in the database
+        // rather than in a handler. The kind is inside the uniqueness because a club chooses a
+        // camp layout and a trip layout independently; a single mark across both would make
+        // choosing one silently unchoose the other.
+        builder.HasIndex(x => new { x.Kind, x.IsDefault }).IsUnique()
             .HasFilter("is_default")
             .HasDatabaseName("ux_trip_report_templates_default");
     }

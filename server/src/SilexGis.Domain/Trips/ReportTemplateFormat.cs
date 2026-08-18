@@ -32,6 +32,34 @@ public enum ReportTemplateDirective
 
     /// <summary>Every answer recorded in one part of the trip's form.</summary>
     Section = 8,
+
+    /// <summary>The trips a camp gathered, one line each.</summary>
+    Trips = 9,
+
+    /// <summary>What ran on each day of a camp, day by day.</summary>
+    Days = 10,
+
+    /// <summary>Who was at a camp in each role, one line per role.</summary>
+    Teams = 11,
+}
+
+/// <summary>
+/// Which kind of thing a layout writes up.
+/// </summary>
+/// <remarks>
+/// One language, two vocabularies. A camp is not a long trip: a fortnight has a day-by-day shape
+/// and a set of teams, and neither has anything a single afternoon underground could answer. So
+/// the words a line may begin with and the names that may stand between braces are chosen per
+/// kind, while the grammar — a word, a colon, and what to print — is the same file a club already
+/// knows how to edit. Stored as smallint and append-only.
+/// </remarks>
+public enum ReportTemplateKind
+{
+    /// <summary>One trip, written up.</summary>
+    Trip = 0,
+
+    /// <summary>A camp, written up over the trips it gathered.</summary>
+    Expedition = 1,
 }
 
 /// <summary>One instruction out of a template, already understood.</summary>
@@ -102,6 +130,22 @@ public static class ReportTemplateFormat
     /// </summary>
     public static readonly IReadOnlyList<string> Sections = ["observations", "logistics", "safety"];
 
+    /// <summary>
+    /// Everything that may stand between braces in a camp's layout.
+    /// </summary>
+    /// <remarks>
+    /// Its own list, not the trip's with words crossed out. A camp has a working area rather than
+    /// a sketch of where somebody went, a count of the trips it gathered, and totals that are the
+    /// sum of what this reader may see rather than a figure read off one record — so a name shared
+    /// with the trip vocabulary would mean a different thing under it, which is exactly how a club
+    /// comes to believe a document says something it does not.
+    /// </remarks>
+    public static readonly IReadOnlyList<string> ExpeditionPlaceholders =
+    [
+        "title", "description", "dates", "days", "club", "area", "trips", "caves", "people",
+        "depth", "length", "stations", "rope", "hours", "published",
+    ];
+
     private static readonly Regex PlaceholderPattern =
         new(@"\{([^{}]*)\}", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
@@ -141,8 +185,12 @@ public static class ReportTemplateFormat
         return tokens;
     }
 
+    /// <summary>What may stand between braces in a layout of this kind.</summary>
+    public static IReadOnlyList<string> PlaceholdersFor(ReportTemplateKind kind) =>
+        kind == ReportTemplateKind.Expedition ? ExpeditionPlaceholders : Placeholders;
+
     /// <summary>Whether a name may stand between braces.</summary>
-    public static bool IsKnownPlaceholder(string name)
+    public static bool IsKnownPlaceholder(string name, ReportTemplateKind kind = ReportTemplateKind.Trip)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -150,16 +198,18 @@ public static class ReportTemplateFormat
         }
 
         var trimmed = name.Trim();
-        if (Placeholders.Contains(trimmed, StringComparer.Ordinal))
+        if (PlaceholdersFor(kind).Contains(trimmed, StringComparer.Ordinal))
         {
             return true;
         }
 
         // One answer out of one part of the form, named the way the form named it. The part must
         // be one of the three; the answer's own name is whatever the club called it, so it is not
-        // checked here — a name no answer was recorded under simply comes back empty.
+        // checked here — a name no answer was recorded under simply comes back empty. A camp has
+        // no form of its own, so this reach belongs to a trip's layout alone.
         var dot = trimmed.IndexOf('.', StringComparison.Ordinal);
-        return dot > 0
+        return kind == ReportTemplateKind.Trip
+            && dot > 0
             && dot < trimmed.Length - 1
             && Sections.Contains(trimmed[..dot], StringComparer.Ordinal);
     }
@@ -172,10 +222,12 @@ public static class ReportTemplateFormat
     /// person fixing it is editing a text file and a refusal that surfaces one fault per attempt
     /// is how a five-minute edit becomes an afternoon.
     /// </remarks>
-    public static ReportTemplateParse Parse(string? body)
+    public static ReportTemplateParse Parse(
+        string? body, ReportTemplateKind kind = ReportTemplateKind.Trip)
     {
         var parts = new List<ReportTemplatePart>();
         var errors = new List<string>();
+        var directives = DirectivesFor(kind);
 
         if (string.IsNullOrWhiteSpace(body))
         {
@@ -202,11 +254,11 @@ public static class ReportTemplateFormat
             var word = (colon < 0 ? line : line[..colon]).Trim();
             var rest = colon < 0 ? string.Empty : line[(colon + 1)..].Trim();
 
-            if (!Directives.TryGetValue(word, out var directive))
+            if (!directives.TryGetValue(word, out var directive))
             {
                 errors.Add(
                     $"Line {number}: '{word}' is not something a template can ask for. "
-                    + $"The words a line may begin with are: {string.Join(", ", Directives.Keys)}.");
+                    + $"The words a line may begin with are: {string.Join(", ", directives.Keys)}.");
                 continue;
             }
 
@@ -214,6 +266,9 @@ public static class ReportTemplateFormat
             {
                 case ReportTemplateDirective.Roster:
                 case ReportTemplateDirective.Photographs:
+                case ReportTemplateDirective.Trips:
+                case ReportTemplateDirective.Days:
+                case ReportTemplateDirective.Teams:
                     if (rest.Length > 0)
                     {
                         errors.Add($"Line {number}: '{word}' stands on its own and takes nothing after it.");
@@ -253,7 +308,7 @@ public static class ReportTemplateFormat
                         continue;
                     }
 
-                    if (Check(value, number, errors))
+                    if (Check(value, number, kind, errors))
                     {
                         parts.Add(new ReportTemplatePart(directive, label, value, number));
                     }
@@ -267,7 +322,7 @@ public static class ReportTemplateFormat
                         continue;
                     }
 
-                    if (Check(rest, number, errors))
+                    if (Check(rest, number, kind, errors))
                     {
                         parts.Add(new ReportTemplatePart(directive, null, rest, number));
                     }
@@ -284,26 +339,34 @@ public static class ReportTemplateFormat
         return new ReportTemplateParse(errors.Count == 0 ? parts : [], errors);
     }
 
-    private static bool Check(string text, int number, List<string> errors)
+    private static bool Check(
+        string text, int number, ReportTemplateKind kind, List<string> errors)
     {
         var ok = true;
+        var subject = kind == ReportTemplateKind.Expedition ? "a camp" : "a trip";
         foreach (var name in PlaceholdersIn(text))
         {
-            if (IsKnownPlaceholder(name))
+            if (IsKnownPlaceholder(name, kind))
             {
                 continue;
             }
 
             ok = false;
             errors.Add(
-                $"Line {number}: nothing about a trip is called '{name}'. "
-                + $"What may go between braces: {string.Join(", ", Placeholders)}, "
-                + $"and one answer out of a part of the form written as "
-                + $"{string.Join(", ", Sections.Select(s => $"{{{s}.name}}"))}.");
+                $"Line {number}: nothing about {subject} is called '{name}'. "
+                + $"What may go between braces: {string.Join(", ", PlaceholdersFor(kind))}"
+                + (kind == ReportTemplateKind.Trip
+                    ? $", and one answer out of a part of the form written as "
+                        + $"{string.Join(", ", Sections.Select(s => $"{{{s}.name}}"))}."
+                    : "."));
         }
 
         return ok;
     }
+
+    /// <summary>The words a line may begin with, for a layout of this kind.</summary>
+    private static Dictionary<string, ReportTemplateDirective> DirectivesFor(ReportTemplateKind kind) =>
+        kind == ReportTemplateKind.Expedition ? ExpeditionDirectives : Directives;
 
     private static readonly Dictionary<string, ReportTemplateDirective> Directives =
         new(StringComparer.Ordinal)
@@ -317,6 +380,29 @@ public static class ReportTemplateFormat
             ["roster"] = ReportTemplateDirective.Roster,
             ["photographs"] = ReportTemplateDirective.Photographs,
             ["section"] = ReportTemplateDirective.Section,
+        };
+
+    /// <remarks>
+    /// The shared half is deliberately identical — a club that has learned to write 'field: Name =
+    /// {title}' has learned it for both. What differs is only what a camp has and a trip has not:
+    /// the trips it gathered, the shape of its days, and who was there in which role. 'section' is
+    /// absent because a camp fills in no form, so a layout naming one is a mistake worth saying out
+    /// loud rather than a line that quietly prints nothing.
+    /// </remarks>
+    private static readonly Dictionary<string, ReportTemplateDirective> ExpeditionDirectives =
+        new(StringComparer.Ordinal)
+        {
+            ["title"] = ReportTemplateDirective.Title,
+            ["heading"] = ReportTemplateDirective.Heading,
+            ["text"] = ReportTemplateDirective.Text,
+            ["note"] = ReportTemplateDirective.Note,
+            ["field"] = ReportTemplateDirective.Field,
+            ["bullet"] = ReportTemplateDirective.Bullet,
+            ["roster"] = ReportTemplateDirective.Roster,
+            ["photographs"] = ReportTemplateDirective.Photographs,
+            ["trips"] = ReportTemplateDirective.Trips,
+            ["days"] = ReportTemplateDirective.Days,
+            ["teams"] = ReportTemplateDirective.Teams,
         };
 
     /// <summary>
@@ -399,6 +485,84 @@ public static class ReportTemplateFormat
         "",
         "heading: Safety",
         "section: safety",
+        "",
+        "heading: Photographs",
+        "photographs",
+        "");
+
+    /// <summary>The layout the system ships for a layout of this kind.</summary>
+    public static string DefaultFor(ReportTemplateKind kind) =>
+        kind == ReportTemplateKind.Expedition ? ExpeditionDefault : Default;
+
+    /// <summary>
+    /// The template the system produces for a club to take away and edit, for a camp.
+    /// </summary>
+    /// <remarks>
+    /// The same file in the same language, documenting its own vocabulary in its own comments for
+    /// the same reason the trip's does. What it is not is a trip layout with a few words changed:
+    /// a fortnight is read day by day and team by team, and a document that simply concatenated
+    /// twenty write-ups would be the thing this whole feature exists to stop somebody producing.
+    /// </remarks>
+    public static string ExpeditionDefault { get; } = string.Join(
+        "\n",
+        "# The template a camp's write-up is built from. Edit it in any text editor and upload it",
+        "# again. Lines beginning with # are notes to whoever is editing and are never printed.",
+        "#",
+        "# Every other line is one instruction: a word, a colon, and what to print.",
+        "#",
+        "#   title: <text>           the document's own title, once, at the top",
+        "#   heading: <text>         a part heading; a part nothing came out under is left out",
+        "#   text: <text>            a paragraph of prose",
+        "#   note: <text>            a quieter aside",
+        "#   field: <name> = <text>  a labelled value on one line",
+        "#   bullet: <text>          one entry of a list",
+        "#   trips                   the trips gathered into the camp, one line each",
+        "#   days                    what ran on each day of the camp, day by day",
+        "#   teams                   who was there in each role",
+        "#   roster                  everybody recorded as having been there, one line each",
+        "#   photographs             the pictures filed against the camp's trips",
+        "#",
+        "# Anything in braces is filled in from the camp:",
+        "#",
+        "#   {title} {description} {dates} {days} {club} {area} {trips} {caves} {people}",
+        "#   {depth} {length} {stations} {rope} {hours} {published}",
+        "#",
+        "# A line whose braces all come back empty is left out. Every total is the sum of what the",
+        "# person producing the document may read — a trip they may not open contributes nothing to",
+        "# it, and the document says so where it matters, so two people producing the same write-up",
+        "# and getting different figures is expected rather than a fault in either of them.",
+        "",
+        "title: {title}",
+        "note: {dates} · {club}",
+        "",
+        "field: Dates = {dates}",
+        "field: Days = {days}",
+        "field: Working area = {area}",
+        "field: Trips = {trips}",
+        "field: People = {people}",
+        "field: Caves = {caves}",
+        "field: Published = {published}",
+        "",
+        "heading: Account",
+        "text: {description}",
+        "",
+        "heading: Measured",
+        "field: Underground = {hours}",
+        "field: Deepest reached = {depth}",
+        "field: Length surveyed = {length}",
+        "field: Survey stations = {stations}",
+        "field: Rope = {rope}",
+        "",
+        "heading: Day by day",
+        "days",
+        "",
+        "heading: The trips",
+        "trips",
+        "",
+        "heading: Who was there",
+        "note: {people}",
+        "teams",
+        "roster",
         "",
         "heading: Photographs",
         "photographs",

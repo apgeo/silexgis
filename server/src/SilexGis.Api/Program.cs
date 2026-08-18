@@ -253,6 +253,7 @@ try
     api.MapGeoreferencedMapEndpoints();
     api.MapTripLogEndpoints();
     api.MapExpeditionEndpoints();
+    api.MapExpeditionReportEndpoints();
     api.MapExpeditionMapEndpoints();
     api.MapExpeditionLeadsEndpoints();
     api.MapExpeditionRosterEndpoints();
@@ -266,6 +267,7 @@ try
     api.MapAccessHistoryEndpoints();
     api.MapHistoryEndpoints();
     api.MapObjectAccessEndpoints();
+    api.MapExpeditionSharingEndpoints();
     api.MapPermissionGroupEndpoints();
     api.MapFeatureSetEndpoints();
     api.MapCavingGroupEndpoints();
