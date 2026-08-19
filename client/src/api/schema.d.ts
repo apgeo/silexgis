@@ -8563,7 +8563,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Creates a trip log (Create permission on trip logs); the caller becomes owner. */
+        /** Creates a trip log written up after the event (Create permission on trip logs); the caller becomes owner, and an audience the request does not name is private. */
         post: {
             parameters: {
                 query?: never;
@@ -8673,6 +8673,82 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Creates a trip that has not happened yet (Create permission on trip logs). The same trip in every respect but one: an audience the request does not name is the author's caving group rather than private, because a proposal only its author can read is a proposal to nobody. The state it starts in is the same. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripLogWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/plan-default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The audience a trip being planned would get for this caller if they name none, answered before the trip exists so a form can say who will see it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripPlanDefaultDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -15630,7 +15706,7 @@ export interface components {
             proposers: null | components["schemas"]["TripParticipantWrite"][];
             /** Format: uuid */
             cavingGroupId: null | string;
-            visibility: components["schemas"]["Visibility"];
+            visibility: null | components["schemas"]["Visibility"];
             /** Format: double */
             depthReachedM: null | number;
             /** Format: double */
@@ -15686,6 +15762,12 @@ export interface components {
             /** Format: time */
             exitTime: null | string;
             note: null | string;
+        };
+        TripPlanDefaultDto: {
+            visibility: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            cavingGroupName: null | string;
         };
         TripReportSavedDto: {
             /** Format: uuid */

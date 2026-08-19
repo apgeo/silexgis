@@ -77,9 +77,10 @@ public static class TripLogFilterFields
         [
             new FieldDescriptor(Title, "filters.fields.title", FieldKind.Text),
             new FieldDescriptor(Type, "filters.fields.tripType", FieldKind.Id, Options: "tripTypes"),
-            // The whole lifecycle vocabulary is offered, not only the four a trip may hold today:
-            // the option set names a shared vocabulary, and narrowing it per kind of activity here
-            // would put a second copy of "which states a trip may hold" a long way from the first.
+            // The whole lifecycle vocabulary is offered, whichever of it a trip may hold: the
+            // option set names a vocabulary shared by every kind of activity, and narrowing it per
+            // kind here would put a second copy of "which states a trip may hold" a long way from
+            // the first.
             new FieldDescriptor(State, "filters.fields.state", FieldKind.Id, Options: "activityStates"),
             new FieldDescriptor(TripDate, "filters.fields.tripDate", FieldKind.Instant),
             new FieldDescriptor(HadIncident, "filters.fields.hadIncident", FieldKind.Boolean),

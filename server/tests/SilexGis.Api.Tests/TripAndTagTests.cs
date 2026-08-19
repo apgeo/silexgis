@@ -1068,7 +1068,8 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         // Announcing what is already announced is not a move either.
         await RefusedTransitionAsync(tripId, "published");
 
-        // Calling a trip off is decided from the workshop, never from the announcement.
+        // Calling a trip off is decided while it still lies ahead, never from the announcement:
+        // a trip that has been out cannot be declared not to have happened in one move.
         await RefusedTransitionAsync(tripId, "cancelled");
         (await TransitionAsync(owner, tripId, "draft")).GetProperty("state").GetString().ShouldBe("draft");
         (await TransitionAsync(owner, tripId, "cancelled")).GetProperty("state").GetString().ShouldBe("cancelled");
@@ -1081,43 +1082,92 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>
-    /// Every move the lifecycle allows is offered by the one route, including the two states a
-    /// trip could reach through no endpoint at all while announcing and withdrawing were the only
-    /// verbs: a trip recorded as having happened, and a trip called off. A demo database already
-    /// held the second, written straight onto the row — which is what a state no call can produce
-    /// looks like from the outside.
+    /// Every move the lifecycle allows is offered by the one route: the planning rungs a trip is
+    /// prepared on, the two states a trip could reach through no endpoint at all while announcing
+    /// and withdrawing were the only verbs — recorded as having happened, and called off — and the
+    /// ways back from each of them. A demo database already held a cancelled trip written straight
+    /// onto the row, which is what a state no call can produce looks like from the outside.
     /// </summary>
+    /// <remarks>
+    /// The walk's coverage is checked against the table itself rather than claimed in a comment
+    /// above it. A pair added to the lifecycle and not driven here fails this test with the pair's
+    /// own name, instead of leaving a walk that used to be exhaustive and quietly is not.
+    /// </remarks>
     [Fact]
     public async Task Every_move_the_lifecycle_allows_is_reachable_through_the_one_route()
     {
         var tripId = await CreateTripAsync($"Whole table {Guid.NewGuid():N}");
 
-        // One walk covering every pair the table holds, each step read back from the row rather
-        // than believed from the answer to the write that made it.
-        var walk = new[] { "done", "draft", "cancelled", "draft", "published", "draft", "done", "published" };
-        foreach (var state in walk)
+        // A trip is created in the workshop, so the walk starts there. It revisits states it has
+        // already been in: the table is not one loop through every pair, so covering it costs
+        // repeats.
+        ActivityState[] walk =
+        [
+            ActivityState.Proposed, ActivityState.Planned, ActivityState.Confirmed,
+            ActivityState.Done, ActivityState.Published, ActivityState.Draft,
+            ActivityState.Planned, ActivityState.Delayed, ActivityState.Planned, ActivityState.Draft,
+            ActivityState.Proposed, ActivityState.Draft,
+            ActivityState.Proposed, ActivityState.Cancelled, ActivityState.Draft,
+            ActivityState.Planned, ActivityState.Cancelled, ActivityState.Draft,
+            ActivityState.Planned, ActivityState.Confirmed, ActivityState.Delayed, ActivityState.Draft,
+            ActivityState.Planned, ActivityState.Confirmed, ActivityState.Draft,
+            ActivityState.Planned, ActivityState.Confirmed, ActivityState.Cancelled, ActivityState.Draft,
+            ActivityState.Planned, ActivityState.Delayed, ActivityState.Cancelled, ActivityState.Draft,
+            ActivityState.Done, ActivityState.Draft,
+            ActivityState.Published, ActivityState.Draft,
+            ActivityState.Cancelled, ActivityState.Draft,
+        ];
+
+        var driven = new HashSet<(ActivityState From, ActivityState To)>();
+        var standing = ActivityState.Draft;
+        foreach (var target in walk)
         {
-            (await TransitionAsync(owner, tripId, state)).GetProperty("state").GetString().ShouldBe(state);
-            (await ReadTripAsync(owner, tripId)).GetProperty("state").GetString().ShouldBe(state);
+            var wire = WireName(target);
+            (await TransitionAsync(owner, tripId, wire)).GetProperty("state").GetString().ShouldBe(wire);
+
+            // Read back from the row rather than believed from the answer to the write that made
+            // it: the stored value is what every later reader gets.
+            (await ReadTripAsync(owner, tripId)).GetProperty("state").GetString().ShouldBe(wire);
+            driven.Add((standing, target));
+            standing = target;
         }
+
+        var table = ActivityStates.All
+            .SelectMany(from => ActivityStates.All.Select(to => (From: from, To: to)))
+            .Where(pair => ActivityStates.MayTripLogTransition(pair.From, pair.To))
+            .ToList();
+        driven.ShouldBe(table, ignoreOrder: true);
     }
 
+    /// <summary>The one-word name a state travels under, which is its own lowercased.</summary>
+    private static string WireName(ActivityState state) => state.ToString().ToLowerInvariant();
+
     /// <summary>
-    /// A state the vocabulary has but a trip may not hold is refused by the transition table and
-    /// by nothing else. The four states kept for planning appear in no pair of the table, so
-    /// asking for one is refused for the same reason and under the same code as an illegal move —
-    /// there is no second rule deciding which states a trip is allowed, free to drift from the
-    /// first.
+    /// A state the transition table cannot reach from where the trip stands is refused by that
+    /// table and by nothing else: there is no second rule deciding which states a trip is allowed,
+    /// free to drift from the first. A trip now holds every state in the vocabulary, so what is
+    /// unreachable is unreachable from here rather than forbidden outright — climbing two rungs of
+    /// the planning ladder at once, and announcing a trip nobody has run yet.
     /// </summary>
     [Fact]
-    public async Task A_state_a_trip_may_not_hold_is_refused_by_the_transition_table()
+    public async Task A_state_the_table_cannot_reach_from_here_is_refused_by_the_transition_table()
     {
-        var tripId = await CreateTripAsync($"Not a trip state {Guid.NewGuid():N}");
+        var tripId = await CreateTripAsync($"Unreachable state {Guid.NewGuid():N}");
 
-        await RefusedTransitionAsync(tripId, "proposed");
-        await RefusedTransitionAsync(tripId, "planned");
+        // From the workshop: the first two rungs are reachable and the third is not, and neither
+        // is putting back a trip that has no date to put back.
         await RefusedTransitionAsync(tripId, "confirmed");
         await RefusedTransitionAsync(tripId, "delayed");
+
+        // From an idea somebody has floated: the next rung only, under the same code.
+        (await TransitionAsync(owner, tripId, "proposed")).GetProperty("state").GetString().ShouldBe("proposed");
+        await RefusedTransitionAsync(tripId, "confirmed");
+        await RefusedTransitionAsync(tripId, "done");
+        await RefusedTransitionAsync(tripId, "published");
+
+        // And back to the workshop, which is where a trip written up after the fact is entered
+        // from — the route a trip run before any of this existed still takes.
+        (await TransitionAsync(owner, tripId, "draft")).GetProperty("state").GetString().ShouldBe("draft");
 
         // A word the vocabulary does not have at all is refused too, and the trip stays where it
         // was. What is asserted here is the refusal and not its code: reading a body whose enum
@@ -1141,8 +1191,9 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         });
         badVisibility.StatusCode.ShouldBe(nonsense.StatusCode, await badVisibility.Content.ReadAsStringAsync());
 
-        // The positive half, and proof the refusals above were about the state and not the caller:
-        // the same caller, on the same trip, asking for a state a trip may hold.
+        // The positive half, and proof the refusals above were about the move and not the caller:
+        // the same caller, on the same trip, asking for a state the table reaches from where it
+        // stands. A trip still enters "it happened" straight from the workshop.
         (await TransitionAsync(owner, tripId, "done")).GetProperty("state").GetString().ShouldBe("done");
         (await ReadTripAsync(owner, tripId)).GetProperty("state").GetString().ShouldBe("done");
     }
@@ -1288,6 +1339,30 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         await GrantTripAsync(opened, outsiderId, AccessAction.Read);
         (await TransitionAsync(owner, opened, "published")).GetProperty("state").GetString().ShouldBe("published");
         await AddParticipantAsync(opened, $"Edited open {marker}", outsiderCaverId);
+        (await TripNotificationsForAsync(outsiderId)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A trip being organised tells the people put on it, and the state it is in is what decides
+    /// that: only the workshop and a called-off trip hold their peace. Somebody named on a plan
+    /// is being asked to come on it, so telling them is the point of naming them — and the read
+    /// check is the same one every other path uses, so a plan they cannot open tells them nothing.
+    /// </summary>
+    [Fact]
+    public async Task Adding_somebody_to_a_trip_being_organised_tells_them_only_if_they_may_read_it()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+
+        var shut = await CreateTripAsync($"Planned shut {marker}");
+        (await TransitionAsync(owner, shut, "proposed")).GetProperty("state").GetString().ShouldBe("proposed");
+        await AddParticipantAsync(shut, $"Planned shut {marker}", outsiderCaverId);
+        (await TripNotificationsForAsync(outsiderId)).ShouldBe(0);
+
+        // The positive half, with the one thing that differs changed and nothing else.
+        var opened = await CreateTripAsync($"Planned open {marker}");
+        await GrantTripAsync(opened, outsiderId, AccessAction.Read);
+        (await TransitionAsync(owner, opened, "proposed")).GetProperty("state").GetString().ShouldBe("proposed");
+        await AddParticipantAsync(opened, $"Planned open {marker}", outsiderCaverId);
         (await TripNotificationsForAsync(outsiderId)).ShouldBe(1);
     }
 

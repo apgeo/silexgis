@@ -116,8 +116,10 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
     public Visibility Visibility { get; set; } = Visibility.Private;
 
     /// <summary>
-    /// Where the trip has got to in its lifecycle. A new trip starts as a draft: it is being
-    /// written, and nobody named on it is told about it until it is published.
+    /// Where the trip has got to in its lifecycle. A new trip starts as a draft whichever it is
+    /// going to be — a plan somebody is still writing or a report of an outing already run —
+    /// because the state it moves to next is the act that decides which, and nobody named on it
+    /// is told about it while it is being written.
     /// </summary>
     /// <remarks>
     /// This is never consulted when deciding who may read the trip. Visibility and the access

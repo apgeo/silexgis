@@ -62,6 +62,40 @@ public class DependencyRuleTests
         result.IsSuccessful.ShouldBeTrue(FailureMessage(result));
     }
 
+    [Fact]
+    public void Deciding_who_may_read_a_row_never_asks_what_state_it_is_in()
+    {
+        // Where an activity has got to and who may read it are two questions, and only one of
+        // them is a permission. A draft is not a security boundary: a trip or a camp marked
+        // public is public while it is still being written, and one marked private stays shut
+        // after it is announced — visibility and the access entries answer readability on their
+        // own. The moment a second rule could answer it, the two are free to disagree, and the
+        // disagreement would be a disclosure rather than a bug somebody notices.
+        //
+        // So the lifecycle vocabulary may not be reachable from the code that decides access at
+        // all — not the evaluator, not its query twin, not the ruleset that feeds them. This
+        // makes a reference somebody adds fail the build rather than review.
+        var domain = Types.InAssembly(typeof(Visibility).Assembly)
+            .That()
+            .ResideInNamespaceStartingWith("SilexGis.Domain.Access")
+            .Or()
+            .ResideInNamespaceStartingWith("SilexGis.Domain.Permissions")
+            .ShouldNot()
+            .HaveDependencyOn("SilexGis.Domain.Entities.ActivityState")
+            .GetResult();
+
+        domain.IsSuccessful.ShouldBeTrue(FailureMessage(domain));
+
+        var infrastructure = Types.InAssembly(typeof(InfrastructureMarker).Assembly)
+            .That()
+            .ResideInNamespaceStartingWith("SilexGis.Infrastructure.Permissions")
+            .ShouldNot()
+            .HaveDependencyOn("SilexGis.Domain.Entities.ActivityState")
+            .GetResult();
+
+        infrastructure.IsSuccessful.ShouldBeTrue(FailureMessage(infrastructure));
+    }
+
     private static string FailureMessage(TestResult result) =>
         result.IsSuccessful
             ? string.Empty

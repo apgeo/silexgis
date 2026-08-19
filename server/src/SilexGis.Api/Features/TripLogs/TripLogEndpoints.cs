@@ -27,7 +27,19 @@ public static class TripLogEndpoints
         trips.MapGet("/{id:guid}", GetAsync)
             .WithSummary("Single trip log with caves and participants.");
         trips.MapPost("/", CreateAsync).WithValidation<TripLogWriteRequest>()
-            .WithSummary("Creates a trip log (Create permission on trip logs); the caller becomes owner.");
+            .WithSummary(
+                "Creates a trip log written up after the event (Create permission on trip logs); "
+                + "the caller becomes owner, and an audience the request does not name is private.");
+        trips.MapPost("/plans", CreatePlanAsync).WithValidation<TripLogWriteRequest>()
+            .WithSummary(
+                "Creates a trip that has not happened yet (Create permission on trip logs). The "
+                + "same trip in every respect but one: an audience the request does not name is "
+                + "the author's caving group rather than private, because a proposal only its "
+                + "author can read is a proposal to nobody. The state it starts in is the same.");
+        trips.MapGet("/plan-default", PlanDefaultAsync)
+            .WithSummary(
+                "The audience a trip being planned would get for this caller if they name none, "
+                + "answered before the trip exists so a form can say who will see it.");
         trips.MapPut("/{id:guid}", UpdateAsync).WithValidation<TripLogWriteRequest>()
             .WithSummary(
                 "Full update (Write permission). The whole roster is replaced, in every role, so a "
@@ -178,7 +190,42 @@ public static class TripLogEndpoints
         return TypedResults.Ok(items[0]);
     }
 
-    private static async Task<Results<Created<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
+    /// <summary>Creates a trip written up after the event.</summary>
+    private static Task<Results<Created<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
+        TripLogWriteRequest request,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
+        FeatureProtection protection,
+        TripSectionWriter sections,
+        CancellationToken ct) =>
+        CreateCoreAsync(
+            TripCreationIntent.Report, request, db, access, accessAccessor, userAccessor,
+            protection, sections, ct);
+
+    /// <summary>Creates a trip that has not happened yet.</summary>
+    private static Task<Results<Created<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreatePlanAsync(
+        TripLogWriteRequest request,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
+        FeatureProtection protection,
+        TripSectionWriter sections,
+        CancellationToken ct) =>
+        CreateCoreAsync(
+            TripCreationIntent.Plan, request, db, access, accessAccessor, userAccessor,
+            protection, sections, ct);
+
+    /// <summary>
+    /// Creating a trip, whichever door it came through. The two doors differ in one thing and it
+    /// is decided here, before anything is checked against it: the audience a request that names
+    /// none falls back to. Everything after that point is identical, which is why they share a
+    /// body rather than each growing their own copy of eight steps.
+    /// </summary>
+    private static async Task<Results<Created<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateCoreAsync(
+        TripCreationIntent intent,
         TripLogWriteRequest request,
         SilexGisDbContext db,
         IAccessService access,
@@ -195,12 +242,28 @@ public static class TripLogEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!CreateRules.MayCreate(ctx, AccessDomain.TripLogs, request.CavingGroupId))
+        // Who may read the trip is one answer in two values, so the default decides it only when
+        // the request answers neither of them. A request that names either half has taken the
+        // decision itself and both halves are read as it sent them — a stated audience with no
+        // group binding is somebody saying "not the club", and quietly supplying one would widen
+        // what they asked for. A request that names only a group is still naming a group: the
+        // audience falls back, but dropping the binding would take the row out of every rule
+        // written about that group's content, a refusal aimed at the group among them.
+        //
+        // Settled before the create check and the reference checks below, so a binding this rule
+        // supplies is guarded exactly like one the caller typed rather than slipping in behind
+        // them.
+        var fallback = TripAudienceRules.DefaultAudience(intent, ctx.CavingGroupIds);
+        var (visibility, cavingGroupId) = request.Visibility is null && request.CavingGroupId is null
+            ? fallback
+            : (request.Visibility ?? fallback.Visibility, request.CavingGroupId);
+
+        if (!CreateRules.MayCreate(ctx, AccessDomain.TripLogs, cavingGroupId))
         {
             return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
-        var problem = await ValidateReferencesAsync(db, ctx, request, ct);
+        var problem = await ValidateReferencesAsync(db, ctx, request with { CavingGroupId = cavingGroupId }, ct);
         if (problem is not null)
         {
             return problem;
@@ -208,6 +271,8 @@ public static class TripLogEndpoints
 
         var trip = new TripLog { Title = request.Title, OwnerUserId = user.UserId };
         Apply(trip, request);
+        trip.Visibility = visibility;
+        trip.CavingGroupId = cavingGroupId;
         // A new row has nothing stored, so every section is a first write and is measured
         // against the purpose's schemas as they stand.
         try
@@ -232,6 +297,42 @@ public static class TripLogEndpoints
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
         return TypedResults.Created($"/api/v1/trip-logs/{trip.Id}", items[0]);
+    }
+
+    /// <summary>
+    /// Who would be able to read a trip this caller plans, if they name no audience themselves —
+    /// the same rule the plan door applies, answered before the trip exists so a form can name
+    /// the audience rather than recite the rule. The group's name travels with its id because a
+    /// notice saying "your group" and a reader who belongs to one they had forgotten about are
+    /// not the same thing.
+    /// </summary>
+    /// <remarks>
+    /// Tells the caller nothing they do not already know: it reports their own membership, and
+    /// only when it is the single one that decides the answer.
+    /// </remarks>
+    private static async Task<Results<Ok<TripPlanDefaultDto>, UnauthorizedHttpResult>> PlanDefaultAsync(
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var (visibility, groupId) = TripAudienceRules.DefaultAudience(
+            TripCreationIntent.Plan, ctx.CavingGroupIds);
+        if (groupId is null)
+        {
+            return TypedResults.Ok(new TripPlanDefaultDto(visibility, null, null));
+        }
+
+        var name = await db.CavingGroups.AsNoTracking()
+            .Where(group => group.Id == groupId.Value)
+            .Select(group => group.Name)
+            .FirstOrDefaultAsync(ct);
+        return TypedResults.Ok(new TripPlanDefaultDto(visibility, groupId, name));
     }
 
     private static async Task<Results<Ok<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -514,8 +615,22 @@ public static class TripLogEndpoints
         trip.HadIncident = request.HadIncident;
         trip.OrganizingCavingGroupId = request.OrganizingCavingGroupId;
         trip.Geom = request.Geom?.ToGeometryOrNull();
-        trip.CavingGroupId = request.CavingGroupId;
-        trip.Visibility = request.Visibility;
+        // An audience the request does not name is left exactly as it stands. The only place a
+        // trip's audience is decided for it is the moment it is created, and it is decided there
+        // before this runs — so a null arriving here can only mean "not editing who may read it",
+        // and a save from a surface that never drew the field cannot quietly narrow or widen one.
+        //
+        // The group binding moves with it rather than on its own, because the two are one answer:
+        // a group-visible trip whose binding is cleared names no group and is therefore readable
+        // by nobody but its owner. Writing the binding unconditionally would do exactly that to
+        // every save from a surface that drew neither field — the case the nullability above
+        // exists to protect — and it would do it silently, with the stored audience still
+        // reading "the caving group".
+        if (request.Visibility is { } visibility)
+        {
+            trip.Visibility = visibility;
+            trip.CavingGroupId = request.CavingGroupId;
+        }
     }
 
     /// <summary>

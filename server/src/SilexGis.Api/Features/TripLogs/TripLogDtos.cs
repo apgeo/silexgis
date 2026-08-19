@@ -132,6 +132,14 @@ public sealed record TripLogDto(
     // an identifier is exactly what the withholding was for. Zero for a caller shown everything.
     int CavesWithheld);
 
+/// <summary>
+/// The audience a trip this caller plans would get if the request names none.
+/// <paramref name="CavingGroupName"/> is set exactly when that audience is the caller's own
+/// group, so a form can name it instead of reciting both halves of the rule.
+/// </summary>
+public sealed record TripPlanDefaultDto(
+    Visibility Visibility, Guid? CavingGroupId, string? CavingGroupName);
+
 public sealed record TripLogWriteRequest(
     string Title,
     long? TripTypeId,
@@ -158,7 +166,13 @@ public sealed record TripLogWriteRequest(
     IReadOnlyList<TripParticipantWrite> Participants,
     IReadOnlyList<TripParticipantWrite>? Proposers,
     Guid? CavingGroupId,
-    Visibility Visibility,
+    // Nullable, and the nullability is the whole point of it. Who may read a trip is a decision
+    // somebody takes, so the shape has to tell "private, deliberately" from "I have not said" —
+    // the first value of the vocabulary is the zero value, and a non-nullable field would read
+    // every request that leaves the field out as choosing the narrowest audience there is. On
+    // creation an unstated audience is answered by the rule for the door the request came
+    // through; on an update it means the stored audience is not being edited.
+    Visibility? Visibility,
     // Appended for the same reason the reading above is: this record is positional too, and it
     // now has a run of three nullable decimals that would absorb each other silently.
     decimal? DepthReachedM,

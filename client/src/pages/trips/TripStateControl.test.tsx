@@ -3,7 +3,7 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
-import type { ActivityState } from '../../api/hooks.ts';
+import type { ActivityState, Visibility } from '../../api/hooks.ts';
 
 const move = vi.fn();
 
@@ -13,10 +13,10 @@ vi.mock('../../api/hooks.ts', () => ({
 
 const { default: TripStateControl } = await import('./TripStateControl.tsx');
 
-function show(state: ActivityState, canEdit = true) {
+function show(state: ActivityState, canEdit = true, visibility: Visibility = 'private') {
   return render(
     <App>
-      <TripStateControl tripId="trip-1" state={state} canEdit={canEdit} />
+      <TripStateControl tripId="trip-1" state={state} visibility={visibility} canEdit={canEdit} />
     </App>,
   );
 }
@@ -27,6 +27,11 @@ const publishButton = () => screen.queryByRole('button', { name: /Publish$/ });
 const draftButton = () => screen.queryByRole('button', { name: /Back to draft$/ });
 const doneButton = () => screen.queryByRole('button', { name: /Mark as done$/ });
 const callOffButton = () => screen.queryByRole('button', { name: /Call it off$/ });
+const floatButton = () => screen.queryByRole('button', { name: /Float it$/ });
+const organiseButton = () => screen.queryByRole('button', { name: /Start organising$/ });
+const goingAheadButton = () => screen.queryByRole('button', { name: /It is going ahead$/ });
+const putBackButton = () => screen.queryByRole('button', { name: /Put it back$/ });
+const newDateButton = () => screen.queryByRole('button', { name: /Settle a new date$/ });
 
 beforeEach(() => {
   move.mockReset().mockResolvedValue({});
@@ -84,10 +89,63 @@ describe('TripStateControl', () => {
     expect(doneButton()).toBeNull();
   });
 
-  it('offers nothing for a state a trip cannot hold, rather than a button that always fails', () => {
-    // The vocabulary is shared with activities that plan, so a value outside the trip's own
-    // table can be handed to this control before anything here knows what to do with it.
+  it('offers a draft both ways out: the ladder a plan climbs and the record of one already run', () => {
+    show('draft');
+
+    expect(floatButton()).not.toBeNull();
+    expect(organiseButton()).not.toBeNull();
+    expect(doneButton()).not.toBeNull();
+    expect(publishButton()).not.toBeNull();
+  });
+
+  it('offers a floated idea the next rung, the way back and the way out', () => {
+    // Before the planning states were admitted this rendered no control at all, so a trip that
+    // reached one could be neither advanced nor abandoned from the page it was shown on.
+    show('proposed');
+
+    expect(organiseButton()).not.toBeNull();
+    expect(draftButton()).not.toBeNull();
+    expect(callOffButton()).not.toBeNull();
+    // One rung at a time: being organised does not imply going ahead.
+    expect(goingAheadButton()).toBeNull();
+  });
+
+  it('offers a trip being organised its confirmation, a postponement and both ways out', () => {
     show('planned');
+
+    expect(goingAheadButton()).not.toBeNull();
+    expect(putBackButton()).not.toBeNull();
+    expect(draftButton()).not.toBeNull();
+    expect(callOffButton()).not.toBeNull();
+  });
+
+  it('lets a confirmed trip be recorded, put back or called off the night before', () => {
+    show('confirmed');
+
+    expect(doneButton()).not.toBeNull();
+    expect(putBackButton()).not.toBeNull();
+    expect(callOffButton()).not.toBeNull();
+    // Announcing is what a finished trip does, not a trip that has not happened yet.
+    expect(publishButton()).toBeNull();
+  });
+
+  it('sends a postponed trip back to being organised rather than straight to going ahead', async () => {
+    // The other state that rendered nothing at all. A new date has to be settled before
+    // anybody is told the trip is on again.
+    show('delayed');
+
+    expect(newDateButton()).not.toBeNull();
+    expect(goingAheadButton()).toBeNull();
+    expect(draftButton()).not.toBeNull();
+
+    fireEvent.click(newDateButton()!);
+    await vi.waitFor(() => expect(move).toHaveBeenCalledWith({ id: 'trip-1', state: 'planned' }));
+  });
+
+  it('offers nothing for a value the trip table says nothing about', () => {
+    // The enum is shared with activities that are not trips, so a value the trip's table says
+    // nothing about can still be handed to this control.
+    show('nonsense' as ActivityState);
 
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
@@ -100,6 +158,39 @@ describe('TripStateControl', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
     await vi.waitFor(() => expect(move).toHaveBeenCalledWith({ id: 'trip-1', state: 'published' }));
+  });
+
+  it('names who can read the trip in the question, and says announcing does not change it', async () => {
+    // A plan is readable by the author's club from the moment it is made, and somebody about to
+    // announce one is entitled to know that before the announcement rather than after it.
+    show('draft', true, 'cavingGroup');
+
+    fireEvent.click(publishButton()!);
+
+    expect(await screen.findByText(/readable by your caving group/)).toBeInTheDocument();
+    expect(screen.getByText(/does not change/)).toBeInTheDocument();
+  });
+
+  it('names the widest audience in the same words the question uses for the narrowest', async () => {
+    show('draft', true, 'public');
+
+    fireEvent.click(publishButton()!);
+
+    expect(
+      await screen.findByText(/anybody at all, including visitors without an account/),
+    ).toBeInTheDocument();
+  });
+
+  it('sends the state and nothing else, so announcing cannot widen the audience', async () => {
+    // The one thing this button might be expected to do and must never do: the request carries
+    // the move and no audience at all, and the server leaves the stored one where it is.
+    show('draft', true, 'cavingGroup');
+
+    fireEvent.click(publishButton()!);
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    await vi.waitFor(() => expect(move).toHaveBeenCalledWith({ id: 'trip-1', state: 'published' }));
+    expect(move).toHaveBeenCalledTimes(1);
   });
 
   it('confirms before calling a trip off, because it reads as an ending', async () => {

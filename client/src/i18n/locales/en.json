@@ -851,9 +851,25 @@
       "delayed": "Delayed"
     },
     "publish": "Publish",
-    "publishConfirm": "Publish this trip log? The people named on it will be notified.",
+    "publishConfirm": "Publish this trip? The people named on it will be notified, and that cannot be taken back. Who may read it does not change: it stays readable by {{audience}}. Widening that is a separate edit.",
+    "publishAudience": {
+      "private": "you and anybody you have named",
+      "cavingGroup": "your caving group",
+      "authenticated": "everybody with an account here",
+      "public": "anybody at all, including visitors without an account"
+    },
     "publishSuccess": "Published. The people named on this trip have been notified.",
     "publishedAt": "Published on",
+    "propose": "Float it",
+    "proposeSuccess": "Floated as an idea.",
+    "organise": "Start organising",
+    "organiseSuccess": "Being organised.",
+    "confirmGoing": "It is going ahead",
+    "confirmGoingSuccess": "Confirmed as going ahead.",
+    "delay": "Put it back",
+    "delaySuccess": "Put back. Settle a new date when there is one.",
+    "reschedule": "Settle a new date",
+    "rescheduleSuccess": "Back to being organised.",
     "markDone": "Mark as done",
     "markDoneSuccess": "Recorded as done.",
     "callOff": "Call it off",
@@ -1096,6 +1112,8 @@
     "scope": "Applies to",
     "scopeObject": "This object only",
     "scopeSubtree": "This object and everything inside",
+    "viaExpedition": "From a camp",
+    "viaExpeditionHint": "Some of these rules were written by a camp this trip belongs to, and are changed there rather than here. They are shown so the whole list of who may read this trip is in one place.",
     "denyHint": "A deny outweighs every allow at the same level, and a rule on the object itself outweighs anything inherited. Check what it costs before saving."
   },
   "access": {

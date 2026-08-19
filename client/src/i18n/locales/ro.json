@@ -851,9 +851,25 @@
       "delayed": "Amânată"
     },
     "publish": "Publică",
-    "publishConfirm": "Publicați acest jurnal de tură? Persoanele menționate în el vor fi anunțate.",
+    "publishConfirm": "Publicați această tură? Persoanele menționate în ea vor fi anunțate, iar acest lucru nu poate fi retras. Cine o poate citi nu se schimbă: rămâne vizibilă pentru {{audience}}. Lărgirea accesului este o modificare separată.",
+    "publishAudience": {
+      "private": "dumneavoastră și persoanele pe care le-ați numit",
+      "cavingGroup": "clubul dumneavoastră speologic",
+      "authenticated": "toți cei care au cont aici",
+      "public": "oricine, inclusiv vizitatorii fără cont"
+    },
     "publishSuccess": "Publicat. Persoanele menționate în această tură au fost anunțate.",
     "publishedAt": "Publicat la",
+    "propose": "Propune ideea",
+    "proposeSuccess": "Propusă ca idee.",
+    "organise": "Începe organizarea",
+    "organiseSuccess": "În curs de organizare.",
+    "confirmGoing": "Se desfășoară",
+    "confirmGoingSuccess": "Confirmată că se desfășoară.",
+    "delay": "Amână",
+    "delaySuccess": "Amânată. Stabiliți o dată nouă când există una.",
+    "reschedule": "Stabilește o dată nouă",
+    "rescheduleSuccess": "Înapoi la organizare.",
     "markDone": "Marchează efectuată",
     "markDoneSuccess": "Marcată ca efectuată.",
     "callOff": "Anulează tura",
@@ -1096,6 +1112,8 @@
     "scope": "Se aplică la",
     "scopeObject": "Doar acest obiect",
     "scopeSubtree": "Acest obiect și tot ce conține",
+    "viaExpedition": "Din tabără",
+    "viaExpeditionHint": "Unele dintre aceste reguli au fost scrise de o tabără din care face parte această tură și se modifică acolo, nu aici. Sunt afișate pentru ca lista completă a celor care pot citi tura să fie într-un singur loc.",
     "denyHint": "O interdicție cântărește mai greu decât orice permisiune de la același nivel, iar o regulă pusă direct pe obiect cântărește mai greu decât una moștenită. Verificați ce efect are înainte de a salva."
   },
   "access": {

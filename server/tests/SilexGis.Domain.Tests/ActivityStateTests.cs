@@ -26,30 +26,81 @@ public class ActivityStateTests
         All.ShouldBe(Enum.GetValues<ActivityState>(), ignoreOrder: true);
 
     [Fact]
-    public void A_trip_holds_four_of_the_eight_states()
+    public void A_trip_holds_every_state_in_the_vocabulary()
     {
-        TripLogStates.ShouldBe([Draft, Done, Published, Cancelled], ignoreOrder: true);
+        TripLogStates.ShouldBe(All, ignoreOrder: true);
 
         // Stated the other way round as well, so admitting a state to the enum without deciding
         // whether a trip may hold it fails here rather than showing up as a column value nothing
         // renders.
-        All.Where(IsTripLogState).ShouldBe([Draft, Done, Published, Cancelled], ignoreOrder: true);
+        All.Where(IsTripLogState).ShouldBe(All, ignoreOrder: true);
     }
 
     [Fact]
-    public void A_trip_cannot_be_moved_into_a_state_kept_for_planning()
+    public void A_trip_climbs_the_planning_ladder_one_rung_at_a_time()
     {
-        foreach (var planning in new[] { Proposed, Planned, Confirmed, Delayed })
-        {
-            IsTripLogState(planning).ShouldBeFalse($"{planning} is not a state a trip holds.");
+        MayTripLogTransition(Draft, Proposed).ShouldBeTrue();
+        MayTripLogTransition(Proposed, Planned).ShouldBeTrue();
+        MayTripLogTransition(Planned, Confirmed).ShouldBeTrue();
+        MayTripLogTransition(Confirmed, Done).ShouldBeTrue();
+        MayTripLogTransition(Done, Published).ShouldBeTrue();
 
-            // Refused as a destination and as an origin. A trip that somehow held one could
-            // otherwise be moved out of it into a legal state and the illegal value would be gone
-            // before anybody saw it.
-            MayTripLogTransition(Draft, planning).ShouldBeFalse();
-            MayTripLogTransition(planning, Draft).ShouldBeFalse();
-            MayTripLogTransition(planning, Published).ShouldBeFalse();
+        // Each rung is a decision somebody takes, so none of them is reachable by skipping the
+        // one before it. Joining the ladder late is allowed; climbing two rungs at once is not,
+        // and neither is announcing a trip nobody has run yet.
+        MayTripLogTransition(Draft, Confirmed).ShouldBeFalse();
+        MayTripLogTransition(Proposed, Confirmed).ShouldBeFalse();
+        MayTripLogTransition(Planned, Done).ShouldBeFalse();
+        MayTripLogTransition(Proposed, Done).ShouldBeFalse();
+        MayTripLogTransition(Proposed, Published).ShouldBeFalse();
+        MayTripLogTransition(Planned, Published).ShouldBeFalse();
+        MayTripLogTransition(Confirmed, Published).ShouldBeFalse();
+
+        // Joining late, and the two edges a retrospective report is entered by: a trip run before
+        // any of this existed is recorded from the workshop with no rungs left to climb.
+        MayTripLogTransition(Draft, Planned).ShouldBeTrue();
+        MayTripLogTransition(Draft, Done).ShouldBeTrue();
+        MayTripLogTransition(Draft, Published).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void A_trip_is_called_off_while_it_still_lies_ahead_and_not_afterwards()
+    {
+        // The ordinary cancellation is a confirmed trip abandoned the night before, so calling it
+        // off is reachable from every state where it has not happened yet.
+        foreach (var live in new[] { Draft, Proposed, Planned, Confirmed, Delayed })
+        {
+            MayTripLogTransition(live, Cancelled).ShouldBeTrue($"{live} lies before the trip.");
         }
+
+        // Afterwards it is not: a trip that happened cannot be made not to have happened, and
+        // removing the record is a different act taken through a different button.
+        MayTripLogTransition(Done, Cancelled).ShouldBeFalse();
+        MayTripLogTransition(Published, Cancelled).ShouldBeFalse();
+
+        // Reinstating one returns it to the workshop rather than to the rung it fell from.
+        MayTripLogTransition(Cancelled, Draft).ShouldBeTrue();
+        MayTripLogTransition(Cancelled, Confirmed).ShouldBeFalse();
+        MayTripLogTransition(Cancelled, Published).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Only_a_trip_with_a_date_to_move_is_put_back()
+    {
+        MayTripLogTransition(Planned, Delayed).ShouldBeTrue();
+        MayTripLogTransition(Confirmed, Delayed).ShouldBeTrue();
+
+        // An idea nobody has dated yet is still an idea, not a postponement; and a trip that
+        // happened has nothing left to put back.
+        MayTripLogTransition(Draft, Delayed).ShouldBeFalse();
+        MayTripLogTransition(Proposed, Delayed).ShouldBeFalse();
+        MayTripLogTransition(Done, Delayed).ShouldBeFalse();
+        MayTripLogTransition(Published, Delayed).ShouldBeFalse();
+
+        // A new date returns it to being organised: telling people it is on again is a second
+        // decision.
+        MayTripLogTransition(Delayed, Planned).ShouldBeTrue();
+        MayTripLogTransition(Delayed, Confirmed).ShouldBeFalse();
     }
 
     [Fact]
@@ -78,8 +129,13 @@ public class ActivityStateTests
     [Fact]
     public void Draft_is_the_state_everything_returns_to()
     {
-        MayTripLogTransition(Done, Draft).ShouldBeTrue();
-        MayTripLogTransition(Cancelled, Draft).ShouldBeTrue();
+        // Every state a trip can be in other than the workshop has a way back to it, so "how do I
+        // get at this again" has one answer whatever the trip is in the middle of.
+        foreach (var state in All.Where(state => state != Draft))
+        {
+            MayTripLogTransition(state, Draft).ShouldBeTrue($"{state} returns to the workshop.");
+        }
+
 
         // De-announcing a trip and declaring it never happened are two decisions. Neither is
         // reachable in one move from the other, so neither can be taken by accident while taking
@@ -105,20 +161,54 @@ public class ActivityStateTests
     }
 
     [Fact]
-    public void The_two_tables_are_independent_of_each_other()
+    public void Each_kind_declares_its_whole_table_for_itself()
     {
-        // A camp is organised before it happens and a trip is written up after, so the states
-        // kept for planning are exactly what tells the two apart. If admitting them to one ever
-        // admits them to the other, this is where it shows.
-        foreach (var planning in new[] { Proposed, Planned, Confirmed, Delayed })
-        {
-            IsExpeditionState(planning).ShouldBeTrue($"{planning} is a state a camp holds.");
-            IsTripLogState(planning).ShouldBeFalse($"{planning} is not a state a trip holds.");
-        }
+        // This replaces a test that proved the two tables separate by the difference between
+        // them: a camp was organised before it happened and a trip was only written up after, so
+        // the four planning states were exactly what told the two apart. A trip is prepared in
+        // the application now, so that difference is gone and the two tables agree pair for pair.
+        //
+        // They agree because two decisions came out the same way, not because one rule serves
+        // both kinds, and what is left to prove is that each table is still declared for itself.
+        // So each one is stated whole and separately below, over every ordered pair the
+        // vocabulary can make. A move added to one kind fails the half of this test that names
+        // that kind and leaves the other half green, which is what being two tables means; and
+        // the refusals stay distinct, so a caller reading one can still tell which kind turned it
+        // down.
+        MovesAllowedBy(MayTripLogTransition).ShouldBe(
+        [
+            (Draft, Proposed), (Draft, Planned),
+            (Draft, Done), (Draft, Published), (Draft, Cancelled),
+            (Proposed, Planned), (Proposed, Draft), (Proposed, Cancelled),
+            (Planned, Confirmed), (Planned, Delayed), (Planned, Draft), (Planned, Cancelled),
+            (Confirmed, Done), (Confirmed, Delayed), (Confirmed, Draft), (Confirmed, Cancelled),
+            (Delayed, Planned), (Delayed, Draft), (Delayed, Cancelled),
+            (Done, Published), (Done, Draft),
+            (Published, Draft),
+            (Cancelled, Draft),
+        ], ignoreOrder: true);
 
-        MayExpeditionTransition(Draft, Proposed).ShouldBeTrue();
-        MayTripLogTransition(Draft, Proposed).ShouldBeFalse();
+        MovesAllowedBy(MayExpeditionTransition).ShouldBe(
+        [
+            (Draft, Proposed), (Draft, Planned),
+            (Draft, Done), (Draft, Published), (Draft, Cancelled),
+            (Proposed, Planned), (Proposed, Draft), (Proposed, Cancelled),
+            (Planned, Confirmed), (Planned, Delayed), (Planned, Draft), (Planned, Cancelled),
+            (Confirmed, Done), (Confirmed, Delayed), (Confirmed, Draft), (Confirmed, Cancelled),
+            (Delayed, Planned), (Delayed, Draft), (Delayed, Cancelled),
+            (Done, Published), (Done, Draft),
+            (Published, Draft),
+            (Cancelled, Draft),
+        ], ignoreOrder: true);
+
+        TripLogTransitionInvalidCode.ShouldNotBe(ExpeditionTransitionInvalidCode);
     }
+
+    /// <summary>Every ordered pair of states one kind's table admits, asked pair by pair.</summary>
+    private static IReadOnlyList<(ActivityState From, ActivityState To)> MovesAllowedBy(
+        Func<ActivityState, ActivityState, bool> mayMove) =>
+        [.. All.SelectMany(from => All.Select(to => (From: from, To: to)))
+               .Where(move => mayMove(move.From, move.To))];
 
     [Fact]
     public void No_legal_expedition_move_touches_a_state_an_expedition_cannot_hold()

@@ -6,8 +6,9 @@ import type { ActivityState } from '../../api/hooks.ts';
 
 /**
  * Keyed by the wire vocabulary rather than by string, so a state added on the server fails to
- * compile here until somebody decides how it should look. The lifecycle is shared with the
- * activities that are not trips yet, which is why states no trip can hold are coloured too.
+ * compile here until somebody decides how it should look. The whole vocabulary is coloured
+ * because the whole vocabulary is reachable: the lifecycle is shared, and a trip now climbs the
+ * planning rungs as well as being written up after the event.
  */
 const STATE_COLOURS: Record<ActivityState, string> = {
   draft: 'default',

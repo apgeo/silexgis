@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { CameraOutlined, DeleteOutlined, EditOutlined, FileTextOutlined } from '@ant-design/icons';
+import {
+  CameraOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  FileTextOutlined,
+  LockOutlined,
+} from '@ant-design/icons';
 import { Alert, App, Button, Card, Descriptions, Flex, Popconfirm, Spin, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -21,6 +27,7 @@ import {
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import HistoryPanel, { type HistoryRestore } from '../../components/history/HistoryPanel.tsx';
 import { applyTripRestore } from '../../components/history/historyModel.ts';
+import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import { TRIP_ROLE_CODES } from '../../components/reslinks/relations.ts';
 import TagChips from '../../components/tags/TagChips.tsx';
@@ -104,6 +111,7 @@ export default function TripLogDetailPage() {
   const domainFallback = useCan('tripLogs', 'write');
   const held = effective ? parseAccessActions(effective.actions) : null;
   const [editing, setEditing] = useState(false);
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
 
   if (isPending || !trip) {
     return (
@@ -115,6 +123,9 @@ export default function TripLogDetailPage() {
 
   const canEdit = held ? held.has('write') : domainFallback;
   const canDelete = held ? held.has('delete') : domainFallback;
+  // Naming who may read a trip is its own right, held by the person who made it and by anybody
+  // they hand it to — not implied by being able to edit the write-up.
+  const canManagePermissions = held ? held.has('managePermissions') : domainFallback;
   // Absent while the vocabulary is still loading, which is right: an identity is not a label,
   // and showing the raw number would be worse than showing nothing for the moment it takes.
   const tripTypeLabel = tripTypeLabelOf(trip.tripTypeId, tripTypes, t);
@@ -156,9 +167,27 @@ export default function TripLogDetailPage() {
               {t('trips.report.open')}
             </Button>
           </Link>
+          {/* Who may read this trip, narrowed person by person. Its own right rather than a
+              consequence of being able to edit the write-up: handing somebody the text and
+              handing them the reader list are two different decisions. A trip contains nothing,
+              so the dialog offers reach over this trip alone. */}
+          {canManagePermissions && (
+            <Button
+              icon={<LockOutlined />}
+              onClick={() => setPermissionsOpen(true)}
+              data-testid="trip-permissions"
+            >
+              {t('permissions.button')}
+            </Button>
+          )}
           {(canEdit || canDelete) && (
             <>
-              <TripStateControl tripId={trip.id} state={trip.state} canEdit={canEdit} />
+              <TripStateControl
+                tripId={trip.id}
+                state={trip.state}
+                visibility={trip.visibility}
+                canEdit={canEdit}
+              />
               {canEdit && (
                 <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
                   {t('trips.edit')}
@@ -381,6 +410,13 @@ export default function TripLogDetailPage() {
       />
 
       <TripFormModal open={editing} trip={trip} onClose={() => setEditing(false)} />
+
+      <PermissionsModal
+        entityType="tripLog"
+        entityId={trip.id}
+        open={permissionsOpen}
+        onClose={() => setPermissionsOpen(false)}
+      />
     </div>
   );
 }

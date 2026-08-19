@@ -13,9 +13,10 @@ namespace SilexGis.Domain.Entities;
 /// inside it and is the object a partner club is invited across in one act.
 /// </para>
 /// <para>
-/// Unlike a trip, which is written up after the fact, an expedition exists before it happens:
-/// people book leave for it, a club commits money to it and a partner is invited to it months
-/// ahead. That is why it holds the planning states a trip does not.
+/// A camp exists before it happens, and on a longer horizon than a trip: people book leave for
+/// it, a club commits money to it and a partner is invited to it months ahead. It shares the
+/// planning states with a trip while keeping its own table of the moves between them, because two
+/// kinds that agree today are still two decisions.
 /// </para>
 /// </remarks>
 public class Expedition : IProtectedEntity, ITimestamped, IAuditable
