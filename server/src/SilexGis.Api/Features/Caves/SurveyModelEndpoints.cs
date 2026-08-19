@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using FluentValidation;
 using NetTopologySuite.Geometries;
 using SilexGis.Infrastructure.Jobs;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
@@ -74,6 +74,13 @@ public sealed class SurveyModelUpdateRequestValidator : AbstractValidator<Survey
 /// cannot be placed at all, and a stored model waiting to be told where it is would be a second
 /// unfinished state for every reader of a cave to understand.
 /// </para>
+///
+/// <para>
+/// The fields are declared parameters of the endpoint rather than read out of the raw form, so the
+/// published document names them and a generated client is type-checked against them. Read loosely,
+/// a renamed or re-typed field would keep every build and every generated client green while every
+/// upload was refused at run time.
+/// </para>
 /// </summary>
 internal sealed record MeshDeclaration(int? SourceEpsg, Point? Origin, double OriginHeightM)
 {
@@ -81,22 +88,16 @@ internal sealed record MeshDeclaration(int? SourceEpsg, Point? Origin, double Or
     private const double LowestHeightM = -500;
     private const double HighestHeightM = 9000;
 
-    public static (MeshDeclaration? Declaration, ProblemHttpResult? Problem) FromForm(IFormCollection form)
+    public static (MeshDeclaration? Declaration, ProblemHttpResult? Problem) Read(
+        int? sourceEpsg, double? originLongitude, double? originLatitude, double? originHeightM)
     {
-        var epsgText = form["sourceEpsg"].ToString();
-        int? epsg = null;
-        if (!string.IsNullOrWhiteSpace(epsgText))
+        if (sourceEpsg is <= 0)
         {
-            if (!int.TryParse(epsgText, CultureInfo.InvariantCulture, out var parsed) || parsed <= 0)
-            {
-                return (null, ApiProblems.BadRequest(
-                    "survey_model.crs_invalid", "The coordinate system must be an EPSG code."));
-            }
-
-            epsg = parsed;
+            return (null, ApiProblems.BadRequest(
+                "survey_model.crs_invalid", "The coordinate system must be an EPSG code."));
         }
 
-        if (!TryNumber(form, "originHeightM", out var height)
+        if (originHeightM is not { } height || !double.IsFinite(height)
             || height < LowestHeightM || height > HighestHeightM)
         {
             return (null, ApiProblems.BadRequest(
@@ -104,15 +105,15 @@ internal sealed record MeshDeclaration(int? SourceEpsg, Point? Origin, double Or
                 "Give the altitude, in metres, that the file's zero level sits at."));
         }
 
-        if (epsg is not null)
+        if (sourceEpsg is { } epsg)
         {
             // The file's own coordinates say where it is; the position is derived from them, so a
             // second answer here could only contradict the first.
             return (new MeshDeclaration(epsg, null, height), null);
         }
 
-        if (!TryNumber(form, "originLongitude", out var lon) || lon is < -180 or > 180
-            || !TryNumber(form, "originLatitude", out var lat) || lat is < -90 or > 90)
+        if (originLongitude is not { } lon || !double.IsFinite(lon) || lon is < -180 or > 180
+            || originLatitude is not { } lat || !double.IsFinite(lat) || lat is < -90 or > 90)
         {
             return (null, ApiProblems.BadRequest(
                 "survey_model.origin_invalid",
@@ -121,10 +122,6 @@ internal sealed record MeshDeclaration(int? SourceEpsg, Point? Origin, double Or
 
         return (new MeshDeclaration(null, new Point(lon, lat) { SRID = 4326 }, height), null);
     }
-
-    private static bool TryNumber(IFormCollection form, string field, out double value) =>
-        double.TryParse(form[field].ToString(), CultureInfo.InvariantCulture, out value)
-        && double.IsFinite(value);
 }
 
 /// <summary>
@@ -195,7 +192,12 @@ public static class SurveyModelEndpoints
     private static async Task<Results<Created<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
         Guid caveId,
         IFormFile file,
-        HttpRequest request,
+        // Only a wall mesh carries these, which is why every one of them is optional: a line-plot
+        // upload places itself out of its own contents and is asked nothing.
+        [FromForm] int? sourceEpsg,
+        [FromForm] double? originLongitude,
+        [FromForm] double? originLatitude,
+        [FromForm] double? originHeightM,
         SilexGisDbContext db,
         DocumentWriteService documents,
         IFileStore fileStore,
@@ -239,7 +241,7 @@ public static class SurveyModelEndpoints
         MeshDeclaration? declaration = null;
         if (extension == ".stl")
         {
-            var read = MeshDeclaration.FromForm(request.Form);
+            var read = MeshDeclaration.Read(sourceEpsg, originLongitude, originLatitude, originHeightM);
             if (read.Problem is { } problem)
             {
                 return problem;

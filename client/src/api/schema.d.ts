@@ -772,6 +772,18 @@ export interface paths {
                 content: {
                     "multipart/form-data": {
                         file: components["schemas"]["IFormFile"];
+                    } & {
+                        /** Format: int32 */
+                        sourceEpsg?: number;
+                    } & {
+                        /** Format: double */
+                        originLongitude?: number;
+                    } & {
+                        /** Format: double */
+                        originLatitude?: number;
+                    } & {
+                        /** Format: double */
+                        originHeightM?: number;
                     };
                 };
             };

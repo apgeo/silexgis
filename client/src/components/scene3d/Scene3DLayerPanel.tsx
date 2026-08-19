@@ -10,6 +10,7 @@ import {
 } from '../../scene3d/caveData3d.ts';
 import { CENTERLINE_DEPTH_BANDS } from '../../scene3d/centerlines3d.ts';
 import type { Scene3DSurfaceMode, Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
+import type { SurveyMesh3DState } from '../../scene3d/surveyMesh3d.ts';
 import { cutawayPauseMessage } from './surfaceMessages.ts';
 import './Scene3DLayerPanel.css';
 
@@ -34,6 +35,16 @@ export interface Scene3DLayerPanelProps {
   /** Keyed by layer; a missing key means fully opaque. */
   overlayOpacity: Record<string, number>;
   onOverlayOpacityChange: (layer: CaveData3DLayer, opacity: number) => void;
+  /**
+   * Whether the walls of the selected cave are drawn. Its own prop rather than another entry in
+   * the overlay records above, because it is not one of the layers those are keyed by: the walls
+   * belong to one cave rather than to the view, and turning them off frees graphics memory rather
+   * than hiding a source that stays loaded.
+   */
+  meshVisible: boolean;
+  onMeshVisibleChange: (visible: boolean) => void;
+  /** What the scene is doing about the selected cave's walls, said in words under the switch. */
+  meshState: SurveyMesh3DState;
   surfaceMode: Scene3DSurfaceMode;
   onSurfaceModeChange: (mode: Scene3DSurfaceMode) => void;
   /** What the scene is actually doing about the ground; undefined until it has started. */
@@ -50,11 +61,14 @@ export default function Scene3DLayerPanel({
   onOverlayVisibleChange,
   overlayOpacity,
   onOverlayOpacityChange,
+  meshVisible,
+  onMeshVisibleChange,
+  meshState,
   surfaceMode,
   onSurfaceModeChange,
   surfaceState,
 }: Scene3DLayerPanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const overlayName = (layer: CaveData3DLayer) => {
     if (layer === CENTERLINE_SOURCE_ID) {
@@ -80,6 +94,43 @@ export default function Scene3DLayerPanel({
     return surfaceState.pausedBy
       ? t(cutawayPauseMessage(surfaceState.pausedBy))
       : t('scene3d.surfaceCutawayHint');
+  };
+
+  /**
+   * What the walls of the selected cave are doing, in a sentence.
+   *
+   * A wall mesh is the one thing this scene draws that a viewer waits for, and the wait is worth
+   * a number: the ordinary export is a few hundred kilobytes and arrives before the sentence is
+   * read, while the case this was built for is fifty megabytes. The triangle count is the size the
+   * server publishes, and it is what tells those two apart before either arrives.
+   */
+  const meshHint = () => {
+    const triangles =
+      meshState.triangleCount === undefined
+        ? undefined
+        : meshState.triangleCount.toLocaleString(i18n.language);
+    switch (meshState.status) {
+      case 'off':
+        return meshVisible ? t('scene3d.meshNoCave') : t('scene3d.meshOff');
+      case 'looking':
+        return t('scene3d.meshLooking');
+      case 'loading':
+        return triangles
+          ? t('scene3d.meshLoadingSized', { triangles })
+          : t('scene3d.meshLoading');
+      case 'drawn':
+        return triangles ? t('scene3d.meshDrawnSized', { triangles }) : t('scene3d.meshDrawn');
+      case 'converting':
+        return t('scene3d.meshConverting');
+      case 'unavailable':
+        return t('scene3d.meshNone');
+      case 'failed':
+        // The server's own words when it gave any: a conversion states what it could not read,
+        // and that sentence says more than any phrase written here in advance could.
+        return meshState.message
+          ? t('scene3d.meshFailedBecause', { reason: meshState.message })
+          : t('scene3d.meshFailed');
+    }
   };
 
   const baseLayers = layers.filter((layer) => layer.isBase);
@@ -174,6 +225,37 @@ export default function Scene3DLayerPanel({
             </div>
           );
         })}
+
+        {/* The walls of one cave, and no opacity beside them: a fading control over a mesh that
+            cannot be faded would be a switch wired to nothing. What the row does carry is the
+            state of the load, because this is the only thing in the scene a viewer waits for. */}
+        <div className="scene3d-layer-row">
+          <Checkbox
+            checked={meshVisible}
+            onChange={(e) => onMeshVisibleChange(e.target.checked)}
+            data-testid="scene3d-mesh-toggle"
+          >
+            {t('scene3d.meshLayer')}
+          </Checkbox>
+          <Typography.Text
+            type="secondary"
+            className="scene3d-mesh-hint"
+            data-testid="scene3d-mesh-status"
+          >
+            {meshHint()}
+          </Typography.Text>
+          {/* Said whenever the mesh is on screen, not only while it loads: the survey itself is
+              degraded, and the person who can fix it is the one who exported the file. */}
+          {meshState.precisionLost && (
+            <Typography.Text
+              type="warning"
+              className="scene3d-mesh-hint"
+              data-testid="scene3d-mesh-precision"
+            >
+              {t('scene3d.meshPrecisionLost')}
+            </Typography.Text>
+          )}
+        </div>
       </div>
 
       <Divider style={{ margin: '12px 0' }} />

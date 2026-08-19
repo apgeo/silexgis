@@ -2405,3 +2405,267 @@ describe('a graphics context the browser takes away', () => {
     expect(states).toEqual([]);
   });
 });
+
+describe('models the scene loads', () => {
+  const scene = () => engine.engineState.widgets[0].scene;
+  const MESH_URL = '/api/v1/files/mesh.glb?token=abc';
+  const OTHER_URL = '/api/v1/files/other.glb?token=def';
+
+  /** A cave whose zero plane is 1100 m up and whose highest point is fifty metres above that. */
+  const anchor = () => ({
+    longitude: 25.2,
+    latitude: 45.5,
+    altitudeM: 1100,
+    surveyTopAltitudeM: 1150,
+  });
+
+  const anchored = { absolute: false, offsetM: 0 };
+  const overRelief = { absolute: true, offsetM: 43 };
+
+  const loadedModels = () =>
+    scene().primitives.items.filter(
+      (item): item is InstanceType<typeof engine.Model> => item instanceof engine.Model,
+    );
+
+  it('puts a model where the altitude rule says, and asks for a frame', async () => {
+    const session = acquire();
+    const before = scene().renderRequests;
+
+    const loading = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    expect(session.engine.modelStatus('cave-mesh')).toBe('loading');
+    engine.Model.deliver(MESH_URL);
+    await loading;
+
+    expect(session.engine.modelStatus('cave-mesh')).toBe('loaded');
+    const [model] = loadedModels();
+    expect(model.url).toBe(MESH_URL);
+    expect(model.modelMatrix.origin.longitudeDegrees).toBe(25.2);
+    expect(model.modelMatrix.origin.latitudeDegrees).toBe(45.5);
+    // With no relief on the globe the top of the cave sits on the surface, so the mesh's own zero
+    // plane hangs the fifty metres below it that the survey recorded — exactly where the survey
+    // lines of the same cave are drawn. Its recorded 1100 m would be a kilometre in the air.
+    expect(model.modelMatrix.origin.height).toBe(-50);
+    // A wall mesh names nothing, so a click on it must reach the survey lines drawn through it.
+    expect(model.allowPicking).toBe(false);
+    // The scene draws only when asked; a model that landed between frames would be invisible.
+    expect(scene().renderRequests).toBeGreaterThan(before);
+    session.release();
+  });
+
+  it('draws a model where it was surveyed once the ground has relief', async () => {
+    const session = acquire();
+
+    const loading = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: overRelief,
+    });
+    engine.Model.deliver(MESH_URL);
+    await loading;
+
+    // Its real altitude, raised by the correction the elevation model needs. Nothing here is
+    // relative to the cave's top any more: there is a hillside to put it inside.
+    expect(loadedModels()[0].modelMatrix.origin.height).toBe(1143);
+    session.release();
+  });
+
+  it('moves a loaded model when the ground changes, without reading the file again', async () => {
+    const session = acquire();
+    const loading = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(MESH_URL);
+    await loading;
+
+    session.engine.setModelPlacement(overRelief);
+
+    expect(loadedModels()[0].modelMatrix.origin.height).toBe(1143);
+    // The whole point: a survey mesh is tens of megabytes, and moving one is arithmetic on what is
+    // already on the graphics card rather than a second download.
+    expect(engine.engineState.modelRequests).toHaveLength(1);
+    session.release();
+  });
+
+  it('places a model that was still being read against the ground as it now is', async () => {
+    const session = acquire();
+    const loading = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+
+    // The elevation model attaches while the file is in the air, which the read cannot notice.
+    session.engine.setModelPlacement(overRelief);
+    engine.Model.deliver(MESH_URL);
+    await loading;
+
+    expect(loadedModels()[0].modelMatrix.origin.height).toBe(1143);
+    session.release();
+  });
+
+  it('re-places rather than re-reads when the same file is asked for again', async () => {
+    const session = acquire();
+    const first = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(MESH_URL);
+    await first;
+
+    await session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: { ...anchor(), surveyTopAltitudeM: 1200 },
+      placement: anchored,
+    });
+
+    expect(engine.engineState.modelRequests).toHaveLength(1);
+    expect(loadedModels()[0].modelMatrix.origin.height).toBe(-100);
+    session.release();
+  });
+
+  it('reports a file it could not read, and stays failed rather than looking empty', async () => {
+    const session = acquire();
+
+    const loading = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(MESH_URL, new Error('the mesh could not be read'));
+
+    await expect(loading).rejects.toThrow('the mesh could not be read');
+    // The promise tells whoever asked; the status tells chrome drawn afterwards, which is what
+    // turns a silently empty scene into a sentence a viewer can act on.
+    expect(session.engine.modelStatus('cave-mesh')).toBe('failed');
+    expect(loadedModels()).toHaveLength(0);
+    session.release();
+  });
+
+  it('reads the file again after a failure, because a retry is the whole point', async () => {
+    const session = acquire();
+    const failing = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(MESH_URL, new Error('the mesh could not be read'));
+    await expect(failing).rejects.toThrow();
+
+    const retry = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(MESH_URL);
+    await retry;
+
+    expect(engine.engineState.modelRequests).toHaveLength(2);
+    expect(session.engine.modelStatus('cave-mesh')).toBe('loaded');
+    session.release();
+  });
+
+  it('gives the graphics memory back when a model is removed, rather than hiding it', async () => {
+    const session = acquire();
+    const loading = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(MESH_URL);
+    await loading;
+    const [model] = loadedModels();
+
+    session.engine.removeModel('cave-mesh');
+
+    // Not `show = false`: a hidden model still holds every byte of its geometry on the card, and
+    // getting that back is the entire reason a viewer turns a wall mesh off.
+    expect(model.destroyed).toBe(true);
+    expect(loadedModels()).toHaveLength(0);
+    expect(session.engine.modelStatus('cave-mesh')).toBeUndefined();
+    session.release();
+  });
+
+  it('hides a model without unloading it', async () => {
+    const session = acquire();
+    const loading = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(MESH_URL);
+    await loading;
+
+    session.engine.setModelVisible('cave-mesh', false);
+
+    expect(loadedModels()[0].show).toBe(false);
+    expect(loadedModels()[0].destroyed).toBe(false);
+    expect(session.engine.modelStatus('cave-mesh')).toBe('loaded');
+    session.release();
+  });
+
+  it('replaces what an id held when it is pointed at another file', async () => {
+    const session = acquire();
+    const first = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(MESH_URL);
+    await first;
+    const [replaced] = loadedModels();
+
+    const second = session.engine.loadModel('cave-mesh', {
+      url: OTHER_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(OTHER_URL);
+    await second;
+
+    expect(replaced.destroyed).toBe(true);
+    expect(loadedModels()).toHaveLength(1);
+    expect(loadedModels()[0].url).toBe(OTHER_URL);
+    session.release();
+  });
+
+  it('drops a file that lands after the model was removed', async () => {
+    const session = acquire();
+    const loading = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+
+    session.engine.removeModel('cave-mesh');
+    engine.Model.deliver(MESH_URL);
+    await loading;
+
+    // Nobody is waiting for it, so it is thrown away rather than drawn — the alternative is a mesh
+    // reappearing seconds after a viewer switched it off.
+    expect(loadedModels()).toHaveLength(0);
+    expect(session.engine.modelStatus('cave-mesh')).toBeUndefined();
+  });
+
+  it('does not put a file that lands after teardown into a scene that is gone', async () => {
+    const session = acquire();
+    const loading = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+
+    session.release();
+    engine.Model.deliver(MESH_URL);
+
+    // The widget is destroyed and every one of its methods throws, so the read has to notice that
+    // rather than reach into it — and it still releases what it fetched.
+    await expect(loading).resolves.toBeUndefined();
+  });
+});

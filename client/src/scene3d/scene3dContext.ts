@@ -23,6 +23,8 @@ import {
   Ion,
   Material,
   Math as CesiumMath,
+  type Matrix4,
+  Model,
   NearFarScalar,
   OrthographicFrustum,
   PerInstanceColorAppearance,
@@ -37,11 +39,14 @@ import {
   SceneTransforms,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
+  Transforms,
   UrlTemplateImageryProvider,
   VerticalOrigin,
   WallGeometry,
 } from 'cesium';
 import { coarsePointer } from '../map/pointer.ts';
+import { drawnAltitude, samePlacement } from './altitude3d.ts';
+import type { Altitude3DPlacement } from './altitude3d.ts';
 import { eyeLookingAt, wrapRoll } from './camera3d.ts';
 import {
   cutawayPitchLimitDegrees,
@@ -67,6 +72,9 @@ import type {
   Scene3DCutawayFootprint,
   Scene3DImageryOptions,
   Scene3DMarker,
+  Scene3DModelAnchor,
+  Scene3DModelOptions,
+  Scene3DModelStatus,
   Scene3DPick,
   Scene3DPolyline,
   Scene3DPosition,
@@ -221,6 +229,25 @@ function contextLossPolicyFor(surface: object): ContextLossPolicy {
 const UNDERGROUND_COLOR = Color.fromCssColorString('#3a332c');
 const UNDERGROUND_COLOR_ALPHA_BY_DISTANCE = new NearFarScalar(1000, 1, 500000, 1);
 
+/**
+ * One model the scene holds, and everything needed to put it back where it belongs without
+ * re-reading it.
+ *
+ * The anchor and the placement are kept rather than the height they produce, because the height is
+ * an answer that expires: attaching or dropping an elevation model changes it for every model in
+ * the scene at once, and a survey mesh is tens of megabytes — moving one has to be arithmetic on
+ * what is already on the graphics card, never a second download.
+ */
+interface LoadedModel {
+  url: string;
+  anchor: Scene3DModelAnchor;
+  placement: Altitude3DPlacement;
+  visible: boolean;
+  status: Scene3DModelStatus;
+  /** Absent while the file is still being read, and after the model has been taken out again. */
+  model?: Model;
+}
+
 class CesiumScene3D implements Scene3DCore {
   private readonly widget: CesiumWidget;
   private readonly imageryById = new Map<string, ImageryLayer>();
@@ -307,6 +334,15 @@ class CesiumScene3D implements Scene3DCore {
    */
   private terrainSeq = 0;
   private removeTileLoadHandler: (() => void) | undefined;
+
+  /**
+   * Every model in the scene, under the id its caller chose.
+   *
+   * The entry object is also the token that says a load is still wanted: a read that lands to find
+   * its id holding something else — or holding nothing, or belonging to a scene that has been torn
+   * down — has arrived for nobody, and throws its own bytes away rather than adding them.
+   */
+  private readonly models = new Map<string, LoadedModel>();
 
   constructor(container: HTMLElement) {
     this.widget = new CesiumWidget(container, {
@@ -549,6 +585,10 @@ class CesiumScene3D implements Scene3DCore {
     // twice under one id can be found, and it must not outlive the scene it named.
     this.vectorSourceIds.clear();
     this.groundLineLayouts.clear();
+    // Same reason as the elevation sequence above: a model file still being read would otherwise
+    // answer into a destroyed scene. Emptying the registry is what makes that answer nobody's, and
+    // the widget below takes the models already in the scene down with it.
+    this.models.clear();
     this.widget.destroy();
   }
 
@@ -921,6 +961,153 @@ class CesiumScene3D implements Scene3DCore {
 
   groundHeight(longitude: number, latitude: number): number {
     return this.groundHeightAt(longitude, latitude);
+  }
+
+  // ---- models ----
+
+  async loadModel(id: string, options: Scene3DModelOptions): Promise<void> {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    const held = this.models.get(id);
+    if (held && held.url === options.url && held.status !== 'failed') {
+      // The same file under the same id. Where it belongs may have moved — the ground under it can
+      // have gained relief since it was asked for — but that is a matrix, not a hundred megabytes
+      // fetched again, so the model already on the graphics card is simply put back in its place.
+      held.anchor = options.anchor;
+      held.placement = options.placement;
+      held.visible = options.visible ?? held.visible;
+      this.placeModel(held);
+      return;
+    }
+    this.removeModel(id);
+
+    const entry: LoadedModel = {
+      url: options.url,
+      anchor: options.anchor,
+      placement: options.placement,
+      visible: options.visible ?? true,
+      status: 'loading',
+    };
+    this.models.set(id, entry);
+
+    let model: Model;
+    try {
+      model = await Model.fromGltfAsync({
+        url: options.url,
+        modelMatrix: this.modelMatrix(entry),
+        // A converted survey mesh identifies nothing: it carries geometry and no attributes worth
+        // naming, so a click on it should reach the survey lines drawn through it, which do say
+        // which cave this is. Not taking part in hit testing also keeps the cost of a click
+        // independent of how many triangles the wall has.
+        allowPicking: false,
+      });
+    } catch (error) {
+      // Recorded on the entry rather than swallowed: the promise tells whoever asked, and the
+      // status tells anything that looks later, such as chrome drawn after the failure.
+      if (this.models.get(id) === entry) {
+        entry.status = 'failed';
+      }
+      throw error;
+    }
+
+    // The scene can have been torn down, the id reloaded with a different file, or the model
+    // removed, while this was in the air. In every one of those cases what arrived belongs to
+    // nobody, and the one thing that must not happen is putting it into a widget that is gone.
+    if (this.widget.isDestroyed() || this.models.get(id) !== entry) {
+      model.destroy();
+      return;
+    }
+    entry.model = model;
+    entry.status = 'loaded';
+    this.widget.scene.primitives.add(model);
+    // Placed again on arrival rather than trusting the matrix the read started with: an elevation
+    // model attaching during a long read changes where this belongs, and the read does not notice.
+    this.placeModel(entry);
+  }
+
+  removeModel(id: string): void {
+    const entry = this.models.get(id);
+    if (!entry) {
+      return;
+    }
+    // Deleted first, so that a read still in flight for this id finds itself orphaned and drops
+    // what it fetched instead of adding it to a scene nothing is expecting it in.
+    this.models.delete(id);
+    if (this.widget.isDestroyed() || !entry.model) {
+      return;
+    }
+    // Removing from the collection destroys the model, and that is the whole point of this call:
+    // a hidden model still holds every byte of its geometry on the graphics card, and getting that
+    // memory back is the reason a viewer turns a wall mesh off.
+    this.widget.scene.primitives.remove(entry.model);
+    entry.model = undefined;
+    this.requestRender();
+  }
+
+  setModelVisible(id: string, visible: boolean): void {
+    const entry = this.models.get(id);
+    if (!entry || entry.visible === visible) {
+      return;
+    }
+    entry.visible = visible;
+    if (this.widget.isDestroyed() || !entry.model) {
+      return; // A model still being read is drawn, or not, the moment it lands.
+    }
+    entry.model.show = visible;
+    this.requestRender();
+  }
+
+  setModelPlacement(placement: Altitude3DPlacement): void {
+    let moved = false;
+    for (const entry of this.models.values()) {
+      if (samePlacement(entry.placement, placement)) {
+        continue;
+      }
+      entry.placement = placement;
+      moved = true;
+      if (!this.widget.isDestroyed() && entry.model) {
+        entry.model.modelMatrix = this.modelMatrix(entry);
+      }
+    }
+    if (moved) {
+      this.requestRender();
+    }
+  }
+
+  modelStatus(id: string): Scene3DModelStatus | undefined {
+    return this.models.get(id)?.status;
+  }
+
+  /**
+   * Where a model sits and which way it faces.
+   *
+   * The height is the shared altitude placement rule's answer and nothing else — the same call the
+   * survey lines of the same cave go through, so a mesh and the lines drawn inside it cannot drift
+   * apart vertically. The frame is the local east-north-up one at the anchor, which puts the
+   * model's own up along the local up and its own north along true north; the conversion that
+   * produced the file has already turned its vertices off its source grid's north, and turning it
+   * again here would be a second rotation rather than a correction.
+   */
+  private modelMatrix(entry: LoadedModel): Matrix4 {
+    const { anchor, placement } = entry;
+    const height = drawnAltitude(
+      anchor.altitudeM,
+      anchor.surveyTopAltitudeM ?? anchor.altitudeM,
+      placement,
+    );
+    return Transforms.eastNorthUpToFixedFrame(
+      Cartesian3.fromDegrees(anchor.longitude, anchor.latitude, height),
+    );
+  }
+
+  /** Puts a model where its anchor and the current placement say it goes, and asks for a frame. */
+  private placeModel(entry: LoadedModel): void {
+    if (!this.widget.isDestroyed() && entry.model) {
+      entry.model.modelMatrix = this.modelMatrix(entry);
+      entry.model.show = entry.visible;
+    }
+    this.requestRender();
   }
 
   /**

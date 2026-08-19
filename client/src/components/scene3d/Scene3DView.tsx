@@ -9,6 +9,7 @@ import {
   onFeatureTypeCatalogChanged,
   setFeatureTypeCatalog,
 } from '../../map/featureTypeCatalog.ts';
+import { ANCHORED_TO_SURFACE, type Altitude3DPlacement } from '../../scene3d/altitude3d.ts';
 import { baseImageryLayerId, syncBaseImagery } from '../../scene3d/baseImagery3d.ts';
 import {
   applyCamera3D,
@@ -24,10 +25,6 @@ import {
   type CaveData3DHandle,
   type CaveData3DState,
 } from '../../scene3d/caveData3d.ts';
-import {
-  ANCHORED_TO_SURFACE,
-  type Altitude3DPlacement,
-} from '../../scene3d/centerlines3d.ts';
 import { geoJsonBounds } from '../../scene3d/geoJson3d.ts';
 import type { OverlayRect } from '../../scene3d/overlayPlacement.ts';
 import { activePreset, presetCamera, type Camera3DPreset } from '../../scene3d/presets3d.ts';
@@ -50,6 +47,13 @@ import {
   type TerrainSourceProblem,
 } from '../../scene3d/terrainSource3d.ts';
 import type { Scene3DSession } from '../../scene3d/scene3dContext.ts';
+import {
+  attachSurveyMesh3d,
+  EMPTY_SURVEY_MESH_3D_STATE,
+  SURVEY_MESH_LAYER_ID,
+  type SurveyMesh3DHandle,
+  type SurveyMesh3DState,
+} from '../../scene3d/surveyMesh3d.ts';
 import { attachScene3dHash } from '../../scene3d/urlHash3d.ts';
 import { attachViewSync3d } from '../../scene3d/viewSync3d.ts';
 import { supportsWebGl2 } from '../../scene3d/webglSupport.ts';
@@ -84,7 +88,7 @@ export interface Scene3DViewProps {
  * and asks React to re-run the effects that talk to it.
  */
 export default function Scene3DView({ height = '100%', syncUrlHash = false }: Scene3DViewProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const slotRef = useRef<HTMLDivElement>(null);
 
   // Answered once, before anything is downloaded: the engine chunk is a megabyte that a browser
@@ -247,6 +251,12 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const [dataState, setDataState] = useState<CaveData3DState>(EMPTY_CAVE_DATA_3D_STATE);
   const [caveFramable, setCaveFramable] = useState(false);
 
+  // The walls of one cave, held apart from the camera-driven loader above because nothing about
+  // them is camera-driven: they are read because a viewer picked a cave, and released again the
+  // moment the pick moves on.
+  const meshRef = useRef<SurveyMesh3DHandle | null>(null);
+  const [meshState, setMeshState] = useState<SurveyMesh3DState>(EMPTY_SURVEY_MESH_3D_STATE);
+
   // What the camera is doing, read back from the scene so the preset buttons describe the camera
   // rather than the last button pressed. Undefined until the scene exists.
   const [camera, setCamera] = useState<Camera3DState>();
@@ -267,6 +277,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     const surface = sceneSurfaceElement();
     const data = attachCaveData3d(engine);
     dataRef.current = data;
+    const mesh = attachSurveyMesh3d(engine);
+    meshRef.current = mesh;
+    const unsubscribeMesh = mesh.subscribe(setMeshState);
     const unsubscribeState = data.subscribe((next) => {
       setDataState(next);
       // Whether there is a cave to frame changes with every load, and only the loader knows.
@@ -370,8 +383,14 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       unsubscribeHover();
       sync.detach();
       unsubscribeState();
+      unsubscribeMesh();
       data.detach();
       dataRef.current = null;
+      // Releases the graphics memory the walls hold; a scene handed back with a mesh still on it
+      // would keep tens of megabytes for a view nobody is looking at.
+      mesh.detach();
+      meshRef.current = null;
+      setMeshState(EMPTY_SURVEY_MESH_3D_STATE);
       setDataState(EMPTY_CAVE_DATA_3D_STATE);
       setCaveFramable(false);
       setCamera(undefined);
@@ -565,7 +584,34 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // where the ellipsoid is.
   useEffect(() => {
     dataRef.current?.setAltitudePlacement(placement);
+    // The walls follow the same rule as the lines drawn inside them, and follow it at the same
+    // moment: a mesh left at the height the bare ellipsoid put it, under ground that has since
+    // gained relief, would be buried under its own hillside. Moving it is arithmetic on its
+    // anchor, so nothing is fetched again.
+    meshRef.current?.setAltitudePlacement(placement);
   }, [placement, engineVersion, showingHere]);
+
+  // Which cave's walls are held. The selection names a cave both when a cave was picked and when
+  // one of its entrances was; anything else selects no cave and releases what was held.
+  //
+  // The top of the cave's survey is passed with it because that is what an anchored rendering
+  // hangs a cave from, and the walls and the survey lines of one cave have to hang from the same
+  // one. It comes from the camera-driven loader, which is the only thing here that is told it, so
+  // it can arrive after the mesh is already drawn — which moves the mesh rather than reloading it.
+  const selectedCaveId =
+    selection?.kind === 'cave' || selection?.kind === 'entrance' ? selection.caveId : undefined;
+  const meshVisible = overlayVisible[SURVEY_MESH_LAYER_ID] ?? true;
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) {
+      return;
+    }
+    mesh.setVisible(meshVisible);
+    mesh.setCave(
+      selectedCaveId,
+      selectedCaveId ? dataRef.current?.caveSurveyTop(selectedCaveId) : undefined,
+    );
+  }, [selectedCaveId, meshVisible, dataState, engineVersion, showingHere]);
 
   // Declared after the loader is attached, and keyed on the same counter, so a scene that is
   // rebuilt comes back with the settings the viewer had rather than with the defaults.
@@ -613,7 +659,34 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // says so, and without a word here the scene would simply look as if the setting had been
   // ignored. Which word depends on why, because the way out of one reason is not the way out of
   // the other. The panel explains the reasons a cutaway was never drawn at all.
+
+  // The walls of the selected cave are the fifth, and the only one that is about waiting. They are
+  // the one thing this scene draws that a viewer waits for, and the wait belongs where it can be
+  // seen without being looked for: the full status line lives in the layer panel, but that panel
+  // opens on a click, so a viewer who picks a cave with a fifty-megabyte mesh would otherwise
+  // watch an unchanged scene for several seconds with nothing to say why — and a mesh that failed
+  // to arrive would look exactly like a cave nobody has surveyed walls for. Only the two states
+  // worth interrupting a viewer for are said out here; the panel says the rest.
+  const meshNotice = () => {
+    const triangles = meshState.triangleCount?.toLocaleString(i18n.language);
+    switch (meshState.status) {
+      case 'looking':
+        return t('scene3d.meshLooking');
+      case 'loading':
+        return triangles ? t('scene3d.meshLoadingSized', { triangles }) : t('scene3d.meshLoading');
+      case 'failed':
+        return meshState.message
+          ? t('scene3d.meshFailedBecause', { reason: meshState.message })
+          : t('scene3d.meshFailed');
+      default:
+        return undefined;
+    }
+  };
+  /** True while the walls are still on their way, which is a wait like any other data wait. */
+  const meshLoading = meshState.status === 'looking' || meshState.status === 'loading';
+
   const notices = [
+    meshNotice(),
     dataState.withheldCount > 0 ? t('map.centerlinesWithheld', { count: dataState.withheldCount }) : undefined,
     dataState.flatCount > 0 ? t('scene3d.centerlinesFlat', { count: dataState.flatCount }) : undefined,
     surfaceState?.pausedBy ? t(cutawayPauseMessage(surfaceState.pausedBy)) : undefined,
@@ -708,6 +781,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
                 onOverlayVisibleChange={setOverlayVisible}
                 overlayOpacity={overlayOpacity}
                 onOverlayOpacityChange={setOverlayOpacity}
+                meshVisible={meshVisible}
+                onMeshVisibleChange={(visible) => setOverlayVisible(SURVEY_MESH_LAYER_ID, visible)}
+                meshState={meshState}
                 surfaceMode={surfaceMode}
                 onSurfaceModeChange={setSurfaceMode}
                 surfaceState={surfaceState}
@@ -728,7 +804,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       <div
         className="scene3d-data-state"
         data-testid="scene3d-data"
-        data-loading={dataState.loading ? 'true' : 'false'}
+        data-loading={dataState.loading || meshLoading ? 'true' : 'false'}
       >
         {notices.map((notice) => (
           <span key={notice} className="scene3d-notice">

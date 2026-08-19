@@ -9,6 +9,7 @@ import type {
   TerrainBuildPhase,
   TerrainBuildSourceKind,
   TerrainBuildStatus,
+  SurveyModelInfo,
 } from '../api/hooks.ts';
 import { RESLINK_ANCHOR_KINDS, RESLINK_TARGET_TYPES } from '../components/reslinks/registry.ts';
 import {
@@ -23,6 +24,7 @@ import {
 import { SEEDED_PARTICIPANT_ROLE_CODES } from '../components/trips/participantRoles.ts';
 import { SEEDED_TRIP_TYPE_CODES } from '../components/trips/tripTypes.ts';
 import { TERRAIN_PROBLEM_MESSAGE_KEYS } from '../pages/admin/terrain/terrainProblems.ts';
+import { SURVEY_MODEL_PROBLEM_MESSAGE_KEYS } from '../pages/caves/surveyModelProblems.ts';
 import type { TerrainDepthBand } from '../pages/admin/terrain/terrainDepth.ts';
 import en from './locales/en.json';
 import ro from './locales/ro.json';
@@ -145,6 +147,28 @@ const terrainBuildStatuses: Record<TerrainBuildStatus, true> = {
   failed: true,
 };
 
+/**
+ * The states a survey model passes through. The list looks each one up by the value the server
+ * sent, so an unnamed one ships as a raw key in the column a reader watches to learn whether the
+ * walls they uploaded are drawable yet.
+ */
+const surveyModelStatuses: Record<SurveyModelInfo['status'], true> = {
+  ready: true,
+  pending: true,
+  processing: true,
+  failed: true,
+};
+
+/**
+ * The formats a survey model can be in. The Format column looks each one up by the value the
+ * server sent, so an unnamed one ships as a raw key beside three readable names.
+ */
+const surveyModelFormats: Record<SurveyModelInfo['format'], true> = {
+  lox: true,
+  survex3d: true,
+  stl: true,
+};
+
 const terrainBuildPhases: Record<TerrainBuildPhase, true> = {
   pending: true,
   fetch: true,
@@ -197,6 +221,42 @@ describe('i18n locales', () => {
     // The reverse direction too: a leftover label for a domain the server dropped would
     // sit unnoticed in both files forever.
     expect(Object.keys(enDomains).sort()).toEqual(names.sort());
+  });
+
+  it('every survey model state is named in both locales, and none is left over', () => {
+    const names = Object.keys(surveyModelStatuses);
+    const enNames: Record<string, string> = en.surveyModels.statusValues;
+    const roNames: Record<string, string> = ro.surveyModels.statusValues;
+    expect(names.filter((name) => !enNames[name])).toEqual([]);
+    expect(names.filter((name) => !roNames[name])).toEqual([]);
+    expect(Object.keys(enNames).sort()).toEqual(names.sort());
+    expect(Object.keys(roNames).sort()).toEqual(names.sort());
+  });
+
+  it('every survey model format is named in both locales, and none is left over', () => {
+    const names = Object.keys(surveyModelFormats);
+    const enNames: Record<string, string> = en.surveyModels.formats;
+    const roNames: Record<string, string> = ro.surveyModels.formats;
+    expect(names.filter((name) => !enNames[name])).toEqual([]);
+    expect(names.filter((name) => !roNames[name])).toEqual([]);
+    expect(Object.keys(enNames).sort()).toEqual(names.sort());
+    expect(Object.keys(roNames).sort()).toEqual(names.sort());
+  });
+
+  /**
+   * The refusals an upload runs into are worded through a lookup table rather than written out at
+   * the call, so the scan that reads keys straight out of the source text cannot see any of them.
+   * Without this, somebody told their survey file was turned away would be shown a lookup key.
+   */
+  it('every survey model refusal has wording in both locales, and none is left over', () => {
+    const keys = Object.values(SURVEY_MODEL_PROBLEM_MESSAGE_KEYS);
+    expect(keys.length).toBeGreaterThan(5);
+    for (const locale of [en, ro]) {
+      expect(keys.filter((key) => typeof lookup(locale, key) !== 'string')).toEqual([]);
+    }
+    const named = keys.map((key) => key.replace('surveyModels.problems.', '')).sort();
+    expect(Object.keys(en.surveyModels.problems).sort()).toEqual(named);
+    expect(Object.keys(ro.surveyModels.problems).sort()).toEqual(named);
   });
 
   it('every terrain build status, phase, source kind and depth band is named in both locales', () => {

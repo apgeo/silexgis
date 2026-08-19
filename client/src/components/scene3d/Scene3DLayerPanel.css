@@ -85,3 +85,8 @@
   height: 4px;
   border-radius: 2px;
 }
+
+.scene3d-mesh-hint {
+  margin: 2px 8px 0 24px;
+  font-size: 11px;
+}

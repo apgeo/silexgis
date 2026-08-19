@@ -99,7 +99,12 @@ Previous versions:
   the camera was facing draws that on the map, which is what turns "somewhere on this slope" into
   a hole you can walk back to. Nothing is ever written back into the file itself.
 - **3D survey models** — Therion `.lox` / Survex `.3d` via CaveView.js, plus cave
-  centerlines projected on the map.
+  centerlines projected on the map. A cave's **walls** can be uploaded as well, as a binary
+  `.stl` exported from Therion: you say which coordinates the file is written in — a projected
+  system, or plain metres about a point, which is normally the cave's own entrance and is
+  offered pre-filled — and the installation converts it into a model the 3D view draws in place,
+  under the terrain, beside that cave's centerlines. It is loaded only for the cave you select,
+  and switching it off in the layer list genuinely lets go of it.
 - **3D view** — the configured base layers draped on a globe, on a page that is downloaded
   only when it is opened. Needs WebGL 2; a browser without it gets an explanation rather
   than a dead canvas. No vendor terrain, imagery or geocoding service is contacted and the

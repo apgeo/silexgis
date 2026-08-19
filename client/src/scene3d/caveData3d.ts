@@ -6,17 +6,18 @@ import {
   type MapConfig,
 } from '../api/hooks.ts';
 import { getMapTagFilter } from '../map/mapFilters.ts';
+import { ANCHORED_TO_SURFACE, samePlacement } from './altitude3d.ts';
+import type { Altitude3DPlacement } from './altitude3d.ts';
 import { entranceMarkers, surfaceFeatureLines, surfaceFeatureMarkers } from './caveMarkers3d.ts';
 import { cameraFloorFor, caveFootprint } from './caveFootprint3d.ts';
 import {
-  ANCHORED_TO_SURFACE,
   caveCenterlines,
   centerlineBounds,
   centerlineLoadState,
   centerlinePolylines,
+  centerlineTopAltitudes,
   EMPTY_CENTERLINE_LOAD_STATE,
   nearestCaveCenterlines,
-  type Altitude3DPlacement,
   type CenterlineLoad3DState,
 } from './centerlines3d.ts';
 import { mapZoomFor } from './pseudoZoom.ts';
@@ -129,6 +130,15 @@ export interface CaveData3DHandle {
    */
   caveBounds(caveId?: string): Scene3DBounds | undefined;
   /**
+   * The surveyed altitude of the top of one cave, as the last response reported it.
+   *
+   * It is what a cave is hung from when the globe has no relief, so anything else the scene draws
+   * for the same cave has to be hung from the same number or the two drift apart vertically.
+   * Undefined when this loop has not been told it: the survey layer is off, the cave is not in
+   * the view, or the compact representation served for it carries no altitudes at all.
+   */
+  caveSurveyTop(caveId: string): number | undefined;
+  /**
    * The payload now drawn for the same thing this one named, if it is still in the scene.
    *
    * Chrome pinned to a pick keeps the payload it was handed at the moment of the click, and every
@@ -216,6 +226,7 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
   let detached = false;
   let drawnCenterlines: readonly Scene3DPolyline[] = [];
   let drawnCenter = { longitude: 0, latitude: 0 };
+  let surveyTops = new Map<string, number>();
   // Everything else that was put into the scene, kept only so a piece of chrome pinned to one of
   // them can find its own thing again after a reload replaced it. The arrays are the ones already
   // handed to the renderer, so this is four references rather than a second copy of the data.
@@ -263,6 +274,9 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       // part of the survey, and the camera would frame geometry that is not on the screen.
       drawnCenterlines = polylines;
       drawnCenter = center;
+      // Kept for anything else drawn for the same cave: a cave's walls and its survey lines hang
+      // from one top, and this loop is the only thing in the scene that is told what that top is.
+      surveyTops = centerlineTopAltitudes(collection);
       publish(centerlineLoadState(collection));
       // The survey is what says where the ground may be cut away and how far down a viewer may
       // go, so both are derived from what was just drawn rather than configured anywhere. The
@@ -361,6 +375,9 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
         : nearestCaveCenterlines(drawnCenterlines, drawnCenter);
       return centerlineBounds(lines);
     },
+    caveSurveyTop(caveId) {
+      return surveyTops.get(caveId);
+    },
     currentPick(payload) {
       for (const batch of [drawnEntrances, drawnFeatures, drawnFeatureLines, drawnCenterlines]) {
         for (const item of batch) {
@@ -381,7 +398,7 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       void load();
     },
     setAltitudePlacement(next) {
-      if (next.absolute === placement.absolute && next.offsetM === placement.offsetM) {
+      if (samePlacement(next, placement)) {
         return;
       }
       placement = next;
@@ -411,6 +428,7 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
           // the camera back to a survey that is not on the screen.
           drawnCenterlines = [];
           drawnCenter = { longitude: 0, latitude: 0 };
+          surveyTops = new Map();
           // The notices explain what the survey layer could not show. With the layer off there is
           // nothing on screen for them to be about, and a viewer reading "some caves are not shown
           // at this zoom" over a view they themselves emptied would be told the wrong thing.

@@ -90,6 +90,15 @@ export const engineState = {
    */
   terrainRequests: [] as FakeTerrainRequest[],
   terrainFailures: new Set<string>(),
+  /**
+   * Every model file the scene asked to read, in order, with where it said the model goes.
+   *
+   * Unlike the elevation reads, none of these answers on its own: a test lands one with
+   * `Model.deliver(url)` or refuses it with `Model.deliver(url, error)`. That is not ceremony —
+   * loading a survey mesh takes long enough for the scene to be torn down or told to load
+   * something else underneath it, and those are the cases worth having a test for.
+   */
+  modelRequests: [] as FakeModelRequest[],
   reset() {
     engineState.widgets = [];
     engineState.widgetOptions = [];
@@ -100,6 +109,8 @@ export const engineState = {
     GroundPolylinePrimitive.forget();
     engineState.terrainRequests = [];
     engineState.terrainFailures = new Set();
+    engineState.modelRequests = [];
+    Model.forget();
   },
 };
 
@@ -842,6 +853,104 @@ export class BillboardCollection {
 
   removeAll() {
     this.billboards.length = 0;
+  }
+}
+
+/**
+ * A placement frame, as the double models it: the point it was built at.
+ *
+ * The real thing is a 4×4 matrix carrying a rotation as well, and it is not reproduced here — the
+ * rotation the scene asks for is always the local east-north-up one, so there is nothing about it
+ * for a test to distinguish. Where a model was put is the whole of what is under test, and that is
+ * exactly what this keeps.
+ */
+export interface FakeMatrix4 {
+  origin: FakeCartesian3;
+}
+
+export const Transforms = {
+  eastNorthUpToFixedFrame(origin: FakeCartesian3): FakeMatrix4 {
+    return { origin };
+  },
+};
+
+/** One `Model.fromGltfAsync` the scene made, with the options it passed. */
+export interface FakeModelRequest {
+  url: string;
+  modelMatrix: FakeMatrix4;
+  allowPicking: boolean | undefined;
+}
+
+/**
+ * A loaded model.
+ *
+ * Reading one is a network round trip over a file that can be tens of megabytes, so the double
+ * keeps every load pending until a test lands it by hand: the states worth testing — asked for but
+ * not here, here, and refused — only exist while that is true. Landing is by URL because a scene
+ * can legitimately have two reads in the air at once.
+ */
+export class Model {
+  readonly url: string;
+  readonly allowPicking: boolean | undefined;
+  modelMatrix: FakeMatrix4;
+  show = true;
+  /** Set when the scene takes the model out of the primitives list, or destroys it directly. */
+  destroyed = false;
+
+  // Public only so a test can name the instance type; the scene reaches one solely through
+  // `fromGltfAsync`, which is the whole of how the real library hands a model over.
+  constructor(request: FakeModelRequest) {
+    this.url = request.url;
+    this.modelMatrix = request.modelMatrix;
+    this.allowPicking = request.allowPicking;
+  }
+
+  private static waiting = new Map<
+    string,
+    { request: FakeModelRequest; resolve: (model: Model) => void; reject: (error: unknown) => void }
+  >();
+
+  static fromGltfAsync(options: {
+    url: string;
+    modelMatrix: FakeMatrix4;
+    allowPicking?: boolean;
+  }): Promise<Model> {
+    const request: FakeModelRequest = {
+      url: options.url,
+      modelMatrix: options.modelMatrix,
+      allowPicking: options.allowPicking,
+    };
+    engineState.modelRequests.push(request);
+    return new Promise<Model>((resolve, reject) => {
+      Model.waiting.set(options.url, { request, resolve, reject });
+    });
+  }
+
+  /** Lands a read the scene is waiting on; with an error, refuses it instead. */
+  static deliver(url: string, error?: unknown) {
+    const pending = Model.waiting.get(url);
+    if (!pending) {
+      throw new Error(`no model read is waiting for ${url}`);
+    }
+    Model.waiting.delete(url);
+    if (error === undefined) {
+      pending.resolve(new Model(pending.request));
+    } else {
+      pending.reject(error);
+    }
+  }
+
+  /** Whether a read for this URL is still in the air. */
+  static isWaitingFor(url: string): boolean {
+    return Model.waiting.has(url);
+  }
+
+  static forget() {
+    Model.waiting.clear();
+  }
+
+  destroy() {
+    this.destroyed = true;
   }
 }
 

@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clusterCellBbox } from '../geo/cluster.ts';
 import { api, ApiError, lastReadETag } from './client.ts';
-import type { components } from './schema';
+import type { components, paths } from './schema';
 
 export type CaveListItem = components['schemas']['CaveListItemDto'];
 export type CaveDetail = components['schemas']['CaveDto'];
@@ -630,16 +630,82 @@ export function useEntrances(caveId: string | undefined) {
 export type SurveyModelInfo = components['schemas']['SurveyModelDto'];
 export type AuditEntry = components['schemas']['AuditEntryDto'];
 
+/** The signed model URLs live 10 minutes; refresh before they lapse mid-view. */
+const SURVEY_MODEL_URL_REFRESH_MS = 8 * 60_000;
+/** How often a model whose conversion has not finished yet is asked about. */
+const SURVEY_MODEL_CONVERSION_POLL_MS = 2000;
+
+/**
+ * A model still on its way to being drawable. Only wall meshes ever are — a line-plot upload is
+ * handed to the viewer exactly as it arrived, so it is ready the moment it lands.
+ *
+ * A failed conversion counts as settled. The worker may retry it and move the row on again, but
+ * the reader has been told the outcome and is owed nothing further until they act on it; asking
+ * every two seconds forever on the chance somebody re-queues the job is a page that never goes
+ * quiet.
+ */
+export function surveyModelUnsettled(status: SurveyModelInfo['status']): boolean {
+  return status === 'pending' || status === 'processing';
+}
+
+/**
+ * Whether the embedded survey viewer can read this model itself.
+ *
+ * The viewer parses the line-plot formats natively, choosing its parser by the extension of the
+ * file name it is handed. A wall mesh is not one of them: it is drawn by the 3D scene, out of the
+ * file the server converts it into, and handing the raw upload to the viewer produces a parse
+ * failure rather than a picture.
+ *
+ * One home, because more than one page decides this — the cave page's model list, and the
+ * popped-out survey panel, which is a separate window nobody testing the cave page would ever see.
+ * Two copies diverge the first time a format is added on one side only: either a viewer is offered
+ * a file it cannot parse, or a readable file is quietly skipped.
+ */
+export function surveyModelReadableByViewer(model: { format: SurveyModelInfo['format'] }): boolean {
+  return model.format === 'lox' || model.format === 'survex3d';
+}
+
+/**
+ * How often the list re-asks. Two intervals meet in this one number, which is why it is a named
+ * rule and not a literal at the query: a conversion in flight is worth a couple of seconds, and
+ * once everything has settled the list must still come back before the signed URLs on it lapse.
+ *
+ * Exported so the rule — a list holding nothing but finished models stops watching them — can be
+ * asserted directly, rather than inferred from a live query somebody would have to watch for two
+ * seconds to prove it did nothing.
+ */
+export function surveyModelPollInterval(
+  models: { status: SurveyModelInfo['status'] }[] | undefined,
+): number {
+  return (models ?? []).some((model) => surveyModelUnsettled(model.status))
+    ? SURVEY_MODEL_CONVERSION_POLL_MS
+    : SURVEY_MODEL_URL_REFRESH_MS;
+}
+
 export function useSurveyModels(caveId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.surveyModels(caveId ?? ''),
     queryFn: () =>
       unwrap(api.GET('/api/v1/caves/{caveId}/survey-models', { params: { path: { caveId: caveId! } } })),
     enabled: !!caveId,
-    // The signed model URLs live 10 minutes; refresh before they lapse mid-view.
     staleTime: 5 * 60_000,
-    refetchInterval: 8 * 60_000,
+    refetchInterval: (query) => surveyModelPollInterval(query.state.data),
   });
+}
+
+/**
+ * Imperative fetch of a cave's survey models, used by the 3D scene rather than by a component.
+ *
+ * The scene is not a React tree — it decides which cave's wall mesh to hold from where the
+ * viewer's selection is, outside the render cycle — so it asks directly instead of mounting a
+ * hook. A cave whose exact location is withheld from this caller answers with an empty list
+ * rather than a refusal, which is the same answer as a cave with no models and needs no special
+ * casing here.
+ */
+export async function fetchSurveyModels(caveId: string): Promise<SurveyModelInfo[]> {
+  return unwrap(
+    api.GET('/api/v1/caves/{caveId}/survey-models', { params: { path: { caveId } } }),
+  );
 }
 
 function useInvalidateSurveyModels() {
@@ -648,12 +714,50 @@ function useInvalidateSurveyModels() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModels(caveId) });
 }
 
+/** The multipart body the upload endpoint declares, as the generated contract states it. */
+type SurveyModelUploadBody =
+  paths['/api/v1/caves/{caveId}/survey-models']['post']['requestBody']['content']['multipart/form-data'];
+
+/**
+ * What a wall mesh needs alongside the file, because a triangle soup carries none of it: which
+ * coordinate system its numbers are in, and what altitude the plane it calls zero sits at.
+ *
+ * Either a projected system by code, or — for a file exported about a local origin, which is the
+ * ordinary case — the position that origin sits at. Never both: with a code, the file's own
+ * coordinates say where it is, and a second answer could only contradict the first.
+ *
+ * Taken from the generated contract rather than restated here, so that a field renamed or re-typed
+ * on the server fails this build instead of failing every upload at run time. Only the altitude is
+ * required of a caller — the server refuses a declaration without one — and the file itself is
+ * appended separately, so both are set aside from what the contract calls optional.
+ */
+export type SurveyMeshDeclaration = Omit<SurveyModelUploadBody, 'file' | 'originHeightM'> &
+  Required<Pick<SurveyModelUploadBody, 'originHeightM'>>;
+
 export function useUploadSurveyModel() {
   const invalidate = useInvalidateSurveyModels();
   return useMutation({
-    mutationFn: async ({ caveId, file }: { caveId: string; file: File }): Promise<SurveyModelInfo> => {
+    mutationFn: async ({
+      caveId,
+      file,
+      declaration,
+    }: {
+      caveId: string;
+      file: File;
+      /** Required for a mesh; the line-plot formats place themselves and take none. */
+      declaration?: SurveyMeshDeclaration;
+    }): Promise<SurveyModelInfo> => {
       const form = new FormData();
       form.append('file', file, file.name);
+      // The field names are the declaration's own keys, so the names on the wire and the names in
+      // the contract are one thing rather than two lists to keep in step. Plain `String(number)`
+      // writes a dot decimal whatever the reader's locale is set to, which is what the server
+      // parses these as; a half that was not answered is left out rather than sent empty.
+      for (const [field, value] of Object.entries(declaration ?? {})) {
+        if (value !== undefined) {
+          form.append(field, String(value));
+        }
+      }
       return unwrap(api.POST('/api/v1/caves/{caveId}/survey-models', {
         params: { path: { caveId } },
         body: form as never,

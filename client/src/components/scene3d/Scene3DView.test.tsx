@@ -24,6 +24,13 @@ vi.mock('../../api/hooks.ts', () => ({
   },
   fetchEntranceFeatures: () => Promise.resolve(emptyCollection),
   fetchMapFeatures: () => Promise.resolve(featureResponse),
+  // Named here because leaving it out is not an empty answer: the mock factory replaces the whole
+  // module, so the loader's call would raise on the property access, be swallowed by its own
+  // catch, and every selection in this file would silently exercise the failure path alone.
+  fetchSurveyModels: (caveId: string) => {
+    surveyModelRequests.push(caveId);
+    return Promise.resolve(surveyModels);
+  },
 }));
 
 const engine = await import('../../scene3d/cesiumTestDouble.ts');
@@ -46,6 +53,34 @@ let centerlineResponse: unknown = {
 };
 /** What the cross-kind overlay answers with; a test that edits a feature changes it in place. */
 let featureResponse: unknown = emptyCollection;
+/** Which caves the wall-mesh loader asked about, and what it was told they hold. */
+let surveyModelRequests: string[] = [];
+let surveyModels: unknown[] = [];
+
+/** A converted wall mesh of cave-1, whose own zero plane sits at 500 m. */
+function aWallMesh(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'model-1',
+    caveId: 'cave-1',
+    name: 'Pereți',
+    format: 'stl',
+    fileId: 'file-1',
+    description: null,
+    surveyedAt: null,
+    modelUrl: '/files/source.stl',
+    status: 'ready',
+    processingError: null,
+    meshUrl: '/files/walls.glb',
+    anchorLongitude: 25.44,
+    anchorLatitude: 45.53,
+    anchorHeightM: 500,
+    triangleCount: 1_234_567,
+    sourcePrecisionLost: false,
+    createdAt: '2026-08-01T00:00:00Z',
+    updatedAt: '2026-08-01T00:00:00Z',
+    ...overrides,
+  };
+}
 
 /** One surface feature, whose name an edit beside the scene can change. */
 function featureCollection(name: string) {
@@ -92,6 +127,8 @@ beforeEach(() => {
   mapConfig = undefined;
   centerlineRequests = [];
   featureResponse = emptyCollection;
+  surveyModelRequests = [];
+  surveyModels = [];
   centerlineResponse = {
     type: 'FeatureCollection',
     features: [],
@@ -961,5 +998,131 @@ describe('the ground the caves are drawn against', () => {
 
     expect(await screen.findByText(/does not hold a terrain tile set/)).toBeInTheDocument();
     expect(engine.engineState.terrainRequests).toEqual([]);
+  });
+});
+
+describe('the walls of the selected cave', () => {
+  /** A survey of cave-1 whose top the server reports at 700 m. */
+  const aSurvey = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [25.44, 45.53, 700],
+            [25.45, 45.535, 420],
+          ],
+        },
+        properties: { id: 'line-1', caveId: 'cave-1', topAltitudeM: 700, hasZ: true },
+      },
+    ],
+    withheldCount: 0,
+    detail: true,
+    flatCount: 0,
+  };
+
+  /** Where the scene actually put the model it was handed, in metres above the ellipsoid. */
+  function meshHeight(): number | undefined {
+    return engine.engineState.modelRequests.at(-1)?.modelMatrix.origin.height;
+  }
+
+  function selectCave(caveId: string) {
+    act(() => {
+      useWorkspaceStore.setState({ selection: { kind: 'cave', caveId } });
+    });
+  }
+
+  it('reads a mesh only once a cave is picked, and hangs it from that cave’s survey top', async () => {
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    surveyModels = [aWallMesh()];
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+
+    // Nothing is read for a scene nobody has picked a cave in. This overlay costs tens of
+    // megabytes of graphics memory, so it is not driven by what the camera can see.
+    expect(surveyModelRequests).toEqual([]);
+
+    selectCave('cave-1');
+    await waitFor(() => expect(surveyModelRequests).toEqual(['cave-1']));
+    await waitFor(() => expect(engine.engineState.modelRequests).toHaveLength(1));
+    expect(engine.engineState.modelRequests[0].url).toBe('/files/walls.glb');
+
+    // The mesh declares its own zero plane at 500 m, and the cave's survey top is 700 m. On the
+    // bare ellipsoid the cave hangs from the surface by its top, so the mesh's origin sits 200 m
+    // below it — the same answer the survey lines drawn inside it get. Placing it by its own
+    // origin would put it on the surface, 200 m above the lines it belongs with.
+    expect(meshHeight()).toBe(-200);
+  });
+
+  it('says that the walls are on their way, and how big they are, without the panel being opened', async () => {
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    surveyModels = [aWallMesh()];
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    selectCave('cave-1');
+
+    // The layer panel opens on a click. The acceptance case is a mesh of some tens of megabytes,
+    // and a viewer staring at an unchanged scene has no reason to go looking behind a button for
+    // the news that anything is happening at all.
+    expect(await screen.findByText(/1,234,567/)).toBeInTheDocument();
+    expect(screen.queryByTestId('scene3d-layer-panel')).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'true'),
+    );
+
+    act(() => engine.Model.deliver('/files/walls.glb'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false'),
+    );
+  });
+
+  it('says why the walls are missing rather than leaving the scene quietly empty', async () => {
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    // The conversion ran and could not read the file. Its own words are the useful ones: they name
+    // a file the uploader can re-export.
+    surveyModels = [
+      aWallMesh({ status: 'failed', meshUrl: null, processingError: 'Not a binary STL.' }),
+    ];
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    selectCave('cave-1');
+
+    expect(await screen.findByText(/Not a binary STL\./)).toBeInTheDocument();
+    expect(engine.engineState.modelRequests).toEqual([]);
+  });
+
+  it('releases the walls when the layer is switched off, and reads them again when it is back on', async () => {
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    surveyModels = [aWallMesh()];
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    selectCave('cave-1');
+    await waitFor(() => expect(engine.engineState.modelRequests).toHaveLength(1));
+    act(() => engine.Model.deliver('/files/walls.glb'));
+
+    // Switching the layer off is what a viewer does to get the graphics memory back, so hiding
+    // the model rather than dropping it would be the one thing they asked for not happening.
+    act(() => {
+      useWorkspaceStore.setState({ overlayVisible: { 'survey-mesh': false } });
+    });
+    await waitFor(() =>
+      expect(
+        engine.engineState.widgets[0].scene.primitives.items.filter(
+          (item): item is InstanceType<typeof engine.Model> => item instanceof engine.Model,
+        ),
+      ).toHaveLength(0),
+    );
+
+    act(() => {
+      useWorkspaceStore.setState({ overlayVisible: { 'survey-mesh': true } });
+    });
+    await waitFor(() => expect(engine.engineState.modelRequests).toHaveLength(2));
   });
 });

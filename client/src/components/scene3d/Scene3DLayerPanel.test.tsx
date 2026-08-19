@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { MapLayerInfo } from '../../api/hooks.ts';
 import type { Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
+import { EMPTY_SURVEY_MESH_3D_STATE } from '../../scene3d/surveyMesh3d.ts';
 import Scene3DLayerPanel, { type Scene3DLayerPanelProps } from './Scene3DLayerPanel.tsx';
 
 const layers = [
@@ -38,6 +39,9 @@ function renderPanel(overrides: Partial<Scene3DLayerPanelProps> = {}) {
     onOverlayVisibleChange: vi.fn(),
     overlayOpacity: {},
     onOverlayOpacityChange: vi.fn(),
+    meshVisible: true,
+    onMeshVisibleChange: vi.fn(),
+    meshState: EMPTY_SURVEY_MESH_3D_STATE,
     surfaceMode: 'overlay',
     onSurfaceModeChange: vi.fn(),
     surfaceState: {
@@ -166,5 +170,79 @@ describe('Scene3DLayerPanel', () => {
     });
 
     expect(screen.getByText(/No survey is loaded to cut around/)).toBeInTheDocument();
+  });
+
+  it('offers the walls of the selected cave as their own switch, with no fade beside them', () => {
+    renderPanel();
+
+    expect(
+      screen.getByRole('checkbox', { name: 'Walls of the selected cave' }),
+    ).toBeInTheDocument();
+    // A fade over a mesh that cannot be faded would be a control wired to nothing, so there is
+    // one slider per layer that has an opacity and none for this one.
+    expect(
+      screen.queryByRole('slider', { name: 'Opacity of Walls of the selected cave' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('reports the walls being turned off, which is what releases their graphics memory', () => {
+    const props = renderPanel();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Walls of the selected cave' }));
+
+    expect(props.onMeshVisibleChange).toHaveBeenCalledWith(false);
+  });
+
+  it('says how big a mesh is while it is still arriving, not only once it is there', () => {
+    // The ordinary export is a few hundred kilobytes and the case this was built for is fifty
+    // megabytes; a viewer waiting on the second one is owed the difference before it lands.
+    renderPanel({
+      meshState: {
+        status: 'loading',
+        name: 'Coiba Mare',
+        triangleCount: 1234567,
+        precisionLost: false,
+      },
+    });
+
+    expect(screen.getByTestId('scene3d-mesh-status').textContent).toMatch(/1,234,567 triangles/);
+  });
+
+  it('tells a viewer to pick a cave rather than leaving the switch explaining nothing', () => {
+    renderPanel({ meshState: EMPTY_SURVEY_MESH_3D_STATE });
+
+    expect(screen.getByTestId('scene3d-mesh-status').textContent).toMatch(/Pick a cave/);
+  });
+
+  it('says a conversion has not finished instead of claiming the cave has no walls', () => {
+    renderPanel({ meshState: { status: 'converting', name: 'Coiba Mare', precisionLost: false } });
+
+    const said = screen.getByTestId('scene3d-mesh-status').textContent ?? '';
+    expect(said).toMatch(/still being converted/);
+    // The two states are genuinely different answers and must not read as the same one.
+    expect(said).not.toMatch(/No wall model/);
+  });
+
+  it("gives the server's own reason when a conversion failed, rather than a blank refusal", () => {
+    renderPanel({
+      meshState: {
+        status: 'failed',
+        name: 'Coiba Mare',
+        precisionLost: false,
+        message: 'This is not a binary STL.',
+      },
+    });
+
+    expect(screen.getByTestId('scene3d-mesh-status').textContent).toMatch(
+      /This is not a binary STL\./,
+    );
+  });
+
+  it('warns that a drawn mesh came from a file that had already lost detail', () => {
+    renderPanel({
+      meshState: { status: 'drawn', name: 'Coiba Mare', triangleCount: 12, precisionLost: true },
+    });
+
+    expect(screen.getByTestId('scene3d-mesh-precision').textContent).toMatch(/local origin/);
   });
 });

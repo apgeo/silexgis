@@ -5,6 +5,7 @@ import type { TablePaginationConfig } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import {
+  surveyModelReadableByViewer,
   useCave,
   useCaves,
   useEntrances,
@@ -135,7 +136,10 @@ function Viewer3dPanel() {
   const { data: cave } = useCave(caveId ?? undefined);
   const { data: models } = useSurveyModels(caveId ?? undefined);
   const { data: entrances } = useEntrances(caveId ?? undefined);
-  const model = models?.[0];
+  // A cave whose models are all wall meshes has nothing for the survey viewer, and handing it one
+  // would produce a parse failure instead of the empty panel that is the truth. Which formats it
+  // can read is decided in one place, because this window is not the only thing that asks.
+  const model = models?.find(surveyModelReadableByViewer);
 
   // Clicking an entrance label in the 3D scene pans the main window's map there.
   // Survey labels and DB entrance names only sometimes agree, so fall back to the

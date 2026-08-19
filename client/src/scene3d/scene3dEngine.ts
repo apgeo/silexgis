@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import type { Altitude3DPlacement } from './altitude3d.ts';
 import type { Scene3DContextLossState } from './contextLoss.ts';
 
 // The contract between the application and whatever draws the 3D scene.
@@ -25,9 +26,9 @@ import type { Scene3DContextLossState } from './contextLoss.ts';
 //     putting it in the engine contract would move product policy behind the seam.
 //
 // Members are grouped so that an implementation can honestly declare which groups it satisfies.
-// Today's implementation satisfies `Scene3DCore` (lifecycle, imagery, camera, coordinates,
-// picking, vector sources, the ground surface and its elevation); model loading is declared here
-// and is not implemented yet, so no code claims to provide it.
+// `Scene3DCore` names the groups something really provides, and today that is all of them:
+// lifecycle, imagery, camera, coordinates, picking, vector sources, the ground surface, its
+// elevation, and loaded models.
 
 /** A position on the globe: degrees, plus metres above the WGS84 ellipsoid. */
 export interface Scene3DPosition {
@@ -522,19 +523,92 @@ export interface Scene3DTerrain {
   groundHeight(longitude: number, latitude: number): number;
 }
 
-// ---- models (declared, not implemented yet) ----------------------------------
+// ---- models -------------------------------------------------------------------
 
-export interface Scene3DModelOptions {
-  url: string;
-  /** Where the model's own origin sits on the globe. */
-  origin: Scene3DPosition;
-  headingDegrees?: number;
+/**
+ * Where a model's own origin sits, in the terms a survey states rather than the terms the scene
+ * draws in.
+ *
+ * A converted survey mesh holds nothing but metres offset from a single point, so this is the
+ * whole of what places it. Two things about the numbers matter:
+ *
+ *   * `altitudeM` is a SURVEYED altitude — metres above the datum the survey was recorded against
+ *     — and not a height above the ellipsoid. What height it is drawn at is the altitude placement
+ *     rule's answer, which changes when an elevation model is attached or dropped, so it is
+ *     resolved by the scene on every placement rather than baked in by the caller.
+ *   * There is no heading. A converted mesh has already had the turn from its source grid's north
+ *     onto true north applied to its vertices, and turning it a second time here would be a second
+ *     rotation, not a correction. The model is drawn with its own up along the local up and its own
+ *     north along true north, and that is the whole of its orientation.
+ */
+export interface Scene3DModelAnchor {
+  longitude: number;
+  latitude: number;
+  /** Surveyed altitude of the model's own zero point, in metres above the survey's datum. */
+  altitudeM: number;
+  /**
+   * Surveyed altitude of the highest point of the cave this model belongs to — what the anchored
+   * rendering hangs the whole cave from, so that the mesh and the survey lines of one cave stay
+   * together. Omitted when the cave's top is not known, in which case the model's own origin is
+   * what hangs from the surface.
+   */
+  surveyTopAltitudeM?: number;
 }
 
+export interface Scene3DModelOptions {
+  /** Address of a self-contained binary glTF; the scene fetches it, the caller does not. */
+  url: string;
+  anchor: Scene3DModelAnchor;
+  /**
+   * How surveyed altitudes become scene heights, as it stands at the moment of loading. It is
+   * asked for here rather than defaulted because a model loaded into a scene that already has
+   * relief must not appear at the anchored height first and jump afterwards.
+   */
+  placement: Altitude3DPlacement;
+  /** Whether it is drawn once loaded; a model can be loaded hidden. Defaults to true. */
+  visible?: boolean;
+}
+
+/**
+ * What is happening to a model under an id.
+ *
+ * A survey mesh is tens of megabytes and takes a visible amount of time, so "asked for" and "on
+ * screen" are genuinely different states and the chrome has to be able to tell them apart —
+ * including telling them from the state where the file could not be read at all, which is a
+ * sentence for the viewer rather than a silently empty scene.
+ */
+export type Scene3DModelStatus = 'loading' | 'loaded' | 'failed';
+
 export interface Scene3DModels {
+  /**
+   * Loads a model under a caller-chosen id, replacing whatever that id held.
+   *
+   * Resolves once it is in the scene, and rejects when it could not be read — which the caller is
+   * expected to turn into a visible explanation rather than a scene that quietly shows nothing.
+   * Asking again for the URL already under that id does not fetch it a second time; it re-places
+   * the model that is already there, because a survey mesh can be a hundred megabytes of graphics
+   * memory and re-reading one to move it a few metres is not a thing to do by accident.
+   */
   loadModel(id: string, options: Scene3DModelOptions): Promise<void>;
+  /**
+   * Takes a model out of the scene and releases its graphics memory. This is a genuine unload and
+   * not a hidden object: the memory a survey mesh holds is the entire reason a viewer would turn
+   * one off. An id that holds nothing is not an error, and a load still in flight under that id is
+   * abandoned rather than allowed to land.
+   */
   removeModel(id: string): void;
+  /** Draws or stops drawing one model, keeping it loaded. Cheap, and not an unload. */
   setModelVisible(id: string, visible: boolean): void;
+  /**
+   * Re-places every model in the scene against a new answer to the altitude placement rule.
+   *
+   * The ground changing under a model is the one event that moves it without anything having
+   * replaced it, and the answer is arithmetic on an anchor rather than anything in the file — so
+   * this moves what is already loaded and never re-reads it.
+   */
+  setModelPlacement(placement: Altitude3DPlacement): void;
+  /** What is happening to the model under an id, or undefined when that id holds nothing. */
+  modelStatus(id: string): Scene3DModelStatus | undefined;
 }
 
 // ---- the whole surface, and the part that exists today -----------------------
@@ -554,8 +628,12 @@ export interface Scene3DEngine
 /**
  * The part of the contract that is implemented. It is a separate name rather than a set of
  * optional members so the compiler keeps telling the truth about what a caller can rely on: code
- * written against `Scene3DCore` compiles against the real scene, and code that reaches for model
- * loading fails to compile until that group is built.
+ * written against `Scene3DCore` compiles against the real scene, and code that reaches for a group
+ * that has not been built fails to compile rather than failing at runtime.
+ *
+ * It currently names every group, which is a statement that the implementation is complete rather
+ * than a reason to delete the distinction: the next group added to the contract is declared here
+ * only once something provides it.
  */
 export type Scene3DCore = Scene3DLifecycle &
   Scene3DImagery &
@@ -564,4 +642,5 @@ export type Scene3DCore = Scene3DLifecycle &
   Scene3DPicking &
   Scene3DVectorSources &
   Scene3DSurface &
-  Scene3DTerrain;
+  Scene3DTerrain &
+  Scene3DModels;
