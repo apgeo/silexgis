@@ -184,6 +184,9 @@ export default function TripSections({ trip, canEdit }: { trip: TripLogInfo; can
       fieldData: section === 'fieldData' ? bag : null,
       logistics: section === 'logistics' ? bag : null,
       safety: section === 'safety' ? bag : null,
+      // Back as it stands: a write sets every field, so saving one section without it would take
+      // the trip's limit off and put everybody who was waiting on the trip.
+      maxParticipants: trip.maxParticipants,
     };
 
     try {

@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Identity;
 
 namespace SilexGis.Infrastructure.Persistence.Configurations;
@@ -79,6 +80,37 @@ public sealed class TripLogParticipantConfiguration : IEntityTypeConfiguration<T
         // One person, one job, one row — so being the leader and the surveyor is two rows and
         // neither displaces the other.
         builder.HasIndex(x => new { x.TripLogId, x.RoleId, x.CaverId }).IsUnique();
+    }
+}
+
+public sealed class TripInvitationConfiguration : IEntityTypeConfiguration<TripInvitation>
+{
+    public void Configure(EntityTypeBuilder<TripInvitation> builder)
+    {
+        builder.ToTable("trip_invitations");
+        // The remark beside an answer, bounded to the same length a roster remark gets so the
+        // two surfaces never disagree about what fits.
+        builder.Property(x => x.Note).HasMaxLength(TripInvitationRules.MaxNoteLength);
+        // Stored as its number, which is what makes "invited and silent" a value with a column
+        // behind it rather than a null standing in for two different facts.
+        builder.Property(x => x.Response).HasConversion<short>();
+        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        // Cascade, and deliberately not the Restrict the roster above uses. Being named on a
+        // trip is a fact about what happened and must survive the roster being tidied, so that
+        // row refuses to go; having once been asked whether you were coming is not, and
+        // somebody who only ever declined an invitation must not thereby become undeletable.
+        builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Cascade);
+        // The people who did the asking and the writing-down are attribution, so a closed
+        // account leaves the answer standing and takes only the name off it.
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.InvitedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.RespondedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(x => x.TripLogId);
+        builder.HasIndex(x => x.CaverId);
+        // One person, one trip, one standing answer — so changing your mind rewrites the answer
+        // you already gave instead of leaving you holding two that disagree.
+        builder.HasIndex(x => new { x.TripLogId, x.CaverId }).IsUnique();
     }
 }
 

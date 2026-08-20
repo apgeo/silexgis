@@ -5,6 +5,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.ResLinks;
+using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -222,6 +223,63 @@ public sealed class DemoSeedIdempotencyTests : IAsyncLifetime
         trips.Count.ShouldBe(members);
         trips.ShouldContain(t => t.Geom != null);
         trips.ShouldContain(t => t.DepthReachedM != null);
+    }
+
+    /// <summary>
+    /// The same, for who was asked on the trip still being planned and what each of them said.
+    ///
+    /// The one shape this dataset exists to show is a trip with more yeses than places, so that a
+    /// surface which ignored the limit shows everybody on a trip that has room for three. A block
+    /// that stopped topping up — widened to "any answer on any trip", or gated on the limit
+    /// already being set — would leave every installation that ran the earlier seeder showing an
+    /// empty list, which is indistinguishable from a broken route. The state is built by removing
+    /// the answers and the limit together, because they are one fact about one trip.
+    /// </summary>
+    [Fact]
+    public async Task A_database_seeded_before_the_trips_answers_existed_gains_them_on_the_next_run()
+    {
+        await using (var db = CreateContext())
+        {
+            await DemoSeeder.SeedAsync(db, Owner);
+        }
+
+        int answers;
+        await using (var strip = CreateContext())
+        {
+            answers = await strip.TripInvitations.CountAsync();
+            answers.ShouldBeGreaterThan(0);
+
+            await strip.Database.ExecuteSqlRawAsync("DELETE FROM trip_invitations");
+            await strip.Database.ExecuteSqlRawAsync(
+                "UPDATE trip_logs SET max_participants = NULL");
+        }
+
+        await using (var again = CreateContext())
+        {
+            await DemoSeeder.SeedAsync(again, Owner);
+        }
+
+        await using var read = CreateContext();
+        (await read.TripInvitations.CountAsync()).ShouldBe(answers);
+
+        // And they are back in the shape the block exists to show: one trip, a stated limit, and
+        // more people saying they are coming than there is room for, so somebody is waiting.
+        var trip = await read.TripLogs
+            .Where(t => t.MaxParticipants != null)
+            .Select(t => new { t.Id, t.MaxParticipants })
+            .SingleAsync();
+        trip.MaxParticipants.ShouldNotBeNull();
+
+        var rows = await read.TripInvitations.Where(x => x.TripLogId == trip.Id).ToListAsync();
+        rows.Count(x => x.Response == TripInvitationResponse.Yes)
+            .ShouldBeGreaterThan(trip.MaxParticipants!.Value);
+
+        var places = TripAttendance.Rank(rows, trip.MaxParticipants);
+        places.Values.ShouldContain(p => !p.Attending);
+
+        // Somebody was picked out of the order, which is the part of the feature a list of yeses
+        // in order alone would show as working when it was not.
+        rows.ShouldContain(x => x.SelectedAt != null);
     }
 
     /// <summary>

@@ -80,6 +80,7 @@ public static class DemoSeeder
         // already seen it.
         await SeedExpeditionRosterAsync(db, ct);
         await SeedExpeditionTripsAsync(db, ct);
+        await SeedTripInvitationsAsync(db, ct);
         await db.SaveChangesAsync(ct);
 
         if (documents is not null && fileStore is not null)
@@ -690,6 +691,12 @@ public static class DemoSeeder
     private const string FortnightCampName = "Demo: Bihor summer camp";
 
     /// <summary>
+    /// The one trip still being planned, named once so the block that seeds who was asked on it
+    /// finds it by name rather than by which state it happens to be in.
+    /// </summary>
+    private const string PlannedTripTitle = "Demo: training weekend";
+
+    /// <summary>
     /// What the trips done from the long camp are called, so the block that joins them to it finds
     /// them by name rather than by guessing from their dates.
     /// </summary>
@@ -815,6 +822,125 @@ public static class DemoSeeder
                 ExpeditionId = camp.Id,
                 TripLogId = tripId,
                 JoinedAt = joinedAt,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Who was asked on the trip still being planned, and what each of them has said.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Against the one trip that is still a draft, because that is the only one where the question
+    /// is live: on a trip already run, who was asked is history and who was there is the roster.
+    /// It is given room for three against five yeses, so the two beyond the limit are waiting and
+    /// a surface that ignored the limit shows five people on a trip for three.
+    /// </para>
+    /// <para>
+    /// Every answer in the vocabulary appears, including somebody asked who has not replied, so a
+    /// reading that quietly counted silence as one of the real answers has a row to get wrong. One
+    /// person answered without ever being asked — the ordinary case of somebody seeing a trip
+    /// their club is running — and one was picked out of the order by whoever runs the trip, from
+    /// behind the limit, so the pick displaces somebody and the order underneath it stays visible.
+    /// </para>
+    /// <para>
+    /// The stamps are minutes apart and fixed rather than relative to now, because the order they
+    /// give is what decides who is on the trip: a demo whose queue came out differently on
+    /// different machines would not be showing the feature at all. The person who changed their
+    /// mind carries the later stamp, which is what puts them behind everybody who answered in
+    /// between.
+    /// </para>
+    /// <para>
+    /// Guarded per row rather than on any one of them, so a database seeded before this block
+    /// existed picks the answers up on the next run, and so an answer added here later reaches an
+    /// installation that already holds the rest.
+    /// </para>
+    /// </remarks>
+    private static async Task SeedTripInvitationsAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var trip = await db.TripLogs.FirstOrDefaultAsync(t => t.Title == PlannedTripTitle, ct);
+        if (trip is null)
+        {
+            return;
+        }
+
+        // Set where nothing has been said about it rather than unconditionally, so an installation
+        // whose own limit was edited on the demo trip keeps what it chose.
+        trip.MaxParticipants ??= 3;
+
+        // Four more people than the trips themselves use, added here and guarded by name, because
+        // a list of who is considering a trip is only worth drawing when there are more people on
+        // it than there is room for — and a demo where the limit was never reached would show a
+        // surface that ignored the limit as working perfectly. They are ordinary directory
+        // entries with no account, which is what most of a club's roster is.
+        var caverIds = new List<Guid>();
+        foreach (var fullName in new[]
+        {
+            "Ana Demo", "Bogdan Demo", "Cristina Demo", "Dan Demo",
+            "Elena Demo", "Florin Demo", "Gabriela Demo", "Horia Demo",
+        })
+        {
+            var existing = await db.Cavers
+                .Where(c => c.FullName == fullName)
+                .Select(c => (Guid?)c.Id)
+                .FirstOrDefaultAsync(ct);
+            if (existing is not null)
+            {
+                caverIds.Add(existing.Value);
+                continue;
+            }
+
+            var caver = new Caver { FullName = fullName };
+            db.Cavers.Add(caver);
+            caverIds.Add(caver.Id);
+        }
+
+        var asked = new DateTimeOffset(2026, 5, 30, 9, 0, 0, TimeSpan.Zero);
+        var answered = new DateTimeOffset(2026, 6, 1, 18, 0, 0, TimeSpan.Zero);
+
+        // Caver, what they said, how many minutes after the first answer they said it, whether
+        // anybody asked them, and whether they were picked.
+        var answers = new (int Caver, TripInvitationResponse Response, int Minutes, bool Invited, bool Picked)[]
+        {
+            (0, TripInvitationResponse.Yes, 0, true, false),
+            (1, TripInvitationResponse.Yes, 20, true, false),
+            (2, TripInvitationResponse.No, 35, true, false),
+            (3, TripInvitationResponse.Yes, 50, true, true),
+
+            // Asked and silent, which is a state somebody reads and acts on rather than an absence.
+            (4, TripInvitationResponse.Pending, -1, true, false),
+
+            // Said maybe first and yes much later, so their place in the queue is where the yes
+            // put them and not where the maybe did.
+            (5, TripInvitationResponse.Yes, 400, true, false),
+
+            // Nobody asked this one; they saw the trip and said they were coming.
+            (6, TripInvitationResponse.Yes, 90, false, false),
+
+            (7, TripInvitationResponse.Maybe, 120, true, false),
+        };
+
+        foreach (var (caver, response, minutes, invited, picked) in answers)
+        {
+            var caverId = caverIds[caver];
+            if (await db.TripInvitations.AnyAsync(x => x.TripLogId == trip.Id && x.CaverId == caverId, ct))
+            {
+                continue;
+            }
+
+            db.TripInvitations.Add(new TripInvitation
+            {
+                TripLogId = trip.Id,
+                CaverId = caverId,
+                Response = response,
+                InvitedAt = invited ? asked : null,
+                // Stamped only where there is an answer to stamp: somebody who has not replied has
+                // not replied at a time, and a date here would put them in the queue.
+                RespondedAt = minutes < 0 ? null : answered.AddMinutes(minutes),
+                SelectedAt = picked ? answered.AddMinutes(600) : null,
+                Note = response == TripInvitationResponse.Maybe
+                    ? "Only if we are back before dark."
+                    : null,
             });
         }
     }

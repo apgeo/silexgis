@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260819191532_TripInvitations")]
+    partial class TripInvitations
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4774,10 +4777,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<int?>("LogisticsSchemaVersion")
                         .HasColumnType("integer")
                         .HasColumnName("logistics_schema_version");
-
-                    b.Property<int?>("MaxParticipants")
-                        .HasColumnType("integer")
-                        .HasColumnName("max_participants");
 
                     b.Property<Guid?>("OrganizingCavingGroupId")
                         .HasColumnType("uuid")

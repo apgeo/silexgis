@@ -337,6 +337,11 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
       fieldData: null,
       logistics: null,
       safety: null,
+      // Echoed back for the reason the measured facts above are. How many the trip has room for
+      // is not on this form, and a write sets every field, so sending nothing here would take a
+      // trip's limit off every time somebody corrected its title — and an unlimited trip is
+      // exactly what "no limit" means, so nobody would see anything go wrong.
+      maxParticipants: trip?.maxParticipants ?? null,
     };
 
     try {

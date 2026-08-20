@@ -295,6 +295,115 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>
+    /// Being asked about a trip is not being on one. Somebody who only ever said no left no
+    /// history to protect, and a list that exists to be sent to half a club would otherwise make
+    /// most of the directory permanent the first time anybody declined — so the delete guard is
+    /// deliberately not extended to these rows and the answer goes with the person. Asserted
+    /// beside the delete that is still refused, so a guard that stopped refusing anything at all
+    /// would fail here rather than look more permissive.
+    /// </summary>
+    [Fact]
+    public async Task Having_been_asked_about_a_trip_does_not_make_a_person_undeletable()
+    {
+        var tripId = await CreateTripWithGuestAsync(editor, $"Went {suffix}");
+        var onlyAskedId = await CreateCaverAsync($"Only Asked {suffix}");
+
+        Guid wentId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            wentId = await db.Cavers.Where(c => c.FullName == $"Went {suffix}").Select(c => c.Id).SingleAsync();
+            db.TripInvitations.Add(new TripInvitation
+            {
+                TripLogId = tripId,
+                CaverId = onlyAskedId,
+                Response = TripInvitationResponse.No,
+                RespondedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var refused = await admin.DeleteAsync($"/api/v1/cavers/{wentId}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await refused.Content.ReadAsStringAsync()).ShouldContain("caver.referenced_by_trips");
+
+        (await admin.DeleteAsync($"/api/v1/cavers/{onlyAskedId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripInvitations.CountAsync(x => x.CaverId == onlyAskedId)).ShouldBe(0);
+        }
+    }
+
+    /// <summary>
+    /// A person holds one standing answer about one trip, so a merge cannot carry both entries'
+    /// answers over the way it carries both entries' camp stays — two rows saying different things
+    /// is exactly what that uniqueness exists to prevent. Where both answered the same trip the
+    /// survivor's answer stands and the duplicate's goes; where only the duplicate answered, the
+    /// answer follows the person rather than being dropped with the entry.
+    /// </summary>
+    [Fact]
+    public async Task Merging_two_entries_leaves_one_answer_about_each_trip_and_it_is_the_survivor_s()
+    {
+        var bothId = await CreateTripWithGuestAsync(editor, $"Both Answered {suffix}");
+        var onlyDuplicateId = await CreateTripWithGuestAsync(editor, $"Duplicate Answered {suffix}");
+        var duplicateId = await CreateCaverAsync($"Both Answered {suffix} (2)");
+
+        Guid survivorId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            survivorId = await db.Cavers.Where(c => c.FullName == $"Both Answered {suffix}")
+                .Select(c => c.Id).SingleAsync();
+
+            db.TripInvitations.Add(new TripInvitation
+            {
+                TripLogId = bothId,
+                CaverId = survivorId,
+                Response = TripInvitationResponse.Yes,
+                Note = "deliberately recorded",
+            });
+            db.TripInvitations.Add(new TripInvitation
+            {
+                TripLogId = bothId,
+                CaverId = duplicateId,
+                Response = TripInvitationResponse.Maybe,
+                Note = "half-remembered",
+            });
+            db.TripInvitations.Add(new TripInvitation
+            {
+                TripLogId = onlyDuplicateId,
+                CaverId = duplicateId,
+                Response = TripInvitationResponse.No,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var merged = await keeper.PostAsJsonAsync($"/api/v1/cavers/{survivorId}/merge", new
+        {
+            sourceCaverId = duplicateId,
+        });
+        merged.StatusCode.ShouldBe(HttpStatusCode.OK, await merged.Content.ReadAsStringAsync());
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var rows = await db.TripInvitations.AsNoTracking()
+                .Where(x => x.TripLogId == bothId || x.TripLogId == onlyDuplicateId)
+                .ToListAsync();
+
+            rows.ShouldAllBe(x => x.CaverId == survivorId);
+            rows.Count.ShouldBe(2);
+
+            var contested = rows.Single(x => x.TripLogId == bothId);
+            contested.Response.ShouldBe(TripInvitationResponse.Yes);
+            contested.Note.ShouldBe("deliberately recorded");
+            rows.Single(x => x.TripLogId == onlyDuplicateId).Response.ShouldBe(TripInvitationResponse.No);
+        }
+    }
+
+    /// <summary>
     /// Being on a camp's roster blocks a delete for the same reason being on a trip does, and the
     /// refusal is asserted beside the delete it does not refuse: a guard that answered "no" to
     /// everything would pass a test that only checked the refusal.

@@ -130,7 +130,13 @@ public sealed record TripLogDto(
     // count and never an identifier: the number lets a surface say the list is short instead of
     // letting it read as the whole truth, and it says nothing about which caves are missing —
     // an identifier is exactly what the withholding was for. Zero for a caller shown everything.
-    int CavesWithheld);
+    int CavesWithheld,
+    // How many people the trip has room for, null when it states no limit — which is what a trip
+    // has until somebody says otherwise. It never refuses a write: somebody saying they are coming
+    // to a full trip is recorded as having said so, and who is on it and who is waiting is worked
+    // out from the answers whenever it is asked rather than written down anywhere. Appended, like
+    // everything before it.
+    int? MaxParticipants);
 
 /// <summary>
 /// The audience a trip this caller plans would get if the request names none.
@@ -189,7 +195,11 @@ public sealed record TripLogWriteRequest(
     // under.
     JsonElement? FieldData,
     JsonElement? Logistics,
-    JsonElement? Safety);
+    JsonElement? Safety,
+    // How many the trip has room for, and null means it states no limit rather than "not editing
+    // it" — there is nothing else null could mean for a number whose absence is the unlimited
+    // case, so clearing the field is how a limit is removed. Appended, like the run above it.
+    int? MaxParticipants);
 
 /// <summary>The state to move a trip log into.</summary>
 /// <remarks>
@@ -260,6 +270,12 @@ public sealed class TripLogWriteRequestValidator : AbstractValidator<TripLogWrit
             .WithMessage("Logistics must be a JSON object.");
         RuleFor(x => x.Safety).Must(BeAnObject).When(x => x.Safety is not null)
             .WithMessage("Safety must be a JSON object.");
+        // A limit of nought is not a small trip, it is a refusal expressed as a number, and a
+        // negative one is nothing at all. Absent is how a trip says it has no limit.
+        RuleFor(x => x.MaxParticipants).GreaterThan(0)
+            .When(x => x.MaxParticipants is not null)
+            .WithMessage("A trip with a limit has room for at least one person.");
+
         RuleFor(x => x.Participants).NotNull();
         // Proposers are optional (a trip needn't record who proposed it); a null list is
         // treated as empty. Each supplied entry still follows the shared identity rules.

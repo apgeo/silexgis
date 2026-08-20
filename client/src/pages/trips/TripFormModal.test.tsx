@@ -143,6 +143,17 @@ describe('TripFormModal dates', () => {
     expect(body.hadIncident).toBe(true);
   });
 
+  it("keeps the trip's room for people through a save that never showed it", async () => {
+    // The write sets the whole trip, and this form draws no control for the limit, so leaving it
+    // out of the body clears it. Nothing would look wrong afterwards — an unlimited trip is what
+    // no limit means — while everybody who was waiting for a place is silently on the trip.
+    show(trip({ maxParticipants: 8 }));
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Digging weekend (4)' } });
+
+    const body = await savedBody(updateTrip);
+    expect(body.maxParticipants).toBe(8);
+  });
+
   it('mentions no section at all, rather than three empty ones', async () => {
     // Absent and empty are different answers on the wire: absent leaves the stored section
     // alone, empty clears it. This form draws none of the three, so a title correction here

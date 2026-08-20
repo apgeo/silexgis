@@ -252,6 +252,7 @@ try
     api.MapResLinkRelationTypeEndpoints();
     api.MapGeoreferencedMapEndpoints();
     api.MapTripLogEndpoints();
+    api.MapTripInvitationEndpoints();
     api.MapExpeditionEndpoints();
     api.MapExpeditionReportEndpoints();
     api.MapExpeditionMapEndpoints();

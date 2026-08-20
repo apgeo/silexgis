@@ -141,6 +141,20 @@ describe('TripSections', () => {
     expect(body.caveIds).toBeNull();
   });
 
+  it("keeps the trip's room for people when a section is saved", async () => {
+    // The section save sends the whole trip, and it draws no control for the limit, so omitting
+    // it clears the trip's room for people. Nothing on screen would say so — an unlimited trip
+    // is what no limit means — while everybody who was waiting for a place is silently on it.
+    show(trip({ maxParticipants: 8, fieldData: { conditions: 'wet' } as never }), true);
+    openSection('Field data');
+
+    fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+
+    const body = (updateTrip.mock.calls[0][0] as { body: TripLogWrite }).body;
+    expect(body.maxParticipants).toBe(8);
+  });
+
   it('shows a person the schema names by their name, and offers the roster rather than an identifier', () => {
     // Read-only first: an identifier is not a person, and a reader shown a raw one learns
     // nothing the field was recorded to tell them.

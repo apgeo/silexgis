@@ -613,6 +613,12 @@ public static class TripLogEndpoints
         trip.SurveyStations = request.SurveyStations;
         trip.RopeMetres = request.RopeMetres;
         trip.HadIncident = request.HadIncident;
+        // Written straight through, and null clears it: a trip with no stated limit is the ordinary
+        // case, so there is nothing else an absent number could be asking for. It is never checked
+        // against how many people have said they are coming — lowering a limit below the answers
+        // already given moves people to waiting, which is what a limit is for, and refusing the
+        // edit would leave whoever runs the trip unable to say how many places there really are.
+        trip.MaxParticipants = request.MaxParticipants;
         trip.OrganizingCavingGroupId = request.OrganizingCavingGroupId;
         trip.Geom = request.Geom?.ToGeometryOrNull();
         // An audience the request does not name is left exactly as it stands. The only place a
@@ -775,12 +781,13 @@ public static class TripLogEndpoints
     }
 
     /// <summary>
-    /// The two roles the trip write path names by itself: everyone a trip records was either
+    /// The two roles a trip names by itself, wherever it writes its list of people: everyone a
+    /// trip records was either
     /// simply there or put it forward, and both are shipped rows precisely so this can rely on
     /// them existing. Missing means the vocabulary was never seeded, and a write that stored
     /// nobody while answering 200 is worse than one that fails.
     /// </summary>
-    private static async Task<(long Participant, long Proposer)> ShippedRosterRolesAsync(
+    internal static async Task<(long Participant, long Proposer)> ShippedRosterRolesAsync(
         SilexGisDbContext db, CancellationToken ct)
     {
         var ids = await db.TripParticipantRoles.AsNoTracking()
@@ -1212,7 +1219,8 @@ public static class TripLogEndpoints
                 safety is null ? null : JsonSerializer.Deserialize<JsonElement>(safety),
                 safetyVersion,
                 campOfTrip.TryGetValue(trip.Id, out var campId) ? campId : null,
-                named.Count(id => !disclosableCaves.Contains(id)));
+                named.Count(id => !disclosableCaves.Contains(id)),
+                trip.MaxParticipants);
         }
     }
 }

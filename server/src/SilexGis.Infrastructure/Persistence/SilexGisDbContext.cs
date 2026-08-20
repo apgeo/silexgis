@@ -120,6 +120,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<TripLogParticipant> TripLogParticipants => Set<TripLogParticipant>();
 
+    public DbSet<TripInvitation> TripInvitations => Set<TripInvitation>();
+
     public DbSet<Expedition> Expeditions => Set<Expedition>();
 
     public DbSet<ExpeditionTrip> ExpeditionTrips => Set<ExpeditionTrip>();

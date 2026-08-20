@@ -107,6 +107,28 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
     /// <summary>The caving group that organized the trip, when one did.</summary>
     public Guid? OrganizingCavingGroupId { get; set; }
 
+    /// <summary>
+    /// How many people the trip has room for, or null when it has no stated limit — which is
+    /// what a trip has until somebody says otherwise.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It never refuses a write. Nothing is rejected for exceeding it: somebody who says they
+    /// are coming to a full trip is recorded as having said so, because who else wanted to come
+    /// and in what order they said it is precisely the record a limit makes worth keeping, and a
+    /// write refused at the door destroys it. Whoever runs the trip then has something to choose
+    /// from instead of a silence.
+    /// </para>
+    /// <para>
+    /// Who is in and who is waiting is therefore worked out from the answers whenever it is
+    /// asked, by taking them in the order they were given and counting up to this number. It is
+    /// not written down anywhere: a stored place in a queue is a fact that begins disagreeing
+    /// with the answers the moment somebody changes their mind, and there would then be two
+    /// records of the same thing with no way to tell which was stale.
+    /// </para>
+    /// </remarks>
+    public int? MaxParticipants { get; set; }
+
     public Geometry? Geom { get; set; }
 
     public Guid OwnerUserId { get; set; }

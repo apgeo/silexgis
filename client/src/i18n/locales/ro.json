@@ -1026,7 +1026,8 @@
       "TripLogParticipant": "Participant",
       "Expedition": "Expediție",
       "ExpeditionTrip": "Tură din expediție",
-      "ExpeditionRosterEntry": "Participant la expediție"
+      "ExpeditionRosterEntry": "Participant la expediție",
+      "TripInvitation": "Invitație"
     },
     "field": {
       "name": "Nume",

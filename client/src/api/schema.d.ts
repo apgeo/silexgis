@@ -8858,6 +8858,240 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{tripLogId}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everybody on this trip's list with what they have said, in the order they answered in. Takes the right to read the trip and nothing besides. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripInvitationListDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Puts somebody on this trip's list (Write permission on the trip). Asking again somebody already on it changes nothing about what they have said. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripInvitationCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripInvitationDto"];
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripInvitationDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/invitations/{caverId}/response": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Records what one person says about coming. Anyone who may read the trip answers for themselves; answering for somebody else takes the right to write the trip. Somebody who was never asked may answer, which puts them on the list. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    caverId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripInvitationResponseRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripInvitationDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/invitations/{caverId}/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Picks one person out for the trip, or puts them back in the order (Write permission on the trip). A picked person is on the trip wherever they stand in the order people answered in, and the order itself is unchanged. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    caverId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripInvitationSelectionRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripInvitationDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/invitations/{caverId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Takes somebody off this trip's list entirely, answer and all (Write permission on the trip). For a person put on it by mistake — recording a "no" in their name instead would be writing down words they never said. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    caverId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/invitations/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Writes everybody holding a place on the trip into its list of people (Write permission on the trip), once the trip has happened. Nobody is told: everybody written in was told when they were asked. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripPromotionDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expeditions": {
         parameters: {
             query?: never;
@@ -15620,6 +15854,59 @@ export interface components {
             /** Format: uuid */
             expeditionId?: null | string;
         };
+        TripInvitationCreateRequest: {
+            /** Format: uuid */
+            caverId: string;
+        };
+        TripInvitationDto: {
+            /** Format: int64 */
+            id: number;
+            /** Format: uuid */
+            tripLogId: string;
+            /** Format: uuid */
+            caverId: string;
+            caverName: string;
+            response: components["schemas"]["TripInvitationResponse"];
+            /** Format: uuid */
+            invitedByUserId?: null | string;
+            /** Format: date-time */
+            invitedAt?: null | string;
+            /** Format: date-time */
+            respondedAt?: null | string;
+            /** Format: uuid */
+            respondedByUserId?: null | string;
+            /** Format: date-time */
+            selectedAt?: null | string;
+            note?: null | string;
+            mayAnswer: boolean;
+            /** Format: int32 */
+            place?: null | number;
+            attending: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        TripInvitationListDto: {
+            /** Format: uuid */
+            tripLogId: string;
+            /** Format: int32 */
+            maxParticipants?: null | number;
+            /** Format: int32 */
+            attendingCount: number;
+            /** Format: int32 */
+            waitingCount: number;
+            invitations: components["schemas"]["TripInvitationDto"][];
+        };
+        /** @enum {unknown} */
+        TripInvitationResponse: "pending" | "yes" | "no" | "maybe";
+        TripInvitationResponseRequest: {
+            response?: null | components["schemas"]["TripInvitationResponse"];
+            note?: null | string;
+        };
+        TripInvitationSelectionRequest: {
+            selected?: null | boolean;
+        };
         TripLogDto: {
             /** Format: uuid */
             id: string;
@@ -15678,6 +15965,8 @@ export interface components {
             expeditionId: null | string;
             /** Format: int32 */
             cavesWithheld: number;
+            /** Format: int32 */
+            maxParticipants: null | number;
         };
         TripLogTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];
@@ -15719,6 +16008,8 @@ export interface components {
             fieldData: null | components["schemas"]["JsonElement"];
             logistics: null | components["schemas"]["JsonElement"];
             safety: null | components["schemas"]["JsonElement"];
+            /** Format: int32 */
+            maxParticipants: null | number;
         };
         TripParticipantDto: {
             /** Format: uuid */
@@ -15768,6 +16059,16 @@ export interface components {
             /** Format: uuid */
             cavingGroupId: null | string;
             cavingGroupName: null | string;
+        };
+        TripPromotionDto: {
+            /** Format: uuid */
+            tripLogId: string;
+            /** Format: int32 */
+            attending: number;
+            /** Format: int32 */
+            promoted: number;
+            /** Format: int32 */
+            alreadyNamed: number;
         };
         TripReportSavedDto: {
             /** Format: uuid */

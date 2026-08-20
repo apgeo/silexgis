@@ -1026,7 +1026,8 @@
       "TripLogParticipant": "Participant",
       "Expedition": "Expedition",
       "ExpeditionTrip": "Expedition trip",
-      "ExpeditionRosterEntry": "Roster entry"
+      "ExpeditionRosterEntry": "Roster entry",
+      "TripInvitation": "Invitation"
     },
     "field": {
       "name": "Name",
