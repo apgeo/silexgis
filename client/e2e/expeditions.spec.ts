@@ -57,7 +57,11 @@ test('a camp opens at the tab its address names, and keeps it across a reload', 
   const camp = await seededCamp(page);
 
   await gotoRoute(page, `/expeditions/${camp.id}`);
-  await expect(page.getByTestId('expedition-name')).toHaveText(camp.name);
+  // The same wait every other check in this file carries, for the same reason: this is the
+  // first assertion after a sign-in, and a sign-in here is a redirect out to the authorization
+  // server and back. The default few seconds are not enough for that on a loaded machine, and
+  // the failure then reads as a camp page that did not draw its name.
+  await expect(page.getByTestId('expedition-name')).toHaveText(camp.name, { timeout: 15_000 });
   // No tab in the address is the page's own first tab, and the address stays clean.
   await expect(page.getByTestId('expedition-trips-tab')).toBeVisible({ timeout: 15_000 });
 

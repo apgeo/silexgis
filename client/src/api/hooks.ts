@@ -140,6 +140,7 @@ export const queryKeys = {
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
+  tripInvitations: (id: string) => ['trip-logs', 'invitations', id] as const,
   tripReportTemplates: ['trip-report-templates'] as const,
   taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
   tags: (search: string) => ['tags', search] as const,
@@ -1999,6 +2000,27 @@ function useInvalidateTripLogs() {
   return () => void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
 }
 
+/**
+ * The same invalidation, but handed back so a caller can wait for the re-read it starts.
+ *
+ * A write on the trip is checked against the version the caller last *read*, and only a read
+ * records a version. So the moment a write succeeds, the version this caller holds is one behind
+ * the one their own write produced, and a second write sent before the re-read lands is refused
+ * as a conflict — with two saves on the same card a second apart, which is ordinary use, not a
+ * race anybody would think to look for. Refusing it is right: the caller really is writing
+ * against a version that has moved. What is wrong is answering "saved" while that is still true.
+ *
+ * So a write on the trip is not finished until the trip has been read back. The cost is that the
+ * confirmation waits for the read, which takes as long as it takes; the alternative is a second
+ * save that fails for a reason nobody can act on. This would be unnecessary if a write handed
+ * back the version it produced, and it is only needed on the trip's own writes — a write on
+ * something beside the trip carries no precondition on it.
+ */
+function useReadTripLogsBack() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+}
+
 export function useCreateTripLog() {
   const invalidate = useInvalidateTripLogs();
   return useMutation({
@@ -2008,14 +2030,16 @@ export function useCreateTripLog() {
 }
 
 export function useUpdateTripLog() {
-  const invalidate = useInvalidateTripLogs();
+  const readBack = useReadTripLogsBack();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: TripLogWrite }) =>
       unwrap(api.PUT('/api/v1/trip-logs/{id}', { params: { path: { id } }, body })),
     onSuccess: () => {
-      invalidate();
       invalidateHistory();
+      // Handed back rather than started and forgotten: the next write on this trip is checked
+      // against the version this one produced, and only the read records it.
+      return readBack();
     },
   });
 }
@@ -2110,7 +2134,7 @@ export function useKeepTripReport() {
  * the rules refuse comes back as a conflict rather than being prevented here.
  */
 export function useMoveTripLog() {
-  const invalidate = useInvalidateTripLogs();
+  const readBack = useReadTripLogsBack();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: ({ id, state }: { id: string; state: ActivityState }) => {
@@ -2124,8 +2148,176 @@ export function useMoveTripLog() {
       );
     },
     onSuccess: () => {
-      invalidate();
       invalidateHistory();
+      // As on the trip's own update: a move is checked against the version last read, so the
+      // move is not finished until the version it produced has been read.
+      return readBack();
+    },
+  });
+}
+
+export type TripInvitationInfo = components['schemas']['TripInvitationDto'];
+export type TripInvitationList = components['schemas']['TripInvitationListDto'];
+export type TripInvitationAnswer = components['schemas']['TripInvitationResponse'];
+
+/**
+ * Everybody on a trip's list and what each has said, in the order the server put them in.
+ *
+ * Three things on this answer are the server's conclusions and not raw rows: the place each
+ * person holds in the order people answered in, whether they hold one of the trip's places or
+ * are waiting for one, and whether this caller may write an answer for that person. Each has a
+ * rule behind it that the client has no way to evaluate — the ordering skips anybody who has not
+ * said yes, a hand-picked person keeps their place even past the limit, and answering for
+ * somebody else depends on rights over the trip. Rendering them as they arrive is the whole
+ * point; re-deriving any of them here would be a second copy of a rule free to drift from the
+ * one that is enforced.
+ *
+ * The list is deliberately unpaged: a place in an order computed over some of the rows would not
+ * be a place in the order at all.
+ */
+export function useTripInvitations(tripLogId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripInvitations(tripLogId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-logs/{tripLogId}/invitations', {
+          params: { path: { tripLogId: tripLogId! } },
+        }),
+      ),
+    enabled: !!tripLogId && enabled,
+  });
+}
+
+function useInvalidateTripInvitations() {
+  const queryClient = useQueryClient();
+  const invalidateHistory = useInvalidateHistory();
+  return (tripLogId: string) => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tripInvitations(tripLogId) });
+    // A row here is an audit child of the trip, so writing one moves the trip's own timeline.
+    invalidateHistory();
+  };
+}
+
+/**
+ * Puts somebody on the trip's list. The person is named by their entry in the club's directory
+ * and never by a bare name — a list of people to be told about a trip that could hold text
+ * nobody can resolve would be a list nobody can act on — so an id the directory does not know
+ * is refused rather than created.
+ */
+export function useInviteToTrip() {
+  const invalidate = useInvalidateTripInvitations();
+  return useMutation({
+    mutationFn: ({ tripLogId, caverId }: { tripLogId: string; caverId: string }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/invitations', {
+          params: { path: { tripLogId } },
+          body: { caverId },
+        }),
+      ),
+    onSuccess: (_data, { tripLogId }) => invalidate(tripLogId),
+  });
+}
+
+/**
+ * Records what one person says about coming.
+ *
+ * The note travels with the answer and is replaced by it: an answer given without words is an
+ * answer without words, not an answer still wearing the previous one's. So a cleared note is
+ * sent as an explicit absence rather than omitted.
+ */
+export function useAnswerTripInvitation() {
+  const invalidate = useInvalidateTripInvitations();
+  return useMutation({
+    mutationFn: ({
+      tripLogId,
+      caverId,
+      response,
+      note,
+    }: {
+      tripLogId: string;
+      caverId: string;
+      response: TripInvitationAnswer;
+      note: string | null;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/trip-logs/{tripLogId}/invitations/{caverId}/response', {
+          params: { path: { tripLogId, caverId } },
+          body: { response, note },
+        }),
+      ),
+    onSuccess: (_data, { tripLogId }) => invalidate(tripLogId),
+  });
+}
+
+/** Picks one person out for the trip, or puts them back in the order. The order itself is unchanged. */
+export function useSelectForTrip() {
+  const invalidate = useInvalidateTripInvitations();
+  return useMutation({
+    mutationFn: ({
+      tripLogId,
+      caverId,
+      selected,
+    }: {
+      tripLogId: string;
+      caverId: string;
+      selected: boolean;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/trip-logs/{tripLogId}/invitations/{caverId}/selection', {
+          params: { path: { tripLogId, caverId } },
+          body: { selected },
+        }),
+      ),
+    onSuccess: (_data, { tripLogId }) => invalidate(tripLogId),
+  });
+}
+
+/**
+ * Takes somebody off the list entirely, answer and all. For a person put on it by mistake —
+ * recording a "no" in their name instead would be writing down words they never said.
+ */
+export function useRemoveTripInvitation() {
+  const invalidate = useInvalidateTripInvitations();
+  return useMutation({
+    mutationFn: ({ tripLogId, caverId }: { tripLogId: string; caverId: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/trip-logs/{tripLogId}/invitations/{caverId}', {
+          params: { path: { tripLogId, caverId } },
+        }),
+      ),
+    onSuccess: (_data, { tripLogId }) => invalidate(tripLogId),
+  });
+}
+
+export type TripPromotion = components['schemas']['TripPromotionDto'];
+
+/**
+ * Writes everybody holding a place on the trip into the trip's own list of people.
+ *
+ * A deliberate act and not a consequence of the trip having happened: who turned up is not who
+ * said they would, and a roster nobody wrote is one an audit trail cannot account for.
+ *
+ * It moves the trip itself — its people change and its version with them — so the whole trip
+ * prefix is invalidated rather than the list alone, and the re-read is waited for. Leaving the
+ * trip as it was read would let a later save carry the roster somebody saw before this ran, pass
+ * its precondition, and quietly undo every row written here; not waiting would leave the same
+ * window open for as long as the re-read takes, with a confirmation already on screen.
+ */
+export function usePromoteTripInvitations() {
+  const readBack = useReadTripLogsBack();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ tripLogId }: { tripLogId: string }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/invitations/promote', {
+          params: { path: { tripLogId } },
+        }),
+      ),
+    onSuccess: () => {
+      invalidateHistory();
+      // Waited for, as on the trip's own writes: this stamps the trip row, so a save sent
+      // between the confirmation and the re-read would be refused against the version it moved.
+      return readBack();
     },
   });
 }

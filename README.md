@@ -155,6 +155,17 @@ Previous versions:
   up an older trip from the archive corrects the figures instead of leaving a stale flag behind.
   Any of the three can be saved as a spreadsheet, which carries exactly what the screen carried and
   says whose totals they are, because a file gets forwarded and read months later.
+- **A trip that has not happened yet asks people, and the answers keep their own order** — a trip's
+  page has a list of who was asked and what each of them said: coming, not coming, or not answered
+  yet, with a line of their own beside it. Whoever may read the trip answers for themselves; whoever
+  may correct it answers for somebody who phoned in. If the trip has a number of places, the list
+  says how many are taken and how many are waiting, in the order people said yes — first come, and a
+  change of mind goes to the back, because that is what everybody assumes is happening and the
+  alternative has to be explained. The organiser can still hand a place to somebody further down,
+  and that pick does not outlive the answer it was made about. Nobody is written into the trip's
+  roster by saying yes: once the trip has happened, one deliberate act turns everybody holding a
+  place into people who were there, and it tells nobody, because everybody it writes in asked to be
+  there and was told when they were asked.
 - **A trip has a gallery and a cover** — the photographs taken on it, the albums made of them, and a
   headline picture chosen with the same star that names a cave's.
 - **A trip writes itself up** — every trip has a report view: the whole trip laid out as a document,

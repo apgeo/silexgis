@@ -41,6 +41,42 @@ async function fillRange(page: Page, start: string, end: string) {
   await expect(to).toHaveValue(end);
 }
 
+/**
+ * Opens one of the trip page's tabs by its label. The tab is written into the address, so a
+ * section of a trip is a place that can be linked to and reloaded — which is what the flows
+ * below use instead of a click wherever they were reloading the page anyway.
+ */
+async function openTab(page: Page, name: string) {
+  await page.getByRole('tab', { name, exact: true }).click();
+}
+
+/**
+ * Clicks one of the report card's save buttons and waits for that save to be *finished*.
+ *
+ * Finished means two answers, not one. The write itself comes back first; the trip is then read
+ * again, because a write on a trip is checked against the version last read and the version has
+ * just moved — so until the re-read lands, the page cannot write to this trip again and says so
+ * by keeping the button busy. A flow that carried on after the write alone would type into a
+ * card that is still saving and lose the click, which is what this waits out.
+ *
+ * Both waits are set up before the click: an answer that arrives before anything is watching for
+ * it is an answer nothing sees.
+ */
+async function saveSection(page: Page, testId: string) {
+  const written = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' && /\/api\/v1\/trip-logs\//.test(response.url()),
+  );
+  const readBack = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      /\/api\/v1\/trip-logs\/[0-9a-f-]+$/.test(new URL(response.url()).pathname),
+  );
+  await page.getByTestId(testId).click();
+  expect((await written).status()).toBe(200);
+  expect((await readBack).status()).toBe(200);
+}
+
 /** Opens one of the trip report's sections by its collapse header. */
 async function openSection(page: Page, name: string) {
   // By role, not by text: the change history names the same sections in its own list, so a
@@ -110,6 +146,7 @@ test('a trip records what it worked in, and the record survives a reload and can
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tripUrl = page.url();
+  await openTab(page, 'Links');
 
   // A trip that has recorded nothing still offers the two fields a report is expected to
   // state, and does not open onto a wall of the other eight.
@@ -136,7 +173,9 @@ test('a trip records what it worked in, and the record survives a reload and can
 
   // The role is a link on the server, not a thing the page was holding: it comes back the
   // same on a page that was loaded fresh.
-  await page.goto(tripUrl);
+  // Straight to the tab rather than to the page and then a click: the tab is in the address, so
+  // this is the claim about the record surviving a reload and one about the address at once.
+  await page.goto(`${tripUrl}?tab=links`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const reloaded = roleField(page, 'trip-work-area');
   await expect(reloaded.getByText('Falia Demo')).toBeVisible({ timeout: 15_000 });
@@ -166,7 +205,7 @@ test('a trip records what it worked in, and the record survives a reload and can
   // navigates; "Delete" then means the feature's delete, and the confirmation says something
   // else while looking the same. That has already removed a shared demo feature twice, and it
   // is silent — the run fails later, somewhere unrelated, and the data is simply gone.
-  await expect(page).toHaveURL(tripUrl);
+  await expect(page).toHaveURL(`${tripUrl}?tab=links`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
 
   await page.getByRole('button', { name: /Delete/ }).click();
@@ -320,6 +359,7 @@ test('a photograph attached to a trip appears in the trip’s own gallery, and t
 
   // Nothing is filed against the trip yet, and the section says so rather than drawing an
   // empty grid that looks like something failed to load.
+  await openTab(page, 'Photographs');
   const gallery = page.getByTestId('trip-gallery');
   await expect(gallery).toContainText('No photographs are filed against this trip yet.');
 
@@ -335,6 +375,9 @@ test('a photograph attached to a trip appears in the trip’s own gallery, and t
     (response) =>
       response.request().method() === 'POST' && /\/api\/v1\/attachments(\?|$)/.test(response.url()),
   );
+  // The drop goes on the trip's files, which is where a picture is attached and where the star
+  // that makes one of them the trip's cover lives; the gallery reads them back.
+  await openTab(page, 'Files');
   await page
     .locator('.ant-upload input[type=file]')
     .last()
@@ -342,7 +385,7 @@ test('a photograph attached to a trip appears in the trip’s own gallery, and t
   expect((await attached).status()).toBe(201);
 
   // ---- and it is the trip's photograph, on a page loaded fresh
-  await page.goto(tripUrl);
+  await page.goto(`${tripUrl}?tab=photos`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tiles = page.getByTestId('trip-gallery').getByTestId('photo-tile');
   await expect(tiles).toHaveCount(1, { timeout: 30_000 });
@@ -394,29 +437,32 @@ test('what a trip measured and what it found are stored on it, not held by the p
   await page.getByRole('button', { name: /New trip log/ }).click();
   await page.getByLabel('Title', { exact: true }).fill(title);
   await page.getByLabel('Trip type').click();
-  await page.getByTitle('Survey / mapping').click();
+  // Waited for before it is clicked: a click landing while the list is still opening selects
+  // nothing at all, and the trip is then created with no purpose.
+  const purpose = page.getByTitle('Survey / mapping', { exact: true });
+  await expect(purpose).toBeVisible({ timeout: 15_000 });
+  await purpose.click();
   await page.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  // Checked here, where the answer is still on screen: the questions a section asks are the ones
+  // the purpose carries, so a trip that lost its purpose on the way in fails much later and
+  // somewhere else — as a section with no fields in it.
+  await expect(page.getByText('Survey / mapping')).toBeVisible();
 
   // A counted fact: a column on the trip, so a club can count it across trips rather than dig
   // it out of prose.
   await openSection(page, 'Measured');
   await page.getByTestId('trip-measure-depthReachedM').fill('218');
-  await page.getByTestId('trip-section-save-measured').click();
-  await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
+  // Waited for on the writes themselves rather than on the word "Saved.": creating the trip a
+  // moment ago put that same word on screen, so a check on the text passes without this save
+  // having happened at all, and everything after it then runs against a card mid-save.
+  await saveSection(page, 'trip-section-save-measured');
 
   // And a value in a section whose field this client never named: the form is built from the
   // purpose's schema, so what is asked for is the installation's decision.
   await openSection(page, 'Field data');
   await page.getByTestId('trip-section-field-instrument').fill('DistoX2');
-  // Waited for on the write itself rather than on the confirmation: the save a few lines above
-  // puts the same word on screen for a few seconds, so matching that text again can match the
-  // earlier save's and let the reload below cancel this one while it is still in flight.
-  const written = page.waitForResponse(
-    (response) => response.request().method() === 'PUT' && /\/api\/v1\/trip-logs\//.test(response.url()),
-  );
-  await page.getByTestId('trip-section-save-fieldData').click();
-  expect((await written).status()).toBe(200);
+  await saveSection(page, 'trip-section-save-fieldData');
 
   // Both survive a reload, which is the whole claim: they are on the row, not in the page.
   await page.reload();
@@ -455,8 +501,17 @@ test('a trip records who was there, what one of them did, and when they came out
   // Scoped to the row that was opened: the form draws several selects and two times of its
   // own, and the party's hours are a different question from this person's.
   const details = page.getByTestId('roster-row-details');
-  await details.getByRole('combobox').click();
+  // Opened, chosen, and then checked that the choice took — the same three steps the exit time
+  // below is driven with, and for the same reason. A click on an option of a list that is on its
+  // way out is dropped in silence: the option is still on screen and still clickable, nothing
+  // raises, and the only trace is a job missing from a trip that saved successfully. Waiting for
+  // the control to say it is open, and then for it to say what it now reads, turns that into a
+  // failure at the step that caused it rather than an assertion four screens later.
+  const role = details.getByRole('combobox');
+  await role.click();
+  await expect(role).toHaveAttribute('aria-expanded', 'true');
   await page.locator('.ant-select-dropdown:visible .ant-select-item-option[title="Leader"]').click();
+  await expect(details.locator('.ant-select-content')).toHaveText('Leader');
   const exit = details.getByPlaceholder('Exit time');
   await exit.fill('18:45');
   await page.keyboard.press('Enter');
@@ -526,7 +581,7 @@ test('a trip is written up as a document, and the document is filed against the 
 
   // And it is on the trip, in the slot the trip's report lives in, named as a write-up of that
   // trip rather than by anybody or anywhere it mentions.
-  await page.goto(tripUrl);
+  await page.goto(`${tripUrl}?tab=files`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(/trip-report-[0-9a-f]{8}-\d{8}\.docx/).first()).toBeVisible({
     timeout: 15_000,

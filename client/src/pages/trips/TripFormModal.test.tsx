@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import dayjs from 'dayjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -90,6 +90,23 @@ describe('TripFormModal dates', () => {
     const body = await savedBody(updateTrip);
     expect(body.tripDate).toBe('2026-03-14');
     expect(body.tripDateEnd).toBe('2026-03-16');
+  });
+
+  it('sends the number of places somebody typed, and an empty box as no limit at all', async () => {
+    // A limit is what makes the people past it a waiting list rather than everybody who said
+    // yes, so somewhere has to be able to set one — and clearing it has to mean a trip that
+    // turns nobody away, not a value silently left as it was.
+    show(trip({ maxParticipants: 8 } as Partial<TripLogInfo>));
+    expect(screen.getByTestId('trip-max-participants')).toHaveValue('8');
+
+    fireEvent.change(screen.getByTestId('trip-max-participants'), { target: { value: '6' } });
+    expect((await savedBody(updateTrip)).maxParticipants).toBe(6);
+
+    cleanup();
+    updateTrip.mockClear();
+    show(trip({ maxParticipants: 8 } as Partial<TripLogInfo>));
+    fireEvent.change(screen.getByTestId('trip-max-participants'), { target: { value: '' } });
+    expect((await savedBody(updateTrip)).maxParticipants).toBeNull();
   });
 
   it('carries a sketch the editor never touched through a save', async () => {
@@ -285,6 +302,28 @@ describe('TripFormModal dates', () => {
       newCaverName: 'Guest Caver',
       note: 'Turned back at the pitch head.',
     });
+  });
+
+  it('saves the job picked in a row’s own details, not the role of having merely been there', async () => {
+    // The picker is the only field in the row whose value is chosen rather than typed, and it
+    // was the only one not covered here: the note and the hours were, so a save that dropped
+    // the job alone went out looking entirely healthy. The server reads a missing job as
+    // "simply there", so the loss is silent — the trip's leader is stored as an attendee and
+    // nothing anywhere says so.
+    show(null);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Pitch rigging' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add participant/ }));
+    fireEvent.change(screen.getByPlaceholderText('Participant name'), { target: { value: 'Guest Caver' } });
+    fireEvent.click(screen.getByRole('button', { name: /Role, times and note/ }));
+
+    // Scoped to the row that was opened: the form draws several selects of its own, and the
+    // trip's type is a different question from this person's job.
+    const details = screen.getByTestId('roster-row-details');
+    fireEvent.mouseDown(within(details).getByRole('combobox'));
+    fireEvent.click(await screen.findByText('Leader'));
+
+    const body = await savedBody(createTrip);
+    expect(body.participants[0]).toMatchObject({ newCaverName: 'Guest Caver', roleId: 3 });
   });
 
   it('leaves a one-day trip without an end date rather than a range of itself', async () => {
