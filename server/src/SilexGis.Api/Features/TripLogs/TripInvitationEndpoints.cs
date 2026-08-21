@@ -250,6 +250,16 @@ public static class TripInvitationEndpoints
         if (existing is null)
         {
             db.TripInvitations.Add(invitation);
+            // Only the first asking is worth a message, and it is queued before the save so that
+            // one exists only if the asking committed. The trip's state is not consulted: being
+            // asked is somebody's deliberate act with this person in mind, unlike a name arriving
+            // on a roster, and whether they may read the trip at all is decided by the notifier.
+            await TripPlanNotifier.InvitedAsync(db, access, user, trip, caver.UserId, ct);
+            // Asking somebody grants them nothing, least of all the caves the trip is about, so
+            // whoever can open one of those to them is told instead. Queued in the same save as
+            // the asking, and sent only to people who can already read the cave in question.
+            await TripCaveAccessNotifier.InviteeCannotOpenCavesAsync(
+                db, access, user, trip, caver.UserId, ct);
         }
 
         try

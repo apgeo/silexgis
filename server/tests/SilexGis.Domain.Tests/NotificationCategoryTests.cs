@@ -39,6 +39,7 @@ public class NotificationCategoryTests
         ((short)NotificationCategory.TripParticipation).ShouldBe((short)2);
         ((short)NotificationCategory.JobCompleted).ShouldBe((short)3);
         ((short)NotificationCategory.SecurityAlerts).ShouldBe((short)4);
+        ((short)NotificationCategory.TripPlanning).ShouldBe((short)5);
         ((short)NotificationDigest.Immediate).ShouldBe((short)0);
         ((short)NotificationDigest.Daily).ShouldBe((short)1);
     }

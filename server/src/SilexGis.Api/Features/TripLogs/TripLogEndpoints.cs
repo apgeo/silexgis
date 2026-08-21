@@ -387,13 +387,32 @@ public static class TripLogEndpoints
             return ApiProblems.BadRequest(e.Code, e.Message);
         }
 
-        if (request.CaveIds is { } caveIds)
-        {
-            await ReconcileCaveLinksAsync(db, protection, ctx, trip.Id, caveIds, ct);
-        }
+        var addedCaves = request.CaveIds is { } caveIds
+            ? await ReconcileCaveLinksAsync(db, protection, ctx, trip.Id, caveIds, ct)
+            : [];
 
         var added = await ReconcileRosterAsync(db, trip.Id, request, ct);
+
+        // Asked before the first message is queued, because queueing one is itself a change and
+        // would answer this question for it. A request that carries back exactly what it was
+        // given — a form saved without an edit, a version restored onto the version already
+        // loaded — moves no column, and a notice announcing a change that provably did not happen
+        // is how a category earns being muted along with the messages that matter.
+        var somethingChanged = db.ChangeTracker.HasChanges();
+
         await NotifyParticipantsAsync(db, access, user, trip, added, ct);
+        // A trip people are expecting to go on has changed under them, so the people it concerns
+        // are told — everybody named on it and everybody asked about it, minus whoever this same
+        // write has just told about it another way. What changed is not in the message: saying so
+        // would mean saying which field, and the fields include the places the trip is about.
+        if (somethingChanged)
+        {
+            await TripPlanNotifier.ChangedAsync(db, access, user, trip, added, ct);
+        }
+
+        // A cave named onto a trip after people were asked onto it is the same pairing arriving in
+        // the other order, and the people who can open it are told the same way.
+        await TripCaveAccessNotifier.CavesAddedAsync(db, access, user, trip, addedCaves, ct);
         await db.SaveChangesAsync(ct);
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
@@ -548,7 +567,28 @@ public static class TripLogEndpoints
                 $"A trip log does not move from {trip.State} to {target}.");
         }
 
+        var stateBefore = trip.State;
         trip.State = target;
+        if (target == ActivityState.Cancelled)
+        {
+            // A deliberate notice sent by the path that calls a trip off, not a state-entry one:
+            // the switch that decides whether entering a state tells the roster the trip exists
+            // still answers "no" for a cancelled trip, and should. Being called off is the one
+            // thing the people expecting to go on it have to be told, and it is told here.
+            await TripPlanNotifier.CancelledAsync(db, access, user, trip, stateBefore, ct);
+        }
+        else if (target != ActivityState.Published && TripPlanNotices.AnnouncesChanges(stateBefore))
+        {
+            // A move of a plan is a change to it, and the one people are most likely to need: a
+            // trip put back to a date not yet chosen the evening before is exactly what somebody
+            // expecting to go on it has to hear. Told only when they were already expecting it —
+            // a plan leaving the workshop announces itself by other means, and the notice would
+            // otherwise be the first they heard of it. Whether the state it lands in is still one
+            // people are expecting anything from is the notifier's own question, so a plan going
+            // back into the workshop or off to be written up stays silent.
+            await TripPlanNotifier.ChangedAsync(db, access, user, trip, [], ct);
+        }
+
         if (target == ActivityState.Published)
         {
             // The stamp records when the trip first went out and is never moved: withdrawing it and
@@ -734,7 +774,12 @@ public static class TripLogEndpoints
     // cave the trip holds only under some other role does nothing. Nothing is hidden by that —
     // this write answers with the trip read afresh, whose list still names that cave — and the
     // way to take such a cave off a trip is through the role that put it there.
-    private static async Task ReconcileCaveLinksAsync(
+    /// <returns>
+    /// The caves this write newly named on the trip. A cave put back because the caller was never
+    /// shown it is not among them: nothing about it changed, and it is the caves that arrive that
+    /// somebody asked on the trip may turn out not to be able to open.
+    /// </returns>
+    private static async Task<List<Guid>> ReconcileCaveLinksAsync(
         SilexGisDbContext db,
         FeatureProtection protection,
         AccessContext ctx,
@@ -768,6 +813,7 @@ public static class TripLogEndpoints
             await TripRoleLinks.UnnameFeatureAsync(db, tripId, caveId, CaveListRole, ct);
         }
 
+        var addedCaveIds = new List<Guid>();
         foreach (var caveId in desired.Where(id => !named.Contains(id)))
         {
             // A role code that is not in the vocabulary means the installation's link types were
@@ -777,7 +823,11 @@ public static class TripLogEndpoints
             {
                 throw new InvalidOperationException($"Relation type '{CaveListRole}' is not seeded.");
             }
+
+            addedCaveIds.Add(caveId);
         }
+
+        return addedCaveIds;
     }
 
     /// <summary>
@@ -950,14 +1000,17 @@ public static class TripLogEndpoints
     /// of that data than a DTO is.
     /// </para>
     /// <para>
-    /// Every path that would tell somebody about a trip comes through here, so the two rules that
-    /// decide whether a message goes out at all are checked here once, for every caller alike. A
-    /// trip being written and a trip called off both keep their silence however their roster is
-    /// edited; and nobody is told about a trip they could not open, whether their name went on it
-    /// through an edit or through the announcement. A message to somebody the trip is closed to
-    /// would be useless to them and would still hand them its title and date, so the recipient's
-    /// own right to read it is decided here — freshly, against the trip as it now stands — rather
-    /// than assumed from their being named on it.
+    /// Every path that puts somebody's name on a trip comes through here, so the state rule is
+    /// checked once for every caller alike: a trip being written and a trip called off both keep
+    /// their silence however their roster is edited. Whether each recipient may actually read the
+    /// trip is the shared recipient rule, applied here as everywhere else — freshly, from that
+    /// person's own access, against the trip as it now stands, rather than assumed from their
+    /// being named on it.
+    /// </para>
+    /// <para>
+    /// The notices about a trip <i>being planned</i> — asked on it, changed, called off — are
+    /// deliberate acts by a person rather than a name arriving on a roster, and are sent by the
+    /// paths that cause them.
     /// </para>
     /// </remarks>
     private static async Task NotifyParticipantsAsync(
@@ -973,19 +1026,8 @@ public static class TripLogEndpoints
             return;
         }
 
-        // Load-bearing rather than defensive: one person holds as many roles on a trip as they
-        // did jobs, so one write can newly list the same person several times over.
-        var candidates = addedUserIds.Distinct().Where(id => id != user.UserId).ToList();
-        var recipients = new List<Guid>();
-        foreach (var candidate in candidates)
-        {
-            var theirs = await AccessContextResolver.ResolveAsync(db, candidate, ct);
-            if ((await access.DecideAsync(theirs, AccessAction.Read, trip, ct)).Allowed)
-            {
-                recipients.Add(candidate);
-            }
-        }
-
+        var recipients = await NotificationRecipients.WhoMayReadAsync(
+            db, access, trip, addedUserIds, user.UserId, ct);
         if (recipients.Count == 0)
         {
             return;

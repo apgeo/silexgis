@@ -25,6 +25,13 @@ public enum NotificationCategory : short
     /// Cannot be switched off; see <see cref="NotificationCategories.IsUserConfigurable"/>.
     /// </summary>
     SecurityAlerts = 4,
+
+    /// <summary>
+    /// A trip being planned concerns the user: they were invited to it, or one they are on
+    /// changed or was called off. One category rather than one per message, because a
+    /// preference is per category — so the category count is how finely somebody can mute.
+    /// </summary>
+    TripPlanning = 5,
 }
 
 /// <summary>How often notifications are delivered. Stored as smallint — do not renumber.</summary>
@@ -53,6 +60,7 @@ public static class NotificationCategories
         NotificationCategory.TripParticipation => true,
         NotificationCategory.JobCompleted => true,
         NotificationCategory.SecurityAlerts => true,
+        NotificationCategory.TripPlanning => true,
         // A category added to the enum but not named here stays off rather than surprising
         // everyone with mail they never asked for.
         _ => false,

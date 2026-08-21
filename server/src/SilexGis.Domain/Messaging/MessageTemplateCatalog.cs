@@ -66,6 +66,30 @@ public static class MessageTemplateCatalog
 
     public const string NotifyTripParticipation = "notify.trip-participation";
 
+    // A trip being planned. All three name the trip and its date and nothing else: the places a
+    // trip is about are readable by fewer people than its roster, and a message is as much an
+    // outbound copy of that as anything the API returns.
+
+    /// <summary>Someone was asked whether they are coming on a trip being planned.</summary>
+    public const string NotifyTripPlanInvitation = "notify.trip-plan-invitation";
+
+    /// <summary>A trip somebody is on was changed while it was still being planned.</summary>
+    public const string NotifyTripPlanChanged = "notify.trip-plan-changed";
+
+    /// <summary>A trip somebody is on was called off.</summary>
+    public const string NotifyTripPlanCancelled = "notify.trip-plan-cancelled";
+
+    /// <summary>
+    /// Somebody asked on a trip cannot open a cave the trip is about, and the people who could
+    /// change that are being told.
+    /// </summary>
+    /// <remarks>
+    /// The one message about a trip that names a cave, and it may only be sent to somebody whose
+    /// own access already opens that cave — which is what makes naming it there a reminder of
+    /// something they can see rather than a disclosure of something they cannot.
+    /// </remarks>
+    public const string NotifyTripInviteeCannotOpenCave = "notify.trip-invitee-cannot-open-cave";
+
     public const string NotifyJobCompleted = "notify.job-completed";
 
     public const string NotifyJobFailed = "notify.job-failed";
@@ -405,6 +429,143 @@ public static class MessageTemplateCatalog
                     {actorName} v-a trecut ca participant la {tripTitle} în data de {tripDate}:
 
                     {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripPlanInvitation,
+            MessageChannel.Email,
+            "Someone was asked whether they are coming on a trip being planned.",
+            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", SiteUrl, "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "You were invited to {tripTitle}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} invited you to {tripTitle} on {tripDate}. You can answer here:
+
+                    {siteUrl}{url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Ați fost invitat la {tripTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} v-a invitat la {tripTitle} în data de {tripDate}. Puteți răspunde aici:
+
+                    {siteUrl}{url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripPlanChanged,
+            MessageChannel.Email,
+            "A trip someone is on was changed while it was still being planned.",
+            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", SiteUrl, "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{tripTitle} has changed",
+                    """
+                    Hello {displayName},
+
+                    {actorName} changed {tripTitle}, planned for {tripDate}:
+
+                    {siteUrl}{url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "S-a modificat {tripTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a modificat {tripTitle}, planificată pentru {tripDate}:
+
+                    {siteUrl}{url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripPlanCancelled,
+            MessageChannel.Email,
+            "A trip someone is on was called off.",
+            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", SiteUrl, "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{tripTitle} was called off",
+                    """
+                    Hello {displayName},
+
+                    {actorName} called off {tripTitle}, planned for {tripDate}. It is not going ahead.
+
+                    {siteUrl}{url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "{tripTitle} a fost anulată",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a anulat {tripTitle}, planificată pentru {tripDate}. Tura nu mai are loc.
+
+                    {siteUrl}{url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripInviteeCannotOpenCave,
+            MessageChannel.Email,
+            "Someone asked on a trip cannot open a cave the trip is about.",
+            [AppName, DisplayName, ActorName, "inviteeName", "caveName", SiteUrl, "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{inviteeName} cannot open {caveName}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} asked {inviteeName} on a trip to {caveName}, which {inviteeName} has
+                    no access to. Being asked on a trip grants none: only somebody who may change
+                    that cave's permissions can.
+
+                    {siteUrl}{url}
+
+                    This message goes to the cave's owner and to full administrators, and to nobody
+                    else — somebody who may grant access to it in another way, through a club for
+                    instance, has not been told. Please pass it on if it is not yours to act on.
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "{inviteeName} nu are acces la {caveName}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a invitat pe {inviteeName} la o tură în {caveName}, la care
+                    {inviteeName} nu are acces. Invitația la o tură nu acordă acces: numai cineva
+                    care poate schimba permisiunile peșterii poate face asta.
+
+                    {siteUrl}{url}
+
+                    Acest mesaj ajunge la proprietarul peșterii și la administratorii deplini, și la
+                    nimeni altcineva — cineva care poate acorda acces altfel, printr-un club de
+                    exemplu, nu a fost înștiințat. Vă rugăm să-l transmiteți mai departe dacă nu vă
+                    revine dumneavoastră.
 
                     {unsubscribeUrl}
                     """),

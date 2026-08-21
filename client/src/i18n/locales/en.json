@@ -1611,6 +1611,7 @@
         "cavingGroupMembership": "Caving group membership changes",
         "permissionGranted": "Someone shares something with me",
         "tripParticipation": "I am added to a trip",
+        "tripPlanning": "I am invited to a trip, a trip I am on changes, or a trip needs access I can grant",
         "jobCompleted": "My uploads finish processing",
         "securityAlerts": "Security alerts"
       }

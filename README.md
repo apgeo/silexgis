@@ -166,6 +166,22 @@ Previous versions:
   roster by saying yes: once the trip has happened, one deliberate act turns everybody holding a
   place into people who were there, and it tells nobody, because everybody it writes in asked to be
   there and was told when they were asked.
+- **A plan tells the people it concerns, and can be told to stop** — being asked onto a trip, a trip
+  you are on changing or being moved along, and a trip being called off all send an email, and every
+  one of them goes only to somebody who may read that trip, decided for each person separately at the
+  moment it is sent. A message about a trip names the trip and its date and **never a cave**, because
+  an email is as much a copy of a protected location as anything on the screen is. A draft tells
+  nobody, since telling you a draft changed would be telling you it exists, and a write that changed
+  nothing sends nothing. All of it is one switch on the notifications page, on to begin with, and off
+  the moment you say so.
+- **Being asked onto a trip does not open the cave, so somebody who can open it is told** — an
+  invitation grants nothing, so when a person asked onto a trip cannot read a cave the trip is about,
+  the cave's owner and the full administrators get a message with a link to the cave, whether the cave
+  was already on the trip or was added afterwards. That message is honest about its own reach: it says
+  it went to the owner and the administrators and to nobody else, that somebody who could grant access
+  another way — through a club, say — has **not** been told, and asks the reader to pass it on if it
+  is not theirs to act on. Somebody on the list with no account on this installation gets nothing and
+  can be granted nothing; they have to be reached another way.
 - **A trip has a gallery and a cover** — the photographs taken on it, the albums made of them, and a
   headline picture chosen with the same star that names a cave's.
 - **A trip writes itself up** — every trip has a report view: the whole trip laid out as a document,

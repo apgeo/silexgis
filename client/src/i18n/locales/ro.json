@@ -1611,6 +1611,7 @@
         "cavingGroupMembership": "Schimbări în grupurile de speologie",
         "permissionGranted": "Cineva îmi dă acces la ceva",
         "tripParticipation": "Sunt adăugat la o tură",
+        "tripPlanning": "Sunt invitat la o tură, se schimbă o tură la care particip sau o tură are nevoie de un acces pe care îl pot acorda",
         "jobCompleted": "Fișierele mele termină de procesat",
         "securityAlerts": "Alerte de securitate"
       }

@@ -76,6 +76,34 @@ public class MessageTemplateTests
         }
     }
 
+    [Theory]
+    [InlineData(MessageTemplateCatalog.NotifyTripPlanInvitation)]
+    [InlineData(MessageTemplateCatalog.NotifyTripPlanChanged)]
+    [InlineData(MessageTemplateCatalog.NotifyTripPlanCancelled)]
+    public void A_message_about_a_planned_trip_may_say_only_which_trip_and_when(string key)
+    {
+        // The places a trip is about are readable by fewer people than the people it is about,
+        // so none of these may carry one. Pinning the declared list rather than scanning the
+        // wording is what makes that hold: the renderer refuses any placeholder off the list, so
+        // a cave can only enter the wording by being declared here first.
+        var definition = MessageTemplateCatalog.Find(key)!;
+
+        definition.Channel.ShouldBe(MessageChannel.Email);
+        definition.Placeholders.ShouldBe(
+            ["appName", "displayName", "actorName", "tripTitle", "tripDate", "siteUrl", "url", "unsubscribeUrl"],
+            ignoreOrder: true);
+
+        foreach (var locale in MessageTemplateCatalog.Locales)
+        {
+            definition.Defaults.ShouldContainKey(locale, $"{key} is missing {locale}");
+
+            var text = MessageTemplateCatalog.Default(definition, locale);
+            text.Subject.ShouldNotBeNullOrWhiteSpace($"{key} ({locale})");
+            MessageTemplateRenderer.UnknownPlaceholders(definition, text.Subject, text.Body)
+                .ShouldBeEmpty($"{key} ({locale})");
+        }
+    }
+
     [Fact]
     public void Every_shipped_template_exists_in_every_language()
     {
