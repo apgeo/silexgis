@@ -40,6 +40,10 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
             .OnDelete(DeleteBehavior.SetNull);
         builder.Property(x => x.Visibility).HasConversion<short>();
         builder.Property(x => x.State).HasConversion<short>();
+        // Defaulted in the database as well as in the entity so a row written by anything that
+        // does not know about the column says "nobody arranged a callout" rather than leaving a
+        // null that a pass watching for overdue parties would have to guard.
+        builder.Property(x => x.CalloutState).HasConversion<short>().HasDefaultValue(TripCalloutState.None);
         builder.Property(x => x.Geom).HasColumnType("geometry(Geometry, 4326)");
 
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
@@ -54,6 +58,11 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
         builder.HasIndex(x => x.Geom).HasMethod("gist");
         builder.HasIndex(x => x.TripDate);
         builder.HasIndex(x => x.OwnerUserId);
+        // The one selection a scheduled pass makes over this table: parties whose alarm time has
+        // gone by and whose check is still live. Leading with the state keeps that pass reading a
+        // handful of rows rather than every trip ever recorded, and it is the state that stays
+        // small — almost every row is a trip that already happened.
+        builder.HasIndex(x => new { x.CalloutState, x.CalloutAlarmAt });
     }
 }
 

@@ -59,12 +59,13 @@ public static class UnsubscribeEndpoints
             return ApiProblems.BadRequest("notification.unsubscribe_invalid", "That link is no longer valid.");
         }
 
-        // Security alerts have no opt-out anywhere else either, and a token for one could only
-        // come from a tampered link — the sender never puts one in those messages.
+        // The categories nobody may switch off have no opt-out anywhere else either, and a token
+        // for one could only come from a tampered link — the sender never puts one in those
+        // messages.
         if (!NotificationCategories.IsUserConfigurable(category))
         {
             return ApiProblems.BadRequest(
-                "notification.unsubscribe_locked", "Security alerts cannot be switched off.");
+                "notification.unsubscribe_locked", "That kind of notification cannot be switched off.");
         }
 
         var row = await db.UserNotificationPreferences

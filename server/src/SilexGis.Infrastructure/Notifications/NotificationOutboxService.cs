@@ -222,7 +222,7 @@ public sealed class NotificationOutboxService(
             }
         }
 
-        // Security alerts carry no opt-out: the settings page refuses to switch them off, so a
+        // A category nobody may switch off carries no opt-out: the settings page refuses it, so a
         // link that could not work would be a lie. The placeholder renders as nothing instead.
         values["unsubscribeUrl"] = NotificationCategories.IsUserConfigurable(row.Category)
             ? UnsubscribeLine(user.Id, row.Category)

@@ -2156,6 +2156,62 @@ export function useMoveTripLog() {
   });
 }
 
+export type TripCalloutState = components['schemas']['TripCalloutState'];
+
+export type TripCalloutArrangement = components['schemas']['TripCalloutRequest'];
+
+/**
+ * Arranges, changes or calls off the check that notices if a party does not come back.
+ *
+ * Part of planning the trip, so it is offered to whoever may change the trip and carries the
+ * precondition header every other write to a trip carries — two people arranging different hours
+ * is exactly the lost update it exists to catch. Clearing the alarm time is how the whole
+ * arrangement is called off; there is no separate route for that, and none is wanted.
+ *
+ * The answer is the trip as it now stands, so the page redraws from it directly.
+ */
+export function useArrangeTripCallout() {
+  const readBack = useReadTripLogsBack();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string } & TripCalloutArrangement) => {
+      const etag = lastReadETag(`/api/v1/trip-logs/${id}`);
+      return unwrap(
+        api.POST('/api/v1/trip-logs/{id}/callout', {
+          params: { path: { id } },
+          headers: etag ? { 'If-Match': etag } : undefined,
+          body,
+        }),
+      );
+    },
+    onSuccess: () => {
+      invalidateHistory();
+      // Checked against the version last read, as the trip's own update is, so the write is not
+      // finished until the version it produced has been read back.
+      return readBack();
+    },
+  });
+}
+
+/**
+ * Says the party is out, which stops the overdue check.
+ *
+ * No precondition header, unlike every other write to a trip, and that is the server's rule
+ * rather than an omission here: there is one value it can write, everybody entitled to call it is
+ * saying the same thing, and a stale version would refuse the message that says people are safe.
+ * The answer is the trip as it now stands, so the page redraws from it directly.
+ */
+export function useStandDownTripCallout() {
+  const readBack = useReadTripLogsBack();
+  return useMutation({
+    mutationFn: ({ id }: { id: string }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{id}/callout/stand-down', { params: { path: { id } } }),
+      ),
+    onSuccess: () => readBack(),
+  });
+}
+
 export type TripInvitationInfo = components['schemas']['TripInvitationDto'];
 export type TripInvitationList = components['schemas']['TripInvitationListDto'];
 export type TripInvitationAnswer = components['schemas']['TripInvitationResponse'];

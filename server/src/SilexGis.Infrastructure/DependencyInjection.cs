@@ -140,7 +140,10 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>File storage, vector format IO (GDAL) and the processing-job worker.</summary>
+    /// <summary>
+    /// File storage, vector format IO (GDAL), the processing-job worker, and the schedules that
+    /// queue work for it.
+    /// </summary>
     public static IServiceCollection AddSilexGisGeodata(
         this IServiceCollection services, IConfiguration configuration)
     {
@@ -214,6 +217,11 @@ public static class DependencyInjection
             configuration.GetSection(AccessHistoryOptions.SectionName));
         services.AddScoped<FileAccessRecorder>();
         services.AddHostedService<AccessHistoryScheduler>();
+
+        services.Configure<TripCalloutOptions>(
+            configuration.GetSection(TripCalloutOptions.SectionName));
+        services.AddScoped<IProcessingJobHandler, TripCalloutSweepHandler>();
+        services.AddHostedService<TripCalloutScheduler>();
         return services;
     }
 }

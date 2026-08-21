@@ -284,7 +284,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
-    public async Task Notification_settings_list_every_category_and_lock_security_alerts()
+    public async Task Notification_settings_list_every_category_and_lock_the_two_nobody_may_mute()
     {
         // Nothing is delivered on an installation with no mail server, and the page must say so —
         // so this reads the settings with the channel reporting itself as absent.
@@ -295,8 +295,14 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
 
         var categories = read.GetProperty("categories").EnumerateArray().ToList();
         categories.Count.ShouldBe(NotificationCategories.All.Count);
+        // Two are locked and the rest are not, asserted together: a page that locked everything
+        // would pass a test that only looked at the locked ones.
         categories.Single(c => c.GetProperty("category").GetString() == "securityAlerts")
             .GetProperty("locked").GetBoolean().ShouldBeTrue();
+        categories.Single(c => c.GetProperty("category").GetString() == "tripCallout")
+            .GetProperty("locked").GetBoolean().ShouldBeTrue();
+        categories.Single(c => c.GetProperty("category").GetString() == "tripPlanning")
+            .GetProperty("locked").GetBoolean().ShouldBeFalse();
         read.GetProperty("deliveryConfigured").GetBoolean().ShouldBeFalse();
 
         var saved = await me.PutAsJsonAsync("/api/v1/me/notifications/", new
@@ -321,18 +327,37 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         stored.ShouldBe(NotificationCategories.All.Count);
     }
 
-    [Fact]
-    public async Task Security_alerts_cannot_be_switched_off()
+    /// <summary>
+    /// The two categories nobody may switch off refuse it through the API and not only on the
+    /// page, and each is refused for its own reason: a live session must not be able to silence
+    /// the warning that the account is being taken over, and nobody hears an overdue party
+    /// through a switch somebody turned off months ago.
+    /// </summary>
+    [Theory]
+    [InlineData("securityAlerts")]
+    [InlineData("tripCallout")]
+    public async Task A_category_nobody_may_mute_cannot_be_switched_off(string category)
     {
         var response = await me.PutAsJsonAsync("/api/v1/me/notifications/", new
         {
             emailEnabled = true,
             digest = "immediate",
-            categories = new[] { new { category = "securityAlerts", enabled = false } },
+            categories = new[] { new { category, enabled = false } },
         });
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await ProblemCodeAsync(response)).ShouldBe("me.notification_locked");
+
+        // And the same request against one that is the user's own choice is accepted, so the
+        // refusal above is about which category it names rather than about the shape of the call.
+        var allowed = await me.PutAsJsonAsync("/api/v1/me/notifications/", new
+        {
+            emailEnabled = true,
+            digest = "immediate",
+            categories = new[] { new { category = "tripPlanning", enabled = false } },
+        });
+
+        allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
     }
 
     [Fact]

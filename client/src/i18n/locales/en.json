@@ -818,6 +818,31 @@
     "hadIncidentYes": "Something went wrong",
     "maxParticipants": "Places",
     "maxParticipantsHelp": "How many people the trip has room for. Leave empty for no limit; anybody past the limit waits in the order they answered in.",
+    "expectedReturnAt": "Expected back",
+    "calloutAlarmAt": "Raise the alarm at",
+    "calloutAlarmHelp": "If nobody has said the party is out by this time, everyone on the trip is told. It cannot be earlier than the time you expect to be back. Leave both empty for no callout.",
+    "calloutStatus": "Callout",
+    "calloutStateValues": {
+      "none": "None arranged",
+      "armed": "Watching",
+      "overdue": "Overdue",
+      "stoodDown": "Party is out"
+    },
+    "calloutLastChecked": "Last checked",
+    "calloutNeverChecked": "Never",
+    "calloutUncheckedTitle": "Nothing has checked this callout recently",
+    "calloutUncheckedBody": "An alarm is set, but the check that would raise it has not run lately — so nobody has confirmed this party is on time. Treat it as unchecked, not as safe, and contact them another way.",
+    "calloutOverdueTitle": "This party is overdue",
+    "calloutOverdueBody": "The alarm time passed and nobody had said the party was out. Everyone on the trip has been told.",
+    "calloutStandDown": "The party is out",
+    "calloutStoodDownSuccess": "Recorded — the callout has been stood down.",
+    "calloutStandDownFailed": "The callout could not be stood down. Try again, and reach somebody another way if it keeps failing.",
+    "calloutArrange": "Arrange a callout",
+    "calloutChange": "Change the callout",
+    "calloutSaved": "Saved — the callout is set.",
+    "calloutCleared": "Saved — no callout is arranged for this trip.",
+    "calloutSaveFailed": "The callout could not be saved. Try again.",
+    "calloutAlarmBeforeReturn": "The alarm cannot be earlier than the time you expect to be back.",
     "sections": {
       "title": "Trip report",
       "measured": "Measured",
@@ -873,6 +898,8 @@
       "key_holder_note": "Key holder, if not on the roster",
       "landowner_caver_id": "Landowner contact",
       "landowner_note": "Landowner contact, if not on the roster",
+      "callout_contact_caver_id": "Callout contact",
+      "callout_contact_note": "Callout contact, if not on the roster",
       "access_notes": "Access notes",
       "cost_amount": "Cost",
       "cost_currency": "Currency",
@@ -1605,13 +1632,18 @@
         "daily": "A daily summary"
       },
       "categories": "What to notify me about",
-      "alwaysOn": "Always sent — this one warns you about your own account.",
+      "alwaysOn": "Always sent, whatever is set above.",
+      "alwaysOnReasons": {
+        "securityAlerts": "Always sent — this one warns you about your own account.",
+        "tripCallout": "Always sent, and never held for the daily summary — an overdue party is nobody's news in the morning."
+      },
       "noDelivery": "This installation has no mail server configured, so nothing is sent yet. Your choices are saved and will be used once one is.",
       "events": {
         "cavingGroupMembership": "Caving group membership changes",
         "permissionGranted": "Someone shares something with me",
         "tripParticipation": "I am added to a trip",
         "tripPlanning": "I am invited to a trip, a trip I am on changes, or a trip needs access I can grant",
+        "tripCallout": "A trip I am on is overdue and nobody has said the party is out",
         "jobCompleted": "My uploads finish processing",
         "securityAlerts": "Security alerts"
       }

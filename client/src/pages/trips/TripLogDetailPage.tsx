@@ -54,6 +54,7 @@ import TripFormModal from './TripFormModal.tsx';
 import TripGeometryField from './TripGeometryField.tsx';
 import TripInvitationsTab from './TripInvitationsTab.tsx';
 import TripStateControl from './TripStateControl.tsx';
+import TripCalloutPanel from '../../components/trips/TripCalloutPanel.tsx';
 import TripRoleFields from './TripRoleFields.tsx';
 import TripSections from './TripSections.tsx';
 
@@ -262,6 +263,20 @@ export default function TripLogDetailPage() {
           through that section's own request, so a cover cannot survive a rule that hides the
           picture it is made of. */}
       <TripCover tripId={trip.id} tripTitle={trip.title} />
+
+      {/* Above everything the trip says about itself, because it is the only part of the page
+          that can be urgent. Drawn for every reader of the trip and not only for the people on
+          it: whether a party is overdue is news to whoever is reading, and the tap that says they
+          are out is what is limited to the people who would know. */}
+      <TripCalloutPanel
+        tripId={trip.id}
+        state={trip.calloutState}
+        expectedReturnAt={trip.expectedReturnAt}
+        calloutAlarmAt={trip.calloutAlarmAt}
+        calloutLastCheckedAt={trip.calloutLastCheckedAt}
+        canStandDown={trip.canStandDownCallout}
+        canEdit={canEdit}
+      />
 
       <Card size="small">
         <Descriptions column={1} size="small">

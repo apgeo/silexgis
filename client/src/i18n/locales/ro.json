@@ -818,6 +818,31 @@
     "hadIncidentYes": "S-a întâmplat ceva",
     "maxParticipants": "Locuri",
     "maxParticipantsHelp": "Câți oameni încap în tură. Lasă gol pentru fără limită; cine depășește limita așteaptă în ordinea în care a răspuns.",
+    "expectedReturnAt": "Ieșire estimată",
+    "calloutAlarmAt": "Dă alarma la",
+    "calloutAlarmHelp": "Dacă nimeni nu confirmă până la ora asta că echipa a ieșit, toți cei din tură sunt anunțați. Nu poate fi mai devreme decât ora la care estimezi ieșirea. Lasă ambele goale dacă nu vrei apel de urgență.",
+    "calloutStatus": "Apel de urgență",
+    "calloutStateValues": {
+      "none": "Neprogramat",
+      "armed": "În supraveghere",
+      "overdue": "Întârziere",
+      "stoodDown": "Echipa a ieșit"
+    },
+    "calloutLastChecked": "Ultima verificare",
+    "calloutNeverChecked": "Niciodată",
+    "calloutUncheckedTitle": "Nimic nu a verificat recent acest apel de urgență",
+    "calloutUncheckedBody": "Alarma este programată, dar verificarea care ar declanșa-o nu a mai rulat de ceva vreme — deci nimeni nu a confirmat că echipa este în grafic. Tratează situația ca neverificată, nu ca sigură, și încearcă să iei legătura pe altă cale.",
+    "calloutOverdueTitle": "Echipa are întârziere",
+    "calloutOverdueBody": "A trecut ora alarmei și nimeni nu confirmase că echipa a ieșit. Toți cei din tură au fost anunțați.",
+    "calloutStandDown": "Echipa a ieșit",
+    "calloutStoodDownSuccess": "Înregistrat — apelul de urgență a fost oprit.",
+    "calloutStandDownFailed": "Apelul de urgență nu a putut fi oprit. Încearcă din nou și ia legătura pe altă cale dacă eroarea persistă.",
+    "calloutArrange": "Stabilește o alarmă",
+    "calloutChange": "Modifică alarma",
+    "calloutSaved": "Salvat — alarma este stabilită.",
+    "calloutCleared": "Salvat — nu este stabilită nicio alarmă pentru această tură.",
+    "calloutSaveFailed": "Alarma nu a putut fi salvată. Încearcă din nou.",
+    "calloutAlarmBeforeReturn": "Alarma nu poate fi mai devreme decât ora la care te aștepți să ieși.",
     "sections": {
       "title": "Raportul turei",
       "measured": "Măsurători",
@@ -873,6 +898,8 @@
       "key_holder_note": "Deținătorul cheii, dacă nu este în registru",
       "landowner_caver_id": "Contactul proprietarului terenului",
       "landowner_note": "Contactul proprietarului terenului, dacă nu este în registru",
+      "callout_contact_caver_id": "Persoana de contact pentru alarmă",
+      "callout_contact_note": "Persoana de contact pentru alarmă, dacă nu este în registru",
       "access_notes": "Note despre acces",
       "cost_amount": "Cost",
       "cost_currency": "Monedă",
@@ -1605,13 +1632,18 @@
         "daily": "Un rezumat zilnic"
       },
       "categories": "Despre ce să fiu anunțat",
-      "alwaysOn": "Se trimit mereu — acestea vă avertizează despre propriul cont.",
+      "alwaysOn": "Se trimit mereu, indiferent de setările de mai sus.",
+      "alwaysOnReasons": {
+        "securityAlerts": "Se trimit mereu — acestea vă avertizează despre propriul cont.",
+        "tripCallout": "Se trimit mereu și nu se amână pentru rezumatul zilnic — o echipă întârziată nu mai este o noutate a doua zi dimineața."
+      },
       "noDelivery": "Această instalare nu are un server de e-mail configurat, deci nu se trimite nimic încă. Alegerile sunt salvate și vor fi folosite când va exista unul.",
       "events": {
         "cavingGroupMembership": "Schimbări în grupurile de speologie",
         "permissionGranted": "Cineva îmi dă acces la ceva",
         "tripParticipation": "Sunt adăugat la o tură",
         "tripPlanning": "Sunt invitat la o tură, se schimbă o tură la care particip sau o tură are nevoie de un acces pe care îl pot acorda",
+        "tripCallout": "O tură la care particip a întârziat și nimeni nu a confirmat că echipa a ieșit",
         "jobCompleted": "Fișierele mele termină de procesat",
         "securityAlerts": "Alerte de securitate"
       }

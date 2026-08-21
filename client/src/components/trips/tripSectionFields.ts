@@ -37,6 +37,8 @@ export const SEEDED_TRIP_SECTION_FIELD_CODES = [
   'key_holder_note',
   'landowner_caver_id',
   'landowner_note',
+  'callout_contact_caver_id',
+  'callout_contact_note',
   'access_notes',
   'cost_amount',
   'cost_currency',

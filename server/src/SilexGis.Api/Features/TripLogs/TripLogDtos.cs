@@ -136,7 +136,26 @@ public sealed record TripLogDto(
     // to a full trip is recorded as having said so, and who is on it and who is waiting is worked
     // out from the answers whenever it is asked rather than written down anywhere. Appended, like
     // everything before it.
-    int? MaxParticipants);
+    int? MaxParticipants,
+    // The callout, read by everyone who may read the trip. Four values and not three: the times
+    // that were arranged, where the check stands, and when the check last actually ran.
+    //
+    // The last of them is the one that is easy to leave out and the one the feature turns on. An
+    // armed check is a promise that something is watching, and a surface that draws the promise
+    // without saying when it was last kept lets a check that has not run since yesterday read
+    // exactly like a check that ran a minute ago and found nothing wrong. Null means no pass has
+    // ever completed, which is the strongest form of the same warning rather than a reassuring
+    // absence — and only a pass that finished is counted, because one that failed checked nothing.
+    DateTimeOffset? ExpectedReturnAt,
+    DateTimeOffset? CalloutAlarmAt,
+    TripCalloutState CalloutState,
+    DateTimeOffset? CalloutLastCheckedAt,
+    // Whether this caller may say the party is out. Answered here rather than worked out by
+    // whatever draws the trip, because the rule is the route's and a second copy of it on a
+    // surface would be free to disagree — and the disagreement that matters is the quiet one,
+    // where somebody entitled to stand an alarm down is shown no way to do it. False for every
+    // reader of a trip that has no live check, so nothing has to pair this with the state.
+    bool CanStandDownCallout);
 
 /// <summary>
 /// The audience a trip this caller plans would get if the request names none.
@@ -200,6 +219,53 @@ public sealed record TripLogWriteRequest(
     // it" — there is nothing else null could mean for a number whose absence is the unlimited
     // case, so clearing the field is how a limit is removed. Appended, like the run above it.
     int? MaxParticipants);
+
+/// <summary>
+/// Arranging — or calling off — the check that notices if a party does not come back.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Its own request, and deliberately not two more fields on the trip's write request. That
+/// request replaces the whole trip, so a surface that never drew these fields would send them
+/// absent and quietly call off a live callout — and a party would find out that nothing had been
+/// watching them only by nobody coming to look. A separate door cannot be omitted by accident.
+/// </para>
+/// <para>
+/// Where the check has got to is not on here either. It follows from the times: an alarm hour
+/// where there was none, or one that differs from the hour stored, is a new arrangement and arms
+/// the check; clearing the hour calls the whole thing off; and the same hour sent again leaves the
+/// state exactly as it was, which is what stops a re-save re-arming a check that somebody already
+/// stood down. Saying the party is out is a different act by different people and has its own
+/// route.
+/// </para>
+/// </remarks>
+public sealed record TripCalloutRequest
+{
+    /// <summary>When the party says they will be out, or null while they name no hour.</summary>
+    public DateTimeOffset? ExpectedReturnAt { get; init; }
+
+    /// <summary>
+    /// When the alarm goes off if nobody has said the party is out. Null calls the arrangement
+    /// off — there is nothing else an arrangement with no hour in it could mean.
+    /// </summary>
+    public DateTimeOffset? CalloutAlarmAt { get; init; }
+}
+
+public sealed class TripCalloutRequestValidator : AbstractValidator<TripCalloutRequest>
+{
+    public TripCalloutRequestValidator()
+    {
+        // The alarm is when somebody starts worrying, so it cannot fall before the hour the party
+        // said they would be out: an alarm set earlier reports everyone overdue while they are
+        // still walking out on schedule, and an alarm nobody believes is worse than none at all.
+        // Checked only when both are given — a party may name an hour to be missed by without
+        // committing to an hour of return, and the other way about.
+        RuleFor(x => x.CalloutAlarmAt)
+            .GreaterThanOrEqualTo(x => x.ExpectedReturnAt!.Value)
+            .When(x => x.CalloutAlarmAt is not null && x.ExpectedReturnAt is not null)
+            .WithMessage("The callout alarm cannot be set before the party is due back.");
+    }
+}
 
 /// <summary>The state to move a trip log into.</summary>
 /// <remarks>

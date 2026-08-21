@@ -174,6 +174,21 @@ Previous versions:
   nobody, since telling you a draft changed would be telling you it exists, and a write that changed
   nothing sends nothing. All of it is one switch on the notifications page, on to begin with, and off
   the moment you say so.
+- **A trip can say when its party is due back, and be told the party is out** — a plan records when
+  the party expects to be out and the hour to raise the alarm if nobody has said so. A pass runs on
+  a schedule; when that hour goes by with nothing said, everyone the trip concerns who may read it
+  gets an email — one that names the trip, its date and the expected hour in UTC, and **never a
+  cave**, because whoever runs a search reads the trip, where the answer is already kept under the
+  rules that decide who may have it. Anybody the trip names or has asked can stand the alarm down in
+  one tap, whether or not they may edit the record, because the person who knows the party is out is
+  the one on the trip. Standing it down disarms the check rather than erasing it, so what was
+  arranged stays on the trip. The same pass reminds the people on a trip that it is coming up, once
+  — and a trip that has been called off or put back stops both the alarm and the reminder, because
+  the date they were set against is no longer one anybody is going on. A trip showing an armed alarm
+  also says **when the check last ran**: silence is the good news in a callout, so a watcher that has
+  stopped and a party safely underground look alike, and the page comes down on the side of saying
+  nobody has looked. Delivery is the ordinary email queue's, which tries several times and then gives
+  up — an alarm is a prompt to go and look, not a guarantee somebody was reached.
 - **Being asked onto a trip does not open the cave, so somebody who can open it is told** — an
   invitation grants nothing, so when a person asked onto a trip cannot read a cave the trip is about,
   the cave's owner and the full administrators get a message with a link to the cave, whether the cave

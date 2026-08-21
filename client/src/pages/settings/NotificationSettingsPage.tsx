@@ -94,7 +94,15 @@ export default function NotificationSettingsPage() {
                 name={['categories', category.category]}
                 label={t(`settings.notifications.events.${category.category}`)}
                 extra={
-                  category.locked ? t('settings.notifications.alwaysOn') : undefined
+                  // One reason per locked category, not one sentence for all of them: they are
+                  // locked for different reasons and a shared line would say something untrue
+                  // under one of them. The generic sentence stands in for a category shipped
+                  // without its own reason, so a new one reads oddly rather than showing a key.
+                  category.locked
+                    ? t(`settings.notifications.alwaysOnReasons.${category.category}`, {
+                        defaultValue: t('settings.notifications.alwaysOn'),
+                      })
+                    : undefined
                 }
                 valuePropName="checked"
               >

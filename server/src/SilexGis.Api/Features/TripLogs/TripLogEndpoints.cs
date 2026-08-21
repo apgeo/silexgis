@@ -53,6 +53,20 @@ public static class TripLogEndpoints
                 "Moves a trip log to another lifecycle state (Write permission). One endpoint "
                 + "rather than a verb per state: the moves a trip may make are a table, and a "
                 + "verb per move can only ever offer the handful somebody thought to name.");
+        trips.MapPost("/{id:guid}/callout", ArrangeCalloutAsync)
+            .WithValidation<TripCalloutRequest>()
+            .WithSummary(
+                "Arranges, changes or calls off the check that notices if the party does not come "
+                + "back (Write permission). Its own door rather than two fields on the trip, so "
+                + "that saving the trip from a surface which never drew them cannot quietly leave "
+                + "a party unwatched.");
+        trips.MapPost("/{id:guid}/callout/stand-down", StandDownCalloutAsync)
+            .WithSummary(
+                "Says the party is out, which stops the overdue check. Open to anyone the trip "
+                + "names or has asked, and deliberately not to whoever may edit the trip: it is a "
+                + "statement about where people are, not a change to the record of the trip. It "
+                + "stands the check down rather than erasing it, so what was arranged stays "
+                + "readable afterwards.");
         trips.MapGet("/{id:guid}/report", TripReportEndpoints.DownloadAsync)
             .WithSummary(
                 "The trip written up as a document, built from this caller's own reading of the "
@@ -509,6 +523,134 @@ public static class TripLogEndpoints
         return TypedResults.NoContent();
     }
 
+    /// <summary>
+    /// Arranges, changes or calls off the check that notices if a party does not come back.
+    /// </summary>
+    /// <remarks>
+    /// Whoever may change the trip, because arranging one is part of planning the trip. Saying the
+    /// party is out is the other half and is not this: it belongs to the people on the trip and
+    /// has its own route. The precondition header is required as on every other write to a trip —
+    /// this one edits the record, and two people arranging different hours is the lost update it
+    /// exists to catch.
+    /// </remarks>
+    private static async Task<Results<Ok<TripLogDto>, ProblemHttpResult>> ArrangeCalloutAsync(
+        Guid id,
+        TripCalloutRequest request,
+        HttpContext http,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
+        FeatureProtection protection,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var user = await userAccessor.GetAsync(ct);
+        var trip = await db.TripLogs.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (trip is null)
+        {
+            return ApiProblems.NotFound("trip_log.not_found");
+        }
+
+        if (ctx is null || user is null || !(await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed)
+        {
+            return (await access.DecideAsync(ctx, AccessAction.Read, trip, ct)).Allowed
+                ? ApiProblems.Forbidden()
+                : ApiProblems.NotFound("trip_log.not_found");
+        }
+
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, required: true) is { } stale)
+        {
+            return stale;
+        }
+
+        ApplyCallout(trip, request);
+        await db.SaveChangesAsync(ct);
+
+        var arranged = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
+        return TypedResults.Ok(arranged[0]);
+    }
+
+    /// <summary>
+    /// Says the party is out: the overdue check stops, and stays on the trip as something that was
+    /// arranged and stood down rather than being erased.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Who may.</b> Anybody the trip names or has asked — not whoever may edit it. The two are
+    /// different questions with different answers: the person who knows the party is out is on the
+    /// trip, and making them wait for somebody with the right to change the record is exactly the
+    /// delay a callout exists to avoid. Whoever may edit the trip is not left without a way: the
+    /// arrangement itself is theirs to change, and clearing the alarm time on the trip calls the
+    /// whole thing off. Reading the trip is required as well, because saying nothing about a trip
+    /// you cannot read is the same refusal every other route gives.
+    /// </para>
+    /// <para>
+    /// <b>Why it takes no precondition header.</b> Every other write to a trip requires one, to
+    /// stop two people overwriting each other's edits. This one is not an edit: there is one value
+    /// it can write, everybody who may call it is saying the same thing, and a stale header would
+    /// refuse the message that says a party is safe. Two people tapping it at once is two people
+    /// agreeing.
+    /// </para>
+    /// <para>
+    /// A second tap answers 200 rather than a conflict, for the same reason: somebody who is not
+    /// sure the first one went through will tap again, and telling them it failed is the one wrong
+    /// answer available. A trip nobody arranged a check for is the refusal, because there is
+    /// nothing to stand down and saying "done" would report a check that never existed as handled.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<TripLogDto>, ProblemHttpResult>> StandDownCalloutAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
+        FeatureProtection protection,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var user = await userAccessor.GetAsync(ct);
+        var trip = await db.TripLogs.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (trip is null || ctx is null || user is null)
+        {
+            return ApiProblems.NotFound("trip_log.not_found");
+        }
+
+        if (!(await access.DecideAsync(ctx, AccessAction.Read, trip, ct)).Allowed)
+        {
+            return ApiProblems.NotFound("trip_log.not_found");
+        }
+
+        // The same set the alarm itself is sent to, asked from the one place that knows it: the
+        // people it would wake are the people who may say it is not needed. Two definitions of
+        // "who this trip concerns" would be free to disagree, and the disagreement that mattered
+        // would be somebody told a party is overdue with no way to say they are not.
+        var concerns = await TripAudience.ConcerningAsync(db, [trip.Id], user.UserId, ct);
+        if (!concerns.Contains(trip.Id))
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        if (trip.CalloutState == TripCalloutState.None)
+        {
+            return ApiProblems.Conflict(
+                "trip_log.callout_not_armed",
+                "This trip has no overdue check to stand down.");
+        }
+
+        if (trip.CalloutState != TripCalloutState.StoodDown)
+        {
+            // The times stay exactly as they were. What was arranged is part of the record of the
+            // trip — a search that was nearly called is worth being able to read afterwards — and
+            // the state is the only thing that moves.
+            trip.CalloutState = TripCalloutState.StoodDown;
+            await db.SaveChangesAsync(ct);
+        }
+
+        var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
+        return TypedResults.Ok(items[0]);
+    }
+
     // ---- shared pieces ----
 
     /// <summary>
@@ -678,6 +820,65 @@ public static class TripLogEndpoints
             trip.CavingGroupId = request.CavingGroupId;
         }
     }
+
+    /// <summary>
+    /// Arms, re-arms or calls off the overdue check from the two times the request states.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The state is not a field anybody sends, because a surface that could post "armed" could
+    /// post "stood down" too, and saying a party is out belongs to the people on the trip rather
+    /// than to whoever may edit it. So it follows from the alarm time, by three readings:
+    /// </para>
+    /// <para>
+    /// No alarm time means there is no arrangement — a callout is called off by clearing the hour
+    /// it was set for, and there is nothing else an absent alarm on a trip somebody is editing
+    /// could be asking for.
+    /// </para>
+    /// <para>
+    /// An alarm time that differs from the stored one is a new arrangement and arms the check,
+    /// whichever state it was in. A party who came back, stood the check down and then went in
+    /// again for the evening has arranged a second callout, not repeated the first.
+    /// </para>
+    /// <para>
+    /// The same alarm time leaves the state alone, and that reading is the load-bearing one: it is
+    /// what stops an edit made for some entirely other reason — a note added, a person added,
+    /// anything a form saves whole — from quietly re-arming a check that somebody has already
+    /// stood down, which would raise an alarm about a party that is sitting in the pub.
+    /// </para>
+    /// </remarks>
+    private static void ApplyCallout(TripLog trip, TripCalloutRequest request)
+    {
+        var armedFor = trip.CalloutAlarmAt;
+        trip.ExpectedReturnAt = request.ExpectedReturnAt;
+        trip.CalloutAlarmAt = request.CalloutAlarmAt;
+
+        if (request.CalloutAlarmAt is null)
+        {
+            trip.CalloutState = TripCalloutState.None;
+        }
+        else if (request.CalloutAlarmAt != armedFor)
+        {
+            trip.CalloutState = TripCalloutState.Armed;
+        }
+    }
+
+    /// <summary>
+    /// Whether the scheduled pass would actually look at this trip's check, which is a narrower
+    /// question than whether a check is arranged on it.
+    /// </summary>
+    /// <remarks>
+    /// A check on a trip that was called off or put back stays on the record — clearing it is a
+    /// person's decision, not a rule's — but no pass will ever raise it, because the arrangement it
+    /// was set against no longer describes anything happening. Saying when the pass last ran would
+    /// then be answering a question nobody asked: the pass did run, and it deliberately looked
+    /// straight past this trip. Reporting that as <i>checked</i> is the one reading this whole
+    /// value exists to prevent, so the answer is withheld and the surface falls back to saying the
+    /// check is not being watched.
+    /// </remarks>
+    private static bool IsWatched(TripLog trip) =>
+        trip.CalloutState is TripCalloutState.Armed or TripCalloutState.Overdue
+            && TripCalloutRules.WatchesForOverdue(trip.State);
 
     /// <summary>
     /// The three sections as raw text, or null for one the request does not mention. Absent and
@@ -1167,6 +1368,33 @@ public static class TripLogEndpoints
             .Select(m => new { m.TripLogId, m.ExpeditionId })
             .ToDictionaryAsync(m => m.TripLogId, m => m.ExpeditionId, ct);
 
+        // When the pass that watches for overdue parties last finished, asked only when one of
+        // these trips actually has a live check — the answer means nothing for a trip nobody
+        // arranged one for, and asking anyway would put a query on every listing of every trip.
+        //
+        // Only a pass that succeeded counts. A pass that failed checked nothing, and a failure
+        // that reported itself as "last checked at" would be the exact reassurance this value
+        // exists to withhold: an armed alarm whose watcher has not run is unchecked, and a surface
+        // has to be able to say so. Null — no pass has ever completed — says the same thing more
+        // strongly, so it is never dressed up as "not applicable".
+        DateTimeOffset? lastSwept = null;
+        HashSet<Guid> onTheTrip = [];
+        var liveCallouts = trips
+            .Where(t => t.CalloutState is TripCalloutState.Armed or TripCalloutState.Overdue)
+            .Select(t => t.Id)
+            .ToList();
+        if (liveCallouts.Count > 0)
+        {
+            lastSwept = await db.ProcessingJobs.AsNoTracking()
+                .Where(j => j.Kind == ProcessingJobKinds.TripCalloutSweep
+                    && j.Status == ProcessingJobStatus.Succeeded)
+                .MaxAsync(j => j.CompletedAt, ct);
+
+            // Asked from the one place that knows who a trip concerns, and asked only about the
+            // trips where the answer could mean anything.
+            onTheTrip = await TripAudience.ConcerningAsync(db, liveCallouts, user.UserId, ct);
+        }
+
         var roles = await ShippedRosterRolesAsync(db, ct);
         var participantRows = await (
             from participant in db.TripLogParticipants.AsNoTracking()
@@ -1262,7 +1490,12 @@ public static class TripLogEndpoints
                 safetyVersion,
                 campOfTrip.TryGetValue(trip.Id, out var campId) ? campId : null,
                 named.Count(id => !disclosableCaves.Contains(id)),
-                trip.MaxParticipants);
+                trip.MaxParticipants,
+                trip.ExpectedReturnAt,
+                trip.CalloutAlarmAt,
+                trip.CalloutState,
+                IsWatched(trip) ? lastSwept : null,
+                onTheTrip.Contains(trip.Id));
         }
     }
 }

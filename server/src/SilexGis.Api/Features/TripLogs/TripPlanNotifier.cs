@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
@@ -83,7 +82,7 @@ internal static class TripPlanNotifier
             return;
         }
 
-        var concerned = await PeopleConcernedAsync(db, trip.Id, ct);
+        var concerned = await TripAudience.PeopleConcernedAsync(db, trip.Id, ct);
         await SendAsync(
             db,
             access,
@@ -115,38 +114,8 @@ internal static class TripPlanNotifier
             return;
         }
 
-        var concerned = await PeopleConcernedAsync(db, trip.Id, ct);
+        var concerned = await TripAudience.PeopleConcernedAsync(db, trip.Id, ct);
         await SendAsync(db, access, user, trip, concerned, MessageTemplateCatalog.NotifyTripPlanCancelled, ct);
-    }
-
-    /// <summary>
-    /// Everybody a trip concerns and can be written to: whoever is named on it and whoever was
-    /// asked about it, unioned.
-    /// </summary>
-    /// <remarks>
-    /// Both halves, because a plan reaches people twice over — somebody asked and not yet written
-    /// in cares that the date moved exactly as much as somebody already on the roster, and after
-    /// the answers are written into the roster the same person is on both lists. Whether each of
-    /// them may actually read the trip is decided afterwards, once, for every caller alike.
-    /// </remarks>
-    private static async Task<List<Guid>> PeopleConcernedAsync(
-        SilexGisDbContext db, Guid tripId, CancellationToken ct)
-    {
-        var named = await (
-            from participant in db.TripLogParticipants.AsNoTracking()
-            join caver in db.Cavers.AsNoTracking() on participant.CaverId equals caver.Id
-            where participant.TripLogId == tripId && caver.UserId != null
-            select caver.UserId!.Value)
-            .ToListAsync(ct);
-
-        var asked = await (
-            from invitation in db.TripInvitations.AsNoTracking()
-            join caver in db.Cavers.AsNoTracking() on invitation.CaverId equals caver.Id
-            where invitation.TripLogId == tripId && caver.UserId != null
-            select caver.UserId!.Value)
-            .ToListAsync(ct);
-
-        return [.. named, .. asked];
     }
 
     private static async Task SendAsync(

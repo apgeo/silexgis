@@ -108,7 +108,7 @@ public static class MeNotificationEndpoints
             if (!enabled && !NotificationCategories.IsUserConfigurable(category))
             {
                 return ApiProblems.BadRequest(
-                    "me.notification_locked", "Security alerts cannot be switched off.");
+                    "me.notification_locked", "That kind of notification cannot be switched off.");
             }
         }
 

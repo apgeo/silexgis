@@ -8796,6 +8796,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{id}/callout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Arranges, changes or calls off the check that notices if the party does not come back (Write permission). Its own door rather than two fields on the trip, so that saving the trip from a surface which never drew them cannot quietly leave a party unwatched. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripCalloutRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{id}/callout/stand-down": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Says the party is out, which stops the overdue check. Open to anyone the trip names or has asked, and deliberately not to whoever may edit the trip: it is a statement about where people are, not a change to the record of the trip. It stands the check down rather than erasing it, so what was arranged stays readable afterwards. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-logs/{id}/report": {
         parameters: {
             query?: never;
@@ -14705,7 +14785,7 @@ export interface components {
             isProtected: boolean;
         };
         /** @enum {unknown} */
-        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning";
+        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout";
         NotificationCategoryDto: {
             category: components["schemas"]["NotificationCategory"];
             enabled: boolean;
@@ -15850,6 +15930,14 @@ export interface components {
         };
         /** @enum {unknown} */
         TextExtractionState: "notApplicable" | "pending" | "extracted" | "noText" | "failed" | "unsupported";
+        TripCalloutRequest: {
+            /** Format: date-time */
+            expectedReturnAt?: null | string;
+            /** Format: date-time */
+            calloutAlarmAt?: null | string;
+        };
+        /** @enum {unknown} */
+        TripCalloutState: "none" | "armed" | "overdue" | "stoodDown";
         TripExpeditionRequest: {
             /** Format: uuid */
             expeditionId?: null | string;
@@ -15967,6 +16055,14 @@ export interface components {
             cavesWithheld: number;
             /** Format: int32 */
             maxParticipants: null | number;
+            /** Format: date-time */
+            expectedReturnAt: null | string;
+            /** Format: date-time */
+            calloutAlarmAt: null | string;
+            calloutState: components["schemas"]["TripCalloutState"];
+            /** Format: date-time */
+            calloutLastCheckedAt: null | string;
+            canStandDownCallout: boolean;
         };
         TripLogTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];

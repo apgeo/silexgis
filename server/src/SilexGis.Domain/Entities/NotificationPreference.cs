@@ -32,6 +32,15 @@ public enum NotificationCategory : short
     /// preference is per category — so the category count is how finely somebody can mute.
     /// </summary>
     TripPlanning = 5,
+
+    /// <summary>
+    /// A party is overdue: the time they said they would be back has passed and nobody has
+    /// stood the alarm down. Kept apart from the rest of trip planning precisely because a
+    /// preference is per category — folded in with reminders and invitations, somebody who
+    /// muted the chatter would have muted this too.
+    /// Cannot be switched off or deferred; see <see cref="NotificationCategories.IsUserConfigurable"/>.
+    /// </summary>
+    TripCallout = 6,
 }
 
 /// <summary>How often notifications are delivered. Stored as smallint — do not renumber.</summary>
@@ -61,24 +70,39 @@ public static class NotificationCategories
         NotificationCategory.JobCompleted => true,
         NotificationCategory.SecurityAlerts => true,
         NotificationCategory.TripPlanning => true,
+        NotificationCategory.TripCallout => true,
         // A category added to the enum but not named here stays off rather than surprising
         // everyone with mail they never asked for.
         _ => false,
     };
 
     /// <summary>
-    /// Whether the user may switch a category off. Security alerts may not: an attacker holding a
-    /// live session could otherwise silence the warning that the account is being taken over.
+    /// Whether the user may switch a category off.
     /// </summary>
+    /// <remarks>
+    /// Two categories may not be, and each is here for its own reason rather than by family
+    /// resemblance. <see cref="NotificationCategory.SecurityAlerts"/>: an attacker holding a live
+    /// session could otherwise silence the warning that the account is being taken over.
+    /// <see cref="NotificationCategory.TripCallout"/>: the message exists to be heard when nobody
+    /// is answering, and a muted overdue alarm is indistinguishable from a party that came back.
+    /// Every other category is the user's own choice, and a third exception is a decision somebody
+    /// has to take rather than something a new category may quietly help itself to.
+    /// </remarks>
     public static bool IsUserConfigurable(NotificationCategory category) =>
-        category is not NotificationCategory.SecurityAlerts;
+        category is not (NotificationCategory.SecurityAlerts or NotificationCategory.TripCallout);
 
     /// <summary>
-    /// Whether a category ignores the digest setting and the master switch. Security alerts are
-    /// always sent immediately, for the same reason they cannot be switched off.
+    /// Whether a category ignores the digest setting and the master switch, and is therefore sent
+    /// the moment it is raised.
     /// </summary>
+    /// <remarks>
+    /// The same two, for the same two reasons, and deliberately the same list: a category nobody
+    /// may switch off but which a daily summary may hold until morning has been switched off in
+    /// all but name. For the callout that is the whole failure — an alarm raised at ten at night
+    /// and delivered with the next digest arrives after the night somebody spent underground.
+    /// </remarks>
     public static bool IsAlwaysImmediate(NotificationCategory category) =>
-        category is NotificationCategory.SecurityAlerts;
+        category is NotificationCategory.SecurityAlerts or NotificationCategory.TripCallout;
 }
 
 /// <summary>A user's choice for one notification category. Unique per (UserId, Category).</summary>

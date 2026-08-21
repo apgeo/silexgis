@@ -38,6 +38,17 @@ public sealed class SilexGisApiFactory(
         // class had just queued — and every "nothing was sent" assertion would go flaky.
         // Tests drive NotificationOutboxService directly instead.
         builder.UseSetting("Notifications:PollSeconds", "0");
+        // Nor does the pass that looks for overdue parties, and for a sharper version of the same
+        // reason: it does not merely read rows, it writes them. Left running under one class it
+        // would move another class's armed trip to overdue and queue an alarm nobody asked for —
+        // in a file containing no bug, at whichever tick happened to land there. A class that
+        // wants the pass switched on passes its own interval, which is applied after this.
+        builder.UseSetting("TripCallout:SweepInterval", "00:00:00");
+        // The reminder rides that same pass, and a pass a class runs by hand still reads every
+        // trip in the shared database — so the run-up window is closed too. A class exercising the
+        // reminder opens it deliberately, which is also the only way another class's trip can end
+        // up stamped as reminded about.
+        builder.UseSetting("TripCallout:ReminderLead", "00:00:00");
         if (settings is not null)
         {
             foreach (var (key, value) in settings)
