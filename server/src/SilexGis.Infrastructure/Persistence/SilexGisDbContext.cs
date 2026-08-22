@@ -161,7 +161,9 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<AccountDataExport> AccountDataExports => Set<AccountDataExport>();
 
-    public DbSet<NotificationOutboxEntry> NotificationOutbox => Set<NotificationOutboxEntry>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+
+    public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
 
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
 

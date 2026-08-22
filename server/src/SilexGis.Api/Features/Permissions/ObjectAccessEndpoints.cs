@@ -343,6 +343,7 @@ public static class ObjectAccessEndpoints
         var actorLabels = await ProfileDirectory.ResolveLabelsAsync(db, user, [user.UserId], ct);
         var actorName = actorLabels.GetValueOrDefault(user.UserId) ?? string.Empty;
         var objectName = NameOf(target);
+        var targetKind = TargetKindOf(target);
 
         foreach (var recipient in recipients)
         {
@@ -356,9 +357,36 @@ public static class ObjectAccessEndpoints
                     ["actorName"] = actorName,
                     ["objectName"] = objectName,
                     ["url"] = LinkTo(target),
-                });
+                },
+                // The name and the link above are what this record looked like now. Whether the
+                // recipient may still be shown either of them is a question for the moment they
+                // read the message, and the target reference is the only thing that question can
+                // be asked against.
+                //
+                // Kind and id travel together or not at all. A kind this has no arm for names
+                // nothing a reader's access can be re-decided against, and an id beside a null
+                // kind would read as "about nothing openable" — which is the one state that is
+                // never re-checked, so the frozen name would be printed for ever.
+                targetKind,
+                targetKind is null ? null : target.Entity.Id);
         }
     }
+
+    /// <summary>
+    /// What the notification is about, in the vocabulary a reader's access can be re-decided
+    /// against. A kind with no arm here is one nothing points a reader at, so it names no target
+    /// rather than one that could not be checked.
+    /// </summary>
+    private static NotificationTargetKind? TargetKindOf(AccessTarget target) => target.EntityType switch
+    {
+        null => NotificationTargetKind.Feature,
+        AttachedEntityType.TripLog => NotificationTargetKind.TripLog,
+        AttachedEntityType.Geofile => NotificationTargetKind.Geofile,
+        AttachedEntityType.GeoreferencedMap => NotificationTargetKind.GeoreferencedMap,
+        AttachedEntityType.MapView => NotificationTargetKind.MapView,
+        AttachedEntityType.Expedition => NotificationTargetKind.Expedition,
+        _ => null,
+    };
 
     private static string NameOf(AccessTarget target) => target.Entity switch
     {

@@ -443,8 +443,8 @@ public sealed class TripPromotionTests : IAsyncLifetime, IDisposable
         var counts = new Dictionary<Guid, int>();
         foreach (var userId in userIds)
         {
-            counts[userId] = await db.NotificationOutbox.AsNoTracking()
-                .CountAsync(n => n.UserId == userId
+            counts[userId] = await db.Notifications.AsNoTracking()
+                .CountAsync(n => n.RecipientUserId == userId
                     && n.Category == NotificationCategory.TripParticipation);
         }
 

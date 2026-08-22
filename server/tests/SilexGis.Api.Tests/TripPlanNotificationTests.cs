@@ -167,7 +167,7 @@ public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable
         (await InviteAsync(organiser, trip, mateCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var sent = await NoticesForTemplateAsync(MessageTemplateCatalog.NotifyTripPlanInvitation, trip);
-        sent.Select(x => x.UserId).ShouldBe([mateId]);
+        sent.Select(x => x.RecipientUserId).ShouldBe([mateId]);
     }
 
     /// <summary>
@@ -582,11 +582,11 @@ public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable
         await db.SaveChangesAsync();
     }
 
-    private async Task<List<NotificationOutboxEntry>> NoticesForAsync(Guid userId, string? templateKey = null)
+    private async Task<List<Notification>> NoticesForAsync(Guid userId, string? templateKey = null)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var query = db.NotificationOutbox.AsNoTracking().Where(x => x.UserId == userId);
+        var query = db.Notifications.AsNoTracking().Where(x => x.RecipientUserId == userId);
         if (templateKey is not null)
         {
             query = query.Where(x => x.TemplateKey == templateKey);
@@ -625,19 +625,19 @@ public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable
     /// placeholders, which are jsonb and have no text-matching operator, and on the cave's id
     /// rather than the trip's — this is the one message about a trip that never names it.
     /// </summary>
-    private async Task<List<NotificationOutboxEntry>> CaveNoticesForAsync(Guid userId, Guid caveId)
+    private async Task<List<Notification>> CaveNoticesForAsync(Guid userId, Guid caveId)
     {
         var sent = await NoticesForAsync(userId, MessageTemplateCatalog.NotifyTripInviteeCannotOpenCave);
         return [.. sent.Where(x => x.Placeholders.Contains(caveId.ToString(), StringComparison.Ordinal))];
     }
 
-    private async Task<List<NotificationOutboxEntry>> NoticesForTemplateAsync(string templateKey, Guid tripId)
+    private async Task<List<Notification>> NoticesForTemplateAsync(string templateKey, Guid tripId)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         // Narrowed in memory rather than in the query: the stored placeholders are jsonb, which
         // has no text-matching operator, and the set here is one test's own messages.
-        var sent = await db.NotificationOutbox.AsNoTracking()
+        var sent = await db.Notifications.AsNoTracking()
             .Where(x => x.TemplateKey == templateKey)
             .OrderBy(x => x.Id)
             .ToListAsync();

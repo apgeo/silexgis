@@ -1462,8 +1462,8 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        return await db.NotificationOutbox.AsNoTracking()
-            .CountAsync(n => n.UserId == userId && n.Category == NotificationCategory.TripParticipation);
+        return await db.Notifications.AsNoTracking()
+            .CountAsync(n => n.RecipientUserId == userId && n.Category == NotificationCategory.TripParticipation);
     }
 
     private static object TripBody(string title, Guid[] caveIds) => new

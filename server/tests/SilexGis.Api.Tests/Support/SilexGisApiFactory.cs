@@ -34,9 +34,9 @@ public sealed class SilexGisApiFactory(
         // shared across factories — every test factory must use the TestServer origin.
         builder.UseSetting("PublicUrl", "http://localhost");
         // The notification worker never runs in tests. Every test class shares one PostGIS
-        // container, so a background drain started by one factory would settle rows another
-        // class had just queued — and every "nothing was sent" assertion would go flaky.
-        // Tests drive NotificationOutboxService directly instead.
+        // container, so a background drain started by one factory would route and settle rows
+        // another class had just queued — and every "nothing was sent" assertion would go flaky.
+        // Tests drive the delivery service directly instead.
         builder.UseSetting("Notifications:PollSeconds", "0");
         if (settings is not null)
         {

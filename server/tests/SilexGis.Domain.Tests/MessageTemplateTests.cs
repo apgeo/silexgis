@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Shouldly;
 using SilexGis.Domain.Messaging;
+using SilexGis.Domain.Notifications;
 
 namespace SilexGis.Domain.Tests;
 
@@ -187,5 +188,51 @@ public class MessageTemplateTests
     public void Tidy_collapses_the_gap_a_missing_value_leaves_behind()
     {
         MessageTemplateRenderer.Tidy("One\n\n\n\nTwo\n\n").ShouldBe("One\n\nTwo");
+    }
+
+    /// <summary>
+    /// Fragments of a name that would be one: a bearing, a projected pair, a height. Matched as
+    /// substrings and case-insensitively, so a placeholder called "caveLat" or "utmEasting" is
+    /// caught as surely as one called "latitude".
+    /// </summary>
+    private static readonly string[] CoordinateShaped =
+    [
+        "lat", "lon", "coord", "position", "wgs", "utm", "easting", "northing",
+        "elevation", "altitude", "gps",
+    ];
+
+    [Fact]
+    public void No_notification_declares_a_placeholder_a_coordinate_could_arrive_in()
+    {
+        // Where a cave is, is readable by fewer people than the fact that something happened to
+        // it, and a message leaves the installation entirely: once it is in a mailbox it obeys
+        // none of the rules that decide who may see a position. So no notification may carry one.
+        //
+        // Pinning the declared list is what makes that a rule rather than a hope. A placeholder
+        // off the list is refused when an operator saves a rewrite, and renders as nothing if it
+        // somehow got in, so nothing can reach the wording without being declared here first —
+        // and a producer supplying a value the wording never names is dropped silently.
+        //
+        // What this cannot do, and nothing else can either: a producer is free to write a
+        // coordinate into a value the message *does* declare, because an object's name is text
+        // somebody typed and "Peștera 45.1234, 25.5678" is a name a person may genuinely have
+        // given a cave. The only guard there is the producer contract — a producer names the
+        // thing and links to it, and never describes where it is.
+        foreach (var definition in MessageTemplateCatalog.All)
+        {
+            if (!definition.Key.StartsWith(NotificationTargetPolicy.TemplatePrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            foreach (var placeholder in definition.Placeholders)
+            {
+                foreach (var fragment in CoordinateShaped)
+                {
+                    placeholder.Contains(fragment, StringComparison.OrdinalIgnoreCase)
+                        .ShouldBeFalse($"{definition.Key} declares {{{placeholder}}}");
+                }
+            }
+        }
     }
 }

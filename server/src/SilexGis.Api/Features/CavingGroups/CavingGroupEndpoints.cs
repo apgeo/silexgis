@@ -376,7 +376,11 @@ public static class CavingGroupEndpoints
                 {
                     ["actorName"] = actorLabels.GetValueOrDefault(user.UserId) ?? string.Empty,
                     ["cavingGroupName"] = cavingGroupName,
-                });
+                },
+                // The group's name above is what it was called at the time. Whether this reader
+                // may still be shown it is decided when they read the message, against this.
+                NotificationTargetKind.CavingGroup,
+                id);
         }
 
         await db.SaveChangesAsync(ct);
@@ -436,7 +440,9 @@ public static class CavingGroupEndpoints
                 {
                     ["actorName"] = actorLabels.GetValueOrDefault(user.UserId) ?? string.Empty,
                     ["cavingGroupName"] = cavingGroupName,
-                });
+                },
+                NotificationTargetKind.CavingGroup,
+                id);
         }
 
         // Leaving a group can sever someone's only path into Full Administrators; the

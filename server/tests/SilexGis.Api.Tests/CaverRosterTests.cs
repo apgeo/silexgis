@@ -611,7 +611,7 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable
 
         // And a grant to the club notifies exactly the members who exist as accounts —
         // the account-less member contributes no recipient, and no phantom row appears.
-        var lastOutboxId = await db.NotificationOutbox.AsNoTracking()
+        var lastNotificationId = await db.Notifications.AsNoTracking()
             .MaxAsync(n => (long?)n.Id) ?? 0;
         var caveId = await CreateCaveAsync(editor, $"X1 Cave {suffix}");
         (await editor.PutAsJsonAsync($"/api/v1/objects/feature/{caveId}/access", new
@@ -626,12 +626,12 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable
             },
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var newRows = await db.NotificationOutbox.AsNoTracking()
-            .Where(n => n.Id > lastOutboxId && n.Category == NotificationCategory.PermissionGranted)
+        var newRows = await db.Notifications.AsNoTracking()
+            .Where(n => n.Id > lastNotificationId && n.Category == NotificationCategory.PermissionGranted)
             .ToListAsync();
         // The granter themselves is not notified; the keeper (creator-member) is the
         // only other linked member. One account-less member, zero extra messages.
-        newRows.Select(n => n.UserId).ShouldBe([keeperId]);
+        newRows.Select(n => n.RecipientUserId).ShouldBe([keeperId]);
     }
 
     // ---- the catalogue reads every account holds ----

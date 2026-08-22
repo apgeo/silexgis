@@ -216,6 +216,7 @@ try
     api.MapUiDefaultsEndpoints();
     api.MapMeDataExportEndpoints();
     api.MapMeCapabilityEndpoints();
+    api.MapNotificationInboxEndpoints();
     api.MapUnsubscribeEndpoints();
     api.MapMfaEndpoints();
     api.MapTaxonomyEndpoints();

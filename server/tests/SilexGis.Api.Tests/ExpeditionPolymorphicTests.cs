@@ -391,8 +391,8 @@ public sealed class ExpeditionPolymorphicTests : IAsyncLifetime, IDisposable
         // one carrying none: it reads as a working link and lands on the router's error screen.
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var placeholders = await db.NotificationOutbox.AsNoTracking()
-            .Where(n => n.UserId == outsiderId && n.Category == NotificationCategory.PermissionGranted)
+        var placeholders = await db.Notifications.AsNoTracking()
+            .Where(n => n.RecipientUserId == outsiderId && n.Category == NotificationCategory.PermissionGranted)
             .OrderByDescending(n => n.Id)
             .Select(n => n.Placeholders)
             .FirstAsync();

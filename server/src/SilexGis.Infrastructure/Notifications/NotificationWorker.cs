@@ -9,7 +9,7 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Notifications;
 
 /// <summary>
-/// Polls the notification outbox and drains it.
+/// Polls for notifications that need routing or delivering, and drains them.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -24,10 +24,11 @@ namespace SilexGis.Infrastructure.Notifications;
 /// in flight when the process restarted.
 /// </para>
 /// </remarks>
-public sealed class NotificationOutboxWorker(
+public sealed class NotificationWorker(
     IServiceScopeFactory scopeFactory,
     IConfiguration configuration,
-    ILogger<NotificationOutboxWorker> logger) : BackgroundService
+    TimeProvider clock,
+    ILogger<NotificationWorker> logger) : BackgroundService
 {
     private static readonly TimeSpan PruneInterval = TimeSpan.FromHours(1);
 
@@ -77,12 +78,12 @@ public sealed class NotificationOutboxWorker(
         {
         }
 
-        if (DateTimeOffset.UtcNow - lastPrune < PruneInterval)
+        if (clock.GetUtcNow() - lastPrune < PruneInterval)
         {
             return;
         }
 
-        lastPrune = DateTimeOffset.UtcNow;
+        lastPrune = clock.GetUtcNow();
         _ = await RunAsync(async s =>
         {
             await s.PruneAsync(ct);
@@ -91,10 +92,10 @@ public sealed class NotificationOutboxWorker(
     }
 
     /// <summary>One scope per unit of work, so a long drain never holds one context open.</summary>
-    private async Task<int> RunAsync(Func<NotificationOutboxService, Task<int>> work)
+    private async Task<int> RunAsync(Func<NotificationDeliveryService, Task<int>> work)
     {
         using var scope = scopeFactory.CreateScope();
-        return await work(scope.ServiceProvider.GetRequiredService<NotificationOutboxService>());
+        return await work(scope.ServiceProvider.GetRequiredService<NotificationDeliveryService>());
     }
 
     private async Task WaitForQueueAsync(CancellationToken ct)
@@ -105,7 +106,7 @@ public sealed class NotificationOutboxWorker(
             {
                 using var scope = scopeFactory.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-                _ = await db.NotificationOutbox.AnyAsync(ct);
+                _ = await db.Notifications.AnyAsync(ct);
                 return;
             }
             catch (Exception)

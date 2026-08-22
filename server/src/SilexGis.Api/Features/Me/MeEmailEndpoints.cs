@@ -146,7 +146,7 @@ public static class MeEmailEndpoints
         await db.SaveChangesAsync(ct);
 
         // Warns the address the account just left. Sent straight rather than queued, because the
-        // outbox addresses a recipient by user id and would resolve that to the *new* address —
+        // queue addresses a recipient by user id and would resolve that to the *new* address —
         // and the whole value of this warning is that it reaches the old mailbox, which is the one
         // an attacker changing the address is trying to cut off.
         if (pending is not null && previousEmail is not null)

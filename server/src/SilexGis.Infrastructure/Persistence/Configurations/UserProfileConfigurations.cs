@@ -101,24 +101,78 @@ public sealed class AccountDataExportConfiguration : IEntityTypeConfiguration<Ac
     }
 }
 
-public sealed class NotificationOutboxConfiguration : IEntityTypeConfiguration<NotificationOutboxEntry>
+public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notification>
 {
-    public void Configure(EntityTypeBuilder<NotificationOutboxEntry> builder)
+    public void Configure(EntityTypeBuilder<Notification> builder)
     {
-        builder.ToTable("notification_outbox");
+        // Kind and id are one reference, so they are present together or absent together. A kind
+        // without an id names nothing that can be looked up; an id without a kind is worse, because
+        // "about nothing openable" is the one state a reader's access is never re-decided against
+        // — a row in it would print the name its producer froze for ever. The invariant is stated
+        // on the entity, so it is enforced where it is stated rather than trusted to every caller.
+        builder.ToTable("notifications", t => t.HasCheckConstraint(
+            "ck_notifications_target_pair", "(target_kind IS NULL) = (target_id IS NULL)"));
 
-        builder.Property(x => x.Status).HasConversion<short>();
         builder.Property(x => x.Category).HasConversion<short>();
+        builder.Property(x => x.TargetKind).HasConversion<short>();
         builder.Property(x => x.TemplateKey).HasMaxLength(64);
         builder.Property(x => x.Placeholders).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.RecipientUserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Retention: the one recurring maintenance query, which takes whole notifications past the
+        // window. Without this it is a sequential scan of the table on every pass, to delete —
+        // usually — nothing.
+        builder.HasIndex(x => x.CreatedAt);
+
+        // The listing: one person's own notifications, newest first. The identity column is the
+        // ordering, so this index answers the page without a sort.
+        builder.HasIndex(x => new { x.RecipientUserId, x.Id })
+            .IsDescending(false, true);
+
+        // The unread count, which is asked for far more often than the list itself and is asked
+        // about one person. Partial, over the only rows it can ever count, so it stays roughly the
+        // size of what is actually unread rather than of the whole table.
+        builder.HasIndex(x => x.RecipientUserId)
+            .HasFilter("read_at IS NULL")
+            .HasDatabaseName("ix_notifications_unread");
+
+        // The routing claim, which takes the oldest rows nothing has decided channels for yet.
+        builder.HasIndex(x => x.Id)
+            .HasFilter("routed_at IS NULL")
+            .HasDatabaseName("ix_notifications_unrouted");
+    }
+}
+
+public sealed class NotificationDeliveryConfiguration : IEntityTypeConfiguration<NotificationDelivery>
+{
+    public void Configure(EntityTypeBuilder<NotificationDelivery> builder)
+    {
+        builder.ToTable("notification_deliveries");
+
+        builder.Property(x => x.Channel).HasConversion<short>();
+        builder.Property(x => x.Status).HasConversion<short>();
         // Shorter than the processing queue's cap because this one is written inside the failure
         // path itself: a message too long to store would fail the save that records the failure.
         builder.Property(x => x.Error).HasMaxLength(1000);
 
-        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<Notification>().WithMany().HasForeignKey(x => x.NotificationId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-        // Serves both claims — the immediate drain and the due-digest gather.
+        // A notification leaves on a given channel once. Retries are attempts on this row, never
+        // a second one, so the unique index is also what stops a re-run of routing duplicating a
+        // message somebody already received.
+        builder.HasIndex(x => new { x.NotificationId, x.Channel }).IsUnique();
+
+        // The claim, moved down from the fused table intact: predicate and index together.
+        // Serves both — the immediate drain and the due-summary gather.
         builder.HasIndex(x => new { x.Status, x.NotBefore, x.Id });
-        builder.HasIndex(x => new { x.UserId, x.Status });
+
+        // The summary claim narrows to one recipient, which is what the copied recipient id is
+        // for. There is deliberately no index on the recipient alone: what a person's deliveries
+        // were is read through their notifications, and nothing queries this table by recipient
+        // without also naming a status.
+        builder.HasIndex(x => new { x.RecipientUserId, x.Status });
     }
 }

@@ -388,8 +388,8 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        return await db.NotificationOutbox.AsNoTracking()
-            .CountAsync(n => n.UserId == userId && n.Category == NotificationCategory.PermissionGranted);
+        return await db.Notifications.AsNoTracking()
+            .CountAsync(n => n.RecipientUserId == userId && n.Category == NotificationCategory.PermissionGranted);
     }
 
     /// <summary>

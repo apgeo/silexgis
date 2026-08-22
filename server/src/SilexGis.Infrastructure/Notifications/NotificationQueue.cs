@@ -24,6 +24,10 @@ namespace SilexGis.Infrastructure.Notifications;
 /// mail server, never reads the recipient's preferences, and never reads a user row — which it
 /// could not do anyway, since a feature slice may not touch Identity types.
 /// </para>
+/// <para>
+/// The row it writes is itself the recipient's in-app notification. Which channels it additionally
+/// goes out on — if any — is decided later, by the pass that is allowed to read the recipient.
+/// </para>
 /// </remarks>
 public static class NotificationQueue
 {
@@ -31,19 +35,30 @@ public static class NotificationQueue
     /// Queues one notification for one person. Call it before the <c>SaveChangesAsync</c> that
     /// commits the change being reported.
     /// </summary>
+    /// <param name="targetKind">
+    /// What the notification is about, so the reader's right to see it can be decided again at the
+    /// moment they read it rather than trusted from the name and path frozen into
+    /// <paramref name="placeholders"/> when it was queued. Optional in the signature only so that
+    /// a producer can be written without one; a message that names an object and passes no target
+    /// can never be re-checked, and which messages are excused from passing one is a list with a
+    /// reason against each entry, pinned by a test.
+    /// </param>
+    /// <param name="targetId">Which one. Pass it with <paramref name="targetKind"/> or not at all.</param>
     public static void Enqueue(
         SilexGisDbContext db,
         Guid recipientUserId,
         NotificationCategory category,
         string templateKey,
-        IReadOnlyDictionary<string, string> placeholders) =>
-        db.NotificationOutbox.Add(new NotificationOutboxEntry
+        IReadOnlyDictionary<string, string> placeholders,
+        NotificationTargetKind? targetKind = null,
+        Guid? targetId = null) =>
+        db.Notifications.Add(new Notification
         {
-            UserId = recipientUserId,
+            RecipientUserId = recipientUserId,
             Category = category,
             TemplateKey = templateKey,
             Placeholders = JsonSerializer.Serialize(placeholders, JsonSerializerOptions.Web),
-            Status = NotificationOutboxStatus.Pending,
-            NotBefore = DateTimeOffset.UtcNow,
+            TargetKind = targetKind,
+            TargetId = targetId,
         });
 }

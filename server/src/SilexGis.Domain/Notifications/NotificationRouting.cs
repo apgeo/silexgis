@@ -3,16 +3,28 @@ using SilexGis.Domain.Entities;
 
 namespace SilexGis.Domain.Notifications;
 
-/// <summary>What should happen to one queued notification.</summary>
+/// <summary>
+/// What one channel answers when asked whether it would carry a notification.
+/// </summary>
+/// <remarks>
+/// A decision, never a result, and the two are deliberately kept apart: what a channel answers
+/// here decides whether a delivery row exists at all, and what happens to that row afterwards is
+/// a transport outcome recorded on the row itself. That is why nothing is ever stored as
+/// "suppressed" — a refusal produces no row to store it on, and the notification is in the
+/// recipient's inbox either way.
+/// </remarks>
 public enum NotificationRoute
 {
-    /// <summary>Send it now.</summary>
+    /// <summary>Send it now — a delivery due immediately.</summary>
     Send,
 
-    /// <summary>Hold it for the recipient's daily digest.</summary>
+    /// <summary>Hold it for the recipient's daily digest — a delivery due at the next window.</summary>
     Defer,
 
-    /// <summary>Do not send it — the recipient asked not to hear about this.</summary>
+    /// <summary>
+    /// Do not send it: the recipient asked not to hear about this here, or cannot be reached on
+    /// this channel. No delivery row is created, which is the whole of what a refusal means.
+    /// </summary>
     Suppress,
 }
 
