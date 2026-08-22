@@ -689,6 +689,7 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Notifications__PollSeconds` | `15` | how often queued notifications are sent; **0 switches sending off entirely, and queued messages keep accumulating** |
 | `SILEXGIS__Notifications__DigestHourUtc` | `7` | the hour (UTC) at which daily summaries go out |
 | `SILEXGIS__Notifications__RetentionDays` | `365` | how long a notification stays readable in the recipient's list before it is deleted — read or unread alike, and whether or not an email ever went out for it. Values of zero or less are ignored in favour of the default, so a mistyped setting cannot empty the list |
+| `SILEXGIS__Notifications__BadgeTransport` | `poll` | how a signed-in page keeps the unread count in the header current. `poll` — the only transport implemented — asks again once a minute. `sse` is reserved for a server-pushed stream and does not exist yet: selecting it today leaves the count moving only when the reader marks something read or returns to the tab. Any other value is treated as a typo and answered as `poll` |
 | `SILEXGIS__About__InstanceName` | `SilexGIS` | name used in the messages this installation sends |
 | `SILEXGIS__Auth__DefaultPermissionGroups` | *(empty)* | comma-separated permission-group slugs (e.g. `editors`) every new account joins at registration or first external sign-in |
 | `SILEXGIS__Map__CenterlineDetailZoom` | `18` | zoom at which cave centerlines switch from passage outlines to full survey detail |

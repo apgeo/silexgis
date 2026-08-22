@@ -37,6 +37,9 @@ services:
       # How long a notification stays readable in the recipient's list. It is deleted after
       # this whether or not they read it, and whether or not an email ever went out for it.
       SILEXGIS__Notifications__RetentionDays: ${SILEXGIS_NOTIFICATIONS_RETENTION_DAYS:-365}
+      # How the header's unread count learns it has changed. Only 'poll' is implemented;
+      # 'sse' is reserved for a server-pushed stream that does not exist yet.
+      SILEXGIS__Notifications__BadgeTransport: ${SILEXGIS_NOTIFICATIONS_BADGE_TRANSPORT:-poll}
       SILEXGIS__Files__Root: /data/files
       # Largest accepted upload. The web service's proxy allows 1 GB, so anything up to that
       # works without touching it; going higher means editing client/nginx.conf and

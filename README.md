@@ -174,6 +174,13 @@ Previous versions:
   nobody, since telling you a draft changed would be telling you it exists, and a write that changed
   nothing sends nothing. All of it is one switch on the notifications page, on to begin with, and off
   the moment you say so.
+- **Everything that was sent to you is also a place you can go** — a bell in the top bar counts what
+  you have not read yet, and the inbox behind it lists what happened, newest first, filterable by the
+  kind of event, marked read as you open it or all at once. A line is worded by the installation, in
+  the language you are reading the site in, so wording an operator has rewritten is the wording you
+  see. And a line about something you can no longer open says exactly that, in place of a name and a
+  link: you are still told that it happened — hiding that would be its own kind of leak — but nothing
+  about the thing itself survives the fact that you lost access to it.
 - **Being asked onto a trip does not open the cave, so somebody who can open it is told** — an
   invitation grants nothing, so when a person asked onto a trip cannot read a cave the trip is about,
   the cave's owner and the full administrators get a message with a link to the cave, whether the cave

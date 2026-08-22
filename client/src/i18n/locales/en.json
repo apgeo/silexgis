@@ -1896,6 +1896,20 @@
     },
     "importSection": "Vector import"
   },
+  "notifications": {
+    "bell": "Notifications",
+    "title": "Notifications",
+    "markAllRead": "Mark all as read",
+    "allCategories": "All categories",
+    "scopeAll": "All",
+    "scopeUnread": "Unread",
+    "what": "What happened",
+    "about": "About",
+    "when": "When",
+    "empty": "Nothing to read.",
+    "withheld": "The thing this is about is no longer available to you.",
+    "unrenderable": "This notification can no longer be shown."
+  },
   "unsubscribe": {
     "title": "Notification settings",
     "working": "Applying your choice…",

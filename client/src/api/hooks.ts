@@ -2,6 +2,11 @@
 import { useEffect, useRef } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clusterCellBbox } from '../geo/cluster.ts';
+import {
+  defaultInboxTransport,
+  inboxPollIntervalMs,
+  isInboxTransport,
+} from '../notifications/transport.ts';
 import { api, ApiError, lastReadETag } from './client.ts';
 import type { components } from './schema';
 
@@ -45,12 +50,25 @@ export type NotificationCategory = components['schemas']['NotificationCategoryDt
 
 /**
  * The name of one notification category, as the server publishes it. Named separately from the
- * row that carries it because the settings page and the opt-out landing page both look their
- * wording up by this value alone. Non-null by construction: the generated union admits null only
+ * row that carries it because the settings page, the opt-out landing page and the inbox all look
+ * their wording up by this value alone. Non-null by construction: the generated union admits null only
  * because one response omits the category — a daily summary collects every category and names
  * none — and null is not a category anybody can be notified about.
  */
 export type NotificationCategoryName = NonNullable<components['schemas']['NotificationCategory']>;
+
+/**
+ * One line of the reader's own inbox, as the server renders it.
+ *
+ * The wording is rendered on the server from the language the request was made in, so `title` is
+ * text to show rather than a key to look up. `targetWithheld` says the reader may no longer see
+ * the thing this row is about: the row is still listed — that it happened is not the secret — but
+ * it carries neither the name nor the link, and has to be shown as deliberate rather than broken.
+ */
+export type NotificationItem = components['schemas']['NotificationDto'];
+
+/** How many lines of the reader's own inbox are still unopened. */
+export type UnreadNotificationCount = components['schemas']['UnreadNotificationCountDto'];
 
 /** What an opt-out link switched off, as the server reports it back to the landing page. */
 export type UnsubscribeResult = components['schemas']['UnsubscribeResultDto'];
@@ -169,6 +187,16 @@ export const queryKeys = {
   members: (params: MemberListParams) => ['members', 'list', params] as const,
   member: (id: string) => ['members', 'detail', id] as const,
   notificationPrefs: ['me', 'notifications'] as const,
+  // The inbox keeps a root of its own rather than joining the preferences under 'me': every
+  // profile write invalidates that whole prefix, and a list of what happened has no reason to be
+  // fetched again because somebody uploaded a new picture of themselves. Both entries share the
+  // one root so marking something read can refresh the list and the badge with a single prefix.
+  notificationInbox: (params: NotificationListParams) =>
+    ['notification-inbox', 'list', params] as const,
+  unreadNotificationCount: ['notification-inbox', 'unread-count'] as const,
+  // Outside the inbox root on purpose: marking something read invalidates that whole prefix, and
+  // how this installation is configured is not something a reader can change by reading.
+  notificationTransport: ['notification-transport'] as const,
   uiPreferences: ['me', 'preferences'] as const,
   uiDefaults: ['ui-defaults'] as const,
   dataExport: ['me', 'data-export'] as const,
@@ -382,6 +410,102 @@ export function useUpdateNotificationPreferences() {
     }) => unwrap(api.PUT('/api/v1/me/notifications', { body })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['me'] }),
   });
+}
+
+export interface NotificationListParams {
+  category?: NotificationCategoryName;
+  unreadOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+/** The reader's own inbox, newest first. Nobody else's is reachable through it. */
+export function useNotifications(params: NotificationListParams) {
+  return useQuery({
+    queryKey: queryKeys.notificationInbox(params),
+    queryFn: () => unwrap(api.GET('/api/v1/notifications', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Everything a read changes: the line's own unread mark, the page it sits on, and the count the
+ * header shows. One prefix covers all three because they share a query root.
+ */
+function useInvalidateNotificationInbox() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: ['notification-inbox'] });
+}
+
+/**
+ * Marks one line read. Idempotent on the server, which does not move the stamp a second time, so
+ * a row that is already read can be marked again without rewriting when it was first seen.
+ */
+export function useMarkNotificationRead() {
+  const invalidate = useInvalidateNotificationInbox();
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrapVoid(api.POST('/api/v1/notifications/{id}/read', { params: { path: { id } } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/** Marks everything the reader has not read yet, in one act. */
+export function useMarkAllNotificationsRead() {
+  const invalidate = useInvalidateNotificationInbox();
+  return useMutation({
+    mutationFn: () => unwrapVoid(api.POST('/api/v1/notifications/read-all')),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * How many lines the reader has not opened yet, for the count the header shows.
+ *
+ * Its own request rather than a number read off the list, because the header is on every page and
+ * the list is on one: asking for the count costs one small answer, while asking for the first page
+ * of the inbox everywhere would fetch and re-render rows nobody is looking at.
+ *
+ * Kept current three ways, and the timer is the weakest of them. Both ways of marking something
+ * read invalidate the inbox root this key sits under, so the number moves as the reader acts
+ * rather than up to a minute later; returning to the tab refetches, which is what covers a browser
+ * that throttles timers in a background tab; and the interval itself only has to cover a
+ * notification arriving while somebody is watching a page that is not the inbox. `staleTime` is
+ * left at zero for the second of those: a query still considered fresh is not refetched on focus.
+ *
+ * The timer is the one of the three the installation chooses: it runs while the configured
+ * transport is polling, and stops when the server says it will push instead. The other two hold
+ * whatever the transport is.
+ */
+export function useUnreadNotificationCount() {
+  const transport = useInboxTransport();
+  return useQuery({
+    queryKey: queryKeys.unreadNotificationCount,
+    queryFn: () => unwrap(api.GET('/api/v1/notifications/unread-count')),
+    refetchInterval: transport === 'poll' ? inboxPollIntervalMs : false,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * Which transport this installation has been configured for.
+ *
+ * The choice belongs to whoever runs the server, not to this client, so it is asked for rather
+ * than compiled in. Until the answer arrives — and if it never does, because the request failed —
+ * the header polls: that is the transport which needs nothing else in place, so a count is never
+ * left with nothing to move it.
+ *
+ * It changes when an operator restarts the server with a different setting, so it is asked for
+ * once and then left alone rather than re-fetched on every mount of the header.
+ */
+export function useInboxTransport() {
+  const { data } = useQuery({
+    queryKey: queryKeys.notificationTransport,
+    queryFn: () => unwrap(api.GET('/api/v1/notifications/config')),
+    staleTime: Infinity,
+  });
+  const named = data?.badgeTransport;
+  return isInboxTransport(named) ? named : defaultInboxTransport;
 }
 
 /**

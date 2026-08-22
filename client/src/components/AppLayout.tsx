@@ -35,6 +35,7 @@ import { useLanguageChoice } from '../i18n/languageChoice.ts';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { hasAccessAction, useCapabilities, useMe, type AccessDomainName } from '../api/hooks.ts';
 import { useAuth } from '../auth/auth.tsx';
+import NotificationBell from './NotificationBell.tsx';
 import { useIsFullAdmin } from './reslinks/permissions.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 
@@ -73,17 +74,18 @@ export default function AppLayout() {
   // offered the page that authors it.
   const isFullAdmin = useIsFullAdmin();
 
-  // "settings" is listed so an unmatched path does not fall through to highlighting the map; it
-  // matches no menu item, so nothing lights up while it is open, which is deliberate — it is not
-  // a sidebar destination. Every other entry here is one, including a camp: the list is a
-  // destination and a camp's own page stays under it, so opening one keeps the camps item lit.
+  // "settings" and "notifications" are listed so an unmatched path does not fall through to
+  // highlighting the map; neither matches a menu item, so nothing lights up while one is open,
+  // which is deliberate — neither is a sidebar destination. Every other entry here is one,
+  // including a camp: the list is a destination and a camp's own page stays under it, so opening
+  // one keeps the camps item lit.
   const sections = [
     'map3d', 'dashboard', 'caves', 'features', 'geodata', 'gallery', 'albums', 'cabinets',
     'uploads', 'documents', 'trip-logs', 'expeditions',
     'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
     'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'admin/term-rules',
-    'settings',
+    'settings', 'notifications',
   ] as const;
   const section = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
   // A document's own page is not a sidebar destination of its own — documents are reached
@@ -97,6 +99,7 @@ export default function AppLayout() {
           {t('app.name')}
         </Typography.Title>
         <Flex gap={16} align="center">
+          <NotificationBell />
           <Select
             size="small"
             value={language}

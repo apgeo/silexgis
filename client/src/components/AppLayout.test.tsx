@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import AppLayout from './AppLayout.tsx';
+import type { UnreadNotificationCount } from '../api/hooks.ts';
 
 let mobile = false;
 let capabilities: Record<string, string> | undefined;
@@ -14,11 +15,16 @@ let permissionGroups: { slug: string }[] = [];
 vi.mock('../hooks/useIsMobile.ts', () => ({ useIsMobile: () => mobile }));
 const saveLocale = vi.fn();
 let me: { avatarUrl: null; displayName?: string | null; email?: string } = { avatarUrl: null };
+// Typed from the wire so the stub cannot drift from the shape the bell actually reads.
+let unreadNotifications: UnreadNotificationCount | undefined;
 vi.mock('../api/hooks.ts', () => ({
   useMe: () => ({ data: me }),
   useUpdateLocale: () => ({ mutate: saveLocale }),
   useMyPermissionGroups: () => ({ data: permissionGroups }),
   useCapabilities: () => ({ data: capabilities ? { domains: capabilities } : undefined }),
+  // The header's bell reads this; the mock replaces the module wholesale, so a hook left out
+  // here is undefined at the call site and every test in this file dies on the render.
+  useUnreadNotificationCount: () => ({ data: unreadNotifications }),
   // The real helper, inlined: the mock replaces the module wholesale.
   hasAccessAction: (actions: string | undefined, flag: string) =>
     (actions ?? '').split(',').map((x) => x.trim()).includes(flag),
@@ -32,12 +38,13 @@ vi.mock('../auth/auth.tsx', () => ({
   }),
 }));
 
-function renderShell() {
+function renderShell(at = '/map') {
   return render(
-    <MemoryRouter initialEntries={['/map']}>
+    <MemoryRouter initialEntries={[at]}>
       <Routes>
         <Route path="/" element={<AppLayout />}>
           <Route path="map" element={<div>map page</div>} />
+          <Route path="notifications" element={<div>inbox page</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -52,6 +59,7 @@ beforeEach(() => {
   mobile = false;
   capabilities = undefined;
   permissionGroups = [];
+  unreadNotifications = undefined;
   saveLocale.mockClear();
 });
 
@@ -94,6 +102,29 @@ describe('AppLayout account name', () => {
     renderShell();
 
     expect(screen.getByText('Ana')).toBeInTheDocument();
+  });
+});
+
+describe('AppLayout header', () => {
+  it('carries the way to the inbox, which no sidebar entry offers', () => {
+    unreadNotifications = { unread: 4 };
+    renderShell();
+
+    // The inbox is reached from here and nowhere else: it is not a sidebar destination, so a
+    // rewrite of this cluster that drops the bell leaves the page registered and unreachable.
+    expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument();
+    expect(screen.getByTitle('4')).toBeInTheDocument();
+  });
+
+  it('lights nothing in the rail while the inbox is open', () => {
+    // The other half of registering this address: the shell resolves a section from the path and
+    // falls back to the map when it recognises none, so an inbox missing from that list lights
+    // the Map item and tells the reader they are somewhere they are not. Nothing lighting up is
+    // the intended answer here — the inbox is reached from the header, not from the rail.
+    renderShell('/notifications');
+
+    expect(screen.getByText('inbox page')).toBeInTheDocument();
+    expect(document.querySelectorAll('.ant-menu-item-selected')).toHaveLength(0);
   });
 });
 

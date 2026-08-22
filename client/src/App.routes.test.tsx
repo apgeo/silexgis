@@ -37,4 +37,10 @@ describe('the addresses this application hands out', () => {
   it('include the list of camps the sidebar sends people to', () => {
     expect(matchRoutes(routes, '/expeditions')).toBeTruthy();
   });
+
+  // The header offers this one, and it is registered in two places — the router and the sidebar's
+  // selected-key list — so it is exactly the kind of address that goes missing from one of them.
+  it('include the inbox the header sends people to', () => {
+    expect(matchRoutes(routes, '/notifications')).toBeTruthy();
+  });
 });

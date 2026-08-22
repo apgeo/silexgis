@@ -91,10 +91,10 @@ const accessDomains: Record<AccessDomainName, true> = {
  * silently, because nothing else in the client mentions the vocabulary.
  */
 /**
- * Every kind of event a person can be notified about. Two things read this vocabulary by name —
- * the notification settings page and the page an opt-out link lands on — and neither has any
- * other mention of it, so a category added on the server ships showing its own lookup key in
- * both languages with nothing failing. The type closes it in both directions: a new category
+ * Every kind of event a person can be notified about. Three things read this vocabulary by name —
+ * the notification settings page, the page an opt-out link lands on, and the inbox — and none has
+ * any other mention of it, so a category added on the server ships showing its own lookup key in
+ * every language with nothing failing. The type closes it in both directions: a new category
  * fails to compile here until it is named, and a name that is no longer a category fails too.
  */
 const notificationCategories: Record<NotificationCategoryName, true> = {

@@ -1896,6 +1896,20 @@
     },
     "importSection": "Import vectorial"
   },
+  "notifications": {
+    "bell": "Notificări",
+    "title": "Notificări",
+    "markAllRead": "Marchează tot ca citit",
+    "allCategories": "Toate categoriile",
+    "scopeAll": "Toate",
+    "scopeUnread": "Necitite",
+    "what": "Ce s-a întâmplat",
+    "about": "Despre",
+    "when": "Când",
+    "empty": "Nu aveți nimic de citit.",
+    "withheld": "Lucrul la care se referă aceasta nu vă mai este disponibil.",
+    "unrenderable": "Această notificare nu mai poate fi afișată."
+  },
   "unsubscribe": {
     "title": "Setări notificări",
     "working": "Se aplică alegerea dumneavoastră…",

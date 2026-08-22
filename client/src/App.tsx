@@ -56,6 +56,7 @@ const SharedAlbumPage = lazy(() =>
 const LinkPage = lazy(() => import('./pages/links/LinkPage.tsx'));
 const CavingGroupsPage = lazy(() => import('./pages/cavingGroups/CavingGroupsPage.tsx'));
 const CaversPage = lazy(() => import('./pages/cavers/CaversPage.tsx'));
+const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage.tsx'));
 const SharedViewPage = lazy(() => import('./pages/SharedViewPage.tsx'));
 const PanelPage = lazy(() => import('./pages/panel/PanelPage.tsx'));
 const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout.tsx'));
@@ -144,6 +145,7 @@ export const routes: RouteObject[] = [
           { path: '/links/:code', element: <Loadable><LinkPage /></Loadable> },
           { path: '/caving-groups', element: <Loadable><CavingGroupsPage /></Loadable> },
           { path: '/cavers', element: <Loadable><CaversPage /></Loadable> },
+          { path: '/notifications', element: <Loadable><NotificationsPage /></Loadable> },
           {
             path: '/settings',
             element: <Loadable><SettingsLayout /></Loadable>,
