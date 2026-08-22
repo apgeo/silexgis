@@ -41,6 +41,12 @@ public sealed class SilexGisUserConfiguration : IEntityTypeConfiguration<SilexGi
         // Used when checking whether a file is somebody's avatar; most rows have none.
         builder.HasIndex(x => x.AvatarFileId).HasFilter("avatar_file_id IS NOT NULL");
 
+        // One number reaches exactly one account. Nothing needed this while the number was only
+        // ever an outbound destination, but a number that two accounts share cannot be resolved
+        // back to a person — and the number is a sign-in credential. Partial: most accounts have
+        // none, and every one of those would otherwise collide with every other.
+        builder.HasIndex(x => x.PhoneNumber).IsUnique().HasFilter("phone_number IS NOT NULL");
+
         // An avatar is either an uploaded image or a built-in one, never both.
         builder.ToTable("users", t => t.HasCheckConstraint(
             "ck_users_one_avatar_source",

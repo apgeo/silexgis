@@ -77,11 +77,42 @@ public sealed class NotificationOutboxService(
 
         var rows = await db.NotificationOutbox.Where(r => ids.Contains(r.Id)).OrderBy(r => r.Id).ToListAsync(ct);
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == rows[0].UserId, ct);
-        if (user?.Email is null)
+
+        // Preferences are read again here, not only when the row was deferred. A summary is
+        // written hours after the events it collects, and the link it carries is itself an
+        // invitation to switch it off — so between the deferral and the send the recipient may
+        // have done exactly that. Sending anyway would answer "the summary has stopped" with one
+        // more summary.
+        if (user?.Email is null || !user.NotifyEmailEnabled)
         {
             MarkAll(rows, NotificationOutboxStatus.Suppressed);
             await db.SaveChangesAsync(ct);
             return rows.Count;
+        }
+
+        // The same second thought applied per category: a summary claimed for today may contain
+        // lines about something the recipient has since switched off, and those must not arrive.
+        var claimed = rows;
+        var stored = await db.UserNotificationPreferences
+            .Where(p => p.UserId == user.Id)
+            .ToDictionaryAsync(p => p.Category, p => p.Enabled, ct);
+
+        rows = claimed
+            .Where(r => stored.TryGetValue(r.Category, out var enabled)
+                ? enabled
+                : NotificationCategories.DefaultEnabled(r.Category))
+            .ToList();
+
+        var dropped = claimed.Where(r => !rows.Contains(r)).ToList();
+        if (dropped.Count > 0)
+        {
+            MarkAll(dropped, NotificationOutboxStatus.Suppressed);
+        }
+
+        if (rows.Count == 0)
+        {
+            await db.SaveChangesAsync(ct);
+            return claimed.Count;
         }
 
         // Each line is that event's own subject: already a one-line summary, already translated,
@@ -95,7 +126,10 @@ public sealed class NotificationOutboxService(
         var values = BaseValues(user);
         values["itemCount"] = rows.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
         values["items"] = string.Join("\n", lines);
-        values["unsubscribeUrl"] = UnsubscribeLine(user.Id, NotificationCategory.CavingGroupMembership);
+        // A summary has no category of its own, so its opt-out link cannot name one: it collects
+        // whatever the recipient still hears about, and a token for one of those would switch off
+        // something they never said anything about.
+        values["unsubscribeUrl"] = DigestUnsubscribeLine(user.Id);
 
         var result = await dispatcher.SendAsync(
             MessageTemplateCatalog.NotifyDigest, user.Email, user.Locale, values, ct);
@@ -114,7 +148,7 @@ public sealed class NotificationOutboxService(
         }
 
         await db.SaveChangesAsync(ct);
-        return rows.Count;
+        return claimed.Count;
     }
 
     /// <summary>Drops settled rows once they are old enough to be of no further interest.</summary>
@@ -222,6 +256,16 @@ public sealed class NotificationOutboxService(
             }
         }
 
+        // A producer writes the path to the thing it is reporting, because a feature slice knows
+        // its own routes and has no business knowing where the installation is deployed. Only this
+        // layer knows that, so this is where a path becomes a link a mail client can open — a
+        // message that printed a bare path would print something nobody can click. A value that is
+        // already a whole address is left exactly as it is.
+        if (values.TryGetValue("url", out var url))
+        {
+            values["url"] = Absolute(url);
+        }
+
         // Security alerts carry no opt-out: the settings page refuses to switch them off, so a
         // link that could not work would be a lie. The placeholder renders as nothing instead.
         values["unsubscribeUrl"] = NotificationCategories.IsUserConfigurable(row.Category)
@@ -239,7 +283,22 @@ public sealed class NotificationOutboxService(
     };
 
     private string UnsubscribeLine(Guid userId, NotificationCategory category) =>
-        $"{SiteUrl}/unsubscribe?token={Uri.EscapeDataString(unsubscribeTokens.Create(userId, category))}";
+        TokenLink(unsubscribeTokens.CreateForCategory(userId, category));
+
+    private string DigestUnsubscribeLine(Guid userId) =>
+        TokenLink(unsubscribeTokens.CreateForDigest(userId));
+
+    private string TokenLink(string token) =>
+        Link($"/unsubscribe?token={Uri.EscapeDataString(token)}");
+
+    /// <summary>Turns one of this installation's own paths into a whole address.</summary>
+    private string Link(string path) => SiteUrl + path;
+
+    /// <summary>
+    /// A path is resolved against the installation's address; anything else is left alone, so a
+    /// value that is already a whole address is not mangled into one that is not.
+    /// </summary>
+    private string Absolute(string url) => url.StartsWith('/') ? Link(url) : url;
 
     /// <summary>Never the email address: it is the one thing the profile rules may be hiding.</summary>
     private static string Greeting(SilexGisUser user) =>

@@ -50,7 +50,6 @@ public sealed class MessageTemplateStore(SilexGisDbContext db, IMemoryCache cach
             {
                 Key = definition.Key,
                 Locale = normalised,
-                Channel = definition.Channel,
                 Subject = subject,
                 Body = body,
             });
@@ -59,7 +58,6 @@ public sealed class MessageTemplateStore(SilexGisDbContext db, IMemoryCache cach
         {
             row.Subject = subject;
             row.Body = body;
-            row.Channel = definition.Channel;
         }
 
         await db.SaveChangesAsync(ct);

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Http.HttpResults;
+using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -51,11 +52,18 @@ public static class AdminSettingsEndpoints
         admin.MapPut("/interface", SaveInterfaceAsync)
             .WithValidation<InterfaceSettingsDto>()
             .WithSummary("Saves the starting interface arrangement new users begin from; a default, never a policy.");
+        // The two routes here that make the installation send something to a destination the
+        // caller types in, so both carry the per-address budget the credential surfaces use.
+        // "May change the settings" is not "may message any address in the world as fast as a
+        // script can ask". The text one costs the operator real money on every call, so it has a
+        // second, durable cooldown of its own inside the handler.
         admin.MapPost("/mail/test", TestMailAsync)
             .WithValidation<TestMessageRequest>()
+            .RequireRateLimiting("auth")
             .WithSummary("Sends a test message to prove the mail server works.");
         admin.MapPost("/sms/test", TestSmsAsync)
             .WithValidation<TestMessageRequest>()
+            .RequireRateLimiting("auth")
             .WithSummary("Sends a test text to prove the gateway works.");
 
         return api;
@@ -336,6 +344,7 @@ public static class AdminSettingsEndpoints
     private static async Task<Results<Ok<TestMessageResultDto>, UnauthorizedHttpResult, ProblemHttpResult>> TestSmsAsync(
         TestMessageRequest request,
         IAccessContextAccessor accessAccessor,
+        AdminTestSendThrottle throttle,
         ISmsSender smsSender,
         ISmsDelivery smsDelivery,
         CancellationToken ct)
@@ -355,6 +364,18 @@ public static class AdminSettingsEndpoints
         {
             return ApiProblems.BadRequest("admin.sms_not_configured", "No SMS gateway is configured.");
         }
+
+        // A durable cooldown, not the per-address request budget: that budget is shared with the
+        // sign-in routes, it refills every minute, and a second replica of this application keeps
+        // a second copy of it — while every call it lets through sends a text the operator pays
+        // for. The budget stays as the outer guard; this is the bound.
+        if (await throttle.TooSoonAsync(ctx.UserId))
+        {
+            return ApiProblems.BadRequest(
+                "admin.sms_test_too_soon", "Wait a moment before sending another test text.");
+        }
+
+        await throttle.MarkSentAsync(ctx.UserId);
 
         try
         {

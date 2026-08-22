@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Notifications;
+using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Notifications;
@@ -12,7 +13,9 @@ namespace SilexGis.Api.Features.Notifications;
 public sealed record UnsubscribeRequest(string Token);
 
 /// <summary>What was switched off, so the page can say so in the user's own words.</summary>
-public sealed record UnsubscribeResultDto(NotificationCategory Category);
+/// <param name="Kind">Whether one category was switched off, or the daily summary itself.</param>
+/// <param name="Category">Null when the daily summary was switched off — it names no category.</param>
+public sealed record UnsubscribeResultDto(UnsubscribeKind Kind, NotificationCategory? Category);
 
 public sealed class UnsubscribeRequestValidator : AbstractValidator<UnsubscribeRequest>
 {
@@ -51,13 +54,21 @@ public static class UnsubscribeEndpoints
     private static async Task<Results<Ok<UnsubscribeResultDto>, ProblemHttpResult>> UnsubscribeAsync(
         UnsubscribeRequest request,
         IUnsubscribeTokens tokens,
+        NotificationOptOut optOut,
         SilexGisDbContext db,
         CancellationToken ct)
     {
-        if (!tokens.TryRead(request.Token, out var userId, out var category))
+        if (!tokens.TryRead(request.Token, out var subject))
         {
             return ApiProblems.BadRequest("notification.unsubscribe_invalid", "That link is no longer valid.");
         }
+
+        if (subject.Kind == UnsubscribeKind.DailyDigest)
+        {
+            return await StopTheDailySummaryAsync(subject.UserId, optOut, ct);
+        }
+
+        var category = subject.Category;
 
         // Security alerts have no opt-out anywhere else either, and a token for one could only
         // come from a tampered link — the sender never puts one in those messages.
@@ -68,13 +79,13 @@ public static class UnsubscribeEndpoints
         }
 
         var row = await db.UserNotificationPreferences
-            .FirstOrDefaultAsync(p => p.UserId == userId && p.Category == category, ct);
+            .FirstOrDefaultAsync(p => p.UserId == subject.UserId && p.Category == category, ct);
 
         if (row is null)
         {
             db.UserNotificationPreferences.Add(new UserNotificationPreference
             {
-                UserId = userId,
+                UserId = subject.UserId,
                 Category = category,
                 Enabled = false,
             });
@@ -85,6 +96,27 @@ public static class UnsubscribeEndpoints
         }
 
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(new UnsubscribeResultDto(category));
+        return TypedResults.Ok(new UnsubscribeResultDto(UnsubscribeKind.Category, category));
+    }
+
+    /// <summary>
+    /// Switches the account's notification email off.
+    /// </summary>
+    /// <remarks>
+    /// The daily summary is not a category and cannot be switched off as one. Merely returning the
+    /// account to one message per event would send it more mail than the link was clicked to stop,
+    /// so the only honest reading of "stop sending me this summary" is to stop the mail. Alerts
+    /// about the account's own credentials still go out: they ignore this switch by design, because
+    /// whoever is taking an account over may be holding a live session while they do it.
+    /// </remarks>
+    private static async Task<Results<Ok<UnsubscribeResultDto>, ProblemHttpResult>> StopTheDailySummaryAsync(
+        Guid userId, NotificationOptOut optOut, CancellationToken ct)
+    {
+        // An account that is gone answers exactly as one that was changed, for the same reason a
+        // bad token does: anything else turns the endpoint into a way to test whether an account
+        // is real.
+        _ = await optOut.StopNotificationEmailAsync(userId, ct);
+
+        return TypedResults.Ok(new UnsubscribeResultDto(UnsubscribeKind.DailyDigest, null));
     }
 }

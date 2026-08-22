@@ -119,6 +119,11 @@ public static class MessageTemplateCatalog
     private const string ActorName = "actorName";
 
     /// <summary>Notification placeholder: where the installation lives, for a "go and look" link.</summary>
+    /// <remarks>
+    /// A template that links to one particular thing does not need this: the sender resolves that
+    /// message's own "url" against the installation's address before rendering, so writing the two
+    /// side by side would produce the address twice.
+    /// </remarks>
     private const string SiteUrl = "siteUrl";
 
     /// <summary>
@@ -438,7 +443,7 @@ public static class MessageTemplateCatalog
             NotifyTripPlanInvitation,
             MessageChannel.Email,
             "Someone was asked whether they are coming on a trip being planned.",
-            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", SiteUrl, "url", UnsubscribeUrl],
+            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", "url", UnsubscribeUrl],
             new Dictionary<string, MessageTemplateText>
             {
                 ["en"] = new(
@@ -448,7 +453,7 @@ public static class MessageTemplateCatalog
 
                     {actorName} invited you to {tripTitle} on {tripDate}. You can answer here:
 
-                    {siteUrl}{url}
+                    {url}
 
                     {unsubscribeUrl}
                     """),
@@ -459,7 +464,7 @@ public static class MessageTemplateCatalog
 
                     {actorName} v-a invitat la {tripTitle} în data de {tripDate}. Puteți răspunde aici:
 
-                    {siteUrl}{url}
+                    {url}
 
                     {unsubscribeUrl}
                     """),
@@ -469,7 +474,7 @@ public static class MessageTemplateCatalog
             NotifyTripPlanChanged,
             MessageChannel.Email,
             "A trip someone is on was changed while it was still being planned.",
-            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", SiteUrl, "url", UnsubscribeUrl],
+            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", "url", UnsubscribeUrl],
             new Dictionary<string, MessageTemplateText>
             {
                 ["en"] = new(
@@ -479,7 +484,7 @@ public static class MessageTemplateCatalog
 
                     {actorName} changed {tripTitle}, planned for {tripDate}:
 
-                    {siteUrl}{url}
+                    {url}
 
                     {unsubscribeUrl}
                     """),
@@ -490,7 +495,7 @@ public static class MessageTemplateCatalog
 
                     {actorName} a modificat {tripTitle}, planificată pentru {tripDate}:
 
-                    {siteUrl}{url}
+                    {url}
 
                     {unsubscribeUrl}
                     """),
@@ -500,7 +505,7 @@ public static class MessageTemplateCatalog
             NotifyTripPlanCancelled,
             MessageChannel.Email,
             "A trip someone is on was called off.",
-            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", SiteUrl, "url", UnsubscribeUrl],
+            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", "url", UnsubscribeUrl],
             new Dictionary<string, MessageTemplateText>
             {
                 ["en"] = new(
@@ -510,7 +515,7 @@ public static class MessageTemplateCatalog
 
                     {actorName} called off {tripTitle}, planned for {tripDate}. It is not going ahead.
 
-                    {siteUrl}{url}
+                    {url}
 
                     {unsubscribeUrl}
                     """),
@@ -521,7 +526,7 @@ public static class MessageTemplateCatalog
 
                     {actorName} a anulat {tripTitle}, planificată pentru {tripDate}. Tura nu mai are loc.
 
-                    {siteUrl}{url}
+                    {url}
 
                     {unsubscribeUrl}
                     """),
@@ -531,7 +536,7 @@ public static class MessageTemplateCatalog
             NotifyTripInviteeCannotOpenCave,
             MessageChannel.Email,
             "Someone asked on a trip cannot open a cave the trip is about.",
-            [AppName, DisplayName, ActorName, "inviteeName", "caveName", SiteUrl, "url", UnsubscribeUrl],
+            [AppName, DisplayName, ActorName, "inviteeName", "caveName", "url", UnsubscribeUrl],
             new Dictionary<string, MessageTemplateText>
             {
                 ["en"] = new(
@@ -543,7 +548,7 @@ public static class MessageTemplateCatalog
                     no access to. Being asked on a trip grants none: only somebody who may change
                     that cave's permissions can.
 
-                    {siteUrl}{url}
+                    {url}
 
                     This message goes to the cave's owner and to full administrators, and to nobody
                     else — somebody who may grant access to it in another way, through a club for
@@ -560,7 +565,7 @@ public static class MessageTemplateCatalog
                     {inviteeName} nu are acces. Invitația la o tură nu acordă acces: numai cineva
                     care poate schimba permisiunile peșterii poate face asta.
 
-                    {siteUrl}{url}
+                    {url}
 
                     Acest mesaj ajunge la proprietarul peșterii și la administratorii deplini, și la
                     nimeni altcineva — cineva care poate acorda acces altfel, printr-un club de

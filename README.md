@@ -215,7 +215,8 @@ Previous versions:
 - **Email and SMS that an operator controls** — any SMTP server, any SMS gateway that speaks
   HTTP, and the wording of every message editable per language from the admin pages. Configure
   nothing and the app still runs: links and codes go to the server log instead.
-- **English and Romanian** throughout.
+- **English and Romanian** throughout — and the language you pick follows your account, so the
+  messages the system sends you arrive in it too, not only the screens.
 
 ## Quick start
 

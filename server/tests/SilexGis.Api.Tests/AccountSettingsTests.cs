@@ -84,7 +84,6 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
     {
         var response = await me.PutAsJsonAsync("/api/v1/me", ProfileBody(
             firstName: "Ana", lastName: "Pop", displayName: "Ana P", bio: "Caver since 2010.",
-            phoneNumber: "+40 700 111 222", locale: "ro",
             realName: "cavingGroup", email: "authenticated"));
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 
@@ -92,18 +91,32 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         profile.GetProperty("firstName").GetString().ShouldBe("Ana");
         profile.GetProperty("lastName").GetString().ShouldBe("Pop");
         profile.GetProperty("displayName").GetString().ShouldBe("Ana P");
-        profile.GetProperty("phoneNumber").GetString().ShouldBe("+40 700 111 222");
 
-        profile.GetProperty("locale").GetString().ShouldBe("ro");
         profile.GetProperty("visibility").GetProperty("realName").GetString().ShouldBe("cavingGroup");
         profile.GetProperty("visibility").GetProperty("email").GetString().ShouldBe("authenticated");
     }
 
     [Fact]
-    public async Task Profile_rejects_an_overlong_name_and_a_bad_locale()
+    public async Task The_profile_save_cannot_move_the_language()
+    {
+        // The language is switched from the application shell, far from any open profile form,
+        // and this save is a full-DTO replace. If it carried the language, a form opened before
+        // the switch would put the old answer back — and with it, the language every message this
+        // account is sent is written in.
+        (await me.PutAsJsonAsync("/api/v1/me/locale", new { language = "ro", timeZone = (string?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var response = await me.PutAsJsonAsync("/api/v1/me", ProfileBody(firstName: "Ana"));
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+
+        (await GetMeAsync(me)).GetProperty("locale").GetString().ShouldBe("ro");
+    }
+
+    [Fact]
+    public async Task Profile_rejects_an_overlong_name()
     {
         var response = await me.PutAsJsonAsync("/api/v1/me", ProfileBody(
-            firstName: new string('x', 300), locale: "english"));
+            firstName: new string('x', 300)));
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
@@ -120,6 +133,63 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         var profile = await GetMeAsync(me);
         profile.GetProperty("email").GetString().ShouldBe(MyEmail);
         profile.GetProperty("userName").GetString().ShouldBe(MyEmail);
+    }
+
+    [Fact]
+    public async Task The_language_choice_is_stored_on_its_own_without_the_profile_form()
+    {
+        // The application shell switches language far from any profile form, so the choice has a
+        // route of its own rather than riding the full-DTO profile save, which would let a stale
+        // form overwrite it.
+        var saved = await me.PutAsJsonAsync(
+            "/api/v1/me/locale", new { language = "ro", timeZone = "Europe/Bucharest" });
+
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+        JsonDocument.Parse(await saved.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("language").GetString().ShouldBe("ro");
+
+        // Visible on both the resource of its own and the profile the rest of the app reads.
+        var read = JsonDocument.Parse(await (await me.GetAsync("/api/v1/me/locale/")).Content.ReadAsStringAsync())
+            .RootElement;
+        read.GetProperty("language").GetString().ShouldBe("ro");
+        (await GetMeAsync(me)).GetProperty("locale").GetString().ShouldBe("ro");
+
+        // The zone is in the contract and validated, but there is no column for it yet, so it
+        // reads back as nothing. When the column lands this assertion is what changes.
+        read.GetProperty("timeZone").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task The_language_route_refuses_a_language_that_is_not_a_tag_and_a_zone_that_is_not_a_zone()
+    {
+        foreach (var body in new object[]
+        {
+            new { language = "english", timeZone = (string?)null },
+            new { language = "", timeZone = (string?)null },
+            new { language = "ro", timeZone = "Not A Zone" },
+        })
+        {
+            var response = await me.PutAsJsonAsync("/api/v1/me/locale", body);
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body.ToString());
+            JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement
+                .GetProperty("code").GetString().ShouldBe("validation.failed");
+        }
+
+        // The positive half: a language with no zone at all is accepted, because a browser that
+        // cannot name its zone must still be able to say what it reads.
+        (await me.PutAsJsonAsync("/api/v1/me/locale", new { language = "en", timeZone = (string?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task The_language_route_requires_authentication()
+    {
+        using var anonymous = factory.CreateClient();
+
+        (await anonymous.GetAsync("/api/v1/me/locale/")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.PutAsJsonAsync("/api/v1/me/locale", new { language = "ro", timeZone = (string?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -488,9 +558,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         string? lastName = null,
         string? displayName = null,
         string? bio = null,
-        string? phoneNumber = null,
         Guid? cavingClubId = null,
-        string locale = "en",
         string realName = "private",
         string email = "private") => new
         {
@@ -498,9 +566,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
             lastName,
             displayName,
             bio,
-            phoneNumber,
             cavingClubId,
-            locale,
             visibility = new
             {
                 realName,

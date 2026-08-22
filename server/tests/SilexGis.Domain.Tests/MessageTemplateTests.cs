@@ -90,7 +90,7 @@ public class MessageTemplateTests
 
         definition.Channel.ShouldBe(MessageChannel.Email);
         definition.Placeholders.ShouldBe(
-            ["appName", "displayName", "actorName", "tripTitle", "tripDate", "siteUrl", "url", "unsubscribeUrl"],
+            ["appName", "displayName", "actorName", "tripTitle", "tripDate", "url", "unsubscribeUrl"],
             ignoreOrder: true);
 
         foreach (var locale in MessageTemplateCatalog.Locales)
@@ -101,6 +101,32 @@ public class MessageTemplateTests
             text.Subject.ShouldNotBeNullOrWhiteSpace($"{key} ({locale})");
             MessageTemplateRenderer.UnknownPlaceholders(definition, text.Subject, text.Body)
                 .ShouldBeEmpty($"{key} ({locale})");
+        }
+    }
+
+    [Fact]
+    public void No_shipped_template_writes_the_installation_address_in_front_of_a_link()
+    {
+        // The sender resolves a message's own "url" against the installation's address before
+        // rendering, so a wording that writes the two side by side prints the address twice and
+        // produces a link no mail client can open. Declaring both is what makes that wording
+        // possible at all, so both halves are pinned: neither may a shipped body write the pair,
+        // nor may a definition declare "siteUrl" alongside "url" and let an operator rewrite
+        // reintroduce it.
+        foreach (var definition in MessageTemplateCatalog.All)
+        {
+            if (definition.Placeholders.Contains("url", StringComparer.Ordinal))
+            {
+                definition.Placeholders.ShouldNotContain("siteUrl", definition.Key);
+            }
+
+            foreach (var locale in MessageTemplateCatalog.Locales)
+            {
+                var text = MessageTemplateCatalog.Default(definition, locale);
+                var whole = (text.Subject ?? string.Empty) + "\n" + text.Body;
+                whole.Contains("{siteUrl}{url}", StringComparison.Ordinal)
+                    .ShouldBeFalse($"{definition.Key} ({locale})");
+            }
         }
     }
 

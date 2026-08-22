@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -10,6 +11,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Expeditions;
+using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -90,13 +92,16 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable
     {
         // The subject shares their phone with any signed-in user and keeps the email
         // private. The roster must serve exactly what the profile would.
+        //
+        // The number is a credential and the profile save has no field for it, so it arrives the
+        // only way it can: already verified. What is under test is who may read it.
+        var phoneNumber = await ConfirmViewerPhoneAsync();
         (await viewer.PutAsJsonAsync("/api/v1/me", new
         {
             firstName = (string?)null,
             lastName = (string?)null,
             displayName = $"Vio {suffix}",
             bio = (string?)null,
-            phoneNumber = "+40 700 000 002",
             cavingClub = (string?)null,
             locale = "en",
             visibility = new
@@ -128,14 +133,32 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable
         foreach (var (client, who) in new[] { (keeper, "keeper"), (editor, "editor") })
         {
             var row = await GetCaverAsync(client, caverId);
-            row.GetProperty("phone").GetString().ShouldBe("+40 700 000 002", who);
+            row.GetProperty("phone").GetString().ShouldBe(phoneNumber, who);
             row.GetProperty("email").ValueKind.ShouldBe(JsonValueKind.Null, who);
         }
 
         // The subject reads their own contact in full through the self relation.
         var self = await GetCaverAsync(viewer, caverId);
         self.GetProperty("email").GetString().ShouldBe($"ros-view-{suffix}@t.local");
-        self.GetProperty("phone").GetString().ShouldBe("+40 700 000 002");
+        self.GetProperty("phone").GetString().ShouldBe(phoneNumber);
+    }
+
+    /// <summary>
+    /// Gives the subject a confirmed sign-in number, which is the only kind there is. Unique per
+    /// account because one number reaches exactly one account, and every class in this suite
+    /// shares one database.
+    /// </summary>
+    private async Task<string> ConfirmViewerPhoneAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+        var user = await userManager.FindByIdAsync(viewerId.ToString());
+        var number = "+4" + ((uint)viewerId.GetHashCode())
+            .ToString("D10", System.Globalization.CultureInfo.InvariantCulture);
+        user!.PhoneNumber = number;
+        user.PhoneNumberConfirmed = true;
+        (await userManager.UpdateAsync(user)).Succeeded.ShouldBeTrue();
+        return number;
     }
 
     [Fact]

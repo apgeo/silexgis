@@ -19,7 +19,6 @@ interface FormValues {
   lastName?: string;
   displayName?: string;
   bio?: string;
-  phoneNumber?: string;
   cavingClubId?: string;
   visibility: Record<keyof MeUpdate['visibility'], FieldVisibility>;
 }
@@ -53,7 +52,6 @@ export default function ProfileSettingsPage() {
         lastName: me.lastName ?? undefined,
         displayName: me.displayName ?? undefined,
         bio: me.bio ?? undefined,
-        phoneNumber: me.phoneNumber ?? undefined,
         cavingClubId: me.cavingClubId ?? undefined,
         visibility: me.visibility,
       });
@@ -82,9 +80,7 @@ export default function ProfileSettingsPage() {
         lastName: values.lastName ?? null,
         displayName: values.displayName ?? null,
         bio: values.bio ?? null,
-        phoneNumber: values.phoneNumber ?? null,
         cavingClubId: values.cavingClubId ?? null,
-        locale: me.locale,
         visibility: values.visibility,
       });
       message.success(t('common.saved'));
@@ -152,12 +148,21 @@ export default function ProfileSettingsPage() {
             <Input.TextArea rows={4} maxLength={2000} showCount />
           </Form.Item>
           <Flex gap={12} wrap>
+            {/* Shown, never edited here: there is one phone column and it is the sign-in
+                number, which only takes a new value once a code texted to it comes back. The
+                audience choice beside the label is still a profile field, so it stays. */}
             <Form.Item
-              name="phoneNumber"
               label={labelWith(t('settings.profile.phone'), 'phone')}
               style={{ flex: 1, minWidth: 200 }}
+              help={
+                <Link to="/settings/security">{t('settings.profile.phoneManagedInSecurity')}</Link>
+              }
             >
-              <Input maxLength={30} />
+              <Input
+                readOnly
+                value={me.phoneNumber ?? ''}
+                placeholder={t('settings.profile.phoneNone')}
+              />
             </Form.Item>
             <Form.Item
               name="cavingClubId"

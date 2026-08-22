@@ -25,7 +25,6 @@ public sealed class MessageTemplateConfiguration : IEntityTypeConfiguration<Mess
 
         builder.Property(x => x.Key).HasMaxLength(64);
         builder.Property(x => x.Locale).HasMaxLength(10);
-        builder.Property(x => x.Channel).HasConversion<short>();
         builder.Property(x => x.Subject).HasMaxLength(300);
         // Generous but bounded: an operator writing a message longer than this has lost the plot,
         // and an unbounded column is a place for someone to put a megabyte.

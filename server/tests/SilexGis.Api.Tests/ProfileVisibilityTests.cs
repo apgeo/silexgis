@@ -231,14 +231,18 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
         string email = "private",
         string phone = "private",
         string address = "private",
-        string addressPoint = "private") =>
+        string addressPoint = "private")
+    {
+        // The number is a credential now, so it arrives the only way it can: verified. The profile
+        // save has no field for it, and what is under test here is who may read it, not who set it.
+        await ConfirmSubjectPhoneAsync();
+
         (await subject.PutAsJsonAsync("/api/v1/me", new
         {
             firstName = "Ana",
             lastName = "Pop",
             displayName = "Ana P",
             bio = (string?)null,
-            phoneNumber = "+40 700 111 222",
             cavingClub = (string?)null,
             locale = "en",
             visibility = new
@@ -252,6 +256,18 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
                 addressPoint,
             },
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private async Task ConfirmSubjectPhoneAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+        var user = await userManager.FindByIdAsync(subjectId.ToString());
+        user!.PhoneNumber = "+4" + ((uint)subjectId.GetHashCode())
+            .ToString("D10", System.Globalization.CultureInfo.InvariantCulture);
+        user.PhoneNumberConfirmed = true;
+        (await userManager.UpdateAsync(user)).Succeeded.ShouldBeTrue();
+    }
 
     private async Task PutSubjectInACavingGroupWithGroupMateAsync()
     {

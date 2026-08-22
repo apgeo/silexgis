@@ -124,6 +124,17 @@ public static class MeCredentialEndpoints
             return ApiProblems.BadRequest("me.password_not_set", "This account signs in without a password.");
         }
 
+        // Warns the account holder that this happened, which is the whole point of a security
+        // alert: if it was not them, someone else knows their password. Queued *before* the change
+        // so that the two commit together: the Identity store writes through this same scoped
+        // context, so its own save is what persists this row, and a change that is refused never
+        // reaches that save — leaving the row tracked, unsaved and discarded with the request.
+        // An alert that outlived a rejected password change would be a lie in the other direction.
+        NotificationQueue.Enqueue(
+            db, user.Id, NotificationCategory.SecurityAlerts,
+            MessageTemplateCatalog.NotifySecurityPasswordChanged,
+            new Dictionary<string, string>());
+
         var result = await userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
         if (!result.Succeeded)
         {
@@ -131,15 +142,6 @@ public static class MeCredentialEndpoints
                 ? ApiProblems.BadRequest("me.password_incorrect", "The current password is not right.")
                 : IdentityProblems.From(result, "me.password_invalid");
         }
-
-        // Warns the account holder that this happened, which is the whole point of a security
-        // alert: if it was not them, someone else knows their password. Saved separately because
-        // the password itself is committed by the Identity store, not by this context.
-        NotificationQueue.Enqueue(
-            db, user.Id, NotificationCategory.SecurityAlerts,
-            MessageTemplateCatalog.NotifySecurityPasswordChanged,
-            new Dictionary<string, string>());
-        await db.SaveChangesAsync(ct);
 
         await signInManager.RefreshSignInAsync(user);
         return TypedResults.NoContent();

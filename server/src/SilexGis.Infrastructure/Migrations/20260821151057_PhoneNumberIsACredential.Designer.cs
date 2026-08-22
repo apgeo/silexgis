@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260821151057_PhoneNumberIsACredential")]
+    partial class PhoneNumberIsACredential
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3538,6 +3541,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)")
                         .HasColumnName("body");
+
+                    b.Property<short>("Channel")
+                        .HasColumnType("smallint")
+                        .HasColumnName("channel");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")

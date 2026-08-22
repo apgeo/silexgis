@@ -70,9 +70,6 @@ public class SilexGisUser : IdentityUser<Guid>, ITimestamped, IUserProfile
     /// </summary>
     public string? PendingPhoneNumber { get; set; }
 
-    /// <summary>When the phone verification code was last texted; throttles resends.</summary>
-    public DateTimeOffset? PendingPhoneRequestedAt { get; set; }
-
     /// <summary>
     /// The three second factors, tracked separately because Identity's own
     /// <see cref="IdentityUser{TKey}.TwoFactorEnabled"/> is a single flag with no room for which

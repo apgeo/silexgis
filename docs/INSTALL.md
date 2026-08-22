@@ -614,7 +614,15 @@ policy**:
   affected by upgrading.
 - **Which second factors are allowed.** Texted codes are **off by default**: a phone number can be
   moved to another SIM by persuading a mobile operator, which makes SMS the weakest of the three.
-- **Code lifetime and the wait between codes.**
+- **Code lifetime and the wait between codes.** The wait is counted **per account**, in the
+  database, and nobody can reset it by deleting their number and starting again. A wrong code
+  counts against the account's ordinary lockout, so a six-digit code cannot be sat and guessed at.
+  The **Send a test message** buttons on the mail and SMS pages carry the same per-account wait, so
+  a test cannot be looped into a bill.
+
+A member's **telephone number is a sign-in credential**, not a profile field: it can only be changed
+through the security page, by returning a code texted to the new number, and one number belongs to
+one account. Whether other members can see it is still a profile setting.
 
 ## Non-Docker install
 

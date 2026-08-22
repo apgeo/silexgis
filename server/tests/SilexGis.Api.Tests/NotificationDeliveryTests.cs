@@ -8,6 +8,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
@@ -88,6 +89,30 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         message.Channel.ShouldBe("email");
         message.Body.ShouldContain($"Notif caving group {suffix}");
         (await RowsAsync())[0].Status.ShouldBe(NotificationOutboxStatus.Sent);
+    }
+
+    [Fact]
+    public async Task A_recipient_who_reads_Romanian_is_written_to_in_Romanian()
+    {
+        factory.Messages.Clear();
+
+        // Set through the route the browser calls, not by writing the column: the whole defect
+        // was that nothing ever called it, so a test that assigns the column directly would prove
+        // the templates work and nothing about whether anyone can ever reach them.
+        (await recipient.PutAsJsonAsync(
+            "/api/v1/me/locale", new { language = "ro", timeZone = "Europe/Bucharest" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await AddToCavingGroupAsync("ro");
+        (await DrainAsync()).ShouldBe(1);
+
+        var message = factory.Messages.LastTo(RecipientEmail);
+        message.Subject.ShouldBe($"Ați fost adăugat în Notif caving group {suffix} ro");
+        message.Body.ShouldContain("v-a adăugat în grupul");
+
+        // The negative half in the same test: the English wording of the same template is gone,
+        // so this cannot pass on a message that merely happens to contain a Romanian word.
+        message.Body.ShouldNotContain("added you to the caving group");
     }
 
     [Fact]
@@ -278,13 +303,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         factory.Messages.Clear();
         await DrainAsync();
 
-        // The body carries two links — where to go and how to stop; pick the second by name
-        // rather than by position.
-        var unsubscribeUrl = factory.Messages.LastTo(RecipientEmail).Body
-            .Split((char[])['\n', '\r', ' '], StringSplitOptions.RemoveEmptyEntries)
-            .Single(part => part.Contains("/unsubscribe?token=", StringComparison.Ordinal));
-        var token = System.Web.HttpUtility.ParseQueryString(new Uri(unsubscribeUrl).Query)["token"];
-        token.ShouldNotBeNullOrWhiteSpace();
+        var token = OptOutTokenInLastMessage();
 
         using var anonymous = factory.CreateClient();
         var response = await anonymous.PostAsJsonAsync("/api/v1/notifications/unsubscribe", new { token });
@@ -296,6 +315,105 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         prefs.GetProperty("categories").EnumerateArray()
             .Single(c => c.GetProperty("category").GetString() == "cavingGroupMembership")
             .GetProperty("enabled").GetBoolean().ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_link_in_a_message_is_a_whole_address_and_one_that_is_already_whole_is_left_alone()
+    {
+        // A producer writes the path to what it is reporting; only the sender knows where the
+        // installation lives. Both arms in one test, because "it prefixed something" and "it
+        // prefixed everything" look identical from a single relative link.
+        await QueueLinkedNotificationAsync("/caves/42");
+        await QueueLinkedNotificationAsync("https://elsewhere.example/caves/42");
+        factory.Messages.Clear();
+        await DrainAsync();
+
+        var bodies = MineSent().Select(m => m.Body).ToList();
+        bodies.Count.ShouldBe(2);
+
+        // The factory configures the installation address, so the whole link is knowable here.
+        bodies.ShouldContain(b => b.Contains("http://localhost/caves/42", StringComparison.Ordinal));
+        bodies.ShouldContain(b => b.Contains("https://elsewhere.example/caves/42", StringComparison.Ordinal));
+
+        // Nothing was made absolute twice, and no message still prints a bare path.
+        bodies.ShouldAllBe(b => !b.Contains("http://localhosthttp", StringComparison.Ordinal));
+        bodies.ShouldAllBe(b => !b.Contains("http://localhosthttps", StringComparison.Ordinal));
+        bodies.ShouldAllBe(b => !b.Contains("\n/caves/42", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task The_opt_out_link_in_a_daily_summary_stops_the_summary_and_not_one_category_in_it()
+    {
+        await SetPreferencesAsync(emailEnabled: true, digest: "daily");
+        await AddToCavingGroupAsync();
+        factory.Messages.Clear();
+
+        await DrainAsync();
+        await MakeDigestDueAsync();
+        await RunDigestAsync();
+
+        var token = OptOutTokenInLastMessage();
+
+        using var anonymous = factory.CreateClient();
+        var response = await anonymous.PostAsJsonAsync("/api/v1/notifications/unsubscribe", new { token });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+
+        // The link says what it switched off, and a summary names no category — the whole defect
+        // was that it used to name one at random.
+        var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        result.GetProperty("kind").GetString().ShouldBe("dailyDigest");
+        result.GetProperty("category").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var prefs = JsonDocument.Parse(
+            await (await recipient.GetAsync("/api/v1/me/notifications/")).Content.ReadAsStringAsync()).RootElement;
+        prefs.GetProperty("emailEnabled").GetBoolean().ShouldBeFalse();
+
+        // The positive half: the category the summary happened to contain was not touched, which
+        // is exactly what the old token did to it.
+        prefs.GetProperty("categories").EnumerateArray()
+            .Single(c => c.GetProperty("category").GetString() == "cavingGroupMembership")
+            .GetProperty("enabled").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_summary_already_waiting_to_go_out_is_not_sent_after_its_own_opt_out_link_is_used()
+    {
+        // The summary's landing page says the summary has stopped. Rows deferred before the click
+        // were routed while it was still wanted, and nothing read the preferences again on the way
+        // out — so tomorrow's summary went anyway, carrying another opt-out link.
+        await SetPreferencesAsync(emailEnabled: true, digest: "daily");
+        await AddToCavingGroupAsync();
+        await DrainAsync();
+
+        await SetPreferencesAsync(emailEnabled: false, digest: "daily");
+
+        await AddToCavingGroupAsync("after the switch was thrown");
+        await DrainAsync();
+        factory.Messages.Clear();
+
+        await MakeDigestDueAsync();
+        await RunDigestAsync();
+        await RunDigestAsync();
+
+        MineSent().ShouldBeEmpty();
+        (await RowsAsync()).ShouldAllBe(r => r.Status == NotificationOutboxStatus.Suppressed);
+    }
+
+    [Fact]
+    public async Task A_category_switched_off_after_it_was_held_back_is_dropped_from_the_summary()
+    {
+        await SetPreferencesAsync(emailEnabled: true, digest: "daily");
+        await AddToCavingGroupAsync();
+        await DrainAsync();
+
+        await SetPreferencesAsync(emailEnabled: true, digest: "daily", off: "cavingGroupMembership");
+        factory.Messages.Clear();
+
+        await MakeDigestDueAsync();
+        await RunDigestAsync();
+
+        MineSent().ShouldBeEmpty();
+        (await RowsAsync()).ShouldAllBe(r => r.Status == NotificationOutboxStatus.Suppressed);
     }
 
     [Fact]
@@ -325,6 +443,94 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         // Offering a link that the endpoint would refuse would be a lie: the settings page does
         // not let this category be switched off either.
         factory.Messages.LastTo(RecipientEmail).Body.ShouldNotContain("unsubscribe");
+    }
+
+    [Fact]
+    public async Task Pruning_drops_only_settled_rows_that_are_older_than_the_retention_window()
+    {
+        // The one thing in this pipeline that deletes data, and the only test of it. Every status
+        // is seeded on both sides of the window, so this records *which* statuses the prune takes
+        // rather than only that it takes something — and the window is keyed on when the row was
+        // created, not on when it was sent.
+        var statuses = new[]
+        {
+            NotificationOutboxStatus.Pending,
+            NotificationOutboxStatus.Deferred,
+            NotificationOutboxStatus.Sent,
+            NotificationOutboxStatus.Suppressed,
+            NotificationOutboxStatus.Dead,
+        };
+
+        // Retention is thirty days. A day either side of it is enough to place a row on one side
+        // or the other without depending on the exact figure.
+        var expired = await SeedForPruneAsync(statuses, DateTimeOffset.UtcNow.AddDays(-31));
+        var withinWindow = await SeedForPruneAsync(statuses, DateTimeOffset.UtcNow.AddDays(-29));
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            await scope.ServiceProvider
+                .GetRequiredService<NotificationOutboxService>()
+                .PruneAsync(CancellationToken.None);
+        }
+
+        var surviving = await SurvivingOutboxIdsAsync();
+
+        // Settled and out of the window: gone. "Settled" means sent or deliberately not sent.
+        surviving.ShouldNotContain(expired[NotificationOutboxStatus.Sent]);
+        surviving.ShouldNotContain(expired[NotificationOutboxStatus.Suppressed]);
+
+        // Still owed, or a permanent failure: kept however old it is. A dead row is the only
+        // record an operator has of a message that never arrived.
+        surviving.ShouldContain(expired[NotificationOutboxStatus.Pending]);
+        surviving.ShouldContain(expired[NotificationOutboxStatus.Deferred]);
+        surviving.ShouldContain(expired[NotificationOutboxStatus.Dead]);
+
+        // Inside the window nothing is touched, whatever its status.
+        foreach (var status in statuses)
+        {
+            surviving.ShouldContain(withinWindow[status], $"a row within the window was pruned: {status}");
+        }
+    }
+
+    /// <summary>
+    /// One outbox row per status, aged by writing <c>created_at</c> — which is what the prune
+    /// keys on. Written straight to the table because no producer can queue a row that is already
+    /// settled, and there is no clock to move.
+    /// </summary>
+    private async Task<Dictionary<NotificationOutboxStatus, long>> SeedForPruneAsync(
+        IEnumerable<NotificationOutboxStatus> statuses, DateTimeOffset createdAt)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        var rows = statuses.ToDictionary(
+            status => status,
+            status => new NotificationOutboxEntry
+            {
+                UserId = recipientId,
+                Category = NotificationCategory.CavingGroupMembership,
+                TemplateKey = MessageTemplateCatalog.NotifyCavingGroupJoined,
+                Status = status,
+                CreatedAt = createdAt,
+
+                // Far enough out that a drain running in this class cannot claim these rows and
+                // change the status the prune is being measured against.
+                NotBefore = DateTimeOffset.UtcNow.AddYears(1),
+            });
+
+        db.NotificationOutbox.AddRange(rows.Values);
+        await db.SaveChangesAsync();
+        return rows.ToDictionary(pair => pair.Key, pair => pair.Value.Id);
+    }
+
+    private async Task<List<long>> SurvivingOutboxIdsAsync()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.NotificationOutbox.AsNoTracking()
+            .Where(r => r.UserId == recipientId)
+            .Select(r => r.Id)
+            .ToListAsync();
     }
 
     private async Task<Guid> CreateCavingGroupAsync(string? tag = null)
@@ -366,6 +572,43 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     private List<SentMessage> MineSent() =>
         [.. factory.Messages.Messages.Where(m =>
             string.Equals(m.Recipient, RecipientEmail, StringComparison.OrdinalIgnoreCase))];
+
+    /// <summary>
+    /// Queues a notification that carries a link, without going through a producer: the two
+    /// producers that write one belong to other slices, and what is under test is what the sender
+    /// does with the value, not who wrote it.
+    /// </summary>
+    private async Task QueueLinkedNotificationAsync(string url)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        NotificationQueue.Enqueue(
+            db,
+            recipientId,
+            NotificationCategory.PermissionGranted,
+            MessageTemplateCatalog.NotifyPermissionGranted,
+            new Dictionary<string, string>
+            {
+                ["actorName"] = "Someone",
+                ["objectName"] = $"Linked record {suffix}",
+                ["url"] = url,
+            });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// The opt-out link out of the last message sent to this test's recipient. The body carries
+    /// two links — where to go and how to stop; pick the second by name rather than by position.
+    /// </summary>
+    private string OptOutTokenInLastMessage()
+    {
+        var line = factory.Messages.LastTo(RecipientEmail).Body
+            .Split((char[])['\n', '\r', ' '], StringSplitOptions.RemoveEmptyEntries)
+            .Single(part => part.Contains("/unsubscribe?token=", StringComparison.Ordinal));
+        var token = System.Web.HttpUtility.ParseQueryString(new Uri(line).Query)["token"];
+        token.ShouldNotBeNullOrWhiteSpace();
+        return token!;
+    }
 
     private async Task<int> DrainAsync()
     {

@@ -133,6 +133,7 @@ try
     builder.Services.AddOptions<TerrainOptions>()
         .BindConfiguration(TerrainOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
+    builder.Services.AddScoped<AdminTestSendThrottle>();
     builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
     // One resolver per resource-link target world; the directory is what the link
     // surface fans out through for display, the picker feed and the authoring floor.
@@ -211,6 +212,7 @@ try
     api.MapMeCredentialEndpoints();
     api.MapMeNotificationEndpoints();
     api.MapMePreferenceEndpoints();
+    api.MapMeLocaleEndpoints();
     api.MapUiDefaultsEndpoints();
     api.MapMeDataExportEndpoints();
     api.MapMeCapabilityEndpoints();

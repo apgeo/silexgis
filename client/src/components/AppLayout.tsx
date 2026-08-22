@@ -31,6 +31,7 @@ import {
 import { useEffect, useState } from 'react';
 import { Avatar, Dropdown, Flex, Layout, Menu, Select, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useLanguageChoice } from '../i18n/languageChoice.ts';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { hasAccessAction, useCapabilities, useMe, type AccessDomainName } from '../api/hooks.ts';
 import { useAuth } from '../auth/auth.tsx';
@@ -39,7 +40,8 @@ import { useIsMobile } from '../hooks/useIsMobile.ts';
 
 /** Application shell: slim header + collapsible icon sidebar (off-canvas on phones). */
 export default function AppLayout() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const { language, choose } = useLanguageChoice();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -57,6 +59,10 @@ export default function AppLayout() {
     }
   }, [isMobile]);
 
+  // Named from this account's own record rather than from the token. The user-name claim carries
+  // the protected label — a generated pseudonym for anyone who never set a display name — which
+  // is the right thing to hand a third party and the wrong thing to show somebody about
+  // themselves: on a shared machine it leaves no way to tell which account is signed in.
   const { data: me } = useMe();
   // Nav visibility follows the caller's domain-level capabilities. There is no
   // route-level guard on purpose: the server refuses, the nav simply doesn't offer.
@@ -93,8 +99,8 @@ export default function AppLayout() {
         <Flex gap={16} align="center">
           <Select
             size="small"
-            value={i18n.resolvedLanguage}
-            onChange={(lng) => void i18n.changeLanguage(lng)}
+            value={language}
+            onChange={choose}
             options={[
               { value: 'en', label: 'EN' },
               { value: 'ro', label: 'RO' },
@@ -127,7 +133,7 @@ export default function AppLayout() {
                 icon={<UserOutlined />}
                 style={{ marginInlineEnd: 8 }}
               />
-              {user?.profile.preferred_username ?? user?.profile.email}
+              {me?.displayName ?? me?.email ?? user?.profile.email}
             </Typography.Text>
           </Dropdown>
         </Flex>

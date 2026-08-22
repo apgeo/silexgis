@@ -3376,6 +3376,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/locale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The language and time zone stored for the caller. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MeLocaleDto"];
+                    };
+                };
+            };
+        };
+        /** Stores the language the caller reads in. The time zone is accepted and validated, but there is nowhere to keep it yet, so it is not stored and reads back as nothing. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MeLocaleWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MeLocaleDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/data-export": {
         parameters: {
             query?: never;
@@ -14605,6 +14665,14 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        MeLocaleDto: {
+            language: string;
+            timeZone: null | string;
+        };
+        MeLocaleWriteRequest: {
+            language: string;
+            timeZone: null | string;
+        };
         MemberAddressDto: {
             /** Format: uuid */
             id: string;
@@ -14659,10 +14727,8 @@ export interface components {
             lastName: null | string;
             displayName: null | string;
             bio: null | string;
-            phoneNumber: null | string;
             /** Format: uuid */
             cavingClubId: null | string;
-            locale: string;
             visibility: components["schemas"]["ProfileVisibilityDto"];
         };
         MfaChallengeDto: {
@@ -14705,7 +14771,7 @@ export interface components {
             isProtected: boolean;
         };
         /** @enum {unknown} */
-        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning";
+        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | null;
         NotificationCategoryDto: {
             category: components["schemas"]["NotificationCategory"];
             enabled: boolean;
@@ -16194,11 +16260,14 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        /** @enum {unknown} */
+        UnsubscribeKind: "category" | "dailyDigest";
         UnsubscribeRequest: {
             token: string;
         };
         UnsubscribeResultDto: {
-            category: components["schemas"]["NotificationCategory"];
+            kind: components["schemas"]["UnsubscribeKind"];
+            category: null | components["schemas"]["NotificationCategory"];
         };
         UploadBatchDto: {
             /** Format: uuid */

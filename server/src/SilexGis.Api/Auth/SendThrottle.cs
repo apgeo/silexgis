@@ -26,11 +26,45 @@ public static class SendThrottle
     /// <summary>Codes sent to prove a method works before it is switched on.</summary>
     public const string Enrolment = "enrol";
 
-    public static async Task<bool> TooSoonAsync(
+    /// <summary>
+    /// Codes texted to verify a number the account holder is trying to move to. Kept here rather
+    /// than on the user row because a marker stored on the row is cleared by removing the number,
+    /// and removing a number is a free, unauthenticated-by-cooldown act: change, delete, change
+    /// would otherwise text a caller-chosen international number once per two requests.
+    /// </summary>
+    public const string PhoneChange = "phone";
+
+    /// <summary>
+    /// Test texts an operator sends to prove a gateway works. Not a code and not a second factor,
+    /// but the same money: one call, one text, to a number typed into a box.
+    /// </summary>
+    public const string AdminTest = "admintest";
+
+    /// <summary>
+    /// How long an operator waits between test texts. Not read from the sign-in policy, which is
+    /// about how quickly somebody may ask for their own code again: proving a gateway works is
+    /// something done once after configuring it, so the bound is measured in texts per hour.
+    /// </summary>
+    public static readonly TimeSpan AdminTestInterval = TimeSpan.FromMinutes(1);
+
+    public static Task<bool> TooSoonAsync(
         UserManager<SilexGisUser> userManager,
         SilexGisUser user,
         TwoFactorMethod method,
         SecuritySettings policy,
+        string purpose) =>
+        TooSoonAsync(
+            userManager,
+            user,
+            method,
+            TimeSpan.FromSeconds(Math.Clamp(policy.TwoFactorResendIntervalSeconds, 0, 600)),
+            purpose);
+
+    public static async Task<bool> TooSoonAsync(
+        UserManager<SilexGisUser> userManager,
+        SilexGisUser user,
+        TwoFactorMethod method,
+        TimeSpan interval,
         string purpose)
     {
         var stored = await userManager.GetAuthenticationTokenAsync(user, Provider, Bucket(method, purpose));
@@ -39,7 +73,6 @@ public static class SendThrottle
             return false;
         }
 
-        var interval = TimeSpan.FromSeconds(Math.Clamp(policy.TwoFactorResendIntervalSeconds, 0, 600));
         return DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(lastUnix) < interval;
     }
 

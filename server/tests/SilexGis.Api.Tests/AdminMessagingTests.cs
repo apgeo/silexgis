@@ -240,6 +240,25 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable
         }
     }
 
+    [Fact]
+    public async Task A_second_test_text_is_refused_by_a_cooldown_the_caller_cannot_clear()
+    {
+        // The per-address request budget is not the bound here. It is shared with the sign-in
+        // routes, it resets every minute, a second replica of the application has a second copy
+        // of it, and every call this route lets through sends a text the operator pays for. This
+        // asserts the shipped default rather than a budget forced small for the test.
+        var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+
+        var first = await admin.PostAsJsonAsync("/api/v1/admin/settings/sms/test", new { recipient = "+40712345678" });
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+
+        var second = await admin.PostAsJsonAsync("/api/v1/admin/settings/sms/test", new { recipient = "+40712345679" });
+
+        second.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await second.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("admin.sms_test_too_soon");
+    }
+
     private static SecuritySettingsBody Policy() => new(false, true, true, true, false, 5, 60);
 
     private static object Mail(string? password, string fromName = "SilexGIS") => new

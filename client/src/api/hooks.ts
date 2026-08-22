@@ -33,6 +33,8 @@ export type FileConfig = components['schemas']['FileConfigDto'];
 export type EntranceFeatureCollection = components['schemas']['FeatureCollection'];
 export type Me = components['schemas']['MeDto'];
 export type MeUpdate = components['schemas']['MeUpdateRequest'];
+export type MeLocale = components['schemas']['MeLocaleDto'];
+export type MeLocaleWrite = components['schemas']['MeLocaleWriteRequest'];
 export type ProfileVisibility = components['schemas']['ProfileVisibilityDto'];
 export type FieldVisibility = ProfileVisibility['email'];
 export type UserAddress = components['schemas']['UserAddressDto'];
@@ -40,6 +42,18 @@ export type UserAddressWrite = components['schemas']['UserAddressWriteRequest'];
 export type MemberSummary = components['schemas']['MemberDto'];
 export type NotificationPreferences = components['schemas']['NotificationPreferencesDto'];
 export type NotificationCategory = components['schemas']['NotificationCategoryDto'];
+
+/**
+ * The name of one notification category, as the server publishes it. Named separately from the
+ * row that carries it because the settings page and the opt-out landing page both look their
+ * wording up by this value alone. Non-null by construction: the generated union admits null only
+ * because one response omits the category — a daily summary collects every category and names
+ * none — and null is not a category anybody can be notified about.
+ */
+export type NotificationCategoryName = NonNullable<components['schemas']['NotificationCategory']>;
+
+/** What an opt-out link switched off, as the server reports it back to the landing page. */
+export type UnsubscribeResult = components['schemas']['UnsubscribeResultDto'];
 export type DataExport = components['schemas']['DataExportDto'];
 export type MfaStatus = components['schemas']['MfaStatusDto'];
 export type MfaMethod = components['schemas']['MfaMethodDto'];
@@ -227,6 +241,14 @@ export function useUpdateProfile() {
   const invalidate = useInvalidateMe();
   return useMutation({
     mutationFn: (body: MeUpdate) => unwrap(api.PUT('/api/v1/me', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateLocale() {
+  const invalidate = useInvalidateMe();
+  return useMutation({
+    mutationFn: (body: MeLocaleWrite) => unwrap(api.PUT('/api/v1/me/locale', { body })),
     onSuccess: () => invalidate(),
   });
 }

@@ -5,6 +5,7 @@ import type {
   AccessDomainName,
   AccessScopeKind,
   ActivityState,
+  NotificationCategoryName,
   SearchDocumentItem,
 } from '../api/hooks.ts';
 import { RESLINK_ANCHOR_KINDS, RESLINK_TARGET_TYPES } from '../components/reslinks/registry.ts';
@@ -89,6 +90,22 @@ const accessDomains: Record<AccessDomainName, true> = {
  * up here, so a scope added on the server ships as a raw lookup key until it is named —
  * silently, because nothing else in the client mentions the vocabulary.
  */
+/**
+ * Every kind of event a person can be notified about. Two things read this vocabulary by name —
+ * the notification settings page and the page an opt-out link lands on — and neither has any
+ * other mention of it, so a category added on the server ships showing its own lookup key in
+ * both languages with nothing failing. The type closes it in both directions: a new category
+ * fails to compile here until it is named, and a name that is no longer a category fails too.
+ */
+const notificationCategories: Record<NotificationCategoryName, true> = {
+  cavingGroupMembership: true,
+  permissionGranted: true,
+  tripParticipation: true,
+  jobCompleted: true,
+  securityAlerts: true,
+  tripPlanning: true,
+};
+
 const accessScopeKinds: Record<AccessScopeKind, true> = {
   all: true,
   own: true,
@@ -162,6 +179,16 @@ describe('i18n locales', () => {
     expect(kinds.filter((kind) => !enScopes[kind])).toEqual([]);
     expect(kinds.filter((kind) => !roScopes[kind])).toEqual([]);
     expect(Object.keys(enScopes).sort()).toEqual(kinds.sort());
+  });
+
+  it('every notification category the server publishes is named in both locales', () => {
+    const names = Object.keys(notificationCategories);
+    const enEvents: Record<string, string> = en.settings.notifications.events;
+    const roEvents: Record<string, string> = ro.settings.notifications.events;
+    expect(names.filter((name) => !enEvents[name])).toEqual([]);
+    expect(names.filter((name) => !roEvents[name])).toEqual([]);
+    // And the reverse: wording kept for a category the server no longer sends.
+    expect(Object.keys(enEvents).sort()).toEqual(names.sort());
   });
 
   it('every activity state the server publishes is named in both locales', () => {

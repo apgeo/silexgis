@@ -135,6 +135,7 @@ public static class DependencyInjection
     /// </remarks>
     public static IServiceCollection AddSilexGisNotifications(this IServiceCollection services)
     {
+        services.AddScoped<NotificationOptOut>();
         services.AddScoped<NotificationOutboxService>();
         services.AddHostedService<NotificationOutboxWorker>();
         return services;
