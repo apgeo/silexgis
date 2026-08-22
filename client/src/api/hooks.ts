@@ -139,6 +139,7 @@ export const queryKeys = {
     ['cabinets', id, 'documents', params] as const,
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
+  myTripLogs: (params: MyTripLogListParams) => ['trip-logs', 'mine', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
   tripInvitations: (id: string) => ['trip-logs', 'invitations', id] as const,
   tripReportTemplates: ['trip-report-templates'] as const,
@@ -1983,6 +1984,40 @@ export function useTripLogs(params: TripLogListParams) {
   return useQuery({
     queryKey: queryKeys.tripLogs(params),
     queryFn: () => unwrap(api.GET('/api/v1/trip-logs', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * What the caller asked of their own list of trips. There is deliberately no member naming a
+ * person: whose trips these are is worked out on the server from whoever is making the request,
+ * and a parameter for it would let somebody assemble where a named person has been out of trips
+ * they may never open. Adding one here would be the first half of undoing that.
+ */
+export interface MyTripLogListParams {
+  page?: number;
+  pageSize?: number;
+  /** Inclusive, `YYYY-MM-DD`. Omitted, the server starts the window at today. */
+  from?: string;
+  /** Inclusive, `YYYY-MM-DD`. Omitted, the window has no far end. */
+  to?: string;
+  /** A lifecycle state spelled the way the contract spells it; an unknown word is refused. */
+  state?: ActivityState;
+}
+
+/**
+ * The trips the signed-in account is on, soonest first.
+ *
+ * Its own key rather than a shape of the trip list's, because it is a different question with a
+ * different answer for every reader, and because it goes stale as dates pass rather than as
+ * people edit. The key sits under the trip prefix so writing a trip re-reads it for free.
+ */
+export function useMyTripLogs(params: MyTripLogListParams) {
+  return useQuery({
+    queryKey: queryKeys.myTripLogs(params),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/mine', { params: { query: params } })),
+    // Paging or narrowing keeps the rows on screen while the next answer arrives, rather than
+    // emptying the table under whoever is reading it.
     placeholderData: keepPreviousData,
   });
 }

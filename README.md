@@ -172,6 +172,15 @@ Previous versions:
   roster by saying yes: once the trip has happened, one deliberate act turns everybody holding a
   place into people who were there, and it tells nobody, because everybody it writes in asked to be
   there and was told when they were asked.
+- **Your own trips, soonest first** — one page answers *what am I going on, and when*: the trips you are
+  named on, plus the ones you have been asked about and not turned down, ordered by when they happen
+  rather than by when somebody last edited them, with the nearest at the top. The dashboard carries the
+  next few of them beside the rest of the day's news. It is worked out from whoever is signed in and
+  **cannot be asked about anybody else** — there is no way to request one person's trips by name, because
+  the answer, and even the number of rows in it, would say where that person has been from records the
+  asker may not read. A trip that has been called off stays on the list, and says so, because that is the
+  thing you most need to notice; the list can be narrowed to one stage of a trip's life, or to a range of
+  dates.
 - **A plan tells the people it concerns, and can be told to stop** — being asked onto a trip, a trip
   you are on changing or being moved along, and a trip being called off all send an email, and every
   one of them goes only to somebody who may read that trip, decided for each person separately at the

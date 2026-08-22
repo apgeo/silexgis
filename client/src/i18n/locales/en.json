@@ -40,6 +40,10 @@
       "geodata": "Geodata files"
     },
     "recentActivity": "Recent activity",
+    "comingUp": "Coming up",
+    "comingUpFailed": "Your trips could not be loaded.",
+    "noComingUp": "Nothing coming up. A trip appears here once somebody invites you to one or puts you on the party.",
+    "allMyTrips": "All my trips",
     "quickActions": "Quick actions",
     "myViews": "My saved views",
     "importFile": "Import file",
@@ -721,6 +725,14 @@
     "title": "Trip logs",
     "titleField": "Title",
     "new": "New trip log",
+    "mine": {
+      "title": "My trips",
+      "link": "My trips",
+      "stateFilter": "Any state",
+      "empty": "You are not on any trip yet. A trip appears here once somebody invites you to one or puts you on the party.",
+      "emptyFiltered": "No trip of yours matches these filters.",
+      "failed": "Your trips could not be loaded."
+    },
     "edit": "Edit trip log",
     "tabReport": "Report",
     "tabLinks": "Links",

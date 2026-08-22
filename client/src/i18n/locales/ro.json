@@ -40,6 +40,10 @@
       "geodata": "Fișiere geodate"
     },
     "recentActivity": "Activitate recentă",
+    "comingUp": "Ce urmează",
+    "comingUpFailed": "Turele tale nu au putut fi încărcate.",
+    "noComingUp": "Nimic în program. O tură apare aici după ce cineva te invită sau te trece în echipă.",
+    "allMyTrips": "Toate turele mele",
     "quickActions": "Acțiuni rapide",
     "myViews": "Vederile mele salvate",
     "importFile": "Importă fișier",
@@ -721,6 +725,14 @@
     "title": "Jurnale de tură",
     "titleField": "Titlu",
     "new": "Jurnal de tură nou",
+    "mine": {
+      "title": "Turele mele",
+      "link": "Turele mele",
+      "stateFilter": "Orice stare",
+      "empty": "Nu ești încă în nicio tură. O tură apare aici după ce cineva te invită sau te trece în echipă.",
+      "emptyFiltered": "Nicio tură de-a ta nu se potrivește cu aceste filtre.",
+      "failed": "Turele tale nu au putut fi încărcate."
+    },
     "edit": "Editare jurnal",
     "tabReport": "Raport",
     "tabLinks": "Legături",

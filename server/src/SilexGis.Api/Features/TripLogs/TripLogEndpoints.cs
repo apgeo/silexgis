@@ -18,12 +18,25 @@ namespace SilexGis.Api.Features.TripLogs;
 
 public static class TripLogEndpoints
 {
+    // A lifecycle state a listing was asked to narrow by that a trip does not have. Its own code
+    // rather than the transition refusal's: nothing is being moved, a word was simply not
+    // recognised, and a client that cannot tell those apart cannot say anything useful about
+    // either.
+    private const string StateInvalidCode = "trip_log.state_invalid";
+
     public static RouteGroupBuilder MapTripLogEndpoints(this RouteGroupBuilder api)
     {
         var trips = api.MapGroup("/trip-logs").WithTags("TripLogs");
 
         trips.MapGet("/", ListAsync)
             .WithSummary("Paged trip logs with date/cave filters; visibility-filtered.");
+        trips.MapGet("/mine", MineAsync)
+            .WithSummary(
+                "The trips the calling account is on \u2014 named on the roster or asked about it "
+                + "\u2014 soonest first, from today unless a window says otherwise, and narrowable "
+                + "by lifecycle state. Whose trips these are is worked out from the caller and "
+                + "cannot be asked for: there is no parameter naming a person, because one would "
+                + "answer where a named person has been out of trips the asker may not read.");
         trips.MapGet("/{id:guid}", GetAsync)
             .WithSummary("Single trip log with caves and participants.");
         trips.MapPost("/", CreateAsync).WithValidation<TripLogWriteRequest>()
@@ -175,6 +188,128 @@ public static class TripLogEndpoints
         var (p, size) = Paging.Normalize(page, pageSize);
         var total = await query.CountAsync(ct);
         var rows = await query.OrderByDescending(x => x.TripDate).ThenByDescending(x => x.CreatedAt)
+            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
+
+        var items = await MapWithChildrenAsync(db, access, protection, ctx, user, rows, ct);
+        return TypedResults.Ok(new PagedResult<TripLogDto>(items, p, size, total));
+    }
+
+    /// <summary>
+    /// The caller's own trips, soonest first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Whose trips these are is resolved from the request's own identity and from nothing
+    /// supplied. That is the whole shape of this route, not an implementation detail: a
+    /// parameter naming a person would let somebody assemble where that person has been out of
+    /// trips they may never open, and the size of the answer gives it away even when no row
+    /// comes back — ask once, ask again with a different window, and the difference is when that
+    /// person was underground. Filtering trips by participant is refused everywhere else in this
+    /// application for exactly that reason, and a query string is the same request with
+    /// different spelling. So there is no participant parameter here, under any name, and adding
+    /// one would undo a refusal the rest of the code takes seriously.
+    /// </para>
+    /// <para>
+    /// Being on a trip is not a right to read it. The caller's ordinary reading is applied first
+    /// and this narrows what is left, so a trip somebody was asked about and then shut out of
+    /// disappears from their own list — which is correct: the list is a view of records, and a
+    /// record nobody may read is not shown by a different door.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<PagedResult<TripLogDto>>, UnauthorizedHttpResult, ProblemHttpResult>> MineAsync(
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
+        FeatureProtection protection,
+        int? page,
+        int? pageSize,
+        DateOnly? from,
+        DateOnly? to,
+        string? state,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var user = await userAccessor.GetAsync(ct);
+        if (ctx is null || user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        // Lifecycle states arrive as the camelCase words the rest of the contract spells them
+        // with, parsed here rather than by route binding: binding a bad word would answer with a
+        // bare 400 carrying no code, and a client cannot tell that apart from any other refusal.
+        // A word this application does not have, and one a trip cannot hold, are refused alike —
+        // a caller who asked for something that cannot exist wants to be told, not handed the
+        // whole list.
+        ActivityState? stateFilter = null;
+        if (!string.IsNullOrWhiteSpace(state))
+        {
+            if (!Enum.TryParse<ActivityState>(state, ignoreCase: true, out var stateValue)
+                || !Enum.IsDefined(stateValue)
+                || !ActivityStates.IsTripLogState(stateValue))
+            {
+                return ApiProblems.BadRequest(StateInvalidCode, $"Unknown state '{state}'.");
+            }
+
+            stateFilter = stateValue;
+        }
+
+        var query = db.TripLogs.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs);
+
+        // Being asked counts as being on it, and saying no counts as not being on it. Somebody
+        // invited and not yet written onto the roster has the trip in their diary as much as
+        // anybody already named; somebody who declined does not, and would otherwise fill a short
+        // list with the weekends they turned down while the trip they are going on falls off the
+        // end. Being written onto the party regardless is the organiser overruling the answer, and
+        // puts the trip back.
+        var mine = TripAudience.TripIdsTheAccountIsOn(db, user.UserId);
+        query = query.Where(x => mine.Contains(x.Id));
+
+        // Coming up means from today onwards unless the caller says otherwise, so the default is
+        // a floor rather than a fixed window: a list of what somebody is going on is useless if
+        // it opens on last winter. Dates here are the trip's own calendar days and today is read
+        // in UTC, which is the only clock this application stores — a trip on the boundary can
+        // therefore appear or drop a few hours early or late for a reader far from it, and that
+        // is preferable to a per-reader answer nothing else in the application gives.
+        //
+        // An explicit window is honoured as asked, backwards included. Every row here is a trip
+        // the caller is on and may already read, so widening it discloses nothing that was being
+        // withheld; the same list then answers "what have I been on" without a second door.
+        var windowStart = from ?? DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // The window asks whether the trip overlaps it rather than whether it starts inside it, so
+        // a trip that began yesterday and runs until tomorrow is still something the caller is on
+        // rather than something they have missed. A trip with no end date is one day long.
+        query = query.Where(x => (x.TripDateEnd ?? x.TripDate) >= windowStart);
+
+        if (to is not null)
+        {
+            var windowEnd = to.Value;
+            query = query.Where(x => x.TripDate <= windowEnd);
+        }
+
+        // No state is excluded by default, and that is a decision rather than an omission. A trip
+        // the caller is on that has been called off is exactly the thing they most need to see on
+        // a list of what is coming up, and hiding it would make the list quietly disagree with the
+        // trip's own page. Narrowing is offered instead, so a surface that wants only what is
+        // going ahead asks for it and says so.
+        if (stateFilter is { } wantedState)
+        {
+            query = query.Where(x => x.State == wantedState);
+        }
+
+        var (p, size) = Paging.Normalize(page, pageSize);
+        var total = await query.CountAsync(ct);
+
+        // Ascending, which is the opposite of every other trip listing and is the point of this
+        // one: the next thing somebody is going on is the row they came for, so it is the first.
+        // The tie-break is the primary key and has to be — two trips on the same day are
+        // ordinary, and an order that does not separate them lets a row appear on two pages or on
+        // none as the database chooses. A timestamp is the same bug one step further away, since
+        // two rows written in the same tick tie again; the identifiers are time-ordered, so
+        // ascending by id reads as "the one entered first" among trips that start together.
+        var rows = await query.OrderBy(x => x.TripDate).ThenBy(x => x.Id)
             .Skip((p - 1) * size).Take(size).ToListAsync(ct);
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, rows, ct);

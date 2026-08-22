@@ -13,25 +13,9 @@ import {
 } from '../../api/hooks.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
+// One lifecycle, one list of its words: a camp offers all of them, and so does a trip.
+import { ACTIVITY_STATES } from '../../components/trips/tripStates.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
-
-/**
- * The lifecycle states a camp may hold — all of them, which is the difference between a camp and a
- * trip. Written out as the wire vocabulary rather than derived from anything, so a state added on
- * the server does not silently become an option nobody decided to offer; the labels are the ones
- * the trip already uses, because it is one lifecycle and a second set of words for it would be a
- * second set to keep in step.
- */
-const STATES: readonly ActivityState[] = [
-  'draft',
-  'proposed',
-  'planned',
-  'confirmed',
-  'done',
-  'published',
-  'cancelled',
-  'delayed',
-];
 
 const asDate = (value: Dayjs | null | undefined): string | undefined =>
   value ? value.format('YYYY-MM-DD') : undefined;
@@ -91,7 +75,7 @@ export default function ExpeditionListPage() {
           data-testid="expedition-state-filter"
           value={params.state as ActivityState | undefined}
           onChange={(value) => narrow({ state: value })}
-          options={STATES.map((state) => ({
+          options={ACTIVITY_STATES.map((state) => ({
             value: state,
             label: t(`trips.stateValues.${state}`),
           }))}
