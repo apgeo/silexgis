@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Checkbox, Input, InputNumber, Select } from 'antd';
+import { Button, Checkbox, Flex, Input, InputNumber, Select } from 'antd';
+import { useTranslation } from 'react-i18next';
 import type { SchemaField } from './propertiesSchema.ts';
 
 /**
@@ -29,15 +30,37 @@ export default function TypedField({
   optionLabel?: (value: string) => string;
   'data-testid'?: string;
 }) {
+  const { t } = useTranslation();
   switch (field.kind) {
-    case 'boolean':
+    case 'boolean': {
+      // Three states, not two. A question nobody has answered is a different fact from one
+      // answered "no" — a plan whose permit question is unanswered is not a plan that needs no
+      // permit — and a bare checkbox can only ever produce the second of the two once it has
+      // been touched. So an unanswered question is drawn as neither ticked nor unticked, and
+      // there is a way back to it: without one, a mistaken tick is a decision the record can
+      // never unmake, and whatever reads the bag later would read it as a real answer.
+      const answered = typeof value === 'boolean';
       return (
-        <Checkbox
-          checked={value === true}
-          onChange={(e) => onChange(e.target.checked)}
-          data-testid={testId}
-        />
+        <Flex align="center" gap={8}>
+          <Checkbox
+            checked={value === true}
+            indeterminate={!answered}
+            onChange={(e) => onChange(e.target.checked)}
+            data-testid={testId}
+          />
+          {answered && (
+            <Button
+              type="link"
+              size="small"
+              onClick={() => onChange(undefined)}
+              data-testid={testId ? `${testId}-clear` : undefined}
+            >
+              {t('common.clearAnswer')}
+            </Button>
+          )}
+        </Flex>
       );
+    }
     case 'enum':
       return (
         <Select

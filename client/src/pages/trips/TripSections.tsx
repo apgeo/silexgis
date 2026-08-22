@@ -218,6 +218,10 @@ export default function TripSections({ trip, canEdit }: { trip: TripLogInfo; can
       locationText: trip.locationText,
       organizingCavingGroupId: trip.organizingCavingGroupId,
       geom: trip.geom,
+      // Where the party gathers, back as it stands for the same reason as everything else on this
+      // list: a write replaces every field on the trip, so saving one section without it would
+      // erase the meeting point of a trip nobody was editing the meeting point of.
+      meetingGeom: trip.meetingGeom,
       // No list at all, not a cleared one: which caves this trip is about is recorded through
       // its roles, and saving a section must not be able to undo that.
       caveIds: null,

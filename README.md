@@ -133,7 +133,13 @@ Previous versions:
   thought of adds it themselves, and it is filterable and countable from that moment. Each kind also
   decides **what a report of that kind asks for** — three sections, field data, logistics and safety,
   drawn from a form the club describes once and can change later without invalidating a single report
-  already written. Beside them a trip records the figures worth counting — how deep, how far surveyed,
+  already written. A **plan** uses the same card for the things a party settles before it sets
+  off: when and where to meet and how to find the spot, who is driving, how many seats and where
+  they leave from, what gear and rigging to bring, whether a permit is needed and whether it has been
+  obtained, what the forecast says, and where the group is doing its talking. A plan can also carry
+  **where the party gathers** — a point, or the walk in to it — drawn on the same kind of map as the
+  trip's own sketch and shown, like it, to everybody who may read the trip, which the form says out
+  loud: a meeting point near a guarded entrance places that entrance for everybody invited. Beside them a trip records the figures worth counting — how deep, how far surveyed,
   how many stations, how much rope — in metres, once, shown in your own language's numbers. It also
   records **whether anything went wrong**, which anyone who may read the trip can see and search for,
   while the account of *what* went wrong is shown only to the people who may correct the trip: a

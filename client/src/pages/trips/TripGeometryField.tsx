@@ -51,6 +51,21 @@ interface Props {
    */
   active?: boolean;
   height?: number;
+  /**
+   * Names this map's controls apart from another one's. A trip page can show two of these at
+   * once — the trip's own sketch and where its party gathers — and a driver that addressed
+   * "the map" would then be addressing whichever of the two it happened to reach first.
+   */
+  testId?: string;
+  /**
+   * What the warning beside the toolbar says this shape discloses. The default states the
+   * sketch's bargain; a host drawing something else must state that shape's own, because the
+   * warning is the only place a reader who cannot edit the trip meets it, and a meeting point
+   * standing a few hundred metres from an entrance discloses more than a shape drawn "roughly
+   * here" does.
+   */
+  warningTitle?: string;
+  warningDetail?: string;
 }
 
 /**
@@ -70,6 +85,9 @@ export default function TripGeometryField({
   readOnly = false,
   active = true,
   height = 280,
+  testId = 'trip-geometry',
+  warningTitle,
+  warningDetail,
 }: Props) {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -240,17 +258,20 @@ export default function TripGeometryField({
     publish(null);
   };
 
+  const warningHeading = warningTitle ?? t('trips.geometryWarning');
   const warning = (
     <Popover
-      title={t('trips.geometryWarning')}
-      content={<div style={{ maxWidth: 320 }}>{t('trips.geometryWarningDetail')}</div>}
+      title={warningHeading}
+      content={
+        <div style={{ maxWidth: 320 }}>{warningDetail ?? t('trips.geometryWarningDetail')}</div>
+      }
       trigger="click"
     >
       <Button
         type="text"
         size="small"
-        aria-label={t('trips.geometryWarning')}
-        data-testid="trip-geometry-warning"
+        aria-label={warningHeading}
+        data-testid={`${testId}-warning`}
         icon={<ExclamationCircleOutlined style={{ color: token.colorWarning }} />}
       />
     </Popover>
@@ -267,21 +288,30 @@ export default function TripGeometryField({
   );
 
   return (
-    <Flex vertical gap={8}>
+    // The whole field carries the name too, not only the map and the buttons that already had
+    // one: the trip form shows two of these at once, and the shape buttons are told apart by
+    // their wording alone, which is identical in both. Addressing them inside their own field
+    // is what keeps "draw a point" meaning the one the caller asked for.
+    <Flex vertical gap={8} data-testid={testId}>
       <Flex gap={8} align="center" wrap>
         {!readOnly && (
           <>
             {shapeButton('Point', t('trips.drawPoint'), <EnvironmentOutlined />)}
             {shapeButton('LineString', t('trips.drawLine'), <LineOutlined />)}
             {shapeButton('Polygon', t('trips.drawArea'), <BorderOutlined />)}
-            <Button icon={<DeleteOutlined />} disabled={!hasShape} onClick={clear}>
+            <Button
+              icon={<DeleteOutlined />}
+              disabled={!hasShape}
+              onClick={clear}
+              data-testid={`${testId}-clear`}
+            >
               {t('trips.clearGeometry')}
             </Button>
           </>
         )}
         {warning}
       </Flex>
-      <div ref={onTargetRef} style={{ height, width: '100%' }} data-testid="trip-geometry-map" />
+      <div ref={onTargetRef} style={{ height, width: '100%' }} data-testid={`${testId}-map`} />
       {!readOnly && (
         <Typography.Text type="secondary">
           {shape ? t('trips.drawHint') : t('trips.geometryHint')}

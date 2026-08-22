@@ -402,6 +402,29 @@ export default function TripLogDetailPage() {
             label: t('trips.tabReport'),
             children: (
               <>
+                {trip.meetingGeom && (
+                  <Card
+                    size="small"
+                    title={t('trips.meetingGeometry')}
+                    style={{ marginBottom: 16 }}
+                  >
+                    {/* Where the party gathers, read-only here for the same reason the sketch is:
+                        editing goes through the trip form. It carries the meeting point's own
+                        warning rather than the sketch's — this position is told exactly to
+                        everybody who may read the trip, which is wider than the set of people the
+                        trip will name its caves to, and this card is the only place a reader who
+                        cannot edit the trip is told so. */}
+                    <TripGeometryField
+                      value={trip.meetingGeom}
+                      readOnly
+                      active={activeTab === 'report'}
+                      height={280}
+                      testId="trip-meeting-geometry"
+                      warningTitle={t('trips.meetingGeometryWarning')}
+                      warningDetail={t('trips.meetingGeometryWarningDetail')}
+                    />
+                  </Card>
+                )}
                 {/* The trip's own sketch. Editing it goes through the trip form, so the map here
                     draws and does nothing else — but it carries the same warning the editor does,
                     because this is where a reader meets the shape. */}

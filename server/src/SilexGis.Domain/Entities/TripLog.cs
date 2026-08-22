@@ -210,6 +210,29 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
 
     public Geometry? Geom { get; set; }
 
+    /// <summary>
+    /// Where the party gathers before it sets off, and — where a club draws one — the way in to
+    /// it. A column rather than a line in the plan's written arrangements because a map has to
+    /// find it: somebody looking at a week of trips on a map is asking where to be and when, and
+    /// a position buried in a form's stored answers is a position no query can select on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Any geometry class, like the trip's own sketch: a meeting point is usually a point, and a
+    /// club that draws the approach as well records the two together rather than in a second
+    /// column. One shape, so there is one answer to "where does this trip start" and no rule
+    /// about which of two to believe.
+    /// </para>
+    /// <para>
+    /// It is served exactly to everybody who may read the trip, which is the same bargain the
+    /// trip's own sketch has always carried, and it inherits that bargain's cost: a meeting point
+    /// drawn two hundred metres from a guarded entrance places that entrance for every reader of
+    /// the trip, including one the trip is at that moment refusing to tell which caves it names.
+    /// Nothing here narrows it, and no surface may hand it to somebody the trip itself would not.
+    /// </para>
+    /// </remarks>
+    public Geometry? MeetingGeom { get; set; }
+
     public Guid OwnerUserId { get; set; }
 
     public Guid? CavingGroupId { get; set; }

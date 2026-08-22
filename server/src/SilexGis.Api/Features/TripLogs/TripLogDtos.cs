@@ -155,7 +155,14 @@ public sealed record TripLogDto(
     // surface would be free to disagree — and the disagreement that matters is the quiet one,
     // where somebody entitled to stand an alarm down is shown no way to do it. False for every
     // reader of a trip that has no live check, so nothing has to pair this with the state.
-    bool CanStandDownCallout);
+    bool CanStandDownCallout,
+    // Where the party gathers, and the way in to it where a club drew one. Appended, like
+    // everything before it. Told to every reader of the trip and to nobody else — the same
+    // audience the sketch above has, and deliberately not a wider one: this is the position a
+    // plan exists to state, so a reader who is not told the trip's caves is still told where to
+    // be. What that costs is written on the column itself and said in words on the surface that
+    // draws it.
+    GeoJsonGeometry? MeetingGeom);
 
 /// <summary>
 /// The audience a trip this caller plans would get if the request names none.
@@ -218,7 +225,11 @@ public sealed record TripLogWriteRequest(
     // How many the trip has room for, and null means it states no limit rather than "not editing
     // it" — there is nothing else null could mean for a number whose absence is the unlimited
     // case, so clearing the field is how a limit is removed. Appended, like the run above it.
-    int? MaxParticipants);
+    int? MaxParticipants,
+    // Where the party gathers. Written straight through and null clears it, exactly as the
+    // sketch above is — which means a surface that draws the trip whole must send this back
+    // whether or not it drew the field, or saving anything else on the trip erases it.
+    GeoJsonGeometry? MeetingGeom);
 
 /// <summary>
 /// Arranging — or calling off — the check that notices if a party does not come back.

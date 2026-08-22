@@ -86,15 +86,19 @@ async function openSection(page: Page, name: string) {
 
 /** Draws the trip's one shape as a single point on the form's embedded map. */
 async function drawPoint(page: Page) {
-  const map = page.getByTestId('trip-geometry-map');
+  // The form carries two of these maps — the trip's own shape and where its party gathers — and
+  // their controls are worded identically, so every control is addressed inside the trip's own
+  // field. Page-wide, "the Point button" names two buttons and picks neither.
+  const field = page.getByTestId('trip-geometry');
+  const map = field.getByTestId('trip-geometry-map');
   // The map is built once the dialog's open transition has put the container in the document,
   // so the canvas appearing is the signal that there is something to draw on.
   await expect(map.locator('canvas')).toBeVisible({ timeout: 30_000 });
   // Anchored at the end: each shape button carries its icon's label ahead of its own word.
-  await page.getByRole('button', { name: /Point$/ }).click();
+  await field.getByRole('button', { name: /Point$/ }).click();
   await map.click({ position: { x: 220, y: 120 } });
   // A shape can only be cleared once one exists, so the control enabling is the drawing landing.
-  await expect(page.getByRole('button', { name: 'Clear shape' })).toBeEnabled();
+  await expect(field.getByRole('button', { name: 'Clear shape' })).toBeEnabled();
 }
 
 /**

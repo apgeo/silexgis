@@ -803,6 +803,7 @@ public static class TripLogEndpoints
         trip.MaxParticipants = request.MaxParticipants;
         trip.OrganizingCavingGroupId = request.OrganizingCavingGroupId;
         trip.Geom = request.Geom?.ToGeometryOrNull();
+        trip.MeetingGeom = request.MeetingGeom?.ToGeometryOrNull();
         // An audience the request does not name is left exactly as it stands. The only place a
         // trip's audience is decided for it is the moment it is created, and it is decided there
         // before this runs — so a null arriving here can only mean "not editing who may read it",
@@ -1263,6 +1264,14 @@ public static class TripLogEndpoints
             return ApiProblems.BadRequest("trip_log.geometry_invalid", "Geometry is malformed or invalid.");
         }
 
+        // Checked with the same words and the same code as the sketch: both are geometry on the
+        // same request, and a caller that sent one malformed shape learns the same thing about
+        // either. Which field it was is in the request the caller sent.
+        if (request.MeetingGeom is not null && request.MeetingGeom.ToGeometryOrNull() is null)
+        {
+            return ApiProblems.BadRequest("trip_log.geometry_invalid", "Geometry is malformed or invalid.");
+        }
+
         // The purpose vocabulary is a row set an installation extends, so an unknown identity is
         // a plain bad request rather than a shape the request validator could have caught. The
         // vocabulary is readable by every account, so naming a row that does not exist discloses
@@ -1495,7 +1504,8 @@ public static class TripLogEndpoints
                 trip.CalloutAlarmAt,
                 trip.CalloutState,
                 IsWatched(trip) ? lastSwept : null,
-                onTheTrip.Contains(trip.Id));
+                onTheTrip.Contains(trip.Id),
+                trip.MeetingGeom is null ? null : GeoJsonGeometry.From(trip.MeetingGeom));
         }
     }
 }

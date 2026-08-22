@@ -199,6 +199,7 @@ export default function TripReportPage() {
     { key: 'ropeMetres', value: trip.ropeMetres },
   ].filter((row) => row.value != null);
   const sketch = tripGeometrySummary(trip.geom);
+  const meeting = tripGeometrySummary(trip.meetingGeom);
   const photos = photosQuery.data?.items ?? [];
 
   /** The values a section actually holds, in the order its purpose declares them. */
@@ -402,6 +403,53 @@ export default function TripReportPage() {
             )}
             <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
               {t('trips.geometryWarning')}
+            </Typography.Paragraph>
+          </Part>
+        )}
+
+        {/* Where the party gathers, beside where it went. The document this page mirrors prints
+            both, and a write-up carrying the sketch but not the meeting point would leave whoever
+            printed the plan before setting off without the one thing the party has to agree on.
+            Its own warning, not the sketch's: a meeting point stands where people actually park,
+            which can be a few hundred metres from an entrance this reader was never told the trip
+            names. */}
+        {trip.meetingGeom && (
+          <Part title={t('trips.meetingGeometry')}>
+            <div className="trip-report-map">
+              <TripGeometryField
+                value={trip.meetingGeom}
+                readOnly
+                height={280}
+                testId="trip-meeting-geometry"
+                warningTitle={t('trips.meetingGeometryWarning')}
+                warningDetail={t('trips.meetingGeometryWarningDetail')}
+              />
+            </div>
+            {/* What the printer gets in its place, for the same reason the sketch has one: paper
+                carries no map tiles, and a position written down is what a driver can read. */}
+            {meeting && (
+              <div className="trip-report-map-fallback" data-testid="trip-report-meeting">
+                <Typography.Text>
+                  {t(
+                    meeting.positions === 1
+                      ? 'trips.report.meetingPoint'
+                      : 'trips.report.meetingShape',
+                    {
+                      shape: shapeLabel(meeting.type, t),
+                      position: formatPosition(meeting.center, {
+                        north: t('trips.report.north'),
+                        south: t('trips.report.south'),
+                        east: t('trips.report.east'),
+                        west: t('trips.report.west'),
+                      }),
+                      count: meeting.positions,
+                    },
+                  )}
+                </Typography.Text>
+              </div>
+            )}
+            <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+              {t('trips.meetingGeometryWarning')}
             </Typography.Paragraph>
           </Part>
         )}

@@ -105,6 +105,10 @@ public static class ExpeditionMapEndpoints
             .OrderBy(x => x.Id)
             .ToListAsync(ct);
 
+        // The sketches only. A trip also states where its party gathered, and that is left off
+        // this map deliberately rather than by omission: this map answers where the camp's work
+        // happened, and a car park at the foot of the hill is not where the work happened. It
+        // would also crowd the one thing the map is for. A reader who wants it reads the trip.
         foreach (var trip in trips.Where(x => x.Geom is not null))
         {
             features.Add(GeoFeature.Of(trip.Geom!, new Dictionary<string, object?>

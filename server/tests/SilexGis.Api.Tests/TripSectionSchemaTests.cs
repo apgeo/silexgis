@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using DocumentFormat.OpenXml.Packaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -309,6 +310,102 @@ public sealed class TripSectionSchemaTests : IAsyncLifetime, IDisposable
         // The event itself is not hidden — the trip was created, and saying so is not the same
         // as saying what it said.
         readerTimeline.ShouldContain(tripId.ToString());
+    }
+
+    /// <summary>
+    /// What a party has to settle before it sets off — where and when it gathers, who is driving
+    /// and from where, what gear is taken, whether the permit is in hand, what the forecast says,
+    /// and where the talking happens — is recorded on the shipped logistics schema rather than in
+    /// columns of its own, because nothing queries any of it.
+    /// <para>
+    /// Stated end to end over the shipped purpose rather than over a schema this test installs:
+    /// what makes these facts usable is that a fresh installation already asks for them, and a
+    /// test that supplied its own schema would pass with the shipped one empty. Each answer is
+    /// written through the ordinary trip write, read back off the record, and then found in the
+    /// generated write-up — which is the whole point of putting them in a section, since a
+    /// section's answers reach the document without anything being told about them one by one.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task What_a_party_settles_before_it_sets_off_is_asked_by_the_shipped_purpose_and_reaches_the_write_up()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var listed = await admin.GetFromJsonAsync<JsonElement>("/api/v1/trip-types");
+        var exploration = listed.EnumerateArray()
+            .Single(r => r.GetProperty("code").GetString() == "exploration");
+        var typeId = exploration.GetProperty("id").GetInt64();
+        var schema = exploration.GetProperty("logisticsSchema").GetString().ShouldNotBeNull();
+
+        // Distinctive enough to find in a document, and carrying this run's own suffix so that a
+        // trip some other test wrote cannot be read here as this one's answers.
+        var answers = new Dictionary<string, object>
+        {
+            ["meeting_time"] = $"07:30 sharp, {suffix}",
+            ["meeting_description"] = $"Layby past the last bridge, {suffix}",
+            ["transport_drivers"] = $"Ana and Radu, {suffix}",
+            ["transport_seats"] = 7,
+            ["transport_departure"] = $"Cluj and Turda, {suffix}",
+            ["equipment_note"] = $"Two 60 m ropes and a spare hanger set, {suffix}",
+            ["permit_required"] = true,
+            ["permit_obtained"] = false,
+            ["weather_note"] = $"Rain forecast from midday, {suffix}",
+            ["whatsapp_group_url"] = $"https://chat.example.invalid/{suffix}",
+        };
+
+        // The shipped purpose asks for every one of them: a key the schema does not carry would
+        // be stored by the server and shown by nothing, which is a fact nobody can record.
+        foreach (var key in answers.Keys)
+        {
+            schema.Contains($"\"{key}\"", StringComparison.Ordinal)
+                .ShouldBeTrue($"the shipped logistics schema does not ask for {key}");
+        }
+
+        var created = await editor.PostAsJsonAsync(
+            "/api/v1/trip-logs/", TripBody(suffix, typeId, new { logistics = answers }));
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var tripId = (await ReadJsonAsync(created)).GetProperty("id").GetGuid();
+
+        // Back off the record, each answer as it was given — the round trip a form makes.
+        var stored = (await editor.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{tripId}"))
+            .GetProperty("logistics");
+        stored.GetProperty("meeting_time").GetString().ShouldBe($"07:30 sharp, {suffix}");
+        stored.GetProperty("meeting_description").GetString().ShouldBe($"Layby past the last bridge, {suffix}");
+        stored.GetProperty("transport_drivers").GetString().ShouldBe($"Ana and Radu, {suffix}");
+        stored.GetProperty("transport_seats").GetInt32().ShouldBe(7);
+        stored.GetProperty("transport_departure").GetString().ShouldBe($"Cluj and Turda, {suffix}");
+        stored.GetProperty("equipment_note").GetString()
+            .ShouldBe($"Two 60 m ropes and a spare hanger set, {suffix}");
+        stored.GetProperty("permit_required").GetBoolean().ShouldBeTrue();
+        stored.GetProperty("permit_obtained").GetBoolean().ShouldBeFalse();
+        stored.GetProperty("weather_note").GetString().ShouldBe($"Rain forecast from midday, {suffix}");
+        stored.GetProperty("whatsapp_group_url").GetString()
+            .ShouldBe($"https://chat.example.invalid/{suffix}");
+
+        // And in the write-up, each under the wording the purpose's schema gave it. The two
+        // states that are not free text are checked with their labels attached: "Yes" and "7"
+        // alone would be satisfied by any other line of the document.
+        var document = await ReportTextAsync(editor, tripId);
+        document.ShouldContain($"07:30 sharp, {suffix}");
+        document.ShouldContain($"Layby past the last bridge, {suffix}");
+        document.ShouldContain($"Ana and Radu, {suffix}");
+        document.ShouldContain("Seats available: 7");
+        document.ShouldContain($"Cluj and Turda, {suffix}");
+        document.ShouldContain($"Two 60 m ropes and a spare hanger set, {suffix}");
+        document.ShouldContain("Permit required: Yes");
+        document.ShouldContain("Permit obtained: No");
+        document.ShouldContain($"Rain forecast from midday, {suffix}");
+        document.ShouldContain($"https://chat.example.invalid/{suffix}");
+    }
+
+    /// <summary>The words of the write-up this trip generates, as a word processor would read them.</summary>
+    private static async Task<string> ReportTextAsync(HttpClient client, Guid tripId)
+    {
+        using var response = await client.GetAsync($"/api/v1/trip-logs/{tripId}/report");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+
+        using var bytes = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var document = WordprocessingDocument.Open(bytes, false);
+        return document.MainDocumentPart!.Document!.InnerText;
     }
 
     /// <summary>Grants one user read of one trip, and nothing else.</summary>

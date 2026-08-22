@@ -16063,6 +16063,7 @@ export interface components {
             /** Format: date-time */
             calloutLastCheckedAt: null | string;
             canStandDownCallout: boolean;
+            meetingGeom: null | components["schemas"]["GeoJsonGeometry"];
         };
         TripLogTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];
@@ -16106,6 +16107,7 @@ export interface components {
             safety: null | components["schemas"]["JsonElement"];
             /** Format: int32 */
             maxParticipants: null | number;
+            meetingGeom: null | components["schemas"]["GeoJsonGeometry"];
         };
         TripParticipantDto: {
             /** Format: uuid */

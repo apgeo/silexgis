@@ -45,6 +45,7 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
         // null that a pass watching for overdue parties would have to guard.
         builder.Property(x => x.CalloutState).HasConversion<short>().HasDefaultValue(TripCalloutState.None);
         builder.Property(x => x.Geom).HasColumnType("geometry(Geometry, 4326)");
+        builder.Property(x => x.MeetingGeom).HasColumnType("geometry(Geometry, 4326)");
 
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.CavingGroupId).OnDelete(DeleteBehavior.SetNull);
@@ -56,6 +57,10 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => x.Geom).HasMethod("gist");
+        // Its own spatial index rather than a shared one: the map layer asks the two columns
+        // separately, and a trip whose only position is where its party meets has to be found by
+        // the same window query that finds a trip with a sketch.
+        builder.HasIndex(x => x.MeetingGeom).HasMethod("gist");
         builder.HasIndex(x => x.TripDate);
         builder.HasIndex(x => x.OwnerUserId);
         // The one selection a scheduled pass makes over this table: parties whose alarm time has
