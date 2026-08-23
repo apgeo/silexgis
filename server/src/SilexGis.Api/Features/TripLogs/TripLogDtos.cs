@@ -162,7 +162,21 @@ public sealed record TripLogDto(
     // plan exists to state, so a reader who is not told the trip's caves is still told where to
     // be. What that costs is written on the column itself and said in words on the surface that
     // draws it.
-    GeoJsonGeometry? MeetingGeom);
+    GeoJsonGeometry? MeetingGeom,
+    // How much of the list this trip's purpose names has been settled. Appended, like everything
+    // before it. Null on a trip whose purpose names no list and on one whose list this caller may
+    // not read — the list answers to its own audience, and a reference from a trip is not consent.
+    //
+    // It is advisory and it decides nothing. It is not a state the trip is in, no write is refused
+    // because of it, and it is never consulted when working out who may read the trip: a trip with
+    // nothing settled is exactly as visible as one fully settled, to exactly the same people.
+    TripChecklistReadinessDto? ChecklistReadiness);
+
+/// <summary>
+/// What a trip has settled of the list its purpose names: <c>Ticked</c> of <c>Total</c>, computed
+/// from the lines and the confirmations each time it is asked for and stored nowhere.
+/// </summary>
+public sealed record TripChecklistReadinessDto(Guid ChecklistId, int Ticked, int Total);
 
 /// <summary>
 /// The audience a trip this caller plans would get if the request names none.

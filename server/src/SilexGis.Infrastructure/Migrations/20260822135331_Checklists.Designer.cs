@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260822135331_Checklists")]
+    partial class Checklists
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1660,9 +1663,6 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_checklist_items");
-
-                    b.HasAlternateKey("ChecklistId", "Id")
-                        .HasName("ak_checklist_items_checklist_id_id");
 
                     b.HasIndex("ChecklistId", "SortOrder", "Id")
                         .HasDatabaseName("ix_checklist_items_checklist_id_sort_order_id");
@@ -4710,43 +4710,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("text_search_languages", (string)null);
                 });
 
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripChecklistTick", b =>
-                {
-                    b.Property<Guid>("TripLogId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("trip_log_id");
-
-                    b.Property<Guid>("ItemId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("item_id");
-
-                    b.Property<Guid>("ChecklistId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("checklist_id");
-
-                    b.Property<DateTimeOffset>("TickedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("ticked_at");
-
-                    b.Property<Guid?>("TickedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("ticked_by_user_id");
-
-                    b.HasKey("TripLogId", "ItemId")
-                        .HasName("pk_trip_checklist_ticks");
-
-                    b.HasIndex("TickedByUserId")
-                        .HasDatabaseName("ix_trip_checklist_ticks_ticked_by_user_id");
-
-                    b.HasIndex("ChecklistId", "ItemId")
-                        .HasDatabaseName("ix_trip_checklist_ticks_checklist_id_item_id");
-
-                    b.HasIndex("TripLogId", "ChecklistId")
-                        .HasDatabaseName("ix_trip_checklist_ticks_trip_log_id_checklist_id");
-
-                    b.ToTable("trip_checklist_ticks", (string)null);
-                });
-
             modelBuilder.Entity("SilexGis.Domain.Entities.TripInvitation", b =>
                 {
                     b.Property<long>("Id")
@@ -5193,10 +5156,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<Guid?>("DefaultChecklistId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("default_checklist_id");
-
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
@@ -5252,9 +5211,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("Code")
                         .IsUnique()
                         .HasDatabaseName("ix_trip_types_code");
-
-                    b.HasIndex("DefaultChecklistId")
-                        .HasDatabaseName("ix_trip_types_default_checklist_id");
 
                     b.ToTable("trip_types", (string)null);
                 });
@@ -6866,30 +6822,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_term_rule_sets_users_owner_user_id");
                 });
 
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripChecklistTick", b =>
-                {
-                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
-                        .WithMany()
-                        .HasForeignKey("TickedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_trip_checklist_ticks_users_ticked_by_user_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.TripLog", null)
-                        .WithMany()
-                        .HasForeignKey("TripLogId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_trip_checklist_ticks_trip_logs_trip_log_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.ChecklistItem", null)
-                        .WithMany()
-                        .HasForeignKey("ChecklistId", "ItemId")
-                        .HasPrincipalKey("ChecklistId", "Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_trip_checklist_ticks_checklist_items_checklist_id_item_id");
-                });
-
             modelBuilder.Entity("SilexGis.Domain.Entities.TripInvitation", b =>
                 {
                     b.HasOne("SilexGis.Domain.Entities.Caver", null)
@@ -6969,15 +6901,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_trip_log_participants_trip_logs_trip_log_id");
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripType", b =>
-                {
-                    b.HasOne("SilexGis.Domain.Entities.Checklist", null)
-                        .WithMany()
-                        .HasForeignKey("DefaultChecklistId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_trip_types_checklists_default_checklist_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripTypeSchema", b =>

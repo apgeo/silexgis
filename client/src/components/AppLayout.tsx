@@ -3,6 +3,7 @@ import {
   ApartmentOutlined,
   AppstoreOutlined,
   CarOutlined,
+  CheckSquareOutlined,
   CloudUploadOutlined,
   CodeSandboxOutlined,
   CompassOutlined,
@@ -73,7 +74,7 @@ export default function AppLayout() {
   // destination and a camp's own page stays under it, so opening one keeps the camps item lit.
   const sections = [
     'map3d', 'dashboard', 'caves', 'features', 'geodata', 'gallery', 'albums', 'cabinets',
-    'uploads', 'documents', 'trip-logs', 'expeditions',
+    'uploads', 'documents', 'trip-logs', 'expeditions', 'checklists',
     'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
     'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'admin/term-rules',
@@ -177,6 +178,9 @@ export default function AppLayout() {
                   ]
                 : []),
               { key: 'trip-logs', icon: <CarOutlined />, label: t('nav.trips') },
+              // The lists trips work through. Everybody may keep their own, so this is not
+              // gated on a right: what a caller may read and write is settled per row.
+              { key: 'checklists', icon: <CheckSquareOutlined />, label: t('nav.checklists') },
               { key: 'expeditions', icon: <FlagOutlined />, label: t('nav.expeditions') },
               { key: 'caving-groups', icon: <TeamOutlined />, label: t('nav.cavingGroups') },
               { key: 'cavers', icon: <UserOutlined />, label: t('nav.cavers') },

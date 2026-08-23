@@ -181,6 +181,15 @@ Previous versions:
   asker may not read. A trip that has been called off stays on the list, and says so, because that is the
   thing you most need to notice; the list can be narrowed to one stage of a trip's life, or to a range of
   dates.
+- **Checklists — what a party settles before it sets off** — anyone can write a list (permit, key
+  collected, gear booked, whatever the club actually checks), keep it to themselves, share it with their
+  club or make it readable by everyone; an administrator's published default is nothing more than a list
+  with a wide audience. A trip purpose points at the list trips of that kind work through, and the trip's
+  own page shows it as lines to tick off, with a quiet *3 of 7* on the trip listings. Ticking records who
+  said so and when, and rewording a line later does not lose what was already confirmed. **Nothing is
+  ever refused because a list is unfinished** — it tells the party where they are, it does not stand in
+  their way, and it decides nothing about who may read the plan. Lists you may not read are not named to
+  you, and no count of them is shown either.
 - **A plan tells the people it concerns, and can be told to stop** — being asked onto a trip, a trip
   you are on changing or being moved along, and a trip being called off all send an email, and every
   one of them goes only to somebody who may read that trip, decided for each person separately at the

@@ -19,6 +19,7 @@ public static class AccessDomains
         // would mean writing every rule twice.
         Album => AccessDomain.Documents,
         Expedition => AccessDomain.Expeditions,
+        Checklist => AccessDomain.Checklists,
         _ => throw new ArgumentException($"No access domain for {entity.GetType().Name}.", nameof(entity)),
     };
 }

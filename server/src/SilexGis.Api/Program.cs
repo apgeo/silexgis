@@ -15,6 +15,7 @@ using SilexGis.Api.Features.Attachments;
 using SilexGis.Api.Features.AccessHistory;
 using SilexGis.Api.Features.Audit;
 using SilexGis.Api.Features.Cabinets;
+using SilexGis.Api.Features.Checklists;
 using SilexGis.Api.Features.Crs;
 using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Dashboard;
@@ -253,6 +254,8 @@ try
     api.MapGeoreferencedMapEndpoints();
     api.MapTripLogEndpoints();
     api.MapTripInvitationEndpoints();
+    api.MapTripChecklistEndpoints();
+    api.MapChecklistEndpoints();
     api.MapExpeditionEndpoints();
     api.MapExpeditionReportEndpoints();
     api.MapExpeditionMapEndpoints();

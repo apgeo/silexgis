@@ -52,6 +52,7 @@ import { formatTripDates, formatUndergroundTime, isMultiDay } from '../../compon
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 import TripFormModal from './TripFormModal.tsx';
 import TripGeometryField from './TripGeometryField.tsx';
+import TripChecklistTab from './TripChecklistTab.tsx';
 import TripInvitationsTab from './TripInvitationsTab.tsx';
 import TripStateControl from './TripStateControl.tsx';
 import TripCalloutPanel from '../../components/trips/TripCalloutPanel.tsx';
@@ -458,6 +459,14 @@ export default function TripLogDetailPage() {
             // actually went is the trip's own list of people above, and one deliberate act turns
             // the first into the second rather than the two drifting into each other.
             children: <TripInvitationsTab trip={trip} canEdit={canEdit} />,
+          },
+          {
+            key: 'checklist',
+            label: t('trips.tabChecklist'),
+            // What the party settles before it sets off, and how much of it is settled. The
+            // figure is advisory: it gates nothing, it is not a state the trip is in, and it is
+            // never consulted when working out who may read this page.
+            children: <TripChecklistTab trip={trip} canEdit={canEdit} />,
           },
           {
             key: 'links',

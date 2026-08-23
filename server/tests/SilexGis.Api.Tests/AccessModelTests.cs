@@ -72,6 +72,9 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable
                 // A saved view is the caller's own workspace state, so every account keeps
                 // being able to make one.
                 AccessDomain.MapViews,
+                // And so is a list of what has to be settled before a trip sets off: anybody
+                // may write one and decide for themselves who else sees it.
+                AccessDomain.Checklists,
             ],
             ignoreOrder: true);
 
@@ -147,14 +150,15 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable
             [
                 AccessDomain.Features, AccessDomain.TripLogs, AccessDomain.Geofiles,
                 AccessDomain.GeoreferencedMaps, AccessDomain.MapViews, AccessDomain.Documents,
-                AccessDomain.Expeditions,
+                AccessDomain.Expeditions, AccessDomain.Checklists,
             ],
             ignoreOrder: true);
 
-        // Every domain that can carry a position carries the exact-view bit; documents carry
-        // none, so granting it there would be a line nobody editing this ruleset could act on.
+        // Every domain that can carry a position carries the exact-view bit; documents and
+        // checklists carry none, so granting it there would be a line nobody editing this
+        // ruleset could act on.
         starter.ShouldAllBe(e => ((e.Actions & AccessAction.ViewExactLocation) != 0)
-            == (e.Domain != AccessDomain.Documents));
+            == (e.Domain != AccessDomain.Documents && e.Domain != AccessDomain.Checklists));
 
         // "«name» — managers": the creator manages the group record and can enroll
         // people from day one.

@@ -9214,6 +9214,248 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{tripLogId}/checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The list this trip works through, its lines, who has confirmed each and when, and how much of it is settled. Takes the right to read the trip; a list the caller may not read is answered as no list. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripChecklistDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/checklist/items/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Confirms one line of the list as settled for this trip (Write permission on the trip). Confirming again changes nothing: the first confirmation is the record of who said so and when. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    itemId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripChecklistItemDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Takes back a confirmation (Write permission on the trip). Taking back one that was never made is not an error. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    itemId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/checklists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The lists this caller may read, lines included. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChecklistDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Writes a list; the caller becomes its owner. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChecklistWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChecklistDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/checklists/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One list. Answered as absent where the caller may not read it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChecklistDto"];
+                    };
+                };
+            };
+        };
+        /** Rewrites a list and its lines (Write permission). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChecklistWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChecklistDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes a list and its lines (Delete permission). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expeditions": {
         parameters: {
             query?: never;
@@ -12794,7 +13036,7 @@ export interface components {
             actions: components["schemas"]["AccessAction"][];
         };
         /** @enum {unknown} */
-        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "expeditions";
+        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "expeditions" | "checklists";
         /** @enum {unknown} */
         AccessEffect: "allow" | "deny";
         AccessEntryDto: {
@@ -13362,6 +13604,42 @@ export interface components {
             /** Format: uuid */
             surveyModelId: null | string;
             isDefault: boolean;
+        };
+        ChecklistDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            description: null | string;
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            items: components["schemas"]["ChecklistItemDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ChecklistItemDto: {
+            /** Format: uuid */
+            id: string;
+            text: string;
+            /** Format: int32 */
+            sortOrder: number;
+        };
+        ChecklistItemRequest: {
+            /** Format: uuid */
+            id: null | string;
+            text: string;
+        };
+        ChecklistWriteRequest: {
+            title: string;
+            description: null | string;
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            items: components["schemas"]["ChecklistItemRequest"][];
         };
         ConfirmEmailRequest: {
             /** Format: uuid */
@@ -15980,6 +16258,39 @@ export interface components {
         };
         /** @enum {unknown} */
         TripCalloutState: "none" | "armed" | "overdue" | "stoodDown";
+        TripChecklistDto: {
+            /** Format: uuid */
+            tripLogId: string;
+            /** Format: uuid */
+            checklistId: null | string;
+            title: null | string;
+            description: null | string;
+            /** Format: int32 */
+            ticked: number;
+            /** Format: int32 */
+            total: number;
+            items: components["schemas"]["TripChecklistItemDto"][];
+        };
+        TripChecklistItemDto: {
+            /** Format: uuid */
+            id: string;
+            text: string;
+            /** Format: int32 */
+            sortOrder: number;
+            ticked: boolean;
+            /** Format: uuid */
+            tickedByUserId: null | string;
+            /** Format: date-time */
+            tickedAt: null | string;
+        };
+        TripChecklistReadinessDto: {
+            /** Format: uuid */
+            checklistId: string;
+            /** Format: int32 */
+            ticked: number;
+            /** Format: int32 */
+            total: number;
+        };
         TripExpeditionRequest: {
             /** Format: uuid */
             expeditionId?: null | string;
@@ -16106,6 +16417,7 @@ export interface components {
             calloutLastCheckedAt: null | string;
             canStandDownCallout: boolean;
             meetingGeom: null | components["schemas"]["GeoJsonGeometry"];
+            checklistReadiness: null | components["schemas"]["TripChecklistReadinessDto"];
         };
         TripLogTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];
@@ -16283,6 +16595,8 @@ export interface components {
             safetySchema: null | string;
             /** Format: int32 */
             safetySchemaVersion: number;
+            /** Format: uuid */
+            defaultChecklistId: null | string;
         };
         TripTypeRequest: {
             code: string;
@@ -16293,6 +16607,8 @@ export interface components {
             fieldDataSchema: null | string;
             logisticsSchema: null | string;
             safetySchema: null | string;
+            /** Format: uuid */
+            defaultChecklistId: null | string;
         };
         /** @enum {unknown} */
         TwoFactorMethod: "authenticator" | "email" | "sms" | null;

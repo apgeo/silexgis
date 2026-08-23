@@ -24,17 +24,22 @@ vi.mock('../auth/auth.tsx', () => ({
   useAuth: () => ({ user: { profile: { preferred_username: 'tester' } }, signOut: vi.fn() }),
 }));
 
-function renderShell() {
+function renderShell(at = '/map') {
   return render(
-    <MemoryRouter initialEntries={['/map']}>
+    <MemoryRouter initialEntries={[at]}>
       <Routes>
         <Route path="/" element={<AppLayout />}>
           <Route path="map" element={<div>map page</div>} />
+          <Route path="checklists" element={<div>checklists page</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
   );
 }
+
+/** The label of whatever the sider is showing as the page you are on. */
+const selectedItem = () =>
+  document.querySelector('.ant-menu-item-selected')?.textContent?.trim();
 
 const sider = () => document.querySelector('.ant-layout-sider');
 const zeroWidthTrigger = () => document.querySelector('.ant-layout-sider-zero-width-trigger');
@@ -66,6 +71,21 @@ describe('AppLayout sider', () => {
     expect(sider()).toHaveStyle({ width: '0px' });
     // antd's own edge trigger is what brings it back; without it the nav is unreachable.
     expect(zeroWidthTrigger()).not.toBeNull();
+  });
+});
+
+describe('AppLayout selected destination', () => {
+  /**
+   * Every destination in the rail has to be recognised from the path, or opening it lights up
+   * the map instead — which reads as "you are on the map" while you are plainly not. The failure
+   * is silent: navigation still works, so only the highlight is wrong.
+   */
+  it('lights up the destination the path is under', () => {
+    capabilities = { checklists: 'read' };
+    renderShell('/checklists');
+
+    expect(screen.getByText('checklists page')).toBeInTheDocument();
+    expect(selectedItem()).toBe('Checklists');
   });
 });
 

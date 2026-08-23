@@ -28,7 +28,8 @@
     "participantRoles": "Roluri în tură",
     "reportTemplates": "Modele de raport",
     "termRules": "Reguli de detectare",
-    "expeditions": "Tabere"
+    "expeditions": "Tabere",
+    "checklists": "Liste de verificare"
   },
   "dashboard": {
     "title": "Panou de bord",
@@ -1032,7 +1033,14 @@
       "trip-searched-not-found": "Căutate, negăsite",
       "trip-lead": "Continuări lăsate",
       "trip-follows-on-from": "Continuă tura"
-    }
+    },
+    "checklist": "Listă de verificare",
+    "tabChecklist": "Listă de verificare",
+    "checklistNone": "Această tură nu parcurge nicio listă pe care o poți vedea.",
+    "checklistReadiness": "{{ticked}} din {{total}} rezolvate",
+    "checklistAdvisory": "Aceasta este o informare pentru echipă, nu o regulă. Nimic nu este refuzat pentru că o linie a rămas nerezolvată, iar gradul de pregătire nu schimbă niciodată cine poate citi tura.",
+    "checklistTickedAt": "Confirmat la {{when}}",
+    "checklistTickFailed": "Confirmarea nu a putut fi înregistrată."
   },
   "expeditions": {
     "notFound": "Nicio astfel de tabără",
@@ -1262,6 +1270,7 @@
       "files": "Depozitul de fișiere",
       "documents": "Documente",
       "expeditions": "Expediții",
+      "checklists": "Liste de verificare",
       "mapLayers": "Straturi de hartă",
       "tags": "Etichete",
       "hierarchies": "Ierarhii",
@@ -1844,7 +1853,9 @@
         "integer": "număr întreg",
         "boolean": "da/nu",
         "enum": "alegere"
-      }
+      },
+      "defaultChecklist": "Listă de verificare",
+      "defaultChecklistHint": "Lista pe care o parcurg turele cu acest scop. Numirea ei aici nu conferă nimic: un cititor care nu poate deschide lista este informat că tura nu are niciuna."
     },
     "participantRoles": {
       "title": "Roluri în tură",
@@ -2587,5 +2598,32 @@
       "trips": "Ture",
       "views": "Vizualizări"
     }
+  },
+  "checklists": {
+    "title": "Liste de verificare",
+    "subtitle": "Listele pe care o echipă le parcurge înainte de plecare.",
+    "new": "Listă nouă",
+    "edit": "Modifică lista",
+    "empty": "Nicio listă de verificare încă.",
+    "saved": "Listă salvată.",
+    "saveFailed": "Lista nu a putut fi salvată.",
+    "deleteConfirm": "Ștergi această listă? Turele pierd confirmările făcute pe liniile ei.",
+    "lineCount": "{{count}} linii",
+    "fieldTitle": "Titlu",
+    "fieldDescription": "Descriere",
+    "fieldVisibility": "Cine o poate citi",
+    "visibilityHint": "O listă pe care o poate citi oricine este modul în care se publică una pentru toată instalarea.",
+    "fieldCavingGroup": "Club de speologie",
+    "fieldItems": "Linii",
+    "itemPlaceholder": "Ceva de rezolvat înainte de plecare",
+    "addLine": "Adaugă o linie",
+    "removeLine": "Elimină această linie",
+    "visibilityValues": {
+      "private": "Doar eu",
+      "cavingGroup": "Clubul meu",
+      "authenticated": "Oricine este autentificat",
+      "public": "Toată lumea"
+    },
+    "delete": "Șterge această listă"
   }
 }

@@ -210,6 +210,7 @@ public static class AccessEntryMapping
                 AccessDomain.GeoreferencedMaps => await AccessColumnsAsync(db.GeoreferencedMaps, objectId, ct),
                 AccessDomain.MapViews => await AccessColumnsAsync(db.MapViews, objectId, ct),
                 AccessDomain.Expeditions => await AccessColumnsAsync(db.Expeditions, objectId, ct),
+                AccessDomain.Checklists => await AccessColumnsAsync(db.Checklists, objectId, ct),
                 _ => null,
             };
 
@@ -296,6 +297,7 @@ public static class AccessEntryMapping
                 AccessDomain.Files => await db.StoredFiles.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.Documents => await db.Documents.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.Expeditions => await db.Expeditions.AnyAsync(x => x.Id == scopeId, ct),
+                AccessDomain.Checklists => await db.Checklists.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.CavingGroups => await db.CavingGroups.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.PermissionGroups => await db.PermissionGroups.AnyAsync(x => x.Id == scopeId, ct),
                 AccessDomain.FeatureSets => await db.FeatureSets.AnyAsync(x => x.Id == scopeId, ct),

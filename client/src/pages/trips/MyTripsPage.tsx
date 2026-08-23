@@ -13,6 +13,7 @@ import {
   type TripLogInfo,
 } from '../../api/hooks.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
+import TripReadinessTag from '../../components/trips/TripReadinessTag.tsx';
 import { countPeople } from '../../components/trips/roster.ts';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
 import { ACTIVITY_STATES } from '../../components/trips/tripStates.ts';
@@ -151,6 +152,12 @@ export default function MyTripsPage() {
               const label = tripTypeLabelOf(value, tripTypes, t);
               return label ? <Tag>{label}</Tag> : null;
             },
+          },
+          {
+            title: t('trips.checklist'),
+            key: 'readiness',
+            width: 140,
+            render: (_, trip) => <TripReadinessTag readiness={trip.checklistReadiness} />,
           },
           {
             title: t('trips.participants'),

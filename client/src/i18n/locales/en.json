@@ -28,7 +28,8 @@
     "participantRoles": "Trip roles",
     "reportTemplates": "Report layouts",
     "termRules": "Detection rules",
-    "expeditions": "Camps"
+    "expeditions": "Camps",
+    "checklists": "Checklists"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1032,7 +1033,14 @@
       "trip-searched-not-found": "Searched, not found",
       "trip-lead": "Leads left",
       "trip-follows-on-from": "Follows on from"
-    }
+    },
+    "checklist": "Checklist",
+    "tabChecklist": "Checklist",
+    "checklistNone": "This trip works through no checklist you can see.",
+    "checklistReadiness": "{{ticked}} of {{total}} settled",
+    "checklistAdvisory": "This is a reading for the party, not a rule. Nothing is refused because a line is unsettled, and how settled a trip is never changes who may read it.",
+    "checklistTickedAt": "Confirmed {{when}}",
+    "checklistTickFailed": "That confirmation could not be recorded."
   },
   "expeditions": {
     "notFound": "No such camp",
@@ -1262,6 +1270,7 @@
       "files": "File store",
       "documents": "Documents",
       "expeditions": "Expeditions",
+      "checklists": "Checklists",
       "mapLayers": "Map layers",
       "tags": "Tags",
       "hierarchies": "Hierarchies",
@@ -1844,7 +1853,9 @@
         "integer": "whole number",
         "boolean": "yes/no",
         "enum": "choice"
-      }
+      },
+      "defaultChecklist": "Checklist",
+      "defaultChecklistHint": "The list trips of this purpose work through. Naming one here confers nothing: a reader who may not open the list is told the trip has none."
     },
     "participantRoles": {
       "title": "Trip roles",
@@ -2587,5 +2598,32 @@
       "trips": "Trips",
       "views": "Views"
     }
+  },
+  "checklists": {
+    "title": "Checklists",
+    "subtitle": "The lists a party works through before it sets off.",
+    "new": "New checklist",
+    "edit": "Edit checklist",
+    "empty": "No checklists yet.",
+    "saved": "Checklist saved.",
+    "saveFailed": "That checklist could not be saved.",
+    "deleteConfirm": "Delete this checklist? Trips lose the confirmations made against its lines.",
+    "lineCount": "{{count}} lines",
+    "fieldTitle": "Title",
+    "fieldDescription": "Description",
+    "fieldVisibility": "Who may read it",
+    "visibilityHint": "A list everyone may read is how one is published for the whole installation.",
+    "fieldCavingGroup": "Caving group",
+    "fieldItems": "Lines",
+    "itemPlaceholder": "Something to settle before setting off",
+    "addLine": "Add a line",
+    "removeLine": "Remove this line",
+    "visibilityValues": {
+      "private": "Only me",
+      "cavingGroup": "My caving group",
+      "authenticated": "Anyone signed in",
+      "public": "Everyone"
+    },
+    "delete": "Delete this checklist"
   }
 }

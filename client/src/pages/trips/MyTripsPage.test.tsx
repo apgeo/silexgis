@@ -70,6 +70,36 @@ describe('my trips', () => {
   });
 
   /**
+   * The figure the listing carries is drawn, because a listing is where somebody scans what is
+   * coming and asks how ready each one is. A trip whose purpose names no list, or whose list this
+   * reader may not see, carries no figure and gets no badge — a zero there would say a list
+   * exists, which is the one thing the server declines to say.
+   */
+  it('shows how much of the checklist is settled, and nothing where there is no figure', () => {
+    answer([
+      trip({
+        id: 'aaaaaaaa-0000-0000-0000-000000000001',
+        title: 'Half ready',
+        checklistReadiness: {
+          checklistId: 'bbbbbbbb-0000-0000-0000-000000000001',
+          ticked: 1,
+          total: 3,
+        },
+      }),
+      trip({
+        id: 'aaaaaaaa-0000-0000-0000-000000000002',
+        title: 'No list to speak of',
+        checklistReadiness: null,
+      }),
+    ]);
+    show();
+
+    const badges = screen.getAllByTestId('trip-readiness');
+    expect(badges).toHaveLength(1);
+    expect(badges[0].textContent).toContain('1 of 3 settled');
+  });
+
+  /**
    * The order is the server's. It is ascending — soonest first, which is the opposite of every
    * other trip listing — and the page must render the rows in the order they arrived rather than
    * sorting them again: re-sorting would only reorder the page in hand, which is a different and

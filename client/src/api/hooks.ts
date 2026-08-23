@@ -142,6 +142,9 @@ export const queryKeys = {
   myTripLogs: (params: MyTripLogListParams) => ['trip-logs', 'mine', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
   tripInvitations: (id: string) => ['trip-logs', 'invitations', id] as const,
+  tripChecklist: (id: string) => ['trip-logs', 'checklist', id] as const,
+  checklists: ['checklists'] as const,
+  checklist: (id: string) => ['checklists', 'detail', id] as const,
   tripReportTemplates: ['trip-report-templates'] as const,
   taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
   tags: (search: string) => ['tags', search] as const,
@@ -1456,6 +1459,8 @@ export interface TripTypeWrite {
   fieldDataSchema: string | null;
   logisticsSchema: string | null;
   safetySchema: string | null;
+  /** The list trips of this purpose work through, by identity. Null names none. */
+  defaultChecklistId: string | null;
 }
 
 function useInvalidateTripTypes() {
@@ -4412,5 +4417,140 @@ export function useExpeditionLeads(expeditionId: string | undefined) {
       unwrap(api.GET('/api/v1/expeditions/{id}/leads', { params: { path: { id: expeditionId! } } })),
     enabled: !!expeditionId,
     retry: false,
+  });
+}
+
+export type ChecklistInfo = components['schemas']['ChecklistDto'];
+export type ChecklistItemInfo = components['schemas']['ChecklistItemDto'];
+export type ChecklistWrite = components['schemas']['ChecklistWriteRequest'];
+export type TripChecklistInfo = components['schemas']['TripChecklistDto'];
+export type TripChecklistItemInfo = components['schemas']['TripChecklistItemDto'];
+
+/**
+ * The lists this caller may read, lines included.
+ *
+ * There is one kind of list. A list an administrator publishes for the whole installation
+ * arrives here beside a caver's own — it is the same row with a wider audience — so nothing
+ * here sorts them into two groups or asks which is "the default".
+ */
+export function useChecklists() {
+  return useQuery({
+    queryKey: queryKeys.checklists,
+    queryFn: () => unwrap(api.GET('/api/v1/checklists')),
+  });
+}
+
+function useInvalidateChecklists() {
+  const queryClient = useQueryClient();
+  return (id?: string) => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.checklists });
+    if (id) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.checklist(id) });
+    }
+    // A trip's reading of how settled it is comes from these rows, so changing a list moves it.
+    void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+  };
+}
+
+export function useCreateChecklist() {
+  const invalidate = useInvalidateChecklists();
+  return useMutation({
+    mutationFn: (body: ChecklistWrite) => unwrap(api.POST('/api/v1/checklists', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateChecklist() {
+  const invalidate = useInvalidateChecklists();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: ChecklistWrite }) =>
+      unwrap(api.PUT('/api/v1/checklists/{id}', { params: { path: { id } }, body })),
+    onSuccess: (_data, variables) => invalidate(variables.id),
+  });
+}
+
+export function useDeleteChecklist() {
+  const invalidate = useInvalidateChecklists();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/checklists/{id}', {
+        params: { path: { id } },
+      });
+      if (error) {
+        throw new ApiError(response.status, error);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * The list one trip works through, its lines, who has confirmed each and when, and how much of
+ * it is settled.
+ *
+ * The count comes back on the answer rather than being worked out here. It is the server's
+ * reading of the lines and the confirmations, and a second count computed in the browser would
+ * be a copy free to disagree with it — over a list whose lines this caller may not even have
+ * been sent all of.
+ *
+ * A trip whose purpose names no list, and a trip naming one this caller may not read, answer the
+ * same way: no list. That is deliberate on the server, and nothing here tries to tell them apart.
+ */
+export function useTripChecklist(tripLogId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripChecklist(tripLogId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-logs/{tripLogId}/checklist', {
+          params: { path: { tripLogId: tripLogId! } },
+        }),
+      ),
+    enabled: !!tripLogId && enabled,
+  });
+}
+
+function useInvalidateTripChecklist() {
+  const queryClient = useQueryClient();
+  return (tripLogId: string) => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tripChecklist(tripLogId) });
+    // The trip's own row carries the same figure, so a confirmation moves both.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tripLog(tripLogId) });
+  };
+}
+
+/**
+ * Confirms one line as settled for this trip, or takes the confirmation back.
+ *
+ * Confirming what is already confirmed changes nothing: the record is of who first said so and
+ * when, and an answer that moved every time somebody reopened the page would answer a different
+ * question.
+ */
+export function useSetTripChecklistItem() {
+  const invalidate = useInvalidateTripChecklist();
+  return useMutation({
+    mutationFn: async ({
+      tripLogId,
+      itemId,
+      ticked,
+    }: {
+      tripLogId: string;
+      itemId: string;
+      ticked: boolean;
+    }) => {
+      const params = { path: { tripLogId, itemId } };
+      if (!ticked) {
+        const { error, response } = await api.DELETE(
+          '/api/v1/trip-logs/{tripLogId}/checklist/items/{itemId}',
+          { params },
+        );
+        if (error) {
+          throw new ApiError(response.status, error);
+        }
+        return;
+      }
+
+      await unwrap(api.PUT('/api/v1/trip-logs/{tripLogId}/checklist/items/{itemId}', { params }));
+    },
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
   });
 }

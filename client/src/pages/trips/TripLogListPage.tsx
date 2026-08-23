@@ -14,6 +14,7 @@ import {
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
+import TripReadinessTag from '../../components/trips/TripReadinessTag.tsx';
 import { countPeople } from '../../components/trips/roster.ts';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
@@ -109,6 +110,12 @@ export default function TripLogListPage() {
               const label = tripTypeLabelOf(value, tripTypes, t);
               return label ? <Tag>{label}</Tag> : null;
             },
+          },
+          {
+            title: t('trips.checklist'),
+            key: 'readiness',
+            width: 140,
+            render: (_, trip) => <TripReadinessTag readiness={trip.checklistReadiness} />,
           },
           { title: t('trips.location'), dataIndex: 'locationText', width: 200 },
           {

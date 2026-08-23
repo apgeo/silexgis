@@ -1588,6 +1588,14 @@ public static class TripLogEndpoints
         // told what went wrong, as against who is told that something did.
         var writable = await ProtectedWrites.WritableAsync(access, ctx, trips, ct);
 
+        // How much of the list its purpose names each of these trips has settled, resolved for the
+        // whole page at once rather than per row: which list a trip is measured against belongs to
+        // its purpose, so asking per trip would put the same query on a page fifty times. Nothing
+        // here narrows the page — a trip with nothing settled is on this list exactly as a trip
+        // fully settled is, because how ready a party is is a reading for that party and never a
+        // rule about who may see the plan.
+        var readiness = await TripChecklistReads.ReadinessForAsync(db, ctx, trips, ct);
+
         return [.. trips.Select(trip => MapOne(trip, writable.Contains(trip.Id)))];
 
         TripLogDto MapOne(TripLog trip, bool mayWrite)
@@ -1640,7 +1648,11 @@ public static class TripLogEndpoints
                 trip.CalloutState,
                 IsWatched(trip) ? lastSwept : null,
                 onTheTrip.Contains(trip.Id),
-                trip.MeetingGeom is null ? null : GeoJsonGeometry.From(trip.MeetingGeom));
+                trip.MeetingGeom is null ? null : GeoJsonGeometry.From(trip.MeetingGeom),
+                readiness.TryGetValue(trip.Id, out var settled)
+                    ? new TripChecklistReadinessDto(
+                        settled.ChecklistId, settled.Readiness.Ticked, settled.Readiness.Total)
+                    : null);
         }
     }
 }

@@ -87,4 +87,24 @@ public enum AccessDomain : short
     /// </para>
     /// </summary>
     Expeditions = 20,
+
+    /// <summary>
+    /// Checklists: the lists of what a party settles before it sets off. Checklist rows
+    /// carry the owner/caving-group/visibility trio, so a checklist is governed like any
+    /// other owned content — by entries written against it, by its owner, and by its
+    /// audience. A list an administrator publishes for the whole installation is an
+    /// ordinary row of this domain with an audience everyone falls inside, not a case of
+    /// its own.
+    /// <para>
+    /// It is a domain of its own rather than something governed through the trips that
+    /// use a list, and both halves of that are forced. An entry scoped to one object
+    /// resolves what it is anchored to against the table its domain names, so a checklist
+    /// id written under the trip domain names nothing and the entry is refused — which is
+    /// exactly the grant "share this list with them" is made of. And the only shape left,
+    /// a grant over every trip, is one flag: it would hand its holder every checklist in
+    /// the installation, private ones included, and a grant meant for lists would confer
+    /// read on every trip. There is no setting between the two.
+    /// </para>
+    /// </summary>
+    Checklists = 21,
 }

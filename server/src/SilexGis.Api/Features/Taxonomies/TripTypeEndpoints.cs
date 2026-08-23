@@ -30,7 +30,16 @@ public sealed record TripTypeDto(
     string? LogisticsSchema,
     int LogisticsSchemaVersion,
     string? SafetySchema,
-    int SafetySchemaVersion);
+    int SafetySchemaVersion,
+    // The list trips of this purpose settle before they set off, if one is named. Only the
+    // identity travels: the list is a thing with an audience of its own, read through its own
+    // routes by whoever may read it — and null, exactly as for a purpose that names none, where
+    // this caller is not one of those. Reading the vocabulary is open to every account, so a
+    // purpose naming a list unconditionally would hand out the identity of a private list to
+    // everybody, which is the one thing the trip's own checklist route goes out of its way not
+    // to do. A purpose with no list and a purpose with a list nobody meant this reader to have
+    // are one answer here for the same reason they are one answer there.
+    Guid? DefaultChecklistId);
 
 /// <summary>A trip purpose as an administrator asks for it to be.</summary>
 public sealed record TripTypeRequest(
@@ -40,7 +49,8 @@ public sealed record TripTypeRequest(
     int SortOrder,
     string? FieldDataSchema,
     string? LogisticsSchema,
-    string? SafetySchema);
+    string? SafetySchema,
+    Guid? DefaultChecklistId);
 
 public sealed class TripTypeRequestValidator : AbstractValidator<TripTypeRequest>
 {
@@ -83,6 +93,13 @@ public static class TripTypeEndpoints
     public const string SeededImmutableCode = TripTypeWriteService.SeededImmutableCode;
     public const string InUseCode = TripTypeWriteService.InUseCode;
 
+    /// <summary>
+    /// The request names a list that is not there, or one this caller may not read. The two are
+    /// one answer on purpose: telling them apart would let anyone holding taxonomy rights probe
+    /// for the existence of lists they were never shown.
+    /// </summary>
+    public const string ChecklistNotFoundCode = "trip_type.checklist_not_found";
+
     public static RouteGroupBuilder MapTripTypeEndpoints(this RouteGroupBuilder api)
     {
         var types = api.MapGroup("/trip-types").WithTags("Taxonomies");
@@ -114,12 +131,41 @@ public static class TripTypeEndpoints
             .OrderBy(t => t.SortOrder)
             .ThenBy(t => t.Id)
             .ToListAsync(ct);
-        return TypedResults.Ok(rows.Select(ToDto).ToList());
+
+        // Which of the named lists this caller may read, decided for the whole vocabulary at once
+        // rather than per row: the same shape the trip listing uses, and for the same reason.
+        var readable = await ReadableChecklistIdsAsync(
+            db, ctx, [.. rows.Where(x => x.DefaultChecklistId is not null)
+                .Select(x => x.DefaultChecklistId!.Value)], ct);
+
+        return TypedResults.Ok(
+            rows.Select(x => ToDto(x, x.DefaultChecklistId is { } id && readable.Contains(id)))
+                .ToList());
+    }
+
+    /// <summary>Of the lists named, the ones this caller may read. Distinct, and empty for none.</summary>
+    private static async Task<HashSet<Guid>> ReadableChecklistIdsAsync(
+        SilexGisDbContext db, AccessContext ctx, IReadOnlyList<Guid> named, CancellationToken ct)
+    {
+        var wanted = named.Distinct().ToList();
+        if (wanted.Count == 0)
+        {
+            return [];
+        }
+
+        // Narrowed in the statement rather than after it: a filter applied to results is a filter
+        // somebody later forgets to apply.
+        return [.. await db.Checklists.AsNoTracking()
+            .VisibleTo(ctx, AccessDomain.Checklists)
+            .Where(x => wanted.Contains(x.Id))
+            .Select(x => x.Id)
+            .ToListAsync(ct)];
     }
 
     private static async Task<Results<Created<TripTypeDto>, ProblemHttpResult>> CreateAsync(
         TripTypeRequest request,
         TripTypeWriteService writer,
+        SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -129,10 +175,15 @@ public static class TripTypeEndpoints
             return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
+        if (!await NamesAReadableChecklistAsync(db, ctx!, request.DefaultChecklistId, ct))
+        {
+            return ApiProblems.BadRequest(ChecklistNotFoundCode, ChecklistNotFoundMessage);
+        }
+
         try
         {
             var row = await writer.CreateAsync(ToInput(request), ct);
-            return TypedResults.Created($"/api/v1/trip-types/{row.Id}", ToDto(row));
+            return TypedResults.Created($"/api/v1/trip-types/{row.Id}", ToDto(row, true));
         }
         catch (TripWriteException e)
         {
@@ -144,6 +195,7 @@ public static class TripTypeEndpoints
         long id,
         TripTypeRequest request,
         TripTypeWriteService writer,
+        SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
     {
@@ -153,9 +205,14 @@ public static class TripTypeEndpoints
             return ApiProblems.Forbidden();
         }
 
+        if (!await NamesAReadableChecklistAsync(db, ctx, request.DefaultChecklistId, ct))
+        {
+            return ApiProblems.BadRequest(ChecklistNotFoundCode, ChecklistNotFoundMessage);
+        }
+
         try
         {
-            return TypedResults.Ok(ToDto(await writer.UpdateAsync(id, ToInput(request), ct)));
+            return TypedResults.Ok(ToDto(await writer.UpdateAsync(id, ToInput(request), ct), true));
         }
         catch (TripWriteException e)
         {
@@ -197,6 +254,20 @@ public static class TripTypeEndpoints
         _ => ApiProblems.BadRequest(e.Code, e.Message),
     };
 
+    private const string ChecklistNotFoundMessage = "No checklist you can read has that id.";
+
+    /// <summary>
+    /// Whether the request either names no list or names one this caller may read. A reference
+    /// the caller cannot see is refused with an answer rather than left to the database, which
+    /// would fail the save as a constraint violation and reach the caller as an unhandled fault;
+    /// and narrowing it to what the caller may read keeps an administrator from pointing a
+    /// purpose at a private list whose identity the trip routes then decline to disclose.
+    /// </summary>
+    private static async Task<bool> NamesAReadableChecklistAsync(
+        SilexGisDbContext db, AccessContext ctx, Guid? checklistId, CancellationToken ct) =>
+        checklistId is not { } id
+        || (await ReadableChecklistIdsAsync(db, ctx, [id], ct)).Contains(id);
+
     private static TripTypeInput ToInput(TripTypeRequest request) => new(
         request.Code,
         request.Name,
@@ -204,9 +275,10 @@ public static class TripTypeEndpoints
         request.SortOrder,
         request.FieldDataSchema,
         request.LogisticsSchema,
-        request.SafetySchema);
+        request.SafetySchema,
+        request.DefaultChecklistId);
 
-    private static TripTypeDto ToDto(TripType row) => new(
+    private static TripTypeDto ToDto(TripType row, bool mayReadChecklist) => new(
         row.Id,
         row.Code,
         row.Name,
@@ -218,5 +290,6 @@ public static class TripTypeEndpoints
         row.LogisticsSchema,
         row.LogisticsSchemaVersion,
         row.SafetySchema,
-        row.SafetySchemaVersion);
+        row.SafetySchemaVersion,
+        mayReadChecklist ? row.DefaultChecklistId : null);
 }
