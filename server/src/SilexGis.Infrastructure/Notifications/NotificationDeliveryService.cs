@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Notifications;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
@@ -46,6 +47,7 @@ public sealed class NotificationDeliveryService(
     IMessageDispatcher dispatcher,
     IUnsubscribeTokens unsubscribeTokens,
     IConfiguration configuration,
+    IAppSettingsService settings,
     TimeProvider clock,
     ILogger<NotificationDeliveryService> logger)
 {
@@ -54,13 +56,6 @@ public sealed class NotificationDeliveryService(
 
     /// <summary>Lines listed in a summary before it says how many more there were.</summary>
     private const int MaxDigestItems = 50;
-
-    /// <summary>
-    /// How long a notification is kept when the installation says nothing. A year, because the
-    /// window is now what an inbox may still show rather than how long an outbound copy is worth
-    /// retrying — and a person coming back after a long absence should still find what happened.
-    /// </summary>
-    private const int DefaultRetentionDays = 365;
 
     /// <summary>
     /// Routes whatever has not been routed yet, then sends whatever is immediately due. Returns
@@ -212,8 +207,151 @@ public sealed class NotificationDeliveryService(
         return claimed.Count;
     }
 
-    /// <summary>Drops notifications once they are old enough to be of no further interest.</summary>
-    public Task PruneAsync(CancellationToken ct) => NotificationDeliverySql.PruneAsync(db, RetentionDays, ct);
+    /// <summary>
+    /// Puts one dead delivery back in the queue by hand, after asking again every question routing
+    /// asked the first time.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A dead delivery is the one thing in this pipeline nothing will ever pick up again, so an
+    /// operator who has fixed whatever broke — a mail server that was refusing everything, an
+    /// address that was wrong — needs a way to say "try that one again". This is that way, and it
+    /// is deliberately not a bare status change.
+    /// </para>
+    /// <para>
+    /// Everything that decided whether the message should leave at all is decided again here,
+    /// against the recipient as they are now rather than as they were when the row was written.
+    /// Between the failure and the retry the recipient may have used the opt-out link the failed
+    /// message itself carried, or cleared the category on their settings page; a retry that only
+    /// flipped the status back would answer "stop telling me about this" with one more of exactly
+    /// that, and would do it under an operator's name. So the same two reads the send path makes
+    /// are made here, and a recipient who has since said no ends with the delivery dropped and the
+    /// operator told why, rather than with a message.
+    /// </para>
+    /// <para>
+    /// The answer is taken whole rather than reduced to yes-or-no. Somebody whose choice for this
+    /// category is a daily summary has asked for one message a day, so their dead rows go back to
+    /// waiting for the next summary rather than out as one immediate message each — the retry must
+    /// not be the single path that can turn a summary into a pile of individual mail.
+    /// </para>
+    /// <para>
+    /// It re-queues rather than sending in line. The instant a delivery becomes due is computed in
+    /// one place for every writer of it, so the hours a recipient asked not to be interrupted in
+    /// hold for a hand-driven attempt exactly as they do for an automatic one — an operator
+    /// working through a backlog in the evening must not be the one path that wakes people up.
+    /// </para>
+    /// <para>
+    /// Saving is left to the caller, so the record of who asked for this commits with the change
+    /// itself or not at all.
+    /// </para>
+    /// </remarks>
+    public async Task<NotificationRetryResult> RetryAsync(long deliveryId, CancellationToken ct)
+    {
+        var delivery = await db.NotificationDeliveries.FirstOrDefaultAsync(d => d.Id == deliveryId, ct);
+        if (delivery is null)
+        {
+            return NotificationRetryResult.Refused(NotificationRetryOutcome.NotFound);
+        }
+
+        if (delivery.Status != NotificationDeliveryStatus.Dead)
+        {
+            return NotificationRetryResult.Refused(NotificationRetryOutcome.NotDead);
+        }
+
+        var row = await db.Notifications.FirstOrDefaultAsync(n => n.Id == delivery.NotificationId, ct);
+        if (row is null)
+        {
+            // The parent goes with the account and with the retention window, taking its
+            // deliveries by cascade, so this is a row mid-deletion rather than a state to report.
+            return NotificationRetryResult.Refused(NotificationRetryOutcome.NotFound);
+        }
+
+        // Asked of the catalogue rather than matched against the recorded failure text: rows
+        // written before that text existed, or by an installation whose wording has since been
+        // restored, both answer this correctly and neither answers a string comparison correctly.
+        var definition = MessageTemplateCatalog.Find(row.TemplateKey);
+        if (definition is null)
+        {
+            return new NotificationRetryResult(
+                NotificationRetryOutcome.TemplateUnknown, row.Id, row.TemplateKey, null);
+        }
+
+        var channel = channels.Of(delivery.Channel);
+
+        // The second way a delivery is dead the moment it is written: the wording exists, but it
+        // was written for a transport nothing here sends on, so no installed channel is willing to
+        // carry it. Asked again rather than assumed away — the send path never re-tests it, so a
+        // retry that skipped this question would hand the message to the very channel that refused
+        // it and send it out as though it had always been welcome.
+        if (!channel.Carries(definition))
+        {
+            return new NotificationRetryResult(
+                NotificationRetryOutcome.TemplateUnknown, row.Id, row.TemplateKey, null);
+        }
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == delivery.RecipientUserId, ct);
+        if (user is null || !channel.CanReach(user))
+        {
+            return new NotificationRetryResult(
+                NotificationRetryOutcome.Unreachable, row.Id, row.TemplateKey, null);
+        }
+
+        // The whole of the routing question is asked again, not the off/on half of it. Somebody
+        // who has since chosen a daily summary for this category asked for one message a day, and
+        // putting their backlog back as immediate mail would answer that with one message per
+        // dead row — by an operator's hand, which is the one path with nobody to complain to.
+        var stored = await StoredAsync(user.Id, row.Category, ct);
+        var route = channel.Decide(user, Resolve(row.Category, channel.Kind, stored));
+
+        if (route is NotificationRoute.Suppress)
+        {
+            db.NotificationDeliveries.Remove(delivery);
+            return new NotificationRetryResult(
+                NotificationRetryOutcome.Suppressed, row.Id, row.TemplateKey, null);
+        }
+
+        // The attempt count is the automatic pipeline's budget for one message and it is spent —
+        // that is what dead means here. An operator putting the row back is starting a new budget:
+        // leaving the count where it stands would let the first failure kill the row again
+        // immediately, with no back-off, which is a retry that can only ever work on the first try.
+        delivery.Attempts = 0;
+
+        // The recorded failure goes with it. It described an attempt that is over, and a row shown
+        // as waiting while carrying the text of a failure reads as a fresh one.
+        delivery.Error = null;
+
+        // The answer decides the status as it does when routing writes the row for the first time:
+        // a summary that failed goes back to waiting for the next summary, not out on its own.
+        var held = route is NotificationRoute.Defer;
+        var now = clock.GetUtcNow();
+        delivery.Status = held
+            ? NotificationDeliveryStatus.Deferred
+            : NotificationDeliveryStatus.Pending;
+        delivery.NotBefore = DueOutsideTheirNight(
+            held ? NotificationRouting.NextDigest(now, DigestHourUtc) : now, row.Category, user);
+
+        return new NotificationRetryResult(
+            NotificationRetryOutcome.Queued, row.Id, row.TemplateKey, delivery.NotBefore);
+    }
+
+    /// <summary>
+    /// Drops notifications once they are old enough to be of no further interest. One window over
+    /// the whole table, keyed on the notification's own age and taking read and unread alike;
+    /// deliveries go with it by cascade. Deliberately not keyed on a delivery outcome — an inbox
+    /// lists what happened, so keeping only what was successfully emailed would delete precisely
+    /// the events somebody had switched email off for.
+    /// </summary>
+    /// <remarks>
+    /// The window is an administrator's to set, over the deployment's own value, and is read on
+    /// every pass rather than held — so shortening it takes effect at the next hourly prune
+    /// without a restart. A value at or below zero is refused in favour of the default wherever it
+    /// came from: a mistyped setting must not be able to delete an installation's history.
+    /// </remarks>
+    public async Task PruneAsync(CancellationToken ct)
+    {
+        var retention = await settings.GetNotificationsAsync(ct);
+        _ = await NotificationDeliverySql.PruneAsync(db, retention.EffectiveRetentionDays, ct);
+    }
 
     private async Task<Dictionary<long, Notification>> NotificationsOfAsync(
         List<NotificationDelivery> deliveries, CancellationToken ct)
@@ -563,24 +701,4 @@ public sealed class NotificationDeliveryService(
     /// installation's own, which for a club is where nearly all of its members are anyway.
     /// </summary>
     private string HouseTimeZone => configuration.GetValue("Notifications:TimeZone", "UTC") ?? "UTC";
-
-    /// <summary>
-    /// One window over the whole table, keyed on the notification's own age and taking read and
-    /// unread alike; deliveries go with it by cascade. Deliberately not keyed on a delivery
-    /// outcome — an inbox lists what happened, so keeping only what was successfully emailed
-    /// would delete precisely the events somebody had switched email off for.
-    /// </summary>
-    /// <remarks>
-    /// A value at or below zero would empty the table on the next pass, so it is refused in
-    /// favour of the default: a mistyped setting must not be able to delete an installation's
-    /// history, and there is no legitimate reading of "keep for nothing".
-    /// </remarks>
-    private int RetentionDays
-    {
-        get
-        {
-            var days = configuration.GetValue("Notifications:RetentionDays", DefaultRetentionDays);
-            return days > 0 ? days : DefaultRetentionDays;
-        }
-    }
 }

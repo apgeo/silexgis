@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
 import {
+  BellOutlined,
   EnvironmentOutlined,
   ImportOutlined,
   MailOutlined,
@@ -34,6 +35,7 @@ import {
   type AdminSettings,
   type ImportSettings,
   type MailSettingsWrite,
+  type NotificationSettings,
   type ProtectionSettings,
   type SecuritySettings,
   type SmsSettingsWrite,
@@ -129,6 +131,15 @@ export default function MessagingSettingsPage() {
                 </span>
               ),
               children: <ImportForm settings={settings} onSaved={onSaved} />,
+            },
+            {
+              key: 'notifications',
+              label: (
+                <span>
+                  <BellOutlined /> {t('admin.messaging.notificationsTab')}
+                </span>
+              ),
+              children: <NotificationsForm settings={settings} onSaved={onSaved} />,
             },
           ]}
         />
@@ -600,6 +611,55 @@ function ImportForm({ settings, onSaved }: SectionProps) {
         extra={t('admin.messaging.duplicateSimilarityHint')}
       >
         <InputNumber min={0} max={1} step={0.05} />
+      </Form.Item>
+      <Button type="primary" htmlType="submit" loading={saving}>
+        {t('common.save')}
+      </Button>
+    </Form>
+  );
+}
+
+/**
+ * How long the installation keeps what it has told people. This was a deployment key alone and is
+ * still readable as one: an installation that never opens this tab keeps whatever its environment
+ * says, and what is saved here replaces it from the next prune onwards.
+ */
+function NotificationsForm({ settings, onSaved }: SectionProps) {
+  const { t } = useTranslation();
+  const { message } = App.useApp();
+  const [form] = Form.useForm<NotificationSettings>();
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    form.setFieldsValue(settings.notifications);
+  }, [settings, form]);
+
+  const save = async (values: NotificationSettings) => {
+    setSaving(true);
+    try {
+      const { data, error } = await api.PUT('/api/v1/admin/settings/notifications', { body: values });
+      if (error !== undefined || !data) {
+        message.error(t('common.saveFailed'));
+        return;
+      }
+      onSaved(data);
+      message.success(t('common.saved'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Form form={form} layout="vertical" onFinish={save} requiredMark={false} style={{ maxWidth: 640 }}>
+      <Alert type="info" showIcon title={t('admin.messaging.notificationsIntro')} style={{ marginBottom: 16 }} />
+      <Form.Item
+        name="retentionDays"
+        label={t('admin.messaging.retentionDays')}
+        extra={t('admin.messaging.retentionDaysHint')}
+      >
+        {/* The unit is in the label rather than an addon: antd deprecated addonAfter here, and
+            the warning it prints is a console error the browser run refuses. */}
+        <InputNumber min={1} max={3650} step={30} />
       </Form.Item>
       <Button type="primary" htmlType="submit" loading={saving}>
         {t('common.save')}

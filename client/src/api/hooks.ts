@@ -81,6 +81,13 @@ export type NotificationCategoryName = NonNullable<components['schemas']['Notifi
  */
 export type NotificationItem = components['schemas']['NotificationDto'];
 
+export type NotificationHealth = components['schemas']['NotificationHealthDto'];
+export type NotificationDeliveryRow = components['schemas']['NotificationDeliveryDto'];
+export type NotificationDeliveryStatus = components['schemas']['NotificationDeliveryStatus'];
+export type NotificationDeliveryChannel = components['schemas']['NotificationChannel'];
+export type NotificationRetryResult = components['schemas']['NotificationRetryDto'];
+export type NotificationRetryOutcome = components['schemas']['NotificationRetryOutcome'];
+
 /** How many lines of the reader's own inbox are still unopened. */
 export type UnreadNotificationCount = components['schemas']['UnreadNotificationCountDto'];
 
@@ -97,6 +104,7 @@ export type SmsSettingsWrite = components['schemas']['SmsSettingsWriteRequest'];
 export type SecuritySettings = components['schemas']['SecuritySettingsDto'];
 export type ProtectionSettings = components['schemas']['ProtectionSettingsDto'];
 export type ImportSettings = components['schemas']['ImportSettingsDto'];
+export type NotificationSettings = components['schemas']['NotificationSettingsDto'];
 export type MessageTemplate = components['schemas']['MessageTemplateDto'];
 export type ResLink = components['schemas']['ResLinkDto'];
 export type ResLinkMember = components['schemas']['ResLinkMemberDto'];

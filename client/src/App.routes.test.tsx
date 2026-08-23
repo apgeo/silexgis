@@ -43,4 +43,10 @@ describe('the addresses this application hands out', () => {
   it('include the inbox the header sends people to', () => {
     expect(matchRoutes(routes, '/notifications')).toBeTruthy();
   });
+
+  // Registered in the same two places, and the sidebar is the only way in — a page reachable
+  // from no menu and matched by no route is a page nobody finds either way.
+  it('include the delivery health page the sidebar offers', () => {
+    expect(matchRoutes(routes, '/admin/notification-health')).toBeTruthy();
+  });
 });

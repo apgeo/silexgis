@@ -28,7 +28,8 @@
     "participantRoles": "Trip roles",
     "reportTemplates": "Report layouts",
     "termRules": "Detection rules",
-    "expeditions": "Camps"
+    "expeditions": "Camps",
+    "notificationHealth": "Message delivery"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1730,7 +1731,11 @@
       "duplicateRadius": "Look for something already there within",
       "duplicateRadiusHint": "The starting radius for a new review; the importer can change it. Only objects whose exact position the reviewer may see are ever measured against.",
       "duplicateSimilarity": "Names count as the same above",
-      "duplicateSimilarityHint": "How alike two names must be, 0 to 1, before a nearby object is called the same thing rather than merely close to it."
+      "duplicateSimilarityHint": "How alike two names must be, 0 to 1, before a nearby object is called the same thing rather than merely close to it.",
+      "notificationsTab": "Notifications",
+      "notificationsIntro": "How long this installation keeps what it has told people. What is saved here replaces the deployment's own setting; leave it alone and that setting stays in force.",
+      "retentionDays": "Keep notifications for (days)",
+      "retentionDaysHint": "A notification is deleted after this, read or unread alike, and whether or not an email ever went out for it. The record of how it was sent goes with it."
     },
     "documentTypes": {
       "title": "Document kinds",
@@ -2569,6 +2574,50 @@
       "documents": "Documents",
       "trips": "Trips",
       "views": "Views"
+    }
+  },
+  "notificationHealth": {
+    "title": "Message delivery",
+    "intro": "Whether messages are getting out of this installation. Every row here is one somebody was meant to receive: a channel a person has switched off produces no row at all, so a backlog is always a backlog.",
+    "stalled": "Nothing has been sent for {{age}}.",
+    "stalledHint": "The oldest message still waiting was queued that long ago. Check the mail server settings and the test send on the messaging page.",
+    "oldestPending": "Oldest still waiting",
+    "nothingWaiting": "Nothing waiting",
+    "byChannel": "By channel",
+    "noDeliveries": "Nothing has been sent yet.",
+    "anyStatus": "Any status",
+    "attentionOnly": "Only what needs attention",
+    "refresh": "Refresh",
+    "createdAt": "Queued",
+    "recipient": "For",
+    "unknownRecipient": "Account no longer exists",
+    "category": "About",
+    "templateKey": "Message",
+    "channel": "Channel",
+    "status": "Status",
+    "attempts": "Attempts",
+    "error": "What went wrong",
+    "retry": "Send again",
+    "retryTitle": "Send this message again?",
+    "retryConfirm": "This sends “{{template}}” to the person it was meant for. Their current answer is read again first, so if they have since asked not to be told about this, nothing is sent.",
+    "retryOk": "Send again",
+    "retryFailed": "It could not be put back.",
+    "ageMinutes": "{{count}} minutes",
+    "ageHours": "{{count}} hours",
+    "ageDays": "{{count}} days",
+    "statuses": {
+      "pending": "Waiting",
+      "deferred": "Held for the daily summary",
+      "sent": "Sent",
+      "dead": "Given up"
+    },
+    "outcomes": {
+      "notFound": "There is no such message any more.",
+      "notDead": "That one has not given up, so there is nothing to put back.",
+      "templateUnknown": "Nothing knows how to write this message, so it would fail the same way. The wording has to be restored first.",
+      "unreachable": "There is nowhere to send it: the account is gone, or no longer has an address.",
+      "suppressed": "The person it was for has since asked not to be told about this, so it was not sent. They can still read it in their own list.",
+      "queued": "Back in the queue."
     }
   }
 }

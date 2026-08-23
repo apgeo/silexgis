@@ -210,6 +210,42 @@ public sealed record InterfaceSettings
     public string PanelDefaults { get; init; } = "{}";
 }
 
+/// <summary>
+/// How long the installation keeps what it has told people.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The only notification key an administrator edits. The rest of the deployment's notification
+/// configuration — how often the sender wakes, when the daily summary goes out, which house time
+/// zone quiet hours fall back to — describes the process rather than the installation's policy, so
+/// it stays where the deployment sets it and is read straight from configuration. Because this
+/// section declares one value and nothing else, saving it can never quietly reset a key somebody
+/// set in the environment: the others are not in it to be lost.
+/// </para>
+/// </remarks>
+public sealed record NotificationSettings
+{
+    /// <summary>
+    /// The default window, in days. A year, because the window is what an inbox may still show
+    /// rather than how long an outbound copy is worth retrying, and somebody coming back after a
+    /// long absence should still find what happened while they were away.
+    /// </summary>
+    public const int DefaultRetentionDays = 365;
+
+    /// <summary>
+    /// How long a notification is kept before it and the record of how it was sent are deleted.
+    /// </summary>
+    /// <remarks>
+    /// A value at or below zero would empty the table on the next pass, so it is refused in favour
+    /// of the default wherever it comes from: a mistyped environment variable and a mistyped form
+    /// field must both fail the same way, and there is no legitimate reading of "keep for nothing".
+    /// </remarks>
+    public int RetentionDays { get; init; } = DefaultRetentionDays;
+
+    /// <summary>The window to actually prune by, with a nonsensical one refused.</summary>
+    public int EffectiveRetentionDays => RetentionDays > 0 ? RetentionDays : DefaultRetentionDays;
+}
+
 public static class AppSettingSections
 {
     public const string Mail = "mail";
@@ -224,6 +260,8 @@ public static class AppSettingSections
 
     public const string Interface = "interface";
 
+    public const string Notifications = "notifications";
+
     public static IReadOnlyList<string> All { get; } =
-        [Mail, Sms, Security, Protection, Import, Interface];
+        [Mail, Sms, Security, Protection, Import, Interface, Notifications];
 }

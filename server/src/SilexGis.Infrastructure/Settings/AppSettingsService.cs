@@ -57,6 +57,9 @@ public sealed class AppSettingsService(
     public ValueTask<InterfaceSettings> GetInterfaceAsync(CancellationToken ct = default) =>
         GetAsync<InterfaceSettings>(AppSettingSections.Interface, "Interface", ct);
 
+    public ValueTask<NotificationSettings> GetNotificationsAsync(CancellationToken ct = default) =>
+        GetAsync<NotificationSettings>(AppSettingSections.Notifications, "Notifications", ct);
+
     public async Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
         where T : class
     {

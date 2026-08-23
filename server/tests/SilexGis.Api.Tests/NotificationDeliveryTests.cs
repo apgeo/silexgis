@@ -11,6 +11,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
 
@@ -655,6 +656,80 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_saved_retention_window_beats_the_one_the_deployment_configured()
+    {
+        // The point of moving this window into the admin page: an installation that has said one
+        // thing in its environment and another on the page keeps what an administrator saved. The
+        // environment here asks for ten years, so a row thirty-one days old survives unless the
+        // saved thirty is the one being read.
+        var pastTheSavedWindow = await SeedAgedAsync(DateTimeOffset.UtcNow.AddDays(-31), readAt: null);
+        var insideIt = await SeedAgedAsync(DateTimeOffset.UtcNow.AddDays(-29), readAt: null);
+
+        await SaveRetentionAsync(30);
+
+        await using (var configured = new SilexGisApiFactory(
+            connectionString,
+            new Dictionary<string, string?>
+            {
+                ["Auth:RateLimitPerMinute"] = "500",
+                ["Notifications:RetentionDays"] = "3650",
+            }))
+        {
+            await using var scope = configured.Services.CreateAsyncScope();
+            await scope.ServiceProvider
+                .GetRequiredService<NotificationDeliveryService>()
+                .PruneAsync(CancellationToken.None);
+        }
+
+        var surviving = (await RowsAsync()).Select(r => r.Id).ToList();
+        surviving.ShouldNotContain(pastTheSavedWindow, "the saved window is the one in force");
+        surviving.ShouldContain(insideIt);
+    }
+
+    [Fact]
+    public async Task A_saved_retention_window_of_nothing_is_refused_like_a_configured_one()
+    {
+        // The guard used to sit on the configuration read alone. Routing the window through the
+        // stored section would have left that guard standing and stepped around it, so the same
+        // zero written the other way has to be refused the same way.
+        //
+        // Three days old, against a deployment that asks for two: the row survives only if the
+        // stored zero was read and refused in favour of the default. Ignore the stored section
+        // and the configured two days deletes it; read the zero literally and everything goes.
+        // Neither wrong answer can leave this row standing, which is what makes it evidence.
+        var recent = await SeedAgedAsync(DateTimeOffset.UtcNow.AddDays(-3), readAt: null);
+
+        await SaveRetentionAsync(0);
+
+        await using (var configured = new SilexGisApiFactory(
+            connectionString,
+            new Dictionary<string, string?>
+            {
+                ["Auth:RateLimitPerMinute"] = "500",
+                ["Notifications:RetentionDays"] = "2",
+            }))
+        {
+            await using var scope = configured.Services.CreateAsyncScope();
+            await scope.ServiceProvider
+                .GetRequiredService<NotificationDeliveryService>()
+                .PruneAsync(CancellationToken.None);
+        }
+
+        (await RowsAsync()).Select(r => r.Id).ShouldContain(recent);
+    }
+
+    /// <summary>
+    /// Writes the stored section as the admin page would, through the service, so the process's
+    /// cached copy of it is dropped and the next read is the value just written.
+    /// </summary>
+    private async Task SaveRetentionAsync(int days)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IAppSettingsService>().SaveAsync(
+            AppSettingSections.Notifications, new NotificationSettings { RetentionDays = days });
+    }
+
+    [Fact]
     public async Task Every_producer_here_names_what_its_notification_is_about()
     {
         // What the exemption list is pinned against. A domain test classifies every template key
@@ -973,6 +1048,10 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         await db.Notifications
             .Where(r => r.RecipientUserId == recipientId || r.RecipientUserId == managerId)
             .ExecuteDeleteAsync();
+
+        // A retention window saved by one test would otherwise decide how long another class's
+        // notifications are kept, against the one database they all share.
+        await db.AppSettings.Where(a => a.Key == AppSettingSections.Notifications).ExecuteDeleteAsync();
     }
 
     public void Dispose()

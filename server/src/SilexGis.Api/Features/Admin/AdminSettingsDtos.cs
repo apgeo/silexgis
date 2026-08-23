@@ -88,6 +88,7 @@ public sealed record AdminSettingsDto(
     ProtectionSettingsDto Protection,
     ImportSettingsDto Import,
     InterfaceSettingsDto Interface,
+    NotificationSettingsDto Notifications,
     bool MailConfigured,
     bool SmsConfigured);
 
@@ -115,6 +116,31 @@ public sealed record ImportSettingsDto(
 /// own preferences shape and is opaque here — the server stores it and never reads inside it.
 /// </summary>
 public sealed record InterfaceSettingsDto(string PanelDefaults);
+
+/// <summary>
+/// How long the installation keeps what it has told people.
+/// </summary>
+/// <param name="RetentionDays">
+/// Days a notification is kept before it and the record of how it was sent are deleted. Read back
+/// as the window actually in force, so a page never shows a number the pruner would refuse.
+/// </param>
+public sealed record NotificationSettingsDto(int RetentionDays);
+
+public sealed class NotificationSettingsDtoValidator : AbstractValidator<NotificationSettingsDto>
+{
+    /// <summary>
+    /// Ten years. Long enough for any installation that wants to keep its history, short enough
+    /// that a mistyped year count is refused here rather than becoming a table nobody prunes.
+    /// </summary>
+    private const int MaxRetentionDays = 3650;
+
+    public NotificationSettingsDtoValidator() =>
+        // One is the shortest window with any meaning. Zero and below are refused rather than
+        // quietly corrected, because a form that accepted "0" and kept a year would be lying to
+        // the person who typed it — the pruner's own fallback exists for a mistyped environment
+        // variable, which nobody is standing in front of.
+        RuleFor(x => x.RetentionDays).InclusiveBetween(1, MaxRetentionDays);
+}
 
 public sealed class InterfaceSettingsDtoValidator : AbstractValidator<InterfaceSettingsDto>
 {

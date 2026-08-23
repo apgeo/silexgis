@@ -28,7 +28,8 @@
     "participantRoles": "Roluri în tură",
     "reportTemplates": "Modele de raport",
     "termRules": "Reguli de detectare",
-    "expeditions": "Tabere"
+    "expeditions": "Tabere",
+    "notificationHealth": "Trimiterea mesajelor"
   },
   "dashboard": {
     "title": "Panou de bord",
@@ -1730,7 +1731,11 @@
       "duplicateRadius": "Caută ceva deja existent pe o rază de",
       "duplicateRadiusHint": "Raza de pornire pentru o verificare nouă; cel care importă o poate schimba. Se măsoară doar față de obiectele a căror poziție exactă o poate vedea.",
       "duplicateSimilarity": "Numele se consideră identice peste",
-      "duplicateSimilarityHint": "Cât de asemănătoare trebuie să fie două nume, de la 0 la 1, pentru ca un obiect din apropiere să fie considerat același lucru, nu doar aproape."
+      "duplicateSimilarityHint": "Cât de asemănătoare trebuie să fie două nume, de la 0 la 1, pentru ca un obiect din apropiere să fie considerat același lucru, nu doar aproape.",
+      "notificationsTab": "Notificări",
+      "notificationsIntro": "Cât timp păstrează această instalare ce le-a spus oamenilor. Ce se salvează aici înlocuiește setarea din configurația de instalare; dacă nu o atingi, aceea rămâne în vigoare.",
+      "retentionDays": "Păstrează notificările (zile)",
+      "retentionDaysHint": "O notificare este ștearsă după acest interval, citită sau nu, și indiferent dacă a plecat vreodată un e-mail pentru ea. Evidența felului în care a fost trimisă dispare odată cu ea."
     },
     "documentTypes": {
       "title": "Tipuri de documente",
@@ -2569,6 +2574,50 @@
       "documents": "Documente",
       "trips": "Ture",
       "views": "Vizualizări"
+    }
+  },
+  "notificationHealth": {
+    "title": "Trimiterea mesajelor",
+    "intro": "Dacă mesajele ies din această instalare. Fiecare rând de aici este unul pe care cineva trebuia să îl primească: un canal pe care o persoană l-a oprit nu produce niciun rând, deci o coadă rămasă în urmă este întotdeauna o problemă.",
+    "stalled": "Nu s-a mai trimis nimic de {{age}}.",
+    "stalledHint": "Cel mai vechi mesaj care încă așteaptă a fost pus la coadă atunci. Verifică setările serverului de e-mail și trimiterea de probă din pagina de mesagerie.",
+    "oldestPending": "Cel mai vechi în așteptare",
+    "nothingWaiting": "Nimic în așteptare",
+    "byChannel": "Pe canale",
+    "noDeliveries": "Nu s-a trimis încă nimic.",
+    "anyStatus": "Orice stare",
+    "attentionOnly": "Doar ce are nevoie de atenție",
+    "refresh": "Reîmprospătează",
+    "createdAt": "Pus la coadă",
+    "recipient": "Pentru",
+    "unknownRecipient": "Contul nu mai există",
+    "category": "Despre",
+    "templateKey": "Mesaj",
+    "channel": "Canal",
+    "status": "Stare",
+    "attempts": "Încercări",
+    "error": "Ce nu a mers",
+    "retry": "Trimite din nou",
+    "retryTitle": "Trimiți din nou acest mesaj?",
+    "retryConfirm": "Aceasta trimite „{{template}}” persoanei căreia îi era destinat. Răspunsul ei de acum este citit din nou întâi, deci dacă între timp a cerut să nu mai fie anunțată despre asta, nu se trimite nimic.",
+    "retryOk": "Trimite din nou",
+    "retryFailed": "Nu a putut fi pus înapoi.",
+    "ageMinutes": "{{count}} minute",
+    "ageHours": "{{count}} ore",
+    "ageDays": "{{count}} zile",
+    "statuses": {
+      "pending": "În așteptare",
+      "deferred": "Reținut pentru rezumatul zilnic",
+      "sent": "Trimis",
+      "dead": "Renunțat"
+    },
+    "outcomes": {
+      "notFound": "Nu mai există un astfel de mesaj.",
+      "notDead": "Acela nu a renunțat, deci nu este nimic de pus înapoi.",
+      "templateUnknown": "Nimic nu știe să scrie acest mesaj, deci ar eșua la fel. Textul trebuie refăcut întâi.",
+      "unreachable": "Nu există unde să fie trimis: contul a dispărut sau nu mai are o adresă.",
+      "suppressed": "Persoana căreia îi era destinat a cerut între timp să nu mai fie anunțată despre asta, deci nu s-a trimis. Îl poate citi în continuare în lista ei.",
+      "queued": "Înapoi la coadă."
     }
   }
 }

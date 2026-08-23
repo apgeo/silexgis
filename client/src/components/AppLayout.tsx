@@ -19,6 +19,7 @@ import {
   IdcardOutlined,
   LogoutOutlined,
   MailOutlined,
+  MonitorOutlined,
   PictureOutlined,
   ProfileOutlined,
   SafetyCertificateOutlined,
@@ -83,7 +84,8 @@ export default function AppLayout() {
     'map3d', 'dashboard', 'caves', 'features', 'geodata', 'gallery', 'albums', 'cabinets',
     'uploads', 'documents', 'trip-logs', 'expeditions',
     'caving-groups', 'cavers',
-    'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
+    'admin/audit', 'admin/notification-health', 'admin/messaging', 'admin/message-templates',
+    'admin/permission-groups',
     'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'admin/term-rules',
     'settings', 'notifications',
   ] as const;
@@ -196,6 +198,13 @@ export default function AppLayout() {
                 : []),
               ...(can('settings')
                 ? [{ key: 'admin/messaging', icon: <MailOutlined />, label: t('nav.messaging') }]
+                : []),
+              ...(can('settings')
+                ? [{
+                    key: 'admin/notification-health',
+                    icon: <MonitorOutlined />,
+                    label: t('nav.notificationHealth'),
+                  }]
                 : []),
               ...(can('messageTemplates')
                 ? [{ key: 'admin/message-templates', icon: <FileTextOutlined />, label: t('nav.templates') }]

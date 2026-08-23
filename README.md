@@ -236,6 +236,16 @@ Previous versions:
 - **Email and SMS that an operator controls** — any SMTP server, any SMS gateway that speaks
   HTTP, and the wording of every message editable per language from the admin pages. Configure
   nothing and the app still runs: links and codes go to the server log instead.
+- **You can see whether the mail is actually going out** — a page for whoever runs the installation
+  shows how many messages are waiting, held for a summary or given up on, and — the number that
+  matters — how long the oldest one that has not left has been waiting. Below it, the ones worth
+  looking at: what each was about, who it was for **under the name they may be shown under and never
+  their address**, and what the far end said, with anything address-shaped taken out of it. One that
+  has given up can be put back by hand, which asks every question again before it sends: somebody
+  who has since said they do not want that kind of message does not get one, somebody who asked for
+  a daily summary gets it in their summary, and every such act is recorded against the person who
+  made it. How long notifications are kept is a number an administrator can change, over whatever
+  the deployment configured.
 - **English and Romanian** throughout — and the language you pick follows your account, so the
   messages the system sends you arrive in it too, not only the screens.
 

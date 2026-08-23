@@ -8,6 +8,8 @@ import type {
   NotificationCategoryName,
   NotificationChannelName,
   NotificationChoice,
+  NotificationDeliveryStatus,
+  NotificationRetryOutcome,
   SearchDocumentItem,
 } from '../api/hooks.ts';
 import { RESLINK_ANCHOR_KINDS, RESLINK_TARGET_TYPES } from '../components/reslinks/registry.ts';
@@ -128,6 +130,30 @@ const notificationChoices: Record<NotificationChoice, true> = {
   daily: true,
 };
 
+/**
+ * Every state a delivery can be in, and every answer a hand-driven retry can give. The operator's
+ * delivery page builds both lookups from the value it was handed — a status badge, and the sentence
+ * an operator is shown after asking for one message to be sent again — so a state or an outcome
+ * added on the server would show its own lookup key in every language with nothing failing. The
+ * retry outcomes matter most: four of the six are refusals, and a refusal that renders as a key is
+ * a refusal nobody reads.
+ */
+const deliveryStatuses: Record<NotificationDeliveryStatus, true> = {
+  pending: true,
+  deferred: true,
+  sent: true,
+  dead: true,
+};
+
+const retryOutcomes: Record<NotificationRetryOutcome, true> = {
+  notFound: true,
+  notDead: true,
+  templateUnknown: true,
+  unreachable: true,
+  suppressed: true,
+  queued: true,
+};
+
 const accessScopeKinds: Record<AccessScopeKind, true> = {
   all: true,
   own: true,
@@ -228,6 +254,23 @@ describe('i18n locales', () => {
     expect(choices.filter((choice) => !enChoices[choice])).toEqual([]);
     expect(choices.filter((choice) => !roChoices[choice])).toEqual([]);
     expect(Object.keys(enChoices).sort()).toEqual(choices.sort());
+  });
+
+  it('every delivery state and retry outcome is named in both locales', () => {
+    const statuses = Object.keys(deliveryStatuses);
+    const enStatuses: Record<string, string> = en.notificationHealth.statuses;
+    const roStatuses: Record<string, string> = ro.notificationHealth.statuses;
+    expect(statuses.filter((name) => !enStatuses[name])).toEqual([]);
+    expect(statuses.filter((name) => !roStatuses[name])).toEqual([]);
+    // And the reverse: wording kept for a state a delivery can no longer be in.
+    expect(Object.keys(enStatuses).sort()).toEqual(statuses.sort());
+
+    const outcomes = Object.keys(retryOutcomes);
+    const enOutcomes: Record<string, string> = en.notificationHealth.outcomes;
+    const roOutcomes: Record<string, string> = ro.notificationHealth.outcomes;
+    expect(outcomes.filter((name) => !enOutcomes[name])).toEqual([]);
+    expect(outcomes.filter((name) => !roOutcomes[name])).toEqual([]);
+    expect(Object.keys(enOutcomes).sort()).toEqual(outcomes.sort());
   });
 
   it('every activity state the server publishes is named in both locales', () => {

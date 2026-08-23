@@ -30,12 +30,14 @@ services:
       SILEXGIS__Admin__Email: ${SILEXGIS_ADMIN_EMAIL:-}
       SILEXGIS__Admin__Password: ${SILEXGIS_ADMIN_PASSWORD:-}
       SILEXGIS__Auth__OpenRegistration: ${SILEXGIS_OPEN_REGISTRATION:-false}
-      # Notification sending. Unlike mail and SMS — which an administrator edits from the admin
-      # pages — these are deployment facts, so they stay plain configuration.
+      # Notification sending. These describe the process rather than the installation's policy,
+      # so they stay plain configuration — with one exception, marked below.
       SILEXGIS__Notifications__PollSeconds: ${SILEXGIS_NOTIFICATIONS_POLL_SECONDS:-15}
       SILEXGIS__Notifications__DigestHourUtc: ${SILEXGIS_NOTIFICATIONS_DIGEST_HOUR_UTC:-7}
       # How long a notification stays readable in the recipient's list. It is deleted after
       # this whether or not they read it, and whether or not an email ever went out for it.
+      # The one notification key an administrator can also set from the admin pages: what is
+      # saved there replaces this, and until somebody saves it this is what is in force.
       SILEXGIS__Notifications__RetentionDays: ${SILEXGIS_NOTIFICATIONS_RETENTION_DAYS:-365}
       # The hours nothing may be sent in, as wall-clock times in each recipient's own zone.
       # Both ends are needed; leaving either empty switches quiet hours off. The zone below is

@@ -48,6 +48,8 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable
         (await editor.GetAsync("/api/v1/admin/message-templates/")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await editor.PutAsJsonAsync("/api/v1/admin/settings/security", Policy()))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await editor.PutAsJsonAsync("/api/v1/admin/settings/notifications", new { retentionDays = 30 }))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         using var anonymous = factory.CreateClient();
         (await anonymous.GetAsync("/api/v1/admin/settings/")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
@@ -110,6 +112,26 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await admin.PutAsJsonAsync("/api/v1/admin/settings/sms", Sms(method: "DELETE")))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // "Keep for nothing" is refused at the form rather than silently turned into the default:
+        // the pruner's own fallback exists for a mistyped environment variable, which nobody is
+        // standing in front of to be told.
+        (await admin.PutAsJsonAsync("/api/v1/admin/settings/notifications", new { retentionDays = 0 }))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await admin.PutAsJsonAsync("/api/v1/admin/settings/notifications", new { retentionDays = 4000 }))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task A_saved_retention_window_is_what_the_page_reads_back()
+    {
+        var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+
+        var saved = await admin.PutAsJsonAsync("/api/v1/admin/settings/notifications", new { retentionDays = 45 });
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var settings = await admin.GetFromJsonAsync<JsonElement>("/api/v1/admin/settings/");
+        settings.GetProperty("notifications").GetProperty("retentionDays").GetInt32().ShouldBe(45);
     }
 
     [Fact]

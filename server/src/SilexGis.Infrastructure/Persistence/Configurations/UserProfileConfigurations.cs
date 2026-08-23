@@ -185,5 +185,14 @@ public sealed class NotificationDeliveryConfiguration : IEntityTypeConfiguration
         // were is read through their notifications, and nothing queries this table by recipient
         // without also naming a status.
         builder.HasIndex(x => new { x.RecipientUserId, x.Status });
+
+        // How long the oldest unsent delivery has been waiting is the one number that says the
+        // mail server has stopped answering, and the operator's health page asks for it every time
+        // it is opened. Partial, so the index holds only what is still waiting: a healthy
+        // installation keeps almost nothing here however many messages it has ever sent, and the
+        // answer is the first entry rather than a scan of the whole table.
+        builder.HasIndex(x => x.CreatedAt)
+            .HasFilter("status = 0")
+            .HasDatabaseName("ix_notification_deliveries_pending_created_at");
     }
 }

@@ -3752,6 +3752,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/notifications/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Delivery counts by channel and status, and how long the oldest unsent delivery has been waiting. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotificationHealthDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/notifications/deliveries/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Puts one dead delivery back in the queue.
+         * @description Needs Execute over the settings domain, not Read: this one sends somebody else's message. The recipient's current preferences are read again first, so a category they have since switched off answers 'suppressed' and drops the delivery rather than sending it. Refused for a delivery that is not dead, and for one that died because nothing knows how to write its message.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotificationRetryDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/notifications/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deliveries that need attention: dead ones, and unsent ones older than the overdue window.
+         * @description status narrows to one delivery status, spelled as the answers spell it. attentionOnly (default true) keeps only dead deliveries and unsent ones older than overdueHours. overdueHours defaults to 24, which is longer than both the daily summary window and a night of quiet hours.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    status?: string;
+                    attentionOnly?: boolean;
+                    overdueHours?: number;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfNotificationDeliveryDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/mfa": {
         parameters: {
             query?: never;
@@ -12746,6 +12868,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Saves how long notifications are kept before they and the record of how they were sent are deleted. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["NotificationSettingsDto"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminSettingsDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/mail/test": {
         parameters: {
             query?: never;
@@ -13032,6 +13194,7 @@ export interface components {
             protection: components["schemas"]["ProtectionSettingsDto"];
             import: components["schemas"]["ImportSettingsDto"];
             interface: components["schemas"]["InterfaceSettingsDto"];
+            notifications: components["schemas"]["NotificationSettingsDto"];
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
@@ -15006,6 +15169,8 @@ export interface components {
             channels: components["schemas"]["NotificationChannelWrite"][];
         };
         /** @enum {unknown} */
+        NotificationChannel: "email";
+        /** @enum {unknown} */
         NotificationChannelChoice: "off" | "immediate" | "daily";
         NotificationChannelDto: {
             channel: components["schemas"]["NotificationChannelKind"];
@@ -15022,6 +15187,36 @@ export interface components {
         NotificationConfigDto: {
             badgeTransport: string;
         };
+        NotificationDeliveryCountDto: {
+            channel: components["schemas"]["NotificationChannel"];
+            status: components["schemas"]["NotificationDeliveryStatus"];
+            /** Format: int32 */
+            count: number;
+        };
+        NotificationDeliveryDto: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            notificationId: number;
+            /** Format: uuid */
+            recipientUserId: string;
+            recipientLabel: null | string;
+            category: components["schemas"]["NotificationCategory"];
+            templateKey: string;
+            channel: components["schemas"]["NotificationChannel"];
+            status: components["schemas"]["NotificationDeliveryStatus"];
+            /** Format: int32 */
+            attempts: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            notBefore: string;
+            /** Format: date-time */
+            sentAt: null | string;
+            error: null | string;
+        };
+        /** @enum {unknown} */
+        NotificationDeliveryStatus: "pending" | "deferred" | "sent" | "dead";
         NotificationDto: {
             /** Format: int64 */
             id: number;
@@ -15035,12 +15230,30 @@ export interface components {
             /** Format: date-time */
             readAt: null | string;
         };
+        NotificationHealthDto: {
+            counts: components["schemas"]["NotificationDeliveryCountDto"][];
+            /** Format: date-time */
+            oldestPendingCreatedAt: null | string;
+            /** Format: int64 */
+            oldestPendingAgeSeconds: null | number;
+        };
         NotificationPreferencesDto: {
             configuredChannels: components["schemas"]["NotificationChannelKind"][];
             categories: components["schemas"]["NotificationCategoryDto"][];
         };
         NotificationPreferencesWriteRequest: {
             categories: components["schemas"]["NotificationCategoryWrite"][];
+        };
+        NotificationRetryDto: {
+            outcome: components["schemas"]["NotificationRetryOutcome"];
+            /** Format: date-time */
+            dueAt: null | string;
+        };
+        /** @enum {unknown} */
+        NotificationRetryOutcome: "notFound" | "notDead" | "templateUnknown" | "unreachable" | "suppressed" | "queued";
+        NotificationSettingsDto: {
+            /** Format: int32 */
+            retentionDays: number;
         };
         ObjectAccessEntryDto: {
             /** Format: int64 */
@@ -15196,6 +15409,15 @@ export interface components {
         };
         PagedResultOfMemberDto: {
             items: components["schemas"]["MemberDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfNotificationDeliveryDto: {
+            items: components["schemas"]["NotificationDeliveryDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
