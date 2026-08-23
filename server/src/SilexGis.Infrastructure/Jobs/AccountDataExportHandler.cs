@@ -114,6 +114,7 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
                 user.PhoneNumber,
                 user.CavingClubId,
                 user.Locale,
+                user.TimeZone,
                 user.AvatarPreset,
                 user.CreatedAt,
                 user.UpdatedAt,
@@ -144,9 +145,14 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
 
             await WriteEntryAsync(archive, "preferences.json", new
             {
-                NotificationEmail = user.NotifyEmailEnabled,
-                Digest = user.NotifyDigest.ToString(),
-                Categories = notifications.Select(p => new { Category = p.Category.ToString(), p.Enabled }),
+                Notifications = notifications
+                    .OrderBy(p => p.Category).ThenBy(p => p.Channel)
+                    .Select(p => new
+                    {
+                        Category = p.Category.ToString(),
+                        Channel = p.Channel.ToString(),
+                        Choice = p.Choice.ToString(),
+                    }),
                 Interface = JsonSerializer.Deserialize<JsonElement>(user.UiPreferences),
             }, ct);
 

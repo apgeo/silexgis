@@ -47,6 +47,20 @@ export type UserAddressWrite = components['schemas']['UserAddressWriteRequest'];
 export type MemberSummary = components['schemas']['MemberDto'];
 export type NotificationPreferences = components['schemas']['NotificationPreferencesDto'];
 export type NotificationCategory = components['schemas']['NotificationCategoryDto'];
+export type NotificationChannelCell = components['schemas']['NotificationChannelDto'];
+export type NotificationChoice = components['schemas']['NotificationChannelChoice'];
+
+/**
+ * One channel of the preference matrix, as the wire spells it. The server's channel type is a
+ * set of bit flags, so it crosses the boundary as a string rather than as a closed union, and a
+ * cell always names exactly one of these. Written out here because the wording lookup, the
+ * column order and the exhaustiveness check all need a closed list, and the generated client
+ * cannot give them one.
+ */
+export type NotificationChannelName = 'inApp' | 'email' | 'sms';
+
+/** Every channel, in the order a settings page reads best: the one that always works first. */
+export const NOTIFICATION_CHANNELS: readonly NotificationChannelName[] = ['inApp', 'email', 'sms'];
 
 /**
  * The name of one notification category, as the server publishes it. Named separately from the
@@ -404,9 +418,10 @@ export function useUpdateNotificationPreferences() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: {
-      emailEnabled: boolean;
-      digest: NotificationPreferences['digest'];
-      categories: { category: NotificationCategory['category']; enabled: boolean }[];
+      categories: {
+        category: NotificationCategory['category'];
+        channels: { channel: NotificationChannelName; choice: NotificationChoice }[];
+      }[];
     }) => unwrap(api.PUT('/api/v1/me/notifications', { body })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['me'] }),
   });

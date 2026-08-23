@@ -30,6 +30,13 @@ public class SilexGisUser : IdentityUser<Guid>, ITimestamped, IUserProfile
 
     public string Locale { get; set; } = "en";
 
+    /// <summary>
+    /// The IANA zone this account lives in, as the browser reports it — or nothing when it has
+    /// never had the chance to say. Wall-clock rules about a person's own day, such as the hours
+    /// a message may not interrupt them, are wrong by an hour for half the year without it.
+    /// </summary>
+    public string? TimeZone { get; set; }
+
     public string? FirstName { get; set; }
 
     public string? LastName { get; set; }
@@ -98,11 +105,6 @@ public class SilexGisUser : IdentityUser<Guid>, ITimestamped, IUserProfile
     public ProfileVisibility AddressVisibility { get; set; } = ProfileVisibility.Private;
 
     public ProfileVisibility AddressPointVisibility { get; set; } = ProfileVisibility.Private;
-
-    /// <summary>Master switch for notification email; individual categories sit beside it.</summary>
-    public bool NotifyEmailEnabled { get; set; } = true;
-
-    public NotificationDigest NotifyDigest { get; set; } = NotificationDigest.Immediate;
 
     /// <summary>
     /// Client-owned interface preferences (appearance, density, reduced motion) as a JSON object.

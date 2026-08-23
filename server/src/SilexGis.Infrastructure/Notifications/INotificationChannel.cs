@@ -63,10 +63,16 @@ public interface INotificationChannel
     bool CanReach(SilexGisUser recipient);
 
     /// <summary>
-    /// Whether this channel would carry this notification to this recipient, and when. Reads the
-    /// recipient's own settings, which are per channel.
+    /// Which cell of the preference matrix this channel is. What a recipient has chosen there is
+    /// resolved once, by the router, so no channel gets to disagree about whose choice wins.
     /// </summary>
-    NotificationRoute Decide(SilexGisUser recipient, NotificationCategory category, bool categoryEnabled);
+    NotificationChannelKind Kind { get; }
+
+    /// <summary>
+    /// Whether this channel would carry this notification to this recipient, and when, given what
+    /// they have chosen for it.
+    /// </summary>
+    NotificationRoute Decide(SilexGisUser recipient, NotificationChannelChoice choice);
 
     /// <summary>Hands one message to whoever carries it out of the system.</summary>
     Task<MessageResult> SendAsync(
@@ -93,10 +99,19 @@ public sealed class NotificationChannels
     {
         byChannel = channels.ToDictionary(channel => channel.Channel);
         All = [.. byChannel.Values.OrderBy(channel => channel.Channel)];
+        Installed = All.Aggregate(NotificationChannelKind.InApp, (set, channel) => set | channel.Kind);
     }
 
     /// <summary>Every channel, in the enum's own order, so a fan-out is deterministic.</summary>
     public IReadOnlyList<INotificationChannel> All { get; }
+
+    /// <summary>
+    /// Every channel this installation has, as a preference-matrix set. In-app is always in it:
+    /// it has no transport that could be missing. A delivery channel is in it only when something
+    /// implements it, so a preference for a transport nobody wired up resolves to nothing rather
+    /// than to messages that are never sent.
+    /// </summary>
+    public NotificationChannelKind Installed { get; }
 
     /// <summary>The implementation a delivery row names.</summary>
     public INotificationChannel Of(NotificationChannel channel) =>

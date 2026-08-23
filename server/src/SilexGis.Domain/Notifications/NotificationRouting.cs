@@ -43,40 +43,32 @@ public static class NotificationRouting
     public const int MaxAttempts = 5;
 
     /// <summary>
-    /// Decides what to do with one notification.
+    /// Decides what to do with one notification on one channel.
     /// </summary>
-    /// <param name="category">What the notification is about.</param>
-    /// <param name="categoryEnabled">The recipient's answer for that category.</param>
-    /// <param name="masterEmailEnabled">The recipient's "notify me by email" switch.</param>
-    /// <param name="digest">Immediate, or batched into a daily summary.</param>
+    /// <remarks>
+    /// Every question about who wants what has already been answered by the time this is called:
+    /// <paramref name="choice"/> is one resolved cell of the preference matrix, so the categories
+    /// nobody may switch off and the channels a category may never use are settled in one place
+    /// rather than argued about again here. What is left is the pair of facts only the transport
+    /// knows — is there anywhere to send, and does this choice mean now or later.
+    /// </remarks>
+    /// <param name="choice">The recipient's resolved answer for this category on this channel.</param>
     /// <param name="hasAddress">Whether there is anywhere to send it.</param>
-    public static NotificationRoute Decide(
-        NotificationCategory category,
-        bool categoryEnabled,
-        bool masterEmailEnabled,
-        NotificationDigest digest,
-        bool hasAddress)
+    public static NotificationRoute Decide(NotificationChannelChoice choice, bool hasAddress)
     {
-        // Nowhere to send beats everything, including a security alert: there is no address.
+        // Nowhere to send beats everything, including a category nobody may switch off: an
+        // address that is not there cannot be reached by insisting.
         if (!hasAddress)
         {
             return NotificationRoute.Suppress;
         }
 
-        // A security alert warns someone their account is being taken over. Whoever is doing it
-        // may hold a live session, so neither the master switch nor a digest delay applies —
-        // the settings page refuses to switch this category off for the same reason.
-        if (NotificationCategories.IsAlwaysImmediate(category))
+        return choice switch
         {
-            return NotificationRoute.Send;
-        }
-
-        if (!masterEmailEnabled || !categoryEnabled)
-        {
-            return NotificationRoute.Suppress;
-        }
-
-        return digest == NotificationDigest.Daily ? NotificationRoute.Defer : NotificationRoute.Send;
+            NotificationChannelChoice.Immediate => NotificationRoute.Send,
+            NotificationChannelChoice.Daily => NotificationRoute.Defer,
+            _ => NotificationRoute.Suppress,
+        };
     }
 
     /// <summary>
@@ -97,9 +89,12 @@ public static class NotificationRouting
     /// The next time the daily digest window opens, strictly after <paramref name="now"/>.
     /// </summary>
     /// <remarks>
-    /// The hour is UTC. There is no per-user timezone anywhere in the schema, so inventing one
-    /// here would be a column, a settings field and a migration for a refinement nobody asked for;
-    /// the digest arriving at a fixed hour is the honest behaviour until that exists.
+    /// The hour is UTC and installation-wide: one window means one claim gathering one recipient's
+    /// whole batch, and a summary arriving at a fixed hour is a weaker promise than a message
+    /// arriving now, so it is the one that can afford to be approximate. The recipient's own zone
+    /// is known and is not read here on purpose — it decides the hours nothing may interrupt them
+    /// in, which is applied to whatever this returns, and per-user summary hours are a separate
+    /// question nobody has asked yet.
     /// </remarks>
     public static DateTimeOffset NextDigest(DateTimeOffset now, int hourUtc)
     {

@@ -334,6 +334,50 @@ public sealed class NotificationInboxTests : IAsyncLifetime, IDisposable
         await db.SaveChangesAsync();
     }
 
+    [Fact]
+    public async Task A_category_whose_inbox_is_switched_off_is_neither_listed_nor_counted()
+    {
+        // The inbox is a cell of the matrix like any other. Switching it off has to mean
+        // something, because the settings page tells somebody who switches every channel off that
+        // the category now reaches them nowhere — and a row that still appeared here, and still
+        // lit the count in the header, would make that statement false.
+        await SetInboxAsync("permissionGranted", "off");
+
+        await GrantReadAsync(await CreateTripAsync($"Muted trip {suffix}"), readerId);
+        await QueueSecurityAlertAsync();
+
+        var page = await InboxAsync(reader);
+        var categories = page.GetProperty("items").EnumerateArray()
+            .Select(row => row.GetProperty("category").GetString()).ToList();
+
+        categories.ShouldNotContain("permissionGranted");
+        page.GetProperty("totalItems").GetInt32().ShouldBe(1);
+        (await UnreadAsync(reader)).ShouldBe(1);
+
+        // The positive half, twice over: a category nobody may switch off is still here — the
+        // rule is read from the vocabulary, so a stored "off" for one is worth nothing — and
+        // switching the inbox back on brings back what happened while it was off, because the
+        // choice is applied when the row is read and never when it is written.
+        categories.ShouldContain("securityAlerts");
+
+        await SetInboxAsync("permissionGranted", "immediate");
+
+        (await InboxAsync(reader)).GetProperty("totalItems").GetInt32().ShouldBe(2);
+        (await UnreadAsync(reader)).ShouldBe(2);
+    }
+
+    private async Task SetInboxAsync(string category, string choice)
+    {
+        var saved = await reader.PutAsJsonAsync("/api/v1/me/notifications/", new
+        {
+            categories = new[]
+            {
+                new { category, channels = new[] { new { channel = "inApp", choice } } },
+            },
+        });
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+    }
+
     private Task SetLocaleAsync(string language) =>
         reader.PutAsJsonAsync("/api/v1/me/locale", new { language, timeZone = (string?)null });
 

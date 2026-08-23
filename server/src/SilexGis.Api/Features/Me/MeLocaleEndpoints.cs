@@ -31,11 +31,14 @@ public sealed class MeLocaleWriteRequestValidator : AbstractValidator<MeLocaleWr
 
         // Shape only, not membership of the zone database: the server's copy of that database
         // may be older than the browser's, and rejecting a zone this host has not heard of would
-        // fail a language change for a reason that has nothing to do with language.
+        // fail a language change for a reason that has nothing to do with language. The name may
+        // be a single word: a browser on a machine set to UTC, and one hardened against
+        // fingerprinting, both report exactly "UTC", and requiring a region prefix would fail the
+        // whole save — language included — for that entirely ordinary population.
         RuleFor(x => x.TimeZone)
             .MaximumLength(64)
-            .Matches("^[A-Za-z0-9+_-]+(/[A-Za-z0-9+_-]+){1,2}$")
-            .WithMessage("The time zone must be an IANA zone name such as 'Europe/Bucharest'.")
+            .Matches("^[A-Za-z0-9+_-]+(/[A-Za-z0-9+_-]+){0,2}$")
+            .WithMessage("The time zone must be an IANA zone name such as 'Europe/Bucharest' or 'UTC'.")
             .When(x => !string.IsNullOrEmpty(x.TimeZone));
     }
 }
@@ -55,9 +58,10 @@ public sealed class MeLocaleWriteRequestValidator : AbstractValidator<MeLocaleWr
 /// it, every account was English and the Romanian wording of every template was unreachable.
 /// </para>
 /// <para>
-/// The time zone is accepted and validated but not yet stored: there is no column for it. It is
-/// in the contract from the first version because this is the only moment the browser volunteers
-/// it, and a caller that already sends it needs no change when the column arrives.
+/// The time zone is stored beside it because this is the only moment the browser volunteers one,
+/// and rules about a person's own day — the hours a message may not interrupt them, above all —
+/// are wrong by an hour for half the year without it. It stays optional: an account whose browser
+/// will not say keeps nothing, and whatever reads the zone has to have an answer for nothing.
 /// </para>
 /// </remarks>
 public static class MeLocaleEndpoints
@@ -70,7 +74,7 @@ public static class MeLocaleEndpoints
             .WithSummary("The language and time zone stored for the caller.");
         locale.MapPut("/", UpdateAsync)
             .WithValidation<MeLocaleWriteRequest>()
-            .WithSummary("Stores the language the caller reads in. The time zone is accepted and validated, but there is nowhere to keep it yet, so it is not stored and reads back as nothing.");
+            .WithSummary("Stores the language the caller reads in and the time zone they read it in. Sending no zone leaves the stored one alone rather than clearing it.");
 
         return api;
     }
@@ -86,14 +90,14 @@ public static class MeLocaleEndpoints
 
         // The context accessor answering does not prove the row is still there: an account
         // deleted between the two reads must give the ordinary refusal, not an unhandled throw.
-        var language = await db.Users.AsNoTracking()
+        var stored = await db.Users.AsNoTracking()
             .Where(u => u.Id == user.UserId)
-            .Select(u => u.Locale)
+            .Select(u => new { u.Locale, u.TimeZone })
             .FirstOrDefaultAsync(ct);
 
-        return language is null
+        return stored is null
             ? TypedResults.Unauthorized()
-            : TypedResults.Ok(new MeLocaleDto(language, null));
+            : TypedResults.Ok(new MeLocaleDto(stored.Locale, stored.TimeZone));
     }
 
     private static async Task<Results<Ok<MeLocaleDto>, UnauthorizedHttpResult>> UpdateAsync(
@@ -115,8 +119,17 @@ public static class MeLocaleEndpoints
         }
 
         account.Locale = request.Language;
+
+        // A caller that sends no zone is a browser that would not name one, not somebody asking
+        // to forget theirs. Overwriting a known zone with nothing on every language change would
+        // make the column empty for anyone whose browser goes quiet about it once.
+        if (!string.IsNullOrWhiteSpace(request.TimeZone))
+        {
+            account.TimeZone = request.TimeZone;
+        }
+
         await db.SaveChangesAsync(ct);
 
-        return TypedResults.Ok(new MeLocaleDto(account.Locale, null));
+        return TypedResults.Ok(new MeLocaleDto(account.Locale, account.TimeZone));
     }
 }

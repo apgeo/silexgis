@@ -172,8 +172,22 @@ Previous versions:
   moment it is sent. A message about a trip names the trip and its date and **never a cave**, because
   an email is as much a copy of a protected location as anything on the screen is. A draft tells
   nobody, since telling you a draft changed would be telling you it exists, and a write that changed
-  nothing sends nothing. All of it is one switch on the notifications page, on to begin with, and off
+  nothing sends nothing. All of it is a switch on the notifications page, on to begin with, and off
   the moment you say so.
+- **You choose what you are told about and where you are told it** — the notifications page is a
+  grid: the kinds of thing that happen down one side, the ways of reaching you across the top. For
+  each pair you say nothing, as it happens, or once a day in a single summary — and a daily summary
+  of something you are not told about by mail is not a thing you can accidentally ask for. Warnings
+  about your own account cannot be switched off, and the page says so. Switch every way of reaching
+  you off for one kind of event and that is allowed, but the page tells you plainly that it will now
+  reach you nowhere. A way of reaching you that this installation has not set up is marked as such,
+  and what you chose is kept for the day somebody sets it up. There is also a quiet window an
+  installation can set — nothing leaves the server during your night, read in your own time zone, so
+  it means the same hour of the night whatever the season; what is waiting is in your list the whole
+  time, because a list wakes nobody, and a warning you may not switch off ignores the window.
+- **A link in an email speaks only for email** — clicking "stop sending me this" in a mail client
+  switches that kind of message off for mail alone and leaves your inbox in the application exactly
+  as it was, and the page you land on says which of the two it changed.
 - **Everything that was sent to you is also a place you can go** — a bell in the top bar counts what
   you have not read yet, and the inbox behind it lists what happened, newest first, filterable by the
   kind of event, marked read as you open it or all at once. A line is worded by the installation, in

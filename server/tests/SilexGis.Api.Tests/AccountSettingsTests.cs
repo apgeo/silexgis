@@ -154,9 +154,32 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         read.GetProperty("language").GetString().ShouldBe("ro");
         (await GetMeAsync(me)).GetProperty("locale").GetString().ShouldBe("ro");
 
-        // The zone is in the contract and validated, but there is no column for it yet, so it
-        // reads back as nothing. When the column lands this assertion is what changes.
-        read.GetProperty("timeZone").ValueKind.ShouldBe(JsonValueKind.Null);
+        // The zone is stored with it. This is the one moment the browser volunteers one, and
+        // rules about a person's own day are wrong by an hour for half the year without it.
+        read.GetProperty("timeZone").GetString().ShouldBe("Europe/Bucharest");
+    }
+
+    [Fact]
+    public async Task A_language_change_that_names_no_zone_leaves_the_stored_one_alone()
+    {
+        (await me.PutAsJsonAsync(
+            "/api/v1/me/locale", new { language = "ro", timeZone = "Europe/Bucharest" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // A browser that will not name a zone is not somebody asking to forget theirs — and every
+        // language change would otherwise empty the column for anyone whose browser goes quiet
+        // about it once.
+        var saved = await me.PutAsJsonAsync(
+            "/api/v1/me/locale", new { language = "en", timeZone = (string?)null });
+
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonDocument.Parse(await saved.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("timeZone").GetString().ShouldBe("Europe/Bucharest");
+
+        var read = JsonDocument.Parse(
+            await (await me.GetAsync("/api/v1/me/locale/")).Content.ReadAsStringAsync()).RootElement;
+        read.GetProperty("language").GetString().ShouldBe("en");
+        read.GetProperty("timeZone").GetString().ShouldBe("Europe/Bucharest");
     }
 
     [Fact]
@@ -180,6 +203,22 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         // cannot name its zone must still be able to say what it reads.
         (await me.PutAsJsonAsync("/api/v1/me/locale", new { language = "en", timeZone = (string?)null }))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task A_zone_name_of_one_word_is_a_zone()
+    {
+        // A browser on a machine set to UTC, and one hardened against fingerprinting, both report
+        // exactly "UTC" — no region, no slash. Refusing it would fail the whole save, language
+        // included, so every account in that entirely ordinary population would stay English.
+        var saved = await me.PutAsJsonAsync("/api/v1/me/locale", new { language = "ro", timeZone = "UTC" });
+
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+
+        var read = JsonDocument.Parse(
+            await (await me.GetAsync("/api/v1/me/locale/")).Content.ReadAsStringAsync()).RootElement;
+        read.GetProperty("language").GetString().ShouldBe("ro");
+        read.GetProperty("timeZone").GetString().ShouldBe("UTC");
     }
 
     [Fact]
@@ -354,55 +393,153 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
-    public async Task Notification_settings_list_every_category_and_lock_security_alerts()
+    public async Task Notification_settings_are_a_matrix_of_every_category_against_every_channel()
     {
         // Nothing is delivered on an installation with no mail server, and the page must say so —
-        // so this reads the settings with the channel reporting itself as absent.
+        // so this reads the settings with one channel reporting itself as absent and the paid one
+        // absent too. Absent is not the same as switched off, and the read has to keep them apart.
         factory.Messages.MailConfigured = false;
+        factory.Messages.SmsConfigured = false;
         var read = JsonDocument.Parse(
             await (await me.GetAsync("/api/v1/me/notifications/")).Content.ReadAsStringAsync()).RootElement;
         factory.Messages.MailConfigured = true;
+        factory.Messages.SmsConfigured = true;
 
         var categories = read.GetProperty("categories").EnumerateArray().ToList();
         categories.Count.ShouldBe(NotificationCategories.All.Count);
-        categories.Single(c => c.GetProperty("category").GetString() == "securityAlerts")
-            .GetProperty("locked").GetBoolean().ShouldBeTrue();
-        read.GetProperty("deliveryConfigured").GetBoolean().ShouldBeFalse();
+
+        // Only the inbox is left, because it is the one channel with no transport to be missing.
+        read.GetProperty("configuredChannels").EnumerateArray()
+            .Select(c => c.GetString()).ShouldBe(["inApp"]);
+
+        var alerts = categories.Single(c => c.GetProperty("category").GetString() == "securityAlerts");
+        var alertMail = alerts.GetProperty("channels").EnumerateArray()
+            .Single(c => c.GetProperty("channel").GetString() == "email");
+        alertMail.GetProperty("locked").GetBoolean().ShouldBeTrue();
+        alertMail.GetProperty("available").GetBoolean().ShouldBeFalse();
+
+        // An account that has never opened this page reads back as the documented defaults, on
+        // every channel of every category — not as silence, and not as everything off.
+        foreach (var category in categories)
+        {
+            foreach (var channel in category.GetProperty("channels").EnumerateArray())
+            {
+                channel.GetProperty("choice").GetString().ShouldBe("immediate");
+            }
+
+            category.GetProperty("reachesNobody").GetBoolean().ShouldBeFalse();
+        }
 
         var saved = await me.PutAsJsonAsync("/api/v1/me/notifications/", new
         {
-            emailEnabled = false,
-            digest = "daily",
-            categories = new[] { new { category = "cavingGroupMembership", enabled = false } },
+            categories = new[]
+            {
+                new
+                {
+                    category = "cavingGroupMembership",
+                    channels = new[]
+                    {
+                        new { channel = "email", choice = "daily" },
+                        new { channel = "inApp", choice = "off" },
+                    },
+                },
+            },
         });
         saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
 
-        var after = JsonDocument.Parse(await saved.Content.ReadAsStringAsync()).RootElement;
-        after.GetProperty("emailEnabled").GetBoolean().ShouldBeFalse();
-        after.GetProperty("digest").GetString().ShouldBe("daily");
-        after.GetProperty("categories").EnumerateArray()
-            .Single(c => c.GetProperty("category").GetString() == "cavingGroupMembership")
-            .GetProperty("enabled").GetBoolean().ShouldBeFalse();
+        var after = JsonDocument.Parse(await saved.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("categories").EnumerateArray()
+            .Single(c => c.GetProperty("category").GetString() == "cavingGroupMembership");
+        Cell(after, "email").GetProperty("choice").GetString().ShouldBe("daily");
+        Cell(after, "inApp").GetProperty("choice").GetString().ShouldBe("off");
 
-        // One save writes the whole set, so there is no half-stored state to reason about later.
+        // A summary is offerable on mail and nowhere else: the inbox cannot hold anything back.
+        Cell(after, "email").GetProperty("canDefer").GetBoolean().ShouldBeTrue();
+        Cell(after, "inApp").GetProperty("canDefer").GetBoolean().ShouldBeFalse();
+
+        // One save writes the whole matrix, so there is no half-stored state to reason about
+        // later: every category against every channel that category may ever use.
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var stored = await db.UserNotificationPreferences.CountAsync(p => p.UserId == myId);
-        stored.ShouldBe(NotificationCategories.All.Count);
+        stored.ShouldBe(NotificationCategories.All
+            .Sum(c => NotificationChannelKinds.Split(NotificationCategories.Ceiling(c)).Count()));
+
+        static JsonElement Cell(JsonElement category, string channel) =>
+            category.GetProperty("channels").EnumerateArray()
+                .Single(c => c.GetProperty("channel").GetString() == channel);
     }
 
     [Fact]
-    public async Task Security_alerts_cannot_be_switched_off()
+    public async Task A_category_may_be_switched_off_everywhere_and_the_read_says_it_reaches_nobody()
+    {
+        var saved = await me.PutAsJsonAsync("/api/v1/me/notifications/", new
+        {
+            categories = new[]
+            {
+                new
+                {
+                    category = "jobCompleted",
+                    channels = new[]
+                    {
+                        new { channel = "email", choice = "off" },
+                        new { channel = "inApp", choice = "off" },
+                    },
+                },
+            },
+        });
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+
+        // A legitimate state, reached deliberately — and one the read has to name, so nobody can
+        // arrive at it without being told that this category now reaches them nowhere.
+        var categories = JsonDocument.Parse(await saved.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("categories").EnumerateArray().ToList();
+        categories.Single(c => c.GetProperty("category").GetString() == "jobCompleted")
+            .GetProperty("reachesNobody").GetBoolean().ShouldBeTrue();
+
+        // The positive half, in the same test: nothing else moved.
+        categories.Single(c => c.GetProperty("category").GetString() == "tripPlanning")
+            .GetProperty("reachesNobody").GetBoolean().ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_category_nobody_may_switch_off_is_refused_rather_than_quietly_rewritten()
     {
         var response = await me.PutAsJsonAsync("/api/v1/me/notifications/", new
         {
-            emailEnabled = true,
-            digest = "immediate",
-            categories = new[] { new { category = "securityAlerts", enabled = false } },
+            categories = new[]
+            {
+                new
+                {
+                    category = "securityAlerts",
+                    channels = new[] { new { channel = "email", choice = "off" } },
+                },
+            },
         });
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await ProblemCodeAsync(response)).ShouldBe("me.notification_locked");
+        (await ProblemCodeAsync(response)).ShouldBe("me.notification_choice_refused");
+    }
+
+    [Fact]
+    public async Task A_channel_a_category_may_never_use_is_refused()
+    {
+        // Nothing here is worth what a text message costs, so no category's ceiling names it —
+        // and a write that asks for one anyway is told so rather than silently dropped.
+        var response = await me.PutAsJsonAsync("/api/v1/me/notifications/", new
+        {
+            categories = new[]
+            {
+                new
+                {
+                    category = "tripPlanning",
+                    channels = new[] { new { channel = "sms", choice = "immediate" } },
+                },
+            },
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemCodeAsync(response)).ShouldBe("me.notification_choice_refused");
     }
 
     [Fact]

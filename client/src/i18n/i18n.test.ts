@@ -6,6 +6,8 @@ import type {
   AccessScopeKind,
   ActivityState,
   NotificationCategoryName,
+  NotificationChannelName,
+  NotificationChoice,
   SearchDocumentItem,
 } from '../api/hooks.ts';
 import { RESLINK_ANCHOR_KINDS, RESLINK_TARGET_TYPES } from '../components/reslinks/registry.ts';
@@ -106,6 +108,26 @@ const notificationCategories: Record<NotificationCategoryName, true> = {
   tripPlanning: true,
 };
 
+/**
+ * Every channel the preference matrix has a column for, and every answer a cell can hold. Both are
+ * looked up by building the key from the value, which no check over literal lookups can see — and
+ * the matrix renders one column and three options per cell entirely from these, so a channel or an
+ * answer added on the server would show its own lookup key in every language with nothing failing.
+ * The channel list cannot come from the generated client: the server's channel type is bit flags
+ * and crosses the boundary as a plain string, so this is the only place it is closed.
+ */
+const notificationChannels: Record<NotificationChannelName, true> = {
+  inApp: true,
+  email: true,
+  sms: true,
+};
+
+const notificationChoices: Record<NotificationChoice, true> = {
+  off: true,
+  immediate: true,
+  daily: true,
+};
+
 const accessScopeKinds: Record<AccessScopeKind, true> = {
   all: true,
   own: true,
@@ -189,6 +211,23 @@ describe('i18n locales', () => {
     expect(names.filter((name) => !roEvents[name])).toEqual([]);
     // And the reverse: wording kept for a category the server no longer sends.
     expect(Object.keys(enEvents).sort()).toEqual(names.sort());
+  });
+
+  it('every notification channel and answer the matrix offers is named in both locales', () => {
+    const channels = Object.keys(notificationChannels);
+    const enChannels: Record<string, string> = en.settings.notifications.channels;
+    const roChannels: Record<string, string> = ro.settings.notifications.channels;
+    expect(channels.filter((channel) => !enChannels[channel])).toEqual([]);
+    expect(channels.filter((channel) => !roChannels[channel])).toEqual([]);
+    // And the reverse: wording kept for a channel the matrix no longer has a column for.
+    expect(Object.keys(enChannels).sort()).toEqual(channels.sort());
+
+    const choices = Object.keys(notificationChoices);
+    const enChoices: Record<string, string> = en.settings.notifications.choices;
+    const roChoices: Record<string, string> = ro.settings.notifications.choices;
+    expect(choices.filter((choice) => !enChoices[choice])).toEqual([]);
+    expect(choices.filter((choice) => !roChoices[choice])).toEqual([]);
+    expect(Object.keys(enChoices).sort()).toEqual(choices.sort());
   });
 
   it('every activity state the server publishes is named in both locales', () => {

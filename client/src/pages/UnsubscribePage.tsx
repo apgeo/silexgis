@@ -80,9 +80,13 @@ export default function UnsubscribePage() {
                   })
             }
             description={
+              // Which channel this switched off, said out loud. The link was clicked in a mail
+              // client, so it speaks for mail and for nothing else — the inbox inside the
+              // application keeps every one of these, and somebody who has just stopped the mail
+              // is exactly the person who needs telling where they still are.
               result?.kind === 'dailyDigest'
-                ? `${t('unsubscribe.alertsStillSent')} ${t('unsubscribe.changeAnyTime')}`
-                : t('unsubscribe.changeAnyTime')
+                ? `${t('unsubscribe.inboxUntouched')} ${t('unsubscribe.alertsStillSent')} ${t('unsubscribe.changeAnyTime')}`
+                : `${t('unsubscribe.inboxUntouched')} ${t('unsubscribe.changeAnyTime')}`
             }
           />
         )}

@@ -13,6 +13,8 @@ public sealed class SilexGisUserConfiguration : IEntityTypeConfiguration<SilexGi
         builder.Property(x => x.DisplayName).HasMaxLength(100);
         builder.Property(x => x.Bio).HasMaxLength(2000);
         builder.Property(x => x.Locale).HasMaxLength(10);
+        // The same cap the write path validates against; a zone name is a short identifier.
+        builder.Property(x => x.TimeZone).HasMaxLength(64);
         builder.Property(x => x.FirstName).HasMaxLength(100);
         builder.Property(x => x.LastName).HasMaxLength(100);
         // The club someone declares on their profile, kept apart from the club rosters:
@@ -32,10 +34,8 @@ public sealed class SilexGisUserConfiguration : IEntityTypeConfiguration<SilexGi
         builder.Property(x => x.AddressVisibility).HasConversion<short>();
         builder.Property(x => x.AddressPointVisibility).HasConversion<short>();
 
-        builder.Property(x => x.NotifyDigest).HasConversion<short>();
-        // Explicit defaults for the two columns whose type-default is wrong for existing rows:
-        // an empty string is not valid jsonb, and notification email is on unless turned off.
-        builder.Property(x => x.NotifyEmailEnabled).HasDefaultValue(true);
+        // An empty string is not valid jsonb, so this column's type-default is wrong for a row
+        // that does not name it.
         builder.Property(x => x.UiPreferences).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
 
         // Used when checking whether a file is somebody's avatar; most rows have none.
@@ -76,11 +76,22 @@ public sealed class UserNotificationPreferenceConfiguration : IEntityTypeConfigu
 {
     public void Configure(EntityTypeBuilder<UserNotificationPreference> builder)
     {
-        builder.ToTable("user_notification_preferences");
+        // One channel per row, never a set, however permissive the flags type is: a row holding
+        // two bits would be one choice pretending to be two and nothing downstream could tell.
+        builder.ToTable(
+            "user_notification_preferences",
+            t => t.HasCheckConstraint(
+                "ck_user_notification_preferences_one_channel",
+                "channel > 0 AND (channel & (channel - 1)) = 0"));
+
         builder.Property(x => x.Category).HasConversion<short>();
+        builder.Property(x => x.Channel).HasConversion<short>();
+        builder.Property(x => x.Choice).HasConversion<short>();
 
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasIndex(x => new { x.UserId, x.Category }).IsUnique();
+
+        // The whole of what makes the matrix a matrix: one answer per category per channel.
+        builder.HasIndex(x => new { x.UserId, x.Category, x.Channel }).IsUnique();
     }
 }
 

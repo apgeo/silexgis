@@ -1602,16 +1602,23 @@
       }
     },
     "notifications": {
-      "delivery": "Livrare",
-      "masterEmail": "Anunțați-mă pe e-mail",
-      "digest": "Cât de des",
-      "digestValues": {
-        "immediate": "Pe măsură ce se întâmplă",
-        "daily": "Un rezumat zilnic"
+      "categories": "Despre ce să fiu anunțat și unde",
+      "category": "Anunțați-mă despre",
+      "channels": {
+        "inApp": "În aplicație",
+        "email": "E-mail",
+        "sms": "SMS"
       },
-      "categories": "Despre ce să fiu anunțat",
-      "alwaysOn": "Se trimit mereu — acestea vă avertizează despre propriul cont.",
-      "noDelivery": "Această instalare nu are un server de e-mail configurat, deci nu se trimite nimic încă. Alegerile sunt salvate și vor fi folosite când va exista unul.",
+      "choices": {
+        "off": "Oprit",
+        "immediate": "Pe măsură ce se întâmplă",
+        "daily": "Rezumat zilnic"
+      },
+      "alwaysOn": "Se trimit mereu — acestea nu pot fi oprite.",
+      "reachesNobody": "Acest lucru nu vă va ajunge nicăieri.",
+      "notOffered": "Nu se trimite astfel",
+      "notConfigured": "neconfigurat",
+      "notConfiguredHere": "Această instalare nu are configurat: {{channels}}. Alegerile de acolo sunt salvate și vor fi folosite imediat ce va exista.",
       "events": {
         "cavingGroupMembership": "Schimbări în grupurile de speologie",
         "permissionGranted": "Cineva îmi dă acces la ceva",
@@ -1919,7 +1926,8 @@
     "failed": "Linkul nu mai este valid. Puteți modifica setările de notificare după autentificare.",
     "doneDigest": "Rezumatul zilnic a fost oprit, iar odată cu el orice alt e-mail de notificare.",
     "alertsStillSent": "Alertele despre propriul cont se trimit în continuare — vă avertizează când cineva îl modifică.",
-    "manage": "Gestionează setările de notificare"
+    "manage": "Gestionează setările de notificare",
+    "inboxUntouched": "Nimic altceva nu s-a schimbat: aceste notificări apar în continuare în inboxul din aplicație, unde le puteți citi oricând."
   },
   "featureKinds": {
     "generic": "Fenomen",

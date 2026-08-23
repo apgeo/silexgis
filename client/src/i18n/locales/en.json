@@ -1602,16 +1602,23 @@
       }
     },
     "notifications": {
-      "delivery": "Delivery",
-      "masterEmail": "Notify me by email",
-      "digest": "How often",
-      "digestValues": {
-        "immediate": "As things happen",
-        "daily": "A daily summary"
+      "categories": "What to notify me about, and where",
+      "category": "Notify me about",
+      "channels": {
+        "inApp": "In the app",
+        "email": "Email",
+        "sms": "Text message"
       },
-      "categories": "What to notify me about",
-      "alwaysOn": "Always sent — this one warns you about your own account.",
-      "noDelivery": "This installation has no mail server configured, so nothing is sent yet. Your choices are saved and will be used once one is.",
+      "choices": {
+        "off": "Off",
+        "immediate": "As it happens",
+        "daily": "Daily summary"
+      },
+      "alwaysOn": "Always sent — this one cannot be switched off.",
+      "reachesNobody": "This will not reach you anywhere.",
+      "notOffered": "Not sent this way",
+      "notConfigured": "not set up",
+      "notConfiguredHere": "This installation has not set up: {{channels}}. Your choices there are saved and will be used as soon as it is.",
       "events": {
         "cavingGroupMembership": "Caving group membership changes",
         "permissionGranted": "Someone shares something with me",
@@ -1919,7 +1926,8 @@
     "failed": "That link is no longer valid. You can change your notification settings after signing in.",
     "doneDigest": "The daily summary has stopped, and with it every other notification email.",
     "alertsStillSent": "Alerts about your own account are still sent — they warn you when someone changes it.",
-    "manage": "Manage notification settings"
+    "manage": "Manage notification settings",
+    "inboxUntouched": "Nothing else changed: these notifications still appear in your inbox inside the application, where you can read them whenever you like."
   },
   "featureKinds": {
     "generic": "Feature",

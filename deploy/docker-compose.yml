@@ -37,6 +37,12 @@ services:
       # How long a notification stays readable in the recipient's list. It is deleted after
       # this whether or not they read it, and whether or not an email ever went out for it.
       SILEXGIS__Notifications__RetentionDays: ${SILEXGIS_NOTIFICATIONS_RETENTION_DAYS:-365}
+      # The hours nothing may be sent in, as wall-clock times in each recipient's own zone.
+      # Both ends are needed; leaving either empty switches quiet hours off. The zone below is
+      # whose night to use for somebody who has never told the installation where they are.
+      SILEXGIS__Notifications__QuietHoursFrom: ${SILEXGIS_NOTIFICATIONS_QUIET_HOURS_FROM:-}
+      SILEXGIS__Notifications__QuietHoursTo: ${SILEXGIS_NOTIFICATIONS_QUIET_HOURS_TO:-}
+      SILEXGIS__Notifications__TimeZone: ${SILEXGIS_NOTIFICATIONS_TIME_ZONE:-UTC}
       # How the header's unread count learns it has changed. Only 'poll' is implemented;
       # 'sse' is reserved for a server-pushed stream that does not exist yet.
       SILEXGIS__Notifications__BadgeTransport: ${SILEXGIS_NOTIFICATIONS_BADGE_TRANSPORT:-poll}

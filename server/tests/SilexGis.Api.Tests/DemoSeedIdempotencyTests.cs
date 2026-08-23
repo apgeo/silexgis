@@ -61,10 +61,10 @@ public sealed class DemoSeedIdempotencyTests : IAsyncLifetime
                 id, locale, two_factor_authenticator_enabled, two_factor_email_enabled,
                 two_factor_sms_enabled, real_name_visibility, bio_visibility, email_visibility,
                 phone_visibility, caving_club_visibility, address_visibility,
-                address_point_visibility, notify_digest, created_at, updated_at, email_confirmed,
+                address_point_visibility, created_at, updated_at, email_confirmed,
                 phone_number_confirmed, two_factor_enabled, lockout_enabled, access_failed_count)
             VALUES ('00000000-0000-0000-0000-0000000000d1', 'en', false, false, false,
-                    0, 0, 0, 0, 0, 0, 0, 0, now(), now(), true, false, false, true, 0);
+                    0, 0, 0, 0, 0, 0, 0, now(), now(), true, false, false, true, 0);
             """);
     }
 

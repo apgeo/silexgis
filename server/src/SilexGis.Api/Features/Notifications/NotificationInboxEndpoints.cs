@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
@@ -70,6 +71,17 @@ public sealed record UnreadNotificationCountDto(int Unread);
 /// have lost the right to open the thing since, and a row in that state is listed with its
 /// category and its date and nothing else.
 /// </para>
+/// <para>
+/// <b>The inbox is a channel like any other, and the reader's choice for it is honoured here.</b>
+/// A producer writes the row whatever anybody has chosen — it is the record that the thing
+/// happened, and a producer that had to read a preference could not stay inside its own
+/// transaction — so the choice is applied when the row is read instead: a category whose inbox
+/// cell resolves to off is absent from the listing and from the unread count alike. Applied at
+/// the read rather than at the write for one further reason: switching the inbox back on brings
+/// back what happened while it was off, rather than leaving a hole nothing can fill. A category
+/// nobody may switch off resolves back on by the same rules, so a warning about somebody's own
+/// account cannot be hidden this way.
+/// </para>
 /// </remarks>
 public static class NotificationInboxEndpoints
 {
@@ -78,7 +90,7 @@ public static class NotificationInboxEndpoints
         var notifications = api.MapGroup("/notifications").WithTags("Notifications");
 
         notifications.MapGet("/", ListAsync)
-            .WithSummary("The caller's own notifications, newest first, filterable by category and by unread.")
+            .WithSummary("The caller's own notifications, newest first, filterable by category and by unread. A category the caller has switched the inbox off for is not listed.")
             .WithDescription("category names one of the notification categories, spelled as the answers spell it.");
         notifications.MapGet("/unread-count", UnreadCountAsync)
             .WithSummary("How many of the caller's notifications are unread.");
@@ -98,6 +110,7 @@ public static class NotificationInboxEndpoints
         IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         NotificationInboxRenderer renderer,
+        NotificationChannels channels,
         HttpContext http,
         string? category,
         bool? unreadOnly,
@@ -130,6 +143,9 @@ public static class NotificationInboxEndpoints
             query = query.Where(n => n.Category == only);
         }
 
+        var muted = await MutedInAppAsync(db, channels, user.UserId, ct);
+        query = query.Where(n => !muted.Contains(n.Category));
+
         if (unreadOnly is true)
         {
             query = query.Where(n => n.ReadAt == null);
@@ -147,7 +163,10 @@ public static class NotificationInboxEndpoints
     }
 
     private static async Task<Results<Ok<UnreadNotificationCountDto>, UnauthorizedHttpResult>> UnreadCountAsync(
-        SilexGisDbContext db, IUserContextAccessor userAccessor, CancellationToken ct)
+        SilexGisDbContext db,
+        IUserContextAccessor userAccessor,
+        NotificationChannels channels,
+        CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
         if (user is null)
@@ -156,9 +175,14 @@ public static class NotificationInboxEndpoints
         }
 
         // Counted rather than derived from a page, because this is asked far more often than the
-        // list is opened and has an index of its own over exactly the rows it can count.
+        // list is opened and has an index of its own over exactly the rows it can count. It counts
+        // exactly what the listing shows, a switched-off category left out of both: a badge that
+        // counts rows the list does not contain is a badge nobody can ever clear.
+        var muted = await MutedInAppAsync(db, channels, user.UserId, ct);
         var unread = await db.Notifications
-            .CountAsync(n => n.RecipientUserId == user.UserId && n.ReadAt == null, ct);
+            .Where(n => n.RecipientUserId == user.UserId && n.ReadAt == null)
+            .Where(n => !muted.Contains(n.Category))
+            .CountAsync(ct);
         return TypedResults.Ok(new UnreadNotificationCountDto(unread));
     }
 
@@ -169,6 +193,7 @@ public static class NotificationInboxEndpoints
         IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         NotificationInboxRenderer renderer,
+        NotificationChannels channels,
         HttpContext http,
         CancellationToken ct)
     {
@@ -185,6 +210,14 @@ public static class NotificationInboxEndpoints
         var row = await db.Notifications.AsNoTracking()
             .FirstOrDefaultAsync(n => n.Id == id && n.RecipientUserId == user.UserId, ct);
         if (row is null)
+        {
+            return ApiProblems.NotFound("notification.not_found");
+        }
+
+        // A row of a category the reader has switched the inbox off for answers as missing, so
+        // that one route cannot show what the listing beside it is hiding.
+        var muted = await MutedInAppAsync(db, channels, user.UserId, ct);
+        if (muted.Contains(row.Category))
         {
             return ApiProblems.NotFound("notification.not_found");
         }
@@ -224,6 +257,7 @@ public static class NotificationInboxEndpoints
     private static async Task<Results<NoContent, UnauthorizedHttpResult>> MarkAllReadAsync(
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
+        NotificationChannels channels,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -234,12 +268,46 @@ public static class NotificationInboxEndpoints
         }
 
         // One statement rather than a page at a time: somebody who reads everything by mail can
-        // have a great many unread rows, and this is the one click that answers that.
+        // have a great many unread rows, and this is the one click that answers that. It clears
+        // exactly what the listing shows — a category whose inbox is switched off is left as it
+        // is, so switching it back on shows what happened rather than a page of things already
+        // marked read on the reader's behalf.
+        var muted = await MutedInAppAsync(db, channels, user.UserId, ct);
         var now = clock.GetUtcNow();
         await db.Notifications
             .Where(n => n.RecipientUserId == user.UserId && n.ReadAt == null)
+            .Where(n => !muted.Contains(n.Category))
             .ExecuteUpdateAsync(set => set.SetProperty(n => n.ReadAt, now), ct);
         return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// The categories this reader has switched the inbox off for, resolved through the same rules
+    /// that decide every other cell of the matrix — so a category nobody may switch off is never
+    /// in it, and a stored row for a channel this installation no longer has is worth nothing.
+    /// </summary>
+    /// <remarks>
+    /// Ordinarily empty, because nothing stored means the documented default and the default for
+    /// the inbox is on. Resolved in memory over the vocabulary rather than compared in SQL: the
+    /// rules that can override a stored row are the domain's, and half of them are not expressible
+    /// as a predicate over the rows.
+    /// </remarks>
+    private static async Task<List<NotificationCategory>> MutedInAppAsync(
+        SilexGisDbContext db, NotificationChannels channels, Guid userId, CancellationToken ct)
+    {
+        var stored = await db.UserNotificationPreferences.AsNoTracking()
+            .Where(p => p.UserId == userId && p.Channel == NotificationChannelKind.InApp)
+            .ToDictionaryAsync(p => p.Category, p => p.Choice, ct);
+
+        return
+        [
+            .. NotificationCategories.All.Where(category =>
+                NotificationMatrix.Resolve(
+                    category,
+                    NotificationChannelKind.InApp,
+                    stored.TryGetValue(category, out var choice) ? choice : null,
+                    channels.Installed) is NotificationChannelChoice.Off),
+        ];
     }
 
     private static bool TryParseCategory(string? value, out NotificationCategory? category)

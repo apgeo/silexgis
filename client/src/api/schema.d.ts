@@ -359,7 +359,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Switches off one notification category using the token from a message. */
+        /** Switches one notification category's mail off using the token from a message. The inbox inside the application is untouched. */
         post: {
             parameters: {
                 query?: never;
@@ -3263,7 +3263,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The caller's notification settings, with every category present. */
+        /** The caller's notification settings as a category by channel matrix, with every cell present, and the channels this installation has configured. */
         get: {
             parameters: {
                 query?: never;
@@ -3404,7 +3404,7 @@ export interface paths {
                 };
             };
         };
-        /** Stores the language the caller reads in. The time zone is accepted and validated, but there is nowhere to keep it yet, so it is not stored and reads back as nothing. */
+        /** Stores the language the caller reads in and the time zone they read it in. Sending no zone leaves the stored one alone rather than clearing it. */
         put: {
             parameters: {
                 query?: never;
@@ -3536,7 +3536,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The caller's own notifications, newest first, filterable by category and by unread.
+         * The caller's own notifications, newest first, filterable by category and by unread. A category the caller has switched the inbox off for is not listed.
          * @description category names one of the notification categories, spelled as the answers spell it.
          */
         get: {
@@ -14998,18 +14998,30 @@ export interface components {
         NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | null;
         NotificationCategoryDto: {
             category: components["schemas"]["NotificationCategory"];
-            enabled: boolean;
-            locked: boolean;
+            reachesNobody: boolean;
+            channels: components["schemas"]["NotificationChannelDto"][];
         };
         NotificationCategoryWrite: {
             category: components["schemas"]["NotificationCategory"];
-            enabled: boolean;
+            channels: components["schemas"]["NotificationChannelWrite"][];
+        };
+        /** @enum {unknown} */
+        NotificationChannelChoice: "off" | "immediate" | "daily";
+        NotificationChannelDto: {
+            channel: components["schemas"]["NotificationChannelKind"];
+            choice: components["schemas"]["NotificationChannelChoice"];
+            locked: boolean;
+            canDefer: boolean;
+            available: boolean;
+        };
+        NotificationChannelKind: string;
+        NotificationChannelWrite: {
+            channel: components["schemas"]["NotificationChannelKind"];
+            choice: components["schemas"]["NotificationChannelChoice"];
         };
         NotificationConfigDto: {
             badgeTransport: string;
         };
-        /** @enum {unknown} */
-        NotificationDigest: "immediate" | "daily";
         NotificationDto: {
             /** Format: int64 */
             id: number;
@@ -15024,14 +15036,10 @@ export interface components {
             readAt: null | string;
         };
         NotificationPreferencesDto: {
-            emailEnabled: boolean;
-            digest: components["schemas"]["NotificationDigest"];
-            deliveryConfigured: boolean;
+            configuredChannels: components["schemas"]["NotificationChannelKind"][];
             categories: components["schemas"]["NotificationCategoryDto"][];
         };
         NotificationPreferencesWriteRequest: {
-            emailEnabled: boolean;
-            digest: components["schemas"]["NotificationDigest"];
             categories: components["schemas"]["NotificationCategoryWrite"][];
         };
         ObjectAccessEntryDto: {

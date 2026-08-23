@@ -172,7 +172,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task A_switched_off_category_produces_no_delivery_and_is_still_in_the_inbox()
     {
-        await SetPreferencesAsync(emailEnabled: true, digest: "immediate", off: "cavingGroupMembership");
+        await SetMailAsync("immediate", "cavingGroupMembership", "off");
         await AddToCavingGroupAsync();
         factory.Messages.Clear();
 
@@ -191,9 +191,9 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
-    public async Task The_master_switch_stops_everything_ordinary_leaving_it_all_in_the_inbox()
+    public async Task Mail_switched_off_on_every_ordinary_category_leaves_it_all_in_the_inbox()
     {
-        await SetPreferencesAsync(emailEnabled: false, digest: "immediate");
+        await SetMailAsync("off");
         await AddToCavingGroupAsync();
         factory.Messages.Clear();
 
@@ -205,9 +205,9 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
-    public async Task A_security_alert_is_sent_even_with_the_master_switch_off()
+    public async Task A_security_alert_is_sent_even_with_every_ordinary_category_muted()
     {
-        await SetPreferencesAsync(emailEnabled: false, digest: "daily");
+        await SetMailAsync("off");
         factory.Messages.Clear();
 
         // Changing the password is the alert: if it was not them, someone else knows it.
@@ -227,7 +227,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task A_daily_digest_holds_events_back_and_then_sends_one_message_for_all_of_them()
     {
-        await SetPreferencesAsync(emailEnabled: true, digest: "daily");
+        await SetMailAsync("daily");
         await AddToCavingGroupAsync();
         await AddToCavingGroupAsync("second");
         factory.Messages.Clear();
@@ -346,12 +346,12 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         var response = await anonymous.PostAsJsonAsync("/api/v1/notifications/unsubscribe", new { token });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 
-        // The setting the page shows is the one that changed.
-        var prefs = JsonDocument.Parse(
-            await (await recipient.GetAsync("/api/v1/me/notifications/")).Content.ReadAsStringAsync()).RootElement;
-        prefs.GetProperty("categories").EnumerateArray()
-            .Single(c => c.GetProperty("category").GetString() == "cavingGroupMembership")
-            .GetProperty("enabled").GetBoolean().ShouldBeFalse();
+        // The setting the page shows is the one that changed — and only that one. Somebody who
+        // clicked a link in a mail client said where they do not want to be reached and said
+        // nothing whatever about the inbox inside the application, so the inbox cell is the
+        // positive half of the same assertion.
+        (await CellAsync("cavingGroupMembership", "email")).ShouldBe("off");
+        (await CellAsync("cavingGroupMembership", "inApp")).ShouldBe("immediate");
     }
 
     [Fact]
@@ -381,7 +381,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task The_opt_out_link_in_a_daily_summary_stops_the_summary_and_not_one_category_in_it()
     {
-        await SetPreferencesAsync(emailEnabled: true, digest: "daily");
+        await SetMailAsync("daily");
         await AddToCavingGroupAsync();
         factory.Messages.Clear();
 
@@ -401,15 +401,17 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         result.GetProperty("kind").GetString().ShouldBe("dailyDigest");
         result.GetProperty("category").ValueKind.ShouldBe(JsonValueKind.Null);
 
-        var prefs = JsonDocument.Parse(
-            await (await recipient.GetAsync("/api/v1/me/notifications/")).Content.ReadAsStringAsync()).RootElement;
-        prefs.GetProperty("emailEnabled").GetBoolean().ShouldBeFalse();
+        // A summary collects whatever the reader still hears about by mail, so the only honest
+        // reading of "stop sending me this" is to stop the mail — on every category that may be
+        // muted, not on the one the summary happened to be holding.
+        foreach (var category in MutableCategories)
+        {
+            (await CellAsync(category, "email")).ShouldBe("off", category);
+        }
 
-        // The positive half: the category the summary happened to contain was not touched, which
-        // is exactly what the old token did to it.
-        prefs.GetProperty("categories").EnumerateArray()
-            .Single(c => c.GetProperty("category").GetString() == "cavingGroupMembership")
-            .GetProperty("enabled").GetBoolean().ShouldBeTrue();
+        // The positive half: nothing about the inbox moved. The events are still read there,
+        // which is the whole reason stopping the mail is a safe thing for a link to do.
+        (await CellAsync("cavingGroupMembership", "inApp")).ShouldBe("immediate");
     }
 
     [Fact]
@@ -418,11 +420,11 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         // The summary's landing page says the summary has stopped. Rows deferred before the click
         // were routed while it was still wanted, and nothing read the preferences again on the way
         // out — so tomorrow's summary went anyway, carrying another opt-out link.
-        await SetPreferencesAsync(emailEnabled: true, digest: "daily");
+        await SetMailAsync("daily");
         await AddToCavingGroupAsync();
         await DrainAsync();
 
-        await SetPreferencesAsync(emailEnabled: false, digest: "daily");
+        await SetMailAsync("off");
 
         await AddToCavingGroupAsync("after the switch was thrown");
         await DrainAsync();
@@ -442,11 +444,11 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task A_category_switched_off_after_it_was_held_back_is_dropped_from_the_summary()
     {
-        await SetPreferencesAsync(emailEnabled: true, digest: "daily");
+        await SetMailAsync("daily");
         await AddToCavingGroupAsync();
         await DrainAsync();
 
-        await SetPreferencesAsync(emailEnabled: true, digest: "daily", off: "cavingGroupMembership");
+        await SetMailAsync("daily", "cavingGroupMembership", "off");
         factory.Messages.Clear();
 
         await MakeDigestDueAsync();
@@ -717,7 +719,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
 
         (await DeliveriesAsync()).ShouldHaveSingleItem().Status.ShouldBe(NotificationDeliveryStatus.Pending);
 
-        await SetPreferencesAsync(emailEnabled: true, digest: "immediate", off: "cavingGroupMembership");
+        await SetMailAsync("immediate", "cavingGroupMembership", "off");
 
         await MakeDueAsync();
         await DrainAsync();
@@ -791,14 +793,41 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
         added.StatusCode.ShouldBe(HttpStatusCode.OK, await added.Content.ReadAsStringAsync());
     }
 
-    private async Task SetPreferencesAsync(bool emailEnabled, string digest, string? off = null) =>
+    /// <summary>One cell of the matrix as the settings endpoint reports it.</summary>
+    private async Task<string> CellAsync(string category, string channel)
+    {
+        var prefs = JsonDocument.Parse(
+            await (await recipient.GetAsync("/api/v1/me/notifications/")).Content.ReadAsStringAsync()).RootElement;
+
+        return prefs.GetProperty("categories").EnumerateArray()
+            .Single(c => c.GetProperty("category").GetString() == category)
+            .GetProperty("channels").EnumerateArray()
+            .Single(c => c.GetProperty("channel").GetString() == channel)
+            .GetProperty("choice").GetString()!;
+    }
+
+    /// <summary>Every category anybody may mute — the ones a write may name a choice for.</summary>
+    private static readonly string[] MutableCategories =
+    [
+        "cavingGroupMembership", "permissionGranted", "tripParticipation", "jobCompleted", "tripPlanning",
+    ];
+
+    /// <summary>
+    /// Sets the mail cell of every category anybody may mute, and optionally one of them
+    /// differently. The inbox cells are left alone deliberately: nothing in this class is about
+    /// where a notification is read back, only about what leaves the system.
+    /// </summary>
+    private async Task SetMailAsync(string choice, string? category = null, string? categoryChoice = null) =>
         (await recipient.PutAsJsonAsync("/api/v1/me/notifications/", new
         {
-            emailEnabled,
-            digest,
-            categories = off is null
-                ? Array.Empty<object>()
-                : [new { category = off, enabled = false }],
+            categories = MutableCategories.Select(name => new
+            {
+                category = name,
+                channels = new[]
+                {
+                    new { channel = "email", choice = name == category ? categoryChoice! : choice },
+                },
+            }),
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
     /// <summary>

@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Notifications;
 using SilexGis.Infrastructure.Notifications;
-using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Notifications;
 
@@ -46,7 +44,7 @@ public static class UnsubscribeEndpoints
             .RequireRateLimiting("auth")
             .WithValidation<UnsubscribeRequest>()
             .WithTags("Notifications")
-            .WithSummary("Switches off one notification category using the token from a message.");
+            .WithSummary("Switches one notification category's mail off using the token from a message. The inbox inside the application is untouched.");
 
         return api;
     }
@@ -55,7 +53,6 @@ public static class UnsubscribeEndpoints
         UnsubscribeRequest request,
         IUnsubscribeTokens tokens,
         NotificationOptOut optOut,
-        SilexGisDbContext db,
         CancellationToken ct)
     {
         if (!tokens.TryRead(request.Token, out var subject))
@@ -75,39 +72,29 @@ public static class UnsubscribeEndpoints
         if (!NotificationCategories.IsUserConfigurable(category))
         {
             return ApiProblems.BadRequest(
-                "notification.unsubscribe_locked", "Security alerts cannot be switched off.");
+                "notification.unsubscribe_locked", "That kind of notification cannot be switched off.");
         }
 
-        var row = await db.UserNotificationPreferences
-            .FirstOrDefaultAsync(p => p.UserId == subject.UserId && p.Category == category, ct);
+        // Mail only. The link was clicked in a mail client, which says where the reader does not
+        // want to be reached and says nothing whatever about the inbox inside the application —
+        // so the notifications keep arriving there, which is where somebody who has switched mail
+        // off reads them.
+        _ = await optOut.StopCategoryEmailAsync(subject.UserId, category, ct);
 
-        if (row is null)
-        {
-            db.UserNotificationPreferences.Add(new UserNotificationPreference
-            {
-                UserId = subject.UserId,
-                Category = category,
-                Enabled = false,
-            });
-        }
-        else
-        {
-            row.Enabled = false;
-        }
-
-        await db.SaveChangesAsync(ct);
         return TypedResults.Ok(new UnsubscribeResultDto(UnsubscribeKind.Category, category));
     }
 
     /// <summary>
-    /// Switches the account's notification email off.
+    /// Switches mail off for every category whose mail may be switched off.
     /// </summary>
     /// <remarks>
-    /// The daily summary is not a category and cannot be switched off as one. Merely returning the
-    /// account to one message per event would send it more mail than the link was clicked to stop,
-    /// so the only honest reading of "stop sending me this summary" is to stop the mail. Alerts
-    /// about the account's own credentials still go out: they ignore this switch by design, because
-    /// whoever is taking an account over may be holding a live session while they do it.
+    /// The daily summary is not a category and cannot be switched off as one: it collects whatever
+    /// the reader still hears about by mail. Merely returning each of those to one message per
+    /// event would send more mail than the link was clicked to stop, so the only honest reading of
+    /// "stop sending me this summary" is to stop the mail. Nothing about the inbox inside the
+    /// application moves, and alerts about the account's own credentials still go out: they ignore
+    /// this by design, because whoever is taking an account over may be holding a live session
+    /// while they do it.
     /// </remarks>
     private static async Task<Results<Ok<UnsubscribeResultDto>, ProblemHttpResult>> StopTheDailySummaryAsync(
         Guid userId, NotificationOptOut optOut, CancellationToken ct)
@@ -115,7 +102,7 @@ public static class UnsubscribeEndpoints
         // An account that is gone answers exactly as one that was changed, for the same reason a
         // bad token does: anything else turns the endpoint into a way to test whether an account
         // is real.
-        _ = await optOut.StopNotificationEmailAsync(userId, ct);
+        _ = await optOut.StopAllEmailAsync(userId, ct);
 
         return TypedResults.Ok(new UnsubscribeResultDto(UnsubscribeKind.DailyDigest, null));
     }

@@ -23,9 +23,11 @@ namespace SilexGis.Infrastructure.Notifications;
 /// <para>
 /// Routing happens once per notification and produces zero or more deliveries: one row per channel
 /// that has to leave the system. Nothing is "suppressed" — a recipient who does not want email
-/// about something simply gets no email delivery for it, and the notification is in their inbox
-/// either way, because the events somebody switched a channel off for are exactly the ones an
-/// inbox exists to show.
+/// about something simply gets no email delivery for it, and the notification is still in their
+/// inbox, because the events somebody switched a transport off for are exactly the ones an inbox
+/// exists to show. The inbox is a cell of the same matrix and can be switched off too, but that
+/// is not decided here: the row is written whatever anybody has chosen, and the choice is applied
+/// where the inbox is read.
 /// </para>
 /// <para>
 /// This class knows no transport. Which channels exist, what each of them needs to reach somebody
@@ -136,7 +138,7 @@ public sealed class NotificationDeliveryService(
         // have done exactly that. Sending anyway would answer "the summary has stopped" with one
         // more summary. Dropping the delivery is all that is needed: the notifications themselves
         // stay in the inbox, which is where somebody who switched email off reads them.
-        if (user?.Email is null || !user.NotifyEmailEnabled)
+        if (user?.Email is null)
         {
             db.NotificationDeliveries.RemoveRange(claimed);
             await db.SaveChangesAsync(ct);
@@ -146,13 +148,12 @@ public sealed class NotificationDeliveryService(
         // The same second thought applied per category: a summary claimed for today may contain
         // lines about something the recipient has since switched off, and those must not arrive.
         var stored = await db.UserNotificationPreferences
-            .Where(p => p.UserId == user.Id)
-            .ToDictionaryAsync(p => p.Category, p => p.Enabled, ct);
+            .Where(p => p.UserId == user.Id && p.Channel == NotificationChannelKind.Email)
+            .ToDictionaryAsync(p => p.Category, p => p.Choice, ct);
 
         var wanted = claimed
-            .Where(d => stored.TryGetValue(notifications[d.NotificationId].Category, out var enabled)
-                ? enabled
-                : NotificationCategories.DefaultEnabled(notifications[d.NotificationId].Category))
+            .Where(d => Resolve(notifications[d.NotificationId].Category, NotificationChannelKind.Email, stored)
+                is not NotificationChannelChoice.Off)
             .ToList();
 
         var dropped = claimed.Where(d => !wanted.Contains(d)).ToList();
@@ -198,7 +199,12 @@ public sealed class NotificationDeliveryService(
             // The whole batch shares one outcome, so a failed summary is retried as a batch.
             foreach (var delivery in wanted)
             {
-                Fail(delivery, result.Error, NotificationDeliveryStatus.Deferred);
+                Fail(
+                    delivery,
+                    result.Error,
+                    NotificationDeliveryStatus.Deferred,
+                    notifications[delivery.NotificationId].Category,
+                    user);
             }
         }
 
@@ -244,31 +250,27 @@ public sealed class NotificationDeliveryService(
             return;
         }
 
-        // A user with no stored preference rows is the ordinary case, not "everything off".
-        var stored = await db.UserNotificationPreferences
-            .Where(p => p.UserId == row.RecipientUserId && p.Category == row.Category)
-            .Select(p => (bool?)p.Enabled)
-            .FirstOrDefaultAsync(ct);
-
-        var categoryEnabled = stored ?? NotificationCategories.DefaultEnabled(row.Category);
+        // A user with no stored preference rows is the ordinary case, not "everything off": most
+        // accounts never open the settings page, and the documented defaults are what they get.
+        var stored = await StoredAsync(row.RecipientUserId, row.Category, ct);
 
         // Every willing channel is asked, and the answers become rows. Zero rows is an ordinary
         // outcome, not a failure: the notification has happened and is readable in the inbox
         // whether or not any copy of it left the system.
         var answers = carriers
-            .Select(channel => (channel.Channel, Route: channel.Decide(user, row.Category, categoryEnabled)))
+            .Select(channel => (
+                channel.Channel,
+                Route: channel.Decide(user, Resolve(row.Category, channel.Kind, stored))))
             .ToList();
 
         var now = clock.GetUtcNow();
         foreach (var planned in NotificationFanOut.Plan(answers))
         {
-            Add(
-                row,
-                planned.Channel,
-                planned.Status,
-                planned.Status == NotificationDeliveryStatus.Deferred
-                    ? NotificationRouting.NextDigest(now, DigestHourUtc)
-                    : now);
+            var due = planned.Status == NotificationDeliveryStatus.Deferred
+                ? NotificationRouting.NextDigest(now, DigestHourUtc)
+                : now;
+
+            Add(row, planned.Channel, planned.Status, DueOutsideTheirNight(due, row.Category, user));
         }
     }
 
@@ -310,7 +312,7 @@ public sealed class NotificationDeliveryService(
             return;
         }
 
-        Fail(delivery, result.Error, NotificationDeliveryStatus.Pending);
+        Fail(delivery, result.Error, NotificationDeliveryStatus.Pending, row.Category, user);
     }
 
     /// <summary>
@@ -320,14 +322,65 @@ public sealed class NotificationDeliveryService(
     private async Task<bool> SuppressedNowAsync(
         SilexGisUser user, Notification row, INotificationChannel channel, CancellationToken ct)
     {
-        var stored = await db.UserNotificationPreferences
-            .Where(p => p.UserId == user.Id && p.Category == row.Category)
-            .Select(p => (bool?)p.Enabled)
-            .FirstOrDefaultAsync(ct);
-
-        var categoryEnabled = stored ?? NotificationCategories.DefaultEnabled(row.Category);
-        return channel.Decide(user, row.Category, categoryEnabled) is NotificationRoute.Suppress;
+        var stored = await StoredAsync(user.Id, row.Category, ct);
+        return channel.Decide(user, Resolve(row.Category, channel.Kind, stored))
+            is NotificationRoute.Suppress;
     }
+
+    /// <summary>
+    /// One recipient's stored matrix row per channel for one category. Absent channels are absent
+    /// on purpose: what a missing row means is the resolver's business, not this query's.
+    /// </summary>
+    private async Task<Dictionary<NotificationChannelKind, NotificationChannelChoice>> StoredAsync(
+        Guid userId, NotificationCategory category, CancellationToken ct) =>
+        await db.UserNotificationPreferences
+            .Where(p => p.UserId == userId && p.Category == category)
+            .ToDictionaryAsync(p => p.Channel, p => p.Choice, ct);
+
+    /// <summary>
+    /// What one cell is worth here — the stored row if there is one, put through the rules that
+    /// can override it, against the channels this installation actually has.
+    /// </summary>
+    private NotificationChannelChoice Resolve(
+        NotificationCategory category,
+        NotificationChannelKind channel,
+        IReadOnlyDictionary<NotificationChannelKind, NotificationChannelChoice> stored) =>
+        NotificationMatrix.Resolve(
+            category,
+            channel,
+            stored.TryGetValue(channel, out var choice) ? choice : null,
+            channels.Installed);
+
+    private NotificationChannelChoice Resolve(
+        NotificationCategory category,
+        NotificationChannelKind channel,
+        IReadOnlyDictionary<NotificationCategory, NotificationChannelChoice> stored) =>
+        NotificationMatrix.Resolve(
+            category,
+            channel,
+            stored.TryGetValue(category, out var choice) ? choice : null,
+            channels.Installed);
+
+    /// <summary>
+    /// When a delivery may really leave: the instant it would otherwise be due, moved past the
+    /// hours the recipient asked not to be interrupted in.
+    /// </summary>
+    /// <remarks>
+    /// Only what leaves the installation is moved. The notification itself is in the reader's list
+    /// the moment it happens whatever the hour, because it interrupts nobody — which is what makes
+    /// holding the outbound copy back honest rather than a lie about what has happened.
+    /// <para>
+    /// A category that refuses to be held back for a summary refuses this for the same reason and
+    /// is asked the same way, from the category vocabulary rather than by name: the messages that
+    /// warn somebody about their own account, or that a party is overdue underground, are exactly
+    /// the ones worth waking them for.
+    /// </para>
+    /// </remarks>
+    private DateTimeOffset DueOutsideTheirNight(
+        DateTimeOffset due, NotificationCategory category, SilexGisUser user) =>
+        NotificationCategories.IsAlwaysImmediate(category)
+            ? due
+            : QuietHours.NextAllowed(due, QuietHoursFrom, QuietHoursTo, user.TimeZone ?? HouseTimeZone);
 
     private void Add(
         Notification row,
@@ -456,7 +509,23 @@ public sealed class NotificationDeliveryService(
         }
     }
 
-    private void Fail(NotificationDelivery delivery, string? error, NotificationDeliveryStatus retryStatus)
+    /// <summary>
+    /// Records a failed attempt and says when the next one may happen.
+    /// </summary>
+    /// <remarks>
+    /// The retry instant goes through the same rule as the first one. A back-off that steps to
+    /// hours crosses into the night from an evening failure without trying to — an unreachable
+    /// mail server at nine in the evening is an entirely ordinary condition — and an installation
+    /// that promised nothing leaves in the small hours must keep that promise on the second
+    /// attempt as much as on the first. Every instant a delivery becomes due is therefore computed
+    /// in one place rather than only the one routing computes.
+    /// </remarks>
+    private void Fail(
+        NotificationDelivery delivery,
+        string? error,
+        NotificationDeliveryStatus retryStatus,
+        NotificationCategory category,
+        SilexGisUser user)
     {
         delivery.Error = Truncate(error);
         if (delivery.Attempts >= NotificationRouting.MaxAttempts)
@@ -466,7 +535,8 @@ public sealed class NotificationDeliveryService(
         }
 
         delivery.Status = retryStatus;
-        delivery.NotBefore = clock.GetUtcNow() + NotificationRouting.RetryDelay(delivery.Attempts);
+        delivery.NotBefore = DueOutsideTheirNight(
+            clock.GetUtcNow() + NotificationRouting.RetryDelay(delivery.Attempts), category, user);
     }
 
     /// <summary>The column is capped, and this runs inside the path that records a failure.</summary>
@@ -477,6 +547,22 @@ public sealed class NotificationDeliveryService(
         (configuration.GetValue("PublicUrl", "http://localhost:8080") ?? "http://localhost:8080").TrimEnd('/');
 
     private int DigestHourUtc => configuration.GetValue("Notifications:DigestHourUtc", 7);
+
+    /// <summary>
+    /// The hours nothing may interrupt anybody in, as wall-clock times in each recipient's own
+    /// zone. Off unless the installation names both ends: an installation that has said nothing
+    /// about its members' nights keeps sending as it always has, rather than holding mail back
+    /// for hours nobody asked for.
+    /// </summary>
+    private TimeOnly? QuietHoursFrom => QuietHours.Parse(configuration["Notifications:QuietHoursFrom"]);
+
+    private TimeOnly? QuietHoursTo => QuietHours.Parse(configuration["Notifications:QuietHoursTo"]);
+
+    /// <summary>
+    /// Whose night to use for somebody who has never told the server where they are — the
+    /// installation's own, which for a club is where nearly all of its members are anyway.
+    /// </summary>
+    private string HouseTimeZone => configuration.GetValue("Notifications:TimeZone", "UTC") ?? "UTC";
 
     /// <summary>
     /// One window over the whole table, keyed on the notification's own age and taking read and
