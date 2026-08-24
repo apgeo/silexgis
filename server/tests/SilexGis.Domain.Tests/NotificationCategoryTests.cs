@@ -83,6 +83,8 @@ public class NotificationCategoryTests
         ((short)NotificationCategory.JobCompleted).ShouldBe((short)3);
         ((short)NotificationCategory.SecurityAlerts).ShouldBe((short)4);
         ((short)NotificationCategory.TripPlanning).ShouldBe((short)5);
+        ((short)NotificationCategory.CommentReply).ShouldBe((short)7);
+        ((short)NotificationCategory.CommentOnMine).ShouldBe((short)8);
 
         ((short)NotificationChannelKind.InApp).ShouldBe((short)1);
         ((short)NotificationChannelKind.Email).ShouldBe((short)2);

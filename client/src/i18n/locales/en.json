@@ -1625,6 +1625,8 @@
         "permissionGranted": "Someone shares something with me",
         "tripParticipation": "I am added to a trip",
         "tripPlanning": "I am invited to a trip, a trip I am on changes, or a trip needs access I can grant",
+        "commentReply": "Someone replies to a comment I wrote",
+        "commentOnMine": "Someone comments on something of mine",
         "jobCompleted": "My uploads finish processing",
         "securityAlerts": "Security alerts"
       }
@@ -1904,6 +1906,8 @@
       "name_notify_security_password_changed": "Password changed",
       "name_notify_security_email_changed": "Email address changed",
       "name_notify_security_two_factor_disabled": "Two-step sign-in switched off",
+      "name_notify_comment_reply": "A reply to a comment",
+      "name_notify_comment_on_mine": "A comment on something of yours",
       "name_notify_digest": "Daily summary"
     },
     "importSection": "Vector import"

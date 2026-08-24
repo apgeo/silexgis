@@ -174,6 +174,16 @@ Previous versions:
   nobody, since telling you a draft changed would be telling you it exists, and a write that changed
   nothing sends nothing. All of it is a switch on the notifications page, on to begin with, and off
   the moment you say so.
+- **Somebody answering you, or leaving a remark on something of yours, tells you** — an answer to
+  your comment and a comment on a document you uploaded are two separate things to be told about, so
+  switching off the traffic on a busy document never costs you the answers meant for you. You are
+  never told about your own remark, and if it is both an answer to you and a remark on your own
+  upload you hear about it once. Whether you may still read the document is decided for you
+  personally at the moment the message is written, so somebody who has lost access to it is told
+  nothing. **No message ever repeats what was said** — it names the document and links to it, and you
+  open it and read the conversation there. If the remark itself is deleted the link still takes you to
+  the right page; if the document goes, the line in your list says the subject is no longer available
+  rather than sending you to a dead link.
 - **You choose what you are told about and where you are told it** — the notifications page is a
   grid: the kinds of thing that happen down one side, the ways of reaching you across the top. For
   each pair you say nothing, as it happens, or once a day in a single summary — and a daily summary

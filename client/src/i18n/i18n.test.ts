@@ -108,6 +108,8 @@ const notificationCategories: Record<NotificationCategoryName, true> = {
   jobCompleted: true,
   securityAlerts: true,
   tripPlanning: true,
+  commentReply: true,
+  commentOnMine: true,
 };
 
 /**

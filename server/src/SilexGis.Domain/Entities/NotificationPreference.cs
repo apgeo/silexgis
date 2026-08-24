@@ -32,6 +32,25 @@ public enum NotificationCategory : short
     /// preference is per category — so the category count is how finely somebody can mute.
     /// </summary>
     TripPlanning = 5,
+
+    // 6 is not free. A category for a trip being called off has already taken it on another
+    // line of work in flight, and values are part of the schema contract — never renumbered,
+    // never reused — so the gap stays a gap rather than being filled in from here.
+
+    /// <summary>
+    /// Somebody replied to a comment this user wrote. Kept apart from
+    /// <see cref="CommentOnMine"/> deliberately: one category would make a busy document's
+    /// traffic and a direct answer to something you said the same setting, and the first thing
+    /// anyone does with that is switch it off — losing the answer along with the traffic.
+    /// </summary>
+    CommentReply = 7,
+
+    /// <summary>
+    /// Somebody commented on something this user owns. The quieter half of the pair: it reports
+    /// that a conversation is happening on your own upload, which is worth knowing and is not
+    /// the same thing as being spoken to.
+    /// </summary>
+    CommentOnMine = 8,
 }
 
 /// <summary>
@@ -174,6 +193,8 @@ public static class NotificationCategories
         NotificationCategory.JobCompleted => InboxAndMail,
         NotificationCategory.SecurityAlerts => InboxAndMail,
         NotificationCategory.TripPlanning => InboxAndMail,
+        NotificationCategory.CommentReply => InboxAndMail,
+        NotificationCategory.CommentOnMine => InboxAndMail,
         // A category added to the enum but not named here reaches nobody anywhere, rather than
         // surprising everyone with messages they never asked for.
         _ => NotificationChannelKind.None,

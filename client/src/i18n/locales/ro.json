@@ -1625,6 +1625,8 @@
         "permissionGranted": "Cineva îmi dă acces la ceva",
         "tripParticipation": "Sunt adăugat la o tură",
         "tripPlanning": "Sunt invitat la o tură, se schimbă o tură la care particip sau o tură are nevoie de un acces pe care îl pot acorda",
+        "commentReply": "Cineva răspunde la un comentariu scris de mine",
+        "commentOnMine": "Cineva comentează la ceva ce îmi aparține",
         "jobCompleted": "Fișierele mele termină de procesat",
         "securityAlerts": "Alerte de securitate"
       }
@@ -1904,6 +1906,8 @@
       "name_notify_security_password_changed": "Parola a fost schimbată",
       "name_notify_security_email_changed": "Adresa de e-mail a fost schimbată",
       "name_notify_security_two_factor_disabled": "Autentificarea în doi pași a fost oprită",
+      "name_notify_comment_reply": "Un răspuns la un comentariu",
+      "name_notify_comment_on_mine": "Un comentariu la ceva al tău",
       "name_notify_digest": "Rezumat zilnic"
     },
     "importSection": "Import vectorial"

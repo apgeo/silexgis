@@ -90,6 +90,18 @@ public static class MessageTemplateCatalog
     /// </remarks>
     public const string NotifyTripInviteeCannotOpenCave = "notify.trip-invitee-cannot-open-cave";
 
+    // Somebody said something where this person can hear it. Both name the document and link to
+    // it, and neither carries a word of what was said: a comment body is free text a person
+    // typed, and a message leaves the installation entirely — once it is in a mailbox it obeys
+    // none of the rules that decided who could read it in the first place. Declaring no
+    // placeholder it could arrive in is what makes that structural rather than a habit.
+
+    /// <summary>Somebody replied to a comment this person wrote.</summary>
+    public const string NotifyCommentReply = "notify.comment-reply";
+
+    /// <summary>Somebody commented on something this person owns.</summary>
+    public const string NotifyCommentOnMine = "notify.comment-on-mine";
+
     public const string NotifyJobCompleted = "notify.job-completed";
 
     public const string NotifyJobFailed = "notify.job-failed";
@@ -571,6 +583,71 @@ public static class MessageTemplateCatalog
                     nimeni altcineva — cineva care poate acorda acces altfel, printr-un club de
                     exemplu, nu a fost înștiințat. Vă rugăm să-l transmiteți mai departe dacă nu vă
                     revine dumneavoastră.
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyCommentReply,
+            MessageChannel.Email,
+            "Someone replied to a comment this person wrote.",
+            [AppName, DisplayName, ActorName, "documentTitle", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{actorName} replied to your comment on {documentTitle}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} replied to your comment on {documentTitle}. You can read it here:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "{actorName} a răspuns la comentariul dumneavoastră de la {documentTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a răspuns la comentariul dumneavoastră de la {documentTitle}. Îl
+                    puteți citi aici:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyCommentOnMine,
+            MessageChannel.Email,
+            "Someone commented on something this person owns.",
+            [AppName, DisplayName, ActorName, "documentTitle", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{actorName} commented on {documentTitle}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} left a comment on {documentTitle}, which is yours. You can read it
+                    here:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "{actorName} a comentat la {documentTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a lăsat un comentariu la {documentTitle}, care vă aparține. Îl
+                    puteți citi aici:
+
+                    {url}
 
                     {unsubscribeUrl}
                     """),

@@ -27,6 +27,7 @@ public enum NotificationTargetKind : short
     GeoreferencedMap = 4,
     MapView = 5,
     Expedition = 6,
+    Document = 7,
 }
 
 /// <summary>

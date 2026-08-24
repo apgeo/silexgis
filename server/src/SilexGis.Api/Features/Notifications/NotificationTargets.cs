@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Notifications;
@@ -53,6 +54,7 @@ public static class NotificationTargets
         NotificationTargetKind.Feature => $"/features/{target.Id}",
         NotificationTargetKind.TripLog => $"/trip-logs/{target.Id}",
         NotificationTargetKind.Expedition => $"/expeditions/{target.Id}",
+        NotificationTargetKind.Document => $"/documents/{target.Id}",
         NotificationTargetKind.CavingGroup => "/caving-groups",
         NotificationTargetKind.Geofile or NotificationTargetKind.GeoreferencedMap => "/geodata",
         NotificationTargetKind.MapView => "/map",
@@ -92,6 +94,25 @@ public static class NotificationTargets
                 var live = await db.CavingGroups.AsNoTracking()
                     .Where(c => ids.Contains(c.Id)).Select(c => c.Id).ToListAsync(ct);
                 foreach (var id in live.Where(id => MayReadCavingGroup(ctx, id)))
+                {
+                    readable.Add(new NotificationTarget(group.Key, id));
+                }
+
+                continue;
+            }
+
+            // Documents are the one kind here whose read walk has a second band. A document
+            // nothing written against it admits is still readable by whoever reaches it through
+            // an object its current file hangs on, or by whoever uploaded the revision it
+            // serves — that is how a survey filed under a cave reaches the people who cave
+            // there, and it is the walk the comment routes themselves take. The generic path
+            // below cannot express it: the facts it assembles carry a document's cabinets but
+            // never its reach, so a reader admitted only by reach would be told, correctly, and
+            // then shown the wording for something they had lost — while the message already in
+            // their mailbox still carried a link that works.
+            if (group.Key == NotificationTargetKind.Document)
+            {
+                foreach (var id in await ReadableDocumentsAsync(db, ctx, ids, ct))
                 {
                     readable.Add(new NotificationTarget(group.Key, id));
                 }
@@ -140,6 +161,45 @@ public static class NotificationTargets
         }
 
         return readable;
+    }
+
+    /// <summary>
+    /// Which of a page's documents this reader may open, decided through the document walk
+    /// rather than the short one — so this agrees with the check the producer made when it
+    /// chose to queue the message at all.
+    /// </summary>
+    /// <remarks>
+    /// The two facts the walk cannot read off a row are fetched once for the whole page, in the
+    /// batch forms that exist for listings, so the cost stays bounded by the page naming
+    /// documents at all rather than by how many it names. Deleted documents are absent from the
+    /// query and so are never readable, which is what a reader should see once the thing a
+    /// message was about has gone.
+    /// </remarks>
+    private static async Task<IEnumerable<Guid>> ReadableDocumentsAsync(
+        SilexGisDbContext db, AccessContext ctx, List<Guid> ids, CancellationToken ct)
+    {
+        var documents = await db.Documents.AsNoTracking()
+            .Where(x => ids.Contains(x.Id)).ToListAsync(ct);
+        if (documents.Count == 0)
+        {
+            return [];
+        }
+
+        if (ctx.IsFullAdmin)
+        {
+            return documents.Select(d => d.Id);
+        }
+
+        var live = documents.Select(d => d.Id).ToList();
+        var cabinetReach = await DocumentAccessRules.CabinetReachAsync(
+            db, ctx, AccessAction.Read, live, ct);
+        var reached = await DocumentAccessRules.ReachedByAttachmentAsync(db, ctx, live, ct);
+
+        return documents
+            .Where(d => DocumentAccessRules.AllowedByOwnRulesOrAttachment(
+                ctx, d, AccessAction.Read, cabinetReach, reached.Contains(d.Id)))
+            .Select(d => d.Id)
+            .ToList();
     }
 
     private static bool MayReadCavingGroup(AccessContext ctx, Guid id) =>

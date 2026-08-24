@@ -15158,7 +15158,7 @@ export interface components {
             isProtected: boolean;
         };
         /** @enum {unknown} */
-        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | null;
+        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "commentReply" | "commentOnMine" | null;
         NotificationCategoryDto: {
             category: components["schemas"]["NotificationCategory"];
             reachesNobody: boolean;
