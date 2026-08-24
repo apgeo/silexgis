@@ -64,6 +64,37 @@ public sealed class ExpeditionListFilterTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>
+    /// Every day the camp ran is a day the window can touch. A window meeting only the camp's
+    /// first day holds it, so does one meeting only its last, and so does one falling wholly
+    /// inside it and touching neither end. A camp with no end date ran for one day and is held by
+    /// the window over that day alone. The day either side is the control that makes those
+    /// assertions about inclusivity rather than about the camp being found at all.
+    /// </summary>
+    [Fact]
+    public async Task The_window_touches_the_first_day_the_last_day_and_a_day_in_between()
+    {
+        var marker = Marker();
+        var fortnight = await CreateAsync($"Fortnight {marker}", "2032-03-10", end: "2032-03-20");
+        var oneDay = await CreateAsync($"One day {marker}", "2032-03-15");
+
+        // The window meets the camp's first day, then its last, then neither end of it.
+        (await ListAsync($"search={marker}&from=2032-03-01&to=2032-03-10")).ShouldBe([fortnight]);
+        (await ListAsync($"search={marker}&from=2032-03-20&to=2032-03-31")).ShouldBe([fortnight]);
+        (await ListAsync($"search={marker}&from=2032-03-13&to=2032-03-14")).ShouldBe([fortnight]);
+
+        // The single day, held by the window over that day alone. Both camps come back, newest
+        // start first, so the order the list answers in is asserted along with its membership.
+        (await ListAsync($"search={marker}&from=2032-03-15&to=2032-03-15"))
+            .ShouldBe([oneDay, fortnight]);
+        (await ListAsync($"search={marker}&from=2032-03-16&to=2032-03-16")).ShouldBe([fortnight]);
+
+        // One day past either end of the fortnight, which is what makes the three edges above
+        // assertions about inclusive bounds.
+        (await ListAsync($"search={marker}&from=2032-03-21&to=2032-03-31")).ShouldBeEmpty();
+        (await ListAsync($"search={marker}&from=2032-01-01&to=2032-03-09")).ShouldBeEmpty();
+    }
+
+    /// <summary>
     /// The name filter reaches past the accents somebody did or did not type, the same way the
     /// trips' does, and it narrows on the name rather than on the description.
     /// </summary>

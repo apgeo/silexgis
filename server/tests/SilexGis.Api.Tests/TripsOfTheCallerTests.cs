@@ -238,6 +238,36 @@ public sealed class TripsOfTheCallerTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>
+    /// Every day the trip is out is a day the window can touch. A window meeting only its first
+    /// day holds it, so does one meeting only its last, and so does one falling wholly inside it
+    /// and touching neither end. A trip with no end date is one day long and is held by the
+    /// window over that day alone. The day either side is the control that makes those
+    /// assertions about inclusivity rather than about the trip being on the list at all.
+    /// </summary>
+    [Fact]
+    public async Task The_window_touches_the_first_day_the_last_day_and_a_day_in_between()
+    {
+        var multiDay = await CreateAsync(ana, "Long push", "2052-03-10", anaCaver, end: "2052-03-20");
+        var oneDay = await CreateAsync(ana, "Day out", "2052-03-15", anaCaver);
+
+        // The window meets the trip's first day, then its last, then neither end of it.
+        (await MineAsync(ana, "from=2052-03-01&to=2052-03-10&pageSize=200")).ShouldBe([multiDay]);
+        (await MineAsync(ana, "from=2052-03-20&to=2052-03-31&pageSize=200")).ShouldBe([multiDay]);
+        (await MineAsync(ana, "from=2052-03-13&to=2052-03-14&pageSize=200")).ShouldBe([multiDay]);
+
+        // The single day, held by the window over that day alone. Both trips come back, soonest
+        // first, so the order the list answers in is asserted along with its membership.
+        (await MineAsync(ana, "from=2052-03-15&to=2052-03-15&pageSize=200"))
+            .ShouldBe([multiDay, oneDay]);
+        (await MineAsync(ana, "from=2052-03-16&to=2052-03-16&pageSize=200")).ShouldBe([multiDay]);
+
+        // One day past either end of the multi-day trip, which is what makes the three edges
+        // above assertions about inclusive bounds.
+        (await MineAsync(ana, "from=2052-03-21&to=2052-03-31&pageSize=200")).ShouldBeEmpty();
+        (await MineAsync(ana, "from=2052-01-01&to=2052-03-09&pageSize=200")).ShouldBeEmpty();
+    }
+
+    /// <summary>
     /// The state narrows the list and nothing is excluded from it by default. A trip the caller is
     /// on that has been called off is exactly the thing they most need to see on a list of what is
     /// coming up, so it is shown unless they ask otherwise. A word this application does not have

@@ -254,7 +254,8 @@ Previous versions:
 - **Email and SMS that an operator controls** — any SMTP server, any SMS gateway that speaks
   HTTP, and the wording of every message editable per language from the admin pages. Configure
   nothing and the app still runs: links and codes go to the server log instead.
-- **English and Romanian** throughout.
+- **English and Romanian** throughout, dates included: calendars and date pickers show the month and
+  weekday names of the language you are reading in, and start the week on the day that language does.
 
 ## Quick start
 

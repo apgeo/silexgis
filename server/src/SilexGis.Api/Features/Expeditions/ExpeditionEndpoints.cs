@@ -116,22 +116,7 @@ public static class ExpeditionEndpoints
 
         var query = db.Expeditions.AsNoTracking().VisibleTo(ctx, AccessDomain.Expeditions);
 
-        // The window asks whether the camp overlapped it rather than whether it started inside
-        // it, which is what somebody looking at a season means: a fortnight camp running across
-        // the end of July is part of both halves of the summer. A camp with no end date ran for
-        // one day, so its end is its start — reading the stored end alone would drop every
-        // single-day camp out of every window.
-        if (from is not null)
-        {
-            var windowStart = from.Value;
-            query = query.Where(x => (x.EndDate ?? x.StartDate) >= windowStart);
-        }
-
-        if (to is not null)
-        {
-            var windowEnd = to.Value;
-            query = query.Where(x => x.StartDate <= windowEnd);
-        }
+        query = query.OverlappingDays(x => x.StartDate, x => x.EndDate, from, to);
 
         if (stateFilter is { } wantedState)
         {

@@ -116,20 +116,7 @@ public static class TripLogEndpoints
 
         var query = db.TripLogs.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs);
 
-        // A trip may run across several days, so the window asks whether the trip overlapped it
-        // rather than whether it started inside it: a trip that ran 27 February to 2 March belongs
-        // in March as much as in February. A trip with no end date is one day long.
-        if (from is not null)
-        {
-            var start = from.Value;
-            query = query.Where(x => (x.TripDateEnd ?? x.TripDate) >= start);
-        }
-
-        if (to is not null)
-        {
-            var end = to.Value;
-            query = query.Where(x => x.TripDate <= end);
-        }
+        query = query.OverlappingDays(x => x.TripDate, x => x.TripDateEnd, from, to);
 
         if (caveId is not null)
         {
@@ -278,16 +265,7 @@ public static class TripLogEndpoints
         // withheld; the same list then answers "what have I been on" without a second door.
         var windowStart = from ?? DateOnly.FromDateTime(DateTime.UtcNow);
 
-        // The window asks whether the trip overlaps it rather than whether it starts inside it, so
-        // a trip that began yesterday and runs until tomorrow is still something the caller is on
-        // rather than something they have missed. A trip with no end date is one day long.
-        query = query.Where(x => (x.TripDateEnd ?? x.TripDate) >= windowStart);
-
-        if (to is not null)
-        {
-            var windowEnd = to.Value;
-            query = query.Where(x => x.TripDate <= windowEnd);
-        }
+        query = query.OverlappingDays(x => x.TripDate, x => x.TripDateEnd, windowStart, to);
 
         // No state is excluded by default, and that is a decision rather than an omission. A trip
         // the caller is on that has been called off is exactly the thing they most need to see on
