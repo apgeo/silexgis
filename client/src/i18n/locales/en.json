@@ -13,6 +13,7 @@
     "albums": "Albums",
     "cabinets": "Cabinets",
     "uploads": "Uploads",
+    "calendar": "Calendar",
     "trips": "Trip logs",
     "audit": "Audit",
     "cavingGroups": "Caving groups",
@@ -720,6 +721,29 @@
       "line": "Lines",
       "polygon": "Areas",
       "any": "Other"
+    }
+  },
+  "calendar": {
+    "title": "Calendar",
+    "when": "When",
+    "what": "What",
+    "kind": "Kind",
+    "state": "State",
+    "postponed": "Date not settled",
+    "togglePast": "Past",
+    "toggleTrips": "Trips",
+    "toggleOther": "Other records",
+    "toggleCancelled": "Called off",
+    "toggleMine": "Only mine",
+    "groupFilter": "Any group",
+    "omitted": "{{count}} more rows fall in these days than this page can carry. Ask for fewer days.",
+    "empty": "Nothing is recorded in these days.",
+    "emptyFiltered": "Nothing in these days matches what you asked for.",
+    "emptyNoKind": "No kind of record is selected.",
+    "failed": "The calendar could not be read.",
+    "sourceValues": {
+      "tripLog": "Trip",
+      "expedition": "Camp"
     }
   },
   "trips": {

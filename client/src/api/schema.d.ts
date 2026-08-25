@@ -1434,6 +1434,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The trips and camps a caller may read whose days fall in a window. */
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    source?: string;
+                    state?: string;
+                    cavingGroupId?: string;
+                    mine?: boolean;
+                    includePast?: boolean;
+                    includeCancelled?: boolean;
+                    sort?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CalendarResultDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files/{id}/position": {
         parameters: {
             query?: never;
@@ -13292,6 +13338,34 @@ export interface components {
             defaultTagIds?: null | number[];
             requiredMetadataKeys?: null | string[];
         };
+        CalendarEntryDto: {
+            source: components["schemas"]["CalendarSource"];
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: date */
+            start: string;
+            /** Format: date */
+            end: null | string;
+            /** Format: time */
+            startTime: null | string;
+            /** Format: time */
+            endTime: null | string;
+            state: components["schemas"]["ActivityState"];
+            placement: components["schemas"]["CalendarPlacement"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            hasPosition: boolean;
+        };
+        /** @enum {unknown} */
+        CalendarPlacement: "off" | "ahead" | "behind" | "calledOff" | "putBack";
+        CalendarResultDto: {
+            entries: components["schemas"]["CalendarEntryDto"][];
+            /** Format: int32 */
+            omitted: number;
+        };
+        /** @enum {unknown} */
+        CalendarSource: "tripLog" | "expedition";
         /** @enum {unknown} */
         CandidateGeometry: "point" | "line" | "area" | "other";
         CapabilitiesDto: {

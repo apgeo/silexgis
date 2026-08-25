@@ -13,6 +13,7 @@
     "albums": "Albume",
     "cabinets": "Dulapuri",
     "uploads": "Încărcări",
+    "calendar": "Calendar",
     "trips": "Jurnale de tură",
     "audit": "Istoric",
     "cavingGroups": "Grupuri de speologie",
@@ -720,6 +721,29 @@
       "line": "Linii",
       "polygon": "Suprafețe",
       "any": "Altele"
+    }
+  },
+  "calendar": {
+    "title": "Calendar",
+    "when": "Când",
+    "what": "Ce",
+    "kind": "Tip",
+    "state": "Stare",
+    "postponed": "Dată nestabilită",
+    "togglePast": "Trecute",
+    "toggleTrips": "Ture",
+    "toggleOther": "Alte înregistrări",
+    "toggleCancelled": "Anulate",
+    "toggleMine": "Doar ale mele",
+    "groupFilter": "Orice grup",
+    "omitted": "În aceste zile mai sunt {{count}} rânduri decât poate purta această pagină. Cere mai puține zile.",
+    "empty": "Nu este nimic înregistrat în aceste zile.",
+    "emptyFiltered": "Nimic din aceste zile nu corespunde cererii.",
+    "emptyNoKind": "Nu este selectat niciun tip de înregistrare.",
+    "failed": "Calendarul nu a putut fi citit.",
+    "sourceValues": {
+      "tripLog": "Tură",
+      "expedition": "Tabără"
     }
   },
   "trips": {

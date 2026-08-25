@@ -138,6 +138,7 @@ export const queryKeys = {
   cabinetDocuments: (id: string, params: CabinetDocumentParams) =>
     ['cabinets', id, 'documents', params] as const,
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
+  calendar: (params: CalendarParams) => ['calendar', params] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
   myTripLogs: (params: MyTripLogListParams) => ['trip-logs', 'mine', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
@@ -4552,5 +4553,62 @@ export function useSetTripChecklistItem() {
       await unwrap(api.PUT('/api/v1/trip-logs/{tripLogId}/checklist/items/{itemId}', { params }));
     },
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+export type CalendarEntry = components['schemas']['CalendarEntryDto'];
+export type CalendarResult = components['schemas']['CalendarResultDto'];
+export type CalendarSource = components['schemas']['CalendarSource'];
+export type CalendarPlacement = components['schemas']['CalendarPlacement'];
+
+/**
+ * What the caller asked of the calendar.
+ *
+ * The window is required, both ends of it, and that is the whole reason this answer can be one
+ * merged list rather than an approximation: within a bounded window each source's readable rows
+ * are a finite set, so merging them is exact. An unbounded question would have to read each
+ * source ahead and hope.
+ *
+ * There is deliberately no member naming a person. `mine` means whoever is making the request and
+ * is worked out on the server from the request itself; a parameter carrying somebody's identifier
+ * would let a reader assemble where a named person has been out of rows they may never open.
+ * `cavingGroupId` names a group and not a person, and it can only ever narrow what the reader
+ * could already read.
+ */
+export interface CalendarParams {
+  /** Inclusive, `YYYY-MM-DD`. Required. */
+  from: string;
+  /** Inclusive, `YYYY-MM-DD`. Required. */
+  to: string;
+  /** One family of dated record. Omitted means all of them, which is the point of the surface. */
+  source?: CalendarSource;
+  /** A lifecycle state spelled the way the contract spells it. */
+  state?: ActivityState;
+  /** One group's calendar: the trips it is running and the camps it owns. */
+  cavingGroupId?: string;
+  /** The rows the signed-in account is on. Takes no argument, and never will. */
+  mine?: boolean;
+  /** False narrows the window to begin no earlier than today, in the server's clock. */
+  includePast?: boolean;
+  /** False leaves out the rows that were called off. They are in by default. */
+  includeCancelled?: boolean;
+  /** One of the orders the server knows; anything else falls back to the calendar's own. */
+  sort?: string;
+}
+
+/**
+ * The dated records the reader may open whose days fall in one window.
+ *
+ * Its own key rather than a shape of any list's: it spans two families of row, so writing either
+ * of them should re-read it, and it goes stale as days pass rather than only as people edit.
+ */
+export function useCalendar(params: CalendarParams, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.calendar(params),
+    queryFn: () => unwrap(api.GET('/api/v1/calendar', { params: { query: params } })),
+    enabled: options?.enabled ?? true,
+    // Changing the window or a toggle keeps the rows on screen while the next answer arrives,
+    // rather than emptying the record under whoever is reading it.
+    placeholderData: keepPreviousData,
   });
 }

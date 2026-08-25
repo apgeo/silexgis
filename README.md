@@ -181,6 +181,18 @@ Previous versions:
   asker may not read. A trip that has been called off stays on the list, and says so, because that is the
   thing you most need to notice; the list can be narrowed to one stage of a trip's life, or to a range of
   dates.
+- **One window over everything dated** — a calendar page answers *what is happening between these two
+  days*, reading trips and expeditions together in one list you can sort, narrow to one kind, narrow to
+  a club's own, or narrow to your own. It shows what is still to come and what already happened, marks a
+  trip that has been called off and lets you switch those off, and lists a postponed one with a
+  postponed mark rather than pretending the date it still carries is one anybody is going on. A trip
+  that nobody has been shown yet is not on it — but that is only about what gets drawn: it stays exactly
+  as readable as it was, on its own page and on the trip lists, to everybody who could read it before.
+  **A calendar row never names a cave** — not the cave, not a count of caves left out — so a glance at a
+  month can never place a protected entrance; the title is shown as the person wrote it, and you open
+  the trip itself to see where it went. You have to say which days you want, the span is capped, and if
+  a window somehow holds more than the page will return it tells you **how many rows it left out**
+  rather than quietly showing you less than there is.
 - **Checklists — what a party settles before it sets off** — anyone can write a list (permit, key
   collected, gear booked, whatever the club actually checks), keep it to themselves, share it with their
   club or make it readable by everyone; an administrator's published default is nothing more than a list

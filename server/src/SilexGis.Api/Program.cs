@@ -17,6 +17,7 @@ using SilexGis.Api.Features.Audit;
 using SilexGis.Api.Features.Cabinets;
 using SilexGis.Api.Features.Checklists;
 using SilexGis.Api.Features.Crs;
+using SilexGis.Api.Features.Calendar;
 using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Dashboard;
 using SilexGis.Api.Features.Documents;
@@ -232,6 +233,7 @@ try
     api.MapMapDataEndpoints();
     api.MapSearchEndpoints();
     api.MapDashboardEndpoints();
+    api.MapCalendarEndpoints();
     api.MapGeofileEndpoints();
     api.MapTermRuleEndpoints();
     api.MapStagedImportEndpoints();
