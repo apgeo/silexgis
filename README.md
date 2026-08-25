@@ -308,6 +308,14 @@ dotnet run --project server/src/SilexGis.Api                # API on :5080
 cd client && npm ci && npm run dev                          # Vite dev server
 ```
 
+### Tests
+
+The fast checks — server build, Domain and Architecture tests, the client gate, the script
+tests — finish in about a minute; `.github/workflows/ci.yml` lists the exact commands. The API
+integration suite (Testcontainers + PostGIS) is measured in hours: `scripts/gate-affected.mjs`
+names the test classes that answer for a change so those can run first, and
+`scripts/gate-lock.mjs` makes integration runs on one machine take turns instead of colliding.
+
 ## License
 
 AGPL-3.0-or-later — see [LICENSE](LICENSE). Third-party bundled components are listed in
