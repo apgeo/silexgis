@@ -165,6 +165,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
 
+    public DbSet<CavingGroupAnnouncement> CavingGroupAnnouncements => Set<CavingGroupAnnouncement>();
+
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
 
     public DbSet<MessageTemplate> MessageTemplates => Set<MessageTemplate>();

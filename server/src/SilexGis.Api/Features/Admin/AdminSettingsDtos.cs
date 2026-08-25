@@ -89,6 +89,7 @@ public sealed record AdminSettingsDto(
     ImportSettingsDto Import,
     InterfaceSettingsDto Interface,
     NotificationSettingsDto Notifications,
+    AnnouncementSettingsDto Announcements,
     bool MailConfigured,
     bool SmsConfigured);
 
@@ -140,6 +141,33 @@ public sealed class NotificationSettingsDtoValidator : AbstractValidator<Notific
         // the person who typed it — the pruner's own fallback exists for a mistyped environment
         // variable, which nobody is standing in front of.
         RuleFor(x => x.RetentionDays).InclusiveBetween(1, MaxRetentionDays);
+}
+
+/// <summary>What an announcement to a whole caving group may cost this installation.</summary>
+/// <param name="PaidChannelsEnabled">
+/// Whether an announcement may leave by a channel that charges for every message. Off unless
+/// somebody here has said otherwise, and while it is off no such channel can be chosen, resolved
+/// or written to at all — it is not a hidden option, it is an absent one.
+/// </param>
+/// <param name="DailyPaidMessageCap">
+/// How many paid messages a day the installation will send before it refuses. Read back as the
+/// ceiling actually in force, so a page never shows a number nothing would count against.
+/// </param>
+public sealed record AnnouncementSettingsDto(bool PaidChannelsEnabled, int DailyPaidMessageCap);
+
+public sealed class AnnouncementSettingsDtoValidator : AbstractValidator<AnnouncementSettingsDto>
+{
+    /// <summary>
+    /// A thousand messages in a day. Far past what any club's roster needs and near enough to a
+    /// real invoice that a slipped digit is refused here rather than sent.
+    /// </summary>
+    private const int MaxDailyPaidMessageCap = 1000;
+
+    public AnnouncementSettingsDtoValidator() =>
+        // One is the smallest ceiling with any meaning. Zero is refused rather than read as
+        // "send nothing", because the switch above already says that unambiguously, and a form
+        // that accepted "0" and then kept a hundred would be lying to whoever typed it.
+        RuleFor(x => x.DailyPaidMessageCap).InclusiveBetween(1, MaxDailyPaidMessageCap);
 }
 
 public sealed class InterfaceSettingsDtoValidator : AbstractValidator<InterfaceSettingsDto>

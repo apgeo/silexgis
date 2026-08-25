@@ -16,6 +16,14 @@ public class NotificationMatrixTests
         | NotificationChannelKind.Email
         | NotificationChannelKind.Sms;
 
+    /// <summary>
+    /// An installation that has agreed to pay for the channels that charge, so that every cell of
+    /// every ceiling is genuinely reachable here and these tests are about the rules rather than
+    /// about what somebody has switched on. That an installation which has agreed to nothing
+    /// reaches none of them is a different claim, stated where the switch is.
+    /// </summary>
+    private const NotificationChannelKind PaidAllowed = NotificationChannelKind.Sms;
+
     /// <summary>Every cell of the matrix, so a test can state a rule over all of it at once.</summary>
     public static TheoryData<NotificationCategory, NotificationChannelKind> EveryCell()
     {
@@ -43,7 +51,7 @@ public class NotificationMatrixTests
             ? NotificationChannelChoice.Immediate
             : NotificationChannelChoice.Off;
 
-        NotificationMatrix.Resolve(category, channel, stored: null, Everything).ShouldBe(expected);
+        NotificationMatrix.Resolve(category, channel, stored: null, Everything, PaidAllowed).ShouldBe(expected);
     }
 
     [Theory]
@@ -56,19 +64,19 @@ public class NotificationMatrixTests
             // The positive half, in the same test: a channel inside the ceiling is choosable and
             // an asked-for choice is what comes back.
             NotificationMatrix.CanChoose(
-                category, channel, NotificationChannelChoice.Immediate, Everything).ShouldBeTrue();
+                category, channel, NotificationChannelChoice.Immediate, Everything, PaidAllowed).ShouldBeTrue();
             NotificationMatrix.Resolve(
-                category, channel, NotificationChannelChoice.Immediate, Everything)
+                category, channel, NotificationChannelChoice.Immediate, Everything, PaidAllowed)
                 .ShouldBe(NotificationChannelChoice.Immediate);
             return;
         }
 
         foreach (var choice in Enum.GetValues<NotificationChannelChoice>())
         {
-            NotificationMatrix.CanChoose(category, channel, choice, Everything).ShouldBeFalse();
+            NotificationMatrix.CanChoose(category, channel, choice, Everything, PaidAllowed).ShouldBeFalse();
         }
 
-        NotificationMatrix.Resolve(category, channel, NotificationChannelChoice.Immediate, Everything)
+        NotificationMatrix.Resolve(category, channel, NotificationChannelChoice.Immediate, Everything, PaidAllowed)
             .ShouldBe(NotificationChannelChoice.Off);
     }
 
@@ -108,19 +116,19 @@ public class NotificationMatrixTests
         if (NotificationCategories.IsUserConfigurable(category))
         {
             // The positive half: an ordinary category obeys what was stored.
-            NotificationMatrix.Resolve(category, channel, NotificationChannelChoice.Off, Everything)
+            NotificationMatrix.Resolve(category, channel, NotificationChannelChoice.Off, Everything, PaidAllowed)
                 .ShouldBe(NotificationChannelChoice.Off);
             NotificationMatrix
-                .CanChoose(category, channel, NotificationChannelChoice.Off, Everything)
+                .CanChoose(category, channel, NotificationChannelChoice.Off, Everything, PaidAllowed)
                 .ShouldBe(inCeiling);
             return;
         }
 
         // A stored "off" for one of these could only have been written by something that got past
         // the write path, so it is ignored rather than obeyed — wherever the category can reach.
-        NotificationMatrix.Resolve(category, channel, NotificationChannelChoice.Off, Everything)
+        NotificationMatrix.Resolve(category, channel, NotificationChannelChoice.Off, Everything, PaidAllowed)
             .ShouldBe(inCeiling ? NotificationChannelChoice.Immediate : NotificationChannelChoice.Off);
-        NotificationMatrix.CanChoose(category, channel, NotificationChannelChoice.Off, Everything)
+        NotificationMatrix.CanChoose(category, channel, NotificationChannelChoice.Off, Everything, PaidAllowed)
             .ShouldBeFalse();
     }
 
@@ -137,11 +145,11 @@ public class NotificationMatrixTests
             && !NotificationCategories.IsAlwaysImmediate(category)
             && (NotificationCategories.Ceiling(category) & channel) == channel;
 
-        NotificationMatrix.CanChoose(category, channel, NotificationChannelChoice.Daily, Everything)
+        NotificationMatrix.CanChoose(category, channel, NotificationChannelChoice.Daily, Everything, PaidAllowed)
             .ShouldBe(offerable);
 
         var resolved = NotificationMatrix.Resolve(
-            category, channel, NotificationChannelChoice.Daily, Everything);
+            category, channel, NotificationChannelChoice.Daily, Everything, PaidAllowed);
 
         if (offerable)
         {
@@ -162,7 +170,7 @@ public class NotificationMatrixTests
         // something — but never one to arrive at without being told, which is why it is asked as
         // a question rather than left for a settings page to work out.
         NotificationMatrix
-            .ReachesNobody(category, _ => NotificationChannelChoice.Off, Everything)
+            .ReachesNobody(category, _ => NotificationChannelChoice.Off, Everything, PaidAllowed)
             .ShouldBeTrue();
 
         // The positive half: one channel left on and the category still reaches its reader.
@@ -172,7 +180,7 @@ public class NotificationMatrixTests
                 channel => channel == NotificationChannelKind.InApp
                     ? NotificationChannelChoice.Immediate
                     : NotificationChannelChoice.Off,
-                Everything)
+                Everything, PaidAllowed)
             .ShouldBeFalse();
     }
 
@@ -185,8 +193,8 @@ public class NotificationMatrixTests
                 .ReachesNobody(
                     category,
                     channel => NotificationMatrix.Resolve(
-                        category, channel, NotificationChannelChoice.Off, Everything),
-                    Everything)
+                        category, channel, NotificationChannelChoice.Off, Everything, PaidAllowed),
+                    Everything, PaidAllowed)
                 .ShouldBeFalse($"{category} must still reach its reader");
         }
     }
@@ -198,7 +206,7 @@ public class NotificationMatrixTests
         // everything that reads a preference.
         var category = NotificationCategories.All.First();
 
-        NotificationMatrix.Usable(category, Everything)
+        NotificationMatrix.Usable(category, Everything, PaidAllowed)
             .ShouldBe(NotificationCategories.Ceiling(category));
         NotificationMatrix.Usable(category, NotificationChannelKind.InApp)
             .ShouldBe(NotificationChannelKind.InApp);

@@ -113,6 +113,25 @@ public sealed class NotificationChannels
     /// </summary>
     public NotificationChannelKind Installed { get; }
 
+    /// <summary>
+    /// The channels here that charge the operator for every message and whose preference cell is
+    /// in <paramref name="kinds"/> — what a day's spending is counted over.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the registered implementations rather than by mapping a delivery value back to a
+    /// preference cell. The implementation already carries both halves, and the round trip through
+    /// a value-to-cell table would be a second place the same pairing is written down — one that
+    /// only the first charging transport ever executes, and therefore one whose first execution
+    /// would be in production. Empty while nothing that charges is wired, which is the honest
+    /// answer rather than a special case: a count over no channels is zero.
+    /// </remarks>
+    public IReadOnlyList<NotificationChannel> PaidFor(NotificationChannelKind kinds) =>
+        [.. All
+            .Where(channel => channel.Kind is not NotificationChannelKind.None
+                && (NotificationChannelKinds.Paid & channel.Kind) == channel.Kind
+                && (kinds & channel.Kind) == channel.Kind)
+            .Select(channel => channel.Channel)];
+
     /// <summary>The implementation a delivery row names.</summary>
     public INotificationChannel Of(NotificationChannel channel) =>
         byChannel.TryGetValue(channel, out var found)

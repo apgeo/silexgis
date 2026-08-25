@@ -48,6 +48,17 @@ services:
       # How the header's unread count learns it has changed. Only 'poll' is implemented;
       # 'sse' is reserved for a server-pushed stream that does not exist yet.
       SILEXGIS__Notifications__BadgeTransport: ${SILEXGIS_NOTIFICATIONS_BADGE_TRANSPORT:-poll}
+      # How many members an announcement to a caving group may be written to inside the request
+      # that sends it. A larger roster is recorded once and handed out by a background pass
+      # instead, so a big club does not turn one click into a slow request holding a write
+      # transaction open. Sized against what a caving club actually is; raise it if yours is
+      # bigger and the send still feels instant.
+      SILEXGIS__Notifications__AnnouncementFanOutLimit: ${SILEXGIS_NOTIFICATIONS_ANNOUNCEMENT_FAN_OUT_LIMIT:-50}
+      # What an announcement to a caving group may cost. Both are also editable from the admin
+      # pages, and what is saved there replaces these. Off means off: while it is off no channel
+      # that charges can be chosen, resolved or sent on for an announcement at all.
+      SILEXGIS__Announcements__PaidChannelsEnabled: ${SILEXGIS_ANNOUNCEMENTS_PAID_CHANNELS_ENABLED:-false}
+      SILEXGIS__Announcements__DailyPaidMessageCap: ${SILEXGIS_ANNOUNCEMENTS_DAILY_PAID_MESSAGE_CAP:-100}
       SILEXGIS__Files__Root: /data/files
       # Largest accepted upload. The web service's proxy allows 1 GB, so anything up to that
       # works without touching it; going higher means editing client/nginx.conf and

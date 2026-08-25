@@ -8,6 +8,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Me;
@@ -130,6 +131,7 @@ public static class MeNotificationEndpoints
         SilexGisDbContext db,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IAppSettingsService settings,
         CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -139,7 +141,7 @@ public static class MeNotificationEndpoints
         }
 
         var stored = await StoredAsync(db, user.UserId, ct);
-        return TypedResults.Ok(await ReadAsync(stored, emailDelivery, smsDelivery, ct));
+        return TypedResults.Ok(await ReadAsync(stored, emailDelivery, smsDelivery, settings, ct));
     }
 
     private static async Task<Results<Ok<NotificationPreferencesDto>, ProblemHttpResult, UnauthorizedHttpResult>>
@@ -149,6 +151,7 @@ public static class MeNotificationEndpoints
             SilexGisDbContext db,
             IEmailDelivery emailDelivery,
             ISmsDelivery smsDelivery,
+            IAppSettingsService settings,
             CancellationToken ct)
     {
         var user = await userAccessor.GetAsync(ct);
@@ -156,6 +159,11 @@ public static class MeNotificationEndpoints
         {
             return TypedResults.Unauthorized();
         }
+
+        // What the installation has agreed to pay for. Asked here as well as where a message is
+        // routed, so a channel this installation will not pay for cannot be stored either — a cell
+        // nobody reads is how a preference silently stops meaning anything.
+        var paidChannelsAllowed = (await settings.GetAnnouncementsAsync(ct)).PaidChannelsAllowed;
 
         var requested = new Dictionary<(NotificationCategory, NotificationChannelKind), NotificationChannelChoice>();
         foreach (var category in request.Categories)
@@ -166,7 +174,11 @@ public static class MeNotificationEndpoints
                 // rules forbid is told so, instead of saving a page that reads back differently
                 // from what they left it at.
                 if (!NotificationMatrix.CanChoose(
-                        category.Category, channel.Channel, channel.Choice, NotificationChannelKinds.Everything))
+                        category.Category,
+                        channel.Channel,
+                        channel.Choice,
+                        NotificationChannelKinds.Everything,
+                        paidChannelsAllowed))
                 {
                     return ApiProblems.BadRequest(
                         "me.notification_choice_refused",
@@ -187,9 +199,17 @@ public static class MeNotificationEndpoints
         // bulk delete would bypass the interceptors that maintain the timestamps. Cells outside a
         // category's ceiling are left exactly as they are — a row a narrowed ceiling stranded is
         // worth nothing when it is read, which is cheaper than hunting it down here.
+        //
+        // Narrowed by the same rule the validation above and the read-back below use, and with the
+        // same answer about what this installation will pay for. Written any wider, a choice just
+        // accepted on a charging channel would be resolved back to "off" and stored that way, so
+        // the page would read back differently from what its owner left it at — and every account
+        // that ever saved would carry an inert row for a channel it may not use.
         foreach (var category in NotificationCategories.All)
         {
-            foreach (var channel in NotificationChannelKinds.Split(NotificationCategories.Ceiling(category)))
+            var writable = NotificationMatrix.Usable(
+                category, NotificationChannelKinds.Everything, paidChannelsAllowed);
+            foreach (var channel in NotificationChannelKinds.Split(writable))
             {
                 var cell = (category, channel);
                 var stored = byCell.TryGetValue(cell, out var row) ? row.Choice : (NotificationChannelChoice?)null;
@@ -197,7 +217,8 @@ public static class MeNotificationEndpoints
                     category,
                     channel,
                     requested.TryGetValue(cell, out var wanted) ? wanted : stored,
-                    NotificationChannelKinds.Everything);
+                    NotificationChannelKinds.Everything,
+                    paidChannelsAllowed);
 
                 if (row is null)
                 {
@@ -219,7 +240,7 @@ public static class MeNotificationEndpoints
         await db.SaveChangesAsync(ct);
 
         return TypedResults.Ok(await ReadAsync(
-            await StoredAsync(db, user.UserId, ct), emailDelivery, smsDelivery, ct));
+            await StoredAsync(db, user.UserId, ct), emailDelivery, smsDelivery, settings, ct));
     }
 
     /// <summary>
@@ -236,6 +257,7 @@ public static class MeNotificationEndpoints
         IReadOnlyDictionary<(NotificationCategory, NotificationChannelKind), NotificationChannelChoice> stored,
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
+        IAppSettingsService settings,
         CancellationToken ct)
     {
         // The inbox is always here: it has no transport that could be missing. Each of the others
@@ -252,11 +274,17 @@ public static class MeNotificationEndpoints
             configured |= NotificationChannelKind.Sms;
         }
 
+        // A channel that costs money is listed only once this installation has said it will pay
+        // for it. Listing it and marking it unavailable would be a switch somebody could set and
+        // nothing would ever read.
+        var paidChannelsAllowed = (await settings.GetAnnouncementsAsync(ct)).PaidChannelsAllowed;
+
         var categories = new List<NotificationCategoryDto>();
         foreach (var category in NotificationCategories.All)
         {
             var cells = NotificationChannelKinds
-                .Split(NotificationCategories.Ceiling(category))
+                .Split(NotificationMatrix.Usable(
+                    category, NotificationChannelKinds.Everything, paidChannelsAllowed))
                 .Select(channel => new NotificationChannelDto(
                     channel,
                     Cell(category, channel),
@@ -268,7 +296,11 @@ public static class MeNotificationEndpoints
 
             categories.Add(new NotificationCategoryDto(
                 category,
-                NotificationMatrix.ReachesNobody(category, channel => Cell(category, channel), NotificationChannelKinds.Everything),
+                NotificationMatrix.ReachesNobody(
+                    category,
+                    channel => Cell(category, channel),
+                    NotificationChannelKinds.Everything,
+                    paidChannelsAllowed),
                 cells));
         }
 
@@ -279,7 +311,8 @@ public static class MeNotificationEndpoints
                 category,
                 channel,
                 stored.TryGetValue((category, channel), out var choice) ? choice : null,
-                NotificationChannelKinds.Everything);
+                NotificationChannelKinds.Everything,
+                paidChannelsAllowed);
     }
 
     private static async Task<Dictionary<(NotificationCategory, NotificationChannelKind), NotificationChannelChoice>>

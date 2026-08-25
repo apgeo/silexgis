@@ -140,6 +140,8 @@ public sealed class NotificationDeliveryService(
             return claimed.Count;
         }
 
+        var paidChannelsAllowed = await PaidChannelsAllowedAsync(ct);
+
         // The same second thought applied per category: a summary claimed for today may contain
         // lines about something the recipient has since switched off, and those must not arrive.
         var stored = await db.UserNotificationPreferences
@@ -147,7 +149,8 @@ public sealed class NotificationDeliveryService(
             .ToDictionaryAsync(p => p.Category, p => p.Choice, ct);
 
         var wanted = claimed
-            .Where(d => Resolve(notifications[d.NotificationId].Category, NotificationChannelKind.Email, stored)
+            .Where(d => Resolve(
+                    notifications[d.NotificationId].Category, NotificationChannelKind.Email, stored, paidChannelsAllowed)
                 is not NotificationChannelChoice.Off)
             .ToList();
 
@@ -301,7 +304,8 @@ public sealed class NotificationDeliveryService(
         // putting their backlog back as immediate mail would answer that with one message per
         // dead row — by an operator's hand, which is the one path with nobody to complain to.
         var stored = await StoredAsync(user.Id, row.Category, ct);
-        var route = channel.Decide(user, Resolve(row.Category, channel.Kind, stored));
+        var route = channel.Decide(
+            user, Resolve(row.Category, channel.Kind, stored, await PaidChannelsAllowedAsync(ct)));
 
         if (route is NotificationRoute.Suppress)
         {
@@ -351,6 +355,15 @@ public sealed class NotificationDeliveryService(
     {
         var retention = await settings.GetNotificationsAsync(ct);
         _ = await NotificationDeliverySql.PruneAsync(db, retention.EffectiveRetentionDays, ct);
+
+        // A notice recorded for a caving group too large to write to inline carries the same words
+        // the notifications carry, so it goes under the same window. Without this it would be the
+        // one copy of somebody's message that outlived the installation's own answer about how
+        // long what it tells people is kept — and only for large clubs, which is the hardest case
+        // to notice. Ones never handed out go too: a pass that was going to happen would have
+        // happened long before the window closed.
+        var cutoff = clock.GetUtcNow().AddDays(-retention.EffectiveRetentionDays);
+        _ = await db.CavingGroupAnnouncements.Where(a => a.CreatedAt < cutoff).ExecuteDeleteAsync(ct);
     }
 
     private async Task<Dictionary<long, Notification>> NotificationsOfAsync(
@@ -391,6 +404,7 @@ public sealed class NotificationDeliveryService(
         // A user with no stored preference rows is the ordinary case, not "everything off": most
         // accounts never open the settings page, and the documented defaults are what they get.
         var stored = await StoredAsync(row.RecipientUserId, row.Category, ct);
+        var paidChannelsAllowed = await PaidChannelsAllowedAsync(ct);
 
         // Every willing channel is asked, and the answers become rows. Zero rows is an ordinary
         // outcome, not a failure: the notification has happened and is readable in the inbox
@@ -398,7 +412,7 @@ public sealed class NotificationDeliveryService(
         var answers = carriers
             .Select(channel => (
                 channel.Channel,
-                Route: channel.Decide(user, Resolve(row.Category, channel.Kind, stored))))
+                Route: channel.Decide(user, Resolve(row.Category, channel.Kind, stored, paidChannelsAllowed))))
             .ToList();
 
         var now = clock.GetUtcNow();
@@ -461,7 +475,8 @@ public sealed class NotificationDeliveryService(
         SilexGisUser user, Notification row, INotificationChannel channel, CancellationToken ct)
     {
         var stored = await StoredAsync(user.Id, row.Category, ct);
-        return channel.Decide(user, Resolve(row.Category, channel.Kind, stored))
+        return channel.Decide(
+                user, Resolve(row.Category, channel.Kind, stored, await PaidChannelsAllowedAsync(ct)))
             is NotificationRoute.Suppress;
     }
 
@@ -482,22 +497,35 @@ public sealed class NotificationDeliveryService(
     private NotificationChannelChoice Resolve(
         NotificationCategory category,
         NotificationChannelKind channel,
-        IReadOnlyDictionary<NotificationChannelKind, NotificationChannelChoice> stored) =>
+        IReadOnlyDictionary<NotificationChannelKind, NotificationChannelChoice> stored,
+        NotificationChannelKind paidChannelsAllowed) =>
         NotificationMatrix.Resolve(
             category,
             channel,
             stored.TryGetValue(channel, out var choice) ? choice : null,
-            channels.Installed);
+            channels.Installed,
+            paidChannelsAllowed);
 
     private NotificationChannelChoice Resolve(
         NotificationCategory category,
         NotificationChannelKind channel,
-        IReadOnlyDictionary<NotificationCategory, NotificationChannelChoice> stored) =>
+        IReadOnlyDictionary<NotificationCategory, NotificationChannelChoice> stored,
+        NotificationChannelKind paidChannelsAllowed) =>
         NotificationMatrix.Resolve(
             category,
             channel,
             stored.TryGetValue(category, out var choice) ? choice : null,
-            channels.Installed);
+            channels.Installed,
+            paidChannelsAllowed);
+
+    /// <summary>
+    /// The channels that charge per message and that this installation has agreed to pay for.
+    /// Read on every pass rather than held: it is an administrator's answer, it is cached for
+    /// half a minute where it is stored, and a switch turned off has to start refusing without a
+    /// restart.
+    /// </summary>
+    private async ValueTask<NotificationChannelKind> PaidChannelsAllowedAsync(CancellationToken ct) =>
+        (await settings.GetAnnouncementsAsync(ct)).PaidChannelsAllowed;
 
     /// <summary>
     /// When a delivery may really leave: the instant it would otherwise be due, moved past the

@@ -105,6 +105,7 @@ export type SecuritySettings = components['schemas']['SecuritySettingsDto'];
 export type ProtectionSettings = components['schemas']['ProtectionSettingsDto'];
 export type ImportSettings = components['schemas']['ImportSettingsDto'];
 export type NotificationSettings = components['schemas']['NotificationSettingsDto'];
+export type AnnouncementSettings = components['schemas']['AnnouncementSettingsDto'];
 export type MessageTemplate = components['schemas']['MessageTemplateDto'];
 export type ResLink = components['schemas']['ResLinkDto'];
 export type ResLinkMember = components['schemas']['ResLinkMemberDto'];
@@ -201,6 +202,7 @@ export const queryKeys = {
   cavingGroups: ['cavingGroups'] as const,
   cavers: ['cavers'] as const,
   cavingGroupMembers: (cavingGroupId: string) => ['teams', cavingGroupId, 'members'] as const,
+  cavingGroupAudience: (cavingGroupId: string) => ['teams', cavingGroupId, 'audience'] as const,
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
   objectAccess: (entityType: string, entityId: string) => ['object-access', entityType, entityId] as const,
   history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
@@ -2572,6 +2574,23 @@ function useInvalidateCavingGroups() {
   return () => void queryClient.invalidateQueries({ queryKey: ['cavingGroups'] });
 }
 
+/**
+ * What a roster edit changes, which is more than the directory row.
+ *
+ * The list of clubs carries each one's member count, so it has to be refetched — but so does the
+ * roster the edit was made in, and so does how many people an announcement to that club would
+ * reach. Refetching only the directory leaves the drawer showing the roster as it was before the
+ * edit that was just made in it.
+ */
+function useInvalidateCavingGroupRoster(cavingGroupId: string) {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['cavingGroups'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.cavingGroupMembers(cavingGroupId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.cavingGroupAudience(cavingGroupId) });
+  };
+}
+
 export function useCreateCavingGroup() {
   const invalidate = useInvalidateCavingGroups();
   return useMutation({
@@ -2582,7 +2601,7 @@ export function useCreateCavingGroup() {
 }
 
 export function useUpsertCavingGroupMember(cavingGroupId: string) {
-  const invalidate = useInvalidateCavingGroups();
+  const invalidate = useInvalidateCavingGroupRoster(cavingGroupId);
   return useMutation({
     mutationFn: (body: { caverId: string; role: CavingGroupMemberInfo['role'] }) =>
       unwrap(api.POST('/api/v1/caving-groups/{id}/members', { params: { path: { id: cavingGroupId } }, body })),
@@ -2590,8 +2609,43 @@ export function useUpsertCavingGroupMember(cavingGroupId: string) {
   });
 }
 
+/**
+ * How many people an announcement to this caving group would reach, asked before one is written.
+ *
+ * Not the roster's size: the members with no account have nowhere to receive anything and the
+ * person asking is never told their own announcement. It is the server's own count rather than
+ * one this page works out, so what somebody is shown and what is sent cannot drift apart.
+ *
+ * Left disabled for anyone who may not write to the group, so no 403 is provoked by opening a
+ * page: only the people the list already marks as able to announce ever ask.
+ */
+export function useCavingGroupAnnouncementAudience(cavingGroupId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.cavingGroupAudience(cavingGroupId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/caving-groups/{id}/announcements/audience', {
+          params: { path: { id: cavingGroupId! } },
+        }),
+      ),
+    enabled: !!cavingGroupId,
+  });
+}
+
+export function useAnnounceToCavingGroup(cavingGroupId: string) {
+  return useMutation({
+    mutationFn: (body: { message: string }) =>
+      unwrap(
+        api.POST('/api/v1/caving-groups/{id}/announcements', {
+          params: { path: { id: cavingGroupId } },
+          body,
+        }),
+      ),
+  });
+}
+
 export function useRemoveCavingGroupMember(cavingGroupId: string) {
-  const invalidate = useInvalidateCavingGroups();
+  const invalidate = useInvalidateCavingGroupRoster(cavingGroupId);
   return useMutation({
     mutationFn: async (caverId: string) => {
       const { error, response } = await api.DELETE('/api/v1/caving-groups/{id}/members/{caverId}', {

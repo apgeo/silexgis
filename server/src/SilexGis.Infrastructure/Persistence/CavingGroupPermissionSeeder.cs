@@ -91,7 +91,14 @@ public static class CavingGroupPermissionSeeder
             PermissionGroupId = managers.Id,
             Effect = AccessEffect.Allow,
             Domain = AccessDomain.CavingGroups,
-            Actions = AccessAction.Read | AccessAction.Write | AccessAction.ManagePermissions,
+            // Execute is here so the person who starts a club can write to everyone on it. It is
+            // a separate action from Write on purpose — editing a list of names and sending a
+            // message to every account on that list are different acts, and an installation can
+            // take this one back from a club's managers without taking the roster with it — but
+            // withholding it by default would leave the club's own leader unable to do the thing
+            // a club leader does, and only an installation administrator able to do it for them.
+            Actions = AccessAction.Read | AccessAction.Write | AccessAction.ManagePermissions
+                | AccessAction.Execute,
             ScopeKind = AccessScopeKind.Object,
             ScopeId = group.Id,
             GrantedBy = creatorUserId,

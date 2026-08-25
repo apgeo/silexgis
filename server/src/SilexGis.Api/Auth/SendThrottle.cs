@@ -47,6 +47,22 @@ public static class SendThrottle
     /// </summary>
     public static readonly TimeSpan AdminTestInterval = TimeSpan.FromMinutes(1);
 
+    /// <summary>
+    /// Announcements one person sends to a whole caving group. Not a code and not tied to any one
+    /// method: what is bounded here is how often an account may make the installation write to a
+    /// roster, whichever way each of those people ends up hearing about it.
+    /// </summary>
+    public const string GroupAnnouncement = "announce";
+
+    /// <summary>
+    /// How long an account waits between announcements to caving groups. Long enough that a
+    /// double-click, a retried request or a script cannot turn one notice into a stream, short
+    /// enough that somebody correcting a time they got wrong is not stuck for the evening. It is
+    /// deliberately per account and not per group: the cost being bounded is the sending, and
+    /// somebody who may write to three clubs can reach three rosters just as fast.
+    /// </summary>
+    public static readonly TimeSpan GroupAnnouncementInterval = TimeSpan.FromMinutes(5);
+
     public static Task<bool> TooSoonAsync(
         UserManager<SilexGisUser> userManager,
         SilexGisUser user,
@@ -75,6 +91,30 @@ public static class SendThrottle
 
         return DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(lastUnix) < interval;
     }
+
+    /// <summary>
+    /// The same marker for something that is not sent by any one method, so the bucket is the
+    /// purpose alone. Kept apart from the method-keyed buckets by the separator those carry.
+    /// </summary>
+    public static async Task<bool> TooSoonAsync(
+        UserManager<SilexGisUser> userManager, SilexGisUser user, TimeSpan interval, string purpose)
+    {
+        var stored = await userManager.GetAuthenticationTokenAsync(user, Provider, purpose);
+        if (stored is null || !long.TryParse(stored, CultureInfo.InvariantCulture, out var lastUnix))
+        {
+            return false;
+        }
+
+        return DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(lastUnix) < interval;
+    }
+
+    public static Task MarkSentAsync(
+        UserManager<SilexGisUser> userManager, SilexGisUser user, string purpose) =>
+        userManager.SetAuthenticationTokenAsync(
+            user,
+            Provider,
+            purpose,
+            DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
 
     public static Task MarkSentAsync(
         UserManager<SilexGisUser> userManager, SilexGisUser user, TwoFactorMethod method, string purpose) =>

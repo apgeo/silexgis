@@ -110,6 +110,7 @@
     "cancel": "Anulează",
     "edit": "Editează",
     "back": "Înapoi",
+    "continue": "Continuă",
     "saved": "Salvat.",
     "saveFailed": "Operația a eșuat. Încercați din nou.",
     "languageSaveFailed": "Limba s-a schimbat aici, dar nu a putut fi salvată în cont. Mesajele care vi se trimit pot sosi în continuare în limba anterioară.",
@@ -1103,6 +1104,20 @@
     "manage": "Administrează",
     "addMember": "Adaugă",
     "removeConfirm": "Eliminați acest membru?",
+    "announce": {
+      "open": "Anunță",
+      "title": "Anunț pentru {{name}}",
+      "message": "Anunț",
+      "placeholder": "Un singur rând \u2014 o schimbare de oră, un loc de întâlnire, o închidere.",
+      "reaches": "Persoane la care ajunge: {{people}}",
+      "reachesHint": "Membrii fără cont nu sunt numărați, iar propriul anunț nu vă este trimis niciodată. Fiecare dintre ceilalți îl primește așa cum a ales să fie anunțat.",
+      "nobody": "Nimeni de pe această listă nu are cont, deci nu are cine să fie anunțat.",
+      "confirm": "Pleacă acum către persoanele numărate mai sus. Nu poate fi retras.",
+      "send": "Trimite",
+      "done": "Trimis. Persoane anunțate: {{people}}",
+      "queued": "Se trimite \u2014 clubul este destul de mare încât anunțurile se scriu în fundal. Persoane care vor fi anunțate: {{people}}",
+      "failed": "Anunțul nu a fost trimis. Încercați din nou."
+    },
     "roles": {
       "member": "Membru",
       "admin": "Administrator",
@@ -1627,6 +1642,7 @@
         "tripPlanning": "Sunt invitat la o tură, se schimbă o tură la care particip sau o tură are nevoie de un acces pe care îl pot acorda",
         "commentReply": "Cineva răspunde la un comentariu scris de mine",
         "commentOnMine": "Cineva comentează la ceva ce îmi aparține",
+          "groupAnnouncement": "Cineva scrie unui grup din care fac parte",
         "jobCompleted": "Fișierele mele termină de procesat",
         "securityAlerts": "Alerte de securitate"
       }
@@ -1737,7 +1753,12 @@
       "notificationsTab": "Notificări",
       "notificationsIntro": "Cât timp păstrează această instalare ce le-a spus oamenilor. Ce se salvează aici înlocuiește setarea din configurația de instalare; dacă nu o atingi, aceea rămâne în vigoare.",
       "retentionDays": "Păstrează notificările (zile)",
-      "retentionDaysHint": "O notificare este ștearsă după acest interval, citită sau nu, și indiferent dacă a plecat vreodată un e-mail pentru ea. Evidența felului în care a fost trimisă dispare odată cu ea."
+      "retentionDaysHint": "O notificare este ștearsă după acest interval, citită sau nu, și indiferent dacă a plecat vreodată un e-mail pentru ea. Evidența felului în care a fost trimisă dispare odată cu ea.",
+      "announcementsIntro": "Cât poate costa această instalare un anunț către un club speologic întreg. Deocamdată nimic nu se taxează pe mesaj, așa că aceste setări stabilesc ce va fi permis atunci când va exista ceva care se taxează.",
+      "paidChannelsEnabled": "Permite anunțuri pe canale care se taxează pe mesaj",
+      "paidChannelsEnabledHint": "Oprit înseamnă oprit: cât timp este oprit, nimeni nu poate alege un astfel de canal, nicio preferință salvată pentru el nu are vreun efect și nu se creează nicio copie de trimis pe el.",
+      "dailyPaidMessageCap": "Mesaje taxate pe zi",
+      "dailyPaidMessageCapHint": "Un anunț care ar depăși această limită este refuzat în întregime, nu trimis către jumătate din listă. Mesajele deja angajate azi contează, inclusiv cele care încă așteaptă să plece."
     },
     "documentTypes": {
       "title": "Tipuri de documente",
@@ -1908,6 +1929,7 @@
       "name_notify_security_two_factor_disabled": "Autentificarea în doi pași a fost oprită",
       "name_notify_comment_reply": "Un răspuns la un comentariu",
       "name_notify_comment_on_mine": "Un comentariu la ceva al tău",
+      "name_notify_group_announcement": "Un anunț către un club speologic",
       "name_notify_digest": "Rezumat zilnic"
     },
     "importSection": "Import vectorial"
@@ -2587,6 +2609,8 @@
     "stalledHint": "Cel mai vechi mesaj care încă așteaptă a fost pus la coadă atunci. Verifică setările serverului de e-mail și trimiterea de probă din pagina de mesagerie.",
     "oldestPending": "Cel mai vechi în așteptare",
     "nothingWaiting": "Nimic în așteptare",
+    "paidToday": "Mesaje cu plată astăzi",
+    "paidTodayValue": "{{spent}} din {{cap}}",
     "byChannel": "Pe canale",
     "noDeliveries": "Nu s-a trimis încă nimic.",
     "anyStatus": "Orice stare",

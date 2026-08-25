@@ -45,12 +45,23 @@ public static class NotificationMatrix
 {
     /// <summary>
     /// The channels a category can really use here: its shipped ceiling, narrowed to what this
-    /// installation has. <b>The one call site an administrator's narrowing would be intersected
-    /// into</b> — which is why the ceiling is a set rather than a flag per channel.
+    /// installation has, narrowed again to the channels this installation has agreed to pay for.
+    /// <b>The one place any narrowing is intersected in</b> — which is why the ceiling is a set
+    /// rather than a flag per channel.
     /// </summary>
+    /// <param name="paidChannelsAllowed">
+    /// The channels that cost money and that this installation has switched on. Defaulted to none
+    /// on purpose: a caller that has not asked the administrator's answer gets the answer that
+    /// spends nothing, so forgetting to pass it makes a paid channel unreachable rather than
+    /// silently billable.
+    /// </param>
     public static NotificationChannelKind Usable(
-        NotificationCategory category, NotificationChannelKind installed) =>
-        NotificationCategories.Ceiling(category) & installed;
+        NotificationCategory category,
+        NotificationChannelKind installed,
+        NotificationChannelKind paidChannelsAllowed = NotificationChannelKind.None) =>
+        NotificationCategories.Ceiling(category)
+        & installed
+        & ~(NotificationChannelKinds.Paid & ~paidChannelsAllowed);
 
     /// <summary>
     /// What one cell of the matrix is worth. <paramref name="stored"/> is the row the user has
@@ -60,10 +71,11 @@ public static class NotificationMatrix
         NotificationCategory category,
         NotificationChannelKind channel,
         NotificationChannelChoice? stored,
-        NotificationChannelKind installed)
+        NotificationChannelKind installed,
+        NotificationChannelKind paidChannelsAllowed = NotificationChannelKind.None)
     {
         if (!NotificationChannelKinds.IsSingle(channel) ||
-            (Usable(category, installed) & channel) != channel)
+            (Usable(category, installed, paidChannelsAllowed) & channel) != channel)
         {
             return NotificationChannelChoice.Off;
         }
@@ -94,10 +106,11 @@ public static class NotificationMatrix
         NotificationCategory category,
         NotificationChannelKind channel,
         NotificationChannelChoice choice,
-        NotificationChannelKind installed)
+        NotificationChannelKind installed,
+        NotificationChannelKind paidChannelsAllowed = NotificationChannelKind.None)
     {
         if (!NotificationChannelKinds.IsSingle(channel) ||
-            (Usable(category, installed) & channel) != channel)
+            (Usable(category, installed, paidChannelsAllowed) & channel) != channel)
         {
             return false;
         }
@@ -121,8 +134,9 @@ public static class NotificationMatrix
     public static bool ReachesNobody(
         NotificationCategory category,
         Func<NotificationChannelKind, NotificationChannelChoice> cell,
-        NotificationChannelKind installed) =>
+        NotificationChannelKind installed,
+        NotificationChannelKind paidChannelsAllowed = NotificationChannelKind.None) =>
         NotificationChannelKinds
-            .Split(Usable(category, installed))
+            .Split(Usable(category, installed, paidChannelsAllowed))
             .All(channel => cell(channel) is NotificationChannelChoice.Off);
 }

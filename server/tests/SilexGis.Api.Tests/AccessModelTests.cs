@@ -164,6 +164,12 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable
             && e.ScopeId == groupId && (e.Actions & AccessAction.ManagePermissions) != 0);
         managerCtx.Entries.ShouldContain(e =>
             e.Domain == AccessDomain.Cavers && (e.Actions & AccessAction.Create) != 0);
+
+        // And can write to everyone on it. Without this the club's own leader could not announce
+        // anything and only an installation administrator could, which is not what a club is.
+        managerCtx.Entries.ShouldContain(e =>
+            e.Domain == AccessDomain.CavingGroups && e.ScopeKind == AccessScopeKind.Object
+            && e.ScopeId == groupId && (e.Actions & AccessAction.Execute) != 0);
     }
 
     [Fact]

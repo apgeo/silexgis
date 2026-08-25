@@ -110,6 +110,7 @@
     "cancel": "Cancel",
     "edit": "Edit",
     "back": "Back",
+    "continue": "Continue",
     "saved": "Saved.",
     "saveFailed": "The operation failed. Please try again.",
     "languageSaveFailed": "The language changed here, but could not be saved to your account. Messages sent to you may still arrive in the previous language.",
@@ -1103,6 +1104,20 @@
     "manage": "Manage",
     "addMember": "Add",
     "removeConfirm": "Remove this member?",
+    "announce": {
+      "open": "Announce",
+      "title": "Announce to {{name}}",
+      "message": "Announcement",
+      "placeholder": "One line \u2014 a change of time, a meeting place, a closure.",
+      "reaches": "People this reaches: {{people}}",
+      "reachesHint": "Members without an account are not counted, and you are never sent your own announcement. Each of the others receives it the way they chose to be told things.",
+      "nobody": "Nobody on this roster holds an account, so there is nobody to tell.",
+      "confirm": "This goes now to the people counted above. It cannot be taken back.",
+      "send": "Send",
+      "done": "Sent. People told: {{people}}",
+      "queued": "Being sent \u2014 this club is large enough that the notices are written in the background. People to be told: {{people}}",
+      "failed": "The announcement was not sent. Please try again."
+    },
     "roles": {
       "member": "Member",
       "admin": "Admin",
@@ -1627,6 +1642,7 @@
         "tripPlanning": "I am invited to a trip, a trip I am on changes, or a trip needs access I can grant",
         "commentReply": "Someone replies to a comment I wrote",
         "commentOnMine": "Someone comments on something of mine",
+          "groupAnnouncement": "Someone writes to a caving group I am in",
         "jobCompleted": "My uploads finish processing",
         "securityAlerts": "Security alerts"
       }
@@ -1737,7 +1753,12 @@
       "notificationsTab": "Notifications",
       "notificationsIntro": "How long this installation keeps what it has told people. What is saved here replaces the deployment's own setting; leave it alone and that setting stays in force.",
       "retentionDays": "Keep notifications for (days)",
-      "retentionDaysHint": "A notification is deleted after this, read or unread alike, and whether or not an email ever went out for it. The record of how it was sent goes with it."
+      "retentionDaysHint": "A notification is deleted after this, read or unread alike, and whether or not an email ever went out for it. The record of how it was sent goes with it.",
+      "announcementsIntro": "What an announcement to a whole caving group may cost this installation. Nothing charges per message yet, so these decide what will be allowed once something does.",
+      "paidChannelsEnabled": "Allow announcements on channels that charge per message",
+      "paidChannelsEnabledHint": "Off means off: while it is off, nobody can choose such a channel, no saved preference for one resolves to anything, and no outbound copy on one is ever created.",
+      "dailyPaidMessageCap": "Charged messages a day",
+      "dailyPaidMessageCapHint": "An announcement that would take the day past this is refused outright rather than sent to half the roster. Messages already committed today count, including ones still waiting to go out."
     },
     "documentTypes": {
       "title": "Document kinds",
@@ -1908,6 +1929,7 @@
       "name_notify_security_two_factor_disabled": "Two-step sign-in switched off",
       "name_notify_comment_reply": "A reply to a comment",
       "name_notify_comment_on_mine": "A comment on something of yours",
+      "name_notify_group_announcement": "An announcement to a caving group",
       "name_notify_digest": "Daily summary"
     },
     "importSection": "Vector import"
@@ -2587,6 +2609,8 @@
     "stalledHint": "The oldest message still waiting was queued that long ago. Check the mail server settings and the test send on the messaging page.",
     "oldestPending": "Oldest still waiting",
     "nothingWaiting": "Nothing waiting",
+    "paidToday": "Charged messages today",
+    "paidTodayValue": "{{spent}} of {{cap}}",
     "byChannel": "By channel",
     "noDeliveries": "Nothing has been sent yet.",
     "anyStatus": "Any status",

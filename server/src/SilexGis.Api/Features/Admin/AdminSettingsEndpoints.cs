@@ -55,6 +55,9 @@ public static class AdminSettingsEndpoints
         admin.MapPut("/notifications", SaveNotificationsAsync)
             .WithValidation<NotificationSettingsDto>()
             .WithSummary("Saves how long notifications are kept before they and the record of how they were sent are deleted.");
+        admin.MapPut("/announcements", SaveAnnouncementsAsync)
+            .WithValidation<AnnouncementSettingsDto>()
+            .WithSummary("Saves whether an announcement to a caving group may cost money, and how much in a day.");
         // The two routes here that make the installation send something to a destination the
         // caller types in, so both carry the per-address budget the credential surfaces use.
         // "May change the settings" is not "may message any address in the world as fast as a
@@ -270,6 +273,37 @@ public static class AdminSettingsEndpoints
         return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
     }
 
+    private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveAnnouncementsAsync(
+        AnnouncementSettingsDto request,
+        IAccessContextAccessor accessAccessor,
+        IAppSettingsService settings,
+        IEmailDelivery emailDelivery,
+        ISmsDelivery smsDelivery,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
+        {
+            return ApiProblems.Forbidden("access.forbidden");
+        }
+
+        await settings.SaveAsync(
+            AppSettingSections.Announcements,
+            new AnnouncementSettings
+            {
+                PaidChannelsEnabled = request.PaidChannelsEnabled,
+                DailyPaidMessageCap = request.DailyPaidMessageCap,
+            },
+            ct);
+
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+    }
+
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveImportAsync(
         ImportSettingsDto request,
         IAccessContextAccessor accessAccessor,
@@ -436,6 +470,7 @@ public static class AdminSettingsEndpoints
         var import = await settings.GetImportAsync(ct);
         var ui = await settings.GetInterfaceAsync(ct);
         var notifications = await settings.GetNotificationsAsync(ct);
+        var announcements = await settings.GetAnnouncementsAsync(ct);
 
         return new AdminSettingsDto(
             new MailSettingsDto(
@@ -477,6 +512,8 @@ public static class AdminSettingsEndpoints
                 import.PhotoClusterRadiusMeters),
             new InterfaceSettingsDto(ui.PanelDefaults),
             new NotificationSettingsDto(notifications.EffectiveRetentionDays),
+            new AnnouncementSettingsDto(
+                announcements.PaidChannelsEnabled, announcements.EffectiveDailyPaidMessageCap),
             await emailDelivery.IsConfiguredAsync(ct),
             await smsDelivery.IsConfiguredAsync(ct));
     }

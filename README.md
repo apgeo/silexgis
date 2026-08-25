@@ -205,6 +205,16 @@ Previous versions:
   see. And a line about something you can no longer open says exactly that, in place of a name and a
   link: you are still told that it happened — hiding that would be its own kind of leak — but nothing
   about the thing itself survives the fact that you lost access to it.
+- **A club can be written to, once, and it reaches each member the way they chose** — somebody
+  entrusted with it can send one line to a caving group, and every member with an account gets it in
+  their own list, by their own choice of mail or application, rather than as a mailing list nobody can
+  leave. Being allowed to edit a club's roster is not the same as being allowed to write to everyone on
+  it, and the two are granted separately; a club's founder can write to their own club from the start.
+  Before you send it you are told how many people it reaches, and confirming is a step of its own, so a
+  message to two hundred people is never one careless click. An installation can also say that
+  announcements may travel on a channel that charges per message — it is off unless switched on, one
+  person cannot send them in a stream, and a day's charged messages have a ceiling an administrator sets
+  and can see on the delivery page.
 - **Being asked onto a trip does not open the cave, so somebody who can open it is told** — an
   invitation grants nothing, so when a person asked onto a trip cannot read a cave the trip is about,
   the cave's owner and the full administrators get a message with a link to the cave, whether the cave

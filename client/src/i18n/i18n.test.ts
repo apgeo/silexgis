@@ -110,6 +110,7 @@ const notificationCategories: Record<NotificationCategoryName, true> = {
   tripPlanning: true,
   commentReply: true,
   commentOnMine: true,
+  groupAnnouncement: true,
 };
 
 /**

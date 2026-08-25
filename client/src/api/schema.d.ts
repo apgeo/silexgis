@@ -12159,6 +12159,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caving-groups/{id}/announcements/audience": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Says how many people an announcement to this caving group would reach. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CavingGroupAnnouncementAudienceDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caving-groups/{id}/announcements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Tells everyone on a caving group's roster something, each of them the way they chose. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CavingGroupAnnouncementRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CavingGroupAnnouncementResultDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cavers": {
         parameters: {
             query?: never;
@@ -12908,6 +12988,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/announcements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Saves whether an announcement to a caving group may cost money, and how much in a day. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AnnouncementSettingsDto"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminSettingsDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/mail/test": {
         parameters: {
             query?: never;
@@ -13195,6 +13315,7 @@ export interface components {
             import: components["schemas"]["ImportSettingsDto"];
             interface: components["schemas"]["InterfaceSettingsDto"];
             notifications: components["schemas"]["NotificationSettingsDto"];
+            announcements: components["schemas"]["AnnouncementSettingsDto"];
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
@@ -13248,6 +13369,11 @@ export interface components {
         };
         /** @enum {unknown} */
         AnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange" | "modelStation" | "modelStationRange" | "modelSurvey" | "modelSurveyRange" | "modelPoint" | "waypoint" | "waypointRange";
+        AnnouncementSettingsDto: {
+            paidChannelsEnabled: boolean;
+            /** Format: int32 */
+            dailyPaidMessageCap: number;
+        };
         AttachmentCreateRequest: {
             /** Format: uuid */
             fileId: string;
@@ -13615,6 +13741,18 @@ export interface components {
             cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
+        CavingGroupAnnouncementAudienceDto: {
+            /** Format: int32 */
+            recipients: number;
+        };
+        CavingGroupAnnouncementRequest: {
+            message: string;
+        };
+        CavingGroupAnnouncementResultDto: {
+            /** Format: int32 */
+            recipients: number;
+            queued: boolean;
+        };
         CavingGroupDto: {
             /** Format: uuid */
             id: string;
@@ -13625,6 +13763,7 @@ export interface components {
             website: null | string;
             /** Format: int32 */
             memberCount: number;
+            canAnnounce: boolean;
         };
         CavingGroupMemberDto: {
             /** Format: uuid */
@@ -15158,7 +15297,7 @@ export interface components {
             isProtected: boolean;
         };
         /** @enum {unknown} */
-        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "commentReply" | "commentOnMine" | null;
+        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "commentReply" | "commentOnMine" | "groupAnnouncement" | null;
         NotificationCategoryDto: {
             category: components["schemas"]["NotificationCategory"];
             reachesNobody: boolean;
@@ -15236,6 +15375,10 @@ export interface components {
             oldestPendingCreatedAt: null | string;
             /** Format: int64 */
             oldestPendingAgeSeconds: null | number;
+            /** Format: int32 */
+            paidMessagesToday: number;
+            /** Format: int32 */
+            dailyPaidMessageCap: number;
         };
         NotificationPreferencesDto: {
             configuredChannels: components["schemas"]["NotificationChannelKind"][];

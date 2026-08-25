@@ -9,7 +9,9 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain;
+using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
@@ -458,12 +460,16 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         Cell(after, "inApp").GetProperty("canDefer").GetBoolean().ShouldBeFalse();
 
         // One save writes the whole matrix, so there is no half-stored state to reason about
-        // later: every category against every channel that category may ever use.
+        // later: every category against every channel that category may actually use here. Not
+        // every channel in its ceiling — a channel this installation will not pay for is masked
+        // out of the write by the same rule that masks it out of the read, so no row is stored for
+        // a cell nobody could set and nothing would resolve.
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var stored = await db.UserNotificationPreferences.CountAsync(p => p.UserId == myId);
-        stored.ShouldBe(NotificationCategories.All
-            .Sum(c => NotificationChannelKinds.Split(NotificationCategories.Ceiling(c)).Count()));
+        stored.ShouldBe(NotificationCategories.All.Sum(c => NotificationChannelKinds
+            .Split(NotificationMatrix.Usable(c, NotificationChannelKinds.Everything))
+            .Count()));
 
         static JsonElement Cell(JsonElement category, string channel) =>
             category.GetProperty("channels").EnumerateArray()
@@ -540,6 +546,72 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await ProblemCodeAsync(response)).ShouldBe("me.notification_choice_refused");
+    }
+
+    [Fact]
+    public async Task A_channel_the_installation_pays_for_is_stored_as_the_member_left_it()
+    {
+        // The whole point of the switch: while the installation pays for nothing, a member cannot
+        // choose the charging channel at all; once it does, the choice they make is the choice
+        // that comes back. The failure this guards against is silent and one-sided — a write path
+        // narrower than the page's own rule accepts the choice, resolves it back to "off" and
+        // stores that, so the member reopens the page and finds it undone with no error anywhere.
+        (await SetGroupAnnouncementSmsAsync("immediate")).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        await SetPaidChannelsAsync(true);
+        try
+        {
+            var saved = await SetGroupAnnouncementSmsAsync("immediate");
+            saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+
+            // What the page reads back from the save itself...
+            JsonDocument.Parse(await saved.Content.ReadAsStringAsync()).RootElement
+                .GetProperty("categories").EnumerateArray()
+                .Single(c => c.GetProperty("category").GetString() == "groupAnnouncement")
+                .GetProperty("channels").EnumerateArray()
+                .Single(c => c.GetProperty("channel").GetString() == "sms")
+                .GetProperty("choice").GetString().ShouldBe("immediate");
+
+            // ...and what was actually written down, which is the half a read-back sharing the
+            // same rule could agree with while both were wrong.
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var row = await db.UserNotificationPreferences.AsNoTracking().SingleAsync(
+                p => p.UserId == myId
+                    && p.Category == NotificationCategory.GroupAnnouncement
+                    && p.Channel == NotificationChannelKind.Sms);
+            row.Choice.ShouldBe(NotificationChannelChoice.Immediate);
+        }
+        finally
+        {
+            await SetPaidChannelsAsync(false);
+        }
+    }
+
+    private Task<HttpResponseMessage> SetGroupAnnouncementSmsAsync(string choice) =>
+        me.PutAsJsonAsync("/api/v1/me/notifications/", new
+        {
+            categories = new[]
+            {
+                new
+                {
+                    category = "groupAnnouncement",
+                    channels = new[] { new { channel = "sms", choice } },
+                },
+            },
+        });
+
+    /// <summary>Says whether this installation will pay for messages, as the administrator's form does.</summary>
+    /// <remarks>
+    /// Cleared again afterwards: every class here shares one database, and an installation-wide
+    /// answer left switched on would follow the next test class into its own assertions.
+    /// </remarks>
+    private async Task SetPaidChannelsAsync(bool pay)
+    {
+        using var scope = factory.Services.CreateScope();
+        var settings = scope.ServiceProvider.GetRequiredService<IAppSettingsService>();
+        await settings.SaveAsync(
+            AppSettingSections.Announcements, new AnnouncementSettings { PaidChannelsEnabled = pay });
     }
 
     [Fact]

@@ -9,6 +9,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
 
@@ -35,10 +36,23 @@ public sealed record NotificationDeliveryCountDto(
 /// mail server has stopped answering: a pending count alone is healthy at any size as long as it
 /// keeps moving, and a client's own clock cannot be trusted to work the age out.
 /// </param>
+/// <param name="PaidMessagesToday">
+/// How many of today's messages went out on a channel that charges for each one, counted since
+/// midnight UTC and including ones still waiting: money committed is money spent. It belongs here
+/// rather than on a page of its own — this is already where an operator comes to ask what is
+/// leaving the installation, and what it is costing is the same question. Zero while nothing that
+/// charges is wired, which is every installation today.
+/// </param>
+/// <param name="DailyPaidMessageCap">
+/// What the count above is refused past. Shown beside it so the number means something: a count
+/// with no ceiling next to it cannot tell an operator whether the next announcement will go.
+/// </param>
 public sealed record NotificationHealthDto(
     IReadOnlyList<NotificationDeliveryCountDto> Counts,
     DateTimeOffset? OldestPendingCreatedAt,
-    long? OldestPendingAgeSeconds);
+    long? OldestPendingAgeSeconds,
+    int PaidMessagesToday,
+    int DailyPaidMessageCap);
 
 /// <summary>
 /// One delivery, as the operator diagnosing it needs to see it.
@@ -139,6 +153,8 @@ public static class NotificationHealthEndpoints
     private static async Task<Results<Ok<NotificationHealthDto>, UnauthorizedHttpResult, ProblemHttpResult>> HealthAsync(
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
+        NotificationChannels channels,
+        IAppSettingsService settings,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -171,6 +187,12 @@ public static class NotificationHealthEndpoints
             ? (long)Math.Max(0, (clock.GetUtcNow() - oldest).TotalSeconds)
             : (long?)null;
 
+        // Counted by the same code the send refuses with, so the headroom shown here and the
+        // headroom the next announcement finds are the same number.
+        var announcements = await settings.GetAnnouncementsAsync(ct);
+        var paidChannels = PaidMessageBudget.ChannelsFor(channels, announcements);
+        var paidToday = await PaidMessageBudget.SpentTodayAsync(db, paidChannels, clock, ct);
+
         return TypedResults.Ok(new NotificationHealthDto(
             [
                 .. counts
@@ -178,7 +200,9 @@ public static class NotificationHealthEndpoints
                     .Select(c => new NotificationDeliveryCountDto(c.Channel, c.Status, c.Count)),
             ],
             oldestPending,
-            age));
+            age,
+            paidToday,
+            announcements.EffectiveDailyPaidMessageCap));
     }
 
     private static async Task<Results<Ok<PagedResult<NotificationDeliveryDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(

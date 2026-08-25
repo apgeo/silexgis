@@ -106,4 +106,10 @@ public static class ProcessingJobKinds
     /// Delete documents whose restore window has run out, and the bytes they hold. Scheduled.
     /// </summary>
     public const string DocumentPurge = "document-purge";
+
+    /// <summary>
+    /// Write the notifications for a notice sent to a caving group whose roster was too large to
+    /// write to inside the request that sent it.
+    /// </summary>
+    public const string CavingGroupAnnouncement = "caving-group-announcement";
 }

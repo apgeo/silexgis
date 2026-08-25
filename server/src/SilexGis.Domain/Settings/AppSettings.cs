@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
 
 namespace SilexGis.Domain.Settings;
@@ -246,6 +247,62 @@ public sealed record NotificationSettings
     public int EffectiveRetentionDays => RetentionDays > 0 ? RetentionDays : DefaultRetentionDays;
 }
 
+/// <summary>
+/// What an announcement to a whole caving group is allowed to cost.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Its own section rather than another key on the notification one, because saving a section
+/// replaces the whole stored document: a form that posts only the retention window would reset
+/// anything sharing that document back to its default, and a switch that quietly turns itself off
+/// when somebody edits an unrelated field is worse than no switch.
+/// </para>
+/// <para>
+/// Both values exist for the same reason. An announcement is the one message this application
+/// sends on purpose to a roster, and the transports worth having for it charge per message, so the
+/// installation says whether it is willing to pay at all and then how much in a day.
+/// </para>
+/// </remarks>
+public sealed record AnnouncementSettings
+{
+    /// <summary>
+    /// How many paid messages a day the installation is willing to send before it refuses. A
+    /// hundred: enough for one announcement to a large club and something left over, small enough
+    /// that a mistake costs a noticeable amount rather than a bill. An installation that means to
+    /// spend more raises it; one that does not should not discover the default by being invoiced.
+    /// </summary>
+    public const int DefaultDailyPaidMessageCap = 100;
+
+    /// <summary>
+    /// Whether an announcement may leave by a channel that charges for every message. <b>Off, so
+    /// an installation opts into spending money rather than inheriting it.</b> While it is off the
+    /// paid channels are not merely hidden: they are masked out of what the category can use at
+    /// all, so no preference for one can be stored, none can be resolved, and no outbound copy on
+    /// one can be created.
+    /// </summary>
+    public bool PaidChannelsEnabled { get; init; }
+
+    /// <summary>How many paid messages a day this installation will send.</summary>
+    /// <remarks>
+    /// Zero and below are refused in favour of the default rather than read as "send nothing",
+    /// because a mistyped environment variable and a mistyped form field must fail the same way,
+    /// and the switch above already says "nothing" unambiguously. Switching the paid channels off
+    /// is how an installation spends nothing; a cap of zero is somebody's slip.
+    /// </remarks>
+    public int DailyPaidMessageCap { get; init; } = DefaultDailyPaidMessageCap;
+
+    /// <summary>The ceiling to actually count against, with a nonsensical one refused.</summary>
+    public int EffectiveDailyPaidMessageCap =>
+        DailyPaidMessageCap > 0 ? DailyPaidMessageCap : DefaultDailyPaidMessageCap;
+
+    /// <summary>
+    /// The paid channels this installation has agreed to, as a set to intersect into what a
+    /// category may use. Empty while the switch is off, which is what makes "off" structural.
+    /// </summary>
+    public NotificationChannelKind PaidChannelsAllowed =>
+        PaidChannelsEnabled ? NotificationChannelKinds.Paid : NotificationChannelKind.None;
+}
+
 public static class AppSettingSections
 {
     public const string Mail = "mail";
@@ -262,6 +319,8 @@ public static class AppSettingSections
 
     public const string Notifications = "notifications";
 
+    public const string Announcements = "announcements";
+
     public static IReadOnlyList<string> All { get; } =
-        [Mail, Sms, Security, Protection, Import, Interface, Notifications];
+        [Mail, Sms, Security, Protection, Import, Interface, Notifications, Announcements];
 }

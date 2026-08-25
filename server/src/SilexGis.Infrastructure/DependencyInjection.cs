@@ -220,6 +220,7 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, DirectoryImportHandler>();
         services.AddScoped<IProcessingJobHandler, UploadSessionSweepHandler>();
         services.AddScoped<IProcessingJobHandler, DocumentPurgeHandler>();
+        services.AddScoped<IProcessingJobHandler, CavingGroupAnnouncementHandler>();
         services.AddHostedService<ProcessingJobWorker>();
         services.AddHostedService<UploadSessionScheduler>();
 

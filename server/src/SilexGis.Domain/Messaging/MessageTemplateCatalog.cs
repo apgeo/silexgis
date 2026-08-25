@@ -62,6 +62,15 @@ public static class MessageTemplateCatalog
 
     public const string NotifyCavingGroupRemoved = "notify.caving-group-removed";
 
+    /// <summary>
+    /// Somebody wrote to a whole caving group. The one message here whose wording is partly the
+    /// sender's: everything else in this catalogue reports a fact the application already knows,
+    /// and this one carries a line a person typed. It arrives in the subject rather than the body
+    /// because that is the half a reader sees inside the application — the body is written for a
+    /// mailbox — and a notice nobody can read where they were told about it is not a notice.
+    /// </summary>
+    public const string NotifyGroupAnnouncement = "notify.group-announcement";
+
     public const string NotifyPermissionGranted = "notify.permission-granted";
 
     public const string NotifyTripParticipation = "notify.trip-participation";
@@ -384,6 +393,41 @@ public static class MessageTemplateCatalog
 
                     {actorName} v-a eliminat din grupul {cavingGroupName} pe {appName}. Este posibil să nu
                     mai aveți acces la ce mai vedea acel grup.
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyGroupAnnouncement,
+            MessageChannel.Email,
+            "Someone with the right to do so wrote to everybody on a caving group's roster.",
+            [AppName, DisplayName, ActorName, "cavingGroupName", "announcement", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{actorName} wrote to {cavingGroupName}: {announcement}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} wrote to the caving group {cavingGroupName}:
+
+                    {announcement}
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "{actorName} a scris grupului {cavingGroupName}: {announcement}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a scris grupului {cavingGroupName}:
+
+                    {announcement}
+
+                    {url}
 
                     {unsubscribeUrl}
                     """),

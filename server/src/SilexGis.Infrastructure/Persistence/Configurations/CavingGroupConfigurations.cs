@@ -54,3 +54,27 @@ public sealed class CavingGroupMembershipConfiguration : IEntityTypeConfiguratio
         builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.CavingGroupId).OnDelete(DeleteBehavior.Cascade);
     }
 }
+
+/// <summary>A notice waiting to be handed out to a roster too large to write to inline.</summary>
+public sealed class CavingGroupAnnouncementConfiguration : IEntityTypeConfiguration<CavingGroupAnnouncement>
+{
+    public void Configure(EntityTypeBuilder<CavingGroupAnnouncement> builder)
+    {
+        builder.ToTable("caving_group_announcements");
+        builder.Property(x => x.Id).ValueGeneratedNever();
+        builder.Property(x => x.Message).HasMaxLength(200);
+        builder.Property(x => x.CavingGroupName).HasMaxLength(200);
+        builder.Property(x => x.SenderName).HasMaxLength(200);
+
+        // Deleting the group takes its pending notices with it: a notice about a club that no
+        // longer exists is not worth handing out, and the message names the club in every line.
+        builder.HasOne<CavingGroup>().WithMany()
+            .HasForeignKey(x => x.CavingGroupId).OnDelete(DeleteBehavior.Cascade);
+
+        // What is still waiting, and nothing else. The handed-out rows are the overwhelming
+        // majority within minutes of being written, so the index that finds work stays small.
+        builder.HasIndex(x => x.CreatedAt)
+            .HasFilter("expanded_at IS NULL")
+            .HasDatabaseName("ix_caving_group_announcements_pending");
+    }
+}

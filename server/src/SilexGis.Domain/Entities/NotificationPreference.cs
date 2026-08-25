@@ -51,6 +51,15 @@ public enum NotificationCategory : short
     /// the same thing as being spoken to.
     /// </summary>
     CommentOnMine = 8,
+
+    /// <summary>
+    /// Somebody with the right to do so wrote to a caving group this person is on the roster of.
+    /// The first message here that is a deliberate broadcast rather than a side effect of a
+    /// change: everything else reports something that happened to one person, and this one
+    /// reports something somebody decided to say to everybody. Which is why it is the category
+    /// whose fan-out has to be bounded rather than merely correct.
+    /// </summary>
+    GroupAnnouncement = 9,
 }
 
 /// <summary>
@@ -89,10 +98,12 @@ public enum NotificationChannelKind : short
     Email = 2,
 
     /// <summary>
-    /// Text message. In the vocabulary and in no category's ceiling: the transport exists for
-    /// sign-in codes, but nothing here has yet made the case that a notification is worth what a
-    /// text message costs. Naming it keeps the ceiling honest — a channel outside a category's
-    /// ceiling can never be chosen, and this is the one that proves it.
+    /// Text message. The one channel here that costs the operator money per message, which is why
+    /// it is named in <see cref="NotificationChannelKinds.Paid"/> and why only the one category
+    /// somebody sends on purpose to a roster has it in its ceiling. Being in a ceiling is not the
+    /// same as being reachable: a paid channel is additionally masked out unless the installation
+    /// has said it will pay for that kind of message, and nothing implements the transport as a
+    /// notification channel yet, so today it resolves to nothing from both directions at once.
     /// </summary>
     Sms = 4,
 }
@@ -141,6 +152,15 @@ public static class NotificationChannelKinds
         NotificationChannelKind.InApp | NotificationChannelKind.Email | NotificationChannelKind.Sms;
 
     /// <summary>
+    /// The channels that cost the operator money for every message that leaves. One home for the
+    /// question, because two things ask it and must agree: what an installation has to switch on
+    /// deliberately before it can be reached at all, and what counts against the day's ceiling on
+    /// spending. A channel added here is refused everywhere until somebody chooses to pay for it,
+    /// which is the safe direction to be wrong in.
+    /// </summary>
+    public static NotificationChannelKind Paid { get; } = NotificationChannelKind.Sms;
+
+    /// <summary>
     /// Whether a channel can hold messages back and send them as one. Only email can: an inbox
     /// entry appears when the event happens because it is the event's own record, and a batched
     /// text message would be one long message rather than a summary anybody reads.
@@ -158,17 +178,6 @@ public static class NotificationChannelKinds
     public static IEnumerable<NotificationChannelKind> Split(NotificationChannelKind channels) =>
         All.Where(channel => (channels & channel) == channel);
 
-    /// <summary>
-    /// The matrix channel a delivery row's channel is a preference about. Loud when it is not one:
-    /// a transport that leaves the system and has no cell in the matrix is a wiring error that
-    /// would otherwise present itself as messages nobody can switch off.
-    /// </summary>
-    public static NotificationChannelKind Of(NotificationChannel channel) => channel switch
-    {
-        NotificationChannel.Email => NotificationChannelKind.Email,
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(channel), channel, "This delivery channel has no cell in the preference matrix."),
-    };
 }
 
 /// <summary>The notification vocabulary and its defaults, in one place.</summary>
@@ -195,6 +204,13 @@ public static class NotificationCategories
         NotificationCategory.TripPlanning => InboxAndMail,
         NotificationCategory.CommentReply => InboxAndMail,
         NotificationCategory.CommentOnMine => InboxAndMail,
+        // The only category whose ceiling names a channel that charges for every message. An
+        // announcement is the one thing here somebody composes and aims at a roster, and a club
+        // whose meeting place has changed at short notice has a real argument for a text. Naming
+        // it here only says the category may use it: whether this installation will pay for it is
+        // a separate answer, intersected in at the same one place the ceiling is, and off until
+        // somebody says otherwise.
+        NotificationCategory.GroupAnnouncement => InboxAndMail | NotificationChannelKind.Sms,
         // A category added to the enum but not named here reaches nobody anywhere, rather than
         // surprising everyone with messages they never asked for.
         _ => NotificationChannelKind.None,

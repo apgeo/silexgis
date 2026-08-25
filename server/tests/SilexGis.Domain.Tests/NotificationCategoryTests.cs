@@ -43,9 +43,25 @@ public class NotificationCategoryTests
 
     [Fact]
     public void A_channel_a_category_may_never_use_is_off_by_default() =>
-        NotificationCategories.All.ShouldAllBe(c =>
-            NotificationCategories.Default(c, NotificationChannelKind.Sms)
-                == NotificationChannelChoice.Off);
+        // Stated over every category and every channel rather than over the one channel most of
+        // them cannot use, because that is the rule: a default outside the ceiling would be a
+        // preference nothing could act on, written into everybody's account.
+        NotificationCategories.All.ShouldAllBe(category =>
+            NotificationChannelKinds.All
+                .Where(channel => (NotificationCategories.Ceiling(category) & channel) != channel)
+                .All(channel => NotificationCategories.Default(category, channel)
+                    == NotificationChannelChoice.Off));
+
+    [Fact]
+    public void Only_the_message_somebody_composes_for_a_roster_may_ever_cost_money() =>
+        // Every category but one is a side effect of something that happened, and none of those is
+        // worth a charge per recipient. The exception is the one message a person writes and aims
+        // at a club, which is why the ceiling is where this is decided and not the transport.
+        NotificationCategories.All
+            .Where(category =>
+                (NotificationCategories.Ceiling(category) & NotificationChannelKinds.Paid)
+                    != NotificationChannelKind.None)
+            .ShouldBe([NotificationCategory.GroupAnnouncement]);
 
     [Fact]
     public void Not_being_switchable_off_and_not_being_deferrable_are_the_same_categories()
@@ -85,6 +101,7 @@ public class NotificationCategoryTests
         ((short)NotificationCategory.TripPlanning).ShouldBe((short)5);
         ((short)NotificationCategory.CommentReply).ShouldBe((short)7);
         ((short)NotificationCategory.CommentOnMine).ShouldBe((short)8);
+        ((short)NotificationCategory.GroupAnnouncement).ShouldBe((short)9);
 
         ((short)NotificationChannelKind.InApp).ShouldBe((short)1);
         ((short)NotificationChannelKind.Email).ShouldBe((short)2);
