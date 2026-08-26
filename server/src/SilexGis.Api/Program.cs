@@ -21,6 +21,7 @@ using SilexGis.Api.Features.Calendar;
 using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Dashboard;
 using SilexGis.Api.Features.Documents;
+using SilexGis.Api.Features.Events;
 using SilexGis.Api.Features.Expeditions;
 using SilexGis.Api.Features.Export;
 using SilexGis.Api.Features.Files;
@@ -259,6 +260,7 @@ try
     api.MapTripChecklistEndpoints();
     api.MapChecklistEndpoints();
     api.MapExpeditionEndpoints();
+    api.MapEventEndpoints();
     api.MapExpeditionReportEndpoints();
     api.MapExpeditionMapEndpoints();
     api.MapExpeditionLeadsEndpoints();

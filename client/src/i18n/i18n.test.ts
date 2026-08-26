@@ -70,6 +70,7 @@ const accessDomains: Record<AccessDomainName, true> = {
   documents: true,
   expeditions: true,
   checklists: true,
+  events: true,
   mapLayers: true,
   tags: true,
   hierarchies: true,
@@ -140,6 +141,7 @@ const activityStates: Record<ActivityState, true> = {
 const calendarSources: Record<CalendarSource, true> = {
   tripLog: true,
   expedition: true,
+  event: true,
 };
 
 // EN and RO must be maintained together.

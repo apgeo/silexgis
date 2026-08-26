@@ -1441,7 +1441,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The trips and camps a caller may read whose days fall in a window. */
+        /** The trips, camps and events a caller may read whose days fall in a window. */
         get: {
             parameters: {
                 query?: {
@@ -9823,6 +9823,236 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paged events, most recent first; visibility-filtered. Narrowed by a date window the event overlaps, by a word in its title, by kind and by lifecycle state. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                    from?: string;
+                    to?: string;
+                    search?: string;
+                    kind?: string;
+                    state?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfEventDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates an event (Create permission); the caller becomes owner. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EventWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The audience an event would get if its author named none, so a form can show the answer the write would apply rather than guessing at it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventDefaultsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A single event. Emits the version token its state route requires back. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventDto"];
+                    };
+                };
+            };
+        };
+        /** Full update (Write permission). The lifecycle state is not part of it. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EventWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes an event and the rules anchored on it. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{id}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Moves an event to another lifecycle state (Write permission). One endpoint rather than a verb per state: an event has eight states and the moves between them are a table, not a handful of named acts. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EventTransitionRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expeditions/{id}/report": {
         parameters: {
             query?: never;
@@ -11099,7 +11329,7 @@ export interface paths {
         };
         /**
          * Rules anchored on this object (ManagePermissions). A rule carrying a camp was written by that camp's sharing: it is shown here and withdrawn there.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
          */
         get: {
             parameters: {
@@ -11126,7 +11356,7 @@ export interface paths {
         };
         /**
          * Replaces the rules authored here, bounded by what the caller holds. A rule a camp's sharing wrote is left exactly as it is.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
          */
         put: {
             parameters: {
@@ -11171,7 +11401,7 @@ export interface paths {
         };
         /**
          * What the caller may do here; ?explain=true names the deciding rule.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
          */
         get: {
             parameters: {
@@ -13082,7 +13312,7 @@ export interface components {
             actions: components["schemas"]["AccessAction"][];
         };
         /** @enum {unknown} */
-        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "expeditions" | "checklists";
+        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "expeditions" | "checklists" | "events";
         /** @enum {unknown} */
         AccessEffect: "allow" | "deny";
         AccessEntryDto: {
@@ -13351,6 +13581,7 @@ export interface components {
             startTime: null | string;
             /** Format: time */
             endTime: null | string;
+            kind: null | components["schemas"]["EventKind"];
             state: components["schemas"]["ActivityState"];
             placement: components["schemas"]["CalendarPlacement"];
             /** Format: uuid */
@@ -13365,7 +13596,7 @@ export interface components {
             omitted: number;
         };
         /** @enum {unknown} */
-        CalendarSource: "tripLog" | "expedition";
+        CalendarSource: "tripLog" | "expedition" | "event";
         /** @enum {unknown} */
         CandidateGeometry: "point" | "line" | "area" | "other";
         CapabilitiesDto: {
@@ -13947,6 +14178,61 @@ export interface components {
             positionQuality: components["schemas"]["PositionQuality"];
             /** Format: date */
             surveyedAt: null | string;
+        };
+        EventDefaultsDto: {
+            visibility: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+        };
+        EventDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            description?: null | string;
+            kind: components["schemas"]["EventKind"];
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate?: null | string;
+            /** Format: time */
+            startTime?: null | string;
+            /** Format: time */
+            endTime?: null | string;
+            place?: null | string;
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            visibility: components["schemas"]["Visibility"];
+            state: components["schemas"]["ActivityState"];
+            /** Format: date-time */
+            publishedAt?: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {unknown} */
+        EventKind: "clubMeeting" | "training" | "maintenanceDay" | "gearCheck" | "conference" | "deadline" | null;
+        EventTransitionRequest: {
+            state?: null | components["schemas"]["ActivityState"];
+        };
+        EventWriteRequest: {
+            title?: string;
+            description?: null | string;
+            kind?: components["schemas"]["EventKind"];
+            /** Format: date */
+            startDate?: string;
+            /** Format: date */
+            endDate?: null | string;
+            /** Format: time */
+            startTime?: null | string;
+            /** Format: time */
+            endTime?: null | string;
+            place?: null | string;
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            visibility?: null | components["schemas"]["Visibility"];
         };
         ExpeditionDto: {
             /** Format: uuid */
@@ -15275,6 +15561,15 @@ export interface components {
         };
         PagedResultOfDocumentCommentDto: {
             items: components["schemas"]["DocumentCommentDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfEventDto: {
+            items: components["schemas"]["EventDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */

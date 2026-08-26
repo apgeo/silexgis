@@ -5,7 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { CalendarEntry, CalendarParams } from '../../api/hooks.ts';
 
-const { calendarSpy } = vi.hoisted(() => ({ calendarSpy: vi.fn() }));
+const { calendarSpy, navigateSpy } = vi.hoisted(() => ({
+  calendarSpy: vi.fn(),
+  navigateSpy: vi.fn(),
+}));
+
+vi.mock('react-router-dom', async () => ({
+  ...(await vi.importActual<typeof import('react-router-dom')>('react-router-dom')),
+  useNavigate: () => navigateSpy,
+}));
 
 vi.mock('../../api/hooks.ts', () => ({
   useCalendar: (params: CalendarParams, options?: { enabled?: boolean }) =>
@@ -30,6 +38,7 @@ const rowShape: Record<keyof CalendarEntry, true> = {
   end: true,
   startTime: true,
   endTime: true,
+  kind: true,
   state: true,
   placement: true,
   cavingGroupId: true,
@@ -47,6 +56,7 @@ function row(overrides: Partial<CalendarEntry> = {}): CalendarEntry {
     end: null,
     startTime: null,
     endTime: null,
+    kind: null,
     state: 'planned',
     placement: 'ahead',
     cavingGroupId: null,
@@ -89,6 +99,7 @@ function show() {
 afterEach(cleanup);
 beforeEach(() => {
   calendarSpy.mockReset();
+  navigateSpy.mockReset();
   answer([row()]);
 });
 
@@ -147,7 +158,7 @@ describe('the calendar record', () => {
    * Narrowing to one family is a question the answer understands; asking for neither is not, and
    * a request that could only come back empty is not worth making.
    */
-  it('names one family when only one is wanted, and asks nothing when neither is', () => {
+  it('names the families it wants, and asks nothing when it wants none', () => {
     show();
 
     fireEvent.click(screen.getByTestId('calendar-toggle-other'));
@@ -156,6 +167,52 @@ describe('the calendar record', () => {
     fireEvent.click(screen.getByTestId('calendar-toggle-trips'));
     expect(lastEnabled()).toBe(false);
     expect(screen.getByTestId('calendar-empty').textContent).toContain('No kind of record');
+  });
+
+  /**
+   * "Everything except the trips" is more than one family now that there are three, and a
+   * narrowing that could only name one would drop the family it left out of a record that says
+   * nothing is missing — the failure nobody sees, because an absent calendar row looks exactly
+   * like a day with nothing on it.
+   */
+  it('keeps every non-trip family when the trips are turned off', () => {
+    show();
+
+    fireEvent.click(screen.getByTestId('calendar-toggle-trips'));
+    expect(lastEnabled()).toBe(true);
+    expect(lastParams().source?.split(',').sort()).toEqual(['event', 'expedition']);
+  });
+
+  /**
+   * A row leads to its own record and to no other. The families are three and the addresses are
+   * three; a row that opened another family's page would be a dead end on the one surface whose
+   * whole purpose is leading somewhere.
+   */
+  it('opens each family of row at its own address', () => {
+    const cases: [CalendarEntry['source'], string][] = [
+      ['tripLog', '/trip-logs/'],
+      ['expedition', '/expeditions/'],
+      ['event', '/events/'],
+    ];
+
+    for (const [source, prefix] of cases) {
+      answer([row({ source, id: '99999999-9999-9999-9999-999999999999' })]);
+      show();
+      fireEvent.click(screen.getByText('Coiba Mare recce'));
+      expect(navigateSpy).toHaveBeenLastCalledWith(`${prefix}99999999-9999-9999-9999-999999999999`);
+      cleanup();
+    }
+  });
+
+  /**
+   * The one source that is more than one thing says which thing it is. A permit deadline and a
+   * social evening drawn as the same word would be indistinguishable to somebody scanning a month.
+   */
+  it('draws an event by its own kind rather than by its family', () => {
+    answer([row({ source: 'event', kind: 'deadline' })]);
+    show();
+
+    expect(screen.getByText('Deadline')).toBeTruthy();
   });
 
   /**
@@ -213,6 +270,7 @@ describe('the calendar record', () => {
       'end',
       'startTime',
       'endTime',
+      'kind',
       'state',
       'placement',
       'cavingGroupId',

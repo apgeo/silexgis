@@ -25,22 +25,22 @@ public static class CavingGroupPermissionSeeder
     [
         AccessDomain.Features, AccessDomain.TripLogs, AccessDomain.Geofiles,
         AccessDomain.GeoreferencedMaps, AccessDomain.MapViews, AccessDomain.Documents,
-        AccessDomain.Expeditions, AccessDomain.Checklists,
+        AccessDomain.Expeditions, AccessDomain.Checklists, AccessDomain.Events,
     ];
 
     /// <summary>
-    /// What the starter ruleset grants over a domain. Two of them differ in one bit —
-    /// documents and checklists — because they carry no position, so the right to see an
-    /// exact location says nothing about them and granting it would be noise in a ruleset an
-    /// operator has to read and edit. The rest hold rows with a geometry of their own — an
-    /// expedition's working area as much as a trip's — and so keep the bit. It decides
+    /// What the starter ruleset grants over a domain. Three of them differ in one bit —
+    /// documents, checklists and calendar events — because they carry no position, so the right
+    /// to see an exact location says nothing about them and granting it would be noise in a
+    /// ruleset an operator has to read and edit. The rest hold rows with a geometry of their
+    /// own — an expedition's working area as much as a trip's — and so keep the bit. It decides
     /// nothing about the caves those rows reach: whether a caller sees a cave's exact
     /// position is asked in the feature domain against that cave's own protected roots, and
     /// no entry written here is consulted there.
     /// </summary>
     private static AccessAction StarterActions(AccessDomain domain) =>
         AccessAction.Read | AccessAction.Write | AccessAction.Create
-        | (domain is AccessDomain.Documents or AccessDomain.Checklists
+        | (domain is AccessDomain.Documents or AccessDomain.Checklists or AccessDomain.Events
             ? AccessAction.None
             : AccessAction.ViewExactLocation);
 

@@ -58,8 +58,19 @@ test('turning a family off narrows the question rather than the reader', async (
   await page.getByTestId('calendar-toggle-other').click();
   expect((await asked).get('source')).toBe('tripLog');
 
-  // Neither family wanted is not a question the answer can be asked, so nothing is asked.
+  // The other way round names every family that is not a trip, one by one. "Not the trips" is
+  // more than one family, and a narrowing that could only name one would drop the family it left
+  // out of a record that says nothing is missing.
+  await page.getByTestId('calendar-toggle-other').click();
+  const askedForTheRest = askedFor(page);
   await page.getByTestId('calendar-toggle-trips').click();
+  expect((await askedForTheRest).get('source')?.split(',').sort()).toEqual([
+    'event',
+    'expedition',
+  ]);
+
+  // Neither family wanted is not a question the answer can be asked, so nothing is asked.
+  await page.getByTestId('calendar-toggle-other').click();
   await expect(page.getByTestId('calendar-empty')).toBeVisible();
 });
 
@@ -82,5 +93,5 @@ test('a row clicks through to the record it came from', async ({ page }) => {
   }
 
   await rows.first().click();
-  await page.waitForURL(/\/(trip-logs|expeditions)\/[0-9a-f-]{36}$/, { timeout: 60_000 });
+  await page.waitForURL(/\/(trip-logs|expeditions|events)\/[0-9a-f-]{36}$/, { timeout: 60_000 });
 });

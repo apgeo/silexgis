@@ -20,6 +20,7 @@ public static class AccessDomains
         Album => AccessDomain.Documents,
         Expedition => AccessDomain.Expeditions,
         Checklist => AccessDomain.Checklists,
+        Event => AccessDomain.Events,
         _ => throw new ArgumentException($"No access domain for {entity.GetType().Name}.", nameof(entity)),
     };
 }

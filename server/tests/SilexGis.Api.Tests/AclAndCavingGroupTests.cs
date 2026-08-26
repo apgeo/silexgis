@@ -275,7 +275,7 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
         var caveId = await CreateCaveAsync("Validation Cave", "private");
 
         // The target vocabulary is feature | tripLog | geofile | georeferencedMap | mapView |
-        // expedition.
+        // expedition | event.
         // Anything else — including the retired per-kind names — is rejected with a stable code.
         foreach (var badName in new[] { "cave", "caveEntrance", "surfaceFeature", "banana" })
         {

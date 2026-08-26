@@ -201,7 +201,22 @@ public class ActivityStateTests
             (Cancelled, Draft),
         ], ignoreOrder: true);
 
+        MovesAllowedBy(MayEventTransition).ShouldBe(
+        [
+            (Draft, Proposed), (Draft, Planned),
+            (Draft, Done), (Draft, Published), (Draft, Cancelled),
+            (Proposed, Planned), (Proposed, Draft), (Proposed, Cancelled),
+            (Planned, Confirmed), (Planned, Delayed), (Planned, Draft), (Planned, Cancelled),
+            (Confirmed, Done), (Confirmed, Delayed), (Confirmed, Draft), (Confirmed, Cancelled),
+            (Delayed, Planned), (Delayed, Draft), (Delayed, Cancelled),
+            (Done, Published), (Done, Draft),
+            (Published, Draft),
+            (Cancelled, Draft),
+        ], ignoreOrder: true);
+
         TripLogTransitionInvalidCode.ShouldNotBe(ExpeditionTransitionInvalidCode);
+        TripLogTransitionInvalidCode.ShouldNotBe(EventTransitionInvalidCode);
+        ExpeditionTransitionInvalidCode.ShouldNotBe(EventTransitionInvalidCode);
     }
 
     /// <summary>Every ordered pair of states one kind's table admits, asked pair by pair.</summary>
@@ -298,12 +313,14 @@ public class ActivityStateTests
         All.ShouldAllBe(state => !MayExpeditionTransition(state, state));
 
     [Fact]
-    public void The_two_refusals_name_the_thing_that_refused_them()
+    public void Every_refusal_names_the_thing_that_refused_them()
     {
         // A caller reading a refusal has to be able to tell which activity refused it, so the
-        // codes are not shared between the two tables.
+        // codes are not shared between the tables. Each is spelled out here rather than derived
+        // from the kind's name, because these strings are a wire contract a client branches on.
         TripLogTransitionInvalidCode.ShouldBe("trip_log.state_transition_invalid");
         ExpeditionTransitionInvalidCode.ShouldBe("expedition.state_transition_invalid");
+        EventTransitionInvalidCode.ShouldBe("event.state_transition_invalid");
     }
 
     [Fact]
@@ -314,4 +331,102 @@ public class ActivityStateTests
         // default does — instead of silently sending mail nobody decided to send.
         All.Where(SuppressesParticipantNotification).ShouldBe([Draft, Cancelled], ignoreOrder: true);
     }
+
+    [Fact]
+    public void An_event_holds_every_state_in_the_vocabulary()
+    {
+        EventStates.ShouldBe(All, ignoreOrder: true);
+
+        // Stated the other way round as well, so a state added to the enum is admitted to an
+        // event by somebody deciding it, not by the list happening to be the whole vocabulary.
+        All.Where(IsEventState).ShouldBe(All, ignoreOrder: true);
+    }
+
+    [Fact]
+    public void No_legal_event_move_touches_a_state_an_event_cannot_hold()
+    {
+        foreach (var from in All)
+        {
+            foreach (var to in All.Where(to => MayEventTransition(from, to)))
+            {
+                IsEventState(from).ShouldBeTrue($"{from} is an origin of a legal move.");
+                IsEventState(to).ShouldBeTrue($"{to} is a destination of a legal move.");
+            }
+        }
+    }
+
+    [Fact]
+    public void An_event_climbs_the_planning_ladder_one_rung_at_a_time()
+    {
+        MayEventTransition(Draft, Proposed).ShouldBeTrue();
+        MayEventTransition(Proposed, Planned).ShouldBeTrue();
+        MayEventTransition(Planned, Confirmed).ShouldBeTrue();
+        MayEventTransition(Confirmed, Done).ShouldBeTrue();
+        MayEventTransition(Done, Published).ShouldBeTrue();
+
+        // Each rung is a decision somebody takes, so none of them is reachable by skipping the
+        // one before it. Joining the ladder late is allowed; climbing two rungs at once is not.
+        MayEventTransition(Draft, Confirmed).ShouldBeFalse();
+        MayEventTransition(Proposed, Confirmed).ShouldBeFalse();
+        MayEventTransition(Planned, Done).ShouldBeFalse();
+        MayEventTransition(Proposed, Done).ShouldBeFalse();
+
+        // Except into the workshop, which is where something that already happened is entered
+        // from — last winter's course, or a deadline that has already passed.
+        MayEventTransition(Draft, Done).ShouldBeTrue();
+        MayEventTransition(Draft, Published).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void An_event_is_called_off_while_it_has_not_happened_and_not_afterwards()
+    {
+        // The ordinary cancellation is a confirmed evening called off the week before, so
+        // calling it off is reachable from every state where the day still lies ahead.
+        foreach (var live in new[] { Draft, Proposed, Planned, Confirmed, Delayed })
+        {
+            MayEventTransition(live, Cancelled).ShouldBeTrue($"{live} lies before the day.");
+        }
+
+        // Afterwards it is not: an evening that happened cannot be made not to have happened,
+        // and removing the record is a different act taken through a different button.
+        MayEventTransition(Done, Cancelled).ShouldBeFalse();
+        MayEventTransition(Published, Cancelled).ShouldBeFalse();
+
+        // Reinstating one returns it to the workshop rather than to the rung it fell from.
+        MayEventTransition(Cancelled, Draft).ShouldBeTrue();
+        MayEventTransition(Cancelled, Confirmed).ShouldBeFalse();
+        MayEventTransition(Cancelled, Published).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Only_an_event_with_a_date_to_move_is_put_back()
+    {
+        MayEventTransition(Planned, Delayed).ShouldBeTrue();
+        MayEventTransition(Confirmed, Delayed).ShouldBeTrue();
+
+        // A suggestion nobody has dated yet is still a suggestion, not a postponement; and one
+        // that happened has nothing left to put back.
+        MayEventTransition(Draft, Delayed).ShouldBeFalse();
+        MayEventTransition(Proposed, Delayed).ShouldBeFalse();
+        MayEventTransition(Done, Delayed).ShouldBeFalse();
+        MayEventTransition(Published, Delayed).ShouldBeFalse();
+
+        // A new date returns it to being arranged: announcing it is on again is a second
+        // decision.
+        MayEventTransition(Delayed, Planned).ShouldBeTrue();
+        MayEventTransition(Delayed, Confirmed).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Everything_live_returns_an_event_to_the_workshop()
+    {
+        foreach (var state in All.Where(state => state != Draft))
+        {
+            MayEventTransition(state, Draft).ShouldBeTrue($"{state} returns to the workshop.");
+        }
+    }
+
+    [Fact]
+    public void An_event_state_is_not_a_move_to_itself() =>
+        All.ShouldAllBe(state => !MayEventTransition(state, state));
 }

@@ -56,6 +56,32 @@ public class AccessDomainsTests
     }
 
     [Fact]
+    public void A_calendar_event_is_governed_by_its_own_domain_and_not_by_the_trips_beside_it()
+    {
+        var calendarEvent = new Event
+        {
+            Title = "Club night",
+            OwnerUserId = Guid.CreateVersion7(),
+            StartDate = new DateOnly(2026, 3, 14),
+        };
+
+        // Not the trip-log domain, and the reason is the same one the camp and the checklist
+        // give. An entry scoped to one object resolves what it is anchored to against the table
+        // its domain names, so an event id written under the trips would name nothing and the
+        // entry would be refused — and "share this event with them" is exactly such an entry,
+        // which is the whole of what one club reading another's calendar means. The only shape
+        // left, a grant over every trip, is a single flag: it would hand its holder every event
+        // in the installation, private ones included.
+        AccessDomains.Of(calendarEvent).ShouldBe(AccessDomain.Events);
+        AccessDomains.Of(calendarEvent).ShouldNotBe(AccessDomain.TripLogs);
+
+        // The trio scopes only mean anything where the row actually carries the columns, and an
+        // event does — one caving-group column, because an event is a thing a group runs.
+        AccessEntryRules.IsTrioDomain(AccessDomain.Events).ShouldBeTrue();
+        AccessEntryRules.AllowsObjectScope(AccessDomain.Events).ShouldBeTrue();
+    }
+
+    [Fact]
     public void An_entity_with_no_domain_is_refused_rather_than_defaulted()
     {
         // Falling back to some default domain would authorize an unknown row against a

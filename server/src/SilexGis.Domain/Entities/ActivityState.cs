@@ -325,4 +325,125 @@ public static class ActivityStates
     /// <summary>Whether an expedition may move from one state to another.</summary>
     public static bool MayExpeditionTransition(ActivityState from, ActivityState to) =>
         ExpeditionMoves.Any(move => move.From == from && move.To == to);
+
+    // ---- calendar events ----
+
+    /// <summary>Refusal: the activity does not go from the state it is in to the one asked for.</summary>
+    public const string EventTransitionInvalidCode = "event.state_transition_invalid";
+
+    /// <summary>
+    /// The states a calendar event may hold — all of them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An event is put in a calendar so that people arrange their lives around it, and every
+    /// value here answers a question somebody asks before they do: is this still somebody's
+    /// suggestion, is a date being settled, is it definitely on, has it been put back, did it
+    /// happen. A club night nobody has confirmed and a club night everybody is coming to are
+    /// different facts, and a vocabulary that could not tell them apart would leave the second
+    /// one indistinguishable from the first on the grid.
+    /// </para>
+    /// <para>
+    /// They are written out rather than taken from the whole vocabulary, so that a state added
+    /// to the enum later is not admitted here by accident: whether an event may hold it is a
+    /// decision somebody has to take, the same way it is for a trip and for a camp. That the
+    /// three lists agree today is not a reason to share one — a state admitted for a camp and
+    /// not for a meeting is an ordinary thing to want, and the day somebody wants it this list
+    /// is where they say so.
+    /// </para>
+    /// <para>
+    /// A deadline holds these states like any other event, and that is deliberate: a date
+    /// something is due by is proposed, settled, put back and called off exactly as a meeting
+    /// is. What a deadline does not have is people answering it, and that is a property of the
+    /// kind rather than of where it has got to — nothing here knows about kinds.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<ActivityState> EventStates { get; } =
+    [
+        ActivityState.Draft,
+        ActivityState.Proposed,
+        ActivityState.Planned,
+        ActivityState.Confirmed,
+        ActivityState.Done,
+        ActivityState.Published,
+        ActivityState.Cancelled,
+        ActivityState.Delayed,
+    ];
+
+    /// <summary>Whether a calendar event may hold this state at all, whatever it is in now.</summary>
+    public static bool IsEventState(ActivityState state) => EventStates.Contains(state);
+
+    /// <summary>
+    /// The moves a calendar event may make. The planning states are a ladder — suggested, being
+    /// arranged, definitely on — which may be joined at any rung but is climbed one rung at a
+    /// time, because each rung is a decision somebody takes and a table that let one imply the
+    /// next would take them both on one click. Draft is the hub: everything live returns there,
+    /// so "how do I get at this again" has one answer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Calling it off is reachable from every state where the day still lies ahead, rather than
+    /// from the workshop alone — a confirmed meeting called off the week before is the ordinary
+    /// cancellation, not an edge case. It is not reachable from Done or Published: an evening
+    /// that happened cannot be made not to have happened, and removing the record is a different
+    /// act with a different button.
+    /// </para>
+    /// <para>
+    /// Putting it back is reachable only from the two states that had a date to put back. Coming
+    /// out of it goes to Planned rather than Confirmed, because a new date has to be settled
+    /// before anybody is told the evening is on again.
+    /// </para>
+    /// <para>
+    /// A state is not a transition to itself, so no pair here repeats a state.
+    /// </para>
+    /// </remarks>
+    private static readonly (ActivityState From, ActivityState To)[] EventMoves =
+    [
+        // Out of the workshop: put to the club as a suggestion, or straight to being arranged
+        // when the evening was agreed in the room and only needs writing down.
+        (ActivityState.Draft, ActivityState.Proposed),
+        (ActivityState.Draft, ActivityState.Planned),
+
+        // Something that already happened is recorded from the workshop — that is how last
+        // winter's course is entered, and how a deadline that has passed is written down.
+        (ActivityState.Draft, ActivityState.Done),
+        (ActivityState.Draft, ActivityState.Published),
+        (ActivityState.Draft, ActivityState.Cancelled),
+
+        // A suggestion is taken up, sent back for more thought, or dropped.
+        (ActivityState.Proposed, ActivityState.Planned),
+        (ActivityState.Proposed, ActivityState.Draft),
+        (ActivityState.Proposed, ActivityState.Cancelled),
+
+        // Being arranged: it goes ahead, is put back, or does not happen.
+        (ActivityState.Planned, ActivityState.Confirmed),
+        (ActivityState.Planned, ActivityState.Delayed),
+        (ActivityState.Planned, ActivityState.Draft),
+        (ActivityState.Planned, ActivityState.Cancelled),
+
+        // Definitely on: it happens, or it is put back or called off after all.
+        (ActivityState.Confirmed, ActivityState.Done),
+        (ActivityState.Confirmed, ActivityState.Delayed),
+        (ActivityState.Confirmed, ActivityState.Draft),
+        (ActivityState.Confirmed, ActivityState.Cancelled),
+
+        // Put back: a new date returns it to being arranged, not to being on.
+        (ActivityState.Delayed, ActivityState.Planned),
+        (ActivityState.Delayed, ActivityState.Draft),
+        (ActivityState.Delayed, ActivityState.Cancelled),
+
+        // It happened: what came of it is announced when it is written, or it goes back for work.
+        (ActivityState.Done, ActivityState.Published),
+        (ActivityState.Done, ActivityState.Draft),
+
+        // The reverse of announcing, and the only one.
+        (ActivityState.Published, ActivityState.Draft),
+
+        // Reinstating a called-off event returns it to the workshop, not to the rung it fell from.
+        (ActivityState.Cancelled, ActivityState.Draft),
+    ];
+
+    /// <summary>Whether a calendar event may move from one state to another.</summary>
+    public static bool MayEventTransition(ActivityState from, ActivityState to) =>
+        EventMoves.Any(move => move.From == from && move.To == to);
 }

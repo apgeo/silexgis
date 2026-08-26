@@ -248,7 +248,7 @@ public sealed class CalendarTests : IAsyncLifetime, IDisposable
         // deliberate act of saying the new member has been thought about.
         row.EnumerateObject().Select(p => p.Name).ShouldBe(
             [
-                "source", "id", "title", "start", "end", "startTime", "endTime",
+                "source", "id", "title", "start", "end", "startTime", "endTime", "kind",
                 "state", "placement", "cavingGroupId", "hasPosition",
             ],
             ignoreOrder: true,

@@ -36,6 +36,21 @@ const openingWindow = (): [Dayjs, Dayjs] => [
 const sortableFields: Record<string, string> = { start: 'start', title: 'title' };
 
 /**
+ * Where each family of row is read. Written as a map over the source union rather than as a
+ * chain of tests, so a family added to the answer is a compile error here instead of falling
+ * through to whichever address happened to be last — a row that silently opened another
+ * record's page would be a dead end on the one surface that exists to lead somewhere.
+ */
+const detailPath: Record<CalendarSource, (id: string) => string> = {
+  tripLog: (id) => `/trip-logs/${id}`,
+  expedition: (id) => `/expeditions/${id}`,
+  event: (id) => `/events/${id}`,
+};
+
+/** Every family the answer can hold, so "all of them" can be told from "some of them". */
+const CALENDAR_SOURCES = Object.keys(detailPath) as CalendarSource[];
+
+/**
  * The club's dated records over a window of days — every trip and every camp the reader may open,
  * read as one list.
  *
@@ -74,12 +89,18 @@ export default function CalendarPage() {
   const [sort, setSort] = useState<string | undefined>(undefined);
   const { data: cavingGroups } = useCavingGroups();
 
-  // Two toggles over two families of record, and the answer takes one family or all of them — so
-  // "only trips" and "only the rest" are a narrowing the server understands, and "both" is the
-  // absence of one. Neither is a question anybody can ask, and rather than sending a request that
-  // could only come back empty the page says so and asks nothing.
-  const source: CalendarSource | undefined =
-    showTrips && !showOther ? 'tripLog' : !showTrips && showOther ? 'expedition' : undefined;
+  // Two toggles over three families of record, so "the rest" names more than one family and the
+  // narrowing is written as the list of families wanted rather than as a single word. Wanting all
+  // of them is the absence of the parameter; wanting none is not a question anybody can ask, and
+  // rather than sending a request that could only come back empty the page says so and asks
+  // nothing.
+  const wanted: CalendarSource[] = [
+    ...(showTrips ? (['tripLog'] as const) : []),
+    ...(showOther ? (['expedition', 'event'] as const) : []),
+  ];
+  const source = wanted.length > 0 && wanted.length < CALENDAR_SOURCES.length
+    ? wanted.join(',')
+    : undefined;
   const nothingChosen = !showTrips && !showOther;
 
   const { data, isFetching, isError } = useCalendar(
@@ -204,8 +225,7 @@ export default function CalendarPage() {
         dataSource={nothingChosen ? [] : data?.entries}
         onChange={onTableChange}
         onRow={(row) => ({
-          onClick: () =>
-            navigate(row.source === 'tripLog' ? `/trip-logs/${row.id}` : `/expeditions/${row.id}`),
+          onClick: () => void navigate(detailPath[row.source](row.id)),
           style: { cursor: 'pointer' },
         })}
         locale={{
@@ -250,8 +270,18 @@ export default function CalendarPage() {
           {
             title: t('calendar.kind'),
             dataIndex: 'source',
-            width: 140,
-            render: (value: CalendarSource) => <Tag>{t(`calendar.sourceValues.${value}`)}</Tag>,
+            width: 160,
+            // The family for the two sources that are exactly one thing, and the row's own kind
+            // for the one that is not: "Event" for both a permit deadline and a social evening
+            // would make them the same row to somebody scanning a month, which is the reading
+            // this column exists for.
+            render: (value: CalendarSource, row) => (
+              <Tag>
+                {row.kind
+                  ? t(`events.kindValues.${row.kind}`)
+                  : t(`calendar.sourceValues.${value}`)}
+              </Tag>
+            ),
           },
           {
             title: t('calendar.state'),

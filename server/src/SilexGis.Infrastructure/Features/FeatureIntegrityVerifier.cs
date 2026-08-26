@@ -243,6 +243,7 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
                     AccessDomain.Documents => db.Documents.Any(x => x.Id == id),
                     AccessDomain.Expeditions => db.Expeditions.Any(x => x.Id == id),
                     AccessDomain.Checklists => db.Checklists.Any(x => x.Id == id),
+                    AccessDomain.Events => db.Events.Any(x => x.Id == id),
                     AccessDomain.CavingGroups => cavingGroupIds.Contains(id),
                     AccessDomain.PermissionGroups => db.PermissionGroups.Any(x => x.Id == id),
                     AccessDomain.FeatureSets => featureSetIds.Contains(id),

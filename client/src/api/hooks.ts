@@ -187,6 +187,9 @@ export const queryKeys = {
   expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,
   expeditionMap: (id: string) => ['expeditions', 'map', id] as const,
   expeditionLeads: (id: string) => ['expeditions', 'leads', id] as const,
+  events: (params: EventListParams) => ['events', 'list', params] as const,
+  event: (id: string) => ['events', 'detail', id] as const,
+  eventDefaults: ['events', 'defaults'] as const,
 };
 
 async function unwrap<T>(
@@ -1165,7 +1168,8 @@ export type EntityType =
   | 'geofile'
   | 'georeferencedMap'
   | 'mapView'
-  | 'expedition';
+  | 'expedition'
+  | 'event';
 // Stored files additionally carry taggings (never attachments or grants) — the tag
 // endpoints accept the extra target; the server rejects it everywhere else.
 export type AttachedEntityType = EntityType | 'storedFile';
@@ -4580,8 +4584,12 @@ export interface CalendarParams {
   from: string;
   /** Inclusive, `YYYY-MM-DD`. Required. */
   to: string;
-  /** One family of dated record. Omitted means all of them, which is the point of the surface. */
-  source?: CalendarSource;
+  /**
+   * The families of dated record wanted, comma-separated. Omitted means all of them, which is
+   * the point of the surface; naming several is how "everything except one family" is asked for,
+   * which a single word cannot express once there are more than two families.
+   */
+  source?: string;
   /** A lifecycle state spelled the way the contract spells it. */
   state?: ActivityState;
   /** One group's calendar: the trips it is running and the camps it owns. */
@@ -4610,5 +4618,166 @@ export function useCalendar(params: CalendarParams, options?: { enabled?: boolea
     // Changing the window or a toggle keeps the rows on screen while the next answer arrives,
     // rather than emptying the record under whoever is reading it.
     placeholderData: keepPreviousData,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Calendar events
+// ---------------------------------------------------------------------------
+
+export type EventInfo = components['schemas']['EventDto'];
+export type EventWrite = components['schemas']['EventWriteRequest'];
+export type EventKind = components['schemas']['EventKind'];
+export type EventDefaults = components['schemas']['EventDefaultsDto'];
+
+/**
+ * How the event list is narrowed. The window asks what an event *overlapped* rather than what it
+ * started inside, so a training weekend running across the end of a month is in both months; the
+ * word is looked for in the title; and a kind or a state the server does not have is refused
+ * rather than quietly answered with an empty page.
+ */
+export interface EventListParams {
+  page?: number;
+  pageSize?: number;
+  from?: string;
+  to?: string;
+  search?: string;
+  kind?: string;
+  state?: string;
+}
+
+/** The events this reader may open, narrowed by the filters the list offers. */
+export function useEvents(params: EventListParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.events(params),
+    queryFn: () => unwrap(api.GET('/api/v1/events', { params: { query: params } })),
+    // Paging or retyping a filter keeps the rows on screen while the next answer arrives, rather
+    // than emptying the table under whoever is reading it.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * One event. An event the caller may not read answers exactly as one that does not exist does —
+ * the server spells both `event.not_found` — so the page has no way to tell them apart and must
+ * not try: an address that answered differently for the two would be one anybody could probe for
+ * the existence of an event they cannot see.
+ */
+export function useEvent(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.event(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/events/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+    // A refusal here is a settled answer about the caller, not a transient failure: retrying it
+    // three times only delays the page saying so.
+    retry: false,
+  });
+}
+
+/**
+ * The audience a new event would get if its author names none.
+ *
+ * Read from the server rather than worked out here, because the write applies the same rule: a
+ * form that guessed would be guessing about who can read something, and the two answers would be
+ * free to disagree the day either changed.
+ */
+export function useEventDefaults(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.eventDefaults,
+    queryFn: () => unwrap(api.GET('/api/v1/events/defaults')),
+    enabled,
+  });
+}
+
+/**
+ * Re-reads everything a write to an event changes, and hands back the promise rather than
+ * starting it and forgetting it.
+ *
+ * The promise matters on the writes the server checks a precondition on. No write answers with
+ * the version it produced, so the token the next write must carry is only recorded by a read —
+ * and a mutation that settled before that read left the buttons live while the cached token was
+ * still the one from before. The second click then carries a spent version and is refused for a
+ * move that was perfectly legal.
+ */
+function useInvalidateEvents() {
+  const queryClient = useQueryClient();
+  return (id?: string) => {
+    const pending = [
+      queryClient.invalidateQueries({ queryKey: ['events'] }),
+      // An event is a row on the calendar, so writing one moves what that window answers.
+      queryClient.invalidateQueries({ queryKey: ['calendar'] }),
+    ];
+    if (id) {
+      pending.push(queryClient.invalidateQueries({ queryKey: queryKeys.event(id) }));
+    }
+    return Promise.all(pending);
+  };
+}
+
+export function useCreateEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: (body: EventWrite) => unwrap(api.POST('/api/v1/events', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * Stores an edited event. The server requires the version the form was loaded against; a full
+ * update is on the path the detail read captured that version under, so the precondition is
+ * threaded onto it without this call having to say so.
+ */
+export function useUpdateEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: EventWrite }) =>
+      unwrap(api.PUT('/api/v1/events/{id}', { params: { path: { id } }, body })),
+    // Handed back rather than started and forgotten: the next write on this event is checked
+    // against the version this one produced, and only the read records it.
+    onSuccess: (_data, variables) => invalidate(variables.id),
+  });
+}
+
+export function useDeleteEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/events/{id}', {
+        params: { path: { id } },
+      });
+      if (error) {
+        throw new ApiError(response.status, error);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * Moves an event to another lifecycle state — one endpoint naming the state to move to rather
+ * than a verb per move.
+ *
+ * The server requires the version the caller was looking at, so the move carries the token the
+ * detail read captured: two people announcing and un-announcing the same evening otherwise land
+ * in whichever order the database happens to see. Which moves are legal from which state is the
+ * server's to decide; the control only offers the ones a reader would expect, and one the table
+ * refuses comes back as a conflict rather than being prevented here.
+ */
+export function useMoveEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: ({ id, state }: { id: string; state: ActivityState }) => {
+      const etag = lastReadETag(`/api/v1/events/${id}`);
+      return unwrap(
+        api.POST('/api/v1/events/{id}/state', {
+          params: { path: { id } },
+          headers: etag ? { 'If-Match': etag } : undefined,
+          body: { state },
+        }),
+      );
+    },
+    // As on the event's own update: a move is checked against the version last read, so the move
+    // is not finished until the version it produced has been read.
+    onSuccess: (_data, variables) => invalidate(variables.id),
   });
 }

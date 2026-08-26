@@ -87,6 +87,7 @@ public class CalendarWindowTests
         null,
         null,
         null,
+        null,
         ActivityState.Planned,
         CalendarPlacement.Ahead,
         null,

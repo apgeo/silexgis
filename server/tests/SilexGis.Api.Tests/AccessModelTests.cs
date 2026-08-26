@@ -75,6 +75,9 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable
                 // And so is a list of what has to be settled before a trip sets off: anybody
                 // may write one and decide for themselves who else sees it.
                 AccessDomain.Checklists,
+                // And so is a date in the calendar: anybody may put one there, and decide for
+                // themselves who else sees that.
+                AccessDomain.Events,
             ],
             ignoreOrder: true);
 
@@ -150,15 +153,17 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable
             [
                 AccessDomain.Features, AccessDomain.TripLogs, AccessDomain.Geofiles,
                 AccessDomain.GeoreferencedMaps, AccessDomain.MapViews, AccessDomain.Documents,
-                AccessDomain.Expeditions, AccessDomain.Checklists,
+                AccessDomain.Expeditions, AccessDomain.Checklists, AccessDomain.Events,
             ],
             ignoreOrder: true);
 
-        // Every domain that can carry a position carries the exact-view bit; documents and
-        // checklists carry none, so granting it there would be a line nobody editing this
-        // ruleset could act on.
+        // Every domain that can carry a position carries the exact-view bit; documents,
+        // checklists and calendar events carry none, so granting it there would be a line
+        // nobody editing this ruleset could act on. An event is where a club meets, written
+        // down for a person to read — an address, never a coordinate.
         starter.ShouldAllBe(e => ((e.Actions & AccessAction.ViewExactLocation) != 0)
-            == (e.Domain != AccessDomain.Documents && e.Domain != AccessDomain.Checklists));
+            == (e.Domain != AccessDomain.Documents && e.Domain != AccessDomain.Checklists
+                && e.Domain != AccessDomain.Events));
 
         // "«name» — managers": the creator manages the group record and can enroll
         // people from day one.

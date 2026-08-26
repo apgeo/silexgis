@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Access;
+
 namespace SilexGis.Domain.Trips;
 
 /// <summary>
@@ -27,14 +29,11 @@ public enum TripCreationIntent
 /// author's caving group.
 /// </para>
 /// <para>
-/// The fallback is deliberately the narrow answer rather than "every signed-in account". A plan
-/// names the cave it is for, and handing that to the whole installation because the author
-/// happens to belong to no group would be a widening nobody asked for; a plan nobody but its
-/// author can read is merely useless, and is fixed by naming an audience. The same reasoning
-/// covers belonging to several groups: nothing here can say which of them the trip is for, and
-/// guessing would show it to a club that has nothing to do with it. A group-visible row must also
-/// name the group it is for, because one that names none admits nobody, which is why the two
-/// values are decided together and travel together.
+/// Which club, and what happens when there is not exactly one, is
+/// <see cref="AudienceDefaults.OwnGroupOrPrivate"/>'s to answer and is answered there for every
+/// kind of content at once: the narrow answer rather than "every signed-in account". It matters
+/// especially for a plan, which names the cave it is for — handing that to the whole installation
+/// because the author happens to belong to no club would be a widening nobody asked for.
 /// </para>
 /// <para>
 /// Lives here rather than at the write because two callers need the same answer: the write that
@@ -52,9 +51,6 @@ public static class TripAudienceRules
             return (Visibility.Private, null);
         }
 
-        var ownGroupId = cavingGroupIds.Count == 1 ? cavingGroupIds[0] : (Guid?)null;
-        return ownGroupId is null
-            ? (Visibility.Private, null)
-            : (Visibility.CavingGroup, ownGroupId);
+        return AudienceDefaults.OwnGroupOrPrivate(cavingGroupIds);
     }
 }

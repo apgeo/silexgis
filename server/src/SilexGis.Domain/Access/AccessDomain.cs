@@ -107,4 +107,23 @@ public enum AccessDomain : short
     /// </para>
     /// </summary>
     Checklists = 21,
+
+    /// <summary>
+    /// Calendar events: the meetings, training, working days and deadlines a club puts in its
+    /// calendar that are not trips and not camps. Event rows carry the
+    /// owner/caving-group/visibility trio, so an event is governed like any other owned content —
+    /// by entries written against it, by its owner, and by its audience.
+    /// <para>
+    /// It is a domain of its own rather than something governed through the trips that share its
+    /// calendar, and that is forced rather than chosen. An entry scoped to one object resolves
+    /// what it is anchored to against the table its domain names, so an event id written under
+    /// the trip domain names nothing and the entry is refused — and that entry is exactly the
+    /// grant "share this event with them" is made of, which is the whole of what a club calendar
+    /// visible to a partner club means. The only shape left, a grant over every trip, is one
+    /// flag: it would hand its holder every event in the installation, private ones included, and
+    /// a grant meant for a club's meetings would confer read on every trip. There is no setting
+    /// between the two.
+    /// </para>
+    /// </summary>
+    Events = 22,
 }

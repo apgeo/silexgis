@@ -12,6 +12,13 @@ public enum CalendarSource
 
     /// <summary>A camp, whose span the calendar reads rather than copying.</summary>
     Expedition = 1,
+
+    /// <summary>
+    /// An event the club runs — a meeting, a course, a working day, a deadline. The one source
+    /// here that exists for the calendar's sake rather than being read into it from a record
+    /// kept for another reason.
+    /// </summary>
+    Event = 2,
 }
 
 /// <summary>
@@ -49,6 +56,12 @@ public enum CalendarSource
 /// so a day's rows can be ordered within the day rather than as a claim about when people meet.
 /// </param>
 /// <param name="EndTime">The wall-clock time the row carries for its last day, where it has one.</param>
+/// <param name="Kind">
+/// What kind of thing the row is, for the one source that says so. A trip and a camp each are
+/// exactly one thing and carry nothing of the sort, so the member is absent on them; an event is
+/// a club night or a deadline or a working day, and a row that did not say which would make a
+/// permit deadline and a social evening the same row to every reader.
+/// </param>
 /// <param name="State">Where the row has got to in its lifecycle.</param>
 /// <param name="Placement">
 /// Where that state puts the row on a calendar. Sent rather than derived on the client, so the
@@ -60,13 +73,13 @@ public enum CalendarSource
 /// </param>
 /// <param name="HasPosition">Whether the source row carries a position at all. Never a position.</param>
 /// <remarks>
-/// <b>There is deliberately no kind-of-record member here yet.</b> Neither dated source this
-/// answer reads carries anything of the sort, so the member could only ever be absent on every
-/// row that exists — and a field that is always empty teaches a client to ignore it, which is
-/// exactly the habit that makes a real value arriving later go unnoticed. The member lands with
-/// the first source that has one to put in it. Widening this record is a deliberate act: two
-/// tests pin the member list, one over the wire and one over the client's generated type, and
-/// both have to be edited by hand for a new member to ship.
+/// <b><see cref="Kind"/> is here because a source that has one to put in it now exists.</b> It
+/// was held back for as long as every dated source was exactly one thing, because a field that
+/// is always empty teaches a client to ignore it — which is the habit that makes a real value
+/// arriving later go unnoticed. It is absent on the sources that still have nothing to say, and
+/// that absence is the answer rather than a gap. Widening this record any further is a
+/// deliberate act: two tests pin the member list, one over the wire and one over the client's
+/// generated type, and both have to be edited by hand for a new member to ship.
 /// </remarks>
 public sealed record CalendarEntryDto(
     CalendarSource Source,
@@ -76,6 +89,7 @@ public sealed record CalendarEntryDto(
     DateOnly? End,
     TimeOnly? StartTime,
     TimeOnly? EndTime,
+    EventKind? Kind,
     ActivityState State,
     CalendarPlacement Placement,
     Guid? CavingGroupId,

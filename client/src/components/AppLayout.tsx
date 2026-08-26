@@ -24,6 +24,7 @@ import {
   PictureOutlined,
   ProfileOutlined,
   SafetyCertificateOutlined,
+  ScheduleOutlined,
   SettingOutlined,
   TagsOutlined,
   TeamOutlined,
@@ -75,7 +76,7 @@ export default function AppLayout() {
   // destination and a camp's own page stays under it, so opening one keeps the camps item lit.
   const sections = [
     'map3d', 'dashboard', 'caves', 'features', 'geodata', 'gallery', 'albums', 'cabinets',
-    'uploads', 'documents', 'calendar', 'trip-logs', 'expeditions', 'checklists',
+    'uploads', 'documents', 'calendar', 'events', 'trip-logs', 'expeditions', 'checklists',
     'caving-groups', 'cavers',
     'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
     'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'admin/term-rules',
@@ -182,6 +183,10 @@ export default function AppLayout() {
               // families of row and the answer is narrowed to what each reader may open,
               // row by row, so there is no single domain that could decide the offer.
               { key: 'calendar', icon: <CalendarOutlined />, label: t('nav.calendar') },
+              // The dated things a club runs that are not trips or camps. Not gated on a
+              // right either: everybody may keep their own, and what a caller may read and
+              // write is settled per row.
+              { key: 'events', icon: <ScheduleOutlined />, label: t('nav.events') },
               { key: 'trip-logs', icon: <CarOutlined />, label: t('nav.trips') },
               // The lists trips work through. Everybody may keep their own, so this is not
               // gated on a right: what a caller may read and write is settled per row.

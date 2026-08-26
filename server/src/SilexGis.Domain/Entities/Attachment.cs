@@ -38,6 +38,15 @@ public enum AttachedEntityType : short
 
     /// <summary>A camp: the one thing a fortnight of trips is gathered into.</summary>
     Expedition = 15,
+
+    /// <summary>
+    /// A calendar event — a meeting, a training weekend, a working day, a deadline. Present so
+    /// that per-object sharing can name one: the route that authors a rule against a single
+    /// object identifies it by this discriminator, so a governed kind with no member here can
+    /// have no sharing door at all. No attachment, tagging or resource-link surface offers this
+    /// value; adding one is a separate decision.
+    /// </summary>
+    Event = 16,
 }
 
 /// <summary>Maps non-feature protected entity instances to their polymorphic discriminator.</summary>
@@ -50,6 +59,7 @@ public static class ProtectedEntityTypes
         GeoreferencedMap => AttachedEntityType.GeoreferencedMap,
         MapView => AttachedEntityType.MapView,
         Expedition => AttachedEntityType.Expedition,
+        Event => AttachedEntityType.Event,
         _ => throw new ArgumentException($"No entity-type mapping for {entity.GetType().Name}.", nameof(entity)),
     };
 }

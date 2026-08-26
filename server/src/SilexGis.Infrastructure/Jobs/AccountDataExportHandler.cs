@@ -208,6 +208,10 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
             .Where(c => c.OwnerUserId == userId)
             .Select(c => new { c.Id, c.Title, c.CreatedAt })
             .ToListAsync(ct),
+        Events = await db.Events.AsNoTracking()
+            .Where(e => e.OwnerUserId == userId)
+            .Select(e => new { e.Id, e.Title, Kind = e.Kind.ToString(), e.StartDate, e.CreatedAt })
+            .ToListAsync(ct),
         // What this account has confirmed as settled on a trip's list, which is a record of
         // something this person said and therefore theirs to be given a copy of. Only the
         // identities travel: the words of the line belong to whoever wrote the list.

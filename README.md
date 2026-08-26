@@ -181,8 +181,16 @@ Previous versions:
   asker may not read. A trip that has been called off stays on the list, and says so, because that is the
   thing you most need to notice; the list can be narrowed to one stage of a trip's life, or to a range of
   dates.
+- **The club's own dates** — a meeting, a training session, a maintenance day, a gear check, a
+  conference or a deadline is a record of its own, with a day, an optional second day it runs on to,
+  optional start and finish times and a place written as an address. Times are the club's own wall
+  clock: a 19:00 meeting reads as 19:00 to everybody, wherever they happen to be, which is what a club
+  that meets in one place means by seven in the evening. An event goes through the same stages a trip
+  or a camp does — drafted, proposed, planned, confirmed, announced, put back, called off — and who may
+  read one is decided the same way: yours alone unless you say otherwise, your club's if you are in
+  one, and anybody you name individually through the same sharing dialog every other record uses.
 - **One window over everything dated** — a calendar page answers *what is happening between these two
-  days*, reading trips and expeditions together in one list you can sort, narrow to one kind, narrow to
+  days*, reading trips, expeditions and the club's events together in one list you can sort, narrow to one kind, narrow to
   a club's own, or narrow to your own. It shows what is still to come and what already happened, marks a
   trip that has been called off and lets you switch those off, and lists a postponed one with a
   postponed mark rather than pretending the date it still carries is one anybody is going on. A trip

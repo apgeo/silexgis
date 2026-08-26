@@ -35,6 +35,8 @@ const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const MyTripsPage = lazy(() => import('./pages/trips/MyTripsPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
 const TripReportPage = lazy(() => import('./pages/trips/TripReportPage.tsx'));
+const EventListPage = lazy(() => import('./pages/events/EventListPage.tsx'));
+const EventDetailPage = lazy(() => import('./pages/events/EventDetailPage.tsx'));
 const ExpeditionListPage = lazy(() => import('./pages/expeditions/ExpeditionListPage.tsx'));
 const ExpeditionDetailPage = lazy(() => import('./pages/expeditions/ExpeditionDetailPage.tsx'));
 const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
@@ -128,6 +130,8 @@ export const routes: RouteObject[] = [
           { path: '/trip-logs/mine', element: <Loadable><MyTripsPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
           { path: '/trip-logs/:id/report', element: <Loadable><TripReportPage /></Loadable> },
+          { path: '/events', element: <Loadable><EventListPage /></Loadable> },
+          { path: '/events/:id', element: <Loadable><EventDetailPage /></Loadable> },
           { path: '/expeditions', element: <Loadable><ExpeditionListPage /></Loadable> },
           { path: '/expeditions/:id', element: <Loadable><ExpeditionDetailPage /></Loadable> },
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },

@@ -72,15 +72,17 @@ public static class CalendarEndpoints
     {
         api.MapGet("/calendar", GetAsync)
             .WithTags("Calendar")
-            .WithSummary("The trips and camps a caller may read whose days fall in a window.");
+            .WithSummary(
+                "The trips, camps and events a caller may read whose days fall in a window.");
         return api;
     }
 
     /// <param name="from">The first day of the window, inclusive. Required.</param>
     /// <param name="to">The last day of the window, inclusive. Required.</param>
     /// <param name="source">
-    /// Narrows to one family of record. Absent means all of them, which is the point of the
-    /// surface.
+    /// Narrows to the named families of record, comma-separated. Absent means all of them, which
+    /// is the point of the surface; naming several is how "everything except one family" is
+    /// asked for.
     /// </param>
     /// <param name="state">
     /// Narrows to one lifecycle state. A state that reaches no calendar is refused rather than
@@ -159,16 +161,35 @@ public static class CalendarEndpoints
         // them with, parsed here rather than by route binding: a bad word bound by the framework
         // answers with a bare 400 carrying no code, which a client cannot tell from any other
         // refusal.
-        CalendarSource? sourceFilter = null;
+        // Several families may be named at once, comma-separated, because "everything except
+        // trips" is a question a reader can ask of a record with three families in it and a
+        // single-valued narrowing cannot express it. Absent still means all of them. A list that
+        // names every family is the same answer as naming none, and is left as the null set so
+        // nothing downstream has to treat the two as different.
+        HashSet<CalendarSource>? sourceFilter = null;
         if (!string.IsNullOrWhiteSpace(source))
         {
-            if (!Enum.TryParse<CalendarSource>(source, ignoreCase: true, out var sourceValue)
-                || !Enum.IsDefined(sourceValue))
+            var wanted = new HashSet<CalendarSource>();
+            foreach (var word in source.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
-                return ApiProblems.BadRequest(SourceInvalidCode, $"Unknown source '{source}'.");
+                if (!Enum.TryParse<CalendarSource>(word, ignoreCase: true, out var sourceValue)
+                    || !Enum.IsDefined(sourceValue))
+                {
+                    return ApiProblems.BadRequest(SourceInvalidCode, $"Unknown source '{word}'.");
+                }
+
+                wanted.Add(sourceValue);
             }
 
-            sourceFilter = sourceValue;
+            // A parameter that was present but named nothing at all is a caller asking for a
+            // narrowing they did not write; answering the whole record would be answering a
+            // different question.
+            if (wanted.Count == 0)
+            {
+                return ApiProblems.BadRequest(SourceInvalidCode, "'source' names no family.");
+            }
+
+            sourceFilter = wanted;
         }
 
         ActivityState? stateFilter = null;
@@ -203,7 +224,7 @@ public static class CalendarEndpoints
         var entries = new List<CalendarEntryDto>();
         var found = 0;
 
-        if (sourceFilter is null or CalendarSource.TripLog)
+        if (sourceFilter is null || sourceFilter.Contains(CalendarSource.TripLog))
         {
             // The reader's own visibility, unconditionally and first. Everything below narrows
             // what is left of it and nothing below can widen it, which is what keeps a calendar
@@ -273,6 +294,8 @@ public static class CalendarEndpoints
                 x.End,
                 x.StartTime,
                 x.EndTime,
+                // A trip is exactly one thing, so it has no kind to state.
+                null,
                 x.State,
                 CalendarMembership.PlacementOf(x.State),
                 x.GroupId,
@@ -281,7 +304,7 @@ public static class CalendarEndpoints
 
         // A camp is a source of its own rather than something derived from the trips inside it:
         // a camp exists, and is planned around, before any of its trips does.
-        if (sourceFilter is null or CalendarSource.Expedition)
+        if (sourceFilter is null || sourceFilter.Contains(CalendarSource.Expedition))
         {
             var camps = db.Expeditions.AsNoTracking().VisibleTo(ctx, AccessDomain.Expeditions);
 
@@ -339,10 +362,86 @@ public static class CalendarEndpoints
                 x.End,
                 null,
                 null,
+                // A camp is exactly one thing too.
+                null,
                 x.State,
                 CalendarMembership.PlacementOf(x.State),
                 x.GroupId,
                 x.HasPosition)));
+        }
+
+        // The one source that is a calendar row in its own right rather than a dated record kept
+        // for some other reason. It is read exactly as the other two are — the reader's own
+        // visibility first, then the display rule, then the window — so that nothing about being
+        // the calendar's own kind of thing gives it a wider audience than its row says.
+        if (sourceFilter is null || sourceFilter.Contains(CalendarSource.Event))
+        {
+            var events = db.Events.AsNoTracking().VisibleTo(ctx, AccessDomain.Events);
+
+            events = events.Where(x => ShownStates.Contains(x.State));
+
+            events = events.OverlappingDays(x => x.StartDate, x => x.EndDate, effectiveStart, windowEnd);
+
+            if (stateFilter is { } wantedEventState)
+            {
+                events = events.Where(x => x.State == wantedEventState);
+            }
+
+            if (includeCancelled == false)
+            {
+                events = events.Where(x => x.State != ActivityState.Cancelled);
+            }
+
+            // An event carries one group column, which is both whose event it is and who it is
+            // for, so the group calendar asks that one — the same shape a camp has and for the
+            // same reason.
+            if (cavingGroupId is { } eventGroup)
+            {
+                events = events.Where(x => x.CavingGroupId == eventGroup);
+            }
+
+            // Nothing records who is coming to an event, so there is nothing here for "mine" to
+            // mean and the source contributes nothing rather than guessing from who may read it.
+            if (mine == true)
+            {
+                events = events.Where(_ => false);
+            }
+
+            found += await events.CountAsync(ct);
+
+            var eventRows = await events
+                .OrderBy(x => x.StartDate).ThenBy(x => x.Id)
+                .Take(MaxRows)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Title,
+                    Start = x.StartDate,
+                    End = x.EndDate,
+                    x.StartTime,
+                    x.EndTime,
+                    x.Kind,
+                    x.State,
+                    GroupId = x.CavingGroupId,
+                })
+                .ToListAsync(ct);
+
+            // An event carries no position at all — a meeting has an address, not a coordinate —
+            // so the flag is false for every row rather than read from a column that is not
+            // there.
+            entries.AddRange(eventRows.Select(x => new CalendarEntryDto(
+                CalendarSource.Event,
+                x.Id,
+                x.Title,
+                x.Start,
+                x.End,
+                x.StartTime,
+                x.EndTime,
+                x.Kind,
+                x.State,
+                CalendarMembership.PlacementOf(x.State),
+                x.GroupId,
+                false)));
         }
 
         var answer = CalendarWindow.Merge(entries, found, MaxRows, sort);

@@ -32,7 +32,7 @@ public static class PermissionGroupSeeder
         AccessDomain.Features, AccessDomain.TripLogs, AccessDomain.Geofiles,
         AccessDomain.GeoreferencedMaps, AccessDomain.MapViews, AccessDomain.Files,
         AccessDomain.Documents, AccessDomain.Expeditions, AccessDomain.Checklists,
-        AccessDomain.Tags,
+        AccessDomain.Events, AccessDomain.Tags,
     ];
 
     /// <summary>Regular admin runs the installation but cannot rewrite the security
@@ -72,6 +72,12 @@ public static class PermissionGroupSeeder
                 // entry. It is an ordinary entry, so an installation that disagrees can
                 // remove it.
                 RulesetEntry(id, AccessDomain.Checklists, AccessAction.Create),
+                // Anybody may put a date in the calendar and decide for themselves who else
+                // sees it. Create only, for the same reason as the line above: what they may
+                // then read is their own rows plus whatever anyone else's audience admits them
+                // to, which the visibility walk answers without an entry. It is an ordinary
+                // entry, so an installation that disagrees can remove it.
+                RulesetEntry(id, AccessDomain.Events, AccessAction.Create),
             ], ct);
 
         await EnsureGroupAsync(db, created, SeededPermissionGroups.AdministratorsSlug,
