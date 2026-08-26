@@ -5,13 +5,13 @@ namespace SilexGis.Domain.Entities;
 /// A way a notification leaves this installation.
 /// </summary>
 /// <remarks>
-/// <b>A channel is something that leaves the system.</b> Email, and later text message, WhatsApp
-/// and push, all hand a message to somebody else's infrastructure and can fail there. In-app does
-/// not: the notification row's own existence is its in-app presence, written in the producer's
-/// transaction with no address and no failure mode, so in-app is deliberately absent from this
-/// enum. A delivery row whose status could only ever be one value would teach nothing and double
-/// the table — and keeping the enum to what can fail is what makes an operator's health view
-/// exactly a view over deliveries.
+/// <b>A channel is something that leaves the system.</b> Email and text message, and later
+/// WhatsApp and push, all hand a message to somebody else's infrastructure and can fail there.
+/// In-app does not: the notification row's own existence is its in-app presence, written in the
+/// producer's transaction with no address and no failure mode, so in-app is deliberately absent
+/// from this enum. A delivery row whose status could only ever be one value would teach nothing
+/// and double the table — and keeping the enum to what can fail is what makes an operator's
+/// health view exactly a view over deliveries.
 /// <para>
 /// Stored as smallint and append-only: values are part of the schema contract.
 /// </para>
@@ -19,6 +19,14 @@ namespace SilexGis.Domain.Entities;
 public enum NotificationChannel : short
 {
     Email = 0,
+
+    /// <summary>
+    /// Text message. The one value here that charges the installation per message, which is why a
+    /// row naming it is also a unit of spending: a day's cost is counted over the rows created
+    /// that day, so a row that exists has been committed to whether or not the gateway has taken
+    /// it yet.
+    /// </summary>
+    Sms = 1,
 }
 
 /// <summary>

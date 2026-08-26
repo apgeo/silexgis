@@ -77,6 +77,59 @@ public class DeliveryErrorTextTests
     }
 
     [Fact]
+    public void A_gateway_quoting_the_number_it_refused_does_not_carry_it_out()
+    {
+        // What a text-message gateway answers with. The destination is a sign-in credential as
+        // well as a way to reach somebody, and an unedited gateway body would put it on a page
+        // whose whole rule is that it never names a recipient.
+        var shown = DeliveryErrorText.ForOperator(
+            "SMS gateway returned 400 Bad Request. "
+            + "{\"code\":21211,\"message\":\"The 'To' number +40721234567 is not a valid phone number\"}");
+
+        shown.ShouldNotBeNull();
+        shown.ShouldNotContain("40721234567");
+        shown.ShouldNotContain("0721234567");
+        shown.ShouldContain(DeliveryErrorText.RedactedNumber);
+
+        // The diagnostic survives: the status the gateway answered with is short enough not to
+        // look like a number, and it is the half that tells one failure from another.
+        shown.ShouldContain("400 Bad Request");
+        shown.ShouldContain("not a valid phone number");
+    }
+
+    [Fact]
+    public void A_number_written_with_spaces_in_it_goes_like_any_other()
+    {
+        // Gateways and people both break numbers up, and a pattern that insists on an unbroken
+        // run of digits prints such a number whole.
+        var shown = DeliveryErrorText.ForOperator("invalid destination +40 721 234 567");
+
+        shown.ShouldNotBeNull();
+        shown.ShouldNotContain("721");
+        shown.ShouldBe($"invalid destination {DeliveryErrorText.RedactedNumber}");
+    }
+
+    [Fact]
+    public void A_number_is_removed_before_the_text_is_shortened()
+    {
+        var padding = new string('x', DeliveryErrorText.MaxLength);
+        var shown = DeliveryErrorText.ForOperator($"{padding} +40721234567");
+
+        shown.ShouldNotBeNull();
+        shown.ShouldNotContain("4072");
+        shown.Length.ShouldBeLessThanOrEqualTo(DeliveryErrorText.MaxLength + 1);
+    }
+
+    [Fact]
+    public void The_short_numbers_an_error_is_made_of_are_left_alone()
+    {
+        // A status code, an attempt count and a vendor error code are all numbers, and redacting
+        // them would leave a diagnostic nobody can act on. Nothing anybody dials is this short.
+        DeliveryErrorText.ForOperator("SMS gateway returned 429 Too Many Requests. code 21211")
+            .ShouldBe("SMS gateway returned 429 Too Many Requests. code 21211");
+    }
+
+    [Fact]
     public void A_long_failure_is_shortened_and_says_so()
     {
         var shown = DeliveryErrorText.ForOperator(new string('e', DeliveryErrorText.MaxLength + 50));

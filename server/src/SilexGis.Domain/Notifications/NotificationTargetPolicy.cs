@@ -71,7 +71,15 @@ public static class NotificationTargetPolicy
         };
 
     /// <summary>Whether a message must name what it is about.</summary>
+    /// <remarks>
+    /// A second wording is not a message a producer can emit, so it is not classified here. It is
+    /// rendered out of the notification that owns it and carries that notification's target, and
+    /// classifying it separately could only ever produce an answer contradicting the one that
+    /// governs the row — a second wording of an excused message would read as required, and the
+    /// contradiction would sit in the table with nothing looking at it.
+    /// </remarks>
     public static bool RequiresTarget(string templateKey) =>
         templateKey.StartsWith(TemplatePrefix, StringComparison.Ordinal)
+        && !MessageTemplateCatalog.IsSecondWording(templateKey)
         && !Exemptions.ContainsKey(templateKey);
 }

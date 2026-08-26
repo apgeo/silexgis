@@ -23,18 +23,18 @@ namespace SilexGis.Api.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// It exists so the day's spending ceiling can be made to refuse something. Nothing in the product
-/// charges per message yet, so the set of charging channels is empty in every configuration it
-/// ships in — and a guard that cannot be reached is a guard nobody has ever seen work. This is
-/// what the first one wired in will look like from the ceiling's point of view: a registered
-/// channel whose preference cell is one of the charging ones.
+/// It exists so the day's spending ceiling can be made to refuse something without any of it
+/// depending on who has a phone number. The real charging transport reaches only an account that
+/// has proved a number is its own, so a roster of accounts that have not would spend nothing and
+/// every refusal below would stop happening for a reason that has nothing to do with the ceiling.
+/// This one reaches everybody, which is what leaves the arithmetic as the only variable.
 /// </para>
 /// <para>
-/// It claims the one delivery value there is, replacing the mail channel rather than joining it —
-/// two implementations claiming the same value is itself refused, and there is deliberately no
-/// second value until something actually implements a second transport. What the ceiling reads is
-/// the channel's preference cell, so which value carries it does not change what is exercised:
-/// the set is derived, the day's rows are counted on it, and the arithmetic is the shipped one.
+/// It replaces every registered channel rather than joining them — two implementations claiming
+/// one delivery value is itself refused, and a second real channel alongside it would make a
+/// roster cost two rows a head instead of one. What the ceiling reads is the channel's preference
+/// cell, so which delivery value carries it does not change what is exercised: the set is derived,
+/// the day's rows are counted on it, and the arithmetic is the shipped one.
 /// </para>
 /// </remarks>
 internal sealed class ChargingTestChannel : INotificationChannel
@@ -44,6 +44,8 @@ internal sealed class ChargingTestChannel : INotificationChannel
     public NotificationChannelKind Kind => NotificationChannelKind.Sms;
 
     public bool Carries(MessageTemplateDefinition template) => true;
+
+    public ValueTask<bool> IsUsableAsync(CancellationToken ct) => ValueTask.FromResult(true);
 
     public bool CanReach(SilexGisUser recipient) => true;
 
@@ -114,8 +116,13 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
             services =>
             {
                 TestHostTweaks.WithoutJobWorker(services);
-                var mail = services.Single(d => d.ServiceType == typeof(INotificationChannel));
-                services.Remove(mail);
+                foreach (var registered in services
+                    .Where(d => d.ServiceType == typeof(INotificationChannel))
+                    .ToList())
+                {
+                    services.Remove(registered);
+                }
+
                 services.AddScoped<INotificationChannel, ChargingTestChannel>();
             });
 
@@ -235,6 +242,39 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
     }
 
     [Fact]
+    public async Task An_announcement_still_waiting_to_be_handed_out_is_headroom_the_next_one_cannot_have()
+    {
+        await StartAsync();
+        await SpendAsync(0);
+        await SetCeilingAsync(2);
+
+        // A second sender, because what is being pinned is two announcements racing each other
+        // and not one sender's own cooldown, which would refuse the second with a different
+        // answer entirely.
+        using var other = await SecondSenderAsync();
+
+        // Accepted: two people to reach and two messages allowed. Nothing has routed — the
+        // sending worker is stopped here exactly as it is briefly stopped in life, between the
+        // request that accepts an announcement and the pass that turns it into outbound copies.
+        (await AnnounceAsync("The meet is on.")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The window the ceiling used to be blind in. Counting only what has been handed over
+        // reads the same empty headroom the first announcement already took, and lets a second
+        // one through — four charged messages against a ceiling of two.
+        var refused = await AnnounceAsAsync(other, "And so is the other one.");
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+        (await refused.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("caving_group.announcement_paid_cap_reached");
+
+        // And the positive half: the refusal is arithmetic about the ceiling rather than a second
+        // sender being unable to announce at all.
+        await SetCeilingAsync(4);
+        (await AnnounceAsAsync(other, "And so is the other one."))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task An_installation_that_pays_for_nothing_counts_nothing()
     {
         // The default, and the shape of every installation today: the switch is off, so the
@@ -272,9 +312,9 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
 
     /// <summary>Puts <paramref name="count"/> charged messages into today, and nothing into any other day.</summary>
     /// <remarks>
-    /// Written straight into the outbox because no charging transport exists to produce them, and
-    /// the day's rows left by other test classes are cleared first so the count under test is this
-    /// test's own. Every class in this suite shares one database and they do not run at the same
+    /// Written straight into the outbox rather than produced by a hundred announcements, because
+    /// what is under test here is the arithmetic and not the transport, and the day's rows left by
+    /// other test classes are cleared first so the count under test is this test's own. Every class in this suite shares one database and they do not run at the same
     /// time as each other.
     /// </remarks>
     private async Task SpendAsync(int count)
@@ -282,6 +322,13 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.NotificationDeliveries.ExecuteDeleteAsync();
+
+        // What a day has promised counts as well as what it has handed over, so an announcement
+        // another class left waiting to be routed would be spending this test cannot see.
+        await db.Notifications
+            .Where(n => n.RoutedAt == null && n.Category == NotificationCategory.GroupAnnouncement)
+            .ExecuteDeleteAsync();
+        await db.CavingGroupAnnouncements.Where(a => a.ExpandedAt == null).ExecuteDeleteAsync();
 
         if (count == 0)
         {
@@ -340,8 +387,42 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
         }
     }
 
-    private Task<HttpResponseMessage> AnnounceAsync(string message) =>
-        leader.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/announcements", new { message });
+    private Task<HttpResponseMessage> AnnounceAsync(string message) => AnnounceAsAsync(leader, message);
+
+    private Task<HttpResponseMessage> AnnounceAsAsync(HttpClient client, string message) =>
+        client.PostAsJsonAsync($"/api/v1/caving-groups/{cavingGroupId}/announcements", new { message });
+
+    /// <summary>
+    /// A second account on the roster that may also announce to it, so two announcements can be
+    /// made one after the other without the per-sender cooldown being what stops the second.
+    /// </summary>
+    private async Task<HttpClient> SecondSenderAsync()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var email = $"cap-lead2-{suffix}@t.local";
+        var id = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, email);
+        mine.Add(id);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await RosterHelper.AddMemberAsync(db, cavingGroupId, id, CavingGroupRole.Owner);
+            db.AccessEntries.Add(new AccessEntry
+            {
+                SubjectKind = AccessSubjectKind.User,
+                SubjectId = id,
+                Effect = AccessEffect.Allow,
+                Domain = AccessDomain.CavingGroups,
+                Actions = AccessAction.Execute,
+                ScopeKind = AccessScopeKind.Object,
+                ScopeId = cavingGroupId,
+                GrantedBy = id,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        return await AuthHelper.BearerClientAsync(factory, email);
+    }
 
     private async Task<List<Notification>> NoticesForAsync(params Guid[] recipients)
     {

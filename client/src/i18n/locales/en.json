@@ -1754,7 +1754,7 @@
       "notificationsIntro": "How long this installation keeps what it has told people. What is saved here replaces the deployment's own setting; leave it alone and that setting stays in force.",
       "retentionDays": "Keep notifications for (days)",
       "retentionDaysHint": "A notification is deleted after this, read or unread alike, and whether or not an email ever went out for it. The record of how it was sent goes with it.",
-      "announcementsIntro": "What an announcement to a whole caving group may cost this installation. Nothing charges per message yet, so these decide what will be allowed once something does.",
+      "announcementsIntro": "What an announcement to a whole caving group may cost this installation. Text messages are charged for one by one and cannot be recalled once sent, so they reach nobody until this is switched on, and stop for the day once the limit below is reached.",
       "paidChannelsEnabled": "Allow announcements on channels that charge per message",
       "paidChannelsEnabledHint": "Off means off: while it is off, nobody can choose such a channel, no saved preference for one resolves to anything, and no outbound copy on one is ever created.",
       "dailyPaidMessageCap": "Charged messages a day",
@@ -1930,6 +1930,7 @@
       "name_notify_comment_reply": "A reply to a comment",
       "name_notify_comment_on_mine": "A comment on something of yours",
       "name_notify_group_announcement": "An announcement to a caving group",
+      "name_notify_group_announcement_sms": "An announcement to a caving group, by text",
       "name_notify_digest": "Daily summary"
     },
     "importSection": "Vector import"

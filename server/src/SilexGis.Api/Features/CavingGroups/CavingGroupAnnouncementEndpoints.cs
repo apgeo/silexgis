@@ -268,7 +268,11 @@ public static class CavingGroupAnnouncementEndpoints
                 ["actorName"] = senderName,
                 ["cavingGroupName"] = cavingGroupName,
                 ["announcement"] = message,
-                ["url"] = "/caving-groups",
+                // The inbox, because that is the one page an announcement can be read on. The
+                // group's own page is where one is written, not where one arrives, and a text
+                // message carries nothing but this link — so a link that landed anywhere else
+                // would be the whole message failing to keep its promise.
+                ["url"] = "/notifications",
             };
 
             foreach (var recipient in recipients)
@@ -312,6 +316,13 @@ public static class CavingGroupAnnouncementEndpoints
     /// would let the unusual one through, and the unusual one is the expensive one.
     /// </para>
     /// <para>
+    /// What has already been promised counts as well as what has already left, because an
+    /// announcement becomes outbound copies moments after it is accepted rather than inside the
+    /// request that accepts it. Reading only what has left would hand the same headroom to every
+    /// announcement made before the first one was routed, and two announcements of sixty would
+    /// pass a ceiling of a hundred between them.
+    /// </para>
+    /// <para>
     /// While the installation has agreed to no paid channel, the set is empty, this costs nothing
     /// and refuses nothing. That is the honest shape rather than a special case: the ceiling is
     /// real and simply never binds until there is something to spend.
@@ -332,9 +343,9 @@ public static class CavingGroupAnnouncementEndpoints
         }
 
         var wouldSend = recipientCount * paidChannels.Count;
-        var sentToday = await PaidMessageBudget.SpentTodayAsync(db, paidChannels, clock, ct);
+        var committedToday = await PaidMessageBudget.CommittedTodayAsync(db, paidChannels, clock, ct);
 
-        return sentToday + wouldSend > announcements.EffectiveDailyPaidMessageCap
+        return committedToday + wouldSend > announcements.EffectiveDailyPaidMessageCap
             ? ApiProblems.BadRequest(
                 "caving_group.announcement_paid_cap_reached",
                 "This installation has reached what it will spend on messages today.")

@@ -572,6 +572,12 @@ For Twilio, point `Url` at
 `ContentType=application/json` and a body such as
 `{"to":"{to}","from":"{from}","message":"{text}"}`.
 
+A configured SMS gateway is also what a charging notification channel needs: with
+`SILEXGIS__Announcements__PaidChannelsEnabled` on, an announcement to a caving group may be
+texted to the members who have confirmed a telephone number, and every such message is charged by
+your gateway. Nothing else is ever texted, and `SILEXGIS__Announcements__DailyPaidMessageCap`
+bounds what one day of it may cost.
+
 Use **Messaging → Send test** in the admin pages to confirm a channel works before anyone
 depends on it; a failure is reported with the server's own error message.
 
@@ -622,7 +628,10 @@ policy**:
 
 A member's **telephone number is a sign-in credential**, not a profile field: it can only be changed
 through the security page, by returning a code texted to the new number, and one number belongs to
-one account. Whether other members can see it is still a profile setting.
+one account. Whether other members can see it is still a profile setting. A **confirmed** number is
+also the only address a notification can be texted to, so a member who has never confirmed one is
+never reached that way — and a number waiting for its code is nobody's address, only the
+destination of the code that proves it.
 
 ## Non-Docker install
 
@@ -694,7 +703,7 @@ All settings bind from `SILEXGIS__{Section}__{Key}` environment variables. The c
 | `SILEXGIS__Notifications__TimeZone` | `UTC` | the IANA zone whose night is used for a member who has never told the installation theirs; a member's own zone is stored the first time their browser reports it |
 | `SILEXGIS__Notifications__BadgeTransport` | `poll` | how a signed-in page keeps the unread count in the header current. `poll` — the only transport implemented — asks again once a minute. `sse` is reserved for a server-pushed stream and does not exist yet: selecting it today leaves the count moving only when the reader marks something read or returns to the tab. Any other value is treated as a typo and answered as `poll` |
 | `SILEXGIS__Notifications__AnnouncementFanOutLimit` | `50` | how many people an announcement to a caving group may be written to inside the request that sends it. A roster larger than this is recorded once and handed out by a background pass moments later, so a large club does not turn one click into a slow request holding a write transaction open. The number is budgeted from what a caving club is rather than measured — a local club runs to a few dozen, a national federation to several hundred — so raise it if your largest roster is bigger and sending still feels instant |
-| `SILEXGIS__Announcements__PaidChannelsEnabled` | `false` | whether an announcement to a caving group may go out by a channel that charges for every message. Off, so an installation opts into spending money rather than inheriting it — and while it is off such a channel is not merely hidden: no member can choose it, no preference for it resolves to anything, and no outbound copy on it is created. Also editable in **Admin → Messaging → Notifications**; what is saved there replaces this value. Note that nothing yet implements a charging channel for notifications, so switching this on changes nothing until one is wired in |
+| `SILEXGIS__Announcements__PaidChannelsEnabled` | `false` | whether an announcement to a caving group may go out by a channel that charges for every message. Off, so an installation opts into spending money rather than inheriting it — and while it is off such a channel is not merely hidden: no member can choose it, no preference for it resolves to anything, and no outbound copy on it is created. Also editable in **Admin → Messaging → Notifications**; what is saved there replaces this value. The charging channel is the **text message**, so switching this on can put real messages on a real bill: it additionally needs the `SILEXGIS__Sms__*` settings (or **Admin → Messaging → SMS**) pointing at a working gateway, and only an announcement to a caving group may use it. A member is texted only if they have confirmed a telephone number on their own security page |
 | `SILEXGIS__Announcements__DailyPaidMessageCap` | `100` | how many messages on a charging channel this installation will send in a day before it refuses. Counted over messages already committed today, including ones still waiting to go out, because money committed is money spent. Values of zero or less are ignored in favour of the default — the switch above is how an installation sends none. Also editable in **Admin → Messaging → Notifications** |
 | `SILEXGIS__About__InstanceName` | `SilexGIS` | name used in the messages this installation sends |
 | `SILEXGIS__Auth__DefaultPermissionGroups` | *(empty)* | comma-separated permission-group slugs (e.g. `editors`) every new account joins at registration or first external sign-in |

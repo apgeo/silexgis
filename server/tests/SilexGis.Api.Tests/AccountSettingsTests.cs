@@ -530,8 +530,9 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task A_channel_a_category_may_never_use_is_refused()
     {
-        // Nothing here is worth what a text message costs, so no category's ceiling names it —
-        // and a write that asks for one anyway is told so rather than silently dropped.
+        // One category names a text message in its ceiling and no other does, because only a line
+        // somebody composed for a whole roster is worth what one costs — and a write that asks for
+        // one anywhere else is told so rather than silently dropped.
         var response = await me.PutAsJsonAsync("/api/v1/me/notifications/", new
         {
             categories = new[]

@@ -102,8 +102,8 @@ public enum NotificationChannelKind : short
     /// it is named in <see cref="NotificationChannelKinds.Paid"/> and why only the one category
     /// somebody sends on purpose to a roster has it in its ceiling. Being in a ceiling is not the
     /// same as being reachable: a paid channel is additionally masked out unless the installation
-    /// has said it will pay for that kind of message, and nothing implements the transport as a
-    /// notification channel yet, so today it resolves to nothing from both directions at once.
+    /// has said it will pay for that kind of message, so an installation that has not said so
+    /// resolves this to nothing however many accounts have a number.
     /// </summary>
     Sms = 4,
 }

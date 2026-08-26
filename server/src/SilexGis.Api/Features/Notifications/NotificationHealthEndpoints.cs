@@ -38,10 +38,13 @@ public sealed record NotificationDeliveryCountDto(
 /// </param>
 /// <param name="PaidMessagesToday">
 /// How many of today's messages went out on a channel that charges for each one, counted since
-/// midnight UTC and including ones still waiting: money committed is money spent. It belongs here
+/// midnight UTC and including ones still waiting — and ones accepted but not yet handed out at
+/// all, because an announcement becomes outbound copies moments after the request that accepts
+/// it rather than inside it: money committed is money spent. It belongs here
 /// rather than on a page of its own — this is already where an operator comes to ask what is
-/// leaving the installation, and what it is costing is the same question. Zero while nothing that
-/// charges is wired, which is every installation today.
+/// leaving the installation, and what it is costing is the same question. Zero on an installation
+/// that has not agreed to pay for messages, because there is then no charged copy of anything to
+/// count rather than a charged copy that was suppressed.
 /// </param>
 /// <param name="DailyPaidMessageCap">
 /// What the count above is refused past. Shown beside it so the number means something: a count
@@ -191,7 +194,10 @@ public static class NotificationHealthEndpoints
         // headroom the next announcement finds are the same number.
         var announcements = await settings.GetAnnouncementsAsync(ct);
         var paidChannels = PaidMessageBudget.ChannelsFor(channels, announcements);
-        var paidToday = await PaidMessageBudget.SpentTodayAsync(db, paidChannels, clock, ct);
+        // The same figure the announcement endpoint refuses against, from the same home. An
+        // operator shown a smaller one would read headroom on the day announcements started being
+        // turned away.
+        var paidToday = await PaidMessageBudget.CommittedTodayAsync(db, paidChannels, clock, ct);
 
         return TypedResults.Ok(new NotificationHealthDto(
             [

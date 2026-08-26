@@ -25,6 +25,9 @@ public static partial class DeliveryErrorText
     /// <summary>What an address is replaced by, so a reader can tell one was there.</summary>
     public const string RedactedAddress = "[address]";
 
+    /// <summary>What a telephone number is replaced by, for the same reason.</summary>
+    public const string RedactedNumber = "[number]";
+
     /// <summary>
     /// How much of a failure is worth a table cell. Long enough for the status line a server
     /// answers with, short enough that one row cannot push the rest of the page off the screen;
@@ -51,6 +54,27 @@ public static partial class DeliveryErrorText
     private static partial Regex AddressPattern();
 
     /// <summary>
+    /// Anything telephone-shaped: an optional plus, then seven to fifteen digits, which may be
+    /// broken up by the spacing and bracketing people and gateways write numbers with.
+    /// </summary>
+    /// <remarks>
+    /// An address is not the only recipient a far side quotes back. A gateway that refuses a
+    /// message routinely names the destination it refused — <c>invalid destination
+    /// +40721234567</c> — and a number here is a sign-in credential as well as a way to reach
+    /// somebody, so it belongs on this page no more than an email address does.
+    /// <para>
+    /// Seven digits at the least, because that is the shortest thing anybody dials, and shorter
+    /// runs are the numbers an error text is actually made of: a status line's code, a message
+    /// id's counter, an attempt number. Fifteen at the most, which is the longest number the
+    /// international plan allows. The same trade-off as above decides the width: redacting
+    /// something that was not a number costs a redaction and a reader who can still tell what
+    /// kind of failure it was, while missing one costs the number.
+    /// </para>
+    /// </remarks>
+    [GeneratedRegex(@"\+?\d(?:[\s\-.()]?\d){6,14}", RegexOptions.CultureInvariant)]
+    private static partial Regex NumberPattern();
+
+    /// <summary>
     /// The failure as an operator may read it: addresses redacted, then shortened.
     /// </summary>
     /// <remarks>
@@ -64,7 +88,10 @@ public static partial class DeliveryErrorText
             return null;
         }
 
+        // Addresses first: an address may have digits in it, and redacting it whole leaves
+        // nothing telephone-shaped behind for the second pass to find inside it.
         var redacted = AddressPattern().Replace(error, RedactedAddress);
+        redacted = NumberPattern().Replace(redacted, RedactedNumber);
         return redacted.Length <= MaxLength ? redacted : redacted[..MaxLength] + "…";
     }
 }

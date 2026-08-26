@@ -178,8 +178,8 @@ export default function NotificationHealthPage() {
         {/* What today has cost, beside the day's ceiling, because a count with no ceiling next to
             it cannot say whether the next announcement will go out. It sits here rather than on a
             page of its own: this is already where an operator comes to ask what is leaving the
-            installation, and what it costs is the same question. Zero on every installation until
-            something that charges per message is wired in. */}
+            installation, and what it costs is the same question. Zero until the installation has
+            agreed to pay for messages, because nothing charged is created before then. */}
         <Statistic
           title={t('notificationHealth.paidToday')}
           value={t('notificationHealth.paidTodayValue', {

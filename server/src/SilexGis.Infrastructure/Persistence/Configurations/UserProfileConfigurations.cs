@@ -194,5 +194,13 @@ public sealed class NotificationDeliveryConfiguration : IEntityTypeConfiguration
         builder.HasIndex(x => x.CreatedAt)
             .HasFilter("status = 0")
             .HasDatabaseName("ix_notification_deliveries_pending_created_at");
+
+        // What a day of messages on a charging channel has cost. Asked on the request path of
+        // every announcement — before it is accepted, which is the whole point of the ceiling —
+        // and again every time the operator's health page is opened. Without this the question is
+        // a scan of every outbound copy the installation has kept, which is a year of them, and
+        // it gets slower exactly as the installation gets busier. Channel first because it is the
+        // equality half of the predicate and the range over the day follows it.
+        builder.HasIndex(x => new { x.Channel, x.CreatedAt });
     }
 }

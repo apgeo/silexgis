@@ -103,6 +103,13 @@ public sealed class CavingGroupAnnouncementTests : IAsyncLifetime, IDisposable
         told[0].TemplateKey.ShouldBe(MessageTemplateCatalog.NotifyGroupAnnouncement);
         told[0].Placeholders.ShouldContain("The Sunday meet moves to 09:00.");
 
+        // Where the message points, which is the whole of what a text message says: it carries
+        // the announcement nowhere, only the link, so a link that landed on a page an
+        // announcement is never shown on would be the message failing to keep its promise. The
+        // inbox is that page; the group's own page is where an announcement is written.
+        told[0].Placeholders.ShouldContain("/notifications");
+        told[0].Placeholders.ShouldNotContain("/caving-groups");
+
         // The same announcement, in the same act, reached nobody off the roster — and the sender
         // is not told what they themselves just wrote.
         (await NoticesForAsync(strangerId)).ShouldBeEmpty();

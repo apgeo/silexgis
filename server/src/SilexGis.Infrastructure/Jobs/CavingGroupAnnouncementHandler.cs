@@ -67,7 +67,11 @@ public sealed class CavingGroupAnnouncementHandler(
             ["actorName"] = announcement.SenderName,
             ["cavingGroupName"] = announcement.CavingGroupName,
             ["announcement"] = announcement.Message,
-            ["url"] = "/caving-groups",
+            // The inbox, because that is the one page an announcement can be read on. The
+            // group's own page is where one is written, not where one arrives, and a text
+            // message carries nothing but this link — so a link that landed anywhere else
+            // would be the whole message failing to keep its promise.
+            ["url"] = "/notifications",
         };
 
         foreach (var recipient in recipients)

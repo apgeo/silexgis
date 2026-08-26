@@ -148,6 +148,7 @@ public static class DependencyInjection
         // branch appearing in the routing pass. In-app is deliberately not here: the notification
         // row's own existence is its in-app presence and nothing about it can fail.
         services.AddScoped<INotificationChannel, EmailNotificationChannel>();
+        services.AddScoped<INotificationChannel, SmsNotificationChannel>();
         services.AddScoped<NotificationChannels>();
 
         services.AddScoped<NotificationOptOut>();

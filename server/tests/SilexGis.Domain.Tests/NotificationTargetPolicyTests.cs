@@ -36,6 +36,7 @@ public class NotificationTargetPolicyTests
         // cannot do without one.
         var notifications = MessageTemplateCatalog.All
             .Where(d => d.Key.StartsWith(NotificationTargetPolicy.TemplatePrefix, StringComparison.Ordinal))
+            .Where(d => !MessageTemplateCatalog.IsSecondWording(d.Key))
             .Select(d => d.Key)
             .ToList();
 
@@ -45,6 +46,30 @@ public class NotificationTargetPolicyTests
         {
             var excused = NotificationTargetPolicy.Exemptions.ContainsKey(key);
             NotificationTargetPolicy.RequiresTarget(key).ShouldBe(!excused, key);
+        }
+    }
+
+    [Fact]
+    public void A_second_wording_is_classified_through_the_message_it_belongs_to_and_not_on_its_own()
+    {
+        // A message written twice is still one message, queued once, and the row that carries it
+        // names one subject. Asking the same question of its second wording could only produce a
+        // second answer to a settled question — and for a message that is excused, the two answers
+        // would contradict each other with nothing looking at the pair.
+        //
+        // Both halves are asserted here so the exclusion cannot be read as a hole: the message
+        // itself is still required to name what it is about, and only the wording is passed over.
+        MessageTemplateCatalog.SecondWordings.ShouldNotBeEmpty();
+
+        foreach (var (message, wording) in MessageTemplateCatalog.SecondWordings)
+        {
+            var excused = NotificationTargetPolicy.Exemptions.ContainsKey(message);
+            NotificationTargetPolicy.RequiresTarget(message).ShouldBe(!excused, message);
+
+            // Out of the classification altogether rather than excused by it: an entry on the
+            // exemption list is a gap somebody accepted and has to justify, and this is not a gap.
+            NotificationTargetPolicy.RequiresTarget(wording).ShouldBeFalse(wording);
+            NotificationTargetPolicy.Exemptions.ShouldNotContainKey(wording);
         }
     }
 

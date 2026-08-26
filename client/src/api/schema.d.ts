@@ -15308,7 +15308,7 @@ export interface components {
             channels: components["schemas"]["NotificationChannelWrite"][];
         };
         /** @enum {unknown} */
-        NotificationChannel: "email";
+        NotificationChannel: "email" | "sms";
         /** @enum {unknown} */
         NotificationChannelChoice: "off" | "immediate" | "daily";
         NotificationChannelDto: {

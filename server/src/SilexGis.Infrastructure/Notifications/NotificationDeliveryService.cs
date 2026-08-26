@@ -394,6 +394,21 @@ public sealed class NotificationDeliveryService(
             return;
         }
 
+        // Narrowed again by what this installation has actually been given for each transport.
+        // A transport with no settings is not here, so it writes no row — the same outcome as a
+        // channel nobody implemented, and for the same reason: a row that could only ever go to
+        // the log would still settle as sent, and on a transport that bills per message it would
+        // spend a day's ceiling on messages nobody was charged for. Not a fault, so it is asked
+        // after the question above and never turned into a dead row.
+        var installed = new List<INotificationChannel>(carriers.Count);
+        foreach (var carrier in carriers)
+        {
+            if (await carrier.IsUsableAsync(ct))
+            {
+                installed.Add(carrier);
+            }
+        }
+
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == row.RecipientUserId, ct);
         if (user is null)
         {
@@ -409,7 +424,7 @@ public sealed class NotificationDeliveryService(
         // Every willing channel is asked, and the answers become rows. Zero rows is an ordinary
         // outcome, not a failure: the notification has happened and is readable in the inbox
         // whether or not any copy of it left the system.
-        var answers = carriers
+        var answers = installed
             .Select(channel => (
                 channel.Channel,
                 Route: channel.Decide(user, Resolve(row.Category, channel.Kind, stored, paidChannelsAllowed))))
@@ -474,6 +489,16 @@ public sealed class NotificationDeliveryService(
     private async Task<bool> SuppressedNowAsync(
         SilexGisUser user, Notification row, INotificationChannel channel, CancellationToken ct)
     {
+        // The transport's own settings are re-read here too, not only the recipient's answer. An
+        // operator can clear a gateway between the routing pass and the send, and a row that then
+        // went only to the log would settle as sent and be counted as money — so a transport that
+        // has stopped being here drops the delivery, which gives the day its spending back for
+        // the same reason a suppressed one does: nothing left.
+        if (!await channel.IsUsableAsync(ct))
+        {
+            return true;
+        }
+
         var stored = await StoredAsync(user.Id, row.Category, ct);
         return channel.Decide(
                 user, Resolve(row.Category, channel.Kind, stored, await PaidChannelsAllowedAsync(ct)))
@@ -567,10 +592,12 @@ public sealed class NotificationDeliveryService(
     /// Records a fault that stopped a notification being routed at all.
     /// </summary>
     /// <remarks>
-    /// It lands on the channel the installation sends notifications on, because an operator's view
-    /// of what is going wrong is a view over deliveries and a fault with no delivery row is a fault
-    /// nobody can see. Which channel that is stays arbitrary only while one of them leaves the
-    /// system; a second will want the row to name the transport the wording was written for.
+    /// It lands on a delivery row because an operator's view of what is going wrong is a view over
+    /// deliveries, and a fault with no row is a fault nobody can see. Which channel it names is not
+    /// arbitrary now that one of them charges: nothing was handed to anybody here, so naming a
+    /// channel that bills per message would put a charge in the day's spending for a message that
+    /// never left, and the operator's headroom would drift away from the sender's on faults alone.
+    /// So a fault names a transport that costs nothing.
     /// </remarks>
     private void AddDead(Notification row, string error) =>
         db.NotificationDeliveries.Add(new NotificationDelivery

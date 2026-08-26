@@ -163,6 +163,140 @@ public class MessageTemplateTests
         }
     }
 
+    [Fact]
+    public void A_message_written_twice_names_a_second_wording_that_exists_and_travels_another_way()
+    {
+        // The pairing is the only thing joining the two, so everything it claims is checked: both
+        // ends exist, they are different entries, and the second really is written for a transport
+        // the first is not — a pair whose halves share a channel would be a duplicate somebody
+        // would eventually edit one of.
+        MessageTemplateCatalog.SecondWordings.ShouldNotBeEmpty();
+
+        foreach (var (message, wording) in MessageTemplateCatalog.SecondWordings)
+        {
+            message.ShouldNotBe(wording);
+
+            var first = MessageTemplateCatalog.Find(message).ShouldNotBeNull(message);
+            var second = MessageTemplateCatalog.Find(wording).ShouldNotBeNull(wording);
+
+            second.Channel.ShouldNotBe(first.Channel, wording);
+            MessageTemplateCatalog.IsSecondWording(wording).ShouldBeTrue(wording);
+
+            // No chains. A wording is reached from the message it belongs to and from nowhere
+            // else, so one that is itself somebody's message would be reachable two ways.
+            MessageTemplateCatalog.IsSecondWording(message).ShouldBeFalse(message);
+            MessageTemplateCatalog.SecondWordings.ShouldNotContain(pair => pair.Message == wording);
+        }
+    }
+
+    [Fact]
+    public void A_second_wording_may_say_no_more_than_the_message_it_is_a_wording_of()
+    {
+        // Both wordings are rendered from one bag of values, frozen by the producer at the moment
+        // it queued the message it was writing — and the producer was written against the first
+        // wording's declared list. A second wording naming anything outside that list asks for a
+        // value nobody supplies, and the renderer leaves an unsupplied placeholder empty rather
+        // than complaining, so the message would simply arrive with a hole where the fact was.
+        foreach (var (message, wording) in MessageTemplateCatalog.SecondWordings)
+        {
+            var first = MessageTemplateCatalog.Find(message)!;
+            var second = MessageTemplateCatalog.Find(wording)!;
+
+            foreach (var placeholder in second.Placeholders)
+            {
+                first.Placeholders.ShouldContain(
+                    placeholder,
+                    $"{wording} declares {{{placeholder}}}, which {message} never carries");
+            }
+        }
+    }
+
+    [Fact]
+    public void A_second_wording_is_swept_by_the_guards_that_hold_over_notifications()
+    {
+        // Every rule about what a notification may say is applied by reading the key: the ban on
+        // a placeholder a coordinate could arrive in, and the two catalogue-wide sweeps over
+        // language and declared placeholders, all find their subjects that way. So a wording of a
+        // notification has to be named as one — this pins the reason those guards reach it, which
+        // is the half that would rot silently if a later wording were named some other way.
+        foreach (var (message, wording) in MessageTemplateCatalog.SecondWordings)
+        {
+            if (!message.StartsWith(NotificationTargetPolicy.TemplatePrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            wording.StartsWith(NotificationTargetPolicy.TemplatePrefix, StringComparison.Ordinal)
+                .ShouldBeTrue($"{wording} is a wording of a notification and must be named as one");
+
+            MessageTemplateCatalog.All.ShouldContain(d => d.Key == wording);
+        }
+    }
+
+    [Theory]
+    [InlineData(MessageChannel.Email, MessageTemplateCatalog.NotifyGroupAnnouncement)]
+    [InlineData(MessageChannel.Sms, MessageTemplateCatalog.NotifyGroupAnnouncementSms)]
+    public void Whatever_sends_is_told_which_wording_its_transport_can_read(
+        MessageChannel channel, string expected)
+    {
+        // Asserted through a non-null check rather than a null-conditional call: an answer of
+        // null is exactly the regression this exists to catch, and a conditional one would skip
+        // the assertion instead of failing on it.
+        MessageTemplateCatalog.On(MessageTemplateCatalog.NotifyGroupAnnouncement, channel)
+            .ShouldNotBeNull()
+            .Key.ShouldBe(expected);
+    }
+
+    [Fact]
+    public void A_message_with_no_wording_for_a_transport_is_not_carried_by_it()
+    {
+        // The refusal is the point: without it whatever sends would have to fall back on the one
+        // wording that exists, and a mailbox message — a greeting, an opt-out line and a blank
+        // line between every paragraph — would be billed by the character to somebody's phone.
+        MessageTemplateCatalog.On(MessageTemplateCatalog.NotifyCommentReply, MessageChannel.Sms)
+            .ShouldBeNull();
+
+        // And the positive case in the same breath, so a method that had simply stopped answering
+        // could not pass this.
+        MessageTemplateCatalog.On(MessageTemplateCatalog.NotifyCommentReply, MessageChannel.Email)
+            .ShouldNotBeNull();
+
+        MessageTemplateCatalog.On("notify.no-such-message", MessageChannel.Email).ShouldBeNull();
+    }
+
+    [Fact]
+    public void An_announcement_by_text_says_that_one_arrived_and_where_to_look_and_nothing_of_it()
+    {
+        // A text leaves the installation and obeys none of its rules afterwards: it does not
+        // expire, it cannot be withdrawn, and nothing re-checks the reader's access when they
+        // finally look at it. The line somebody typed for a roster is exactly what a reader who
+        // has since left the club must stop seeing, so it never enters the message — the notice
+        // says that one arrived and where to read it, and the reading is where the check happens.
+        //
+        // Pinning the declared list is what makes that hold rather than describe today's wording:
+        // the renderer refuses any placeholder off the list and an operator rewrite is refused the
+        // same way, so the announcement can only reach a phone by being declared here first.
+        var definition = MessageTemplateCatalog.Find(MessageTemplateCatalog.NotifyGroupAnnouncementSms)
+            .ShouldNotBeNull();
+
+        definition.Channel.ShouldBe(MessageChannel.Sms);
+        definition.Placeholders.ShouldBe(
+            ["appName", "actorName", "cavingGroupName", "url"],
+            ignoreOrder: true);
+
+        definition.Placeholders.ShouldNotContain("announcement");
+        definition.Placeholders.ShouldNotContain("unsubscribeUrl");
+
+        foreach (var locale in MessageTemplateCatalog.Locales)
+        {
+            var text = MessageTemplateCatalog.Default(definition, locale);
+            text.Subject.ShouldBeNull($"{definition.Key} ({locale})");
+            text.Body.ShouldNotBeNullOrWhiteSpace($"{definition.Key} ({locale})");
+            text.Body.ShouldContain("{url}", customMessage: $"{definition.Key} ({locale})");
+            text.Body.ShouldNotContain("\n", customMessage: $"{definition.Key} ({locale})");
+        }
+    }
+
     [Theory]
     [InlineData("ro", "ro")]
     [InlineData("ro-RO", "ro")]

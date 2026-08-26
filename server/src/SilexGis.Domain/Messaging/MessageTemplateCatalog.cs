@@ -71,6 +71,14 @@ public static class MessageTemplateCatalog
     /// </summary>
     public const string NotifyGroupAnnouncement = "notify.group-announcement";
 
+    /// <summary>
+    /// The same announcement written to be read on a phone's lock screen. A second wording of
+    /// <see cref="NotifyGroupAnnouncement"/>, never queued by anything: a producer writes the
+    /// message it is reporting and knows nothing about how it will travel, and whatever carries a
+    /// message out of the system asks the catalogue for the wording its transport can read.
+    /// </summary>
+    public const string NotifyGroupAnnouncementSms = "notify.group-announcement.sms";
+
     public const string NotifyPermissionGranted = "notify.permission-granted";
 
     public const string NotifyTripParticipation = "notify.trip-participation";
@@ -431,6 +439,28 @@ public static class MessageTemplateCatalog
 
                     {unsubscribeUrl}
                     """),
+            }),
+
+        // Deliberately says less than the message it is a wording of, and the narrowing is the
+        // point rather than an economy. A text leaves the installation and obeys none of its rules
+        // afterwards — it does not expire, it cannot be withdrawn, and nothing re-checks the
+        // reader's access at the moment they look at it — so this says that an announcement
+        // arrived and where to read it, and resolves none of it into the message itself. Three
+        // things the mailbox wording carries are therefore absent: the announcement, which is a
+        // line somebody typed for a roster and is exactly what a reader who has since left the
+        // club must stop seeing; the greeting, because a phone already knows whose it is and every
+        // character is billed; and the one-click opt-out, because it is a signed link that would
+        // travel unrecallably beside the notice it opts out of, and this channel is switched off
+        // in the same settings that switched it on.
+        new(
+            NotifyGroupAnnouncementSms,
+            MessageChannel.Sms,
+            "The same announcement, written for a phone: that one arrived, and where to read it.",
+            [AppName, ActorName, "cavingGroupName", "url"],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(null, "{appName}: {actorName} wrote to {cavingGroupName}. Read it at {url}"),
+                ["ro"] = new(null, "{appName}: {actorName} a scris grupului {cavingGroupName}. Citiți mesajul la {url}"),
             }),
 
         new(
@@ -904,6 +934,77 @@ public static class MessageTemplateCatalog
                     """),
             }),
     ];
+
+    /// <summary>
+    /// Messages written twice, each paired with the entry carrying the second wording. The first
+    /// of a pair is the message a producer queues; the second exists only to be rendered when
+    /// that message travels on a transport the first was not written for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A text message is not a short email. It has no subject, it is billed by the character, and
+    /// it arrives on a screen with no formatting and no way to open a second thing — so a message
+    /// that may go both ways has to be written twice. The second wording is a catalogue entry of
+    /// its own rather than an extra field on the first, for three reasons that all point the same
+    /// way. It declares its own placeholders, and that list is the ceiling on what a wording may
+    /// emit, so one shared list would raise the ceiling for both to whatever the wider one needs.
+    /// It is rewritten by an operator through the same lookup as every other wording, which is a
+    /// key and a language and nothing else, so nothing about the editor, its route or its storage
+    /// has to learn that some messages are written more than once. And every guard over this
+    /// catalogue reads a definition's key, channel and declared placeholders — so wording added
+    /// this way is swept by all of them the day it lands, rather than after somebody remembers to
+    /// teach each one a new shape.
+    /// </para>
+    /// <para>
+    /// What must not follow from this is a producer choosing between two names. A producer writes
+    /// down what happened and who it concerns; which transports will carry that, and therefore
+    /// which wording is rendered, is settled far downstream of anything a feature knows. So the
+    /// pairing is resolved here, by whatever is about to hand the message over.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<(string Message, string Wording)> SecondWordings { get; } =
+    [
+        (NotifyGroupAnnouncement, NotifyGroupAnnouncementSms),
+    ];
+
+    /// <summary>
+    /// The wording of <paramref name="templateKey"/> that <paramref name="channel"/> can carry, or
+    /// null when this message has no form that travels that way.
+    /// </summary>
+    /// <remarks>
+    /// Asked twice by whatever sends: once to decide whether it is willing to carry the message at
+    /// all, and again to name the wording it renders. Both answers come from here, so they cannot
+    /// disagree, and a message with no wording for a transport is simply not carried by it rather
+    /// than carried badly.
+    /// </remarks>
+    public static MessageTemplateDefinition? On(string templateKey, MessageChannel channel)
+    {
+        var definition = Find(templateKey);
+        if (definition is null || definition.Channel == channel)
+        {
+            return definition;
+        }
+
+        foreach (var (message, wording) in SecondWordings)
+        {
+            if (string.Equals(message, templateKey, StringComparison.Ordinal)
+                && Find(wording) is { } second
+                && second.Channel == channel)
+            {
+                return second;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether this entry exists only as another message's wording. Nothing queues one: it is
+    /// reached through the message it belongs to, and carries that message's subject, target and
+    /// values rather than any of its own.
+    /// </summary>
+    public static bool IsSecondWording(string key) =>
+        SecondWordings.Any(pair => string.Equals(pair.Wording, key, StringComparison.Ordinal));
 
     public static MessageTemplateDefinition? Find(string key) =>
         All.FirstOrDefault(d => string.Equals(d.Key, key, StringComparison.Ordinal));

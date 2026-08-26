@@ -53,6 +53,26 @@ public interface INotificationChannel
     bool Carries(MessageTemplateDefinition template);
 
     /// <summary>
+    /// Whether this installation has been given what this transport needs to carry anything.
+    /// </summary>
+    /// <remarks>
+    /// A statement about the installation, and the third one the router asks alongside "can this
+    /// wording travel here" and "can this recipient be reached here". It is separate from both
+    /// because it has a different answer when it is false: a transport with no settings is not
+    /// here at all, so it writes no delivery row, the same as a channel nobody implemented. A row
+    /// would be worse than nothing on a transport that bills per message — the message goes only
+    /// to the log, the row settles as sent, and a day's spending would count money nobody was
+    /// ever asked for while the ceiling it is counted against refused the next announcement.
+    /// <para>
+    /// Not every transport answers this the same way, which is why it is asked of the transport.
+    /// A message with nowhere to be posted is written to the log on purpose here — that is the
+    /// documented mode for a small installation and it costs nothing — so a channel whose
+    /// unconfigured behaviour is free says so by answering true.
+    /// </para>
+    /// </remarks>
+    ValueTask<bool> IsUsableAsync(CancellationToken ct);
+
+    /// <summary>
     /// Whether there is anywhere to send to on this channel right now.
     /// </summary>
     /// <remarks>
@@ -122,8 +142,8 @@ public sealed class NotificationChannels
     /// preference cell. The implementation already carries both halves, and the round trip through
     /// a value-to-cell table would be a second place the same pairing is written down — one that
     /// only the first charging transport ever executes, and therefore one whose first execution
-    /// would be in production. Empty while nothing that charges is wired, which is the honest
-    /// answer rather than a special case: a count over no channels is zero.
+    /// would be in production. Empty on an installation with nothing charging wired, which is the
+    /// honest answer rather than a special case: a count over no channels is zero.
     /// </remarks>
     public IReadOnlyList<NotificationChannel> PaidFor(NotificationChannelKind kinds) =>
         [.. All
