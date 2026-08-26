@@ -47,7 +47,14 @@ public class NotificationMatrixTests
         // The single easiest thing here to break in silence: nothing stored is the ordinary case,
         // not "everything off". Read through the same function the worker reads through, so a
         // default that drifts cannot drift only for the worker.
-        var expected = (NotificationCategories.Ceiling(category) & channel) == channel
+        //
+        // A channel that costs money is the exception, and it is a rule about consent rather than
+        // about cost: the only number held is the one confirmed to sign in with, and confirming it
+        // proves whose number it is, not that its owner agreed to be texted. So a paid cell starts
+        // off however wide the category's ceiling is, and somebody has to choose it.
+        var inCeiling = (NotificationCategories.Ceiling(category) & channel) == channel;
+        var costsMoney = (NotificationChannelKinds.Paid & channel) == channel;
+        var expected = inCeiling && !costsMoney
             ? NotificationChannelChoice.Immediate
             : NotificationChannelChoice.Off;
 

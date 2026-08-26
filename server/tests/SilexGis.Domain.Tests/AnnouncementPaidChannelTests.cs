@@ -82,10 +82,21 @@ public class AnnouncementPaidChannelTests
             .Usable(NotificationCategory.GroupAnnouncement, EverythingInstalled, settings.PaidChannelsAllowed)
             .ShouldBe(EverythingInstalled);
 
+        // Two answers are needed before a text is sent, and this is where they meet. The
+        // installation's switch decides whether the channel may be reached at all; the account's
+        // own answer decides whether it is. So with nothing stored it is still off — a confirmed
+        // sign-in number is not consent to be texted — and it is one saved choice that turns it on.
         NotificationMatrix.Resolve(
             NotificationCategory.GroupAnnouncement,
             NotificationChannelKind.Sms,
             null,
+            EverythingInstalled,
+            settings.PaidChannelsAllowed).ShouldBe(NotificationChannelChoice.Off);
+
+        NotificationMatrix.Resolve(
+            NotificationCategory.GroupAnnouncement,
+            NotificationChannelKind.Sms,
+            NotificationChannelChoice.Immediate,
             EverythingInstalled,
             settings.PaidChannelsAllowed).ShouldBe(NotificationChannelChoice.Immediate);
     }

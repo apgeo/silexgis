@@ -70,6 +70,7 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
         // the wrong column texts a roster's business to somebody's typo, at the installation's
         // expense, with nothing downstream able to catch it because the message has left.
         var proved = await ConfirmAsync(account, Number(1));
+        await ChooseTextAsync(account);
         var unproved = Number(2);
         (await account.Client.PostAsJsonAsync("/api/v1/me/phone/change", new { phoneNumber = unproved }))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -95,6 +96,7 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
         var reachable = await NewAccountAsync("has-number");
         var unreachable = await NewAccountAsync("no-number");
         var number = await ConfirmAsync(reachable, Number(3));
+        await ChooseTextAsync(reachable);
 
         factory.Messages.Clear();
         await QueueAnnouncementAsync(reachable.Id);
@@ -119,6 +121,7 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
         await StartAsync();
         var account = await NewAccountAsync("refused");
         var number = await ConfirmAsync(account, Number(4));
+        await ChooseTextAsync(account);
 
         factory.Messages.Clear();
         try
@@ -169,6 +172,12 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
         var account = await NewAccountAsync("unpaid");
         var number = await ConfirmAsync(account, Number(5));
 
+        // The switch being off does not merely stop the sending — it takes the channel out of what
+        // this category may use at all, so the account cannot even choose it. Asserting the refusal
+        // here rather than skipping the choice is what makes the rest of the test mean something:
+        // nothing below is passing because somebody forgot to opt in.
+        (await TryChooseTextAsync(account)).StatusCode.ShouldNotBe(HttpStatusCode.OK);
+
         factory.Messages.Clear();
         await QueueAnnouncementAsync(account.Id);
         await DrainAsync();
@@ -179,8 +188,10 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
         var deliveries = await DeliveriesAsync(account.Id);
         deliveries.ShouldHaveSingleItem().Channel.ShouldBe(NotificationChannel.Email);
 
-        // The positive half, in the same test: the account really is reachable by text, and only
-        // the installation's answer is keeping it from being one.
+        // The positive half, in the same test: the account really is reachable by text — it has a
+        // proved number — and the installation's answer is what keeps it from being one. Since a
+        // paid cell also starts off, the two guards are independent, and this test pins the
+        // installation's half by making the account's half unreachable rather than merely unset.
         factory.Messages.Messages
             .Any(m => string.Equals(m.Recipient, number, StringComparison.Ordinal))
             .ShouldBeFalse();
@@ -195,6 +206,7 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
         var operatorClient = await OperatorClientAsync();
         var account = await NewAccountAsync("gatewayless");
         var number = await ConfirmAsync(account, Number(10));
+        await ChooseTextAsync(account);
 
         // The installation says it will pay for texts and has nothing to send them with — an
         // operator who ticked the switch before filling the gateway in, or who cleared the gateway
@@ -233,6 +245,7 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
         // over on its behalf.
         var proved = await NewAccountAsync("counted");
         var number = await ConfirmAsync(proved, Number(6));
+        await ChooseTextAsync(proved);
         var mailOnly = await NewAccountAsync("uncounted");
 
         factory.Messages.Clear();
@@ -282,6 +295,7 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
         var leaderClient = await LeaderClientAsync();
         var member = await NewAccountAsync("roster");
         await ConfirmAsync(member, Number(7));
+        await ChooseTextAsync(member);
         await JoinAsync(member.Id);
 
         // Nothing about the ceiling is injected here. The installation says only that it will pay
@@ -319,8 +333,10 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
 
         var kept = await NewAccountAsync("kept");
         await ConfirmAsync(kept, Number(8));
+        await ChooseTextAsync(kept);
         var withdrawn = await NewAccountAsync("withdrawn");
         var withdrawnNumber = await ConfirmAsync(withdrawn, Number(9));
+        await ChooseTextAsync(withdrawn);
 
         factory.Messages.Clear();
         try
@@ -435,6 +451,46 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>Adds a number and answers the code texted to it, exactly as the settings page does.</summary>
+    /// <summary>
+    /// Chooses text messages for the one category that may cost money.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately separate from proving the number, and every test that expects a text calls
+    /// both. Confirming a number proves whose it is; it is the sign-in number and is never offered
+    /// as a contact address, so it says nothing about wanting to be texted. A paid channel
+    /// therefore starts off and somebody has to choose it — which is why a test that forgot this
+    /// call would see no text and be right to.
+    /// </remarks>
+    private async Task ChooseTextAsync(Account account) =>
+        (await TryChooseTextAsync(account)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+    /// <summary>Attempts the choice and hands back what the server said, refusal included.</summary>
+    private async Task<HttpResponseMessage> TryChooseTextAsync(Account account)
+    {
+        var response = await account.Client.PutAsJsonAsync(
+            "/api/v1/me/notifications",
+            new
+            {
+                categories = new[]
+                {
+                    new
+                    {
+                        category = NotificationCategory.GroupAnnouncement,
+                        channels = new[]
+                        {
+                            new
+                            {
+                                channel = NotificationChannelKind.Sms,
+                                choice = NotificationChannelChoice.Immediate,
+                            },
+                        },
+                    },
+                },
+            });
+
+        return response;
+    }
+
     private async Task<string> ConfirmAsync(Account account, string number)
     {
         var change = await account.Client.PostAsJsonAsync(

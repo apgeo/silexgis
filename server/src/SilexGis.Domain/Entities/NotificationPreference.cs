@@ -222,13 +222,33 @@ public static class NotificationCategories
     /// predictably rather than reading as "everything off".
     /// </summary>
     /// <remarks>
-    /// Everything a category may use is on, immediately. The inbox is on for every category by
-    /// deliberate choice: it costs the reader nothing until they open it, and a person who has
-    /// never opened the settings page should still find their notifications somewhere.
+    /// <para>
+    /// Everything a category may use is on, immediately — <b>except a channel that costs money</b>.
+    /// The inbox is on for every category by deliberate choice: it costs the reader nothing until
+    /// they open it, and a person who has never opened the settings page should still find their
+    /// notifications somewhere.
+    /// </para>
+    /// <para>
+    /// A paid channel defaults to off, and the reason is consent rather than cost. The only number
+    /// this installation holds is the one an account confirmed to sign in with; it is never offered
+    /// as a contact address, and confirming it proves the number belongs to the person, not that
+    /// they agreed to be texted. Defaulting it on would mean that the day an operator configures a
+    /// gateway, every member who ever set up two-factor sign-in starts receiving messages they
+    /// never asked for, at that operator's expense. So somebody chooses it, or it does not happen —
+    /// which is the same direction <see cref="NotificationChannelKinds.Paid"/> is wrong in
+    /// everywhere else.
+    /// </para>
+    /// <para>
+    /// The cost of this choice is real and accepted: a paid channel is inert for every account that
+    /// has never opened the settings page, so an installation that starts paying for one sees
+    /// nothing happen until its members opt in.
+    /// </para>
     /// </remarks>
     public static NotificationChannelChoice Default(
         NotificationCategory category, NotificationChannelKind channel) =>
-        (Ceiling(category) & channel) == channel && NotificationChannelKinds.IsSingle(channel)
+        (Ceiling(category) & channel) == channel
+        && NotificationChannelKinds.IsSingle(channel)
+        && (NotificationChannelKinds.Paid & channel) != channel
             ? NotificationChannelChoice.Immediate
             : NotificationChannelChoice.Off;
 
