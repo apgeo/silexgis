@@ -153,6 +153,16 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<MapView> MapViews => Set<MapView>();
 
+    public DbSet<Checklist> Checklists => Set<Checklist>();
+
+    /// <summary>Dated things a club runs that are not trips and not camps.</summary>
+    public DbSet<Event> Events => Set<Event>();
+
+    public DbSet<ChecklistItem> ChecklistItems => Set<ChecklistItem>();
+
+    /// <summary>What each trip has confirmed of the list it works through: who, and when.</summary>
+    public DbSet<TripChecklistTick> TripChecklistTicks => Set<TripChecklistTick>();
+
     public DbSet<SurveyModel> SurveyModels => Set<SurveyModel>();
 
     public DbSet<UserAddress> UserAddresses => Set<UserAddress>();

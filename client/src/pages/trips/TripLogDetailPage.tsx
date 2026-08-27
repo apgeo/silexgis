@@ -52,8 +52,10 @@ import { formatTripDates, formatUndergroundTime, isMultiDay } from '../../compon
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 import TripFormModal from './TripFormModal.tsx';
 import TripGeometryField from './TripGeometryField.tsx';
+import TripChecklistTab from './TripChecklistTab.tsx';
 import TripInvitationsTab from './TripInvitationsTab.tsx';
 import TripStateControl from './TripStateControl.tsx';
+import TripCalloutPanel from '../../components/trips/TripCalloutPanel.tsx';
 import TripRoleFields from './TripRoleFields.tsx';
 import TripSections from './TripSections.tsx';
 
@@ -263,6 +265,20 @@ export default function TripLogDetailPage() {
           picture it is made of. */}
       <TripCover tripId={trip.id} tripTitle={trip.title} />
 
+      {/* Above everything the trip says about itself, because it is the only part of the page
+          that can be urgent. Drawn for every reader of the trip and not only for the people on
+          it: whether a party is overdue is news to whoever is reading, and the tap that says they
+          are out is what is limited to the people who would know. */}
+      <TripCalloutPanel
+        tripId={trip.id}
+        state={trip.calloutState}
+        expectedReturnAt={trip.expectedReturnAt}
+        calloutAlarmAt={trip.calloutAlarmAt}
+        calloutLastCheckedAt={trip.calloutLastCheckedAt}
+        canStandDown={trip.canStandDownCallout}
+        canEdit={canEdit}
+      />
+
       <Card size="small">
         <Descriptions column={1} size="small">
           {tripTypeLabel && (
@@ -387,6 +403,29 @@ export default function TripLogDetailPage() {
             label: t('trips.tabReport'),
             children: (
               <>
+                {trip.meetingGeom && (
+                  <Card
+                    size="small"
+                    title={t('trips.meetingGeometry')}
+                    style={{ marginBottom: 16 }}
+                  >
+                    {/* Where the party gathers, read-only here for the same reason the sketch is:
+                        editing goes through the trip form. It carries the meeting point's own
+                        warning rather than the sketch's — this position is told exactly to
+                        everybody who may read the trip, which is wider than the set of people the
+                        trip will name its caves to, and this card is the only place a reader who
+                        cannot edit the trip is told so. */}
+                    <TripGeometryField
+                      value={trip.meetingGeom}
+                      readOnly
+                      active={activeTab === 'report'}
+                      height={280}
+                      testId="trip-meeting-geometry"
+                      warningTitle={t('trips.meetingGeometryWarning')}
+                      warningDetail={t('trips.meetingGeometryWarningDetail')}
+                    />
+                  </Card>
+                )}
                 {/* The trip's own sketch. Editing it goes through the trip form, so the map here
                     draws and does nothing else — but it carries the same warning the editor does,
                     because this is where a reader meets the shape. */}
@@ -420,6 +459,14 @@ export default function TripLogDetailPage() {
             // actually went is the trip's own list of people above, and one deliberate act turns
             // the first into the second rather than the two drifting into each other.
             children: <TripInvitationsTab trip={trip} canEdit={canEdit} />,
+          },
+          {
+            key: 'checklist',
+            label: t('trips.tabChecklist'),
+            // What the party settles before it sets off, and how much of it is settled. The
+            // figure is advisory: it gates nothing, it is not a state the trip is in, and it is
+            // never consulted when working out who may read this page.
+            children: <TripChecklistTab trip={trip} canEdit={canEdit} />,
           },
           {
             key: 'links',

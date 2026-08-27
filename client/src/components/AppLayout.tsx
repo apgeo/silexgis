@@ -2,7 +2,9 @@
 import {
   ApartmentOutlined,
   AppstoreOutlined,
+  CalendarOutlined,
   CarOutlined,
+  CheckSquareOutlined,
   CloudUploadOutlined,
   CodeSandboxOutlined,
   CompassOutlined,
@@ -23,6 +25,7 @@ import {
   PictureOutlined,
   ProfileOutlined,
   SafetyCertificateOutlined,
+  ScheduleOutlined,
   SettingOutlined,
   TagsOutlined,
   TeamOutlined,
@@ -82,7 +85,7 @@ export default function AppLayout() {
   // one keeps the camps item lit.
   const sections = [
     'map3d', 'dashboard', 'caves', 'features', 'geodata', 'gallery', 'albums', 'cabinets',
-    'uploads', 'documents', 'trip-logs', 'expeditions',
+    'uploads', 'documents', 'calendar', 'events', 'trip-logs', 'expeditions', 'checklists',
     'caving-groups', 'cavers',
     'admin/audit', 'admin/notification-health', 'admin/messaging', 'admin/message-templates',
     'admin/permission-groups',
@@ -187,7 +190,18 @@ export default function AppLayout() {
                     { key: 'uploads', icon: <CloudUploadOutlined />, label: t('nav.uploads') },
                   ]
                 : []),
+              // Everything dated, read as one list. Not gated on a right: it spans two
+              // families of row and the answer is narrowed to what each reader may open,
+              // row by row, so there is no single domain that could decide the offer.
+              { key: 'calendar', icon: <CalendarOutlined />, label: t('nav.calendar') },
+              // The dated things a club runs that are not trips or camps. Not gated on a
+              // right either: everybody may keep their own, and what a caller may read and
+              // write is settled per row.
+              { key: 'events', icon: <ScheduleOutlined />, label: t('nav.events') },
               { key: 'trip-logs', icon: <CarOutlined />, label: t('nav.trips') },
+              // The lists trips work through. Everybody may keep their own, so this is not
+              // gated on a right: what a caller may read and write is settled per row.
+              { key: 'checklists', icon: <CheckSquareOutlined />, label: t('nav.checklists') },
               { key: 'expeditions', icon: <FlagOutlined />, label: t('nav.expeditions') },
               { key: 'caving-groups', icon: <TeamOutlined />, label: t('nav.cavingGroups') },
               { key: 'cavers', icon: <UserOutlined />, label: t('nav.cavers') },

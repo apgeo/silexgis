@@ -133,7 +133,13 @@ Previous versions:
   thought of adds it themselves, and it is filterable and countable from that moment. Each kind also
   decides **what a report of that kind asks for** — three sections, field data, logistics and safety,
   drawn from a form the club describes once and can change later without invalidating a single report
-  already written. Beside them a trip records the figures worth counting — how deep, how far surveyed,
+  already written. A **plan** uses the same card for the things a party settles before it sets
+  off: when and where to meet and how to find the spot, who is driving, how many seats and where
+  they leave from, what gear and rigging to bring, whether a permit is needed and whether it has been
+  obtained, what the forecast says, and where the group is doing its talking. A plan can also carry
+  **where the party gathers** — a point, or the walk in to it — drawn on the same kind of map as the
+  trip's own sketch and shown, like it, to everybody who may read the trip, which the form says out
+  loud: a meeting point near a guarded entrance places that entrance for everybody invited. Beside them a trip records the figures worth counting — how deep, how far surveyed,
   how many stations, how much rope — in metres, once, shown in your own language's numbers. It also
   records **whether anything went wrong**, which anyone who may read the trip can see and search for,
   while the account of *what* went wrong is shown only to the people who may correct the trip: a
@@ -166,6 +172,44 @@ Previous versions:
   roster by saying yes: once the trip has happened, one deliberate act turns everybody holding a
   place into people who were there, and it tells nobody, because everybody it writes in asked to be
   there and was told when they were asked.
+- **Your own trips, soonest first** — one page answers *what am I going on, and when*: the trips you are
+  named on, plus the ones you have been asked about and not turned down, ordered by when they happen
+  rather than by when somebody last edited them, with the nearest at the top. The dashboard carries the
+  next few of them beside the rest of the day's news. It is worked out from whoever is signed in and
+  **cannot be asked about anybody else** — there is no way to request one person's trips by name, because
+  the answer, and even the number of rows in it, would say where that person has been from records the
+  asker may not read. A trip that has been called off stays on the list, and says so, because that is the
+  thing you most need to notice; the list can be narrowed to one stage of a trip's life, or to a range of
+  dates.
+- **The club's own dates** — a meeting, a training session, a maintenance day, a gear check, a
+  conference or a deadline is a record of its own, with a day, an optional second day it runs on to,
+  optional start and finish times and a place written as an address. Times are the club's own wall
+  clock: a 19:00 meeting reads as 19:00 to everybody, wherever they happen to be, which is what a club
+  that meets in one place means by seven in the evening. An event goes through the same stages a trip
+  or a camp does — drafted, proposed, planned, confirmed, announced, put back, called off — and who may
+  read one is decided the same way: yours alone unless you say otherwise, your club's if you are in
+  one, and anybody you name individually through the same sharing dialog every other record uses.
+- **One window over everything dated** — a calendar page answers *what is happening between these two
+  days*, reading trips, expeditions and the club's events together in one list you can sort, narrow to one kind, narrow to
+  a club's own, or narrow to your own. It shows what is still to come and what already happened, marks a
+  trip that has been called off and lets you switch those off, and lists a postponed one with a
+  postponed mark rather than pretending the date it still carries is one anybody is going on. A trip
+  that nobody has been shown yet is not on it — but that is only about what gets drawn: it stays exactly
+  as readable as it was, on its own page and on the trip lists, to everybody who could read it before.
+  **A calendar row never names a cave** — not the cave, not a count of caves left out — so a glance at a
+  month can never place a protected entrance; the title is shown as the person wrote it, and you open
+  the trip itself to see where it went. You have to say which days you want, the span is capped, and if
+  a window somehow holds more than the page will return it tells you **how many rows it left out**
+  rather than quietly showing you less than there is.
+- **Checklists — what a party settles before it sets off** — anyone can write a list (permit, key
+  collected, gear booked, whatever the club actually checks), keep it to themselves, share it with their
+  club or make it readable by everyone; an administrator's published default is nothing more than a list
+  with a wide audience. A trip purpose points at the list trips of that kind work through, and the trip's
+  own page shows it as lines to tick off, with a quiet *3 of 7* on the trip listings. Ticking records who
+  said so and when, and rewording a line later does not lose what was already confirmed. **Nothing is
+  ever refused because a list is unfinished** — it tells the party where they are, it does not stand in
+  their way, and it decides nothing about who may read the plan. Lists you may not read are not named to
+  you, and no count of them is shown either.
 - **A plan tells the people it concerns, and can be told to stop** — being asked onto a trip, a trip
   you are on changing or being moved along, and a trip being called off all send an email, and every
   one of them goes only to somebody who may read that trip, decided for each person separately at the
@@ -215,6 +259,21 @@ Previous versions:
   announcements may travel on a channel that charges per message — it is off unless switched on, one
   person cannot send them in a stream, and a day's charged messages have a ceiling an administrator sets
   and can see on the delivery page.
+- **A trip can say when its party is due back, and be told the party is out** — a plan records when
+  the party expects to be out and the hour to raise the alarm if nobody has said so. A pass runs on
+  a schedule; when that hour goes by with nothing said, everyone the trip concerns who may read it
+  gets an email — one that names the trip, its date and the expected hour in UTC, and **never a
+  cave**, because whoever runs a search reads the trip, where the answer is already kept under the
+  rules that decide who may have it. Anybody the trip names or has asked can stand the alarm down in
+  one tap, whether or not they may edit the record, because the person who knows the party is out is
+  the one on the trip. Standing it down disarms the check rather than erasing it, so what was
+  arranged stays on the trip. The same pass reminds the people on a trip that it is coming up, once
+  — and a trip that has been called off or put back stops both the alarm and the reminder, because
+  the date they were set against is no longer one anybody is going on. A trip showing an armed alarm
+  also says **when the check last ran**: silence is the good news in a callout, so a watcher that has
+  stopped and a party safely underground look alike, and the page comes down on the side of saying
+  nobody has looked. Delivery is the ordinary email queue's, which tries several times and then gives
+  up — an alarm is a prompt to go and look, not a guarantee somebody was reached.
 - **Being asked onto a trip does not open the cave, so somebody who can open it is told** — an
   invitation grants nothing, so when a person asked onto a trip cannot read a cave the trip is about,
   the cave's owner and the full administrators get a message with a link to the cave, whether the cave
@@ -268,6 +327,8 @@ Previous versions:
   the deployment configured.
 - **English and Romanian** throughout — and the language you pick follows your account, so the
   messages the system sends you arrive in it too, not only the screens.
+- **English and Romanian** throughout, dates included: calendars and date pickers show the month and
+  weekday names of the language you are reading in, and start the week on the day that language does.
 
 ## Quick start
 
@@ -307,6 +368,14 @@ docker compose -f deploy/docker-compose.dev.yml up -d db   # PostGIS only
 dotnet run --project server/src/SilexGis.Api                # API on :5080
 cd client && npm ci && npm run dev                          # Vite dev server
 ```
+
+### Tests
+
+The fast checks — server build, Domain and Architecture tests, the client gate, the script
+tests — finish in about a minute; `.github/workflows/ci.yml` lists the exact commands. The API
+integration suite (Testcontainers + PostGIS) is measured in hours: `scripts/gate-affected.mjs`
+names the test classes that answer for a change so those can run first, and
+`scripts/gate-lock.mjs` makes integration runs on one machine take turns instead of colliding.
 
 ## License
 

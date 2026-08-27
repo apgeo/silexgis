@@ -22,6 +22,7 @@ const everyCategory: Record<NotificationCategoryName, true> = {
   permissionGranted: true,
   tripParticipation: true,
   tripPlanning: true,
+  tripCallout: true,
   jobCompleted: true,
   securityAlerts: true,
   commentReply: true,

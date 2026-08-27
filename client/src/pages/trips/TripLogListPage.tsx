@@ -14,6 +14,7 @@ import {
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
+import TripReadinessTag from '../../components/trips/TripReadinessTag.tsx';
 import { countPeople } from '../../components/trips/roster.ts';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
@@ -52,11 +53,17 @@ export default function TripLogListPage() {
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('trips.title')}
         </Typography.Title>
-        {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-            {t('trips.new')}
-          </Button>
-        )}
+        <Flex gap={8} align="center">
+          {/* Offered to everybody, and not gated on anything: the list it opens is worked out
+              from whoever is reading it, so it is never a door onto somebody else's trips —
+              an account on none of them is shown that, which is a useful answer. */}
+          <Button onClick={() => navigate('/trip-logs/mine')}>{t('trips.mine.link')}</Button>
+          {canCreate && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
+              {t('trips.new')}
+            </Button>
+          )}
+        </Flex>
       </Flex>
       <Flex gap={8} style={{ marginBottom: 12 }}>
         <Input.Search
@@ -103,6 +110,12 @@ export default function TripLogListPage() {
               const label = tripTypeLabelOf(value, tripTypes, t);
               return label ? <Tag>{label}</Tag> : null;
             },
+          },
+          {
+            title: t('trips.checklist'),
+            key: 'readiness',
+            width: 140,
+            render: (_, trip) => <TripReadinessTag readiness={trip.checklistReadiness} />,
           },
           { title: t('trips.location'), dataIndex: 'locationText', width: 200 },
           {

@@ -121,7 +121,7 @@ public static class ReportTemplateFormat
     [
         "title", "purpose", "dates", "hours", "club", "location", "caves", "weather",
         "incident", "published", "description", "results", "depth", "length", "stations",
-        "rope", "people", "sketch",
+        "rope", "people", "sketch", "meeting",
     ];
 
     /// <summary>
@@ -438,7 +438,7 @@ public static class ReportTemplateFormat
         "#",
         "#   {title} {purpose} {dates} {hours} {club} {location} {caves} {weather} {incident}",
         "#   {published} {description} {results} {depth} {length} {stations} {rope} {people}",
-        "#   {sketch}",
+        "#   {sketch} {meeting}",
         "#",
         "# and a single answer out of one part of the form, under the name the form gave it:",
         "#",
@@ -470,6 +470,7 @@ public static class ReportTemplateFormat
         "",
         "heading: Where",
         "field: Sketch = {sketch}",
+        "field: Meeting point = {meeting}",
         "",
         "heading: Measured",
         "field: Depth reached = {depth}",

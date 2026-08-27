@@ -112,4 +112,15 @@ public static class ProcessingJobKinds
     /// write to inside the request that sent it.
     /// </summary>
     public const string CavingGroupAnnouncement = "caving-group-announcement";
+
+    /// <summary>
+    /// Look for parties past the hour they said they would be back, tell whoever the trip names,
+    /// and remind the people on a trip that is nearly here. Scheduled.
+    /// </summary>
+    /// <remarks>
+    /// Its rows are also the record that the check ran at all: a page showing an armed alarm reads
+    /// the last completed pass of this kind, so that a check nobody ran reads as unchecked rather
+    /// than as nothing wrong.
+    /// </remarks>
+    public const string TripCalloutSweep = "trip-callout-sweep";
 }

@@ -109,6 +109,44 @@ describe('TripFormModal dates', () => {
     expect((await savedBody(updateTrip)).maxParticipants).toBeNull();
   });
 
+  it('carries the meeting point through a save that never touched it', async () => {
+    // The meeting point is a column like the sketch, written straight through with null meaning
+    // "cleared", so a save that only corrects a title must send it back — otherwise correcting a
+    // title erases where the party was told to be, and nothing on screen says it happened.
+    const meetingGeom = {
+      type: 'Point',
+      coordinates: [25.44, 45.53],
+    } as unknown as TripLogInfo['meetingGeom'];
+    show(trip({ meetingGeom }));
+
+    const body = await savedBody(updateTrip);
+    expect(body.meetingGeom).toEqual(meetingGeom);
+  });
+
+  it('sends no meeting point for a trip that states none', async () => {
+    show(null);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Quick look' } });
+
+    expect((await savedBody(createTrip)).meetingGeom).toBeNull();
+  });
+
+  it('drops the meeting point when it is cleared, and leaves the sketch alone', async () => {
+    // Two maps stand on this form and each clears only its own: a driver that reached for "the
+    // clear button" would be reaching for whichever rendered first.
+    const geom = { type: 'Point', coordinates: [25.6, 45.65] } as unknown as TripLogInfo['geom'];
+    const meetingGeom = {
+      type: 'Point',
+      coordinates: [25.44, 45.53],
+    } as unknown as TripLogInfo['meetingGeom'];
+    show(trip({ geom, meetingGeom }));
+
+    fireEvent.click(screen.getByTestId('trip-meeting-geometry-clear'));
+
+    const body = await savedBody(updateTrip);
+    expect(body.meetingGeom).toBeNull();
+    expect(body.geom).toEqual(geom);
+  });
+
   it('carries a sketch the editor never touched through a save', async () => {
     // The form owns the geometry now; an edit that changes only the title must not drop the shape.
     const geom = { type: 'Point', coordinates: [25.6, 45.65] } as unknown as TripLogInfo['geom'];
@@ -130,7 +168,7 @@ describe('TripFormModal dates', () => {
     const geom = { type: 'Point', coordinates: [25.6, 45.65] } as unknown as TripLogInfo['geom'];
     show(trip({ geom }));
 
-    fireEvent.click(screen.getByRole('button', { name: /Clear shape/ }));
+    fireEvent.click(screen.getByTestId('trip-geometry-clear'));
 
     const body = await savedBody(updateTrip);
     expect(body.geom).toBeNull();

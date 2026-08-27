@@ -227,6 +227,45 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         onMap.ShouldNotContain(beforeId);
     }
 
+    /// <summary>
+    /// Every day the trip was out is a day the window can touch. A window meeting only the trip's
+    /// first day holds it, so does one meeting only its last, and so does one falling wholly
+    /// inside it and touching neither end. A trip with no end date is one day long and is held by
+    /// the window over that day alone. The day either side is the control that makes those
+    /// assertions about inclusivity rather than about the trip being found at all.
+    /// </summary>
+    /// <remarks>
+    /// The list and the map are asserted over the same window every time, because they ask the
+    /// same question of the same rows. A window that disagreed between them would surface as a
+    /// trip missing from one of the two, with nothing to say which of the two was wrong.
+    /// </remarks>
+    [Fact]
+    public async Task Trip_date_windows_touch_the_first_day_the_last_day_and_a_day_in_between()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+
+        var multiDay = await CreateDatedTripAsync($"Long push {marker}", "2051-03-10", "2051-03-20");
+        var oneDay = await CreateDatedTripAsync($"Day out {marker}", "2051-03-15", end: null);
+
+        // The window meets the trip's first day and no other day of it.
+        await BothListAndMapAsync(marker, "from=2051-03-01&to=2051-03-10", [multiDay], [oneDay]);
+
+        // Its last day, and no other day of it.
+        await BothListAndMapAsync(marker, "from=2051-03-20&to=2051-03-31", [multiDay], [oneDay]);
+
+        // A window wholly inside the trip, touching neither of its ends.
+        await BothListAndMapAsync(marker, "from=2051-03-13&to=2051-03-14", [multiDay], [oneDay]);
+
+        // The single day, held by the window over that day alone.
+        await BothListAndMapAsync(marker, "from=2051-03-15&to=2051-03-15", [multiDay, oneDay], []);
+        await BothListAndMapAsync(marker, "from=2051-03-16&to=2051-03-16", [multiDay], [oneDay]);
+
+        // The day either side of the multi-day trip, which is what the three edges above are
+        // asserted against: both bounds are inclusive, and one day further out holds nothing.
+        await BothListAndMapAsync(marker, "from=2051-03-21&to=2051-03-31", [], [multiDay, oneDay]);
+        await BothListAndMapAsync(marker, "from=2051-01-01&to=2051-03-09", [], [multiDay, oneDay]);
+    }
+
     [Fact]
     public async Task Trip_report_fields_and_proposers_round_trip()
     {
@@ -1527,6 +1566,50 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    private async Task<Guid> CreateDatedTripAsync(string title, string tripDate, string? end)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title,
+            tripDate,
+            tripDateEnd = end,
+            geom = new { type = "Point", coordinates = new[] { 25.61, 45.55 } },
+            caveIds = Array.Empty<Guid>(),
+            participants = Array.Empty<object>(),
+            visibility = "authenticated",
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>The same window put to the trip list and to the trip map.</summary>
+    private async Task BothListAndMapAsync(
+        string marker, string window, IReadOnlyList<Guid> present, IReadOnlyList<Guid> absent)
+    {
+        var listed = (await outsider.GetFromJsonAsync<JsonElement>(
+                $"/api/v1/trip-logs/?search={marker}&{window}"))
+            .GetProperty("items").EnumerateArray()
+            .Select(x => x.GetProperty("id").GetGuid()).ToList();
+
+        var onMap = (await outsider.GetFromJsonAsync<JsonElement>(
+                $"/api/v1/map/trip-logs?bbox={WorldBbox}&{window}"))
+            .GetProperty("features").EnumerateArray()
+            .Select(f => f.GetProperty("properties").GetProperty("id").GetGuid()).ToList();
+
+        foreach (var id in present)
+        {
+            listed.ShouldContain(id, $"the list over {window}");
+            onMap.ShouldContain(id, $"the map over {window}");
+        }
+
+        foreach (var id in absent)
+        {
+            listed.ShouldNotContain(id, $"the list over {window}");
+            onMap.ShouldNotContain(id, $"the map over {window}");
+        }
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

@@ -67,8 +67,9 @@ public static class UnsubscribeEndpoints
 
         var category = subject.Category;
 
-        // Security alerts have no opt-out anywhere else either, and a token for one could only
-        // come from a tampered link — the sender never puts one in those messages.
+        // The categories nobody may switch off have no opt-out anywhere else either, and a token
+        // for one could only come from a tampered link — the sender never puts one in those
+        // messages.
         if (!NotificationCategories.IsUserConfigurable(category))
         {
             return ApiProblems.BadRequest(

@@ -265,6 +265,7 @@ internal static class TripReportDocument
             case "rope": return trip.RopeMetres is { } rope ? Metres(rope) : null;
             case "people": return People(trip);
             case "sketch": return Sketch(trip);
+            case "meeting": return Meeting(trip);
             default: return Answer(content, name);
         }
     }
@@ -363,6 +364,32 @@ internal static class TripReportDocument
             + $"{Math.Abs(centre.Y):F5}° {(centre.Y >= 0 ? "N" : "S")}, "
             + $"{Math.Abs(centre.X):F5}° {(centre.X >= 0 ? "E" : "W")}. Everyone who may read this "
             + $"trip sees this shape exactly as drawn, whatever protection the caves it names carry.");
+    }
+
+    /// <summary>
+    /// Where the party gathers, written down rather than drawn.
+    /// </summary>
+    /// <remarks>
+    /// Read out of the same reading the sketch above is, and carrying the same warning welded to
+    /// the same value, because it is the same bargain: a meeting point is exact for everybody who
+    /// may read the trip. It is the one that is worth saying twice — a meeting point stands where
+    /// people actually park, which can be a few hundred metres from an entrance the reader of
+    /// this very document was not told the trip names.
+    /// </remarks>
+    private static string? Meeting(TripLogDto trip)
+    {
+        if (trip.MeetingGeom?.ToGeometryOrNull() is not { IsEmpty: false } shape)
+        {
+            return null;
+        }
+
+        var centre = shape.Centroid;
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{shape.GeometryType} of {shape.NumPoints} position(s), centred on "
+            + $"{Math.Abs(centre.Y):F5}° {(centre.Y >= 0 ? "N" : "S")}, "
+            + $"{Math.Abs(centre.X):F5}° {(centre.X >= 0 ? "E" : "W")}. Everyone who may read this "
+            + $"trip sees this position exactly as placed, whatever protection the caves it names carry.");
     }
 
     /// <summary>How one answer in a section reads, or null when it says nothing.</summary>

@@ -4,6 +4,50 @@ using NetTopologySuite.Geometries;
 namespace SilexGis.Domain.Entities;
 
 /// <summary>
+/// Where a trip's overdue check stands: whether anybody is waiting to hear that the party is out,
+/// and whether that wait has already run out.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Stored as smallint and append-only — the values travel to a client and are selected on by a
+/// scheduled pass, so a member keeps the number it was given.
+/// </para>
+/// <para>
+/// This is the whole of the check's idempotence. The pass that notices an overdue party writes the
+/// row and queues the message in one save, so a party is moved out of <see cref="Armed"/> exactly
+/// once however many times the pass runs, and a second pass finds nothing to do. It is on the trip
+/// rather than on the queued message because the queue has no key to ask "was this one already
+/// sent about" with.
+/// </para>
+/// <para>
+/// Standing an alarm down does not erase it: the row keeps the times that were armed, so what was
+/// arranged is still readable after the party is home. Nothing here is ever consulted when deciding
+/// who may read the trip.
+/// </para>
+/// </remarks>
+public enum TripCalloutState : short
+{
+    /// <summary>
+    /// Nobody arranged one. The state a trip is in until somebody says when they will be back, and
+    /// the only safe reading of an absent value.
+    /// </summary>
+    None = 0,
+
+    /// <summary>Somebody is expected back, and the check is live.</summary>
+    Armed = 1,
+
+    /// <summary>The time passed and nobody stood it down; whoever the trip names has been told.</summary>
+    Overdue = 2,
+
+    /// <summary>
+    /// Somebody on the trip said they were out. The check is over — reaching it from
+    /// <see cref="Overdue"/> as well as from <see cref="Armed"/>, because a party that surfaces
+    /// late still surfaces.
+    /// </summary>
+    StoodDown = 3,
+}
+
+/// <summary>
 /// A dated exploration/visit report: who went where and what happened. Optionally
 /// carries a location geometry (point or area) and links to the caves involved.
 /// </summary>
@@ -129,7 +173,65 @@ public class TripLog : IProtectedEntity, ITimestamped, IAuditable
     /// </remarks>
     public int? MaxParticipants { get; set; }
 
+    /// <summary>
+    /// When the party said they would be back out, or null while the trip has no callout. Held as
+    /// an instant rather than as the wall-clock times the trip's own entry and exit use, because it
+    /// is compared against "now" by something running with every browser closed, and a comparison
+    /// like that cannot be made against a time with no day and no zone attached to it.
+    /// </summary>
+    public DateTimeOffset? ExpectedReturnAt { get; set; }
+
+    /// <summary>
+    /// When the alarm goes off if nobody has said the party is out, or null while the trip has no
+    /// callout. A separate instant from <see cref="ExpectedReturnAt"/> and not derived from it: the
+    /// grace somebody wants between being late and being reported is theirs to choose, and it is
+    /// not the same hour for a half-day through a known system as for a first descent.
+    /// </summary>
+    public DateTimeOffset? CalloutAlarmAt { get; set; }
+
+    /// <summary>
+    /// Where the overdue check stands. Never null: a trip nobody arranged one for is
+    /// <see cref="TripCalloutState.None"/>, so nothing reading this has to tell an absent answer
+    /// from "no callout", and a party is never left in a state that could be read as either.
+    /// </summary>
+    public TripCalloutState CalloutState { get; set; } = TripCalloutState.None;
+
+    /// <summary>
+    /// When the people on this trip were last reminded that it is coming up, or null while they
+    /// have not been. Written by the same scheduled pass that watches the callout, and the whole of
+    /// that reminder's idempotence — without it every pass in the run-up would send another.
+    /// </summary>
+    /// <remarks>
+    /// The reminder is not armed ahead of time as a queued message, for the same reason the alarm
+    /// is not: a queued message cannot be recalled, so a trip put back or called off would still
+    /// remind everybody about a date that is no longer true.
+    /// </remarks>
+    public DateTimeOffset? PlanReminderSentAt { get; set; }
+
     public Geometry? Geom { get; set; }
+
+    /// <summary>
+    /// Where the party gathers before it sets off, and — where a club draws one — the way in to
+    /// it. A column rather than a line in the plan's written arrangements because a map has to
+    /// find it: somebody looking at a week of trips on a map is asking where to be and when, and
+    /// a position buried in a form's stored answers is a position no query can select on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Any geometry class, like the trip's own sketch: a meeting point is usually a point, and a
+    /// club that draws the approach as well records the two together rather than in a second
+    /// column. One shape, so there is one answer to "where does this trip start" and no rule
+    /// about which of two to believe.
+    /// </para>
+    /// <para>
+    /// It is served exactly to everybody who may read the trip, which is the same bargain the
+    /// trip's own sketch has always carried, and it inherits that bargain's cost: a meeting point
+    /// drawn two hundred metres from a guarded entrance places that entrance for every reader of
+    /// the trip, including one the trip is at that moment refusing to tell which caves it names.
+    /// Nothing here narrows it, and no surface may hand it to somebody the trip itself would not.
+    /// </para>
+    /// </remarks>
+    public Geometry? MeetingGeom { get; set; }
 
     public Guid OwnerUserId { get; set; }
 

@@ -29,7 +29,10 @@
     "reportTemplates": "Report layouts",
     "termRules": "Detection rules",
     "expeditions": "Camps",
-    "notificationHealth": "Message delivery"
+    "notificationHealth": "Message delivery",
+    "calendar": "Calendar",
+    "events": "Events",
+    "checklists": "Checklists"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -55,7 +58,11 @@
       "caveEntrance": "Cave entrance",
       "centerline": "Centerline",
       "expedition": "Camp"
-    }
+    },
+    "comingUp": "Coming up",
+    "comingUpFailed": "Your trips could not be loaded.",
+    "noComingUp": "Nothing coming up. A trip appears here once somebody invites you to one or puts you on the party.",
+    "allMyTrips": "All my trips"
   },
   "auth": {
     "email": "Email",
@@ -120,7 +127,8 @@
     "conflict": "Someone else changed this since you loaded it. Reload and reapply your changes.",
     "loadFailed": "Could not load this. Please try again.",
     "close": "Close",
-    "reset": "Reset"
+    "reset": "Reset",
+    "clearAnswer": "Clear answer"
   },
   "errorBoundary": {
     "title": "Something went wrong on this screen",
@@ -884,7 +892,19 @@
       "incident_severity": "Severity",
       "equipment_failure": "Equipment failed",
       "lessons_learned": "Lessons learned",
-      "reported_to": "Reported to"
+      "reported_to": "Reported to",
+      "meeting_time": "Meeting time",
+      "meeting_description": "Meeting point, described",
+      "transport_drivers": "Drivers",
+      "transport_seats": "Seats available",
+      "transport_departure": "Departure points",
+      "equipment_note": "Equipment and rigging",
+      "permit_required": "Permit required",
+      "permit_obtained": "Permit obtained",
+      "callout_contact_caver_id": "Callout contact",
+      "callout_contact_note": "Callout contact, if not on the roster",
+      "weather_note": "Weather note",
+      "whatsapp_group_url": "Group chat link"
     },
     "state": "State",
     "stateValues": {
@@ -951,7 +971,9 @@
       "template": "Layout",
       "templateDefault": "Standard layout",
       "audienceNotice": "This report shows what you may see. Somebody else reading the same trip may see more, or less.",
-      "keepAudience": "The copy saved to the trip can be opened by everybody who may read the trip, so it leaves out what only editors of the trip may see. Your own fuller copy is the download."
+      "keepAudience": "The copy saved to the trip can be opened by everybody who may read the trip, so it leaves out what only editors of the trip may see. Your own fuller copy is the download.",
+      "meetingPoint": "Meeting point: a point at {{position}}.",
+      "meetingShape": "Meeting point: {{shape}}, {{count}} points, centred on {{position}}."
     },
     "geometry": "Trip sketch",
     "geometryHint": "Pick a shape, then draw on the map. A new shape replaces the one before it.",
@@ -979,7 +1001,51 @@
       "trip-searched-not-found": "Searched, not found",
       "trip-lead": "Leads left",
       "trip-follows-on-from": "Follows on from"
-    }
+    },
+    "mine": {
+      "title": "My trips",
+      "link": "My trips",
+      "stateFilter": "Any state",
+      "empty": "You are not on any trip yet. A trip appears here once somebody invites you to one or puts you on the party.",
+      "emptyFiltered": "No trip of yours matches these filters.",
+      "failed": "Your trips could not be loaded."
+    },
+    "expectedReturnAt": "Expected back",
+    "calloutAlarmAt": "Raise the alarm at",
+    "calloutAlarmHelp": "If nobody has said the party is out by this time, everyone on the trip is told. It cannot be earlier than the time you expect to be back. Leave both empty for no callout.",
+    "calloutStatus": "Callout",
+    "calloutStateValues": {
+      "none": "None arranged",
+      "armed": "Watching",
+      "overdue": "Overdue",
+      "stoodDown": "Party is out"
+    },
+    "calloutLastChecked": "Last checked",
+    "calloutNeverChecked": "Never",
+    "calloutUncheckedTitle": "Nothing has checked this callout recently",
+    "calloutUncheckedBody": "An alarm is set, but the check that would raise it has not run lately — so nobody has confirmed this party is on time. Treat it as unchecked, not as safe, and contact them another way.",
+    "calloutOverdueTitle": "This party is overdue",
+    "calloutOverdueBody": "The alarm time passed and nobody had said the party was out. Everyone on the trip has been told.",
+    "calloutStandDown": "The party is out",
+    "calloutStoodDownSuccess": "Recorded — the callout has been stood down.",
+    "calloutStandDownFailed": "The callout could not be stood down. Try again, and reach somebody another way if it keeps failing.",
+    "calloutArrange": "Arrange a callout",
+    "calloutChange": "Change the callout",
+    "calloutSaved": "Saved — the callout is set.",
+    "calloutCleared": "Saved — no callout is arranged for this trip.",
+    "calloutSaveFailed": "The callout could not be saved. Try again.",
+    "calloutAlarmBeforeReturn": "The alarm cannot be earlier than the time you expect to be back.",
+    "meetingGeometry": "Meeting point",
+    "meetingGeometryHint": "Where the party gathers, and the way in to it if your club draws one. Everyone who may read this trip is told this position exactly, including readers the trip does not name its caves to.",
+    "meetingGeometryWarning": "Exact position — where the party gathers is never approximated.",
+    "meetingGeometryWarningDetail": "Everyone who may read this trip sees this position exactly as placed, including readers the trip does not name its caves to. A meeting point a few hundred metres from a protected entrance therefore points at that entrance.",
+    "checklist": "Checklist",
+    "tabChecklist": "Checklist",
+    "checklistNone": "This trip works through no checklist you can see.",
+    "checklistReadiness": "{{ticked}} of {{total}} settled",
+    "checklistAdvisory": "This is a reading for the party, not a rule. Nothing is refused because a line is unsettled, and how settled a trip is never changes who may read it.",
+    "checklistTickedAt": "Confirmed {{when}}",
+    "checklistTickFailed": "That confirmation could not be recorded."
   },
   "expeditions": {
     "notFound": "No such camp",
@@ -1108,14 +1174,14 @@
       "open": "Announce",
       "title": "Announce to {{name}}",
       "message": "Announcement",
-      "placeholder": "One line \u2014 a change of time, a meeting place, a closure.",
+      "placeholder": "One line — a change of time, a meeting place, a closure.",
       "reaches": "People this reaches: {{people}}",
       "reachesHint": "Members without an account are not counted, and you are never sent your own announcement. Each of the others receives it the way they chose to be told things.",
       "nobody": "Nobody on this roster holds an account, so there is nobody to tell.",
       "confirm": "This goes now to the people counted above. It cannot be taken back.",
       "send": "Send",
       "done": "Sent. People told: {{people}}",
-      "queued": "Being sent \u2014 this club is large enough that the notices are written in the background. People to be told: {{people}}",
+      "queued": "Being sent — this club is large enough that the notices are written in the background. People to be told: {{people}}",
       "failed": "The announcement was not sent. Please try again."
     },
     "roles": {
@@ -1235,7 +1301,9 @@
       "settings": "Installation settings",
       "messageTemplates": "Message texts",
       "audit": "Audit log",
-      "jobs": "Jobs"
+      "jobs": "Jobs",
+      "checklists": "Checklists",
+      "events": "Calendar events"
     },
     "sources": {
       "fullAdministrators": "Full administration: membership decides before any rule is consulted.",
@@ -1642,10 +1710,23 @@
         "tripPlanning": "I am invited to a trip, a trip I am on changes, or a trip needs access I can grant",
         "commentReply": "Someone replies to a comment I wrote",
         "commentOnMine": "Someone comments on something of mine",
-          "groupAnnouncement": "Someone writes to a caving group I am in",
+        "groupAnnouncement": "Someone writes to a caving group I am in",
         "jobCompleted": "My uploads finish processing",
-        "securityAlerts": "Security alerts"
-      }
+        "securityAlerts": "Security alerts",
+        "tripCallout": "A trip I am on is overdue and nobody has said the party is out"
+      },
+      "delivery": "Delivery",
+      "masterEmail": "Notify me by email",
+      "digest": "How often",
+      "digestValues": {
+        "immediate": "As things happen",
+        "daily": "A daily summary"
+      },
+      "alwaysOnReasons": {
+        "securityAlerts": "Always sent — this one warns you about your own account.",
+        "tripCallout": "Always sent, and never held for the daily summary — an overdue party is nobody's news in the morning."
+      },
+      "noDelivery": "This installation has no mail server configured, so nothing is sent yet. Your choices are saved and will be used once one is."
     },
     "accessibility": {
       "heading": "Appearance",
@@ -1823,7 +1904,9 @@
         "integer": "whole number",
         "boolean": "yes/no",
         "enum": "choice"
-      }
+      },
+      "defaultChecklist": "Checklist",
+      "defaultChecklistHint": "The list trips of this purpose work through. Naming one here confers nothing: a reader who may not open the list is told the trip has none."
     },
     "participantRoles": {
       "title": "Trip roles",
@@ -2648,5 +2731,105 @@
       "suppressed": "The person it was for has since asked not to be told about this, so it was not sent. They can still read it in their own list.",
       "queued": "Back in the queue."
     }
+  },
+  "calendar": {
+    "title": "Calendar",
+    "when": "When",
+    "what": "What",
+    "kind": "Kind",
+    "state": "State",
+    "postponed": "Date not settled",
+    "togglePast": "Past",
+    "toggleTrips": "Trips",
+    "toggleOther": "Other records",
+    "toggleCancelled": "Called off",
+    "toggleMine": "Only mine",
+    "groupFilter": "Any group",
+    "omitted": "{{count}} more rows fall in these days than this page can carry. Ask for fewer days.",
+    "empty": "Nothing is recorded in these days.",
+    "emptyFiltered": "Nothing in these days matches what you asked for.",
+    "emptyNoKind": "No kind of record is selected.",
+    "failed": "The calendar could not be read.",
+    "sourceValues": {
+      "tripLog": "Trip",
+      "expedition": "Camp",
+      "event": "Event"
+    }
+  },
+  "events": {
+    "title": "Events",
+    "titleField": "Title",
+    "create": "New event",
+    "edit": "Edit event",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this event?",
+    "searchPlaceholder": "Search by title",
+    "kind": "Kind",
+    "kindFilter": "Any kind",
+    "kindValues": {
+      "clubMeeting": "Club meeting",
+      "training": "Training",
+      "maintenanceDay": "Working day",
+      "gearCheck": "Gear check",
+      "conference": "Conference",
+      "deadline": "Deadline"
+    },
+    "dates": "Dates",
+    "time": "Time",
+    "startTime": "Starts at",
+    "endTime": "Ends at",
+    "place": "Place",
+    "description": "Description",
+    "cavingGroup": "Caving group",
+    "state": "State",
+    "stateFilter": "Any state",
+    "announce": "Announce",
+    "announceSuccess": "The event was announced.",
+    "unannounce": "Back to draft",
+    "unannounceSuccess": "The event went back to the workshop.",
+    "propose": "Float the idea",
+    "proposeSuccess": "The event was floated.",
+    "organise": "Start organising",
+    "organiseSuccess": "The event is being organised.",
+    "confirm": "It is going ahead",
+    "confirmSuccess": "The event is going ahead.",
+    "postpone": "Put it back",
+    "postponeSuccess": "The event was put back.",
+    "reschedule": "Settle a new date",
+    "rescheduleSuccess": "The event is being organised again.",
+    "markDone": "It happened",
+    "markDoneSuccess": "The event was recorded as having happened.",
+    "notFound": "No such event",
+    "notFoundDetail": "Either it is not there, or it is not yours to read. This page cannot tell the two apart, and does not try.",
+    "callOff": "Call it off",
+    "callOffConfirm": "Call this event off?",
+    "callOffSuccess": "The event was called off."
+  },
+  "checklists": {
+    "title": "Checklists",
+    "subtitle": "The lists a party works through before it sets off.",
+    "new": "New checklist",
+    "edit": "Edit checklist",
+    "empty": "No checklists yet.",
+    "saved": "Checklist saved.",
+    "saveFailed": "That checklist could not be saved.",
+    "deleteConfirm": "Delete this checklist? Trips lose the confirmations made against its lines.",
+    "lineCount": "{{count}} lines",
+    "fieldTitle": "Title",
+    "fieldDescription": "Description",
+    "fieldVisibility": "Who may read it",
+    "visibilityHint": "A list everyone may read is how one is published for the whole installation.",
+    "fieldCavingGroup": "Caving group",
+    "fieldItems": "Lines",
+    "itemPlaceholder": "Something to settle before setting off",
+    "addLine": "Add a line",
+    "removeLine": "Remove this line",
+    "visibilityValues": {
+      "private": "Only me",
+      "cavingGroup": "My caving group",
+      "authenticated": "Anyone signed in",
+      "public": "Everyone"
+    },
+    "delete": "Delete this checklist"
   }
 }

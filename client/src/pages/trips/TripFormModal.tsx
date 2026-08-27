@@ -54,6 +54,7 @@ interface FormValues {
   results?: string;
   weather?: string;
   geom?: TripGeometry | null;
+  meetingGeom?: TripGeometry | null;
   participants: RosterRow[];
   proposers: RosterRow[];
   visibility: TripLogInfo['visibility'];
@@ -276,6 +277,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           results: trip.results ?? undefined,
           weather: trip.weatherConditions ?? undefined,
           geom: trip.geom ?? null,
+          meetingGeom: trip.meetingGeom ?? null,
           participants: trip.participants.map(toRosterRow),
           proposers: trip.proposers.map(toRosterRow),
           visibility: trip.visibility,
@@ -287,6 +289,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           // and the field is a range, so a bare day would leave it failing its own required rule.
           dates: [dayjs(), dayjs()],
           geom: null,
+          meetingGeom: null,
           participants: [],
           proposers: [],
           visibility: 'private',
@@ -318,6 +321,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
       locationText: values.locationText?.trim() || null,
       organizingCavingGroupId: values.organizingCavingGroupId ?? null,
       geom: values.geom ?? null,
+      meetingGeom: values.meetingGeom ?? null,
       // Not a cleared list — no list at all. Which caves the trip is about is recorded on its
       // page, role by role, and this form must not be able to undo that by saving a title.
       caveIds: null,
@@ -468,6 +472,23 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
         </Form.Item>
         <Form.Item name="geom" label={t('trips.geometry')}>
           <TripGeometryField active={shown} height={260} />
+        </Form.Item>
+        {/* Where the party gathers, drawn by the same control as the sketch above and carrying the
+            same warning, because it is disclosed on the same terms: everybody who may read the
+            trip is told it exactly. A club that draws the approach as well draws it here too —
+            one shape, so there is no rule about which of two to believe. */}
+        <Form.Item
+          name="meetingGeom"
+          label={t('trips.meetingGeometry')}
+          tooltip={t('trips.meetingGeometryHint')}
+        >
+          <TripGeometryField
+            active={shown}
+            height={260}
+            testId="trip-meeting-geometry"
+            warningTitle={t('trips.meetingGeometryWarning')}
+            warningDetail={t('trips.meetingGeometryWarningDetail')}
+          />
         </Form.Item>
       </Form>
     </Modal>

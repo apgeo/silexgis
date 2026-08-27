@@ -1434,6 +1434,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The trips, camps and events a caller may read whose days fall in a window. */
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    source?: string;
+                    state?: string;
+                    cavingGroupId?: string;
+                    mine?: boolean;
+                    includePast?: boolean;
+                    includeCancelled?: boolean;
+                    sort?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CalendarResultDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files/{id}/position": {
         parameters: {
             query?: never;
@@ -9000,6 +9046,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The trips the calling account is on — named on the roster or asked about it — soonest first, from today unless a window says otherwise, and narrowable by lifecycle state. Whose trips these are is worked out from the caller and cannot be asked for: there is no parameter naming a person, because one would answer where a named person has been out of trips the asker may not read. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                    from?: string;
+                    to?: string;
+                    state?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfTripLogDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-logs/{id}": {
         parameters: {
             query?: never;
@@ -9184,6 +9272,86 @@ export interface paths {
                     "application/json": components["schemas"]["TripLogTransitionRequest"];
                 };
             };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{id}/callout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Arranges, changes or calls off the check that notices if the party does not come back (Write permission). Its own door rather than two fields on the trip, so that saving the trip from a surface which never drew them cannot quietly leave a party unwatched. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripCalloutRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{id}/callout/stand-down": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Says the party is out, which stops the overdue check. Open to anyone the trip names or has asked, and deliberately not to whoever may edit the trip: it is a statement about where people are, not a change to the record of the trip. It stands the check down rather than erasing it, so what was arranged stays readable afterwards. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
             responses: {
                 /** @description OK */
                 200: {
@@ -9493,6 +9661,248 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The list this trip works through, its lines, who has confirmed each and when, and how much of it is settled. Takes the right to read the trip; a list the caller may not read is answered as no list. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripChecklistDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/checklist/items/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Confirms one line of the list as settled for this trip (Write permission on the trip). Confirming again changes nothing: the first confirmation is the record of who said so and when. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    itemId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripChecklistItemDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Takes back a confirmation (Write permission on the trip). Taking back one that was never made is not an error. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    itemId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/checklists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The lists this caller may read, lines included. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChecklistDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Writes a list; the caller becomes its owner. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChecklistWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChecklistDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/checklists/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One list. Answered as absent where the caller may not read it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChecklistDto"];
+                    };
+                };
+            };
+        };
+        /** Rewrites a list and its lines (Write permission). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChecklistWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChecklistDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes a list and its lines (Delete permission). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -9813,6 +10223,236 @@ export interface paths {
             };
         };
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paged events, most recent first; visibility-filtered. Narrowed by a date window the event overlaps, by a word in its title, by kind and by lifecycle state. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                    from?: string;
+                    to?: string;
+                    search?: string;
+                    kind?: string;
+                    state?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfEventDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates an event (Create permission); the caller becomes owner. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EventWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The audience an event would get if its author named none, so a form can show the answer the write would apply rather than guessing at it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventDefaultsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A single event. Emits the version token its state route requires back. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventDto"];
+                    };
+                };
+            };
+        };
+        /** Full update (Write permission). The lifecycle state is not part of it. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EventWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes an event and the rules anchored on it. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{id}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Moves an event to another lifecycle state (Write permission). One endpoint rather than a verb per state: an event has eight states and the moves between them are a table, not a handful of named acts. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EventTransitionRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventDto"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -11095,7 +11735,7 @@ export interface paths {
         };
         /**
          * Rules anchored on this object (ManagePermissions). A rule carrying a camp was written by that camp's sharing: it is shown here and withdrawn there.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
          */
         get: {
             parameters: {
@@ -11122,7 +11762,7 @@ export interface paths {
         };
         /**
          * Replaces the rules authored here, bounded by what the caller holds. A rule a camp's sharing wrote is left exactly as it is.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
          */
         put: {
             parameters: {
@@ -11167,7 +11807,7 @@ export interface paths {
         };
         /**
          * What the caller may do here; ?explain=true names the deciding rule.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
          */
         get: {
             parameters: {
@@ -13238,7 +13878,7 @@ export interface components {
             actions: components["schemas"]["AccessAction"][];
         };
         /** @enum {unknown} */
-        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "expeditions";
+        AccessDomain: "features" | "tripLogs" | "geofiles" | "georeferencedMaps" | "mapViews" | "files" | "mapLayers" | "tags" | "hierarchies" | "taxonomies" | "cavers" | "cavingGroups" | "users" | "permissionGroups" | "featureSets" | "settings" | "messageTemplates" | "audit" | "jobs" | "documents" | "expeditions" | "checklists" | "events";
         /** @enum {unknown} */
         AccessEffect: "allow" | "deny";
         AccessEntryDto: {
@@ -13501,6 +14141,35 @@ export interface components {
             defaultTagIds?: null | number[];
             requiredMetadataKeys?: null | string[];
         };
+        CalendarEntryDto: {
+            source: components["schemas"]["CalendarSource"];
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: date */
+            start: string;
+            /** Format: date */
+            end: null | string;
+            /** Format: time */
+            startTime: null | string;
+            /** Format: time */
+            endTime: null | string;
+            kind: null | components["schemas"]["EventKind"];
+            state: components["schemas"]["ActivityState"];
+            placement: components["schemas"]["CalendarPlacement"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            hasPosition: boolean;
+        };
+        /** @enum {unknown} */
+        CalendarPlacement: "off" | "ahead" | "behind" | "calledOff" | "putBack";
+        CalendarResultDto: {
+            entries: components["schemas"]["CalendarEntryDto"][];
+            /** Format: int32 */
+            omitted: number;
+        };
+        /** @enum {unknown} */
+        CalendarSource: "tripLog" | "expedition" | "event";
         /** @enum {unknown} */
         CandidateGeometry: "point" | "line" | "area" | "other";
         CapabilitiesDto: {
@@ -13827,6 +14496,42 @@ export interface components {
             surveyModelId: null | string;
             isDefault: boolean;
         };
+        ChecklistDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            description: null | string;
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            items: components["schemas"]["ChecklistItemDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ChecklistItemDto: {
+            /** Format: uuid */
+            id: string;
+            text: string;
+            /** Format: int32 */
+            sortOrder: number;
+        };
+        ChecklistItemRequest: {
+            /** Format: uuid */
+            id: null | string;
+            text: string;
+        };
+        ChecklistWriteRequest: {
+            title: string;
+            description: null | string;
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            items: components["schemas"]["ChecklistItemRequest"][];
+        };
         ConfirmEmailRequest: {
             /** Format: uuid */
             userId: string;
@@ -14059,6 +14764,61 @@ export interface components {
             positionQuality: components["schemas"]["PositionQuality"];
             /** Format: date */
             surveyedAt: null | string;
+        };
+        EventDefaultsDto: {
+            visibility: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+        };
+        EventDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            description?: null | string;
+            kind: components["schemas"]["EventKind"];
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate?: null | string;
+            /** Format: time */
+            startTime?: null | string;
+            /** Format: time */
+            endTime?: null | string;
+            place?: null | string;
+            /** Format: uuid */
+            ownerUserId: string;
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            visibility: components["schemas"]["Visibility"];
+            state: components["schemas"]["ActivityState"];
+            /** Format: date-time */
+            publishedAt?: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {unknown} */
+        EventKind: "clubMeeting" | "training" | "maintenanceDay" | "gearCheck" | "conference" | "deadline" | null;
+        EventTransitionRequest: {
+            state?: null | components["schemas"]["ActivityState"];
+        };
+        EventWriteRequest: {
+            title?: string;
+            description?: null | string;
+            kind?: components["schemas"]["EventKind"];
+            /** Format: date */
+            startDate?: string;
+            /** Format: date */
+            endDate?: null | string;
+            /** Format: time */
+            startTime?: null | string;
+            /** Format: time */
+            endTime?: null | string;
+            place?: null | string;
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            visibility?: null | components["schemas"]["Visibility"];
         };
         ExpeditionDto: {
             /** Format: uuid */
@@ -15297,7 +16057,7 @@ export interface components {
             isProtected: boolean;
         };
         /** @enum {unknown} */
-        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "commentReply" | "commentOnMine" | "groupAnnouncement" | null;
+        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout" | "commentReply" | "commentOnMine" | "groupAnnouncement" | null;
         NotificationCategoryDto: {
             category: components["schemas"]["NotificationCategory"];
             reachesNobody: boolean;
@@ -15471,6 +16231,15 @@ export interface components {
         };
         PagedResultOfDocumentCommentDto: {
             items: components["schemas"]["DocumentCommentDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfEventDto: {
+            items: components["schemas"]["EventDto"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -16538,6 +17307,47 @@ export interface components {
         };
         /** @enum {unknown} */
         TextExtractionState: "notApplicable" | "pending" | "extracted" | "noText" | "failed" | "unsupported";
+        TripCalloutRequest: {
+            /** Format: date-time */
+            expectedReturnAt?: null | string;
+            /** Format: date-time */
+            calloutAlarmAt?: null | string;
+        };
+        /** @enum {unknown} */
+        TripCalloutState: "none" | "armed" | "overdue" | "stoodDown";
+        TripChecklistDto: {
+            /** Format: uuid */
+            tripLogId: string;
+            /** Format: uuid */
+            checklistId: null | string;
+            title: null | string;
+            description: null | string;
+            /** Format: int32 */
+            ticked: number;
+            /** Format: int32 */
+            total: number;
+            items: components["schemas"]["TripChecklistItemDto"][];
+        };
+        TripChecklistItemDto: {
+            /** Format: uuid */
+            id: string;
+            text: string;
+            /** Format: int32 */
+            sortOrder: number;
+            ticked: boolean;
+            /** Format: uuid */
+            tickedByUserId: null | string;
+            /** Format: date-time */
+            tickedAt: null | string;
+        };
+        TripChecklistReadinessDto: {
+            /** Format: uuid */
+            checklistId: string;
+            /** Format: int32 */
+            ticked: number;
+            /** Format: int32 */
+            total: number;
+        };
         TripExpeditionRequest: {
             /** Format: uuid */
             expeditionId?: null | string;
@@ -16655,6 +17465,16 @@ export interface components {
             cavesWithheld: number;
             /** Format: int32 */
             maxParticipants: null | number;
+            /** Format: date-time */
+            expectedReturnAt: null | string;
+            /** Format: date-time */
+            calloutAlarmAt: null | string;
+            calloutState: components["schemas"]["TripCalloutState"];
+            /** Format: date-time */
+            calloutLastCheckedAt: null | string;
+            canStandDownCallout: boolean;
+            meetingGeom: null | components["schemas"]["GeoJsonGeometry"];
+            checklistReadiness: null | components["schemas"]["TripChecklistReadinessDto"];
         };
         TripLogTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];
@@ -16698,6 +17518,7 @@ export interface components {
             safety: null | components["schemas"]["JsonElement"];
             /** Format: int32 */
             maxParticipants: null | number;
+            meetingGeom: null | components["schemas"]["GeoJsonGeometry"];
         };
         TripParticipantDto: {
             /** Format: uuid */
@@ -16831,6 +17652,8 @@ export interface components {
             safetySchema: null | string;
             /** Format: int32 */
             safetySchemaVersion: number;
+            /** Format: uuid */
+            defaultChecklistId: null | string;
         };
         TripTypeRequest: {
             code: string;
@@ -16841,6 +17664,8 @@ export interface components {
             fieldDataSchema: null | string;
             logisticsSchema: null | string;
             safetySchema: null | string;
+            /** Format: uuid */
+            defaultChecklistId: null | string;
         };
         /** @enum {unknown} */
         TwoFactorMethod: "authenticator" | "email" | "sms" | null;

@@ -33,9 +33,14 @@ public enum NotificationCategory : short
     /// </summary>
     TripPlanning = 5,
 
-    // 6 is not free. A category for a trip being called off has already taken it on another
-    // line of work in flight, and values are part of the schema contract — never renumbered,
-    // never reused — so the gap stays a gap rather than being filled in from here.
+    /// <summary>
+    /// A party is overdue: the time they said they would be back has passed and nobody has
+    /// stood the alarm down. Kept apart from the rest of trip planning precisely because a
+    /// preference is per category — folded in with reminders and invitations, somebody who
+    /// muted the chatter would have muted this too.
+    /// Cannot be switched off or deferred; see <see cref="NotificationCategories.IsUserConfigurable"/>.
+    /// </summary>
+    TripCallout = 6,
 
     /// <summary>
     /// Somebody replied to a comment this user wrote. Kept apart from
@@ -202,6 +207,10 @@ public static class NotificationCategories
         NotificationCategory.JobCompleted => InboxAndMail,
         NotificationCategory.SecurityAlerts => InboxAndMail,
         NotificationCategory.TripPlanning => InboxAndMail,
+        // An overdue party. Inbox and mail here, deliberately: whether it may also reach a
+        // phone was reserved as a decision of its own rather than inherited from the rest of
+        // trip planning, and it arrives on its own line when it is taken.
+        NotificationCategory.TripCallout => InboxAndMail,
         NotificationCategory.CommentReply => InboxAndMail,
         NotificationCategory.CommentOnMine => InboxAndMail,
         // The only category whose ceiling names a channel that charges for every message. An
@@ -257,15 +266,30 @@ public static class NotificationCategories
     /// that their own account is being taken over, and whoever is doing it may hold a live
     /// session — so a category with a safety argument behind it stays on wherever it can reach.
     /// </summary>
+    /// <remarks>
+    /// Two categories may not be, and each is here for its own reason rather than by family
+    /// resemblance. <see cref="NotificationCategory.SecurityAlerts"/>: an attacker holding a live
+    /// session could otherwise silence the warning that the account is being taken over.
+    /// <see cref="NotificationCategory.TripCallout"/>: the message exists to be heard when nobody
+    /// is answering, and a muted overdue alarm is indistinguishable from a party that came back.
+    /// Every other category is the user's own choice, and a third exception is a decision somebody
+    /// has to take rather than something a new category may quietly help itself to.
+    /// </remarks>
     public static bool IsUserConfigurable(NotificationCategory category) =>
-        category is not NotificationCategory.SecurityAlerts;
+        category is not (NotificationCategory.SecurityAlerts or NotificationCategory.TripCallout);
 
     /// <summary>
     /// Whether a category refuses to be held back for a summary. The same categories nobody may
     /// switch off, for the same reason: a warning that arrives tomorrow morning is not a warning.
     /// </summary>
+    /// <remarks>
+    /// The same two, for the same two reasons, and deliberately the same list: a category nobody
+    /// may switch off but which a daily summary may hold until morning has been switched off in
+    /// all but name. For the callout that is the whole failure — an alarm raised at ten at night
+    /// and delivered with the next digest arrives after the night somebody spent underground.
+    /// </remarks>
     public static bool IsAlwaysImmediate(NotificationCategory category) =>
-        category is NotificationCategory.SecurityAlerts;
+        category is NotificationCategory.SecurityAlerts or NotificationCategory.TripCallout;
 
     private const NotificationChannelKind InboxAndMail =
         NotificationChannelKind.InApp | NotificationChannelKind.Email;

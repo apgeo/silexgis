@@ -10,6 +10,7 @@ import type {
   NotificationChoice,
   NotificationDeliveryStatus,
   NotificationRetryOutcome,
+  CalendarSource,
   SearchDocumentItem,
 } from '../api/hooks.ts';
 import { RESLINK_ANCHOR_KINDS, RESLINK_TARGET_TYPES } from '../components/reslinks/registry.ts';
@@ -73,6 +74,8 @@ const accessDomains: Record<AccessDomainName, true> = {
   files: true,
   documents: true,
   expeditions: true,
+  checklists: true,
+  events: true,
   mapLayers: true,
   tags: true,
   hierarchies: true,
@@ -108,6 +111,7 @@ const notificationCategories: Record<NotificationCategoryName, true> = {
   jobCompleted: true,
   securityAlerts: true,
   tripPlanning: true,
+  tripCallout: true,
   commentReply: true,
   commentOnMine: true,
   groupAnnouncement: true,
@@ -197,6 +201,18 @@ const activityStates: Record<ActivityState, true> = {
   delayed: true,
 };
 
+/**
+ * Every family of dated record the calendar can answer with. The kind column looks its label up
+ * by the word the row carries, so a family added on the server puts a raw lookup key in the
+ * column until it is named — and a label left behind for a family that no longer exists is an
+ * offer nothing can take up.
+ */
+const calendarSources: Record<CalendarSource, true> = {
+  tripLog: true,
+  expedition: true,
+  event: true,
+};
+
 // EN and RO must be maintained together.
 describe('i18n locales', () => {
   it('en and ro define exactly the same keys', () => {
@@ -284,6 +300,15 @@ describe('i18n locales', () => {
     expect(states.filter((state) => !roStates[state])).toEqual([]);
     // And the reverse: a label kept for a state the server no longer has.
     expect(Object.keys(enStates).sort()).toEqual(states.sort());
+  });
+
+  it('every family of dated record the calendar answers with is named in both locales', () => {
+    const sources = Object.keys(calendarSources);
+    const enSources: Record<string, string> = en.calendar.sourceValues;
+    const roSources: Record<string, string> = ro.calendar.sourceValues;
+    expect(sources.filter((source) => !enSources[source])).toEqual([]);
+    expect(sources.filter((source) => !roSources[source])).toEqual([]);
+    expect(Object.keys(enSources).sort()).toEqual(sources.sort());
   });
 
   // A link chip labels its target by type. An unnamed type would render as a raw lookup

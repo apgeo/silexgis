@@ -16,7 +16,11 @@ public sealed record TripTypeInput(
     int SortOrder,
     string? FieldDataSchema,
     string? LogisticsSchema,
-    string? SafetySchema);
+    string? SafetySchema,
+    // The list trips of this purpose settle before they set off, if an administrator names one.
+    // Appended, and a reference rather than a copy: correcting a line corrects it everywhere at
+    // once.
+    Guid? DefaultChecklistId = null);
 
 /// <summary>
 /// The single mutator of a trip purpose and of the three schemas it carries. A schema is not a
@@ -60,6 +64,7 @@ public sealed class TripTypeWriteService(SilexGisDbContext db, ITypedPropertiesV
             Name = input.Name.Trim(),
             Description = input.Description,
             SortOrder = input.SortOrder,
+            DefaultChecklistId = input.DefaultChecklistId,
         };
         foreach (var section in TripType.Sections)
         {
@@ -116,6 +121,7 @@ public sealed class TripTypeWriteService(SilexGisDbContext db, ITypedPropertiesV
         type.Name = input.Name.Trim();
         type.Description = input.Description;
         type.SortOrder = input.SortOrder;
+        type.DefaultChecklistId = input.DefaultChecklistId;
 
         foreach (var section in TripType.Sections)
         {

@@ -75,13 +75,18 @@ public class DependencyRuleTests
         // So the lifecycle vocabulary may not be reachable from the code that decides access at
         // all — not the evaluator, not its query twin, not the ruleset that feeds them. This
         // makes a reference somebody adds fail the build rather than review.
+        //
+        // How settled a trip's preparation is answers to the same rule and is named here for the
+        // same reason. It is a reading of rows, not a state, and it must never become a second
+        // thing deciding who sees a plan: a trip whose party has ticked nothing is exactly as
+        // visible as one that has ticked everything, to exactly the same people.
         var domain = Types.InAssembly(typeof(Visibility).Assembly)
             .That()
             .ResideInNamespaceStartingWith("SilexGis.Domain.Access")
             .Or()
             .ResideInNamespaceStartingWith("SilexGis.Domain.Permissions")
             .ShouldNot()
-            .HaveDependencyOn("SilexGis.Domain.Entities.ActivityState")
+            .HaveDependencyOnAny(StateVocabulary)
             .GetResult();
 
         domain.IsSuccessful.ShouldBeTrue(FailureMessage(domain));
@@ -90,11 +95,22 @@ public class DependencyRuleTests
             .That()
             .ResideInNamespaceStartingWith("SilexGis.Infrastructure.Permissions")
             .ShouldNot()
-            .HaveDependencyOn("SilexGis.Domain.Entities.ActivityState")
+            .HaveDependencyOnAny(StateVocabulary)
             .GetResult();
 
         infrastructure.IsSuccessful.ShouldBeTrue(FailureMessage(infrastructure));
     }
+
+    /// <summary>
+    /// What a row is in the middle of, and how far through its preparation it is. Neither is an
+    /// answer to who may read it, and neither may be reachable from the code that decides that.
+    /// </summary>
+    private static readonly string[] StateVocabulary =
+    [
+        "SilexGis.Domain.Entities.ActivityState",
+        "SilexGis.Domain.Entities.TripChecklistTick",
+        "SilexGis.Domain.Trips.TripReadiness",
+    ];
 
     private static string FailureMessage(TestResult result) =>
         result.IsSuccessful

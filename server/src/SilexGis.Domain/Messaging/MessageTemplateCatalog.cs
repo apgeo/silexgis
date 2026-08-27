@@ -83,7 +83,7 @@ public static class MessageTemplateCatalog
 
     public const string NotifyTripParticipation = "notify.trip-participation";
 
-    // A trip being planned. All three name the trip and its date and nothing else: the places a
+    // A trip being planned. All four name the trip and its date and nothing else: the places a
     // trip is about are readable by fewer people than its roster, and a message is as much an
     // outbound copy of that as anything the API returns.
 
@@ -95,6 +95,29 @@ public static class MessageTemplateCatalog
 
     /// <summary>A trip somebody is on was called off.</summary>
     public const string NotifyTripPlanCancelled = "notify.trip-plan-cancelled";
+
+    /// <summary>A trip somebody is on is coming up.</summary>
+    /// <remarks>
+    /// Sent by the pass that watches for overdue parties rather than written ahead of time onto
+    /// the queue, so that a trip put back or called off stops reminding people about a date that
+    /// is no longer true.
+    /// </remarks>
+    public const string NotifyTripPlanReminder = "notify.trip-plan-reminder";
+
+    /// <summary>
+    /// A party said when they would be back, the time has gone by, and nobody has said they are
+    /// out.
+    /// </summary>
+    /// <remarks>
+    /// It names the trip, the date and the hour that passed, and — like the four above and for the
+    /// same reason — no cave. The temptation is strongest here, because an overdue party feels
+    /// like the one message that ought to say where they are; but the message goes to everybody
+    /// the trip names, and where a cave is remains readable by fewer people than that. Whoever
+    /// runs a search reads the trip, where the answer is already kept for them.
+    /// It carries no opt-out line: nobody may switch this one off, so a link that could not work
+    /// would be a lie.
+    /// </remarks>
+    public const string NotifyTripCalloutOverdue = "notify.trip-callout-overdue";
 
     /// <summary>
     /// Somebody asked on a trip cannot open a cave the trip is about, and the people who could
@@ -615,6 +638,76 @@ public static class MessageTemplateCatalog
                     {url}
 
                     {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripPlanReminder,
+            MessageChannel.Email,
+            "A trip someone is on is coming up.",
+            [AppName, DisplayName, "tripTitle", "tripDate", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{tripTitle} is coming up",
+                    """
+                    Hello {displayName},
+
+                    {tripTitle} is on {tripDate}. What has been arranged for it is here:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Se apropie {tripTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {tripTitle} are loc în data de {tripDate}. Ce s-a stabilit pentru ea găsiți aici:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripCalloutOverdue,
+            MessageChannel.Email,
+            "A party is past the time they said they would be back, and nobody has stood the alarm down.",
+            [AppName, DisplayName, "tripTitle", "tripDate", "expectedReturn", "url"],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{tripTitle} is overdue",
+                    """
+                    Hello {displayName},
+
+                    {tripTitle} on {tripDate} was due back by {expectedReturn}, and nobody has said
+                    it is out. You are being told because the trip names you.
+
+                    If you know the party is safe, say so here — anyone the trip names can:
+
+                    {url}
+
+                    If nobody can reach them, the trip records what was arranged for this.
+                    """),
+                ["ro"] = new(
+                    "{tripTitle} a depășit ora de întoarcere",
+                    """
+                    Bună ziua {displayName},
+
+                    {tripTitle} din data de {tripDate} trebuia să se încheie până la
+                    {expectedReturn}, iar nimeni nu a confirmat că echipa a ieșit. Primiți acest
+                    mesaj pentru că tura vă numește.
+
+                    Dacă știți că echipa este în siguranță, confirmați aici — o poate face oricine
+                    este numit pe tură:
+
+                    {url}
+
+                    Dacă nimeni nu îi poate contacta, tura consemnează ce s-a stabilit pentru acest caz.
                     """),
             }),
 

@@ -132,6 +132,45 @@ public class MessageTemplateTests
     }
 
     [Fact]
+    public void A_message_a_scheduled_pass_sends_names_no_actor_and_no_cave()
+    {
+        // Neither of these is caused by anybody, so neither declares an actor — a placeholder
+        // nothing fills is one an operator can write into the wording and get a hole from. And
+        // neither may name a cave. The temptation is at its worst on the overdue one, where an
+        // alarm feels like the message that ought to say where the party is; but it goes to
+        // everybody the trip names, and where a cave is stays readable by fewer people than that.
+        var reminder = MessageTemplateCatalog.Find(MessageTemplateCatalog.NotifyTripPlanReminder)!;
+
+        reminder.Placeholders.ShouldBe(
+            ["appName", "displayName", "tripTitle", "tripDate", "url", "unsubscribeUrl"],
+            ignoreOrder: true);
+
+        var overdue = MessageTemplateCatalog.Find(MessageTemplateCatalog.NotifyTripCalloutOverdue)!;
+
+        // The overdue one carries no opt-out line, the way the account-security messages do not:
+        // nobody may switch a callout off, so a link that could not work would be a lie. Leaving
+        // the placeholder undeclared is what stops an operator putting one back.
+        overdue.Placeholders.ShouldBe(
+            ["appName", "displayName", "tripTitle", "tripDate", "expectedReturn", "url"],
+            ignoreOrder: true);
+
+        foreach (var definition in new[] { reminder, overdue })
+        {
+            definition.Channel.ShouldBe(MessageChannel.Email);
+
+            foreach (var locale in MessageTemplateCatalog.Locales)
+            {
+                definition.Defaults.ShouldContainKey(locale, $"{definition.Key} is missing {locale}");
+
+                var text = MessageTemplateCatalog.Default(definition, locale);
+                text.Subject.ShouldNotBeNullOrWhiteSpace($"{definition.Key} ({locale})");
+                MessageTemplateRenderer.UnknownPlaceholders(definition, text.Subject, text.Body)
+                    .ShouldBeEmpty($"{definition.Key} ({locale})");
+            }
+        }
+    }
+
+    [Fact]
     public void Every_shipped_template_exists_in_every_language()
     {
         foreach (var definition in MessageTemplateCatalog.All)

@@ -49,4 +49,9 @@ describe('the addresses this application hands out', () => {
   it('include the delivery health page the sidebar offers', () => {
     expect(matchRoutes(routes, '/admin/notification-health')).toBeTruthy();
   });
+
+  // Same reason, for the record of everything dated: the sidebar offers it by key.
+  it('include the calendar the sidebar sends people to', () => {
+    expect(matchRoutes(routes, '/calendar')).toBeTruthy();
+  });
 });

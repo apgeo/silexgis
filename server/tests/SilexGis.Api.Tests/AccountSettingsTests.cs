@@ -420,6 +420,21 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         alertMail.GetProperty("locked").GetBoolean().ShouldBeTrue();
         alertMail.GetProperty("available").GetBoolean().ShouldBeFalse();
 
+        // Both categories nobody may mute are locked, and a third is not — asserted together,
+        // because a page that locked everything would pass a test that only looked at the locked
+        // ones. Each is locked for its own reason rather than by family resemblance: a live
+        // session must not be able to silence the warning that an account is being taken over,
+        // and an overdue party is not news that can wait for the morning.
+        bool MailLocked(string category) =>
+            categories.Single(c => c.GetProperty("category").GetString() == category)
+                .GetProperty("channels").EnumerateArray()
+                .Single(c => c.GetProperty("channel").GetString() == "email")
+                .GetProperty("locked").GetBoolean();
+
+        MailLocked("securityAlerts").ShouldBeTrue();
+        MailLocked("tripCallout").ShouldBeTrue();
+        MailLocked("tripPlanning").ShouldBeFalse();
+
         // An account that has never opened this page reads back as the documented defaults, on
         // every channel of every category — not as silence, and not as everything off.
         foreach (var category in categories)

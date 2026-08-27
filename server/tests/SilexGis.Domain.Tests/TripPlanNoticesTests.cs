@@ -37,4 +37,25 @@ public class TripPlanNoticesTests
         ActivityStates.SuppressesParticipantNotification(Cancelled).ShouldBeTrue();
         TripPlanNotices.AnnouncesChanges(Cancelled).ShouldBeFalse();
     }
+
+    [Fact]
+    public void Only_a_trip_whose_date_is_still_true_is_reminded_about() =>
+        // The partition again, and the one state where it deliberately parts company with the
+        // announcement rule is the whole point: a trip that has been put back is worth telling
+        // people about, and the date it still carries is not one anybody is going on.
+        ActivityStates.All.Where(TripPlanNotices.RemindsOfDate)
+            .ShouldBe([Proposed, Planned, Confirmed], ignoreOrder: true);
+
+    [Fact]
+    public void A_trip_put_back_is_still_worth_mentioning_but_not_on_the_date_it_no_longer_has()
+    {
+        // Pinned as a pair so neither rule can later be "simplified" into the other. Reusing the
+        // announcement rule for the run-up reminder is exactly how everybody on a delayed trip
+        // gets mailed a date nobody is going on.
+        TripPlanNotices.AnnouncesChanges(Delayed).ShouldBeTrue();
+        TripPlanNotices.RemindsOfDate(Delayed).ShouldBeFalse();
+
+        // And the positive beside it, so a predicate answering "no" to everything could not pass.
+        TripPlanNotices.RemindsOfDate(Planned).ShouldBeTrue();
+    }
 }

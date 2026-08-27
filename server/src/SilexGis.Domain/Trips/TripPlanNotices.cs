@@ -47,4 +47,31 @@ public static class TripPlanNotices
         ActivityState.Cancelled => false,
         _ => false,
     };
+
+    /// <summary>
+    /// Whether the people on a trip in this state should be reminded, in the run-up, that it is
+    /// coming up on the date the trip carries.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Deliberately not the same question as <see cref="AnnouncesChanges"/>, and the difference is
+    /// the whole reason this exists. That one asks whether a change is worth mailing about; this
+    /// one asks whether the date on the trip is still a date somebody is going on. They part
+    /// company on exactly one state: a trip that has been <b>put back</b> is worth telling people
+    /// about — that is news — but the date it still carries is not one anybody is going on any
+    /// more, so a reminder quoting it would be the reminder saying something untrue. A new date
+    /// has to be settled before the run-up means anything again.
+    /// </para>
+    /// <para>
+    /// A state added to the vocabulary and not named here sends no reminder, which is the same
+    /// safe default the announcement rule takes: silence is recoverable, a wrong date is not.
+    /// </para>
+    /// </remarks>
+    public static bool RemindsOfDate(ActivityState state) => state switch
+    {
+        ActivityState.Proposed => true,
+        ActivityState.Planned => true,
+        ActivityState.Confirmed => true,
+        _ => false,
+    };
 }

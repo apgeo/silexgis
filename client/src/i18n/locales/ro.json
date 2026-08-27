@@ -29,7 +29,10 @@
     "reportTemplates": "Modele de raport",
     "termRules": "Reguli de detectare",
     "expeditions": "Tabere",
-    "notificationHealth": "Trimiterea mesajelor"
+    "notificationHealth": "Trimiterea mesajelor",
+    "calendar": "Calendar",
+    "events": "Evenimente",
+    "checklists": "Liste de verificare"
   },
   "dashboard": {
     "title": "Panou de bord",
@@ -55,7 +58,11 @@
       "caveEntrance": "Intrare de peșteră",
       "centerline": "Poligonație",
       "expedition": "Tabără"
-    }
+    },
+    "comingUp": "Ce urmează",
+    "comingUpFailed": "Turele tale nu au putut fi încărcate.",
+    "noComingUp": "Nimic în program. O tură apare aici după ce cineva te invită sau te trece în echipă.",
+    "allMyTrips": "Toate turele mele"
   },
   "auth": {
     "email": "Email",
@@ -120,7 +127,8 @@
     "conflict": "Altcineva a modificat acest element de când l-ați încărcat. Reîncărcați și reaplicați modificările.",
     "loadFailed": "Nu s-a putut încărca. Încercați din nou.",
     "close": "Închide",
-    "reset": "Resetează"
+    "reset": "Resetează",
+    "clearAnswer": "Șterge răspunsul"
   },
   "errorBoundary": {
     "title": "Ceva nu a funcționat pe acest ecran",
@@ -884,7 +892,19 @@
       "incident_severity": "Gravitate",
       "equipment_failure": "Echipament defect",
       "lessons_learned": "Ce s-a învățat",
-      "reported_to": "Raportat către"
+      "reported_to": "Raportat către",
+      "meeting_time": "Ora întâlnirii",
+      "meeting_description": "Locul întâlnirii, descris",
+      "transport_drivers": "Șoferi",
+      "transport_seats": "Locuri disponibile",
+      "transport_departure": "Puncte de plecare",
+      "equipment_note": "Echipament și echipare",
+      "permit_required": "Autorizație necesară",
+      "permit_obtained": "Autorizație obținută",
+      "callout_contact_caver_id": "Persoana de contact pentru alarmă",
+      "callout_contact_note": "Persoana de contact pentru alarmă, dacă nu este în registru",
+      "weather_note": "Notă meteo",
+      "whatsapp_group_url": "Link către grupul de discuții"
     },
     "state": "Stare",
     "stateValues": {
@@ -951,7 +971,9 @@
       "template": "Machetă",
       "templateDefault": "Macheta standard",
       "audienceNotice": "Acest raport arată ceea ce puteți vedea dumneavoastră. Altcineva care citește aceeași tură poate vedea mai mult sau mai puțin.",
-      "keepAudience": "Copia salvată la tură poate fi deschisă de toți cei care pot citi tura, așa că lasă deoparte ceea ce văd doar cei care pot modifica tura. Copia dumneavoastră completă este descărcarea."
+      "keepAudience": "Copia salvată la tură poate fi deschisă de toți cei care pot citi tura, așa că lasă deoparte ceea ce văd doar cei care pot modifica tura. Copia dumneavoastră completă este descărcarea.",
+      "meetingPoint": "Punct de întâlnire: un punct la {{position}}.",
+      "meetingShape": "Punct de întâlnire: {{shape}}, {{count}} puncte, centrat pe {{position}}."
     },
     "geometry": "Schița turei",
     "geometryHint": "Alegeți o formă, apoi desenați pe hartă. O formă nouă o înlocuiește pe cea dinainte.",
@@ -979,7 +1001,51 @@
       "trip-searched-not-found": "Căutate, negăsite",
       "trip-lead": "Continuări lăsate",
       "trip-follows-on-from": "Continuă tura"
-    }
+    },
+    "mine": {
+      "title": "Turele mele",
+      "link": "Turele mele",
+      "stateFilter": "Orice stare",
+      "empty": "Nu ești încă în nicio tură. O tură apare aici după ce cineva te invită sau te trece în echipă.",
+      "emptyFiltered": "Nicio tură de-a ta nu se potrivește cu aceste filtre.",
+      "failed": "Turele tale nu au putut fi încărcate."
+    },
+    "expectedReturnAt": "Ieșire estimată",
+    "calloutAlarmAt": "Dă alarma la",
+    "calloutAlarmHelp": "Dacă nimeni nu confirmă până la ora asta că echipa a ieșit, toți cei din tură sunt anunțați. Nu poate fi mai devreme decât ora la care estimezi ieșirea. Lasă ambele goale dacă nu vrei apel de urgență.",
+    "calloutStatus": "Apel de urgență",
+    "calloutStateValues": {
+      "none": "Neprogramat",
+      "armed": "În supraveghere",
+      "overdue": "Întârziere",
+      "stoodDown": "Echipa a ieșit"
+    },
+    "calloutLastChecked": "Ultima verificare",
+    "calloutNeverChecked": "Niciodată",
+    "calloutUncheckedTitle": "Nimic nu a verificat recent acest apel de urgență",
+    "calloutUncheckedBody": "Alarma este programată, dar verificarea care ar declanșa-o nu a mai rulat de ceva vreme — deci nimeni nu a confirmat că echipa este în grafic. Tratează situația ca neverificată, nu ca sigură, și încearcă să iei legătura pe altă cale.",
+    "calloutOverdueTitle": "Echipa are întârziere",
+    "calloutOverdueBody": "A trecut ora alarmei și nimeni nu confirmase că echipa a ieșit. Toți cei din tură au fost anunțați.",
+    "calloutStandDown": "Echipa a ieșit",
+    "calloutStoodDownSuccess": "Înregistrat — apelul de urgență a fost oprit.",
+    "calloutStandDownFailed": "Apelul de urgență nu a putut fi oprit. Încearcă din nou și ia legătura pe altă cale dacă eroarea persistă.",
+    "calloutArrange": "Stabilește o alarmă",
+    "calloutChange": "Modifică alarma",
+    "calloutSaved": "Salvat — alarma este stabilită.",
+    "calloutCleared": "Salvat — nu este stabilită nicio alarmă pentru această tură.",
+    "calloutSaveFailed": "Alarma nu a putut fi salvată. Încearcă din nou.",
+    "calloutAlarmBeforeReturn": "Alarma nu poate fi mai devreme decât ora la care te aștepți să ieși.",
+    "meetingGeometry": "Punct de întâlnire",
+    "meetingGeometryHint": "Unde se adună echipa și, dacă clubul o desenează, calea de acces spre el. Oricine poate citi această tură află această poziție exact, inclusiv cititorii cărora tura nu le spune ce peșteri numește.",
+    "meetingGeometryWarning": "Poziție exactă — locul unde se adună echipa nu este niciodată aproximat.",
+    "meetingGeometryWarningDetail": "Oricine poate citi această tură vede această poziție exact așa cum a fost pusă, inclusiv cititorii cărora tura nu le spune ce peșteri numește. Un punct de întâlnire aflat la câteva sute de metri de o intrare protejată arată astfel spre acea intrare.",
+    "checklist": "Listă de verificare",
+    "tabChecklist": "Listă de verificare",
+    "checklistNone": "Această tură nu parcurge nicio listă pe care o poți vedea.",
+    "checklistReadiness": "{{ticked}} din {{total}} rezolvate",
+    "checklistAdvisory": "Aceasta este o informare pentru echipă, nu o regulă. Nimic nu este refuzat pentru că o linie a rămas nerezolvată, iar gradul de pregătire nu schimbă niciodată cine poate citi tura.",
+    "checklistTickedAt": "Confirmat la {{when}}",
+    "checklistTickFailed": "Confirmarea nu a putut fi înregistrată."
   },
   "expeditions": {
     "notFound": "Nicio astfel de tabără",
@@ -1108,14 +1174,14 @@
       "open": "Anunță",
       "title": "Anunț pentru {{name}}",
       "message": "Anunț",
-      "placeholder": "Un singur rând \u2014 o schimbare de oră, un loc de întâlnire, o închidere.",
+      "placeholder": "Un singur rând — o schimbare de oră, un loc de întâlnire, o închidere.",
       "reaches": "Persoane la care ajunge: {{people}}",
       "reachesHint": "Membrii fără cont nu sunt numărați, iar propriul anunț nu vă este trimis niciodată. Fiecare dintre ceilalți îl primește așa cum a ales să fie anunțat.",
       "nobody": "Nimeni de pe această listă nu are cont, deci nu are cine să fie anunțat.",
       "confirm": "Pleacă acum către persoanele numărate mai sus. Nu poate fi retras.",
       "send": "Trimite",
       "done": "Trimis. Persoane anunțate: {{people}}",
-      "queued": "Se trimite \u2014 clubul este destul de mare încât anunțurile se scriu în fundal. Persoane care vor fi anunțate: {{people}}",
+      "queued": "Se trimite — clubul este destul de mare încât anunțurile se scriu în fundal. Persoane care vor fi anunțate: {{people}}",
       "failed": "Anunțul nu a fost trimis. Încercați din nou."
     },
     "roles": {
@@ -1235,7 +1301,9 @@
       "settings": "Setările instalării",
       "messageTemplates": "Texte mesaje",
       "audit": "Istoricul de audit",
-      "jobs": "Sarcini"
+      "jobs": "Sarcini",
+      "checklists": "Liste de verificare",
+      "events": "Evenimente din calendar"
     },
     "sources": {
       "fullAdministrators": "Administrare deplină: apartenența decide înainte de orice regulă.",
@@ -1642,10 +1710,23 @@
         "tripPlanning": "Sunt invitat la o tură, se schimbă o tură la care particip sau o tură are nevoie de un acces pe care îl pot acorda",
         "commentReply": "Cineva răspunde la un comentariu scris de mine",
         "commentOnMine": "Cineva comentează la ceva ce îmi aparține",
-          "groupAnnouncement": "Cineva scrie unui grup din care fac parte",
+        "groupAnnouncement": "Cineva scrie unui grup din care fac parte",
         "jobCompleted": "Fișierele mele termină de procesat",
-        "securityAlerts": "Alerte de securitate"
-      }
+        "securityAlerts": "Alerte de securitate",
+        "tripCallout": "O tură la care particip a întârziat și nimeni nu a confirmat că echipa a ieșit"
+      },
+      "delivery": "Livrare",
+      "masterEmail": "Anunțați-mă pe e-mail",
+      "digest": "Cât de des",
+      "digestValues": {
+        "immediate": "Pe măsură ce se întâmplă",
+        "daily": "Un rezumat zilnic"
+      },
+      "alwaysOnReasons": {
+        "securityAlerts": "Se trimit mereu — acestea vă avertizează despre propriul cont.",
+        "tripCallout": "Se trimit mereu și nu se amână pentru rezumatul zilnic — o echipă întârziată nu mai este o noutate a doua zi dimineața."
+      },
+      "noDelivery": "Această instalare nu are un server de e-mail configurat, deci nu se trimite nimic încă. Alegerile sunt salvate și vor fi folosite când va exista unul."
     },
     "accessibility": {
       "heading": "Aspect",
@@ -1823,7 +1904,9 @@
         "integer": "număr întreg",
         "boolean": "da/nu",
         "enum": "alegere"
-      }
+      },
+      "defaultChecklist": "Listă de verificare",
+      "defaultChecklistHint": "Lista pe care o parcurg turele cu acest scop. Numirea ei aici nu conferă nimic: un cititor care nu poate deschide lista este informat că tura nu are niciuna."
     },
     "participantRoles": {
       "title": "Roluri în tură",
@@ -2648,5 +2731,105 @@
       "suppressed": "Persoana căreia îi era destinat a cerut între timp să nu mai fie anunțată despre asta, deci nu s-a trimis. Îl poate citi în continuare în lista ei.",
       "queued": "Înapoi la coadă."
     }
+  },
+  "calendar": {
+    "title": "Calendar",
+    "when": "Când",
+    "what": "Ce",
+    "kind": "Tip",
+    "state": "Stare",
+    "postponed": "Dată nestabilită",
+    "togglePast": "Trecute",
+    "toggleTrips": "Ture",
+    "toggleOther": "Alte înregistrări",
+    "toggleCancelled": "Anulate",
+    "toggleMine": "Doar ale mele",
+    "groupFilter": "Orice grup",
+    "omitted": "În aceste zile mai sunt {{count}} rânduri decât poate purta această pagină. Cere mai puține zile.",
+    "empty": "Nu este nimic înregistrat în aceste zile.",
+    "emptyFiltered": "Nimic din aceste zile nu corespunde cererii.",
+    "emptyNoKind": "Nu este selectat niciun tip de înregistrare.",
+    "failed": "Calendarul nu a putut fi citit.",
+    "sourceValues": {
+      "tripLog": "Tură",
+      "expedition": "Tabără",
+      "event": "Eveniment"
+    }
+  },
+  "events": {
+    "title": "Evenimente",
+    "titleField": "Titlu",
+    "create": "Eveniment nou",
+    "edit": "Modifică evenimentul",
+    "delete": "Șterge",
+    "deleteConfirm": "Ștergeți acest eveniment?",
+    "searchPlaceholder": "Caută după titlu",
+    "kind": "Tip",
+    "kindFilter": "Orice tip",
+    "kindValues": {
+      "clubMeeting": "Ședință de club",
+      "training": "Instruire",
+      "maintenanceDay": "Zi de lucru",
+      "gearCheck": "Verificarea echipamentului",
+      "conference": "Conferință",
+      "deadline": "Termen limită"
+    },
+    "dates": "Date",
+    "time": "Ora",
+    "startTime": "Începe la",
+    "endTime": "Se termină la",
+    "place": "Loc",
+    "description": "Descriere",
+    "cavingGroup": "Club de speologie",
+    "state": "Stare",
+    "stateFilter": "Orice stare",
+    "announce": "Anunță",
+    "announceSuccess": "Evenimentul a fost anunțat.",
+    "unannounce": "Înapoi la ciornă",
+    "unannounceSuccess": "Evenimentul s-a întors la ciornă.",
+    "propose": "Lansează ideea",
+    "proposeSuccess": "Evenimentul a fost propus.",
+    "organise": "Începe organizarea",
+    "organiseSuccess": "Evenimentul se organizează.",
+    "confirm": "Are loc",
+    "confirmSuccess": "Evenimentul are loc.",
+    "postpone": "Amână",
+    "postponeSuccess": "Evenimentul a fost amânat.",
+    "reschedule": "Stabilește o dată nouă",
+    "rescheduleSuccess": "Evenimentul se organizează din nou.",
+    "markDone": "A avut loc",
+    "markDoneSuccess": "Evenimentul a fost înregistrat ca desfășurat.",
+    "notFound": "Niciun astfel de eveniment",
+    "notFoundDetail": "Fie nu există, fie nu îl puteți citi. Această pagină nu poate deosebi cele două cazuri și nici nu încearcă.",
+    "callOff": "Anulează",
+    "callOffConfirm": "Anulați acest eveniment?",
+    "callOffSuccess": "Evenimentul a fost anulat."
+  },
+  "checklists": {
+    "title": "Liste de verificare",
+    "subtitle": "Listele pe care o echipă le parcurge înainte de plecare.",
+    "new": "Listă nouă",
+    "edit": "Modifică lista",
+    "empty": "Nicio listă de verificare încă.",
+    "saved": "Listă salvată.",
+    "saveFailed": "Lista nu a putut fi salvată.",
+    "deleteConfirm": "Ștergi această listă? Turele pierd confirmările făcute pe liniile ei.",
+    "lineCount": "{{count}} linii",
+    "fieldTitle": "Titlu",
+    "fieldDescription": "Descriere",
+    "fieldVisibility": "Cine o poate citi",
+    "visibilityHint": "O listă pe care o poate citi oricine este modul în care se publică una pentru toată instalarea.",
+    "fieldCavingGroup": "Club de speologie",
+    "fieldItems": "Linii",
+    "itemPlaceholder": "Ceva de rezolvat înainte de plecare",
+    "addLine": "Adaugă o linie",
+    "removeLine": "Elimină această linie",
+    "visibilityValues": {
+      "private": "Doar eu",
+      "cavingGroup": "Clubul meu",
+      "authenticated": "Oricine este autentificat",
+      "public": "Toată lumea"
+    },
+    "delete": "Șterge această listă"
   }
 }

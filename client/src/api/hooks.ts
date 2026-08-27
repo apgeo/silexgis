@@ -193,9 +193,14 @@ export const queryKeys = {
   cabinetDocuments: (id: string, params: CabinetDocumentParams) =>
     ['cabinets', id, 'documents', params] as const,
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
+  calendar: (params: CalendarParams) => ['calendar', params] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
+  myTripLogs: (params: MyTripLogListParams) => ['trip-logs', 'mine', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
   tripInvitations: (id: string) => ['trip-logs', 'invitations', id] as const,
+  tripChecklist: (id: string) => ['trip-logs', 'checklist', id] as const,
+  checklists: ['checklists'] as const,
+  checklist: (id: string) => ['checklists', 'detail', id] as const,
   tripReportTemplates: ['trip-report-templates'] as const,
   taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
   tags: (search: string) => ['tags', search] as const,
@@ -248,6 +253,9 @@ export const queryKeys = {
   expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,
   expeditionMap: (id: string) => ['expeditions', 'map', id] as const,
   expeditionLeads: (id: string) => ['expeditions', 'leads', id] as const,
+  events: (params: EventListParams) => ['events', 'list', params] as const,
+  event: (id: string) => ['events', 'detail', id] as const,
+  eventDefaults: ['events', 'defaults'] as const,
 };
 
 async function unwrap<T>(
@@ -1331,7 +1339,8 @@ export type EntityType =
   | 'geofile'
   | 'georeferencedMap'
   | 'mapView'
-  | 'expedition';
+  | 'expedition'
+  | 'event';
 // Stored files additionally carry taggings (never attachments or grants) — the tag
 // endpoints accept the extra target; the server rejects it everywhere else.
 export type AttachedEntityType = EntityType | 'storedFile';
@@ -1626,6 +1635,8 @@ export interface TripTypeWrite {
   fieldDataSchema: string | null;
   logisticsSchema: string | null;
   safetySchema: string | null;
+  /** The list trips of this purpose work through, by identity. Null names none. */
+  defaultChecklistId: string | null;
 }
 
 function useInvalidateTripTypes() {
@@ -2158,6 +2169,40 @@ export function useTripLogs(params: TripLogListParams) {
   });
 }
 
+/**
+ * What the caller asked of their own list of trips. There is deliberately no member naming a
+ * person: whose trips these are is worked out on the server from whoever is making the request,
+ * and a parameter for it would let somebody assemble where a named person has been out of trips
+ * they may never open. Adding one here would be the first half of undoing that.
+ */
+export interface MyTripLogListParams {
+  page?: number;
+  pageSize?: number;
+  /** Inclusive, `YYYY-MM-DD`. Omitted, the server starts the window at today. */
+  from?: string;
+  /** Inclusive, `YYYY-MM-DD`. Omitted, the window has no far end. */
+  to?: string;
+  /** A lifecycle state spelled the way the contract spells it; an unknown word is refused. */
+  state?: ActivityState;
+}
+
+/**
+ * The trips the signed-in account is on, soonest first.
+ *
+ * Its own key rather than a shape of the trip list's, because it is a different question with a
+ * different answer for every reader, and because it goes stale as dates pass rather than as
+ * people edit. The key sits under the trip prefix so writing a trip re-reads it for free.
+ */
+export function useMyTripLogs(params: MyTripLogListParams) {
+  return useQuery({
+    queryKey: queryKeys.myTripLogs(params),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/mine', { params: { query: params } })),
+    // Paging or narrowing keeps the rows on screen while the next answer arrives, rather than
+    // emptying the table under whoever is reading it.
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function useTripLog(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.tripLog(id ?? ''),
@@ -2324,6 +2369,62 @@ export function useMoveTripLog() {
       // move is not finished until the version it produced has been read.
       return readBack();
     },
+  });
+}
+
+export type TripCalloutState = components['schemas']['TripCalloutState'];
+
+export type TripCalloutArrangement = components['schemas']['TripCalloutRequest'];
+
+/**
+ * Arranges, changes or calls off the check that notices if a party does not come back.
+ *
+ * Part of planning the trip, so it is offered to whoever may change the trip and carries the
+ * precondition header every other write to a trip carries — two people arranging different hours
+ * is exactly the lost update it exists to catch. Clearing the alarm time is how the whole
+ * arrangement is called off; there is no separate route for that, and none is wanted.
+ *
+ * The answer is the trip as it now stands, so the page redraws from it directly.
+ */
+export function useArrangeTripCallout() {
+  const readBack = useReadTripLogsBack();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string } & TripCalloutArrangement) => {
+      const etag = lastReadETag(`/api/v1/trip-logs/${id}`);
+      return unwrap(
+        api.POST('/api/v1/trip-logs/{id}/callout', {
+          params: { path: { id } },
+          headers: etag ? { 'If-Match': etag } : undefined,
+          body,
+        }),
+      );
+    },
+    onSuccess: () => {
+      invalidateHistory();
+      // Checked against the version last read, as the trip's own update is, so the write is not
+      // finished until the version it produced has been read back.
+      return readBack();
+    },
+  });
+}
+
+/**
+ * Says the party is out, which stops the overdue check.
+ *
+ * No precondition header, unlike every other write to a trip, and that is the server's rule
+ * rather than an omission here: there is one value it can write, everybody entitled to call it is
+ * saying the same thing, and a stale version would refuse the message that says people are safe.
+ * The answer is the trip as it now stands, so the page redraws from it directly.
+ */
+export function useStandDownTripCallout() {
+  const readBack = useReadTripLogsBack();
+  return useMutation({
+    mutationFn: ({ id }: { id: string }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{id}/callout/stand-down', { params: { path: { id } } }),
+      ),
+    onSuccess: () => readBack(),
   });
 }
 
@@ -4544,5 +4645,362 @@ export function useExpeditionLeads(expeditionId: string | undefined) {
       unwrap(api.GET('/api/v1/expeditions/{id}/leads', { params: { path: { id: expeditionId! } } })),
     enabled: !!expeditionId,
     retry: false,
+  });
+}
+
+export type ChecklistInfo = components['schemas']['ChecklistDto'];
+export type ChecklistItemInfo = components['schemas']['ChecklistItemDto'];
+export type ChecklistWrite = components['schemas']['ChecklistWriteRequest'];
+export type TripChecklistInfo = components['schemas']['TripChecklistDto'];
+export type TripChecklistItemInfo = components['schemas']['TripChecklistItemDto'];
+
+/**
+ * The lists this caller may read, lines included.
+ *
+ * There is one kind of list. A list an administrator publishes for the whole installation
+ * arrives here beside a caver's own — it is the same row with a wider audience — so nothing
+ * here sorts them into two groups or asks which is "the default".
+ */
+export function useChecklists() {
+  return useQuery({
+    queryKey: queryKeys.checklists,
+    queryFn: () => unwrap(api.GET('/api/v1/checklists')),
+  });
+}
+
+function useInvalidateChecklists() {
+  const queryClient = useQueryClient();
+  return (id?: string) => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.checklists });
+    if (id) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.checklist(id) });
+    }
+    // A trip's reading of how settled it is comes from these rows, so changing a list moves it.
+    void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+  };
+}
+
+export function useCreateChecklist() {
+  const invalidate = useInvalidateChecklists();
+  return useMutation({
+    mutationFn: (body: ChecklistWrite) => unwrap(api.POST('/api/v1/checklists', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateChecklist() {
+  const invalidate = useInvalidateChecklists();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: ChecklistWrite }) =>
+      unwrap(api.PUT('/api/v1/checklists/{id}', { params: { path: { id } }, body })),
+    onSuccess: (_data, variables) => invalidate(variables.id),
+  });
+}
+
+export function useDeleteChecklist() {
+  const invalidate = useInvalidateChecklists();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/checklists/{id}', {
+        params: { path: { id } },
+      });
+      if (error) {
+        throw new ApiError(response.status, error);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * The list one trip works through, its lines, who has confirmed each and when, and how much of
+ * it is settled.
+ *
+ * The count comes back on the answer rather than being worked out here. It is the server's
+ * reading of the lines and the confirmations, and a second count computed in the browser would
+ * be a copy free to disagree with it — over a list whose lines this caller may not even have
+ * been sent all of.
+ *
+ * A trip whose purpose names no list, and a trip naming one this caller may not read, answer the
+ * same way: no list. That is deliberate on the server, and nothing here tries to tell them apart.
+ */
+export function useTripChecklist(tripLogId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripChecklist(tripLogId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-logs/{tripLogId}/checklist', {
+          params: { path: { tripLogId: tripLogId! } },
+        }),
+      ),
+    enabled: !!tripLogId && enabled,
+  });
+}
+
+function useInvalidateTripChecklist() {
+  const queryClient = useQueryClient();
+  return (tripLogId: string) => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tripChecklist(tripLogId) });
+    // The trip's own row carries the same figure, so a confirmation moves both.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tripLog(tripLogId) });
+  };
+}
+
+/**
+ * Confirms one line as settled for this trip, or takes the confirmation back.
+ *
+ * Confirming what is already confirmed changes nothing: the record is of who first said so and
+ * when, and an answer that moved every time somebody reopened the page would answer a different
+ * question.
+ */
+export function useSetTripChecklistItem() {
+  const invalidate = useInvalidateTripChecklist();
+  return useMutation({
+    mutationFn: async ({
+      tripLogId,
+      itemId,
+      ticked,
+    }: {
+      tripLogId: string;
+      itemId: string;
+      ticked: boolean;
+    }) => {
+      const params = { path: { tripLogId, itemId } };
+      if (!ticked) {
+        const { error, response } = await api.DELETE(
+          '/api/v1/trip-logs/{tripLogId}/checklist/items/{itemId}',
+          { params },
+        );
+        if (error) {
+          throw new ApiError(response.status, error);
+        }
+        return;
+      }
+
+      await unwrap(api.PUT('/api/v1/trip-logs/{tripLogId}/checklist/items/{itemId}', { params }));
+    },
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+export type CalendarEntry = components['schemas']['CalendarEntryDto'];
+export type CalendarResult = components['schemas']['CalendarResultDto'];
+export type CalendarSource = components['schemas']['CalendarSource'];
+export type CalendarPlacement = components['schemas']['CalendarPlacement'];
+
+/**
+ * What the caller asked of the calendar.
+ *
+ * The window is required, both ends of it, and that is the whole reason this answer can be one
+ * merged list rather than an approximation: within a bounded window each source's readable rows
+ * are a finite set, so merging them is exact. An unbounded question would have to read each
+ * source ahead and hope.
+ *
+ * There is deliberately no member naming a person. `mine` means whoever is making the request and
+ * is worked out on the server from the request itself; a parameter carrying somebody's identifier
+ * would let a reader assemble where a named person has been out of rows they may never open.
+ * `cavingGroupId` names a group and not a person, and it can only ever narrow what the reader
+ * could already read.
+ */
+export interface CalendarParams {
+  /** Inclusive, `YYYY-MM-DD`. Required. */
+  from: string;
+  /** Inclusive, `YYYY-MM-DD`. Required. */
+  to: string;
+  /**
+   * The families of dated record wanted, comma-separated. Omitted means all of them, which is
+   * the point of the surface; naming several is how "everything except one family" is asked for,
+   * which a single word cannot express once there are more than two families.
+   */
+  source?: string;
+  /** A lifecycle state spelled the way the contract spells it. */
+  state?: ActivityState;
+  /** One group's calendar: the trips it is running and the camps it owns. */
+  cavingGroupId?: string;
+  /** The rows the signed-in account is on. Takes no argument, and never will. */
+  mine?: boolean;
+  /** False narrows the window to begin no earlier than today, in the server's clock. */
+  includePast?: boolean;
+  /** False leaves out the rows that were called off. They are in by default. */
+  includeCancelled?: boolean;
+  /** One of the orders the server knows; anything else falls back to the calendar's own. */
+  sort?: string;
+}
+
+/**
+ * The dated records the reader may open whose days fall in one window.
+ *
+ * Its own key rather than a shape of any list's: it spans two families of row, so writing either
+ * of them should re-read it, and it goes stale as days pass rather than only as people edit.
+ */
+export function useCalendar(params: CalendarParams, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.calendar(params),
+    queryFn: () => unwrap(api.GET('/api/v1/calendar', { params: { query: params } })),
+    enabled: options?.enabled ?? true,
+    // Changing the window or a toggle keeps the rows on screen while the next answer arrives,
+    // rather than emptying the record under whoever is reading it.
+    placeholderData: keepPreviousData,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Calendar events
+// ---------------------------------------------------------------------------
+
+export type EventInfo = components['schemas']['EventDto'];
+export type EventWrite = components['schemas']['EventWriteRequest'];
+export type EventKind = components['schemas']['EventKind'];
+export type EventDefaults = components['schemas']['EventDefaultsDto'];
+
+/**
+ * How the event list is narrowed. The window asks what an event *overlapped* rather than what it
+ * started inside, so a training weekend running across the end of a month is in both months; the
+ * word is looked for in the title; and a kind or a state the server does not have is refused
+ * rather than quietly answered with an empty page.
+ */
+export interface EventListParams {
+  page?: number;
+  pageSize?: number;
+  from?: string;
+  to?: string;
+  search?: string;
+  kind?: string;
+  state?: string;
+}
+
+/** The events this reader may open, narrowed by the filters the list offers. */
+export function useEvents(params: EventListParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.events(params),
+    queryFn: () => unwrap(api.GET('/api/v1/events', { params: { query: params } })),
+    // Paging or retyping a filter keeps the rows on screen while the next answer arrives, rather
+    // than emptying the table under whoever is reading it.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * One event. An event the caller may not read answers exactly as one that does not exist does —
+ * the server spells both `event.not_found` — so the page has no way to tell them apart and must
+ * not try: an address that answered differently for the two would be one anybody could probe for
+ * the existence of an event they cannot see.
+ */
+export function useEvent(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.event(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/events/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+    // A refusal here is a settled answer about the caller, not a transient failure: retrying it
+    // three times only delays the page saying so.
+    retry: false,
+  });
+}
+
+/**
+ * The audience a new event would get if its author names none.
+ *
+ * Read from the server rather than worked out here, because the write applies the same rule: a
+ * form that guessed would be guessing about who can read something, and the two answers would be
+ * free to disagree the day either changed.
+ */
+export function useEventDefaults(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.eventDefaults,
+    queryFn: () => unwrap(api.GET('/api/v1/events/defaults')),
+    enabled,
+  });
+}
+
+/**
+ * Re-reads everything a write to an event changes, and hands back the promise rather than
+ * starting it and forgetting it.
+ *
+ * The promise matters on the writes the server checks a precondition on. No write answers with
+ * the version it produced, so the token the next write must carry is only recorded by a read —
+ * and a mutation that settled before that read left the buttons live while the cached token was
+ * still the one from before. The second click then carries a spent version and is refused for a
+ * move that was perfectly legal.
+ */
+function useInvalidateEvents() {
+  const queryClient = useQueryClient();
+  return (id?: string) => {
+    const pending = [
+      queryClient.invalidateQueries({ queryKey: ['events'] }),
+      // An event is a row on the calendar, so writing one moves what that window answers.
+      queryClient.invalidateQueries({ queryKey: ['calendar'] }),
+    ];
+    if (id) {
+      pending.push(queryClient.invalidateQueries({ queryKey: queryKeys.event(id) }));
+    }
+    return Promise.all(pending);
+  };
+}
+
+export function useCreateEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: (body: EventWrite) => unwrap(api.POST('/api/v1/events', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * Stores an edited event. The server requires the version the form was loaded against; a full
+ * update is on the path the detail read captured that version under, so the precondition is
+ * threaded onto it without this call having to say so.
+ */
+export function useUpdateEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: EventWrite }) =>
+      unwrap(api.PUT('/api/v1/events/{id}', { params: { path: { id } }, body })),
+    // Handed back rather than started and forgotten: the next write on this event is checked
+    // against the version this one produced, and only the read records it.
+    onSuccess: (_data, variables) => invalidate(variables.id),
+  });
+}
+
+export function useDeleteEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/events/{id}', {
+        params: { path: { id } },
+      });
+      if (error) {
+        throw new ApiError(response.status, error);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * Moves an event to another lifecycle state — one endpoint naming the state to move to rather
+ * than a verb per move.
+ *
+ * The server requires the version the caller was looking at, so the move carries the token the
+ * detail read captured: two people announcing and un-announcing the same evening otherwise land
+ * in whichever order the database happens to see. Which moves are legal from which state is the
+ * server's to decide; the control only offers the ones a reader would expect, and one the table
+ * refuses comes back as a conflict rather than being prevented here.
+ */
+export function useMoveEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: ({ id, state }: { id: string; state: ActivityState }) => {
+      const etag = lastReadETag(`/api/v1/events/${id}`);
+      return unwrap(
+        api.POST('/api/v1/events/{id}/state', {
+          params: { path: { id } },
+          headers: etag ? { 'If-Match': etag } : undefined,
+          body: { state },
+        }),
+      );
+    },
+    // As on the event's own update: a move is checked against the version last read, so the move
+    // is not finished until the version it produced has been read.
+    onSuccess: (_data, variables) => invalidate(variables.id),
   });
 }

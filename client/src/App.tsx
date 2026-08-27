@@ -29,9 +29,14 @@ const GeodataPage = lazy(() => import('./pages/geodata/GeodataPage.tsx'));
 const ImportWorkspacePage = lazy(() => import('./pages/geodata/ImportWorkspacePage.tsx'));
 const PhotoImportWorkspacePage = lazy(() => import('./pages/geodata/PhotoImportWorkspacePage.tsx'));
 const TermRulesPage = lazy(() => import('./pages/admin/TermRulesPage.tsx'));
+const ChecklistsPage = lazy(() => import('./pages/checklists/ChecklistsPage.tsx'));
+const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage.tsx'));
 const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
+const MyTripsPage = lazy(() => import('./pages/trips/MyTripsPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
 const TripReportPage = lazy(() => import('./pages/trips/TripReportPage.tsx'));
+const EventListPage = lazy(() => import('./pages/events/EventListPage.tsx'));
+const EventDetailPage = lazy(() => import('./pages/events/EventDetailPage.tsx'));
 const ExpeditionListPage = lazy(() => import('./pages/expeditions/ExpeditionListPage.tsx'));
 const ExpeditionDetailPage = lazy(() => import('./pages/expeditions/ExpeditionDetailPage.tsx'));
 const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
@@ -121,9 +126,14 @@ export const routes: RouteObject[] = [
           { path: '/geodata/:geofileId/import', element: <Loadable><ImportWorkspacePage /></Loadable> },
           { path: '/geodata/photo-import', element: <Loadable><PhotoImportWorkspacePage /></Loadable> },
           { path: '/admin/term-rules', element: <Loadable><TermRulesPage /></Loadable> },
+          { path: '/checklists', element: <Loadable><ChecklistsPage /></Loadable> },
+          { path: '/calendar', element: <Loadable><CalendarPage /></Loadable> },
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
+          { path: '/trip-logs/mine', element: <Loadable><MyTripsPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
           { path: '/trip-logs/:id/report', element: <Loadable><TripReportPage /></Loadable> },
+          { path: '/events', element: <Loadable><EventListPage /></Loadable> },
+          { path: '/events/:id', element: <Loadable><EventDetailPage /></Loadable> },
           { path: '/expeditions', element: <Loadable><ExpeditionListPage /></Loadable> },
           { path: '/expeditions/:id', element: <Loadable><ExpeditionDetailPage /></Loadable> },
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },

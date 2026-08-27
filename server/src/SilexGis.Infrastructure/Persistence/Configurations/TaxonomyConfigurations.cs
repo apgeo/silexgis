@@ -57,6 +57,12 @@ public sealed class TripTypeConfiguration : IEntityTypeConfiguration<TripType>
         builder.Property(x => x.LogisticsSchemaVersion).HasDefaultValue(TripType.FirstSchemaVersion);
         builder.Property(x => x.SafetySchema).HasColumnType("jsonb");
         builder.Property(x => x.SafetySchemaVersion).HasDefaultValue(TripType.FirstSchemaVersion);
+
+        // Set-null rather than restrict: a list an administrator deletes leaves the purposes that
+        // named it without one, which is what happened, rather than leaving a list nobody can
+        // delete because a vocabulary row still points at it.
+        builder.HasOne<Checklist>().WithMany().HasForeignKey(x => x.DefaultChecklistId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
 
