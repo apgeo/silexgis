@@ -81,6 +81,20 @@ public class Notification
     /// <summary>Which one; null exactly when <see cref="TargetKind"/> is null.</summary>
     public Guid? TargetId { get; set; }
 
+    /// <summary>
+    /// What one outbound copy of this is expected to cost, in the pieces a carrier splits a text
+    /// message into, or zero when the producer did not weigh it.
+    /// </summary>
+    /// <remarks>
+    /// The day's ceiling counts a notification that has been written and not yet routed as money
+    /// already committed, and no text exists for it at that moment. A producer whose message can
+    /// travel on a transport that bills by the piece knows every value that wording will carry, so
+    /// it can weigh it once and write the answer here instead of leaving the guard to guess one.
+    /// Zero means nobody weighed it, and the guard falls back to its own floor rather than reading
+    /// the message as free.
+    /// </remarks>
+    public int SegmentsPerCopy { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>

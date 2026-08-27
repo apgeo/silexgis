@@ -37,18 +37,22 @@ public sealed record NotificationDeliveryCountDto(
 /// keeps moving, and a client's own clock cannot be trusted to work the age out.
 /// </param>
 /// <param name="PaidMessagesToday">
-/// How many of today's messages went out on a channel that charges for each one, counted since
-/// midnight UTC and including ones still waiting — and ones accepted but not yet handed out at
-/// all, because an announcement becomes outbound copies moments after the request that accepts
-/// it rather than inside it: money committed is money spent. It belongs here
-/// rather than on a page of its own — this is already where an operator comes to ask what is
-/// leaving the installation, and what it is costing is the same question. Zero on an installation
-/// that has not agreed to pay for messages, because there is then no charged copy of anything to
-/// count rather than a charged copy that was suppressed.
+/// What today has cost on the channels that charge, in the pieces a carrier splits a text message
+/// into and bills for — not in messages, because one character outside the narrow alphabet
+/// re-encodes a whole message into pieces less than half the size, so the same wording costs
+/// twice as much to somebody who reads Romanian as to somebody who reads English. Counted since
+/// midnight UTC and including copies still waiting — and work accepted but not yet handed out at
+/// all, at what it is assumed to cost before it is rendered, because an announcement becomes
+/// outbound copies moments after the request that accepts it rather than inside it: money
+/// committed is money spent. It belongs here rather than on a page of its own — this is already
+/// where an operator comes to ask what is leaving the installation, and what it is costing is the
+/// same question. Zero on an installation that has not agreed to pay for messages, because there
+/// is then no charged copy of anything to count rather than a charged copy that was suppressed.
 /// </param>
 /// <param name="DailyPaidMessageCap">
-/// What the count above is refused past. Shown beside it so the number means something: a count
-/// with no ceiling next to it cannot tell an operator whether the next announcement will go.
+/// What the amount above is refused past, in the same pieces. Shown beside it so the number means
+/// something: an amount with no ceiling next to it cannot tell an operator whether the next
+/// announcement will go.
 /// </param>
 public sealed record NotificationHealthDto(
     IReadOnlyList<NotificationDeliveryCountDto> Counts,

@@ -45,6 +45,13 @@ public sealed class MessageDispatcher(
             _ => throw new NotSupportedException(UnknownChannel(definition.Channel)),
         };
 
+        // What the carrier will bill for this hand-over, from the exact text that is about to
+        // leave rather than from the wording it came out of: the recipient's own language decides
+        // how many pieces it takes, and an operator may have rewritten that wording since. Taken
+        // before the send so a hand-over the gateway then rejects reports the same amount — the
+        // far side may well have sent it, and a charge is not undone by being told it failed.
+        var segments = definition.Channel is MessageChannel.Sms ? TextMessageSegments.Count(body) : 0;
+
         try
         {
             switch (definition.Channel)
@@ -61,7 +68,7 @@ public sealed class MessageDispatcher(
                     throw new NotSupportedException(UnknownChannel(definition.Channel));
             }
 
-            return configured ? MessageResult.Delivered() : MessageResult.LoggedOnly();
+            return configured ? MessageResult.Delivered(segments) : MessageResult.LoggedOnly(segments);
         }
         catch (NotSupportedException)
         {
@@ -71,8 +78,33 @@ public sealed class MessageDispatcher(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "Could not send {TemplateKey} on {Channel}", templateKey, definition.Channel);
-            return MessageResult.Failed(ex.Message);
+            return MessageResult.Failed(ex.Message, segments);
         }
+    }
+
+    public async Task<int> WeighAsync(
+        string templateKey,
+        MessageChannel channel,
+        IReadOnlyDictionary<string, string> values,
+        CancellationToken ct = default)
+    {
+        // Only the transport that bills by the piece has an answer here. Asked through the same
+        // lookup the send uses, so what is weighed is the wording that would actually leave —
+        // including the case where a message has a second, shorter form written for a phone.
+        if (channel is not MessageChannel.Sms
+            || MessageTemplateCatalog.On(templateKey, channel) is not { } wording)
+        {
+            return 0;
+        }
+
+        var most = 0;
+        foreach (var locale in MessageTemplateCatalog.Locales)
+        {
+            var (_, body, _) = await ComposeAsync(wording.Key, locale, values, ct);
+            most = Math.Max(most, TextMessageSegments.Count(body));
+        }
+
+        return most;
     }
 
     public async Task<string> RenderSubjectAsync(

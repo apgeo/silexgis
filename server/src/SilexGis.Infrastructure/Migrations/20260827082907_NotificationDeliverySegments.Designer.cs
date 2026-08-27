@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260827082907_NotificationDeliverySegments")]
+    partial class NotificationDeliverySegments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1514,10 +1517,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<int>("RecipientCount")
                         .HasColumnType("integer")
                         .HasColumnName("recipient_count");
-
-                    b.Property<int>("SegmentsPerCopy")
-                        .HasColumnType("integer")
-                        .HasColumnName("segments_per_copy");
 
                     b.Property<string>("SenderName")
                         .IsRequired()
@@ -3839,10 +3838,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("RoutedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("routed_at");
-
-                    b.Property<int>("SegmentsPerCopy")
-                        .HasColumnType("integer")
-                        .HasColumnName("segments_per_copy");
 
                     b.Property<Guid?>("TargetId")
                         .HasColumnType("uuid")

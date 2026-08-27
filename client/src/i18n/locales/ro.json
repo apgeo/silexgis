@@ -1835,11 +1835,11 @@
       "notificationsIntro": "Cât timp păstrează această instalare ce le-a spus oamenilor. Ce se salvează aici înlocuiește setarea din configurația de instalare; dacă nu o atingi, aceea rămâne în vigoare.",
       "retentionDays": "Păstrează notificările (zile)",
       "retentionDaysHint": "O notificare este ștearsă după acest interval, citită sau nu, și indiferent dacă a plecat vreodată un e-mail pentru ea. Evidența felului în care a fost trimisă dispare odată cu ea.",
-      "announcementsIntro": "Cât poate costa această instalare un anunț către un club speologic întreg. Mesajele SMS se taxează unul câte unul și nu mai pot fi retrase după trimitere, așa că nu ajung la nimeni până când aceasta nu este activată și se opresc pentru toată ziua când se atinge limita de mai jos.",
-      "paidChannelsEnabled": "Permite anunțuri pe canale care se taxează pe mesaj",
+      "announcementsIntro": "Cât poate costa această instalare un anunț către un club speologic întreg. Mesajele SMS se taxează pe segmente și nu mai pot fi retrase după trimitere, așa că nu ajung la nimeni până când aceasta nu este activată și se opresc pentru toată ziua când se atinge limita de mai jos.",
+      "paidChannelsEnabled": "Permite anunțuri pe canale care se taxează pentru ce trimit",
       "paidChannelsEnabledHint": "Oprit înseamnă oprit: cât timp este oprit, nimeni nu poate alege un astfel de canal, nicio preferință salvată pentru el nu are vreun efect și nu se creează nicio copie de trimis pe el.",
-      "dailyPaidMessageCap": "Mesaje taxate pe zi",
-      "dailyPaidMessageCapHint": "Un anunț care ar depăși această limită este refuzat în întregime, nu trimis către jumătate din listă. Mesajele deja angajate azi contează, inclusiv cele care încă așteaptă să plece."
+      "dailyPaidMessageCap": "Segmente de mesaj taxate pe zi",
+      "dailyPaidMessageCapHint": "Un operator taxează un mesaj SMS pe segmente, nu pe mesaj: 160 de caractere din alfabetul latin simplu încap într-un singur segment, dar o singură literă cu diacritice recodifică tot mesajul în segmente de 70, așa că aceeași formulare costă de două ori mai mult în română decât în engleză. Un anunț care ar depăși această limită este refuzat în întregime, nu trimis către jumătate din listă. Segmentele deja angajate azi contează, inclusiv cele care încă așteaptă să plece."
     },
     "documentTypes": {
       "title": "Tipuri de documente",
@@ -2693,7 +2693,7 @@
     "stalledHint": "Cel mai vechi mesaj care încă așteaptă a fost pus la coadă atunci. Verifică setările serverului de e-mail și trimiterea de probă din pagina de mesagerie.",
     "oldestPending": "Cel mai vechi în așteptare",
     "nothingWaiting": "Nimic în așteptare",
-    "paidToday": "Mesaje cu plată astăzi",
+    "paidToday": "Segmente de mesaj taxate astăzi",
     "paidTodayValue": "{{spent}} din {{cap}}",
     "byChannel": "Pe canale",
     "noDeliveries": "Nu s-a trimis încă nimic.",

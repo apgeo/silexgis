@@ -175,11 +175,18 @@ export default function NotificationHealthPage() {
           title={t('notificationHealth.oldestPending')}
           value={oldestSeconds === null ? t('notificationHealth.nothingWaiting') : ageLabel(oldestSeconds, t)}
         />
-        {/* What today has cost, beside the day's ceiling, because a count with no ceiling next to
-            it cannot say whether the next announcement will go out. It sits here rather than on a
-            page of its own: this is already where an operator comes to ask what is leaving the
+        {/* What today has cost, beside the day's ceiling, because an amount with no ceiling next
+            to it cannot say whether the next announcement will go out. It sits here rather than on
+            a page of its own: this is already where an operator comes to ask what is leaving the
             installation, and what it costs is the same question. Zero until the installation has
-            agreed to pay for messages, because nothing charged is created before then. */}
+            agreed to pay for messages, because nothing charged is created before then.
+
+            The unit is the segment a carrier splits a text message into and bills for, not the
+            message: one accented letter re-encodes a whole message into segments of 70 rather
+            than 160, so the same wording costs twice as much in Romanian as in English. The label
+            says so, in both languages, and the settings page that sets the ceiling says it in the
+            same words — a figure in segments under a heading that said "messages" would understate
+            an installation's spending by exactly the factor this number exists to show. */}
         <Statistic
           title={t('notificationHealth.paidToday')}
           value={t('notificationHealth.paidTodayValue', {

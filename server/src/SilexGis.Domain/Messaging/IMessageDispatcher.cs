@@ -12,13 +12,21 @@ namespace SilexGis.Domain.Messaging;
 /// "no code is coming, ask an administrator" instead of leaving someone waiting.
 /// </param>
 /// <param name="Error">Why it failed, for the operator's log and the admin test-send button.</param>
-public readonly record struct MessageResult(bool Sent, bool ChannelConfigured, string? Error)
+/// <param name="Segments">
+/// How many pieces the text handed over was split into, on a channel that bills by the piece —
+/// what the carrier actually charges for this hand-over. Taken here because this is the last
+/// place the rendered text exists: above it there is only a template key, and the number of
+/// pieces depends on the recipient's language and on whatever the operator has rewritten the
+/// wording to say. Zero when nothing was handed over that is billed this way, which includes
+/// every channel that is not, so a caller can tell "nothing to charge" from any real amount.
+/// </param>
+public readonly record struct MessageResult(bool Sent, bool ChannelConfigured, string? Error, int Segments = 0)
 {
-    public static MessageResult Delivered() => new(true, true, null);
+    public static MessageResult Delivered(int segments = 0) => new(true, true, null, segments);
 
-    public static MessageResult LoggedOnly() => new(true, false, null);
+    public static MessageResult LoggedOnly(int segments = 0) => new(true, false, null, segments);
 
-    public static MessageResult Failed(string error) => new(false, true, error);
+    public static MessageResult Failed(string error, int segments = 0) => new(false, true, error, segments);
 }
 
 /// <summary>
@@ -37,6 +45,32 @@ public interface IMessageDispatcher
         string templateKey,
         string recipient,
         string? locale,
+        IReadOnlyDictionary<string, string> values,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// The most pieces this message could cost on <paramref name="channel"/>, given the values
+    /// that are already known — or zero when nothing that channel carries is billed that way.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For the guard that has to answer "would sending this take the day past what we will spend"
+    /// before anything has been handed to a transport. It renders the same wording the send would
+    /// render, through the same resolution — so an operator's rewrite is weighed rather than the
+    /// shipped words — and counts the pieces a carrier would split it into.
+    /// </para>
+    /// <para>
+    /// The recipient's language is the one thing still unknown at that moment, and it is the thing
+    /// that decides the answer: the same sentence costs twice as much in a language whose marks
+    /// fall outside the narrow alphabet. So every language the installation renders in is weighed
+    /// and the largest answer is returned. That over-states an audience who all read the cheap
+    /// language, which is the safe direction: the alternative is a ceiling that admits work it
+    /// cannot pay for.
+    /// </para>
+    /// </remarks>
+    Task<int> WeighAsync(
+        string templateKey,
+        MessageChannel channel,
         IReadOnlyDictionary<string, string> values,
         CancellationToken ct = default);
 
