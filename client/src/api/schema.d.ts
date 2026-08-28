@@ -4513,7 +4513,7 @@ export interface paths {
                 };
             };
         };
-        /** Replaces the feature's parent edges (Write permission; exactly one primary edge). */
+        /** Replaces the feature's parent edges (Write permission; exactly one primary edge, and never an empty list for a kind that only exists inside a containing feature). */
         put: {
             parameters: {
                 query?: never;
@@ -11723,6 +11723,186 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The contract version and limits a device sizes itself to (authenticated). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SyncCapabilitiesDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own sync sets. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SyncSetDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Creates a sync set owned by the caller. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SyncSetWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SyncSetDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/sets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One of the caller's own sync sets. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SyncSetDto"];
+                    };
+                };
+            };
+        };
+        /** Replaces a sync set the caller owns; bumps its revision when anything changed. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SyncSetWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SyncSetDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes a sync set the caller owns. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -14639,6 +14819,39 @@ export interface components {
             description: null | string;
             /** Format: date */
             surveyedAt: null | string;
+        };
+        SyncCapabilitiesDto: {
+            /** Format: int32 */
+            contractVersion: number;
+            /** Format: int32 */
+            pageSizeMax: number;
+            /** Format: int32 */
+            uploadRowsMax: number;
+            features: string[];
+        };
+        SyncSetDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            uploadVisibility: components["schemas"]["Visibility"];
+            rootFeatureIds: string[];
+            settings: components["schemas"]["JsonElement"];
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SyncSetWriteRequest: {
+            name: string;
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            uploadVisibility: components["schemas"]["Visibility"];
+            rootFeatureIds: string[];
+            settings: components["schemas"]["JsonElement"];
         };
         TagDto: {
             /** Format: int64 */

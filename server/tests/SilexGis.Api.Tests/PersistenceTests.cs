@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -44,15 +45,73 @@ public sealed class PersistenceTests : IDisposable
         (await db.CaveTypes.AnyAsync(x => x.Code == "cave")).ShouldBeTrue();
         (await db.EntranceTypes.AnyAsync(x => x.Code == "natural")).ShouldBeTrue();
         (await db.RockTypes.AnyAsync(x => x.Code == "limestone")).ShouldBeTrue();
-        (await db.FeatureTypes.CountAsync()).ShouldBeGreaterThanOrEqualTo(27);
+        (await db.FeatureTypes.CountAsync()).ShouldBeGreaterThanOrEqualTo(30);
 
-        // Feature types drive the data-driven kinds: category, accepted geometry and whether
-        // a kind may exist outside a containing feature.
+        // Feature types drive the data-driven kinds: category, accepted geometry, whether a
+        // kind may exist outside a containing feature, and what a caller without exact view
+        // is shown of a protected one.
         var area = await db.FeatureTypes.SingleAsync(x => x.Code == "karst_area");
         area.Category.ShouldBe(FeatureCategory.Area);
         area.AcceptedGeometryClasses.ShouldContain(GeometryClass.Polygon);
         area.RequiresParent.ShouldBeFalse();
+        area.ProtectedDisplay.ShouldBe(ProtectedDisplay.SnapPoint);
         (await db.FeatureTypes.SingleAsync(x => x.Code == "cave_sector")).RequiresParent.ShouldBeTrue();
+
+        // The shapes a cave-navigation device's data lands in. A place and an area inside a
+        // cave are meaningless outside one and are withheld rather than snapped: a scatter of
+        // snapped points inside one cave outlines the cave the protection was flipped to hide.
+        var cavePlace = await db.FeatureTypes.SingleAsync(x => x.Code == "cave_place");
+        cavePlace.Category.ShouldBe(FeatureCategory.Underground);
+        cavePlace.RequiresParent.ShouldBeTrue();
+        cavePlace.ProtectedDisplay.ShouldBe(ProtectedDisplay.Withhold);
+
+        var caveArea = await db.FeatureTypes.SingleAsync(x => x.Code == "cave_area");
+        caveArea.Category.ShouldBe(FeatureCategory.Underground);
+        caveArea.RequiresParent.ShouldBeTrue();
+        caveArea.ProtectedDisplay.ShouldBe(ProtectedDisplay.Withhold);
+
+        // A surface area is a named grouping above ground with no geometry of its own.
+        var surfaceArea = await db.FeatureTypes.SingleAsync(x => x.Code == "surface_area");
+        surfaceArea.Category.ShouldBe(FeatureCategory.Area);
+        surfaceArea.RequiresParent.ShouldBeFalse();
+        surfaceArea.ProtectedDisplay.ShouldBe(ProtectedDisplay.SnapPoint);
+        surfaceArea.PropertiesSchema.ShouldNotBeNull();
+        surfaceArea.PropertiesSchema.ShouldContain("speleolocGeneralAreaIdentifier");
+
+        // The place's identifier keys, asserted as a set and as a shape.
+        //
+        // Flat and primitive is the contract, not a preference: the typed-properties renderers
+        // show only top-level string/number/integer/boolean values, so a key nested one level
+        // down would be stored, validated and synced and never once displayed.
+        //
+        // And nothing locating may join them. The property document is emitted verbatim to
+        // every reader that can see the row, including a share-token visitor whose geometry was
+        // withheld, with no protection filter anywhere on that path — so the closed list below
+        // is what makes "no coordinates in properties" a thing a test refuses rather than a
+        // thing a reviewer remembers. A depth alone locates nothing; a bearing or a distance
+        // from a named point would, which is why neither is here.
+        string[] placeKeys =
+        [
+            "speleolocPci",
+            "speleolocQcri",
+            "speleolocCaveLocalIndex",
+            "speleolocGeneralAreaIdentifier",
+            "speleolocDepthInCave",
+            "speleolocSchemaVersion",
+        ];
+        cavePlace.PropertiesSchema.ShouldNotBeNull();
+        using (var schema = JsonDocument.Parse(cavePlace.PropertiesSchema))
+        {
+            schema.RootElement.GetProperty("type").GetString().ShouldBe("object");
+            var declared = schema.RootElement.GetProperty("properties");
+            declared.EnumerateObject().Select(p => p.Name).ShouldBe(placeKeys, ignoreOrder: true);
+            foreach (var key in placeKeys)
+            {
+                declared.GetProperty(key).GetProperty("type").GetString()
+                    .ShouldBeOneOf("string", "number", "integer", "boolean");
+                declared.GetProperty(key).GetProperty("title").GetString().ShouldNotBeNullOrWhiteSpace();
+            }
+        }
 
         // Typed-properties schemas ship (and backfill) for selected feature types.
         var sinkhole = await db.FeatureTypes.SingleAsync(x => x.Code == "sinkhole");
@@ -112,6 +171,10 @@ public sealed class PersistenceTests : IDisposable
             .OrderBy(x => x.Code)
             .Select(x => new { x.Code, x.SortOrder })
             .ToListAsync();
+        var featureTypeOrderBefore = await db.FeatureTypes.AsNoTracking()
+            .OrderBy(x => x.Code)
+            .Select(x => new { x.Code, x.SortOrder })
+            .ToListAsync();
 
         await TaxonomySeeder.SeedAsync(db);
         (await db.FeatureTypes.CountAsync()).ShouldBe(before);
@@ -123,6 +186,23 @@ public sealed class PersistenceTests : IDisposable
             .Select(x => new { x.Code, x.SortOrder })
             .ToListAsync();
         relationOrderAfter.ShouldBe(relationOrderBefore);
+
+        // The same rule for feature types, which had no such assertion until the kinds a
+        // cave-navigation device uploads into were appended: a code inserted mid-list keeps
+        // its old number on an installation that already ran and takes a new one on a fresh
+        // database, so the two disagree about the palette's order and nothing complains.
+        var featureTypeOrderAfter = await db.FeatureTypes.AsNoTracking()
+            .OrderBy(x => x.Code)
+            .Select(x => new { x.Code, x.SortOrder })
+            .ToListAsync();
+        featureTypeOrderAfter.ShouldBe(featureTypeOrderBefore);
+
+        // The landing kinds sort after every kind that shipped before them, in list order.
+        var featureTypeByCode = featureTypeOrderAfter.ToDictionary(x => x.Code, x => x.SortOrder);
+        var lastShippedKind = featureTypeByCode["building"];
+        featureTypeByCode["cave_area"].ShouldBe(lastShippedKind + 10);
+        featureTypeByCode["cave_place"].ShouldBe(lastShippedKind + 20);
+        featureTypeByCode["surface_area"].ShouldBe(lastShippedKind + 30);
 
         // The trip roles were appended, so they sort after every code that shipped before them
         // and their own order matches the list. Appending is the whole reason they do: the

@@ -160,6 +160,10 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<TerrainBuildSource> TerrainBuildSources => Set<TerrainBuildSource>();
 
+    public DbSet<SyncSet> SyncSets => Set<SyncSet>();
+
+    public DbSet<SyncSetMember> SyncSetMembers => Set<SyncSetMember>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

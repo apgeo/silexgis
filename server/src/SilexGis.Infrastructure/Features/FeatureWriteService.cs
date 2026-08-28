@@ -137,11 +137,55 @@ public sealed class FeatureWriteService(
 
     /// <summary>
     /// Replaces a feature's containment edges. DAG rules: no cycles, no self-edges, at
-    /// most one primary edge (required when any edge exists). Recomputes the closure for
-    /// the feature's whole subtree.
+    /// most one primary edge (required when any edge exists), and no empty list for a kind
+    /// that only exists inside a containing feature. Recomputes the closure for the
+    /// feature's whole subtree.
     /// </summary>
     public async Task SetParentsAsync(Guid featureId, IReadOnlyList<ParentSpec> parents, CancellationToken ct = default)
     {
+        // Replacing the edges with none is the third door to a shape that creation and update
+        // already refuse: a kind meaningless outside a container, left with no container.
+        //
+        // It is not a cosmetic breach of the vocabulary. Protection is inherited along
+        // containment and along nothing else, so a row with no ancestors inherits from nothing:
+        // a place whose exact position was governed by the protected cave above it becomes
+        // readable at full precision by every caller who can see the row at all. The account
+        // able to do this is the row's own owner — which, for anything an app uploaded, is the
+        // uploading account by construction — so it is a door the subject of the protection
+        // does not hold the key to. Guarded here rather than in the one endpoint that calls
+        // this today, so a later caller inherits the refusal instead of having to remember it.
+        //
+        // Read this for exactly what it is: it closes the empty list, and only that. Moving the
+        // same row to a different container it is allowed to name has the same effect on what it
+        // inherits, and is still permitted — the exact-view check the endpoint makes is
+        // satisfied by ownership, so a row's owner can re-root it out from under somebody else's
+        // protected cave. Closing that means deciding that owning a row is not enough to move it
+        // out of a protection root one does not otherwise hold, which is a change to the
+        // protection model and not to this guard. Anyone reading this line as coverage of it
+        // would be reading it wrong.
+        if (parents.Count == 0)
+        {
+            var featureTypeId = await db.Features
+                .Where(f => f.Id == featureId)
+                .Select(f => f.FeatureTypeId)
+                .FirstOrDefaultAsync(ct);
+
+            // Caves, entrances and centerlines name no feature type and may be re-rooted
+            // freely; a missing type is therefore not a refusal.
+            if (featureTypeId is not null)
+            {
+                var requiredKind = await db.FeatureTypes
+                    .Where(t => t.Id == featureTypeId.Value && t.RequiresParent)
+                    .Select(t => t.Code)
+                    .FirstOrDefaultAsync(ct);
+                if (requiredKind is not null)
+                {
+                    throw new FeatureWriteException("feature.parent_required",
+                        [$"kind '{requiredKind}' only exists inside a containing feature"]);
+                }
+            }
+        }
+
         var old = await db.FeatureHierarchyEdges.Where(e => e.ChildId == featureId).ToListAsync(ct);
         db.FeatureHierarchyEdges.RemoveRange(old);
         await SetParentsCoreAsync(featureId, parents, ct);

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clusterCellBbox } from '../geo/cluster.ts';
 import { api, ApiError, lastReadETag } from './client.ts';
 import type { components, paths } from './schema';
@@ -144,6 +144,8 @@ export const queryKeys = {
   taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
   tags: (search: string) => ['tags', search] as const,
   cavingGroups: ['cavingGroups'] as const,
+  syncCapabilities: ['sync', 'capabilities'] as const,
+  syncSets: ['sync', 'sets'] as const,
   cavers: ['cavers'] as const,
   cavingGroupMembers: (cavingGroupId: string) => ['teams', cavingGroupId, 'members'] as const,
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
@@ -604,6 +606,33 @@ export function useCave(id: string | undefined) {
     queryKey: queryKeys.cave(id ?? ''),
     queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id: id! } } })),
     enabled: !!id,
+  });
+}
+
+/**
+ * Names for caves known only by id — the ones a stored selection points at that a paged, searched
+ * list did not happen to return.
+ *
+ * Worth its own hook because the alternative is worse than untidy: falling back to "a cave you can
+ * no longer read" for anything simply absent from the current page tells a caver their access was
+ * revoked when nothing of the kind happened. Asking for each id by name distinguishes the two —
+ * what comes back is named, and what genuinely cannot be read stays unnamed. A failure is not
+ * retried, because the expected failure here is a definite "you cannot read this".
+ */
+export function useCaveNames(ids: readonly string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.cave(id),
+      queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id } } })),
+      staleTime: 300_000,
+      retry: false,
+    })),
+    combine: (results) =>
+      new Map(
+        results.flatMap((result) =>
+          result.data ? ([[result.data.id, result.data.name]] as [string, string][]) : [],
+        ),
+      ),
   });
 }
 
@@ -4291,5 +4320,60 @@ export function useDeleteTerrainBuild() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.terrainBuilds });
       void queryClient.invalidateQueries({ queryKey: queryKeys.mapConfig });
     },
+  });
+}
+
+export type SyncSet = components['schemas']['SyncSetDto'];
+export type SyncSetWrite = components['schemas']['SyncSetWriteRequest'];
+export type SyncCapabilities = components['schemas']['SyncCapabilitiesDto'];
+
+/**
+ * What this installation's sync protocol can do. Read by the settings page for the same reason a
+ * phone reads it first: the parts of the protocol a server actually serves are announced by name,
+ * so a page can say what a device will and will not be able to do here instead of guessing.
+ */
+export function useSyncCapabilities() {
+  return useQuery({
+    queryKey: queryKeys.syncCapabilities,
+    queryFn: () => unwrap(api.GET('/api/v1/sync/capabilities')),
+    staleTime: 300_000,
+  });
+}
+
+/** The caller's own sync sets. Nobody else can read them, administrators included. */
+export function useSyncSets() {
+  return useQuery({
+    queryKey: queryKeys.syncSets,
+    queryFn: () => unwrap(api.GET('/api/v1/sync/sets')),
+  });
+}
+
+export function useCreateSyncSet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SyncSetWrite) => unwrap(api.POST('/api/v1/sync/sets', { body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.syncSets }),
+  });
+}
+
+export function useUpdateSyncSet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: SyncSetWrite }) =>
+      unwrap(api.PUT('/api/v1/sync/sets/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.syncSets }),
+  });
+}
+
+/**
+ * Revokes a selection. Nothing that was synced is touched — a sync set names caves, it never owned
+ * any of them — so what this ends is a device's licence to keep asking for them.
+ */
+export function useDeleteSyncSet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/sync/sets/{id}', { params: { path: { id } } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.syncSets }),
   });
 }

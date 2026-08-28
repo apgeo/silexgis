@@ -31,6 +31,7 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable
     private long karstAreaTypeId;
     private long sinkholeTypeId;
     private long stalactiteTypeId;
+    private long cavePlaceTypeId;
     private long caveTypeId;
 
     public FeatureHierarchyTests(PostgresFixture postgres) =>
@@ -48,6 +49,7 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable
             karstAreaTypeId = await db.FeatureTypes.Where(t => t.Code == "karst_area").Select(t => t.Id).SingleAsync();
             sinkholeTypeId = await db.FeatureTypes.Where(t => t.Code == "sinkhole").Select(t => t.Id).SingleAsync();
             stalactiteTypeId = await db.FeatureTypes.Where(t => t.Code == "stalactite").Select(t => t.Id).SingleAsync();
+            cavePlaceTypeId = await db.FeatureTypes.Where(t => t.Code == "cave_place").Select(t => t.Id).SingleAsync();
             caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
         }
 
@@ -280,6 +282,139 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable
         var verifier = scope.ServiceProvider.GetRequiredService<FeatureIntegrityVerifier>();
         var problems = await verifier.VerifyAsync();
         problems.ShouldBeEmpty(string.Join("; ", problems.Select(p => $"{p.Check}:{p.FeatureId} {p.Detail}")));
+    }
+
+    /// <summary>
+    /// Creation and update both refuse a kind that only exists inside a containing feature
+    /// when it has no container. Replacing the parent edges was the third door to the same
+    /// shape, and it opened for the row's own owner — which, for anything an app uploaded, is
+    /// the uploading account. It matters because protection is inherited along containment and
+    /// nothing else: a row left with no ancestors inherits from nothing, so a place governed by
+    /// a protected cave comes back at full precision to everyone who can see it.
+    /// </summary>
+    [Fact]
+    public async Task A_kind_that_needs_a_container_cannot_be_left_without_one_by_replacing_its_parents()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var container = await CreateAreaAsync(owner, $"Container {marker}");
+        var place = await CreateFeatureAsync(owner, new
+        {
+            kind = "generic",
+            name = $"Place {marker}",
+            featureTypeId = cavePlaceTypeId,
+            geometry = Point(25.53, 45.63),
+            visibility = "private",
+            parents = new[] { new { parentId = container, isPrimary = true } },
+        });
+
+        // The negative: an empty list is refused with the same code the other two paths use.
+        await PutParentsExpectingAsync(owner, place, "feature.parent_required");
+
+        // And nothing was destroyed on the way to the refusal — the edges are replaced by
+        // deleting them first, so a guard that ran too late would leave the row rootless
+        // anyway and answer 400 about it.
+        var kept = (await owner.GetFromJsonAsync<JsonArray>($"/api/v1/features/{place}/parents"))!;
+        kept.Single()!["id"]!.GetValue<Guid>().ShouldBe(container);
+
+        // The positive: swapping one container for another is what the endpoint is for.
+        var otherContainer = await CreateAreaAsync(owner, $"Container B {marker}");
+        var moved = await owner.PutAsJsonAsync($"/api/v1/features/{place}/parents", new
+        {
+            parents = new[] { new { parentId = otherContainer, isPrimary = true } },
+        });
+        moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+        (await moved.Content.ReadFromJsonAsync<JsonArray>())!.Single()!["id"]!.GetValue<Guid>()
+            .ShouldBe(otherContainer);
+
+        // The other positive: a kind that needs no container may still be emptied, so the
+        // guard reads the kind rather than refusing every empty list. A sinkhole is a surface
+        // feature and a root of its own is a legitimate place for one to sit.
+        var loose = await CreateFeatureAsync(owner, new
+        {
+            kind = "generic",
+            name = $"Loose {marker}",
+            featureTypeId = sinkholeTypeId,
+            geometry = Point(25.54, 45.64),
+            visibility = "private",
+            parents = new[] { new { parentId = container, isPrimary = true } },
+        });
+        var cleared = await owner.PutAsJsonAsync(
+            $"/api/v1/features/{loose}/parents", new { parents = Array.Empty<object>() });
+        cleared.StatusCode.ShouldBe(HttpStatusCode.OK, await cleared.Content.ReadAsStringAsync());
+        (await cleared.Content.ReadFromJsonAsync<JsonArray>())!.Count.ShouldBe(0);
+    }
+
+    /// <summary>
+    /// A place inside a cave carries the device's identifying codes and nothing else. The
+    /// property document is handed verbatim to every reader that can see the row — including
+    /// one whose geometry was withheld because the cave above it is protected — and no filter
+    /// touches it on the way out, so a coordinate stored beside the codes would be the
+    /// protected position, published. The kind's schema is closed for that reason, which makes
+    /// it a refusal at the write rather than a rule somebody has to remember.
+    /// </summary>
+    [Fact]
+    public async Task A_place_in_a_cave_carries_its_codes_and_refuses_a_key_nobody_declared()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var container = await CreateAreaAsync(owner, $"Props container {marker}");
+
+        // The positive: the declared codes are stored and read back.
+        var place = await CreateFeatureAsync(owner, new
+        {
+            kind = "generic",
+            name = $"Coded place {marker}",
+            featureTypeId = cavePlaceTypeId,
+            geometry = Point(25.55, 45.65),
+            visibility = "private",
+            parents = new[] { new { parentId = container, isPrimary = true } },
+            properties = new
+            {
+                speleolocPci = "RO-BH-0001-014",
+                speleolocDepthInCave = 42.5,
+                speleolocSchemaVersion = 1,
+            },
+        });
+
+        var read = await owner.GetFromJsonAsync<JsonObject>($"/api/v1/features/{place}");
+        read!["feature"]!["properties"]!["speleolocPci"]!.GetValue<string>().ShouldBe("RO-BH-0001-014");
+
+        // The negative: a key the schema does not declare is refused, whatever it is called —
+        // an outright coordinate, and a value that only reconstructs one in company.
+        foreach (var undeclared in new object[]
+        {
+            new { speleolocPci = "RO-BH-0001-015", lat = 45.65, lon = 25.55 },
+            new { speleolocPci = "RO-BH-0001-016", bearingFromEntrance = 137.0 },
+        })
+        {
+            var refused = await owner.PostAsJsonAsync("/api/v1/features", new
+            {
+                kind = "generic",
+                name = $"Located place {marker}",
+                featureTypeId = cavePlaceTypeId,
+                geometry = Point(25.56, 45.66),
+                visibility = "private",
+                parents = new[] { new { parentId = container, isPrimary = true } },
+                properties = undeclared,
+            });
+            refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+            (await refused.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
+                .ShouldBe("feature.properties_invalid");
+        }
+
+        // …and the same door is shut on the update path, which is the one an application would
+        // use to add a field to a row that was already accepted.
+        var edited = await owner.PutWithIfMatchAsync($"/api/v1/features/{place}", new
+        {
+            kind = "generic",
+            name = $"Coded place {marker}",
+            featureTypeId = cavePlaceTypeId,
+            geometry = Point(25.55, 45.65),
+            visibility = "private",
+            properties = new { speleolocPci = "RO-BH-0001-014", lat = 45.65 },
+        });
+        edited.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await edited.Content.ReadAsStringAsync());
+        (await edited.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
+            .ShouldBe("feature.properties_invalid");
     }
 
     private static object Point(double lon, double lat) =>

@@ -40,6 +40,7 @@ using SilexGis.Api.Features.ResLinks;
 using SilexGis.Api.Features.FeatureShares;
 using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.Statistics;
+using SilexGis.Api.Features.Sync;
 using SilexGis.Api.Features.Tags;
 using SilexGis.Api.Features.Taxonomies;
 using SilexGis.Api.Features.Terrain;
@@ -132,6 +133,8 @@ try
         .BindConfiguration(MapOptions.SectionName);
     builder.Services.AddOptions<TerrainOptions>()
         .BindConfiguration(TerrainOptions.SectionName);
+    builder.Services.AddOptions<SyncOptions>()
+        .BindConfiguration(SyncOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
     // One resolver per resource-link target world; the directory is what the link
@@ -269,6 +272,7 @@ try
     api.MapAdminSettingsEndpoints();
     api.MapAdminTemplateEndpoints();
     api.MapTerrainBuildEndpoints();
+    api.MapSyncEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {
@@ -329,6 +333,35 @@ try
             scope.ServiceProvider.GetRequiredService<IFileStore>());
         Log.Information("Demo data seeded (owner: {Email})", admins[0].Email);
         return;
+    }
+
+    // `dotnet run -- seed-speleoloc-dev`: add the second party the demo dataset lacks — a caving
+    // group, a plain account in it that owns nothing, and the administrator alongside — then exit.
+    // Without it every object on the installation belongs to the one administrator account, so
+    // nothing here can show what location protection actually does.
+    if (args.Contains("seed-speleoloc-dev"))
+    {
+        using var scope = app.Services.CreateScope();
+        switch (await SpeleoLocDevSeeder.SeedAsync(scope.ServiceProvider))
+        {
+            case SpeleoLocDevSeedOutcome.NotPermitted:
+                // It creates a login whose password is printed in the installation guide, so it
+                // is refused rather than trusted to the operator having read the warning.
+                Log.Error(
+                    "seed-speleoloc-dev creates a development login and runs only on a "
+                    + "development host (set SILEXGIS__SpeleoLocDev__Allow=true to override)");
+                return;
+            case SpeleoLocDevSeedOutcome.NoAdministrator:
+                Log.Error(
+                    "seed-speleoloc-dev requires a bootstrap admin (set SILEXGIS__Admin__Email/Password)");
+                return;
+            default:
+                Log.Information(
+                    "Development sync data seeded (group: {Group}, member: {Email})",
+                    SpeleoLocDevSeeder.GroupName,
+                    SpeleoLocDevSeeder.MemberEmail);
+                return;
+        }
     }
 
     await app.RunAsync();

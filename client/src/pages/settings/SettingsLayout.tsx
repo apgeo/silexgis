@@ -4,6 +4,7 @@ import {
   EyeOutlined,
   IdcardOutlined,
   MailOutlined,
+  MobileOutlined,
   SafetyOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -21,6 +22,7 @@ const SECTION_ICONS: Record<SettingsSection, ReactNode> = {
   notifications: <BellOutlined />,
   security: <SafetyOutlined />,
   accessibility: <EyeOutlined />,
+  sync: <MobileOutlined />,
 };
 
 /**

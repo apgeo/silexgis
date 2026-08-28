@@ -1541,7 +1541,8 @@
       "emails": "E-mail",
       "notifications": "Notificări",
       "security": "Securitate",
-      "accessibility": "Accesibilitate"
+      "accessibility": "Accesibilitate",
+      "sync": "Sincronizare"
     },
     "visibility": {
       "label": "Cine poate vedea",
@@ -1701,6 +1702,37 @@
       "title": "Alegeți un punct",
       "hint": "Faceți clic pe hartă sau scrieți coordonatele.",
       "use": "Folosește punctul"
+    },
+    "sync": {
+      "intro": "Alegeți peșterile pe care un telefon le poartă offline. O selecție doar numește peșteri — nu le preia — deci încheierea ei aici oprește cererile unui dispozitiv și nu schimbă nimic despre peșterile în sine.",
+      "serverTitle": "Ce vorbește acest server",
+      "contractVersion": "Versiunea protocolului",
+      "limits": "Limite",
+      "limitsValue": "{{pageSize}} rânduri pe pagină descărcată, {{uploadRows}} rânduri pe încărcare",
+      "served": "Disponibil",
+      "servedNone": "Doar selecții — acest server nu transferă încă rânduri.",
+      "setsTitle": "Selecții",
+      "newSet": "Selecție nouă",
+      "editSet": "Editează selecția",
+      "noSets": "Nicio selecție încă. Nimic nu este purtat offline.",
+      "name": "Nume",
+      "caves": "Peșteri",
+      "cavesPlaceholder": "Căutați peșteri după nume",
+      "caveCount": "Peșteri purtate: {{total}}",
+      "unnamedCave": "O peșteră pe care nu o mai puteți citi",
+      "uploadVisibility": "Înregistrările noi sunt vizibile pentru",
+      "uploadVisibilityHelp": "Ce primesc înregistrările proprii ale unui dispozitiv când le trimite înapoi. Doar dumneavoastră, până când extindeți.",
+      "uploadsAs": "Încarcă ca: {{visibility}}",
+      "cavingGroup": "Grup de speologie",
+      "noCavingGroup": "Fără grup de speologie",
+      "noCavingGroupsHere": "Această instalare nu are grupuri de speologie.",
+      "cavingGroupRequired": "Alegeți grupul de speologie căruia îi aparțin aceste înregistrări. Fără unul, înregistrările vizibile unui grup de speologie nu sunt vizibile nimănui.",
+      "notInCavingGroup": "Nu sunteți membru al acelui grup de speologie, deci un dispozitiv nu poate crea înregistrări pentru el.",
+      "caveUnreadable": "Una dintre peșterile alese nu mai poate fi citită de dumneavoastră. Eliminați-o și salvați din nou.",
+      "changedElsewhere": "Această selecție a fost schimbată în altă parte — pe un dispozitiv sau în altă filă. Redeschideți-o și refaceți modificarea.",
+      "revoke": "Revocă",
+      "revokeConfirm": "Revocați această selecție? Un dispozitiv nu va mai putea cere aceste peșteri. Nimic din ce are deja nu este șters.",
+      "revoked": "Selecție revocată."
     }
   },
   "admin": {

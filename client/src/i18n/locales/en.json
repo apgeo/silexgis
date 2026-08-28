@@ -1541,7 +1541,8 @@
       "emails": "Emails",
       "notifications": "Notifications",
       "security": "Security",
-      "accessibility": "Accessibility"
+      "accessibility": "Accessibility",
+      "sync": "Sync"
     },
     "visibility": {
       "label": "Who can see this",
@@ -1701,6 +1702,37 @@
       "title": "Pick a point",
       "hint": "Click the map, or type the coordinates.",
       "use": "Use this point"
+    },
+    "sync": {
+      "intro": "Choose the caves a phone carries offline. A selection names caves — it never takes them over — so ending one here stops a device asking for them and changes nothing about the caves themselves.",
+      "serverTitle": "What this server speaks",
+      "contractVersion": "Protocol version",
+      "limits": "Limits",
+      "limitsValue": "{{pageSize}} rows per download page, {{uploadRows}} rows per upload",
+      "served": "Available",
+      "servedNone": "Selections only — this server does not move rows yet.",
+      "setsTitle": "Selections",
+      "newSet": "New selection",
+      "editSet": "Edit selection",
+      "noSets": "No selection yet. Nothing is carried offline.",
+      "name": "Name",
+      "caves": "Caves",
+      "cavesPlaceholder": "Search caves by name",
+      "caveCount": "Caves carried: {{total}}",
+      "unnamedCave": "A cave you can no longer read",
+      "uploadVisibility": "New records are visible to",
+      "uploadVisibilityHelp": "What a device's own records get when it sends them back. Only you, until you widen it.",
+      "uploadsAs": "Uploads as: {{visibility}}",
+      "cavingGroup": "Caving group",
+      "noCavingGroup": "No caving group",
+      "noCavingGroupsHere": "This installation has no caving groups.",
+      "cavingGroupRequired": "Choose the caving group these records belong to. Without one, records visible to a caving group are visible to nobody.",
+      "notInCavingGroup": "You are not a member of that caving group, so a device cannot create records for it.",
+      "caveUnreadable": "One of the chosen caves is no longer readable by you. Remove it and save again.",
+      "changedElsewhere": "This selection was changed somewhere else — on a device, or in another tab. Reopen it and make the change again.",
+      "revoke": "Revoke",
+      "revokeConfirm": "Revoke this selection? A device will stop being able to ask for these caves. Nothing already on it is deleted.",
+      "revoked": "Selection revoked."
     }
   },
   "admin": {

@@ -58,11 +58,18 @@ public static class AuthHelper
         $"&code_challenge={codeChallenge ?? "x"}&code_challenge_method=S256&state=s";
 
     /// <summary>Returns a client whose default Authorization header carries a valid access token.</summary>
-    public static async Task<HttpClient> BearerClientAsync(SilexGisApiFactory factory, string email)
+    /// <param name="password">
+    /// Given only for an account this helper did not mint. A seeder's account carries the
+    /// password its seeder chose, and signing in as one is the only way to see an installation
+    /// the way that account does.
+    /// </param>
+    public static async Task<HttpClient> BearerClientAsync(
+        SilexGisApiFactory factory, string email, string? password = null)
     {
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password });
+        var login = await client.PostAsJsonAsync(
+            "/api/v1/auth/login", new { email, password = password ?? Password });
         login.StatusCode.ShouldBe(HttpStatusCode.OK, $"login failed for {email}");
 
         var verifier = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(48));

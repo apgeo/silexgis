@@ -64,6 +64,7 @@ const EmailSettingsPage = lazy(() => import('./pages/settings/EmailSettingsPage.
 const NotificationSettingsPage = lazy(() => import('./pages/settings/NotificationSettingsPage.tsx'));
 const SecuritySettingsPage = lazy(() => import('./pages/settings/SecuritySettingsPage.tsx'));
 const AccessibilitySettingsPage = lazy(() => import('./pages/settings/AccessibilitySettingsPage.tsx'));
+const SyncSettingsPage = lazy(() => import('./pages/settings/SyncSettingsPage.tsx'));
 
 function Loadable({ children }: { children: ReactNode }) {
   return (
@@ -151,6 +152,7 @@ export const routes: RouteObject[] = [
               { path: 'notifications', element: <Loadable><NotificationSettingsPage /></Loadable> },
               { path: 'security', element: <Loadable><SecuritySettingsPage /></Loadable> },
               { path: 'accessibility', element: <Loadable><AccessibilitySettingsPage /></Loadable> },
+              { path: 'sync', element: <Loadable><SyncSettingsPage /></Loadable> },
             ],
           },
           // The security page used to live here; links out in the wild still point at it.

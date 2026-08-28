@@ -392,6 +392,58 @@ public static class TaxonomySeeder
             }}
             """;
 
+        // The identifiers a cave-navigation device carries for a place inside a cave.
+        //
+        // Flat top-level keys under one prefix, never a nested object: the typed-properties
+        // renderers accept only an object schema whose properties are primitives, and both of
+        // them drop a nested bag — one renderer skips it, the other prints it as "[object
+        // Object]". A nested value would be stored, validated, synced and never once shown to
+        // the caver who asked for it, which is the opposite of why these codes are kept here.
+        //
+        // Nothing that locates anything may ever join this list. The property document is
+        // emitted verbatim to every reader that can see the row at all — including a
+        // share-token visitor whose geometry was snapped away or withheld — and no protection
+        // filter touches it on the way out. That bars the obvious (a latitude, a longitude, an
+        // altitude) and the reconstructible (a depth paired with a bearing or a distance from a
+        // named point, which together back-project to a position). A depth on its own places
+        // nothing on a map, which is why it is here and a bearing is not.
+        //
+        // "additionalProperties":false is what turns that from a rule somebody has to remember
+        // into one the server keeps. Without it JSON Schema accepts every key nobody declared,
+        // so a write carrying a latitude beside the codes would be stored and then handed to
+        // exactly the readers whose geometry had just been withheld. The device's whole field
+        // set is declared here, so the closed list costs it nothing; a field it grows later is
+        // added here first, which is the review this rule needs anyway.
+        //
+        // The keys are camelCase where the schemas above are snake_case: they mirror the field
+        // names the device sends, so one name reads the same on both sides of a round-trip.
+        // Note that the "speleolocSchemaVersion" value is the device's own row-shape version and
+        // has nothing to do with the feature type's PropertiesSchemaVersion column, which the
+        // server moves on its own when this schema changes.
+        const string cavePlaceSchema =
+            """
+            {"type":"object","properties":{
+              "speleolocPci":{"type":"string","title":"Place code (PCI)"},
+              "speleolocQcri":{"type":"string","title":"QR code reference (QCRI)"},
+              "speleolocCaveLocalIndex":{"type":"string","title":"Cave local index"},
+              "speleolocGeneralAreaIdentifier":{"type":"string","title":"General area identifier"},
+              "speleolocDepthInCave":{"type":"number","title":"Depth in cave (m)"},
+              "speleolocSchemaVersion":{"type":"integer","title":"Device schema version"}
+            },"additionalProperties":false}
+            """;
+
+        // A surface area groups caves by name and carries no geometry of its own on the device.
+        // Its identifier is one segment of every place code allocated beneath it, so it must
+        // survive a round-trip intact or devices re-downloading the area renumber their places.
+        // Closed to undeclared keys for the same reason as the kind above.
+        const string surfaceAreaSchema =
+            """
+            {"type":"object","properties":{
+              "speleolocGeneralAreaIdentifier":{"type":"string","title":"General area identifier"},
+              "speleolocSchemaVersion":{"type":"integer","title":"Device schema version"}
+            },"additionalProperties":false}
+            """;
+
         // Accepted geometry classes follow the legacy loose semantics: a kind accepts its
         // class plus the matching Multi* (imported multi-part features round-trip).
         GeometryClass[] point = [GeometryClass.Point, GeometryClass.MultiPoint];
@@ -403,51 +455,71 @@ public static class TaxonomySeeder
             GeometryClass.MultiPoint, GeometryClass.MultiLineString, GeometryClass.MultiPolygon,
         ];
 
+        // How a protected row is shown to a caller without exact view. Named here so every
+        // seeded kind states its answer rather than inheriting one nobody chose.
+        const ProtectedDisplay snap = ProtectedDisplay.SnapPoint;
+        const ProtectedDisplay withhold = ProtectedDisplay.Withhold;
+
         // Symbol files reference the bundled legacy symbol set. Categories drive map-layer
         // separation and index partitioning; RequiresParent marks kinds meaningless outside
         // a containing feature (in-cave palette).
         (string Code, string Name, FeatureCategory Category, GeometryClass[] Classes,
-            bool RequiresParent, string? Symbol, string? Schema)[] items =
+            bool RequiresParent, ProtectedDisplay Protected, string? Symbol, string? Schema)[] items =
         [
             // Surface palette (v1/v2 heritage)
-            ("sinkhole", "Sinkhole / Doline", FeatureCategory.Surface, point, false, "sinkhole.png", sinkholeSchema),
-            ("pit", "Pit", FeatureCategory.Surface, point, false, "pit.png", null),
-            ("pitch", "Pitch", FeatureCategory.Surface, point, false, "pitch.png", null),
-            ("chimney", "Chimney", FeatureCategory.Surface, point, false, "chimney.png", null),
-            ("tunnel", "Tunnel", FeatureCategory.Surface, point, false, "tunnel.png", null),
-            ("lake", "Lake / Pond", FeatureCategory.Surface, any, false, "lake.png", null),
-            ("water_flow", "Spring / Water flow", FeatureCategory.Surface, point, false, "water_flow.png", waterFlowSchema),
-            ("fracture_line", "Fracture line / Fault", FeatureCategory.Surface, line, false, "fracture_line.png", null),
-            ("peak", "Peak", FeatureCategory.Surface, point, false, "peak.png", null),
-            ("wall", "Wall / Crag", FeatureCategory.Surface, line, false, "fracture_line.png", null),
-            ("bivouac", "Bivouac", FeatureCategory.Surface, point, false, "bivouac.png", null),
-            ("exploration_point", "Exploration point", FeatureCategory.Surface, point, false, "exploration_point.png", null),
-            ("desobstruction", "Desobstruction", FeatureCategory.Surface, point, false, "desobstruction.png", null),
-            ("continuation", "Continuation", FeatureCategory.Surface, point, false, "continuation.png", continuationSchema),
-            ("calm", "Calm", FeatureCategory.Surface, point, false, "calm.png", null),
-            ("detritus", "Detritus", FeatureCategory.Surface, point, false, "dedritus.png", null),
-            ("driller", "Drilling point", FeatureCategory.Surface, point, false, "driller.png", null),
-            ("flag", "Flag / Marker", FeatureCategory.Surface, point, false, "flag.png", null),
-            ("generic", "Generic feature", FeatureCategory.Surface, any, false, "generic_feature.png", null),
-            ("arrow", "Arrow / Direction", FeatureCategory.Surface, line, false, "arrows.png", null),
+            ("sinkhole", "Sinkhole / Doline", FeatureCategory.Surface, point, false, snap, "sinkhole.png", sinkholeSchema),
+            ("pit", "Pit", FeatureCategory.Surface, point, false, snap, "pit.png", null),
+            ("pitch", "Pitch", FeatureCategory.Surface, point, false, snap, "pitch.png", null),
+            ("chimney", "Chimney", FeatureCategory.Surface, point, false, snap, "chimney.png", null),
+            ("tunnel", "Tunnel", FeatureCategory.Surface, point, false, snap, "tunnel.png", null),
+            ("lake", "Lake / Pond", FeatureCategory.Surface, any, false, snap, "lake.png", null),
+            ("water_flow", "Spring / Water flow", FeatureCategory.Surface, point, false, snap, "water_flow.png", waterFlowSchema),
+            ("fracture_line", "Fracture line / Fault", FeatureCategory.Surface, line, false, snap, "fracture_line.png", null),
+            ("peak", "Peak", FeatureCategory.Surface, point, false, snap, "peak.png", null),
+            ("wall", "Wall / Crag", FeatureCategory.Surface, line, false, snap, "fracture_line.png", null),
+            ("bivouac", "Bivouac", FeatureCategory.Surface, point, false, snap, "bivouac.png", null),
+            ("exploration_point", "Exploration point", FeatureCategory.Surface, point, false, snap, "exploration_point.png", null),
+            ("desobstruction", "Desobstruction", FeatureCategory.Surface, point, false, snap, "desobstruction.png", null),
+            ("continuation", "Continuation", FeatureCategory.Surface, point, false, snap, "continuation.png", continuationSchema),
+            ("calm", "Calm", FeatureCategory.Surface, point, false, snap, "calm.png", null),
+            ("detritus", "Detritus", FeatureCategory.Surface, point, false, snap, "dedritus.png", null),
+            ("driller", "Drilling point", FeatureCategory.Surface, point, false, snap, "driller.png", null),
+            ("flag", "Flag / Marker", FeatureCategory.Surface, point, false, snap, "flag.png", null),
+            ("generic", "Generic feature", FeatureCategory.Surface, any, false, snap, "generic_feature.png", null),
+            ("arrow", "Arrow / Direction", FeatureCategory.Surface, line, false, snap, "arrows.png", null),
 
             // Underground palette (inside a cave — parent required)
-            ("stalactite", "Stalactite / Speleothem", FeatureCategory.Underground, point, true, "generic_feature.png", null),
-            ("calcite_dome", "Calcite dome", FeatureCategory.Underground, point, true, "generic_feature.png", null),
-            ("cave_sector", "Cave sector", FeatureCategory.Underground, area, true, "generic_feature.png", null),
+            ("stalactite", "Stalactite / Speleothem", FeatureCategory.Underground, point, true, snap, "generic_feature.png", null),
+            ("calcite_dome", "Calcite dome", FeatureCategory.Underground, point, true, snap, "generic_feature.png", null),
+            ("cave_sector", "Cave sector", FeatureCategory.Underground, area, true, snap, "generic_feature.png", null),
 
             // Areas & groupings
-            ("karst_area", "Karst area", FeatureCategory.Area, area, false, null, null),
-            ("massif", "Massif / Mountain", FeatureCategory.Area, area, false, null, null),
-            ("cave_system", "Cave system", FeatureCategory.Area, area, false, null, null),
+            ("karst_area", "Karst area", FeatureCategory.Area, area, false, snap, null, null),
+            ("massif", "Massif / Mountain", FeatureCategory.Area, area, false, snap, null, null),
+            ("cave_system", "Cave system", FeatureCategory.Area, area, false, snap, null, null),
 
             // Structures
-            ("building", "Building", FeatureCategory.Structure, [.. point, .. area], false, null, null),
+            ("building", "Building", FeatureCategory.Structure, [.. point, .. area], false, snap, null, null),
+
+            // The shapes a cave-navigation device's data lands in. Appended at the end, and
+            // every later addition must be too: sort orders are assigned in list order and
+            // only when a row is inserted, so a code added in the middle would take one order
+            // on a fresh database and a different one on an installation that already ran the
+            // seeder — two installations would then disagree about the palette's order.
+            //
+            // An area and a place inside a cave are withheld rather than snapped for a caller
+            // without exact view. A snapped point still says which hillside a cave is in, and
+            // these rows exist in numbers: a scatter of them snapped to the same grid squares
+            // outlines the cave whose position the protection was flipped to hide. The surface
+            // area is a named grouping with no geometry of its own and gets the ordinary answer.
+            ("cave_area", "Cave area", FeatureCategory.Underground, any, true, withhold, "generic_feature.png", null),
+            ("cave_place", "Cave place", FeatureCategory.Underground, point, true, withhold, "generic_feature.png", cavePlaceSchema),
+            ("surface_area", "Surface area", FeatureCategory.Area, any, false, snap, null, surfaceAreaSchema),
         ];
 
         var existing = await db.FeatureTypes.ToDictionaryAsync(x => x.Code, ct);
         var sort = 0;
-        foreach (var (code, name, category, classes, requiresParent, symbol, schema) in items)
+        foreach (var (code, name, category, classes, requiresParent, protectedDisplay, symbol, schema) in items)
         {
             sort += 10;
             if (existing.TryGetValue(code, out var row))
@@ -465,6 +537,7 @@ public static class TaxonomySeeder
                     Category = category,
                     AcceptedGeometryClasses = classes,
                     RequiresParent = requiresParent,
+                    ProtectedDisplay = protectedDisplay,
                     SymbolFile = symbol,
                     SortOrder = sort,
                     PropertiesSchema = schema,

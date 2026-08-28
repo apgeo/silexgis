@@ -47,13 +47,36 @@ The first start creates the database schema, seeds taxonomies, default map layer
 built-in permission groups, and creates the admin account as a member of **Full
 Administrators**. Sign in at `SILEXGIS_PUBLIC_URL` with the admin credentials.
 
-To load a small demo dataset (2 caves, entrances, features, a geofile and a raster, plus a
-two-shelf archive holding a survey report and a link joining that report to the cave it
-describes):
+To load a small demo dataset (six caves with their entrances, a containing karst area and two
+surface features, five trips with the people on them, two saved map views, plus a two-shelf
+archive holding a survey report and a link joining that report to the cave it describes):
 
 ```bash
 docker compose exec api dotnet SilexGis.Api.dll seed-demo
 ```
+
+Everything the demo set creates belongs to the admin account, which is also a full
+administrator — so on a stock demo installation every signed-in caller is exempt from location
+protection twice over, and a protected cave shows its exact position to everyone. For
+development and for anyone building a client against this server, a second command adds the
+party that is not exempt: a caving group called **Demo Caving Club**, the admin in it, and a
+plain account `member@dev.local` that belongs to the group and owns nothing. It also stamps the
+group onto the demo cave that was created club-visible without naming a club. Safe to run more
+than once:
+
+```bash
+docker compose exec api dotnet SilexGis.Api.dll seed-speleoloc-dev
+```
+
+Unlike `seed-demo`, this one creates a **login**, so it refuses to run on anything but a
+development host. On a normal installation it exits with an error and writes nothing. An
+installation that wants it anyway has to set `SILEXGIS__SpeleoLocDev__Allow=true`, and should
+also set `SILEXGIS__SpeleoLocDev__MemberPassword` rather than take the default printed in this
+guide.
+
+The account holds the Viewer role and belongs to Demo Caving Club, so it can read everything
+public, everything visible to signed-in accounts, and everything that club may see. Treat it as
+what it is: a second party that exists so location protection can be watched working.
 
 ## Enabling HTTPS
 
@@ -1048,6 +1071,10 @@ the reasoning beside each one.
 | `SILEXGIS__Auth__ExternalOnly` | `false` | hide the password form when providers exist |
 | `SILEXGIS__Auth__RateLimitPerMinute` | `60` | sign-in, password-reset and token requests one IP address may make per minute. Raise it for an installation whose users share an outbound address |
 | `SILEXGIS__Auth__SpeleoLocRefreshTokenDays` | `45` | how long the SpeleoLoc mobile app may stay offline before a caver has to sign in on it again. The clock restarts at every successful sync, not at sign-in. Values outside 1 to 365 days are brought back inside that range |
+| `SILEXGIS__Sync__PageSizeMax` | `500` | the largest page of rows the mobile sync surface hands back in one response. A phone asks for this figure before it starts and sizes its own requests to it. Values outside 1 to 5000 are brought back inside that range |
+| `SILEXGIS__Sync__UploadRowsMax` | `500` | the most rows one upload batch from a phone may carry. A batch is applied as a unit, so this bounds what a single failed or repeated request costs. Values outside 1 to 5000 are brought back inside that range |
+| `SILEXGIS__SpeleoLocDev__Allow` | `false` | permits `seed-speleoloc-dev` on a host that is not in development. That command creates a login, so it is refused without this |
+| `SILEXGIS__SpeleoLocDev__MemberPassword` | `dev-member-pass-1` | the password `member@dev.local` is created with. The default is printed in this guide, so set your own if you allow the command at all |
 | `SILEXGIS__Mail__Enabled` / `__Host` / `__Port` | `false` / — / `587` | SMTP server; unset means messages go to the log |
 | `SILEXGIS__Mail__Security` | `Auto` | `Auto`, `StartTls`, `SslOnConnect` (465) or `None` |
 | `SILEXGIS__Mail__FromAddress` / `__FromName` | — / `SilexGIS` | sender of every message |
