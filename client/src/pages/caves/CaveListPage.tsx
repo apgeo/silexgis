@@ -16,6 +16,7 @@ import {
   type CaveListParams,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import CaveDistributionPanel from '../../components/statistics/CaveDistributionPanel.tsx';
 
 const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
 
@@ -143,6 +144,7 @@ export default function CaveListPage() {
           },
         ]}
       />
+      <CaveDistributionPanel caves={data?.items ?? []} typeName={typeName} />
     </div>
   );
 }

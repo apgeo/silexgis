@@ -2572,5 +2572,20 @@
       "trips": "Trips",
       "views": "Views"
     }
+  },
+  "karstStats": {
+    "count": "Caves",
+    "depthAxis": "Depth (m)",
+    "lengthAxis": "Surveyed length (m)",
+    "nothingMeasured": "No cave on this page has a surveyed length.",
+    "powerLawFit": "Power-law fit (exponent {{exponent}})",
+    "rank": "Rank",
+    "regression": "Fit: slope {{slope}}, R² {{r2}}",
+    "scopeNote": "Computed from the {{shown}} of {{total}} caves on this page that carry a surveyed length. Caves without one are absent rather than counted as zero.",
+    "title": "Distributions",
+    "viewByType": "By type",
+    "viewHistogram": "Length",
+    "viewLengthDepth": "Length vs depth",
+    "viewRankSize": "Rank–size"
   }
 }
