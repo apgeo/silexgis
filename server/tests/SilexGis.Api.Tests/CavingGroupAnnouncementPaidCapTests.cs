@@ -275,6 +275,55 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
     }
 
     [Fact]
+    public async Task An_overdue_party_nobody_has_been_told_about_yet_is_headroom_the_announcement_cannot_have()
+    {
+        await StartAsync();
+        await SpendAsync(0);
+        await SetCeilingAsync(2);
+
+        // The overdue alarm is the second message here worth putting on a charging channel, and
+        // the day's spending is estimated from which categories could ever put one there rather
+        // than from a list somebody keeps — so the alarm counts against the same day's ceiling.
+        // Written down deliberately, because it is a coupling between two things that never
+        // mention each other: an automatic sweep raising an alarm about a party nobody has heard
+        // from, and a person being told the line they wrote to their club will not go out.
+        await WaitingToBeRoutedAsync(NotificationCategory.TripCallout, count: 2);
+
+        var refused = await AnnounceAsync("The meet is on.");
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+        (await refused.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("caving_group.announcement_paid_cap_reached");
+
+        // And the half that says the refusal was arithmetic about a shared ceiling rather than
+        // the fixture being unable to announce at all. The direction that must never hold is the
+        // other one — the ceiling is a brake on what a person composes and aims at a roster, and
+        // no count of announcements withholds an alarm about a party that is still out.
+        await SetCeilingAsync(20);
+        (await AnnounceAsync("The meet is on.")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// Messages raised today and not yet turned into outbound copies — the promised half of the
+    /// day's spending, in whichever category is asked for.
+    /// </summary>
+    private async Task WaitingToBeRoutedAsync(NotificationCategory category, int count)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        db.Notifications.AddRange(Enumerable.Range(0, count).Select(_ => new Notification
+        {
+            RecipientUserId = memberId,
+            Category = category,
+            TemplateKey = MessageTemplateCatalog.NotifyTripCalloutOverdue,
+            CreatedAt = DateTimeOffset.UtcNow,
+            RoutedAt = null,
+        }));
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
     public async Task An_installation_that_pays_for_nothing_counts_nothing()
     {
         // The default, and the shape of every installation today: the switch is off, so the
@@ -323,10 +372,19 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.NotificationDeliveries.ExecuteDeleteAsync();
 
-        // What a day has promised counts as well as what it has handed over, so an announcement
-        // another class left waiting to be routed would be spending this test cannot see.
+        // What a day has promised counts as well as what it has handed over, so a message another
+        // class left waiting to be routed would be spending this test cannot see. Cleared for
+        // every category the estimate counts rather than for announcements alone, and the set is
+        // derived from the same ceilings the estimate reads: a category given a charging channel
+        // later starts leaking into these numbers on the day it gets one, and a hand-written list
+        // here would go quietly out of date exactly then.
+        var counted = NotificationCategories.All
+            .Where(category =>
+                (NotificationCategories.Ceiling(category) & NotificationChannelKinds.Paid)
+                != NotificationChannelKind.None)
+            .ToArray();
         await db.Notifications
-            .Where(n => n.RoutedAt == null && n.Category == NotificationCategory.GroupAnnouncement)
+            .Where(n => n.RoutedAt == null && counted.Contains(n.Category))
             .ExecuteDeleteAsync();
         await db.CavingGroupAnnouncements.Where(a => a.ExpandedAt == null).ExecuteDeleteAsync();
 

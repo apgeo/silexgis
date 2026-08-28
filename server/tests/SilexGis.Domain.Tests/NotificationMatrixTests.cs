@@ -131,8 +131,30 @@ public class NotificationMatrixTests
             return;
         }
 
+        if (inCeiling && (NotificationChannelKinds.Paid & channel) == channel)
+        {
+            // Where the category can reach only by being paid for, "nobody may switch this off"
+            // stops. The rule exists so nobody can silence a warning on a channel they already
+            // have; extended to a billed one it would decide, on the reader's behalf and the
+            // operator's, that a number confirmed to sign in with is an agreement to be texted at
+            // somebody else's expense. So here the stored answer is obeyed, and "off" is a choice
+            // the write path has to accept — otherwise anyone who opted in could never opt out.
+            NotificationMatrix.Resolve(category, channel, NotificationChannelChoice.Off, Everything, PaidAllowed)
+                .ShouldBe(NotificationChannelChoice.Off);
+            NotificationMatrix.CanChoose(category, channel, NotificationChannelChoice.Off, Everything, PaidAllowed)
+                .ShouldBeTrue();
+
+            // And the other direction in the same test, so a cell that had simply stopped
+            // answering could not pass this: asked for, it is on.
+            NotificationMatrix.Resolve(
+                category, channel, NotificationChannelChoice.Immediate, Everything, PaidAllowed)
+                .ShouldBe(NotificationChannelChoice.Immediate);
+            return;
+        }
+
         // A stored "off" for one of these could only have been written by something that got past
-        // the write path, so it is ignored rather than obeyed — wherever the category can reach.
+        // the write path, so it is ignored rather than obeyed — wherever the category can reach
+        // without being billed for.
         NotificationMatrix.Resolve(category, channel, NotificationChannelChoice.Off, Everything, PaidAllowed)
             .ShouldBe(inCeiling ? NotificationChannelChoice.Immediate : NotificationChannelChoice.Off);
         NotificationMatrix.CanChoose(category, channel, NotificationChannelChoice.Off, Everything, PaidAllowed)

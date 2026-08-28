@@ -120,6 +120,14 @@ public static class MessageTemplateCatalog
     public const string NotifyTripCalloutOverdue = "notify.trip-callout-overdue";
 
     /// <summary>
+    /// The overdue alarm written to be read on a phone with no data behind it. A second wording of
+    /// <see cref="NotifyTripCalloutOverdue"/>, never queued by anything: the pass that watches the
+    /// clock writes down the message, and whatever carries it out of the system asks the catalogue
+    /// for the wording its transport can read.
+    /// </summary>
+    public const string NotifyTripCalloutOverdueSms = "notify.trip-callout-overdue.sms";
+
+    /// <summary>
     /// Somebody asked on a trip cannot open a cave the trip is about, and the people who could
     /// change that are being told.
     /// </summary>
@@ -711,6 +719,33 @@ public static class MessageTemplateCatalog
                     """),
             }),
 
+        // Written as its own text rather than as the mailbox wording shortened, because it is the
+        // one message here that has to work for somebody standing at a car park entrance with no
+        // data: what is legible before anything is opened is part of the safety argument, so the
+        // message leads with which party and what is wrong and puts the link last. Three things
+        // the mailbox wording carries are absent. The greeting, because a phone already knows
+        // whose it is and every character is billed. The date on its own, because the hour that
+        // passed already contains it. And the installation's name in front, because the ten
+        // characters it costs are worth more spent on the alarm, and the address inside the link
+        // says where this came from.
+        //
+        // The Romanian was written first and the English follows it, which is the only order that
+        // works: a text is carried in seven-bit form only while every character is in that
+        // alphabet, and Romanian's diacritics are not, so the whole Romanian message is carried
+        // two bytes to the character and fits 67 of them in a part-message where English fits 153.
+        // Fitting the half-capacity language first means both fit; the other way round, the second
+        // language quietly becomes the one that costs double.
+        new(
+            NotifyTripCalloutOverdueSms,
+            MessageChannel.Sms,
+            "The same overdue alarm, written for a phone: which party, what has not been confirmed, and by when.",
+            ["tripTitle", "expectedReturn", "url"],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(null, "{tripTitle}: nobody has confirmed the party is out. Due back {expectedReturn} {url}"),
+                ["ro"] = new(null, "{tripTitle}: ieșire neconfirmată. Termen {expectedReturn} {url}"),
+            }),
+
         new(
             NotifyTripInviteeCannotOpenCave,
             MessageChannel.Email,
@@ -1058,6 +1093,7 @@ public static class MessageTemplateCatalog
     public static IReadOnlyList<(string Message, string Wording)> SecondWordings { get; } =
     [
         (NotifyGroupAnnouncement, NotifyGroupAnnouncementSms),
+        (NotifyTripCalloutOverdue, NotifyTripCalloutOverdueSms),
     ];
 
     /// <summary>

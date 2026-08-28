@@ -545,9 +545,11 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task A_channel_a_category_may_never_use_is_refused()
     {
-        // One category names a text message in its ceiling and no other does, because only a line
-        // somebody composed for a whole roster is worth what one costs — and a write that asks for
-        // one anywhere else is told so rather than silently dropped.
+        // A category whose ceiling does not name a channel can never be set to use it, however the
+        // write is phrased: trip planning is one of the many that a message charged for per
+        // recipient would be wrong for, so asking for a text there is refused outright rather than
+        // stored and silently dropped later. Which categories may name a paid channel at all is
+        // settled once, in the ceiling's own tests; this is only the refusal at the write path.
         var response = await me.PutAsJsonAsync("/api/v1/me/notifications/", new
         {
             categories = new[]

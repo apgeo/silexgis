@@ -162,7 +162,15 @@ export default function NotificationSettingsPage() {
                 render: (_, category) => (
                   <Flex vertical>
                     <span>{t(`settings.notifications.events.${String(category.category)}`)}</span>
-                    {category.channels.every((cell) => cell.locked) && (
+                    {/*
+                      Asked of any cell rather than of all of them, because a row can hold both
+                      kinds at once: a category with a safety argument behind it is held on
+                      wherever it costs nothing, while on a channel billed per message the same
+                      category is the account's own choice. Asking whether every cell is locked
+                      would drop this sentence from exactly the row whose greyed-out switches it
+                      explains, the moment that row gained an optional paid cell.
+                    */}
+                    {category.channels.some((cell) => cell.locked) && (
                       <Typography.Text type="secondary">
                         {t('settings.notifications.alwaysOn')}
                       </Typography.Text>

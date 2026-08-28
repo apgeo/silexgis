@@ -273,15 +273,33 @@ public class MessageTemplateTests
     }
 
     [Theory]
-    [InlineData(MessageChannel.Email, MessageTemplateCatalog.NotifyGroupAnnouncement)]
-    [InlineData(MessageChannel.Sms, MessageTemplateCatalog.NotifyGroupAnnouncementSms)]
+    [InlineData(
+        MessageTemplateCatalog.NotifyGroupAnnouncement,
+        MessageChannel.Email,
+        MessageTemplateCatalog.NotifyGroupAnnouncement)]
+    [InlineData(
+        MessageTemplateCatalog.NotifyGroupAnnouncement,
+        MessageChannel.Sms,
+        MessageTemplateCatalog.NotifyGroupAnnouncementSms)]
+    [InlineData(
+        MessageTemplateCatalog.NotifyTripCalloutOverdue,
+        MessageChannel.Email,
+        MessageTemplateCatalog.NotifyTripCalloutOverdue)]
+    [InlineData(
+        MessageTemplateCatalog.NotifyTripCalloutOverdue,
+        MessageChannel.Sms,
+        MessageTemplateCatalog.NotifyTripCalloutOverdueSms)]
     public void Whatever_sends_is_told_which_wording_its_transport_can_read(
-        MessageChannel channel, string expected)
+        string message, MessageChannel channel, string expected)
     {
         // Asserted through a non-null check rather than a null-conditional call: an answer of
         // null is exactly the regression this exists to catch, and a conditional one would skip
         // the assertion instead of failing on it.
-        MessageTemplateCatalog.On(MessageTemplateCatalog.NotifyGroupAnnouncement, channel)
+        //
+        // Both directions for each message, because the two halves fail differently: losing the
+        // second wording sends nothing by text, and losing the first would send the mailbox
+        // wording to a phone.
+        MessageTemplateCatalog.On(message, channel)
             .ShouldNotBeNull()
             .Key.ShouldBe(expected);
     }
@@ -333,6 +351,243 @@ public class MessageTemplateTests
             text.Body.ShouldNotBeNullOrWhiteSpace($"{definition.Key} ({locale})");
             text.Body.ShouldContain("{url}", customMessage: $"{definition.Key} ({locale})");
             text.Body.ShouldNotContain("\n", customMessage: $"{definition.Key} ({locale})");
+        }
+    }
+
+    [Fact]
+    public void An_overdue_alarm_by_text_says_which_party_and_by_when_and_nothing_more()
+    {
+        // Written as its own text rather than as the mailbox wording shortened, because this is
+        // the one message whose reader may be standing at a cave entrance with no data: what is
+        // legible before anything is opened is part of the safety argument. So it leads with
+        // which party and what has not been confirmed, and the link — which nobody in a car park
+        // can open anyway — comes last.
+        //
+        // Pinning the declared list is what makes the narrowing hold rather than describe today's
+        // wording: the renderer refuses any placeholder off the list and an operator rewrite is
+        // refused the same way, so nothing new can enter this message without being declared here
+        // first. What must stay out is the greeting, because a phone already knows whose it is and
+        // every character is billed, and the date on its own, because the hour that passed already
+        // contains it.
+        var definition = MessageTemplateCatalog.Find(MessageTemplateCatalog.NotifyTripCalloutOverdueSms)
+            .ShouldNotBeNull();
+
+        definition.Channel.ShouldBe(MessageChannel.Sms);
+        definition.Placeholders.ShouldBe(["tripTitle", "expectedReturn", "url"], ignoreOrder: true);
+
+        definition.Placeholders.ShouldNotContain("displayName");
+        definition.Placeholders.ShouldNotContain("tripDate");
+        definition.Placeholders.ShouldNotContain("unsubscribeUrl");
+
+        foreach (var locale in MessageTemplateCatalog.Locales)
+        {
+            var text = MessageTemplateCatalog.Default(definition, locale);
+            text.Subject.ShouldBeNull($"{definition.Key} ({locale})");
+            text.Body.ShouldNotBeNullOrWhiteSpace($"{definition.Key} ({locale})");
+
+            // Which party, first, so a truncated preview on a locked screen still names the trip
+            // somebody has to act about.
+            text.Body.ShouldStartWith("{tripTitle}", customMessage: $"{definition.Key} ({locale})");
+            text.Body.ShouldContain("{expectedReturn}", customMessage: $"{definition.Key} ({locale})");
+            text.Body.ShouldContain("{url}", customMessage: $"{definition.Key} ({locale})");
+            text.Body.ShouldNotContain("\n", customMessage: $"{definition.Key} ({locale})");
+        }
+    }
+
+    /// <summary>
+    /// The characters a text message can carry seven bits at a time, in the alphabet the radio
+    /// interface defines. Everything outside it — including every Romanian diacritic — forces the
+    /// whole message into two bytes a character.
+    /// </summary>
+    private const string SevenBitAlphabet =
+        "@£$¥èéùìòÇ\nØø\rÅå"
+        + "Δ_ΦΓΛΩΠΨΣΘΞÆæßÉ"
+        + " !\"#¤%&'()*+,-./0123456789:;<=>?"
+        + "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§"
+        + "¿abcdefghijklmnopqrstuvwxyzäöñüà";
+
+    /// <summary>
+    /// The few characters the seven-bit alphabet reaches only through an escape, and which
+    /// therefore cost two units each rather than one.
+    /// </summary>
+    private const string SevenBitEscaped = "\f^{}\\[~]|€";
+
+    /// <summary>
+    /// How many parts the network would charge for <paramref name="message"/>, and in which
+    /// encoding it would send it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A part carries 140 octets. Seven bits to the character that is 160 characters, or 153 once
+    /// a part has to carry the header that lets a phone reassemble a split message; two bytes to
+    /// the character it is 70, or 67 split. The encoding is chosen for the message as a whole, so
+    /// a single character outside the seven-bit alphabet more than halves what the whole message
+    /// can hold. That is why this counts parts and not characters: a character count would read
+    /// the same for both languages and be right about neither.
+    /// </para>
+    /// <para>
+    /// Two-byte length is counted in UTF-16 units rather than in characters, because that is what
+    /// goes over the air — anything outside the basic multilingual plane costs two. The one thing
+    /// deliberately not modelled is an escape falling across a part boundary; none of the wordings
+    /// measured here contains an escaped character at all once its placeholders are filled in.
+    /// </para>
+    /// </remarks>
+    private static (bool SevenBit, int Units, int Parts) Parts(string message)
+    {
+        var units = 0;
+        var sevenBit = true;
+
+        foreach (var character in message)
+        {
+            if (SevenBitAlphabet.Contains(character, StringComparison.Ordinal))
+            {
+                units += 1;
+            }
+            else if (SevenBitEscaped.Contains(character, StringComparison.Ordinal))
+            {
+                units += 2;
+            }
+            else
+            {
+                sevenBit = false;
+                break;
+            }
+        }
+
+        if (!sevenBit)
+        {
+            units = message.Length;
+        }
+
+        var single = sevenBit ? 160 : 70;
+        var split = sevenBit ? 153 : 67;
+
+        return (sevenBit, units, units <= single ? 1 : (units + split - 1) / split);
+    }
+
+    [Fact]
+    public void The_overdue_alarm_costs_no_more_than_three_parts_in_either_language()
+    {
+        // Every part of this is billed to the installation, for every person a trip names, at the
+        // moment somebody is overdue — so what the wording costs is decided here rather than
+        // discovered on an invoice. It is counted in parts and not in characters because a part is
+        // not a fixed number of characters: a message is carried seven bits to a character while
+        // every character is in the carrier's own alphabet, 153 of them to a part, and one
+        // character outside it carries the whole message two bytes to the character, where a part
+        // holds 67. The switch is binary and it is decided by a single character, so a character
+        // bound would pass a wording and hide its neighbour at more than double the price — which
+        // is exactly the mistake worth failing a build over.
+        //
+        // Which alphabet applies is not a property of the language alone, and that is the part
+        // that is easy to get backwards. Romanian's diacritics are outside it, so the Romanian
+        // wording is always at half capacity; but a cave name spelled properly puts a diacritic
+        // into the English message too, and then the English is at half capacity as well and is
+        // the dearer of the two, because its fixed text is the longer. So both are measured, and
+        // measured with a value that carries diacritics rather than one that hides the effect.
+        //
+        // Measured against values chosen to be the dear end of realistic rather than the kind
+        // end: a cave name carrying diacritics, a full timestamp, and an installation reachable
+        // at its own domain rather than the development default. The link and the hour together
+        // are ninety-five characters the wording does not choose and cannot shorten, and two
+        // parts hold a hundred and thirty-four — so two parts is not reachable by any wording that
+        // also names which party is overdue. Three is therefore the honest bound, and buying the
+        // fourth back by writing less would be spending legibility on postage for the one message
+        // where being legible unopened is the whole point.
+        var definition = MessageTemplateCatalog
+            .Find(MessageTemplateCatalog.NotifyTripCalloutOverdueSms)
+            .ShouldNotBeNull();
+
+        var values = new Dictionary<string, string>
+        {
+            ["tripTitle"] = "Peștera Ursilor",
+            ["expectedReturn"] = "2026-08-27 21:30 UTC",
+            ["url"] = "https://silexgis.example.org/trip-logs/8f3a1c2e-4b5d-6a7f-8091-a2b3c4d5e6f7",
+        };
+
+        foreach (var locale in MessageTemplateCatalog.Locales)
+        {
+            var body = MessageTemplateRenderer.Render(
+                MessageTemplateCatalog.Default(definition, locale).Body, values);
+            var (_, units, parts) = Parts(body);
+
+            parts.ShouldBeLessThanOrEqualTo(
+                3,
+                $"{definition.Key} ({locale}) is {parts} parts, {units} units: {body}");
+        }
+
+        // The second half, and the one that keeps the first honest. A bound on parts can always be
+        // met by taking the diacritics out of the Romanian, which would make it seven-bit and
+        // halve its price — and would also make it wrong, so it is refused here rather than left
+        // as a temptation for whoever is next asked to make this cheaper.
+        var romanian = MessageTemplateCatalog.Default(definition, "ro").Body;
+        Parts(romanian).SevenBit.ShouldBeFalse(
+            "the Romanian wording is written in Romanian, and correct spelling is not negotiable "
+            + "against the price of a message");
+
+        // And the discipline that stops the expensive language becoming an afterthought: the
+        // Romanian is written first and the English follows it, so the language billed at double
+        // is never the longer of the two. Held as an invariant rather than as a habit, because it
+        // is the half that goes wrong silently — English has more than twice the room, so an
+        // English wording can grow for a long time before anything complains.
+        var english = MessageTemplateCatalog.Default(definition, "en").Body;
+        romanian.Length.ShouldBeLessThanOrEqualTo(
+            english.Length,
+            $"ro is {romanian.Length} characters against en at {english.Length}");
+    }
+
+    [Fact]
+    public void The_overdue_alarm_says_how_long_a_trip_title_it_can_still_carry()
+    {
+        // The bound above is a property of the wording and of one representative title. The title
+        // itself is free text somebody typed when they planned the trip, and it goes into the
+        // message exactly as it stands, so how much of it fits is what decides whether a real
+        // alarm is three parts or four. Measured here in the one direction a build can check: how
+        // many characters of title each wording still has room for. Held above a floor rather than
+        // pinned to a number, so shortening the fixed text is free while lengthening it has to be
+        // paid for by admitting which titles it stops carrying.
+        //
+        // Measured with a title made of characters outside the carrier's seven-bit alphabet,
+        // because a cave name spelled properly is written with them and that is the case that
+        // costs. What this does not do is bound the message that actually leaves: nothing shortens
+        // a long title on the way out, so a title longer than the room measured here is charged
+        // the extra part, for every person the trip names.
+        const int floorCharacters = 40;
+
+        var definition = MessageTemplateCatalog
+            .Find(MessageTemplateCatalog.NotifyTripCalloutOverdueSms)
+            .ShouldNotBeNull();
+
+        foreach (var locale in MessageTemplateCatalog.Locales)
+        {
+            var template = MessageTemplateCatalog.Default(definition, locale).Body;
+
+            // Counted upwards rather than solved for, because the relation is a step function and
+            // a loop that anybody can read is worth more here than an arithmetic one that has to
+            // be trusted. Stopped well short of the title column's own maximum so a wording that
+            // somehow fitted everything ends the loop rather than running away with it.
+            var carried = 0;
+            while (carried < 300 && TitleFits(template, carried + 1))
+            {
+                carried++;
+            }
+
+            carried.ShouldBeGreaterThanOrEqualTo(
+                floorCharacters,
+                $"{definition.Key} ({locale}) has room for {carried} characters of trip title "
+                + "before it costs a fourth part");
+        }
+
+        static bool TitleFits(string template, int titleLength)
+        {
+            var body = MessageTemplateRenderer.Render(template, new Dictionary<string, string>
+            {
+                ["tripTitle"] = new string('\u0103', titleLength),
+                ["expectedReturn"] = "2026-08-27 21:30 UTC",
+                ["url"] = "https://silexgis.example.org/trip-logs/8f3a1c2e-4b5d-6a7f-8091-a2b3c4d5e6f7",
+            });
+
+            var (_, _, parts) = Parts(body);
+            return parts <= 3;
         }
     }
 

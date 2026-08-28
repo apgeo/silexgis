@@ -31,8 +31,15 @@ namespace SilexGis.Domain.Notifications;
 /// page.
 /// </item>
 /// <item>
-/// A category nobody may switch off is on wherever it can reach, so a stored
-/// <see cref="NotificationChannelChoice.Off"/> for one is ignored rather than obeyed.
+/// A category nobody may switch off is on wherever it can reach for free, so a stored
+/// <see cref="NotificationChannelChoice.Off"/> for one is ignored rather than obeyed — <b>on a
+/// channel that charges per message it is obeyed</b>, and such a channel starts off. The rule
+/// exists so nobody can silence a warning about their own account, and a channel the reader
+/// already has costs them nothing to leave on; a channel billed to the operator is different in
+/// kind. Forcing one on would manufacture two agreements nobody gave: the reader's, whose number
+/// was confirmed to sign in with and never offered as a contact address, and the operator's, who
+/// would be paying per message for every account that ever set up a second factor. So a safety
+/// category may reach a phone, and does so when somebody asks for it.
 /// </item>
 /// <item>
 /// A category that refuses to be held back, or a channel that cannot hold anything back, reads
@@ -83,7 +90,8 @@ public static class NotificationMatrix
         var choice = stored ?? NotificationCategories.Default(category, channel);
 
         if (choice is NotificationChannelChoice.Off &&
-            !NotificationCategories.IsUserConfigurable(category))
+            !NotificationCategories.IsUserConfigurable(category) &&
+            !Charges(channel))
         {
             choice = NotificationChannelChoice.Immediate;
         }
@@ -116,7 +124,8 @@ public static class NotificationMatrix
         }
 
         if (choice is NotificationChannelChoice.Off &&
-            !NotificationCategories.IsUserConfigurable(category))
+            !NotificationCategories.IsUserConfigurable(category) &&
+            !Charges(channel))
         {
             return false;
         }
@@ -125,6 +134,14 @@ public static class NotificationMatrix
             (NotificationChannelKinds.CanDefer(channel) &&
              !NotificationCategories.IsAlwaysImmediate(category));
     }
+
+    /// <summary>
+    /// Whether this channel bills the installation for every message it carries. The one thing
+    /// that stops "nobody may switch this category off" from also meaning "and somebody else pays
+    /// for it wherever it can reach".
+    /// </summary>
+    private static bool Charges(NotificationChannelKind channel) =>
+        (NotificationChannelKinds.Paid & channel) == channel;
 
     /// <summary>
     /// Whether a category reaches its reader nowhere at all. A legitimate state — somebody may

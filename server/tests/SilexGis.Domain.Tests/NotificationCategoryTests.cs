@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Shouldly;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Notifications;
 
 namespace SilexGis.Domain.Tests;
 
@@ -53,15 +54,88 @@ public class NotificationCategoryTests
                     == NotificationChannelChoice.Off));
 
     [Fact]
-    public void Only_the_message_somebody_composes_for_a_roster_may_ever_cost_money() =>
-        // Every category but one is a side effect of something that happened, and none of those is
-        // worth a charge per recipient. The exception is the one message a person writes and aims
-        // at a club, which is why the ceiling is where this is decided and not the transport.
+    public void Only_a_message_worth_paying_for_may_ever_cost_money() =>
+        // Most categories are a side effect of something that happened, and none of those is worth
+        // a charge per recipient. Two are, and they are here for different reasons rather than by
+        // family resemblance. The overdue-party alarm, because its reader may be the one person
+        // standing at a cave entrance with no data, where a text arrives and a mailbox does not.
+        // The announcement, because it is the one message a person writes and aims at a club, and
+        // a meeting place changed at short notice has a real argument for a text. Listed
+        // exhaustively so that a third arrives as a decision somebody took rather than as a line
+        // in a switch nobody read — and note that being named here only makes the channel
+        // permissible: it costs money, so it stays off until an account chooses it.
         NotificationCategories.All
             .Where(category =>
                 (NotificationCategories.Ceiling(category) & NotificationChannelKinds.Paid)
                     != NotificationChannelKind.None)
-            .ShouldBe([NotificationCategory.GroupAnnouncement]);
+            .ShouldBe([NotificationCategory.TripCallout, NotificationCategory.GroupAnnouncement]);
+
+    [Fact]
+    public void The_overdue_alarm_may_reach_a_phone_and_reaches_nobody_who_has_not_asked()
+    {
+        const NotificationChannelKind everything =
+            NotificationChannelKind.InApp | NotificationChannelKind.Email | NotificationChannelKind.Sms;
+        const NotificationChannelKind paidAllowed = NotificationChannelKind.Sms;
+
+        // The permission half. A text is the one thing that reaches somebody standing at a cave
+        // entrance with no data, so the alarm is allowed to travel that way.
+        (NotificationCategories.Ceiling(NotificationCategory.TripCallout) & NotificationChannelKind.Sms)
+            .ShouldBe(NotificationChannelKind.Sms);
+
+        // And the half that matters more, because getting it wrong would be worse than not having
+        // built this at all. Permission is not consent: the only number this installation holds is
+        // the one an account confirmed to sign in with, which proves whose number it is and not
+        // that its owner agreed to be texted. So an account that has never chosen this is not
+        // texted — not on the day an operator configures a gateway, and not because the category
+        // happens to be one nobody may switch off.
+        NotificationCategories.Default(NotificationCategory.TripCallout, NotificationChannelKind.Sms)
+            .ShouldBe(NotificationChannelChoice.Off);
+        NotificationMatrix.Resolve(
+            NotificationCategory.TripCallout,
+            NotificationChannelKind.Sms,
+            stored: null,
+            everything,
+            paidAllowed).ShouldBe(NotificationChannelChoice.Off);
+
+        // Somebody who asks for it gets it, and may stop again — otherwise the first half would be
+        // a trap rather than an offer.
+        NotificationMatrix.CanChoose(
+            NotificationCategory.TripCallout,
+            NotificationChannelKind.Sms,
+            NotificationChannelChoice.Immediate,
+            everything,
+            paidAllowed).ShouldBeTrue();
+        NotificationMatrix.Resolve(
+            NotificationCategory.TripCallout,
+            NotificationChannelKind.Sms,
+            NotificationChannelChoice.Immediate,
+            everything,
+            paidAllowed).ShouldBe(NotificationChannelChoice.Immediate);
+        NotificationMatrix.CanChoose(
+            NotificationCategory.TripCallout,
+            NotificationChannelKind.Sms,
+            NotificationChannelChoice.Off,
+            everything,
+            paidAllowed).ShouldBeTrue();
+
+        // An installation that has not agreed to pay for text messages sends none whatever any
+        // account has chosen, and the two free channels are untouched by any of this: the alarm
+        // still cannot be switched off where it costs nothing.
+        NotificationMatrix.Resolve(
+            NotificationCategory.TripCallout,
+            NotificationChannelKind.Sms,
+            NotificationChannelChoice.Immediate,
+            everything).ShouldBe(NotificationChannelChoice.Off);
+        foreach (var free in new[] { NotificationChannelKind.InApp, NotificationChannelKind.Email })
+        {
+            NotificationMatrix.Resolve(
+                NotificationCategory.TripCallout,
+                free,
+                NotificationChannelChoice.Off,
+                everything,
+                paidAllowed).ShouldBe(NotificationChannelChoice.Immediate);
+        }
+    }
 
     [Fact]
     public void Not_being_switchable_off_and_not_being_deferrable_are_the_same_categories()

@@ -19,8 +19,10 @@ namespace SilexGis.Api.Features.Me;
 /// </summary>
 /// <param name="Choice">Nothing, as it happens, or gathered into a daily summary.</param>
 /// <param name="Locked">
-/// A cell the caller may not switch off. Read from the category vocabulary, never from a category's
-/// name — more than one category has a safety argument behind it.
+/// A cell the caller may not switch off. Asked of the same rule the write path enforces rather
+/// than read off the category, because the answer is per cell: a category with a safety argument
+/// behind it is held on wherever it costs nothing, but on a channel billed per message it is the
+/// account's own choice, so that cell is offered rather than locked.
 /// </param>
 /// <param name="CanDefer">
 /// Whether a daily summary is offerable here at all. False for a channel that cannot hold anything
@@ -288,7 +290,12 @@ public static class MeNotificationEndpoints
                 .Select(channel => new NotificationChannelDto(
                     channel,
                     Cell(category, channel),
-                    Locked: !NotificationCategories.IsUserConfigurable(category),
+                    Locked: !NotificationMatrix.CanChoose(
+                        category,
+                        channel,
+                        NotificationChannelChoice.Off,
+                        NotificationChannelKinds.Everything,
+                        paidChannelsAllowed),
                     CanDefer: NotificationChannelKinds.CanDefer(channel) &&
                         !NotificationCategories.IsAlwaysImmediate(category),
                     Available: (configured & channel) == channel))

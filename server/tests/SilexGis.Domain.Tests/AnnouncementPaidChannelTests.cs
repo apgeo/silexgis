@@ -102,14 +102,33 @@ public class AnnouncementPaidChannelTests
     }
 
     [Fact]
-    public void Switching_it_on_widens_nothing_but_the_one_category_that_may_cost_money() =>
+    public void Switching_it_on_widens_nothing_but_the_categories_whose_ceiling_may_cost_money()
+    {
+        var allowed = new AnnouncementSettings { PaidChannelsEnabled = true }.PaidChannelsAllowed;
+
+        // Everything else stays where it was. The switch is one intersection in one place, so it
+        // cannot reach a category whose ceiling never named the channel.
         NotificationCategories.All
-            .Where(category => category is not NotificationCategory.GroupAnnouncement)
-            .ShouldAllBe(category => NotificationMatrix.Usable(
-                category,
-                EverythingInstalled,
-                new AnnouncementSettings { PaidChannelsEnabled = true }.PaidChannelsAllowed)
-                    == (NotificationChannelKind.InApp | NotificationChannelKind.Email));
+            .Where(category => category
+                is not (NotificationCategory.GroupAnnouncement or NotificationCategory.TripCallout))
+            .ShouldAllBe(category => NotificationMatrix.Usable(category, EverythingInstalled, allowed)
+                == (NotificationChannelKind.InApp | NotificationChannelKind.Email));
+
+        // And the two it does reach, in the same test, so a switch that had stopped widening
+        // anything at all could not pass this. Widening is not switching on: what these two gain
+        // is permission, and every account still starts with the paid channel off.
+        foreach (var category in new[]
+                 { NotificationCategory.GroupAnnouncement, NotificationCategory.TripCallout })
+        {
+            NotificationMatrix.Usable(category, EverythingInstalled, allowed)
+                .ShouldBe(NotificationChannelKind.InApp
+                    | NotificationChannelKind.Email
+                    | NotificationChannelKind.Sms);
+            NotificationMatrix.Resolve(
+                category, NotificationChannelKind.Sms, stored: null, EverythingInstalled, allowed)
+                .ShouldBe(NotificationChannelChoice.Off);
+        }
+    }
 
     [Fact]
     public void A_caller_that_does_not_ask_the_installation_spends_nothing() =>

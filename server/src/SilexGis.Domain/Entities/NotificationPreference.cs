@@ -104,11 +104,15 @@ public enum NotificationChannelKind : short
 
     /// <summary>
     /// Text message. The one channel here that costs the operator money per message, which is why
-    /// it is named in <see cref="NotificationChannelKinds.Paid"/> and why only the one category
-    /// somebody sends on purpose to a roster has it in its ceiling. Being in a ceiling is not the
-    /// same as being reachable: a paid channel is additionally masked out unless the installation
-    /// has said it will pay for that kind of message, so an installation that has not said so
-    /// resolves this to nothing however many accounts have a number.
+    /// it is named in <see cref="NotificationChannelKinds.Paid"/> and why two categories have it
+    /// in their ceiling rather than all of them: the announcement somebody composes and aims at a
+    /// roster, and the overdue-party alarm, which is the one message whose reader may be standing
+    /// somewhere with no data. Being in a ceiling is not the same as being reachable: a paid
+    /// channel is additionally masked out unless the installation has said it will pay for that
+    /// kind of message, so an installation that has not said so resolves this to nothing however
+    /// many accounts have a number. And it is not the same as being on, either — a paid channel
+    /// is off for every account until that account chooses it, including for a category nobody
+    /// may switch off.
     /// </summary>
     Sms = 4,
 }
@@ -207,13 +211,18 @@ public static class NotificationCategories
         NotificationCategory.JobCompleted => InboxAndMail,
         NotificationCategory.SecurityAlerts => InboxAndMail,
         NotificationCategory.TripPlanning => InboxAndMail,
-        // An overdue party. Inbox and mail here, deliberately: whether it may also reach a
-        // phone was reserved as a decision of its own rather than inherited from the rest of
-        // trip planning, and it arrives on its own line when it is taken.
-        NotificationCategory.TripCallout => InboxAndMail,
+        // An overdue party, and the one message with a safety argument for reaching a phone:
+        // whoever is going to drive to a cave entrance is standing outside with no data, where a
+        // text arrives and a mailbox does not. Naming the channel here makes it permissible and
+        // nothing more — it costs money, so it stays off until the account whose number it is
+        // chooses it, and the installation has to have agreed to pay for texts at all. An alarm
+        // that started texting everybody who ever set up a sign-in code would be reading this
+        // line as consent, and a number confirmed to sign in with was never offered as a contact
+        // address.
+        NotificationCategory.TripCallout => InboxAndMail | NotificationChannelKind.Sms,
         NotificationCategory.CommentReply => InboxAndMail,
         NotificationCategory.CommentOnMine => InboxAndMail,
-        // The only category whose ceiling names a channel that charges for every message. An
+        // The other category whose ceiling names a channel that charges for every message. An
         // announcement is the one thing here somebody composes and aims at a roster, and a club
         // whose meeting place has changed at short notice has a real argument for a text. Naming
         // it here only says the category may use it: whether this installation will pay for it is
@@ -264,7 +273,10 @@ public static class NotificationCategories
     /// <summary>
     /// Whether the user may switch a category off. Some may not: a security alert warns the owner
     /// that their own account is being taken over, and whoever is doing it may hold a live
-    /// session — so a category with a safety argument behind it stays on wherever it can reach.
+    /// session — so a category with a safety argument behind it stays on wherever it can reach
+    /// without somebody being billed per message for it. A channel that charges is exempt from
+    /// that override and starts off, because forcing one on would be reading a number confirmed
+    /// for sign-in as an agreement to be texted.
     /// </summary>
     /// <remarks>
     /// Two categories may not be, and each is here for its own reason rather than by family
