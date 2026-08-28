@@ -1140,7 +1140,8 @@
       "Expedition": "Expediție",
       "ExpeditionTrip": "Tură din expediție",
       "ExpeditionRosterEntry": "Participant la expediție",
-      "TripInvitation": "Invitație"
+      "TripInvitation": "Invitație",
+      "Event": "Eveniment"
     },
     "field": {
       "name": "Nume",
@@ -2803,7 +2804,45 @@
     "notFoundDetail": "Fie nu există, fie nu îl puteți citi. Această pagină nu poate deosebi cele două cazuri și nici nu încearcă.",
     "callOff": "Anulează",
     "callOffConfirm": "Anulați acest eveniment?",
-    "callOffSuccess": "Evenimentul a fost anulat."
+    "callOffSuccess": "Evenimentul a fost anulat.",
+    "maxParticipants": "Locuri",
+    "maxParticipantsHelp": "Câți oameni încap la eveniment. Lasă gol pentru fără limită; cine depășește limita așteaptă în ordinea în care a răspuns.",
+    "tabResponses": "Cine vine",
+    "kindHasResponses": "Unii au spus deja dacă vin, iar un eveniment de acel fel nu primește răspunsuri. Schimbă tipul înapoi sau șterge întâi răspunsurile.",
+    "tabHistory": "Istoric",
+    "responses": {
+      "title": "Cine vine",
+      "invite": "Invită",
+      "invitePlaceholder": "Cineva cunoscut clubului",
+      "invited": "Adăugat pe listă.",
+      "pickFromDirectory": "Alege pe cineva dintre sugestii. O persoană este invitată prin fișa ei din evidențele clubului, nu printr-un nume scris aici — un nume pe care nimeni nu îl poate identifica ar fi un nume pe care nimeni nu îl poate anunța.",
+      "empty": "Nimeni nu a fost invitat la acest eveniment încă.",
+      "emptyWithheld": "Toți cei de pe lista acestui eveniment sunt persoane despre care nu ai dreptul să fii informat.",
+      "unavailable": "Lista acestui eveniment nu a putut fi citită.",
+      "limit": "{{attending}} din {{max}} locuri ocupate, {{waiting}} în așteptare.",
+      "noLimit": "{{attending}} vin. Acest eveniment nu are limită de participanți.",
+      "place": "#{{place}}",
+      "attending": "Vine",
+      "waiting": "În așteptare",
+      "selected": "Ales",
+      "select": "Alege această persoană pentru eveniment",
+      "deselect": "Pune persoana înapoi în ordine",
+      "notePlaceholder": "O vorbă despre asta",
+      "removeConfirm": "Ștergi complet această persoană de pe listă, cu răspuns cu tot?",
+      "concurrentAnswer": "Altcineva a scris despre această persoană în același moment. Lista a fost citită din nou — repetă modificarea dacă mai este dorită.",
+      "caverUnknown": "Evidențele clubului nu conțin pe nimeni cu acest nume.",
+      "selectNotAttending": "Doar cineva care a spus că vine poate fi ales pentru eveniment.",
+      "noteInvalid": "Această notă este prea lungă pentru a fi păstrată.",
+      "kindTakesNoResponses": "Acest fel de eveniment este o dată în calendar, nu o întâlnire: nu are cine să vină la el și nu are ce să răspundă cineva.",
+      "withheld": "{{count}} pe listă, care nu îți sunt arătați",
+      "withheldDetail": "Pe lista acestui eveniment se află cineva despre care nu ai dreptul să fii informat. Este numărat aici pentru ca cifrele de lângă listă să fie corecte, și nu este numit nicăieri.",
+      "responseValues": {
+        "pending": "Fără răspuns",
+        "yes": "Vine",
+        "no": "Nu vine",
+        "maybe": "Poate"
+      }
+    }
   },
   "checklists": {
     "title": "Liste de verificare",

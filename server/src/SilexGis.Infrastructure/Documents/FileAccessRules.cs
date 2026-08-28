@@ -312,6 +312,13 @@ public static class FileAccessRules
             case AttachedEntityType.Expedition:
                 return await CanEntityAsync(db, access, ctx, db.Expeditions, entityId, AccessAction.Read, ct);
 
+            // Reading an event's own trail takes the right to read the event and nothing besides,
+            // the same question its own routes ask. Without this the answers about an event are
+            // recorded against it and reachable through no timeline at all — a trail written and
+            // never readable, which looks exactly like a page with nothing on it.
+            case AttachedEntityType.Event:
+                return await CanEntityAsync(db, access, ctx, db.Events, entityId, AccessAction.Read, ct);
+
             case AttachedEntityType.StoredFile:
                 // A file (as a tag target) inherits the access of the objects it is
                 // attached to — the same rule the file endpoints use.

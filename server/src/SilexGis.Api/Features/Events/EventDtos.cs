@@ -51,6 +51,13 @@ public sealed record EventDto
     /// <summary>Where it is, as somebody would write it for a person to read. Never a position.</summary>
     public string? Place { get; init; }
 
+    /// <summary>
+    /// How many people it has room for, or absent when it states no limit. Never a reason an
+    /// answer is refused: it is what the answers are counted against to say who is in and who is
+    /// waiting, and both facts are worked out from the answers rather than stored.
+    /// </summary>
+    public int? MaxParticipants { get; init; }
+
     public required Guid OwnerUserId { get; init; }
 
     public Guid? CavingGroupId { get; init; }
@@ -131,6 +138,13 @@ public sealed record EventWriteRequest
 
     public string? Place { get; init; }
 
+    /// <summary>
+    /// How many people it has room for, or absent for no limit. Sent as written even on a kind
+    /// that accepts no answers: the number is then simply nothing to count against, and refusing
+    /// the save would throw away everything else the author typed.
+    /// </summary>
+    public int? MaxParticipants { get; init; }
+
     public Guid? CavingGroupId { get; init; }
 
     public Visibility? Visibility { get; init; }
@@ -151,6 +165,9 @@ public sealed class EventWriteRequestValidator : AbstractValidator<EventWriteReq
             .WithMessage("The end date must not precede the start date.");
 
         RuleFor(x => x.Visibility).IsInEnum().When(x => x.Visibility is not null);
+
+        // Room for nobody is not a limit anybody means to state; absent is how "no limit" is said.
+        RuleFor(x => x.MaxParticipants).GreaterThan(0).When(x => x.MaxParticipants is not null);
     }
 }
 

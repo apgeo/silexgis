@@ -95,3 +95,113 @@ test('a row clicks through to the record it came from', async ({ page }) => {
   await rows.first().click();
   await page.waitForURL(/\/(trip-logs|expeditions|events)\/[0-9a-f-]{36}$/, { timeout: 60_000 });
 });
+
+/**
+ * An event is answered the way a trip is, and the answering is reached from the event's own page.
+ *
+ * This is the flow the whole mechanism exists for and the only place a person meets it: a table
+ * two subjects share is worth nothing until somebody can open one of them and say they are coming.
+ * It is driven end to end — the event is written, its page is opened, somebody is asked, and what
+ * the server concluded about the limit is read back off the page — because every step between the
+ * form and the list is a place the wrong subject could be named without anything failing.
+ */
+test('an event says who is coming, and a deadline is not asked', async ({ page }) => {
+  const title = `E2E Event ${Date.now()}`;
+  const deadlineTitle = `E2E Deadline ${Date.now()}`;
+  await login(page);
+
+  // Typed rather than clicked out of the calendar panel: which cell is where is a fact about
+  // today's date rather than about the event, and Enter is also what moves the picker along.
+  const fillDay = async (value: string) => {
+    // Named by the form's own field rather than by the placeholder: the list behind the dialog
+    // filters by date too, so a placeholder matches two controls on this page.
+    const from = page.getByTestId('event-form').getByPlaceholder('Start date');
+    await from.click();
+    await from.fill(value);
+    await page.keyboard.press('Enter');
+    await expect(from).toHaveValue(value);
+  };
+  const today = new Date();
+  const day = `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, '0')}-${`${today.getDate()}`.padStart(2, '0')}`;
+
+  await gotoRoute(page, '/events');
+  await page.getByTestId('event-create').click();
+  await page.getByTestId('event-title').fill(title);
+  // The kind the form opens on is one people come to, so nothing is chosen here.
+  await fillDay(day);
+  // How many places it has. Left empty an event turns nobody away; a number is what makes the
+  // people past it a waiting list, and what the line above the list counts up to.
+  await page.getByTestId('event-max-participants').fill('2');
+  await page.getByRole('button', { name: 'OK' }).click();
+
+  await expect(page.getByTestId('event-title')).toHaveText(title, { timeout: 15_000 });
+  await page.getByRole('tab', { name: 'Who is coming', exact: true }).click();
+  await expect(page.getByTestId('event-invitations-limit')).toHaveText(
+    '0 of 2 places taken, 0 waiting.',
+  );
+
+  // Chosen with the keyboard rather than clicked: the suggestion list commits on mousedown, and a
+  // click that straddles a re-render loses the choice with the list left open.
+  const picker = page.getByTestId('event-invite-name');
+  await picker.click();
+  await picker.fill('Ana Demo');
+  // The suggestions are fetched, so they are not on screen the moment the text is, and waiting for
+  // the option itself is the only thing that says they have arrived. Pressing before then costs
+  // more than a lost keystroke: with no option under it the highlight moves over nothing, and the
+  // text box reads Enter as "ask" — so the form asks with nobody chosen, is correctly refused for
+  // naming nobody, and the failure lands much later on an empty list.
+  //
+  // The value read back afterwards cannot stand in for this. The text is whatever was typed
+  // whether or not anybody was chosen, so it says the same thing in both cases; what distinguishes
+  // them is the option going active, which is asserted before the key that depends on it.
+  const suggestion = page.locator('.ant-select-item-option').filter({ hasText: 'Ana Demo' }).first();
+  await expect(suggestion).toBeVisible({ timeout: 15_000 });
+  await page.keyboard.press('ArrowDown');
+  await expect(suggestion).toHaveClass(/ant-select-item-option-active/);
+  await page.keyboard.press('Enter');
+  await expect(picker).toHaveValue('Ana Demo');
+  await page.getByTestId('event-invite').click();
+
+  const list = page.getByTestId('event-invitations');
+  await expect(list.getByText('Ana Demo')).toBeVisible({ timeout: 15_000 });
+  // Nothing said yet is not a "no", and the row says so in words rather than in the stored token
+  // — twice over, on the tag beside the name and in the control that would change it, which is
+  // why this takes the first of the two rather than asserting there is only one.
+  await expect(list.getByText('Not answered').first()).toBeVisible();
+  // An event keeps no list of who turned up, so nothing here turns the answers into one.
+  await expect(page.getByTestId('event-invitations-promote')).toHaveCount(0);
+
+  // Nobody comes to a deadline, so a deadline is not asked who is coming — and the tab is not
+  // offered rather than offered and refused.
+  await gotoRoute(page, '/events');
+  await page.getByTestId('event-create').click();
+  await page.getByTestId('event-title').fill(deadlineTitle);
+  const kind = page.getByTestId('event-kind');
+  await kind.click();
+  // Chosen with the keyboard for the same reason the person above is, and the cost of losing this
+  // one is worse: the option list commits on mousedown, so a click straddling a re-render selects
+  // nothing and the form keeps the kind it opened on — an ordinary event under a title saying
+  // "deadline". Nothing fails there. What fails is the assertion below, which then reads as this
+  // page failing to hide a tab rather than as the kind never having been chosen.
+  const deadlineOption = page.locator('.ant-select-item-option').filter({ hasText: 'Deadline' });
+  await expect(deadlineOption).toBeVisible({ timeout: 15_000 });
+  // Walked to rather than counted to. Which row a kind sits on is a fact about the vocabulary, and
+  // a fixed number of presses would silently choose its neighbour the day a kind is added.
+  for (let step = 0; step < 12; step++) {
+    const active = await deadlineOption.evaluate((el) =>
+      el.classList.contains('ant-select-item-option-active'),
+    );
+    if (active) break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(deadlineOption).toHaveClass(/ant-select-item-option-active/);
+  await page.keyboard.press('Enter');
+  // Read back, so a lost choice fails here at its cause rather than downstream on the tab.
+  await expect(kind).toContainText('Deadline');
+  await fillDay(day);
+  await page.getByRole('button', { name: 'OK' }).click();
+
+  await expect(page.getByTestId('event-title')).toHaveText(deadlineTitle, { timeout: 15_000 });
+  await expect(page.getByRole('tab', { name: 'Who is coming', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'History', exact: true })).toBeVisible();
+});

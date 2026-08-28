@@ -23,6 +23,8 @@ vi.mock('../../api/hooks.ts', () => ({
 vi.mock('./EventFormModal.tsx', () => ({ default: () => null }));
 vi.mock('./EventStateControl.tsx', () => ({ default: () => <div>where it has got to</div> }));
 vi.mock('../../components/permissions/PermissionsModal.tsx', () => ({ default: () => null }));
+vi.mock('./EventResponsesTab.tsx', () => ({ default: () => <div>who is coming</div> }));
+vi.mock('../../components/history/HistoryPanel.tsx', () => ({ default: () => <div>its trail</div> }));
 
 function anEvent(overrides: Partial<EventInfo> = {}): EventInfo {
   return {
@@ -68,6 +70,30 @@ describe('the event page', () => {
     // 19:00 is 19:00 to every reader: the times are printed from their own parts and neither is
     // handed to a date constructor that would read it against a zone.
     expect(screen.getByText('19:00 – 22:30')).toBeTruthy();
+  });
+
+  /**
+   * Nobody comes to a deadline, so nobody is asked about one. The server holds the same rule and
+   * refuses the whole group for such a kind under its own code; this only decides whether a reader
+   * is offered the tab, and offering one that every write behind it would refuse is worse than
+   * offering none.
+   */
+  it('offers who is coming for a kind people come to, and not for one nobody does', () => {
+    renderPage();
+    expect(screen.getByRole('tab', { name: 'Who is coming' })).toBeTruthy();
+    expect(screen.getByText('who is coming')).toBeTruthy();
+
+    cleanup();
+    eventSpy.mockReturnValue({
+      data: anEvent({ kind: 'deadline' }),
+      isPending: false,
+      isError: false,
+    });
+    renderPage();
+    expect(screen.queryByRole('tab', { name: 'Who is coming' })).toBeNull();
+    // The event still has a trail of its own, and it is what the strip falls back to — a tab set
+    // whose first pane is missing would otherwise render with nothing under it.
+    expect(screen.getByText('its trail')).toBeTruthy();
   });
 
   /**

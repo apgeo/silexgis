@@ -101,7 +101,14 @@ public sealed class TripInvitationConfiguration : IEntityTypeConfiguration<TripI
 {
     public void Configure(EntityTypeBuilder<TripInvitation> builder)
     {
-        builder.ToTable("trip_invitations");
+        // Exactly one subject per row, decided by the database. The alternative — one column
+        // naming a kind and one holding an id — would give up both foreign keys and both
+        // cascades, so deleting an event would leave its answers behind pointing at nothing and
+        // nothing in the schema could say so.
+        builder.ToTable("trip_invitations", t => t.HasCheckConstraint(
+            "ck_trip_invitations_one_subject",
+            "(trip_log_id IS NOT NULL AND event_id IS NULL) OR "
+            + "(trip_log_id IS NULL AND event_id IS NOT NULL)"));
         // The remark beside an answer, bounded to the same length a roster remark gets so the
         // two surfaces never disagree about what fits.
         builder.Property(x => x.Note).HasMaxLength(TripInvitationRules.MaxNoteLength);
@@ -109,6 +116,9 @@ public sealed class TripInvitationConfiguration : IEntityTypeConfiguration<TripI
         // behind it rather than a null standing in for two different facts.
         builder.Property(x => x.Response).HasConversion<short>();
         builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        // The second subject, with its own foreign key and the same cascade: an event that is
+        // deleted takes the answers about it with it, exactly as a trip does.
+        builder.HasOne<Event>().WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
         // Cascade, and deliberately not the Restrict the roster above uses. Being named on a
         // trip is a fact about what happened and must survive the roster being tidied, so that
         // row refuses to go; having once been asked whether you were coming is not, and
@@ -121,10 +131,15 @@ public sealed class TripInvitationConfiguration : IEntityTypeConfiguration<TripI
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.RespondedByUserId)
             .OnDelete(DeleteBehavior.SetNull);
         builder.HasIndex(x => x.TripLogId);
+        builder.HasIndex(x => x.EventId);
         builder.HasIndex(x => x.CaverId);
-        // One person, one trip, one standing answer — so changing your mind rewrites the answer
-        // you already gave instead of leaving you holding two that disagree.
-        builder.HasIndex(x => new { x.TripLogId, x.CaverId }).IsUnique();
+        // One person, one subject, one standing answer — so changing your mind rewrites the
+        // answer you already gave instead of leaving you holding two that disagree. One index per
+        // subject rather than one over both, because a unique index treats every row whose
+        // subject is null as distinct from every other, so a single index over the pair would
+        // hold nobody to anything.
+        builder.HasIndex(x => new { x.TripLogId, x.CaverId }).IsUnique().HasFilter("trip_log_id IS NOT NULL");
+        builder.HasIndex(x => new { x.EventId, x.CaverId }).IsUnique().HasFilter("event_id IS NOT NULL");
     }
 }
 

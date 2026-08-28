@@ -89,11 +89,15 @@ public static class TripAudience
             where caver.UserId == userId
             select participant.TripLogId;
 
+        // Answers are held about club events as well as about trips, and only the trip ones are
+        // trips somebody is on — a row whose subject is an event names no trip at all.
         var asked =
             from invitation in db.TripInvitations.AsNoTracking()
             join caver in db.Cavers.AsNoTracking() on invitation.CaverId equals caver.Id
-            where caver.UserId == userId && invitation.Response != TripInvitationResponse.No
-            select invitation.TripLogId;
+            where caver.UserId == userId
+                && invitation.Response != TripInvitationResponse.No
+                && invitation.TripLogId != null
+            select invitation.TripLogId!.Value;
 
         // Union rather than Concat: somebody asked and then written onto the roster holds a row
         // in both halves, and a person carrying two jobs on one trip holds two roster rows.
@@ -123,8 +127,10 @@ public static class TripAudience
         var asked = await (
             from invitation in db.TripInvitations.AsNoTracking()
             join caver in db.Cavers.AsNoTracking() on invitation.CaverId equals caver.Id
-            where tripIds.Contains(invitation.TripLogId) && caver.UserId == userId
-            select invitation.TripLogId)
+            where invitation.TripLogId != null
+                && tripIds.Contains(invitation.TripLogId!.Value)
+                && caver.UserId == userId
+            select invitation.TripLogId!.Value)
             .ToListAsync(ct);
 
         return [.. named, .. asked];

@@ -171,6 +171,30 @@ public class Event : IProtectedEntity, ITimestamped, IAuditable
     /// </summary>
     public DateTimeOffset? PublishedAt { get; set; }
 
+    /// <summary>
+    /// How many people the event has room for, or null when it states no limit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A limit here never refuses an answer. Somebody who says they are coming to a full evening
+    /// is recorded as having said so and waits, because who else wanted to come and in what order
+    /// they said so is exactly the record a limit is kept for — and a refusal would destroy it.
+    /// </para>
+    /// <para>
+    /// Who is in and who is waiting is worked out from the answers whenever it is asked, by taking
+    /// them in the order they were given and counting up to this number. It is not written down
+    /// anywhere: a stored place in a queue starts disagreeing with the answers the moment somebody
+    /// changes their mind, and there would then be two records of the same thing with no way to
+    /// tell which was stale.
+    /// </para>
+    /// <para>
+    /// A kind that accepts no answers has nothing to count, so the number is meaningless on one
+    /// rather than forbidden: it is a room size somebody may have typed before the kind was
+    /// changed, and refusing the save would lose the rest of what they wrote.
+    /// </para>
+    /// </remarks>
+    public int? MaxParticipants { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

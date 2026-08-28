@@ -10,11 +10,12 @@ import {
   Popconfirm,
   Result,
   Spin,
+  Tabs,
   Tag,
   Typography,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   parseAccessActions,
   useCan,
@@ -23,11 +24,14 @@ import {
   useEvent,
   type EventKind,
 } from '../../api/hooks.ts';
+import HistoryPanel from '../../components/history/HistoryPanel.tsx';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
 import EventFormModal from './EventFormModal.tsx';
+import EventResponsesTab from './EventResponsesTab.tsx';
 import EventStateControl from './EventStateControl.tsx';
+import { eventKindTakesResponses } from './eventKinds.ts';
 
 /**
  * One event: what it is, when it is, where it is in words, who it is for, and where it has got to.
@@ -36,12 +40,17 @@ import EventStateControl from './EventStateControl.tsx';
  * times carrying no zone, so a 19:00 club meeting reads as 19:00 to every reader wherever they
  * are — the same reading a trip's entry and exit times already carry, and the reason nothing here
  * hands either to a date constructor.
+ *
+ * What the event is stays above the tab strip rather than becoming a tab of its own: it is what a
+ * reader came for, and it is what everything below is about. Which tabs there are depends on the
+ * kind — nobody comes to a deadline, so a deadline is not asked who is coming.
  */
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { message } = App.useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: event, isPending, isError } = useEvent(id);
   const { data: effective } = useEffectiveAccess('event', id);
   const domainFallback = useCan('events', 'write');
@@ -92,6 +101,30 @@ export default function EventDetailPage() {
       message.error(t('common.saveFailed'));
     }
   };
+
+  // Only the kinds people are asked about get a list of who is coming. The server holds the same
+  // rule and is the one that enforces it, refusing the whole group for a kind that takes no
+  // answers; this decides only what a reader is offered.
+  const tabs = [
+    ...(eventKindTakesResponses(event.kind)
+      ? [
+          {
+            key: 'responses',
+            label: t('events.tabResponses'),
+            children: <EventResponsesTab event={event} canEdit={canEdit} />,
+          },
+        ]
+      : []),
+    {
+      key: 'history',
+      // Being asked, and answering, are facts about the event and surface on its own trail rather
+      // than in a history of their own that nobody would think to open.
+      label: t('events.tabHistory'),
+      children: <HistoryPanel entityType="event" entityId={event.id} variant="bare" />,
+    },
+  ];
+  const requested = searchParams.get('tab');
+  const activeTab = tabs.some((tab) => tab.key === requested) ? requested! : tabs[0].key;
 
   const times = [event.startTime, event.endTime]
     .filter((value): value is string => !!value)
@@ -170,6 +203,19 @@ export default function EventDetailPage() {
       </Card>
 
       <EventStateControl eventId={event.id} state={event.state} canEdit={canEdit} />
+
+      <Tabs
+        // The tab is in the address, so a section of an event is a place somebody can link to and
+        // one that survives a reload. Switching replaces rather than pushes, matching the trip's
+        // strip: the back button leaves the event instead of walking back through the tabs the
+        // reader opened on the way. An address naming a tab this event has not got falls back to
+        // its first one rather than leaving the strip with nothing under it.
+        activeKey={activeTab}
+        onChange={(key) =>
+          setSearchParams(key === tabs[0].key ? {} : { tab: key }, { replace: true })
+        }
+        items={tabs}
+      />
 
       <EventFormModal open={editOpen} event={event} onClose={() => setEditOpen(false)} />
       <PermissionsModal

@@ -256,6 +256,7 @@ export const queryKeys = {
   events: (params: EventListParams) => ['events', 'list', params] as const,
   event: (id: string) => ['events', 'detail', id] as const,
   eventDefaults: ['events', 'defaults'] as const,
+  eventInvitations: (id: string) => ['events', 'invitations', id] as const,
 };
 
 async function unwrap<T>(
@@ -2591,6 +2592,130 @@ export function usePromoteTripInvitations() {
       // between the confirmation and the re-read would be refused against the version it moved.
       return readBack();
     },
+  });
+}
+
+export type EventInvitationInfo = components['schemas']['EventInvitationDto'];
+export type EventInvitationList = components['schemas']['EventInvitationListDto'];
+
+/**
+ * Everybody on a club event's list and what each has said, in the order the server put them in.
+ *
+ * The same rows a trip's answers are, read through the shape that names an event: there is one
+ * answering mechanism and one table behind both. As on a trip, the place each person holds, in or
+ * waiting, and whether this caller may write an answer for them are the server's conclusions and
+ * never re-derived here.
+ *
+ * A kind of event that nobody comes to — a deadline — takes no answers at all and refuses this
+ * whole group under its own code, so nothing asks for a list it has no way to hold.
+ */
+export function useEventInvitations(eventId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.eventInvitations(eventId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/events/{eventId}/invitations', {
+          params: { path: { eventId: eventId! } },
+        }),
+      ),
+    enabled: !!eventId && enabled,
+  });
+}
+
+function useInvalidateEventInvitations() {
+  const queryClient = useQueryClient();
+  const invalidateHistory = useInvalidateHistory();
+  return (eventId: string) => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.eventInvitations(eventId) });
+    // A row here is an audit child of the event, so writing one moves the event's own timeline.
+    invalidateHistory();
+  };
+}
+
+/**
+ * Puts somebody on an event's list. The person is named by their entry in the club's directory
+ * and never by a bare name, exactly as on a trip: a list of people to be told about something
+ * that could hold text nobody can resolve would be a list nobody can act on.
+ */
+export function useInviteToEvent() {
+  const invalidate = useInvalidateEventInvitations();
+  return useMutation({
+    mutationFn: ({ eventId, caverId }: { eventId: string; caverId: string }) =>
+      unwrap(
+        api.POST('/api/v1/events/{eventId}/invitations', {
+          params: { path: { eventId } },
+          body: { caverId },
+        }),
+      ),
+    onSuccess: (_data, { eventId }) => invalidate(eventId),
+  });
+}
+
+/**
+ * Records what one person says about coming to an event. The note travels with the answer and is
+ * replaced by it, so a cleared note is sent as an explicit absence rather than omitted.
+ */
+export function useAnswerEventInvitation() {
+  const invalidate = useInvalidateEventInvitations();
+  return useMutation({
+    mutationFn: ({
+      eventId,
+      caverId,
+      response,
+      note,
+    }: {
+      eventId: string;
+      caverId: string;
+      response: TripInvitationAnswer;
+      note: string | null;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/events/{eventId}/invitations/{caverId}/response', {
+          params: { path: { eventId, caverId } },
+          body: { response, note },
+        }),
+      ),
+    onSuccess: (_data, { eventId }) => invalidate(eventId),
+  });
+}
+
+/** Picks one person out for the event, or puts them back in the order. The order is unchanged. */
+export function useSelectForEvent() {
+  const invalidate = useInvalidateEventInvitations();
+  return useMutation({
+    mutationFn: ({
+      eventId,
+      caverId,
+      selected,
+    }: {
+      eventId: string;
+      caverId: string;
+      selected: boolean;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/events/{eventId}/invitations/{caverId}/selection', {
+          params: { path: { eventId, caverId } },
+          body: { selected },
+        }),
+      ),
+    onSuccess: (_data, { eventId }) => invalidate(eventId),
+  });
+}
+
+/**
+ * Takes somebody off an event's list entirely, answer and all. For a person put on it by mistake —
+ * recording a "no" in their name instead would be writing down words they never said.
+ */
+export function useRemoveEventInvitation() {
+  const invalidate = useInvalidateEventInvitations();
+  return useMutation({
+    mutationFn: ({ eventId, caverId }: { eventId: string; caverId: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/events/{eventId}/invitations/{caverId}', {
+          params: { path: { eventId, caverId } },
+        }),
+      ),
+    onSuccess: (_data, { eventId }) => invalidate(eventId),
   });
 }
 

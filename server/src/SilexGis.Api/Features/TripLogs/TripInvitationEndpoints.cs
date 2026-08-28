@@ -788,7 +788,9 @@ public static class TripInvitationEndpoints
         return new TripInvitationDto
         {
             Id = invitation.Id,
-            TripLogId = invitation.TripLogId,
+            // Every row reaching here was selected by the trip it answers about, so its subject
+            // is that trip; a row whose subject is a club event never comes through this list.
+            TripLogId = invitation.TripLogId!.Value,
             CaverId = invitation.CaverId,
             CaverName = labels.GetValueOrDefault(invitation.CaverId, string.Empty),
             Response = invitation.Response,

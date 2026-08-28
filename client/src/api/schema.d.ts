@@ -10459,6 +10459,202 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/events/{eventId}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everybody on this event's list with what they have said, in the order they answered in. Takes the right to read the event and nothing besides. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    eventId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventInvitationListDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Puts somebody on this event's list (Write permission on the event). Asking again somebody already on it changes nothing about what they have said. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    eventId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EventInvitationCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventInvitationDto"];
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventInvitationDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{eventId}/invitations/{caverId}/response": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Records what one person says about coming. Anyone who may read the event answers for themselves; answering for somebody else takes the right to write the event. Somebody who was never asked may answer, which puts them on the list. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    eventId: string;
+                    caverId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EventInvitationResponseRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventInvitationDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{eventId}/invitations/{caverId}/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Picks one person out for the event, or puts them back in the order (Write permission on the event). A picked person is in wherever they stand in the order people answered in, and the order itself is unchanged. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    eventId: string;
+                    caverId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EventInvitationSelectionRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventInvitationDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{eventId}/invitations/{caverId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Takes somebody off this event's list entirely, answer and all (Write permission on the event). For a person put on it by mistake — recording a "no" in their name instead would be writing down words they never said. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    eventId: string;
+                    caverId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expeditions/{id}/report": {
         parameters: {
             query?: never;
@@ -14785,6 +14981,8 @@ export interface components {
             /** Format: time */
             endTime?: null | string;
             place?: null | string;
+            /** Format: int32 */
+            maxParticipants?: null | number;
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */
@@ -14797,6 +14995,57 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        EventInvitationCreateRequest: {
+            /** Format: uuid */
+            caverId: string;
+        };
+        EventInvitationDto: {
+            /** Format: int64 */
+            id: number;
+            /** Format: uuid */
+            eventId: string;
+            /** Format: uuid */
+            caverId: string;
+            caverName: string;
+            response: components["schemas"]["TripInvitationResponse"];
+            /** Format: uuid */
+            invitedByUserId?: null | string;
+            /** Format: date-time */
+            invitedAt?: null | string;
+            /** Format: date-time */
+            respondedAt?: null | string;
+            /** Format: uuid */
+            respondedByUserId?: null | string;
+            /** Format: date-time */
+            selectedAt?: null | string;
+            note?: null | string;
+            mayAnswer: boolean;
+            /** Format: int32 */
+            place?: null | number;
+            attending: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        EventInvitationListDto: {
+            /** Format: uuid */
+            eventId: string;
+            /** Format: int32 */
+            maxParticipants?: null | number;
+            /** Format: int32 */
+            attendingCount: number;
+            /** Format: int32 */
+            waitingCount: number;
+            invitations: components["schemas"]["EventInvitationDto"][];
+        };
+        EventInvitationResponseRequest: {
+            response?: null | components["schemas"]["TripInvitationResponse"];
+            note?: null | string;
+        };
+        EventInvitationSelectionRequest: {
+            selected?: null | boolean;
         };
         /** @enum {unknown} */
         EventKind: "clubMeeting" | "training" | "maintenanceDay" | "gearCheck" | "conference" | "deadline" | null;
@@ -14816,6 +15065,8 @@ export interface components {
             /** Format: time */
             endTime?: null | string;
             place?: null | string;
+            /** Format: int32 */
+            maxParticipants?: null | number;
             /** Format: uuid */
             cavingGroupId?: null | string;
             visibility?: null | components["schemas"]["Visibility"];

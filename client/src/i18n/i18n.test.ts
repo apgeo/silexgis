@@ -489,6 +489,49 @@ describe('i18n locales', () => {
     ).toEqual([]);
   });
 
+  /**
+   * One panel draws the answers about a trip and the answers about a club event, because there is
+   * one answering mechanism behind both. It builds every label from the prefix it was handed, so
+   * the check over literal `t('…')` calls above cannot see any of them: a group missing a word
+   * would render its own lookup key on a shipped page, in both languages, with nothing failing.
+   */
+  it('the two subjects that share the answering panel name the same things', () => {
+    const shared = [
+      'title',
+      'invite',
+      'invitePlaceholder',
+      'empty',
+      'emptyWithheld',
+      'limit',
+      'noLimit',
+      'place',
+      'attending',
+      'waiting',
+      'selected',
+      'select',
+      'deselect',
+      'notePlaceholder',
+      'removeConfirm',
+      'withheld',
+      'withheldDetail',
+      'responseValues.pending',
+      'responseValues.yes',
+      'responseValues.no',
+      'responseValues.maybe',
+    ];
+    const missing = ['trips.invitations', 'events.responses'].flatMap((group) =>
+      shared.flatMap((leaf) =>
+        [
+          ['en', en],
+          ['ro', ro],
+        ]
+          .filter(([, locale]) => typeof lookup(locale as object, `${group}.${leaf}`) !== 'string')
+          .map(([language]) => `${language as string}: ${group}.${leaf}`),
+      ),
+    );
+    expect(missing).toEqual([]);
+  });
+
   it('names every numbered division a content hit can carry, and no more', () => {
     const names = Object.keys(numberedDivisions);
     const enDivisions: Record<string, string> = en.search.divisions;

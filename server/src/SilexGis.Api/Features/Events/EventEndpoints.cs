@@ -29,6 +29,13 @@ public static class EventEndpoints
     // A kind the list was asked to narrow by that is not one of the six.
     private const string KindInvalidCode = "event.kind_invalid";
 
+    // An edit that would move an event to a kind nobody is asked to while answers about it are
+    // already on file. Refused rather than allowed, because nothing is destroyed and that is
+    // precisely the danger: every route in the responses group refuses a kind that takes no
+    // answers, and the surface stops drawing the tab, so the answers would survive with no door
+    // onto them and no count of them anywhere — invisible rather than gone, which nobody notices.
+    private const string KindHasResponsesCode = "event.kind_has_responses";
+
     public static RouteGroupBuilder MapEventEndpoints(this RouteGroupBuilder api)
     {
         var events = api.MapGroup("/events").WithTags("Events");
@@ -253,6 +260,23 @@ public static class EventEndpoints
             return stale;
         }
 
+        // Asked only when the edit actually crosses from a kind people answer to one they do not:
+        // an edit that leaves the kind alone, or moves between two answerable kinds, costs no
+        // query. The count is read rather than a bare existence check so the refusal can say how
+        // many answers are in the way, which is the difference between a message somebody can act
+        // on and one they have to go looking behind.
+        if (EventKinds.AcceptsResponses(row.Kind) && !EventKinds.AcceptsResponses(request.Kind))
+        {
+            var answers = await db.TripInvitations.CountAsync(x => x.EventId == row.Id, ct);
+            if (answers > 0)
+            {
+                return ApiProblems.Conflict(
+                    KindHasResponsesCode,
+                    $"{answers} answer(s) are on file about this event, and an event of that kind "
+                    + "is not answered. Remove them first, or leave the kind as it is.");
+            }
+        }
+
         Apply(row, request);
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(Map(row));
@@ -334,6 +358,7 @@ public static class EventEndpoints
         row.StartTime = request.StartTime;
         row.EndTime = request.EndTime;
         row.Place = request.Place;
+        row.MaxParticipants = request.MaxParticipants;
 
         // An audience the request does not name is left exactly as it stands. The only place an
         // event's audience is decided for it is the moment it is created, and it is decided
@@ -440,6 +465,21 @@ public static class EventEndpoints
         return TypedResults.Ok(Map(row));
     }
 
+    /// <summary>
+    /// The event if this caller may read it, and null when they may not or it is not there. One
+    /// question, asked the same way the event's own reading asks it: a sub-resource that decided
+    /// for itself would become a way of learning that an event exists without being allowed to
+    /// open it.
+    /// </summary>
+    internal static async Task<Event?> ReadableEventAsync(
+        SilexGisDbContext db, IAccessService access, AccessContext ctx, Guid id, CancellationToken ct)
+    {
+        var row = await db.Events.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        return row is not null && (await access.DecideAsync(ctx, AccessAction.Read, row, ct)).Allowed
+            ? row
+            : null;
+    }
+
     internal static async Task<ProblemHttpResult?> RefuseUnlessWritableAsync(
         IAccessService access, AccessContext? ctx, Event row, CancellationToken ct)
     {
@@ -466,6 +506,7 @@ public static class EventEndpoints
         StartTime = row.StartTime,
         EndTime = row.EndTime,
         Place = row.Place,
+        MaxParticipants = row.MaxParticipants,
         OwnerUserId = row.OwnerUserId,
         CavingGroupId = row.CavingGroupId,
         Visibility = row.Visibility,

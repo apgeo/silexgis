@@ -189,6 +189,13 @@ Previous versions:
   or a camp does — drafted, proposed, planned, confirmed, announced, put back, called off — and who may
   read one is decided the same way: yours alone unless you say otherwise, your club's if you are in
   one, and anybody you name individually through the same sharing dialog every other record uses.
+  **An event is answered the way a trip is.** Somebody is asked, each person says yes, no or maybe, and
+  if the event has a number of places the answers decide who is in and who is waiting — the same list,
+  in the order people answered, with the organiser free to pick somebody out of turn. A limit never
+  refuses an answer; it only decides where in the queue an answer sits. A deadline takes no answers at
+  all — a date to have something in by is not something to sign up for — so it is offered no list. And
+  unlike a trip, an event keeps no separate record of who turned up: the answers *are* the record, so
+  there is nothing to turn into anything.
 - **One window over everything dated** — a calendar page answers *what is happening between these two
   days*, reading trips, expeditions and the club's events together in one list you can sort, narrow to one kind, narrow to
   a club's own, or narrow to your own. It shows what is still to come and what already happened, marks a

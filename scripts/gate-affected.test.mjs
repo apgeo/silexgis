@@ -129,6 +129,56 @@ describe('the map cannot rot', () => {
     }
   });
 
+  // The mirror of the test above, and the half that was missing while a class could exist that
+  // no group named. That gap is invisible from either direction on its own: naming a class that
+  // does not exist is caught above, but a class nobody names simply never runs in the targeted
+  // tier, and the change that stops running it looks like an ordinary addition to the map.
+  //
+  // The exemptions are the classes no group named on the day this test was written. They are not
+  // all equally loose: some own areas that are whole-API triggers, so the full suite reaches them
+  // anyway, while others sit under an area whose group simply omits them and are skipped by the
+  // targeted tier today. Either way the list is a record of what is unowned, meant to shrink, and
+  // never the place to put a NEW class — a class added from here on must be named by a group or by
+  // a cross-cutting list, which is the whole point of the check above.
+  const unclaimedClasses = new Set([
+    'AdminTestSendRateLimitTests',
+    'CavingGroupAnnouncementPaidCapTests',
+    'DemoSeedIdempotencyTests',
+    'NotificationConfigTests',
+    'NotificationInboxTests',
+    'NotificationQuietHoursTests',
+    'PerformanceTests',
+    'PersistenceTests',
+    'PhoneCredentialTests',
+    'SmsNotificationChannelTests',
+  ]);
+
+  it('every integration test class is named by the map', () => {
+    const named = new Set([
+      ...Object.values(map.groups).flat(),
+      ...map.crossCutting.permissionClasses,
+      ...map.crossCutting.locationClasses,
+    ]);
+    const orphans = readdirSync(testDir)
+      .filter((f) => f.endsWith('Tests.cs'))
+      .map((f) => f.replace(/\.cs$/, ''))
+      .filter((c) => !named.has(c) && !unclaimedClasses.has(c));
+    assert.deepEqual(
+      orphans,
+      [],
+      `no group or cross-cutting list names ${orphans.join(', ')} — the targeted tier would never run it`,
+    );
+  });
+
+  it('every exempted class still exists, so the exemption list cannot outlive its holes', () => {
+    for (const c of unclaimedClasses) {
+      assert.ok(
+        existsSync(join(testDir, `${c}.cs`)),
+        `${c}.cs is gone — drop it from the exemption list`,
+      );
+    }
+  });
+
   it('every area names a group that exists', () => {
     for (const [prefix, owner] of Object.entries(map.areas)) {
       if (typeof owner === 'string') {

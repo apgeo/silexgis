@@ -488,21 +488,26 @@ public static class CaverEndpoints
             }
         }
 
-        // What each entry said about coming on a trip folds the way the trips above do and not the
-        // way the camps below do, because a person holds one standing answer about one trip and
-        // two rows saying different things is exactly what that uniqueness exists to prevent.
-        // Where both entries answered the same trip the survivor's own answer stands: the entry
-        // being merged away is the duplicate, and preferring what it says would let a stray
+        // What each entry said about coming folds the way the trips above do and not the way the
+        // camps below do, because a person holds one standing answer about one subject and two
+        // rows saying different things is exactly what that uniqueness exists to prevent. Where
+        // both entries answered the same thing the survivor's own answer stands: the entry being
+        // merged away is the duplicate, and preferring what it says would let a stray
         // half-remembered "maybe" overwrite the yes somebody deliberately gave.
+        //
+        // The duplicate is decided on the whole subject and not on the trip alone. An answer is
+        // held about a trip or about a club event, so a comparison that looked only at the trip
+        // would read every one of the survivor's event answers as the same row as every one of
+        // the other entry's, and delete answers nobody gave twice.
         var sourceAnswers = await db.TripInvitations.Where(x => x.CaverId == source.Id).ToListAsync(ct);
         var targetAnswered = await db.TripInvitations
             .Where(x => x.CaverId == target.Id)
-            .Select(x => x.TripLogId)
+            .Select(x => new { x.TripLogId, x.EventId })
             .ToListAsync(ct);
 
         foreach (var answer in sourceAnswers)
         {
-            if (targetAnswered.Contains(answer.TripLogId))
+            if (targetAnswered.Any(x => x.TripLogId == answer.TripLogId && x.EventId == answer.EventId))
             {
                 db.TripInvitations.Remove(answer);
             }

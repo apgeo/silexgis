@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect } from 'react';
-import { App, DatePicker, Form, Input, Modal, Select, TimePicker } from 'antd';
+import { App, DatePicker, Form, Input, InputNumber, Modal, Select, TimePicker } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,7 @@ import {
   type EventWrite,
   type Visibility,
 } from '../../api/hooks.ts';
+import { ApiError } from '../../api/client.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 import { EVENT_KINDS } from './eventKinds.ts';
 
@@ -32,6 +33,7 @@ interface FormValues {
   startTime: Dayjs | null;
   endTime: Dayjs | null;
   place?: string;
+  maxParticipants?: number | null;
   description?: string;
   visibility: Visibility;
   cavingGroupId?: string | null;
@@ -91,6 +93,7 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
         startTime: parseTime(event.startTime),
         endTime: parseTime(event.endTime),
         place: event.place ?? undefined,
+        maxParticipants: event.maxParticipants ?? undefined,
         description: event.description ?? undefined,
         visibility: event.visibility,
         cavingGroupId: event.cavingGroupId ?? undefined,
@@ -133,6 +136,7 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
       startTime: values.startTime ? values.startTime.format('HH:mm:ss') : null,
       endTime: values.endTime ? values.endTime.format('HH:mm:ss') : null,
       place: values.place || null,
+      maxParticipants: values.maxParticipants ?? null,
       description: values.description || null,
       visibility: values.visibility,
       cavingGroupId: values.cavingGroupId || null,
@@ -144,8 +148,15 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
       message.success(t('common.saved'));
       onSaved?.(saved);
       onClose();
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // One refusal has a phrase of its own, because "save failed" would leave the author with no
+      // idea what to change: an event people have already answered cannot be turned into a kind
+      // nobody is asked to, since the answers would survive with no surface left that shows them.
+      message.error(
+        error instanceof ApiError && error.code === 'event.kind_has_responses'
+          ? t('events.kindHasResponses')
+          : t('common.saveFailed'),
+      );
     }
   };
 
@@ -192,6 +203,17 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
         <Form.Item name="place" label={t('events.place')}>
           {/* Words, never a position: nobody navigates to a club night by coordinate. */}
           <Input maxLength={255} data-testid="event-place" />
+        </Form.Item>
+        {/* How many places the event has. Left empty for one that turns nobody away; a number is
+            what makes the people past it a waiting list rather than a refusal — nobody is ever
+            refused an answer here, they stand in the order they answered in. A kind nobody comes
+            to takes no answers at all, so a number on one counts nothing. */}
+        <Form.Item
+          name="maxParticipants"
+          label={t('events.maxParticipants')}
+          tooltip={t('events.maxParticipantsHelp')}
+        >
+          <InputNumber min={1} precision={0} style={{ width: '100%' }} data-testid="event-max-participants" />
         </Form.Item>
         <Form.Item name="description" label={t('events.description')}>
           <Input.TextArea rows={3} maxLength={4000} />

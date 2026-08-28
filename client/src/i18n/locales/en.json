@@ -1140,7 +1140,8 @@
       "Expedition": "Expedition",
       "ExpeditionTrip": "Expedition trip",
       "ExpeditionRosterEntry": "Roster entry",
-      "TripInvitation": "Invitation"
+      "TripInvitation": "Invitation",
+      "Event": "Event"
     },
     "field": {
       "name": "Name",
@@ -2803,7 +2804,45 @@
     "notFoundDetail": "Either it is not there, or it is not yours to read. This page cannot tell the two apart, and does not try.",
     "callOff": "Call it off",
     "callOffConfirm": "Call this event off?",
-    "callOffSuccess": "The event was called off."
+    "callOffSuccess": "The event was called off.",
+    "maxParticipants": "Places",
+    "maxParticipantsHelp": "How many people the event has room for. Leave empty for no limit; anybody past the limit waits in the order they answered in.",
+    "tabResponses": "Who is coming",
+    "kindHasResponses": "People have already said whether they are coming, and an event of that kind is not answered. Change the kind back, or take the answers off first.",
+    "tabHistory": "History",
+    "responses": {
+      "title": "Who is coming",
+      "invite": "Ask",
+      "invitePlaceholder": "Somebody the club knows",
+      "invited": "Added to the list.",
+      "pickFromDirectory": "Choose somebody from the list of suggestions. A person is asked by their entry in the club's records, not by a name typed here — a name nobody can resolve would be a name nobody can tell.",
+      "empty": "Nobody has been asked about this event yet.",
+      "emptyWithheld": "Everybody on this event's list is somebody you may not be told about.",
+      "unavailable": "This event's list could not be read.",
+      "limit": "{{attending}} of {{max}} places taken, {{waiting}} waiting.",
+      "noLimit": "{{attending}} coming. This event sets no limit on how many.",
+      "place": "#{{place}}",
+      "attending": "Coming",
+      "waiting": "Waiting",
+      "selected": "Picked",
+      "select": "Pick this person for the event",
+      "deselect": "Put this person back in the order",
+      "notePlaceholder": "A word about it",
+      "removeConfirm": "Take this person off the list entirely, answer and all?",
+      "concurrentAnswer": "Somebody wrote about this person at the same moment. The list has been read again — repeat the change if it is still wanted.",
+      "caverUnknown": "The club's records hold nobody by that name.",
+      "selectNotAttending": "Only somebody who has said they are coming can be picked for the event.",
+      "noteInvalid": "That note is too long to store.",
+      "kindTakesNoResponses": "This kind of event is a date rather than a gathering, so there is nobody to come to it and nothing to answer.",
+      "withheld": "{{count}} on the list, not shown to you",
+      "withheldDetail": "Somebody is on this event's list whom you may not be told about. They are counted here so the numbers beside the list add up, and named nowhere.",
+      "responseValues": {
+        "pending": "Not answered",
+        "yes": "Coming",
+        "no": "Not coming",
+        "maybe": "Maybe"
+      }
+    }
   },
   "checklists": {
     "title": "Checklists",
