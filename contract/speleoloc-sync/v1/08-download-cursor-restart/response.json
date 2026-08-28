@@ -1,0 +1,38 @@
+{
+  "setRevision": 1,
+  "settings": {},
+  "features": [
+    {
+      "id": "<place-one>",
+      "kind": "generic",
+      "featureTypeCode": "cave_place",
+      "category": "underground",
+      "name": "Cursor one <marker>",
+      "description": null,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          25.442,
+          45.532
+        ]
+      },
+      "properties": {},
+      "propertiesSchemaVersion": 1,
+      "locationProtected": false,
+      "protectedEffective": false,
+      "visibility": "private",
+      "parents": [
+        {
+          "parentId": "<cave>",
+          "isPrimary": true
+        }
+      ],
+      "createdAt": "<timestamp>",
+      "updatedAt": "<timestamp>",
+      "clientUpdatedAt": null
+    }
+  ],
+  "tombstones": [],
+  "nextCursor": "<cursor>",
+  "hasMore": true
+}

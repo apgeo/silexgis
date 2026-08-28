@@ -27,27 +27,54 @@ public static class SyncEndpoints
     public const int ContractVersion = 1;
 
     /// <summary>
-    /// The optional parts of the contract this build serves, announced by name. Empty while
-    /// the surface is lifecycle only — a device learns that this server can hold its selection
-    /// but cannot yet move rows, and says so, instead of failing at the first transfer.
+    /// The optional parts of the contract this build serves, announced by name. A device that
+    /// meets a server serving only some of them takes the parts that are there instead of
+    /// failing at the first transfer — which is why reading rows is announced separately from
+    /// writing them, and why a build that can only be read from says so.
     /// </summary>
-    public static readonly IReadOnlyList<string> ServedFeatures = [];
+    public static readonly IReadOnlyList<string> ServedFeatures = ["download"];
 
     public static RouteGroupBuilder MapSyncEndpoints(this RouteGroupBuilder api)
     {
         var sync = api.MapGroup("/sync").WithTags("Sync");
 
+        // These routes are named, and almost nothing else on this server is. A name becomes the
+        // operation's identifier in the served description, which is what a generated client on
+        // another platform turns into a method name: unnamed, the generator invents one from the
+        // path and it changes whenever the path is tidied. This surface is the one a separate
+        // application is written against from the description alone, so its names are part of the
+        // contract and are chosen here rather than left to a tool. Naming the rest of the server
+        // is a larger change than this, and is not made in passing.
+        //
+        // Problem responses are declared for the same reason: a code branched on by a device has
+        // to be visible to whoever writes the device. The declared statuses are the ones this
+        // slice can answer; the body is the standard problem document carrying a stable `code`.
         sync.MapGet("/capabilities", CapabilitiesAsync)
+            .WithName("syncCapabilities")
             .WithSummary("The contract version and limits a device sizes itself to (authenticated).");
 
         var sets = sync.MapGroup("/sets");
-        sets.MapGet("/", ListAsync).WithSummary("The caller's own sync sets.");
+        sets.MapGet("/", ListAsync).WithName("syncListSets")
+            .WithSummary("The caller's own sync sets.");
         sets.MapPost("/", CreateAsync).WithValidation<SyncSetWriteRequest>()
+            .WithName("syncCreateSet")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
             .WithSummary("Creates a sync set owned by the caller.");
-        sets.MapGet("/{id:guid}", GetAsync).WithSummary("One of the caller's own sync sets.");
+        sets.MapGet("/{id:guid}", GetAsync).WithName("syncGetSet")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("One of the caller's own sync sets.");
         sets.MapPut("/{id:guid}", UpdateAsync).WithValidation<SyncSetWriteRequest>()
+            .WithName("syncReplaceSet")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithSummary("Replaces a sync set the caller owns; bumps its revision when anything changed.");
-        sets.MapDelete("/{id:guid}", DeleteAsync).WithSummary("Deletes a sync set the caller owns.");
+        sets.MapDelete("/{id:guid}", DeleteAsync).WithName("syncDeleteSet")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("Deletes a sync set the caller owns.");
+        sets.MapSyncDownloadEndpoints();
 
         return api;
     }

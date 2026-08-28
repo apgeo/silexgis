@@ -1,0 +1,56 @@
+{
+  "setRevision": 1,
+  "settings": {},
+  "features": [
+    {
+      "id": "<cave>",
+      "kind": "cave",
+      "featureTypeCode": null,
+      "category": "underground",
+      "name": "Withhold cave <marker>",
+      "description": null,
+      "geometry": null,
+      "properties": {},
+      "propertiesSchemaVersion": null,
+      "locationProtected": false,
+      "protectedEffective": false,
+      "visibility": "authenticated",
+      "parents": [],
+      "createdAt": "<timestamp>",
+      "updatedAt": "<timestamp>",
+      "clientUpdatedAt": null
+    },
+    {
+      "id": "<place-readable>",
+      "kind": "generic",
+      "featureTypeCode": "cave_place",
+      "category": "underground",
+      "name": "Open place <marker>",
+      "description": null,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          25.451,
+          45.541
+        ]
+      },
+      "properties": {},
+      "propertiesSchemaVersion": 1,
+      "locationProtected": false,
+      "protectedEffective": false,
+      "visibility": "authenticated",
+      "parents": [
+        {
+          "parentId": "<cave>",
+          "isPrimary": true
+        }
+      ],
+      "createdAt": "<timestamp>",
+      "updatedAt": "<timestamp>",
+      "clientUpdatedAt": null
+    }
+  ],
+  "tombstones": [],
+  "nextCursor": "<cursor>",
+  "hasMore": false
+}

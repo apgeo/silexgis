@@ -80,10 +80,10 @@ public sealed class SyncSetTests : IAsyncLifetime, IDisposable
         body.GetProperty("pageSizeMax").GetInt32().ShouldBeGreaterThan(0);
         body.GetProperty("uploadRowsMax").GetInt32().ShouldBeGreaterThan(0);
 
-        // Nothing moves rows yet, and the device is told so by name rather than by discovering
-        // it at the first transfer.
+        // Which halves of the transfer this build actually serves, by name, so a device meets
+        // a read-only server and takes what is there instead of failing at the first write.
         var features = body.GetProperty("features").EnumerateArray().Select(x => x.GetString()).ToList();
-        features.ShouldNotContain("download");
+        features.ShouldContain("download");
         features.ShouldNotContain("upload");
     }
 

@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260828093941_FeatureAncestorIdsIndex")]
+    partial class FeatureAncestorIdsIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2061,10 +2064,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<Guid?>("CavingGroupId")
                         .HasColumnType("uuid")
                         .HasColumnName("caving_group_id");
-
-                    b.Property<DateTimeOffset?>("ClientUpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("client_updated_at");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")

@@ -102,6 +102,20 @@ public class Feature : IProtectedEntity, ITimestamped, IAuditable
     /// <summary>Soft delete, stamped over the whole containment subtree. Purge is an explicit admin job.</summary>
     public DateTimeOffset? DeletedAt { get; set; }
 
+    /// <summary>
+    /// The moment a mobile device believes it last wrote this row, by that device's own clock.
+    /// Null for everything created through this server's own interface, which is nearly everything.
+    /// </summary>
+    /// <remarks>
+    /// Provenance, never a merge key. <see cref="UpdatedAt"/> is stamped by this server and is the
+    /// only value any arbitration here compares: a device's wall clock is unsynchronised,
+    /// resettable by whoever holds the phone, and routinely wrong by hours, so letting it decide
+    /// which of two versions is newer would let a bad clock overwrite anything. It is stored and
+    /// handed back because two devices editing the same row while both are offline can compare it
+    /// with each other, which is a question this server is in no position to answer for them.
+    /// </remarks>
+    public DateTimeOffset? ClientUpdatedAt { get; set; }
+
     // Shared-PK subtype rows (at most one, matching Kind — enforced by composite FK + CHECK).
     public Cave? Cave { get; set; }
 

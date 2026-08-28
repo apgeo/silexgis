@@ -106,7 +106,11 @@ try
         options => options.MultipartBodyLengthLimit = multipartBodyLengthLimit);
 
     builder.Services.AddProblemDetails();
-    builder.Services.AddOpenApi();
+    builder.Services.AddOpenApi(options =>
+    {
+        options.AddDocumentTransformer<SilexGis.Api.Common.BearerSecurityDocumentTransformer>();
+        options.AddOperationTransformer<SilexGis.Api.Common.AnonymousRouteSecurityOperationTransformer>();
+    });
     builder.Services.AddSilexGisPersistence(builder.Configuration);
     builder.Services.AddSilexGisGeodata(builder.Configuration);
     builder.Services.AddSilexGisAuth(builder.Configuration);

@@ -73,6 +73,10 @@ public sealed class FeatureConfiguration : IEntityTypeConfiguration<Feature>
         builder.HasIndex(x => x.OwnerUserId);
         builder.HasIndex(x => x.CavingGroupId);
         builder.HasIndex(x => x.DeletedAt).HasFilter("deleted_at IS NULL");
+        // The flattened ancestry is how every subtree question is asked: the visibility walk's
+        // subtree arms, and a device's download, which is "everything under these roots". All of
+        // them are array overlaps, and without this each is a sequential scan of the whole table.
+        builder.HasIndex(x => x.AncestorIds).HasMethod("gin");
 
         // Accent-insensitive full-text search over the supertype payload (shadow property so
         // Domain stays free of provider types; queries use EF.Property<NpgsqlTsVector>).

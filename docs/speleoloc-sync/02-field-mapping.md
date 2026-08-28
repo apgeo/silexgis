@@ -4,10 +4,12 @@ This document is for whoever writes the client side. It says which SilexGIS shap
 device's records become, which of its fields survive a round trip, and — as importantly — which
 values may never be sent at all.
 
-Nothing here moves rows yet. The shapes below exist on the server and can be created and read
-through the ordinary feature routes; the transfer that fills them is described separately once it
-exists. What this document fixes is the vocabulary, because a device that allocates codes against
-one set of names cannot be repointed at another later without renumbering everything it holds.
+The shapes below exist on the server and can be created and read through the ordinary feature
+routes. The transfer that carries them to a device is a separate document — the protocol one, beside
+this — and it currently moves rows in one direction only: a device can read these shapes from a
+server and cannot yet send any back. What this document fixes is the vocabulary, because a device
+that allocates codes against one set of names cannot be repointed at another later without
+renumbering everything it holds.
 
 ---
 
@@ -26,6 +28,12 @@ Two of these are withheld rather than snapped, which is not the ordinary answer.
 still says which hillside something is on, and these rows come in numbers: a scatter of places
 snapped to the same few grid squares outlines the cave whose position the protection exists to hide.
 A surface area is a named grouping with no position of its own and gets the ordinary treatment.
+
+**That last column describes the rest of the API, not the sync download.** On the sync channel every
+row whose exact position the caller may not see is absent from the payload, whatever its kind's
+setting says — a `surface_area` included. The setting still matters, because these rows are read
+through the web interface as well. And this table lists the three kinds a *device* creates: a
+download carries whatever is contained in the selection's roots, of every kind the installation has.
 
 **Resolve a kind by its `code`, never by its numeric id.** The ids are assigned by whichever
 installation seeded the table first and are not comparable between installations; the codes are
