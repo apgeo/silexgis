@@ -9,7 +9,12 @@ jobs:
   server:
     runs-on: ubuntu-latest
     steps:
+      # The survey-format readers live in a submodule. Without this the checkout lacks a project
+      # file the solution names, and the build fails at restore with a message about a missing
+      # path rather than about a missing checkout step.
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
@@ -50,6 +55,8 @@ jobs:
     needs: [server, client]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Build deployment images
         run: docker compose build
         working-directory: deploy

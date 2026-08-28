@@ -1,0 +1,4 @@
+[submodule "server/external/ThIDE"]
+	path = server/external/ThIDE
+	url = https://github.com/apgeo/ThIDE.git
+	branch = main

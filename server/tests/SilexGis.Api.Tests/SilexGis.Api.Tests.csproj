@@ -28,6 +28,11 @@
   <ItemGroup>
     <!-- Real files of their format, read by tests at run time. -->
     <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Linked rather than copied: the browser tests drive the 3D viewer with this same export,
+         and two copies of a binary fixture drift into two different caves. -->
+    <None Include="..\..\..\client\e2e\fixtures\P8_Master.3d"
+          Link="Fixtures\P8_Master.3d"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

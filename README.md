@@ -198,7 +198,7 @@ Previous versions:
 ## Quick start
 
 ```bash
-git clone https://github.com/apgeo/silexgis.git
+git clone --recurse-submodules https://github.com/apgeo/silexgis.git
 cd silexgis/deploy
 cp .env.example .env          # set the DB password, admin account and public URL
 docker compose up -d          # → http://localhost:8080

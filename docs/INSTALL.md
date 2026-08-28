@@ -29,10 +29,20 @@ in-process.
 ## Quick start (Docker)
 
 ```bash
-git clone https://github.com/apgeo/silexgis.git
+git clone --recurse-submodules https://github.com/apgeo/silexgis.git
 cd silexgis/deploy
 cp .env.example .env          # then edit .env (see below)
 docker compose up -d          # → http://localhost:8080
+```
+
+**`--recurse-submodules` is required, not decorative.** The readers for the compiled cave-survey
+formats (Therion `.lox`, Survex `.3d`) live in a separate repository, checked out under
+`server/external/`. A plain `git clone` leaves that directory empty, and the first build then
+fails with a message about a missing project file rather than about a missing checkout step. If
+you have already cloned without it, run this once from the repository root and carry on:
+
+```bash
+git submodule update --init --recursive
 ```
 
 Edit `.env` before first start and set at least:
