@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
 using System.Net.Http.Json;
-using System.Security.Cryptography;
 using System.Text.Json;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
@@ -53,7 +52,7 @@ public sealed class MfaAndRateLimitTests : IAsyncLifetime, IDisposable
         (await client.PostAsJsonAsync("/api/v1/me/mfa/methods/authenticator", new { code = "000000" }))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         var confirm = await client.PostAsJsonAsync(
-            "/api/v1/me/mfa/methods/authenticator", new { code = Totp(sharedKey) });
+            "/api/v1/me/mfa/methods/authenticator", new { code = TotpCodes.Generate(sharedKey) });
         confirm.StatusCode.ShouldBe(HttpStatusCode.OK, await confirm.Content.ReadAsStringAsync());
         var recoveryCodes = (await confirm.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("codes").EnumerateArray().Select(x => x.GetString()!).ToList();
@@ -78,7 +77,7 @@ public sealed class MfaAndRateLimitTests : IAsyncLifetime, IDisposable
         {
             email,
             password = AuthHelper.Password,
-            twoFactorCode = Totp(sharedKey),
+            twoFactorCode = TotpCodes.Generate(sharedKey),
         });
         withCode.StatusCode.ShouldBe(HttpStatusCode.OK, await withCode.Content.ReadAsStringAsync());
 
@@ -105,42 +104,6 @@ public sealed class MfaAndRateLimitTests : IAsyncLifetime, IDisposable
             email,
             password = AuthHelper.Password,
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
-    }
-
-    /// <summary>RFC 6238 TOTP (SHA1, 6 digits, 30 s step) over a base32 key.</summary>
-    private static string Totp(string base32Key)
-    {
-        var key = Base32Decode(base32Key);
-        var counter = DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 30;
-        Span<byte> counterBytes = stackalloc byte[8];
-        System.Buffers.Binary.BinaryPrimitives.WriteInt64BigEndian(counterBytes, counter);
-        var hash = HMACSHA1.HashData(key, counterBytes);
-        var offset = hash[^1] & 0x0f;
-        var code = ((hash[offset] & 0x7f) << 24)
-            | (hash[offset + 1] << 16)
-            | (hash[offset + 2] << 8)
-            | hash[offset + 3];
-        return (code % 1_000_000).ToString("D6");
-    }
-
-    private static byte[] Base32Decode(string input)
-    {
-        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-        var bits = 0;
-        var value = 0;
-        var output = new List<byte>();
-        foreach (var c in input.TrimEnd('=').ToUpperInvariant())
-        {
-            value = (value << 5) | alphabet.IndexOf(c);
-            bits += 5;
-            if (bits >= 8)
-            {
-                output.Add((byte)(value >> (bits - 8)));
-                bits -= 8;
-            }
-        }
-
-        return [.. output];
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

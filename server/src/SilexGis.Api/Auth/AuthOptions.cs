@@ -34,6 +34,30 @@ public sealed class AuthOptions
     public string[] AdditionalRedirectUris { get; set; } = [];
 
     /// <summary>
+    /// How long the SpeleoLoc mobile client's refresh token stays usable, in days.
+    /// </summary>
+    /// <remarks>
+    /// This is that client's own ceiling, not the web application's: the browser keeps its refresh
+    /// token in memory and drops it when the page unloads, so it is the phone that actually
+    /// persists a credential and the phone that actually gets lost. Expiration slides, so the clock
+    /// restarts on every successful exchange — the figure is really "how long a device may stay
+    /// offline before its caver has to sign in again", and a lapsed token costs a sign-in, never
+    /// data, because the device's own database is the source of truth for what it holds.
+    /// </remarks>
+    public int SpeleoLocRefreshTokenDays { get; set; } = 45;
+
+    /// <summary>
+    /// The configured mobile lifetime, brought inside one day to one year.
+    /// </summary>
+    /// <remarks>
+    /// The clamp is a safety net against a mistyped figure, in the direction that matters: this
+    /// value is written into the client registration at startup and then governs a credential
+    /// nothing prunes, so an accidental extra digit would mint phone credentials lasting years.
+    /// </remarks>
+    public TimeSpan SpeleoLocRefreshTokenLifetime =>
+        TimeSpan.FromDays(Math.Clamp(SpeleoLocRefreshTokenDays, 1, 365));
+
+    /// <summary>
     /// External identity providers (Google / GitHub / generic OIDC). Empty by default —
     /// the login page shows provider buttons only for entries configured here.
     /// </summary>

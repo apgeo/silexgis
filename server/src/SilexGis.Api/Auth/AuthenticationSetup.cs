@@ -62,6 +62,18 @@ public static class AuthenticationSetup
         services.Configure<DataProtectionTokenProviderOptions>(options =>
             options.TokenLifespan = TimeSpan.FromHours(EmailLinkLifetimeHours));
 
+        // Revalidate the security stamp on every cookie request rather than on the framework's
+        // default half-hour timer. Changing or resetting a password rotates the stamp and clears
+        // the token stores, but a cookie issued before that keeps working until the next
+        // revalidation — and the authorize endpoint accepts exactly that cookie and auto-consents,
+        // so a stale cookie could mint a fresh code and trade it for a refresh token that lasts
+        // weeks. A thirty-minute residual would therefore become a six-week one, which is the
+        // opposite of what changing a password is for. The per-request account lookup this costs
+        // is paid only by the cookie scheme, which serves the login and authorize routes alone —
+        // every API route authenticates a bearer token and is untouched.
+        services.Configure<SecurityStampValidatorOptions>(options =>
+            options.ValidationInterval = TimeSpan.Zero);
+
         services.ConfigureApplicationCookie(options =>
         {
             options.Cookie.Name = "silexgis.session";

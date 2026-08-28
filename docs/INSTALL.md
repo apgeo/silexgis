@@ -1046,6 +1046,8 @@ the reasoning beside each one.
 | `SILEXGIS__Admin__Email` / `__Password` | — | first-run administrator |
 | `SILEXGIS__Auth__OpenRegistration` | `false` | allow self-registration |
 | `SILEXGIS__Auth__ExternalOnly` | `false` | hide the password form when providers exist |
+| `SILEXGIS__Auth__RateLimitPerMinute` | `60` | sign-in, password-reset and token requests one IP address may make per minute. Raise it for an installation whose users share an outbound address |
+| `SILEXGIS__Auth__SpeleoLocRefreshTokenDays` | `45` | how long the SpeleoLoc mobile app may stay offline before a caver has to sign in on it again. The clock restarts at every successful sync, not at sign-in. Values outside 1 to 365 days are brought back inside that range |
 | `SILEXGIS__Mail__Enabled` / `__Host` / `__Port` | `false` / — / `587` | SMTP server; unset means messages go to the log |
 | `SILEXGIS__Mail__Security` | `Auto` | `Auto`, `StartTls`, `SslOnConnect` (465) or `None` |
 | `SILEXGIS__Mail__FromAddress` / `__FromName` | — / `SilexGIS` | sender of every message |

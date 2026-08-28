@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using OpenIddict.Abstractions;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Auth;
@@ -250,6 +251,8 @@ public static class AuthEndpoints
     private static async Task<IResult> ResetPasswordAsync(
         ResetPasswordRequest request,
         UserManager<SilexGisUser> userManager,
+        IOpenIddictTokenManager issuedTokens,
+        IOpenIddictAuthorizationManager grants,
         SilexGisDbContext db,
         CancellationToken ct)
     {
@@ -264,6 +267,11 @@ public static class AuthEndpoints
         {
             return AuthProblem(StatusCodes.Status400BadRequest, "auth.reset_invalid", "The reset token is invalid or expired.");
         }
+
+        // This is the path taken by somebody who has lost the device the sessions live on, so it is
+        // the path where ending them matters most: whoever completes a reset is not going to be
+        // able to sign the lost device out afterwards, and cannot list what it holds.
+        await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, user.Id, ct);
 
         // The reset path is the one an attacker holding a stolen mailbox would use, so it warns
         // exactly as the signed-in change does.

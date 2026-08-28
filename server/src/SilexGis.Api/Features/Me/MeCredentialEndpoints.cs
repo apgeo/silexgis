@@ -3,6 +3,8 @@ using System.Security.Claims;
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
+using OpenIddict.Abstractions;
+using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
@@ -42,7 +44,8 @@ public sealed class PasswordChangeRequestValidator : AbstractValidator<PasswordC
 /// <remarks>
 /// Signing in resolves an account by email address, so a chosen user name is a display handle
 /// and never a second way to log in. Both operations rotate the security stamp, so both refresh
-/// the sign-in cookie.
+/// the sign-in cookie — and a password change additionally ends every issued session, which the
+/// rotated stamp on its own would not do, because issued tokens carry no stamp to compare.
 /// </remarks>
 public static class MeCredentialEndpoints
 {
@@ -108,6 +111,8 @@ public static class MeCredentialEndpoints
         ClaimsPrincipal principal,
         UserManager<SilexGisUser> userManager,
         SignInManager<SilexGisUser> signInManager,
+        IOpenIddictTokenManager issuedTokens,
+        IOpenIddictAuthorizationManager grants,
         SilexGisDbContext db,
         CancellationToken ct)
     {
@@ -131,6 +136,12 @@ public static class MeCredentialEndpoints
                 ? ApiProblems.BadRequest("me.password_incorrect", "The current password is not right.")
                 : IdentityProblems.From(result, "me.password_invalid");
         }
+
+        // Changing a password is what somebody does when they think a credential has escaped, so
+        // it has to end the sessions that credential opened — on every client and every device,
+        // not merely on the one asking. Nothing else reaches them: an issued token carries no
+        // security stamp, and the exchange that renews one never asks when the password changed.
+        await SessionRevocation.EndAllSessionsAsync(issuedTokens, grants, user.Id, ct);
 
         // Warns the account holder that this happened, which is the whole point of a security
         // alert: if it was not them, someone else knows their password. Saved separately because
