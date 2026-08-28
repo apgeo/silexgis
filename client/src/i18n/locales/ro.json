@@ -2572,5 +2572,20 @@
       "trips": "Ture",
       "views": "Vizualizări"
     }
+  },
+  "karstStats": {
+    "count": "Peșteri",
+    "depthAxis": "Denivelare (m)",
+    "lengthAxis": "Lungime carotată (m)",
+    "nothingMeasured": "Nicio peșteră de pe această pagină nu are lungime măsurată.",
+    "powerLawFit": "Ajustare putere (exponent {{exponent}})",
+    "rank": "Rang",
+    "regression": "Ajustare: pantă {{slope}}, R² {{r2}}",
+    "scopeNote": "Calculat din cele {{shown}} din {{total}} peșteri de pe această pagină care au o lungime măsurată. Peșterile fără lungime lipsesc, nu sunt numărate ca zero.",
+    "title": "Distribuții",
+    "viewByType": "După tip",
+    "viewHistogram": "Lungime",
+    "viewLengthDepth": "Lungime vs denivelare",
+    "viewRankSize": "Rang–mărime"
   }
 }

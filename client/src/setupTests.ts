@@ -44,9 +44,19 @@ if (!window.ResizeObserver) {
 // builds its colour gradient through a canvas context the moment it is constructed,
 // which would throw under jsdom. A minimal stub covering the handful of calls that
 // gradient construction makes lets such layers be unit-tested without a real canvas.
+//
+// The stub also answers text measurement, which the charting library needs even when it
+// draws vectors rather than pixels: it lays an axis out by asking how wide each label
+// will be, and an unanswered question throws before anything is drawn. The width returned
+// is proportional, not real — there are no fonts here to measure against. That is the
+// right trade because nothing asserts on pixel positions; what matters is that layout
+// completes, so the labels, boxes and paths become elements a test can look at. Anything
+// that did depend on a true width would be depending on which fonts happen to be
+// installed on the machine running the tests.
 if (typeof HTMLCanvasElement !== 'undefined') {
   HTMLCanvasElement.prototype.getContext = function stubGetContext(this: HTMLCanvasElement) {
     const gradient = { addColorStop() {} };
+    let font = '12px sans-serif';
     return {
       canvas: this,
       createLinearGradient: () => gradient,
@@ -54,9 +64,40 @@ if (typeof HTMLCanvasElement !== 'undefined') {
       clearRect() {},
       drawImage() {},
       putImageData() {},
+      save() {},
+      restore() {},
+      beginPath() {},
+      closePath() {},
+      moveTo() {},
+      lineTo() {},
+      stroke() {},
+      fill() {},
+      translate() {},
+      scale() {},
+      rotate() {},
+      setTransform() {},
+      measureText: (text: string) => {
+        const size = Number.parseFloat(/(\d+(?:\.\d+)?)px/.exec(font)?.[1] ?? '12');
+        const width = text.length * size * 0.5;
+        return {
+          width,
+          actualBoundingBoxLeft: 0,
+          actualBoundingBoxRight: width,
+          actualBoundingBoxAscent: size * 0.8,
+          actualBoundingBoxDescent: size * 0.2,
+          fontBoundingBoxAscent: size * 0.8,
+          fontBoundingBoxDescent: size * 0.2,
+        } as unknown as TextMetrics;
+      },
       getImageData: (_x: number, _y: number, w: number, h: number) => ({
         data: new Uint8ClampedArray(Math.max(1, w * h * 4)),
       }),
+      set font(v: string) {
+        font = v;
+      },
+      get font() {
+        return font;
+      },
       set fillStyle(_v: unknown) {},
       get fillStyle() {
         return '';
