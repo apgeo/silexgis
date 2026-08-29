@@ -132,6 +132,13 @@ try
         .BindConfiguration(MapOptions.SectionName);
     builder.Services.AddOptions<TerrainOptions>()
         .BindConfiguration(TerrainOptions.SectionName);
+    // Checked while starting rather than when first used: an unresolvable working system would
+    // otherwise surface as a projection error inside whichever request first asked a question in
+    // metres, which could be weeks after the value was mistyped.
+    builder.Services.AddOptions<SpatialOptions>()
+        .BindConfiguration(SpatialOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<SpatialOptions>, SpatialOptionsValidator>();
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
     // One resolver per resource-link target world; the directory is what the link
