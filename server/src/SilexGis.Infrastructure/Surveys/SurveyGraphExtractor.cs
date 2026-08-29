@@ -17,7 +17,8 @@ namespace SilexGis.Infrastructure.Surveys;
 /// <param name="Lrud">
 /// Every wall measurement the file states, keyed by the station it was taken at, whichever of the
 /// two shapes the file used to say it. A reading in which the surveyor measured nothing is not a
-/// reading and is not here.
+/// reading and is not here, whether the file said so by writing its "not measured" number in every
+/// field or by flagging the whole leg as carrying no wall measurement.
 /// </param>
 /// <param name="DroppedShotCount">
 /// Legs of the traverse whose endpoints matched no station, or matched the same one twice, and so
@@ -174,9 +175,25 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
             // states them that way. The leg travels with them: it is the only thing that says which
             // way the surveyor was facing when the walls were measured, and it is exactly what the
             // other format cannot say.
-            var section = MapSection(shot.SectionType);
-            AddReading(readings, surveyModelId, StationOf(shot.FromStationId) ?? from, shot.FromLrud, section, leg);
-            AddReading(readings, surveyModelId, StationOf(shot.ToStationId) ?? to, shot.ToLrud, section, leg);
+            //
+            // Unless the file has already said those numbers mean nothing. That format gives every
+            // leg its eight wall distances whether or not any were taken, and states "this leg
+            // carries no usable wall measurement" with a flag of its own rather than by leaving the
+            // fields empty — so a flagged leg holding four zeros is not a passage of zero width at
+            // a station standing against the wall, it is a leg nobody measured. The negative
+            // sentinel does not catch it, because zero is a real measurement everywhere else.
+            //
+            // Splay, surface and duplicate legs are deliberately not excluded here. What those
+            // flags say is that the leg is not ordinary passage to be counted, not that the
+            // distances recorded at its ends are meaningless: those ends are stations like any
+            // other, and a wall distance measured at one is a measurement. Only the flag that
+            // speaks about the wall distances themselves decides whether they are kept.
+            if ((flags & SurveyShotFlags.NotLrud) == 0)
+            {
+                var section = MapSection(shot.SectionType);
+                AddReading(readings, surveyModelId, StationOf(shot.FromStationId) ?? from, shot.FromLrud, section, leg);
+                AddReading(readings, surveyModelId, StationOf(shot.ToStationId) ?? to, shot.ToLrud, section, leg);
+            }
 
             // A splay is a shot at the wall, and its far end is routinely a point the file names no
             // station for; a surface or duplicate leg is not passage to be counted either. None of

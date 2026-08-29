@@ -1544,6 +1544,8 @@
       "formatUnsupported": "Archive a survey source: Therion .th, .th2 or .thconfig, Survex .svx, a compilation .log, or a survey app's .zip export.",
       "contentMismatch": "This file is not what its name says it is. A survey source has to be the format its extension claims.",
       "sizeInvalid": "The file is empty or larger than 100 MB.",
+      "nameInvalid": "The file's name is too long to archive. Rename it to 255 characters or fewer and try again.",
+      "descriptionInvalid": "The description is too long; keep it to 4000 characters or fewer.",
       "notFound": "This archived source no longer exists.",
       "caveNotFound": "This cave no longer exists.",
       "forbidden": "You are not allowed to change this cave's survey archive."

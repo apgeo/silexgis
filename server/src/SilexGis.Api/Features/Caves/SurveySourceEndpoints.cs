@@ -62,6 +62,24 @@ public static class SurveySourceEndpoints
     /// <summary>Sources are small next to the models they compile to; matches the model cap.</summary>
     private const long MaxUploadBytes = 100L * 1024 * 1024;
 
+    /// <summary>
+    /// What the two text columns behind an archive entry hold. Checked here rather than left to the
+    /// database, because the database's answer to an over-long value is a failed save with nothing a
+    /// caller can act on — and by then the bytes are in the file store with no row to reference them.
+    /// The file name is stored twice, as the display name and as the name it arrived under, so one
+    /// limit governs both: a value that passed one cap and failed the other would be the same string
+    /// accepted and refused at once.
+    /// </summary>
+    private const int MaxNameLength = 255;
+
+    private const int MaxDescriptionLength = 4000;
+
+    /// <summary>The file name will not fit what an archive entry can hold.</summary>
+    private const string NameInvalidCode = "survey_source.name_invalid";
+
+    /// <summary>The note written against the source is longer than one can be.</summary>
+    private const string DescriptionInvalidCode = "survey_source.description_invalid";
+
     public static RouteGroupBuilder MapSurveySourceEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/caves/{caveId:guid}/survey-sources", ListAsync)
@@ -157,6 +175,26 @@ public static class SurveySourceEndpoints
             return ApiProblems.BadRequest("survey_source.size_invalid", "The file is empty or exceeds 100 MB.");
         }
 
+        // Both checked before anything is written. A file name is chosen by whoever is uploading and
+        // a deep export path produces a long one without anybody trying, so this is an ordinary
+        // request to answer rather than an attack to survive — and answering it after the bytes are
+        // stored would leave a file in the store that no row will ever point at.
+        var name = Path.GetFileName(file.FileName);
+        if (name.Length == 0 || name.Length > MaxNameLength)
+        {
+            return ApiProblems.BadRequest(
+                NameInvalidCode,
+                $"The file name is longer than {MaxNameLength} characters; rename the file and archive it again.");
+        }
+
+        var note = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        if (note is { Length: > MaxDescriptionLength })
+        {
+            return ApiProblems.BadRequest(
+                DescriptionInvalidCode,
+                $"The description is longer than {MaxDescriptionLength} characters.");
+        }
+
         // Stored the way every other upload is stored — one describer, so an archived source is
         // hashed, sized and sniffed exactly as a photograph or a report is.
         var content = await intake.FromStreamAsync(file.OpenReadStream(), file.FileName, file.ContentType, ct);
@@ -173,7 +211,6 @@ public static class SurveySourceEndpoints
                 + $"was expected to be {SurveySourceFormats.ExpectedContent(kind)}.");
         }
 
-        var name = Path.GetFileName(file.FileName);
         var archived = documents.Create(
             content with
             {
@@ -196,7 +233,7 @@ public static class SurveySourceEndpoints
             Kind = kind,
             Name = name,
             OriginalFileName = name,
-            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+            Description = note,
         };
 
         db.SurveySources.Add(source);

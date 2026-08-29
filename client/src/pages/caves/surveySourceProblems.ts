@@ -19,6 +19,8 @@ export const SURVEY_SOURCE_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'survey_source.format_unsupported': 'surveySources.problems.formatUnsupported',
   'survey_source.content_mismatch': 'surveySources.problems.contentMismatch',
   'survey_source.size_invalid': 'surveySources.problems.sizeInvalid',
+  'survey_source.name_invalid': 'surveySources.problems.nameInvalid',
+  'survey_source.description_invalid': 'surveySources.problems.descriptionInvalid',
   'survey_source.not_found': 'surveySources.problems.notFound',
   'cave.not_found': 'surveySources.problems.caveNotFound',
   'acl.forbidden': 'surveySources.problems.forbidden',

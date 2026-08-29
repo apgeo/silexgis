@@ -128,6 +128,12 @@ public sealed class SurveySourceTests : IAsyncLifetime, IDisposable
         (await owner.PostAsync($"/api/v1/caves/{caveId}/survey-sources", honest))
             .StatusCode.ShouldBe(HttpStatusCode.Created);
 
+        // What the store holds once one honest upload is in it. The refusals below are checked
+        // against this rather than against zero, so a refusal that leaves its bytes behind shows up
+        // here — the row count alone cannot see an orphaned blob, and an orphan is invisible for
+        // ever precisely because no row points at it.
+        var storedBefore = BlobCount();
+
         using var disguised = BuildForm("cave.svx", Executable());
         var refused = await owner.PostAsync($"/api/v1/caves/{caveId}/survey-sources", disguised);
         refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -146,7 +152,52 @@ public sealed class SurveySourceTests : IAsyncLifetime, IDisposable
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         (await db.SurveySources.CountAsync(s => s.CaveFeatureId == caveId)).ShouldBe(1);
+
+        // Nothing on disk either. The bytes have to be written before they can be read, so the
+        // refusal is what has to take them away again.
+        BlobCount().ShouldBe(storedBefore);
     }
+
+    [Fact]
+    public async Task A_name_or_a_description_longer_than_the_record_holds_is_refused_before_anything_is_stored()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        var storedBefore = BlobCount();
+
+        // A file name a deep export path produces without anybody trying. It is stored twice — as
+        // the display name and as the name the file arrived under — and it has to be answered
+        // rather than handed to the database to refuse.
+        using var longName = BuildForm(new string('p', 260) + ".svx", SurvexText());
+        var refusedName = await owner.PostAsync($"/api/v1/caves/{caveId}/survey-sources", longName);
+        refusedName.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refusedName.Content.ReadAsStringAsync());
+        (await refusedName.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("survey_source.name_invalid");
+
+        using var longDescription = BuildForm("cave.svx", SurvexText());
+        longDescription.Add(new StringContent(new string('d', 4001)), "description");
+        var refusedNote = await owner.PostAsync($"/api/v1/caves/{caveId}/survey-sources", longDescription);
+        refusedNote.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refusedNote.Content.ReadAsStringAsync());
+        (await refusedNote.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("survey_source.description_invalid");
+
+        // Refused before the bytes were read, so nothing was written and nothing has to be undone.
+        BlobCount().ShouldBe(storedBefore);
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/survey-sources"))
+            .GetArrayLength().ShouldBe(0);
+
+        // The longest name that does fit is archived, so the limit refuses what it says it refuses
+        // and not everything near it.
+        using var atTheLimit = BuildForm(new string('p', 251) + ".svx", SurvexText());
+        (await owner.PostAsync($"/api/v1/caves/{caveId}/survey-sources", atTheLimit))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    /// <summary>How many files the store holds, whatever any row says about them.</summary>
+    private int BlobCount() =>
+        Directory.Exists(filesRoot)
+            ? Directory.EnumerateFiles(filesRoot, "*", SearchOption.AllDirectories)
+                .Count(f => !f.StartsWith(Path.Combine(filesRoot, "keys"), StringComparison.Ordinal))
+            : 0;
 
     [Fact]
     public async Task A_compiled_model_is_not_a_source_and_an_empty_file_is_not_archived()

@@ -12,7 +12,9 @@ public sealed class SurveySourceConfiguration : IEntityTypeConfiguration<SurveyS
         builder.ToTable("survey_sources");
         builder.Property(x => x.Id).ValueGeneratedNever();
 
-        builder.Property(x => x.Name).HasMaxLength(200);
+        // One width for both: an upload writes the same file name into each of them, so a narrower
+        // display name would be a value the row accepts in one column and rejects in the other.
+        builder.Property(x => x.Name).HasMaxLength(255);
         builder.Property(x => x.OriginalFileName).HasMaxLength(255);
         builder.Property(x => x.Description).HasMaxLength(4000);
         builder.Property(x => x.Kind).HasConversion<short>();

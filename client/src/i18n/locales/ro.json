@@ -1544,6 +1544,8 @@
       "formatUnsupported": "Arhivează o sursă topografică: Therion .th, .th2 sau .thconfig, Survex .svx, un .log de compilare sau exportul .zip al unei aplicații de topografie.",
       "contentMismatch": "Acest fișier nu este ceea ce spune numele lui. O sursă topografică trebuie să fie chiar formatul pe care extensia îl pretinde.",
       "sizeInvalid": "Fișierul este gol sau mai mare de 100 MB.",
+      "nameInvalid": "Numele fișierului este prea lung pentru arhivă. Redenumește-l la cel mult 255 de caractere și încearcă din nou.",
+      "descriptionInvalid": "Descrierea este prea lungă; păstreaz-o la cel mult 4000 de caractere.",
       "notFound": "Această sursă arhivată nu mai există.",
       "caveNotFound": "Această peșteră nu mai există.",
       "forbidden": "Nu ai voie să modifici arhiva topografică a acestei peșteri."

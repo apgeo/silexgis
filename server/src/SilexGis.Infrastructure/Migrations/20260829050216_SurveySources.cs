@@ -19,7 +19,7 @@ namespace SilexGis.Infrastructure.Migrations
                     cave_feature_id = table.Column<Guid>(type: "uuid", nullable: false),
                     document_id = table.Column<Guid>(type: "uuid", nullable: false),
                     kind = table.Column<short>(type: "smallint", nullable: false),
-                    name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
                     original_file_name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
                     description = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
