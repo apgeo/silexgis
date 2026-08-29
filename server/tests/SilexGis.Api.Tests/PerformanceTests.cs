@@ -12,6 +12,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Access;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 using Xunit.Abstractions;
 
 namespace SilexGis.Api.Tests;
@@ -107,6 +108,76 @@ public sealed class PerformanceTests : IDisposable
         }
 
         await AssertEntranceLayerPlansAsync(ownerId, strangerId);
+        await AssertSurveySubstratePlansAsync(strangerId);
+    }
+
+    /// <summary>
+    /// The two cave-scoped lookups a cave's survey statistics are computed over. Both splice the
+    /// whole access walk over the feature table, and both are given a single cave id — so the
+    /// feature row they need must be reached by its primary key, and the protection-root probe
+    /// beside it by an index. A sequential scan of a hundred thousand features to answer a
+    /// question about one cave is the regression this pins, and it is the shape that appears
+    /// silently as an installation's feature table grows rather than at the moment it is written.
+    /// </summary>
+    /// <remarks>
+    /// The seeded caves hold no survey models and no centerlines, so these plans are the ones the
+    /// planner chooses for an empty result — which is why each pin also asserts that the feature
+    /// lookup is <i>in</i> the plan. Without that half, a plan that never reached the feature
+    /// table at all would satisfy "no sequential scan of features" while proving nothing.
+    /// </remarks>
+    private async Task AssertSurveySubstratePlansAsync(Guid strangerId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var connection = db.Database.GetDbConnection();
+
+        var caveId = await connection.QuerySingleAsync<Guid>(
+            $"SELECT id FROM features WHERE kind = {(short)FeatureKind.Cave} LIMIT 1");
+
+        // Not the owner and holding nothing: the caller for whom both arms of the access walk
+        // actually run rather than short-circuiting on ownership.
+        var ctx = new AccessContext(strangerId, false, [], []);
+
+        var (legSql, legParameters) = SurveySegmentSql.BuildForCave(ctx, caveId);
+        var legs = await ExplainAsync(connection, legParameters, "survey leg substrate", legSql);
+        AssertReachesFeaturesByIndex(legs, "survey leg substrate");
+
+        // The step that picks the one survey model answering for this cave is cave-scoped too, and
+        // both of the tables it reads grow with the installation rather than with the cave.
+        legs.ShouldNotContain("Seq Scan on survey_models", Case.Insensitive,
+            "choosing which survey model answers must not scan every model in the installation");
+        legs.ShouldNotContain("Seq Scan on centerlines", Case.Insensitive,
+            "nor every centerline in it");
+
+        var (sourceSql, sourceParameters) = CenterlineSegmentSql.BuildSourceQuery(ctx, caveId);
+        var source = await ExplainAsync(
+            connection, sourceParameters, "centerline substrate source", sourceSql);
+        AssertReachesFeaturesByIndex(source, "centerline substrate source");
+    }
+
+    /// <summary>
+    /// The two halves of a plan pin over a cave-scoped feature lookup: no sequential scan of the
+    /// feature table, and evidence that the feature table was reached at all. The second half is
+    /// what keeps the first from being satisfied by a plan that never got there.
+    /// </summary>
+    /// <remarks>
+    /// Either of the two id-keyed indexes on <c>features</c> counts: the lookup that carries a
+    /// kind rides the id+kind alternate key, one without a kind rides the primary key, and both
+    /// are index probes on one row. Note that neither of them is the geometry index — a lookup by
+    /// id has no geometry in it to index — so a plan pin phrased in terms of the GIST index would
+    /// be pinning something these queries never touch.
+    /// </remarks>
+    private static void AssertReachesFeaturesByIndex(string plan, string label)
+    {
+        plan.ShouldNotContain("Seq Scan on features", Case.Insensitive,
+            $"{label}: a question about one cave must never scan the whole feature table");
+
+        (plan.Contains("ak_features_id_kind", StringComparison.OrdinalIgnoreCase)
+                || plan.Contains("pk_features", StringComparison.OrdinalIgnoreCase))
+            .ShouldBeTrue(
+                $"{label}: the cave's own feature row must be reached through an id-keyed index — "
+                + "and if neither appears, the plan never touched the feature table at all, which "
+                + "would leave the assertion above satisfied while proving nothing");
     }
 
     /// <summary>The viewport as a bbox query argument (invariant — the API parses '.' decimals).</summary>
