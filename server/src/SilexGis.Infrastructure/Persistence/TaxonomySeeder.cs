@@ -467,16 +467,23 @@ public static class TaxonomySeeder
             ("cave_sector", "Cave sector", FeatureCategory.Underground, area, true, "generic_feature.png", null),
 
             // Areas & groupings
-            // By the shared constant rather than a literal, for the reason the constant states:
-            // the board that lists work areas resolves this kind by code and answers with an
-            // empty list when it finds nothing, so a rename here would empty it in silence.
-            (FeatureTypeSeeds.WorkArea, "Work area", FeatureCategory.Area, area, false, null, null),
             ("karst_area", "Karst area", FeatureCategory.Area, area, false, null, null),
             ("massif", "Massif / Mountain", FeatureCategory.Area, area, false, null, null),
             ("cave_system", "Cave system", FeatureCategory.Area, area, false, null, null),
 
             // Structures
             ("building", "Building", FeatureCategory.Structure, [.. point, .. area], false, null, null),
+
+            // Appended, and it has to be, however much it belongs beside the other areas above.
+            // Sort order is written on insert and never updated, so a code slotted mid-list takes
+            // the number the row after it already holds on every database that has already been
+            // seeded, while numbering one higher on a fresh one — two installations disagreeing
+            // about the order of the palette, and a duplicate order deciding it arbitrarily.
+            //
+            // By the shared constant rather than a literal, for the reason the constant states:
+            // the board that lists work areas resolves this kind by code and answers with an empty
+            // list when it finds nothing, so a rename here would empty it in silence.
+            (FeatureTypeSeeds.WorkArea, "Work area", FeatureCategory.Area, area, false, null, null),
         ];
 
         var existing = await db.FeatureTypes.ToDictionaryAsync(x => x.Code, ct);
