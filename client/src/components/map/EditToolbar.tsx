@@ -16,7 +16,7 @@ import {
   RedoOutlined,
   UndoOutlined,
 } from '@ant-design/icons';
-import { App, Badge, Button, Divider, Space, Tooltip } from 'antd';
+import { App, Badge, Button, Divider, Segmented, Space, Tooltip } from 'antd';
 import type Feature from 'ol/Feature';
 import { useTranslation } from 'react-i18next';
 import {
@@ -39,7 +39,7 @@ import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 import CaveAddModal from './CaveAddModal.tsx';
 import FeaturePalette, { FeatureSymbol } from './FeaturePalette.tsx';
-import { drawShapeForType } from './featureTypeGroups.ts';
+import { drawShapeForType, drawShapesForType } from './featureTypeGroups.ts';
 
 interface EditToolbarProps {
   controller: MapEditController;
@@ -58,6 +58,8 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
     mode: 'none', snap: true, canUndo: false, canRedo: false, dirty: 0, sketchActive: false,
   });
   const [typeId, setTypeId] = useState<number>();
+  // Which shape a many-shaped type is being drawn as, until another one is picked.
+  const [chosenShape, setChosenShape] = useState<DrawShape>();
   const [saving, setSaving] = useState(false);
   // Measuring lives outside the edit controller (react-geo owns those
   // interactions); arming either side disarms the other.
@@ -95,7 +97,15 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
     .slice(0, MAX_PINNED_BUTTONS);
 
   const selectedType = featureTypes?.find((ft) => Number(ft.id) === typeId);
-  const fixedShape = drawShapeForType(selectedType) ?? 'Point';
+
+  // A type accepting several shapes — a doline is a marker on a small one and a drawn outline on a
+  // large one — is armed with whichever the person last chose for it, and offers the choice. Left
+  // to a default it would always arm as the first, and the shape the type accepts as well could
+  // never be drawn at all.
+  const shapeChoices = drawShapesForType(selectedType);
+  const fixedShape =
+    drawShapeForType(selectedType) ??
+    (chosenShape && shapeChoices.includes(chosenShape) ? chosenShape : shapeChoices[0]);
 
   // Picking a symbol (palette or pinned shortcut) arms drawing immediately
   // (reference-software behavior), with the shape implied by the type's
@@ -104,7 +114,13 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
     setTypeId(id);
     setMeasure(null);
     const picked = featureTypes?.find((ft) => Number(ft.id) === id);
-    controller.setMode('draw', drawShapeForType(picked) ?? 'Point', id);
+    const shapes = drawShapesForType(picked);
+    // Picking a symbol clears any earlier shape choice: the shapes a type offers are its own, so
+    // carrying "polygon" over to a marker-only type would arm the tool with a shape that type
+    // cannot hold.
+    const shape = drawShapeForType(picked) ?? shapes[0];
+    setChosenShape(shapes.length > 1 ? shape : undefined);
+    controller.setMode('draw', shape, id);
   };
 
   const setMode = (mode: EditMode, shape?: DrawShape) => {
@@ -250,6 +266,23 @@ export default function EditToolbar({ controller }: EditToolbarProps) {
           onClick={() => setMode('draw', fixedShape)}
         />
       </Tooltip>
+      {shapeChoices.length > 1 && (
+        <span data-testid="draw-shape-choice">
+          <Segmented
+            size="small"
+            value={fixedShape}
+            options={shapeChoices.map((shape) => ({
+              value: shape,
+              label: t(`mapEdit.shapes.${shape}`),
+            }))}
+            onChange={(value) => {
+              const shape = value as DrawShape;
+              setChosenShape(shape);
+              controller.setMode('draw', shape, typeId);
+            }}
+          />
+        </span>
+      )}
       <Tooltip title={t('mapEdit.modify')}>
         <Button
           size="small"

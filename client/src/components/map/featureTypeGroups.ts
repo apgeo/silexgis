@@ -54,6 +54,36 @@ export function drawShapeForType(type: Pick<FeatureType, 'acceptedGeometryClasse
   }
 }
 
+/** Draw shapes in palette order, so a chooser lists them the same way the palette groups them. */
+const shapeOfFamily: Record<Exclude<FeatureTypeGroupKind, 'any'>, DrawShape> = {
+  point: 'Point',
+  line: 'LineString',
+  polygon: 'Polygon',
+};
+
+/**
+ * Every shape a feature type may be drawn as, in palette order.
+ *
+ * A type accepting exactly one family has one entry and is armed with it without asking. A type
+ * accepting several — a doline, which is a marker on a small one and an outline on a large one —
+ * has more than one, and something has to offer the choice: arming such a type with a default and
+ * offering no way past it would mean the shape the type was widened for could never be drawn.
+ */
+export function drawShapesForType(
+  type: Pick<FeatureType, 'acceptedGeometryClasses'> | undefined,
+): DrawShape[] {
+  if (!type) {
+    return ['Point'];
+  }
+  const families = new Set(
+    type.acceptedGeometryClasses.map((c) => familyOfClass[c]).filter((f) => f !== undefined),
+  );
+  const shapes = FEATURE_TYPE_GROUP_ORDER.filter(
+    (kind): kind is Exclude<FeatureTypeGroupKind, 'any'> => kind !== 'any' && families.has(kind),
+  ).map((kind) => shapeOfFamily[kind]);
+  return shapes.length > 0 ? shapes : ['Point'];
+}
+
 /**
  * Groups feature types by drawable geometry family in palette order, dropping empty
  * groups. Shared by the symbol palette and the map context menu so both offer the

@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import type { FeatureType } from '../../api/hooks.ts';
-import { drawShapeForType, geometryGroupOf, groupFeatureTypes } from './featureTypeGroups.ts';
+import {
+  drawShapeForType,
+  drawShapesForType,
+  geometryGroupOf,
+  groupFeatureTypes,
+} from './featureTypeGroups.ts';
 
 function makeType(id: number, acceptedGeometryClasses: string[]): FeatureType {
   return { id, name: `t${id}`, acceptedGeometryClasses } as FeatureType;
@@ -39,5 +44,26 @@ describe('drawShapeForType', () => {
     expect(drawShapeForType(makeType(3, ['polygon', 'multiPolygon']))).toBe('Polygon');
     expect(drawShapeForType(makeType(4, ['point', 'polygon']))).toBeNull();
     expect(drawShapeForType(undefined)).toBe('Point');
+  });
+});
+
+describe('drawShapesForType', () => {
+  it('offers one shape for a kind that accepts one family, so nothing is asked', () => {
+    expect(drawShapesForType(makeType(1, ['point', 'multiPoint']))).toEqual(['Point']);
+    expect(drawShapesForType(makeType(2, ['polygon', 'multiPolygon']))).toEqual(['Polygon']);
+  });
+
+  it('offers every family a widened kind accepts, in palette order', () => {
+    // The doline case: a marker on a small depression and a drawn outline on a large one. Both
+    // have to be offered or the shape the kind was widened for can never be drawn.
+    expect(drawShapesForType(makeType(3, ['point', 'multiPoint', 'polygon', 'multiPolygon'])))
+      .toEqual(['Point', 'Polygon']);
+    expect(drawShapesForType(makeType(4, ['polygon', 'lineString', 'point'])))
+      .toEqual(['Point', 'LineString', 'Polygon']);
+  });
+
+  it('falls back to a marker for a kind that names no geometry at all', () => {
+    expect(drawShapesForType(makeType(5, []))).toEqual(['Point']);
+    expect(drawShapesForType(undefined)).toEqual(['Point']);
   });
 });

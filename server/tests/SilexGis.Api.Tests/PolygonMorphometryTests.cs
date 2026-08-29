@@ -252,6 +252,91 @@ public sealed class PolygonMorphometryTests : IAsyncLifetime, IDisposable
             .ShouldBe("feature.geometry_invalid");
     }
 
+    [Fact]
+    public async Task The_route_hands_back_the_measured_shape_and_answers_nobody_without_a_session()
+    {
+        var rectangleId = await CreateAsync(Body("Route rim", Rectangle()));
+
+        var response = await owner.GetAsync($"/api/v1/features/{rectangleId}/morphometry");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = (await response.Content.ReadFromJsonAsync<JsonObject>())!;
+
+        // The same numbers the outline was built from, so a route that measured in stored degrees
+        // would be out by ten orders of magnitude rather than by a rounding.
+        body["geometryValid"]!.GetValue<bool>().ShouldBeTrue();
+        body["areaM2"]!.GetValue<double>().ShouldBe(10_000d, 1d);
+        body["perimeterM"]!.GetValue<double>().ShouldBe(500d, 1d);
+        body["circularity"]!.GetValue<double>().ShouldBe(0.502655d, 0.001d);
+        body["longAxisM"]!.GetValue<double>().ShouldBe(200d, 1d);
+        body["shortAxisM"]!.GetValue<double>().ShouldBe(50d, 1d);
+        body["elongation"]!.GetValue<double>().ShouldBe(4d, 0.02d);
+        body["longAxisAzimuthDegrees"]!.GetValue<double>().ShouldBeInRange(0d, 180d);
+
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync($"/api/v1/features/{rectangleId}/morphometry"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.GetAsync(
+                "/api/v1/features/morphometry?west=26.34&south=46.04&east=26.37&north=46.06"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task A_reader_who_may_not_place_a_doline_is_told_by_the_route_that_there_is_none()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"mmview-{suffix}@t.local");
+        using var viewer = await AuthHelper.BearerClientAsync(factory, $"mmview-{suffix}@t.local");
+
+        var open = await CreateAsync(Body("Route open", Rectangle(), visibility: "public"));
+        var guarded = await CreateAsync(
+            Body("Route guarded", Rectangle(), visibility: "public", locationProtected: true));
+
+        // The positive half, for the same caller: the open outline is measured, so the refusal
+        // below is the placement rule and not a route that answers nobody.
+        (await viewer.GetAsync($"/api/v1/features/{open}/morphometry"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // And the guarded one is genuinely readable by that same caller, which is what makes this
+        // a placement rule rather than a visibility one.
+        (await viewer.GetAsync($"/api/v1/features/{guarded}"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // A shape places a doline as surely as a coordinate does, so nothing is returned — and it
+        // is spelled as absence, so a guarded doline and a doline that never existed answer alike.
+        var refused = await viewer.GetAsync($"/api/v1/features/{guarded}/morphometry");
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await refused.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
+            .ShouldBe("feature.not_found");
+
+        var never = await viewer.GetAsync($"/api/v1/features/{Guid.NewGuid()}/morphometry");
+        never.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await never.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
+            .ShouldBe("feature.not_found");
+
+        // The table is the same rule in bulk: the open outline is in it and the guarded one is
+        // not, and it carries no count of what it left out.
+        var table = await viewer.GetAsync(
+            $"/api/v1/features/morphometry?west=26.34&south=46.04&east=26.37&north=46.06"
+            + $"&featureTypeId={sinkholeTypeId}");
+        table.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var rows = (await table.Content.ReadFromJsonAsync<JsonObject>())!["rows"]!.AsArray();
+        var ids = rows.Select(r => r!["featureId"]!.GetValue<Guid>()).ToList();
+        ids.ShouldContain(open);
+        ids.ShouldNotContain(guarded);
+    }
+
+    [Fact]
+    public async Task The_area_route_refuses_a_box_that_is_not_a_box_and_a_row_count_out_of_bounds()
+    {
+        (await owner.GetAsync(
+                "/api/v1/features/morphometry?west=26.37&south=46.04&east=26.34&north=46.06"))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        (await owner.GetAsync(
+                "/api/v1/features/morphometry?west=26.34&south=46.04&east=26.37&north=46.06&limit=0"))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
     private AccessContext Admin() => new(ownerId, isFullAdmin: true, [], []);
 
     private async Task<PolygonMorphometryRow?> MeasureAsync(

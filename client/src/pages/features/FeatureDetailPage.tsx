@@ -24,6 +24,7 @@ import {
 } from '../../api/hooks.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import FeatureEditModal, { type FeatureAttributeValues } from '../../components/features/FeatureEditModal.tsx';
+import FeatureMorphometryCard from '../../components/features/FeatureMorphometryCard.tsx';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import HistoryPanel from '../../components/history/HistoryPanel.tsx';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
@@ -325,6 +326,8 @@ export default function FeatureDetailPage() {
           </Descriptions>
         </Card>
       )}
+
+      <FeatureMorphometryCard featureId={id} geometryType={feature.geometry?.type ?? null} />
 
       <HierarchyCard featureId={id} canEdit={canEdit} />
       <LinksCard featureId={id} canEdit={canEdit} />
