@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260828174208_EventReminderStamp")]
+    partial class EventReminderStamp
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2243,15 +2246,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("published_at");
 
-                    b.Property<Guid?>("SeriesId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("series_id");
-
-                    b.Property<string>("SeriesRule")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("series_rule");
-
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date")
                         .HasColumnName("start_date");
@@ -2290,15 +2284,9 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("StartDate")
                         .HasDatabaseName("ix_events_start_date");
 
-                    b.HasIndex("SeriesId", "StartDate")
-                        .HasDatabaseName("ix_events_series_id_start_date")
-                        .HasFilter("series_id IS NOT NULL");
-
                     b.ToTable("events", null, t =>
                         {
                             t.HasCheckConstraint("ck_events_dates", "end_date IS NULL OR end_date > start_date");
-
-                            t.HasCheckConstraint("ck_events_series_rule", "series_rule IS NULL OR series_id IS NOT NULL");
                         });
                 });
 

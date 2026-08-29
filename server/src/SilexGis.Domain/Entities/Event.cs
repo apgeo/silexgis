@@ -172,6 +172,27 @@ public class Event : IProtectedEntity, ITimestamped, IAuditable
     public DateTimeOffset? PublishedAt { get; set; }
 
     /// <summary>
+    /// When the people who answered about this event were last reminded that it is coming up, or
+    /// null while they have not been. Written by the same scheduled pass that reminds people about
+    /// a trip, and the whole of that reminder's idempotence — without it every pass in the run-up
+    /// would send another.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The reminder is not armed ahead of time as a queued message, for the same reason a trip's is
+    /// not: a queued message cannot be recalled, so an event put back or called off would still
+    /// remind everybody about a date that is no longer true.
+    /// </para>
+    /// <para>
+    /// Never cleared. An event already reminded about, then put back and planned again on a new
+    /// date, is not reminded a second time — the same deliberate reading of "once" a trip carries.
+    /// A repeating evening does not suffer by it, because each occurrence is a row of its own with
+    /// a stamp of its own.
+    /// </para>
+    /// </remarks>
+    public DateTimeOffset? PlanReminderSentAt { get; set; }
+
+    /// <summary>
     /// How many people the event has room for, or null when it states no limit.
     /// </summary>
     /// <remarks>

@@ -28,6 +28,7 @@ public enum NotificationTargetKind : short
     MapView = 5,
     Expedition = 6,
     Document = 7,
+    Event = 8,
 }
 
 /// <summary>

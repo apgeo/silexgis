@@ -138,6 +138,21 @@ public static class MessageTemplateCatalog
     /// </remarks>
     public const string NotifyTripInviteeCannotOpenCave = "notify.trip-invitee-cannot-open-cave";
 
+    /// <summary>A club event somebody was asked about is coming up.</summary>
+    /// <remarks>
+    /// <para>
+    /// Sent by the same pass that reminds people about a trip, and for the same reason: a message
+    /// written onto the queue when the event was arranged could not be recalled, so an evening put
+    /// back or called off would still remind everybody about a date that is no longer true.
+    /// </para>
+    /// <para>
+    /// It names the event and its date and nothing else, the way the trip messages do. An event
+    /// has no cave on it to name, and the placeholder list is what keeps that true: an operator
+    /// editing the wording may only use the names declared here, so one could not be written in.
+    /// </para>
+    /// </remarks>
+    public const string NotifyEventReminder = "notify.event-reminder";
+
     // Somebody said something where this person can hear it. Both name the document and link to
     // it, and neither carries a word of what was said: a comment body is free text a person
     // typed, and a message leaves the installation entirely — once it is in a mailbox it obeys
@@ -785,6 +800,37 @@ public static class MessageTemplateCatalog
                     nimeni altcineva — cineva care poate acorda acces altfel, printr-un club de
                     exemplu, nu a fost înștiințat. Vă rugăm să-l transmiteți mai departe dacă nu vă
                     revine dumneavoastră.
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyEventReminder,
+            MessageChannel.Email,
+            "A club event someone was asked about is coming up.",
+            [AppName, DisplayName, "eventTitle", "eventDate", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{eventTitle} is coming up",
+                    """
+                    Hello {displayName},
+
+                    {eventTitle} is on {eventDate}. What has been arranged for it is here:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Se apropie {eventTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {eventTitle} are loc în data de {eventDate}. Ce s-a stabilit pentru el găsiți aici:
+
+                    {url}
 
                     {unsubscribeUrl}
                     """),

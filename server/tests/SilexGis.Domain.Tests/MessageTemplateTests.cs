@@ -134,15 +134,25 @@ public class MessageTemplateTests
     [Fact]
     public void A_message_a_scheduled_pass_sends_names_no_actor_and_no_cave()
     {
-        // Neither of these is caused by anybody, so neither declares an actor — a placeholder
-        // nothing fills is one an operator can write into the wording and get a hole from. And
-        // neither may name a cave. The temptation is at its worst on the overdue one, where an
-        // alarm feels like the message that ought to say where the party is; but it goes to
-        // everybody the trip names, and where a cave is stays readable by fewer people than that.
+        // None of these is caused by anybody, so none declares an actor — a placeholder nothing
+        // fills is one an operator can write into the wording and get a hole from. And none may
+        // name a cave. The temptation is at its worst on the overdue one, where an alarm feels
+        // like the message that ought to say where the party is; but it goes to everybody the trip
+        // names, and where a cave is stays readable by fewer people than that.
         var reminder = MessageTemplateCatalog.Find(MessageTemplateCatalog.NotifyTripPlanReminder)!;
 
         reminder.Placeholders.ShouldBe(
             ["appName", "displayName", "tripTitle", "tripDate", "url", "unsubscribeUrl"],
+            ignoreOrder: true);
+
+        // Same pass, same shape: an event names itself and its date and has no cave to name, and
+        // the declared list is what keeps it that way. Pinning the list rather than reading the
+        // wording is the whole mechanism — the renderer refuses any placeholder off it, so a cave
+        // could only enter by being declared here first, which is this assertion failing.
+        var eventReminder = MessageTemplateCatalog.Find(MessageTemplateCatalog.NotifyEventReminder)!;
+
+        eventReminder.Placeholders.ShouldBe(
+            ["appName", "displayName", "eventTitle", "eventDate", "url", "unsubscribeUrl"],
             ignoreOrder: true);
 
         var overdue = MessageTemplateCatalog.Find(MessageTemplateCatalog.NotifyTripCalloutOverdue)!;
@@ -154,7 +164,7 @@ public class MessageTemplateTests
             ["appName", "displayName", "tripTitle", "tripDate", "expectedReturn", "url"],
             ignoreOrder: true);
 
-        foreach (var definition in new[] { reminder, overdue })
+        foreach (var definition in new[] { reminder, eventReminder, overdue })
         {
             definition.Channel.ShouldBe(MessageChannel.Email);
 

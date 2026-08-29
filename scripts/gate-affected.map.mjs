@@ -26,7 +26,7 @@ export const groups = {
   ],
   events: [
     'EventAccessDomainTests', 'EventAuthoringTests', 'EventInvitationTests',
-    'EventLifecycleTests', 'TripInvitationSubjectTests',
+    'EventLifecycleTests', 'EventReminderSweepTests', 'TripInvitationSubjectTests',
   ],
   expeditions: [
     'ExpeditionDiscoveryTests', 'ExpeditionEntityTests', 'ExpeditionLeadsTests',
@@ -87,8 +87,8 @@ export const groups = {
     'ArchiveUpgradeMigrationTests', 'BulkImportTests', 'PhotoImportTests', 'StagedImportTests',
   ],
   jobs: [
-    'BulkImportTests', 'DocumentConversionTests', 'NotificationDeliveryTests',
-    'TextExtractionPipelineTests',
+    'BulkImportTests', 'DocumentConversionTests', 'EventReminderSweepTests',
+    'NotificationDeliveryTests', 'TextExtractionPipelineTests', 'TripCalloutSweepTests',
   ],
   map: ['ExpeditionMapTests', 'GeoJsonGeometryTests', 'TerrainOptionsTests'],
   mapViews: ['MapViewTests'],

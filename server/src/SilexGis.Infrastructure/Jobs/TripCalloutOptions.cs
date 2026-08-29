@@ -65,14 +65,46 @@ public sealed class TripCalloutOptions
         SweepInterval > MaxSweepInterval ? MaxSweepInterval : SweepInterval;
 
     /// <summary>
-    /// How far ahead of a trip the people on it are reminded that it is coming up. Zero or negative
-    /// sends no reminders, leaving the overdue check running — they are two different promises and
-    /// an installation may well want one without the other.
+    /// How far ahead of a trip, or of a club event, the people it concerns are reminded that it is
+    /// coming up. Zero or negative sends no reminders at all, leaving the overdue check running —
+    /// they are two different promises and an installation may well want one without the other.
+    /// <para>
+    /// One setting for both kinds of row rather than one each. It is an installation's answer to
+    /// "how much notice do people here want", which is a fact about the club and not about what is
+    /// written in the diary; and a reader who wants different notice for the two would be asking
+    /// for a setting of their own, which is a per-account preference and not this.
+    /// </para>
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The reminder rides the same pass rather than being written onto the queue when the trip is
     /// arranged, for the same reason the alarm does: a message set weeks ahead cannot be recalled
     /// when the trip moves or is called off, and would arrive naming a date nobody is going on.
+    /// </para>
+    /// <para>
+    /// Why this is one number for the installation and not one per reader, written down here
+    /// because the obvious way to make it per-reader loses messages silently. What stops a
+    /// reminder arriving on every pass through the run-up is a single nullable instant on the
+    /// subject itself, claimed by an update that only sends when it finds that instant still
+    /// unset. Two readers wanting different notice are two sends about one subject on two
+    /// different days, and one column records at most one of them: the earlier send sets it, the
+    /// guarded update then finds nothing to claim on the later day, and the second reader is
+    /// simply never told — with nothing anywhere recording that a reminder was owed. Widening the
+    /// window to the longest notice does not help, because it sends earlier for everybody and
+    /// still stamps once; dropping the stamp restores the reminder-every-quarter-hour it exists
+    /// to prevent.
+    /// </para>
+    /// <para>
+    /// So a per-reader notice needs two things this does not have: somewhere to record each
+    /// reader's chosen notice, and a marker per subject-and-reader rather than per subject. And if
+    /// it is built, it should offer a small closed set of choices — the same day, a day, three
+    /// days, a week — rather than a free-form duration. With a closed set the pass still selects
+    /// subjects, taking everything inside the longest choice and sorting each subject's readers
+    /// into the choice each of them made, so the bound on how many rows one pass takes goes on
+    /// bounding subjects. A free-form duration gives every subject-and-reader pair its own due
+    /// date and inverts the selection to pairs, so the same bound silently starts bounding
+    /// something that grows with how many people a subject concerns.
+    /// </para>
     /// </remarks>
     public TimeSpan ReminderLead { get; set; } = TimeSpan.FromDays(2);
 }

@@ -3,6 +3,7 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
@@ -14,7 +15,7 @@ namespace SilexGis.Infrastructure.Jobs;
 
 /// <summary>
 /// Looks for parties past the hour they said they would be back and tells whoever the trip names,
-/// and reminds the people on a trip that is nearly here.
+/// and reminds the people on a trip — or at a club event — that is nearly here.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -67,24 +68,51 @@ public sealed class TripCalloutSweepHandler(
     ILogger<TripCalloutSweepHandler> logger) : IProcessingJobHandler
 {
     /// <summary>
-    /// How many trips one pass moves. A bound rather than a policy: the selection is normally a
-    /// handful of rows, and a pass that somehow found thousands should still finish, commit what it
-    /// did, and let the next one take the rest — which it can, because what it did is on the rows.
+    /// How many rows of one kind one pass moves. A bound rather than a policy: the selection is
+    /// normally a handful of rows, and a pass that somehow found thousands should still finish,
+    /// commit what it did, and let the next one take the rest — which it can, because what it did
+    /// is on the rows.
     /// </summary>
+    /// <remarks>
+    /// Spent per selection rather than shared across them, so a month of club evenings cannot use
+    /// up the budget the trips needed. Each selection is bounded and each is drained by the passes
+    /// that follow, which is the property the bound exists for.
+    /// </remarks>
     private const int BatchSize = 200;
 
     /// <summary>
-    /// The states in which a trip's own date is still a date somebody is going on, resolved once
-    /// from the rule that decides it rather than listed again here.
+    /// The states in which a dated row's own date is still a date somebody is going on, resolved
+    /// once from the rule that decides it rather than listed again here.
     /// </summary>
     /// <remarks>
-    /// Deliberately not the rule about whether a change is worth mailing about. A trip that has
+    /// <para>
+    /// Deliberately not the rule about whether a change is worth mailing about. Something that has
     /// been put back is worth telling people about and its date is not one anybody is going on, so
     /// reminding them of it would quote a date that is no longer true — which is the same mistake
     /// this whole design exists to avoid.
+    /// </para>
+    /// <para>
+    /// One set for both kinds of row rather than one each. The question is asked of the lifecycle
+    /// vocabulary, which trips and club events share, and the answer is the same fact about a
+    /// state whichever kind of row carries it; two copies would be two answers free to drift, and
+    /// the drift that would matter is the one where a reminder quotes a date nobody is going on.
+    /// </para>
     /// </remarks>
     private static readonly ActivityState[] RemindedStates =
         [.. Enum.GetValues<ActivityState>().Where(TripPlanNotices.RemindsOfDate)];
+
+    /// <summary>
+    /// The kinds of event somebody is asked to answer about, and so the only kinds with anybody to
+    /// remind, resolved from the rule that decides it rather than listed again here.
+    /// </summary>
+    /// <remarks>
+    /// A date something is due by has no audience at all: nobody was asked, so the reminder would
+    /// reach nobody. It is left out of the selection rather than selected and skipped, because the
+    /// stamp is never cleared — spending it on a send that never happened would mean a row whose
+    /// kind is later changed to one people answer about is never reminded at all.
+    /// </remarks>
+    private static readonly EventKind[] AnsweredKinds =
+        [.. Enum.GetValues<EventKind>().Where(EventKinds.AcceptsResponses)];
 
     private static readonly ActivityState[] WatchedStates =
         [.. Enum.GetValues<ActivityState>().Where(TripCalloutRules.WatchesForOverdue)];
@@ -102,18 +130,24 @@ public sealed class TripCalloutSweepHandler(
         {
             var overdue = await RaiseOverdueAlarmsAsync(now, ct);
             var reminded = await SendRemindersAsync(now, ct);
+            var eventsReminded = await SendEventRemindersAsync(now, ct);
 
-            if (overdue > 0 || reminded > 0)
+            var did = overdue > 0 || reminded > 0 || eventsReminded > 0;
+            if (did)
             {
                 await db.SaveChangesAsync(ct);
             }
 
             await pass.CommitAsync(ct);
 
-            if (overdue > 0 || reminded > 0)
+            if (did)
             {
                 logger.LogInformation(
-                    "Trip callout pass: {Overdue} overdue, {Reminded} reminded", overdue, reminded);
+                    "Trip callout pass: {Overdue} overdue, {Reminded} reminded, {EventsReminded} "
+                    + "event reminders",
+                    overdue,
+                    reminded,
+                    eventsReminded);
             }
         }
         catch
@@ -188,6 +222,7 @@ public sealed class TripCalloutSweepHandler(
             var expected = trip.ExpectedReturnAt ?? trip.CalloutAlarmAt;
             await QueueAsync(
                 trip,
+                await TripAudience.PeopleConcernedAsync(db, trip.Id, ct),
                 NotificationCategory.TripCallout,
                 MessageTemplateCatalog.NotifyTripCalloutOverdue,
                 new Dictionary<string, string>
@@ -197,6 +232,12 @@ public sealed class TripCalloutSweepHandler(
                     ["expectedReturn"] = FormatInstant(expected),
                     ["url"] = TripUrl(trip.Id),
                 },
+                // Deliberately names nothing, pending a decision that is not this one's to make.
+                // Every other message here degrades to a bare line once the reader can no longer
+                // open what it is about; for an alarm about a party nobody has heard from, whether
+                // that is protection or the withholding of the one message that had to arrive
+                // whole is a question with a person's safety on both sides of it.
+                names: null,
                 ct);
             raised++;
         }
@@ -240,6 +281,14 @@ public sealed class TripCalloutSweepHandler(
     /// cleared: a trip already reminded about, then put back and planned again on a new date, is
     /// not reminded a second time, which is a deliberate reading of "once".
     /// <para>
+    /// What the two reminder loops share is held in one place wherever a shared form exists: the
+    /// bound on a pass, the operator's window, the states worth reminding about, and the rule that
+    /// decides who may be told. What is left in each is the one query that names its own table and
+    /// its own date column, which the query language cannot express over both without composing
+    /// the predicate by hand — so the club-event loop below is shaped like this one deliberately,
+    /// and a change to how either selects is a change to both.
+    /// </para>
+    /// <para>
     /// The states it selects are the ones whose date is still a date somebody is going on, which is
     /// deliberately not the same set as the states whose changes are worth mailing about. A trip
     /// that has been put back keeps the date it was going to happen on until a new one is settled,
@@ -249,14 +298,14 @@ public sealed class TripCalloutSweepHandler(
     /// </remarks>
     private async Task<int> SendRemindersAsync(DateTimeOffset now, CancellationToken ct)
     {
-        var lead = options.Value.ReminderLead;
-        if (lead <= TimeSpan.Zero)
+        var runUp = RunUp(now);
+        if (runUp is null)
         {
             return 0;
         }
 
-        var today = DateOnly.FromDateTime(now.UtcDateTime);
-        var horizon = DateOnly.FromDateTime((now + lead).UtcDateTime);
+        var (today, horizon) = runUp.Value;
+
         var comingUp = await db.TripLogs
             .AsNoTracking()
             .Where(t => t.PlanReminderSentAt == null
@@ -280,6 +329,7 @@ public sealed class TripCalloutSweepHandler(
 
             await QueueAsync(
                 trip,
+                await TripAudience.PeopleConcernedAsync(db, trip.Id, ct),
                 NotificationCategory.TripPlanning,
                 MessageTemplateCatalog.NotifyTripPlanReminder,
                 new Dictionary<string, string>
@@ -288,6 +338,7 @@ public sealed class TripCalloutSweepHandler(
                     ["tripDate"] = FormatDate(trip.TripDate),
                     ["url"] = TripUrl(trip.Id),
                 },
+                NotificationTargetKind.TripLog,
                 ct);
             sent++;
         }
@@ -296,30 +347,151 @@ public sealed class TripCalloutSweepHandler(
     }
 
     /// <summary>
-    /// Queues one message for everybody the trip concerns whose own access lets them read it.
+    /// Tells the people who answered about a club event that it is nearly here, once.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The same mechanism as the trip reminder above rather than a copy of it: the same window off
+    /// the same operator setting, the same never-cleared stamp on the row itself, the same guarded
+    /// update to claim it, the same bound on how many rows one pass takes. A second pass, or a
+    /// second setting, would be a second thing to keep in step with the first — and the way that
+    /// fails is that somebody is not reminded, which nobody sees until afterwards.
+    /// </para>
+    /// <para>
+    /// One reminder is a message about one subject, so it goes out on the same category as the
+    /// trip reminder. How finely somebody can mute is exactly how many categories there are, and
+    /// whoever switches off "a trip is coming up" means the club evening too.
+    /// </para>
+    /// <para>
+    /// The audience is the answers and nothing else, because an event keeps no roster: who is
+    /// coming is worked out from what people said, so what people said is who it concerns.
+    /// </para>
+    /// <para>
+    /// The selection below is shaped like the trip one above for the reason recorded there, and
+    /// the two move together: a change to how either picks what is coming up belongs in both.
+    /// </para>
+    /// </remarks>
+    private async Task<int> SendEventRemindersAsync(DateTimeOffset now, CancellationToken ct)
+    {
+        var runUp = RunUp(now);
+        if (runUp is null)
+        {
+            return 0;
+        }
+
+        var (today, horizon) = runUp.Value;
+
+        // The first day is what the run-up leads to, and it is the only date that can be compared
+        // against the window: an event that started yesterday and runs until tomorrow is under way
+        // rather than coming up, and nobody wants telling about it now.
+        var comingUp = await db.Events
+            .AsNoTracking()
+            .Where(e => e.PlanReminderSentAt == null
+                && e.StartDate >= today
+                && e.StartDate <= horizon
+                && RemindedStates.Contains(e.State)
+                && AnsweredKinds.Contains(e.Kind))
+            .OrderBy(e => e.StartDate)
+            .Take(BatchSize)
+            .ToListAsync(ct);
+
+        var sent = 0;
+        foreach (var occasion in comingUp)
+        {
+            var stamped = await db.Events
+                .Where(e => e.Id == occasion.Id && e.PlanReminderSentAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(e => e.PlanReminderSentAt, now), ct);
+            if (stamped != 1)
+            {
+                continue;
+            }
+
+            await QueueAsync(
+                occasion,
+                await EventAudience.PeopleConcernedAsync(db, occasion.Id, ct),
+                NotificationCategory.TripPlanning,
+                MessageTemplateCatalog.NotifyEventReminder,
+                new Dictionary<string, string>
+                {
+                    ["eventTitle"] = occasion.Title,
+                    ["eventDate"] = FormatDate(occasion.StartDate),
+                    ["url"] = EventUrl(occasion.Id),
+                },
+                NotificationTargetKind.Event,
+                ct);
+            sent++;
+        }
+
+        return sent;
+    }
+
+    /// <summary>
+    /// Queues one message for everybody the subject concerns whose own access lets them read it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Who a subject concerns differs by what it is — a trip has a roster as well as its answers,
+    /// a club event has only its answers — so the caller works that out and this decides the one
+    /// thing that must not differ: nobody is told about something they could not open. It is asked
+    /// of each recipient's own access, freshly, through the rule every producer shares.
+    /// </para>
+    /// <para>
     /// Nobody is excluded as the actor, because there is no actor: a clock is not a person, so
     /// unlike an edit there is nobody here who already knows what the message says.
+    /// </para>
+    /// <para>
+    /// The check above is made once, here, at the moment the message is written; the reference
+    /// this puts on the row is what lets it be made again when somebody reads their inbox. A
+    /// reminder about an evening in a fortnight sits in a mailbox for a fortnight, and a grant
+    /// withdrawn in the meantime has to reach the copy already written down — which it can only
+    /// do through a reference, because the title and the link were frozen when this ran. A caller
+    /// that names nothing writes a row whose protection can never be applied a second time.
+    /// </para>
     /// </remarks>
     private async Task QueueAsync(
-        TripLog trip,
+        IProtectedEntity subject,
+        IReadOnlyList<Guid> concerned,
         NotificationCategory category,
         string templateKey,
         Dictionary<string, string> placeholders,
+        NotificationTargetKind? names,
         CancellationToken ct)
     {
-        var concerned = await TripAudience.PeopleConcernedAsync(db, trip.Id, ct);
         var recipients = await NotificationRecipients.WhoMayReadAsync(
-            db, access, trip, concerned, excluding: null, ct);
+            db, access, subject, concerned, excluding: null, ct);
 
         foreach (var recipient in recipients)
         {
-            NotificationQueue.Enqueue(db, recipient, category, templateKey, placeholders);
+            NotificationQueue.Enqueue(
+                db, recipient, category, templateKey, placeholders, names, names is null ? null : subject.Id);
         }
     }
 
+    /// <summary>
+    /// The stretch of calendar a reminder is owed for, or nothing at all when the operator has
+    /// shut the window.
+    /// </summary>
+    /// <remarks>
+    /// One place, driven by both reminder loops, because the window is the part of them most
+    /// likely to be reconsidered — whether a subject already under way still counts as coming up,
+    /// whether the far edge is inclusive — and a change made to one loop and not the other shows
+    /// up as somebody simply not being reminded, which nobody notices until after the day.
+    /// <para>
+    /// A shut window is a real setting rather than a misconfiguration: an installation may want
+    /// the overdue check and no reminders at all.
+    /// </para>
+    /// </remarks>
+    private (DateOnly Today, DateOnly Horizon)? RunUp(DateTimeOffset now)
+    {
+        var lead = options.Value.ReminderLead;
+        return lead <= TimeSpan.Zero
+            ? null
+            : (DateOnly.FromDateTime(now.UtcDateTime), DateOnly.FromDateTime((now + lead).UtcDateTime));
+    }
+
     private static string TripUrl(Guid tripId) => $"/trip-logs/{tripId}";
+
+    private static string EventUrl(Guid eventId) => $"/events/{eventId}";
 
     private static string FormatDate(DateOnly date) =>
         date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

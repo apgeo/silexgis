@@ -54,6 +54,7 @@ public static class NotificationTargets
         NotificationTargetKind.Feature => $"/features/{target.Id}",
         NotificationTargetKind.TripLog => $"/trip-logs/{target.Id}",
         NotificationTargetKind.Expedition => $"/expeditions/{target.Id}",
+        NotificationTargetKind.Event => $"/events/{target.Id}",
         NotificationTargetKind.Document => $"/documents/{target.Id}",
         NotificationTargetKind.CavingGroup => "/caving-groups",
         NotificationTargetKind.Geofile or NotificationTargetKind.GeoreferencedMap => "/geodata",
@@ -230,6 +231,8 @@ public static class NotificationTargets
                 [.. await db.MapViews.AsNoTracking().Where(x => ids.Contains(x.Id)).ToListAsync(ct)],
             NotificationTargetKind.Expedition =>
                 [.. await db.Expeditions.AsNoTracking().Where(x => ids.Contains(x.Id)).ToListAsync(ct)],
+            NotificationTargetKind.Event =>
+                [.. await db.Events.AsNoTracking().Where(x => ids.Contains(x.Id)).ToListAsync(ct)],
             _ => [],
         };
 }
