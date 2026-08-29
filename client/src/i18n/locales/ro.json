@@ -263,7 +263,8 @@
     "loadFailed": "Nu s-a putut încărca. Încercați din nou.",
     "close": "Închide",
     "reset": "Resetează",
-    "clearAnswer": "Șterge răspunsul"
+    "clearAnswer": "Șterge răspunsul",
+    "configure": "Configurare"
   },
   "errorBoundary": {
     "title": "Ceva nu a funcționat pe acest ecran",

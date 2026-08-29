@@ -263,7 +263,8 @@
     "loadFailed": "Could not load this. Please try again.",
     "close": "Close",
     "reset": "Reset",
-    "clearAnswer": "Clear answer"
+    "clearAnswer": "Clear answer",
+    "configure": "Configure"
   },
   "errorBoundary": {
     "title": "Something went wrong on this screen",

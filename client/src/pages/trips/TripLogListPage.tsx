@@ -12,6 +12,7 @@ import {
   type TripLogInfo,
   type TripLogListParams,
 } from '../../api/hooks.ts';
+import ConfigureLink from '../../components/ConfigureLink.tsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import TripReadinessTag from '../../components/trips/TripReadinessTag.tsx';
@@ -42,6 +43,9 @@ export default function TripLogListPage() {
   }, [location.pathname, location.state, navigate]);
 
   const canCreate = useCan('tripLogs', 'create');
+  // Write, not read: every account may read the vocabularies, so a read check would offer these
+  // to everyone. Authoring one decides what every trip under it may say.
+  const canWriteTaxonomies = useCan('taxonomies', 'write');
 
   const onTableChange = (pagination: TablePaginationConfig) => {
     setParams((p) => ({ ...p, page: pagination.current, pageSize: pagination.pageSize }));
@@ -58,6 +62,18 @@ export default function TripLogListPage() {
               from whoever is reading it, so it is never a door onto somebody else's trips —
               an account on none of them is shown that, which is a useful answer. */}
           <Button onClick={() => navigate('/trip-logs/mine')}>{t('trips.mine.link')}</Button>
+          {/* What a purpose asks a report to record, what a roster row may say somebody did, and
+              the layout a write-up circulates in — reached from the list they govern, not only
+              from the configuration group in the rail. */}
+          <ConfigureLink
+            items={canWriteTaxonomies
+              ? [
+                  { key: 'admin/trip-types', label: t('nav.tripTypes') },
+                  { key: 'admin/participant-roles', label: t('nav.participantRoles') },
+                  { key: 'admin/report-templates', label: t('nav.reportTemplates') },
+                ]
+              : []}
+          />
           {canCreate && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
               {t('trips.new')}
