@@ -37,7 +37,12 @@ const apiDir = join(repoRoot, 'server', 'src', 'SilexGis.Api');
 const DB_PORT = process.env.SILEXGIS_E2E_DB_PORT ?? '5447';
 const API_PORT = process.env.SILEXGIS_E2E_API_PORT ?? '5081';
 const DEV_PORT = process.env.SILEXGIS_E2E_DEV_PORT ?? '5174';
-const DB_NAME = 'silexgis-e2e-db';
+// Named after its port, not a constant. The ports are what make two runs independent, and a
+// fixed container name quietly undid that: a second run's `docker rm -f` removed the first
+// run's database out from under it, and the first died at "seeding failed" with nothing
+// pointing at the other run. Two checkouts compared side by side is exactly what this script
+// is for, so the isolation it advertises has to hold for the container too.
+const DB_NAME = `silexgis-e2e-db-${DB_PORT}`;
 
 const ADMIN_EMAIL = 'admin@dev.local';
 const ADMIN_PASSWORD = 'dev-admin-pass-1';
@@ -49,7 +54,12 @@ const ADMIN_PASSWORD = 'dev-admin-pass-1';
 // port and reported "API: ready after 0s" — serving the whole suite from the previous run's
 // process. That is the failure this project has been bitten by before, and it is worse than a
 // crash: the run is green, and green about the wrong build.
-const PID_FILE = join(repoRoot, 'client', 'node_modules', '.cache', 'silexgis-e2e-api.pid');
+// Per API port, for the same reason the container is: two runs that differ only by port must
+// not find each other's pid here and kill it. That is not hypothetical even within one
+// checkout — a worktree created for a side-by-side comparison may symlink `node_modules`, which
+// makes this literally the same file in both trees.
+const PID_FILE = join(
+  repoRoot, 'client', 'node_modules', '.cache', `silexgis-e2e-api-${API_PORT}.pid`);
 
 /** Kill an API this script left behind, so a stale one can never quietly serve the run. */
 function killPreviousApi() {
@@ -219,6 +229,10 @@ try {
     env: {
       ...process.env,
       SILEXGIS_DEV_PORT: DEV_PORT,
+      // Tells the Playwright config not to adopt a dev server it did not start. Without this a
+      // Vite left over from an earlier run serves the previous code, and the run reports on
+      // assets that are no longer on disk.
+      SILEXGIS_E2E_MANAGED: '1',
       SILEXGIS_API_TARGET: `http://localhost:${API_PORT}`,
     },
   });

@@ -87,7 +87,13 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev',
     url: baseURL,
-    reuseExistingServer: true,
+    // Reusing a running dev server is a convenience by hand and a trap under the runner: a Vite
+    // started before an edit keeps serving the code from before it, so the suite passes or fails
+    // against assets nobody is looking at. That is not hypothetical — a CSS fix measured as
+    // ineffective across forty runs here, and was measured working twenty times out of twenty the
+    // moment the server was started fresh. `scripts/e2e.mjs` sets the marker, so a managed run
+    // always builds its own server and an ordinary `npx playwright test` keeps the convenience.
+    reuseExistingServer: !process.env.SILEXGIS_E2E_MANAGED,
     timeout: 60_000,
   },
 });
