@@ -282,6 +282,77 @@ public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_dimension_the_surveyor_did_not_measure_is_stored_as_nothing()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var modelId = await UploadLocalLoxAsync(caveId, MeasuredWalls());
+        await RunQueuedGraphJobAsync(modelId);
+
+        var reading = (await ReadingsOfAsync(modelId)).ShouldHaveSingleItem();
+        reading.StationName.ShouldBe("A");
+
+        reading.LeftM.ShouldBe(1.5);
+        reading.RightM.ShouldBe(2.0);
+
+        // The one that matters. The file says this was never measured, and it says so with a
+        // negative number; stored as the number it would be a wall a metre behind the station, and
+        // every width, height and volume computed over the cave afterwards would be wrong while
+        // looking entirely like data.
+        reading.UpM.ShouldBeNull();
+
+        // And a genuine zero is not the same statement: the station stands against the floor. A rule
+        // that treated the two alike would erase a measurement somebody took.
+        reading.DownM.ShouldBe(0);
+
+        reading.Section.ShouldBe(SurveySectionShape.Oval);
+
+        // The leg this was measured along, named by an id the database assigned in the same save.
+        reading.ShotId.ShouldNotBeNull();
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.SurveyShots.AnyAsync(s => s.Id == reading.ShotId)).ShouldBeTrue();
+        }
+
+        // Read again — after a crash, or by hand — and there is still one reading, not two. The
+        // readings have to be cleared before the legs are, because the readings the other format
+        // states name no leg and so would not follow the legs out.
+        await RunGraphJobAsync(modelId);
+        (await ReadingsOfAsync(modelId)).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task Cross_sections_keyed_by_station_alone_are_stored_with_no_leg_named()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+
+        // A real export in the other of the two formats, which states its own grid and so is asked
+        // nothing. It carries its passage dimensions as runs of cross-sections keyed by station
+        // name, with no leg anywhere in them.
+        var modelId = await UploadAsync(caveId, "P8_Master.3d", Survex3dFixture());
+        await RunQueuedGraphJobAsync(modelId);
+
+        var readings = await ReadingsOfAsync(modelId);
+        readings.Count.ShouldBe(155);
+
+        // Nullable because of exactly this: the relationship does not exist in this format, and
+        // filling it in would mean guessing which of a station's legs a reading belonged to.
+        readings.ShouldAllBe(r => r.ShotId == null);
+        readings.ShouldAllBe(r => r.Section == null);
+
+        // Every reading stands at a station this same read stored, which is what makes the name a
+        // usable key rather than a label nothing can be joined on.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var stations = await db.SurveyStations
+            .Where(s => s.SurveyModelId == modelId)
+            .Select(s => s.Name)
+            .ToListAsync();
+        readings.Select(r => r.StationName).Except(stations).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Deleting_a_survey_takes_the_centerline_that_was_read_out_of_it()
     {
         var caveId = await CreateCaveAsync(locationProtected: false);
@@ -373,6 +444,41 @@ public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable
                     RawFlags = s.RawFlags,
                     Flags = s.RawFlags == loxSplayBit ? CaveShotFlags.Splay : CaveShotFlags.None,
                 }),
+            ],
+        };
+
+        return LoxWriter.Write(model);
+    }
+
+    /// <summary>
+    /// A survey with the passage measured at one end of its one leg and not at the other, carrying
+    /// all three cases at once: two wall distances measured, one measured as zero because the
+    /// station stands against the floor, and one the surveyor never took.
+    /// </summary>
+    private static byte[] MeasuredWalls()
+    {
+        var model = new CaveModel
+        {
+            SourceFormat = CaveSourceFormat.Lox,
+            Stations =
+            [
+                new CaveStation { Id = 1, Name = "A", Position = new CaveVector3(0, 0, 0) },
+                new CaveStation { Id = 2, Name = "B", Position = new CaveVector3(10, 0, 0) },
+            ],
+            Shots =
+            [
+                new CaveShot
+                {
+                    FromStationId = 1,
+                    ToStationId = 2,
+                    SectionType = CaveShotSection.Oval,
+
+                    // -1 is how this format writes "not measured". The other format writes a
+                    // different negative number for the same statement, which is why what is read
+                    // is the sign and not the value.
+                    FromLrud = new CaveLrud(Left: 1.5, Right: 2.0, Up: -1, Down: 0),
+                    ToLrud = new CaveLrud(-1, -1, -1, -1),
+                },
             ],
         };
 
@@ -490,6 +596,26 @@ public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable
         var response = await owner.GetAsync($"/api/v1/caves/{caveId}/centerlines");
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return [.. (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray()];
+    }
+
+    /// <summary>
+    /// The passage dimensions as the database ends up holding them.
+    ///
+    /// <para>
+    /// Read off the rows and not off anything rendered, deliberately. The fact under test is that a
+    /// dimension the surveyor never measured is stored as nothing at all, and a rendered blank and a
+    /// rendered zero are the same handful of pixels — a screen cannot tell the two apart, and the
+    /// difference between them is a passage that exists and a passage that does not.
+    /// </para>
+    /// </summary>
+    private async Task<List<SurveyLrud>> ReadingsOfAsync(Guid modelId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.SurveyLruds
+            .Where(l => l.SurveyModelId == modelId)
+            .OrderBy(l => l.StationName)
+            .ToListAsync();
     }
 
     private async Task<(int Stations, int Shots)> CountRowsAsync(Guid modelId)

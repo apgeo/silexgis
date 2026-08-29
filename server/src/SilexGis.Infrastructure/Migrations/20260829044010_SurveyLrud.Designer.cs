@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260829044010_SurveyLrud")]
+    partial class SurveyLrud
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4316,62 +4319,6 @@ namespace SilexGis.Infrastructure.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SilexGis.Domain.Entities.SurveySource", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("CaveFeatureId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("cave_feature_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)")
-                        .HasColumnName("description");
-
-                    b.Property<Guid>("DocumentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("document_id");
-
-                    b.Property<short>("Kind")
-                        .HasColumnType("smallint")
-                        .HasColumnName("kind");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("name");
-
-                    b.Property<string>("OriginalFileName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("original_file_name");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_survey_sources");
-
-                    b.HasIndex("CaveFeatureId")
-                        .HasDatabaseName("ix_survey_sources_cave_feature_id");
-
-                    b.HasIndex("DocumentId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_survey_sources_document_id");
-
-                    b.ToTable("survey_sources", (string)null);
-                });
-
             modelBuilder.Entity("SilexGis.Domain.Entities.SurveyStation", b =>
                 {
                     b.Property<long>("Id")
@@ -6673,23 +6620,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_survey_shots_survey_models_survey_model_id");
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.SurveySource", b =>
-                {
-                    b.HasOne("SilexGis.Domain.Entities.Cave", null)
-                        .WithMany()
-                        .HasForeignKey("CaveFeatureId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_survey_sources_caves_cave_feature_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.Document", null)
-                        .WithMany()
-                        .HasForeignKey("DocumentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_survey_sources_documents_document_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SurveyStation", b =>

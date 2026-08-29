@@ -233,6 +233,126 @@ public class SurveyGraphExtractorTests
     }
 
     [Fact]
+    public void Walls_measured_along_a_leg_are_stored_at_the_station_they_were_measured_from()
+    {
+        var extraction = Extractor.Extract(WrittenAndReadBack(MeasuredCave()), ModelId, Local);
+
+        var reading = extraction.Lrud.ShouldHaveSingleItem();
+        reading.StationName.ShouldBe("main.a");
+
+        // The leg travels with the reading in this format, because this format is the one that has
+        // it to give: the walls were measured facing along a particular leg, and which leg that was
+        // is not recoverable from the station alone.
+        reading.Shot.ShouldBeSameAs(extraction.Shots.Single());
+        reading.Section.ShouldBe(SurveySectionShape.Oval);
+
+        reading.LeftM.ShouldBe(1.5);
+        reading.RightM.ShouldBe(2.0);
+
+        // A dimension the surveyor did not measure is nothing, and a dimension measured as zero is
+        // zero. Both formats say "not measured" with a negative number, so storing that number
+        // would make a passage with a wall a metre behind the station — and a substituted default
+        // would invent a passage nobody measured. These are three different facts and only two of
+        // them are numbers.
+        reading.UpM.ShouldBeNull();
+        reading.DownM.ShouldBe(0);
+
+        // Nothing at all was measured at the far end, and a row stating nothing is not a reading.
+        // The formats emit all four distances whenever they emit a leg, filled in or not, so
+        // keeping the empty ones would put a row on nearly every station in the cave.
+        extraction.Lrud.ShouldNotContain(r => r.StationName == "main.b");
+    }
+
+    [Fact]
+    public void A_leg_the_file_says_carries_no_wall_measurement_produces_no_reading()
+    {
+        // The format that hangs walls off legs writes all eight distances for every leg, filled or
+        // not, and has a flag for saying that a leg's are not wall measurements at all. A leg
+        // carrying that flag with zeros in those fields is the case that matters: zero is a real
+        // measurement everywhere else — a station standing against the wall — so the sign rule that
+        // catches the "not measured" sentinel cannot catch this one, and the readings would be
+        // stored as a passage of no width and no height at a real station.
+        var extraction = Extractor.Extract(WrittenAndReadBack(UnmeasuredCave()), ModelId, Local);
+
+        var reading = extraction.Lrud.ShouldHaveSingleItem();
+        reading.StationName.ShouldBe("main.a");
+        reading.LeftM.ShouldBe(1.5);
+
+        // Nothing from either end of the flagged leg — not from the station it shares with the leg
+        // that was measured either.
+        extraction.Lrud.ShouldNotContain(r => r.StationName == "main.c");
+    }
+
+    /// <summary>
+    /// The same cave, described by both compiled formats, storing the same wall measurements.
+    ///
+    /// <para>
+    /// This is the test the normalisation exists to pass. The two formats do not merely spell the
+    /// same idea differently — one hangs measurements off the legs they were taken along and the
+    /// other emits ordered runs of cross-sections keyed by station name, with no leg anywhere in it.
+    /// Either shape can be written down without the other ever agreeing with it, so the only thing
+    /// that shows they were normalised rather than merely stored is reading one cave through both
+    /// paths and getting one table.
+    /// </para>
+    ///
+    /// <para>
+    /// The readings come from the committed export, because there is no writer for that format and a
+    /// cave invented here would only prove that this test can invent the same numbers twice. They
+    /// are then restated as the other format states them — as a chained traverse, which is how that
+    /// format really carries a run of cross-sections — and written as real bytes by its own writer,
+    /// so both sides of the comparison came out of a file.
+    /// </para>
+    ///
+    /// <para>
+    /// The two tables are therefore not the same size, and that is the point of the comparison
+    /// rather than a flaw in it. An interior station of a traverse is the far end of one leg and the
+    /// near end of the next, so the leg-based format states its walls twice while the run-based
+    /// format states them once. What has to agree is the set of facts — which station, which four
+    /// distances — and the extra rows have to be restatements of a fact the other format already
+    /// carries rather than readings of their own.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void The_same_cave_read_through_either_format_yields_the_same_wall_measurements()
+    {
+        var survex = CaveModelReader.Read(
+            File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "P8_Master.3d")));
+
+        var fromRuns = Extractor.Extract(
+            survex, ModelId, new SurveySourceDeclaration(SourceEpsg: 27700, null, null, OriginHeightM: 0)).Lrud;
+
+        var fromLegs = Extractor.Extract(
+            WrittenAndReadBack(SameReadingsAsChainedLegs(survex)), ModelId, Local).Lrud;
+
+        // A file with no cross-sections would pass every assertion below by having nothing to
+        // disagree about, so what the export actually carries is stated rather than assumed: nine
+        // runs of cross-sections, 155 stations between them with something measured at each.
+        fromRuns.Count.ShouldBe(155);
+
+        // The shapes really do differ, so the agreement below is between two different tables and
+        // not between one table and itself. If this ever stops holding, the fixture has been flattened
+        // into a one-reading-per-station shape no real file of that format has.
+        fromLegs.Count.ShouldBeGreaterThan(fromRuns.Count);
+
+        // The same facts, from both paths — this is what normalisation means here.
+        Walls(fromLegs).Distinct().ShouldBe(Walls(fromRuns).Distinct(), ignoreOrder: true);
+
+        // And every extra row the leg-based shape produced is one of those facts again, at the
+        // station that already stated it, rather than a reading the other format never mentioned.
+        var stated = Walls(fromRuns).ToHashSet();
+        Walls(fromLegs).ShouldAllBe(w => stated.Contains(w));
+
+        // And the one thing that legitimately differs, which is why the column is nullable: the
+        // format that measures along a leg names it, and the format that does not, does not.
+        fromLegs.ShouldAllBe(r => r.Shot != null);
+        fromRuns.ShouldAllBe(r => r.Shot == null);
+
+        // No section shape either — that format has no word for one, and inventing this
+        // application's default would record a shape the surveyor never wrote down.
+        fromRuns.ShouldAllBe(r => r.Section == null);
+    }
+
+    [Fact]
     public void A_real_export_is_read_whole_and_placed_from_its_own_grid()
     {
         var parsed = CaveModelReader.Read(
@@ -323,6 +443,10 @@ public class SurveyGraphExtractorTests
     private const uint LoxEntrance = 2;
     private const uint LoxSplay = 16;
 
+    // "This leg's wall distances are not wall measurements", in this format's own bits. The other
+    // format has no way of saying it, which is why it is stated as a bit and not as a value.
+    private const uint LoxNotLrud = 8;
+
     private static CaveStation Station(uint id, string name, CaveVector3 position, uint raw) => new()
     {
         Id = id,
@@ -331,6 +455,173 @@ public class SurveyGraphExtractorTests
         Position = position,
         Flags = MapLoxStationFlags(raw),
         RawFlags = raw,
+    };
+
+    /// <summary>
+    /// What a reading says, with the leg it came along left out — that is the one thing the two
+    /// formats are not expected to agree about.
+    /// </summary>
+    private static List<(string Station, double? Left, double? Right, double? Up, double? Down)> Walls(
+        IEnumerable<SurveyLrud> readings) =>
+        [.. readings.Select(r => (r.StationName, r.LeftM, r.RightM, r.UpM, r.DownM))];
+
+    /// <summary>
+    /// Every cross-section of <paramref name="survex"/>, restated the way the other format states
+    /// one: as wall distances at the two ends of the legs of a traverse.
+    ///
+    /// <para>
+    /// Each run of cross-sections becomes a chain of legs along the stations it names, so an
+    /// interior station carries its walls twice — as the far end of the leg that arrives and the
+    /// near end of the leg that leaves — which is what a real file of that format looks like and is
+    /// exactly the structural difference the comparison has to survive. Giving every reading a leg
+    /// of its own instead would engineer that difference away and leave both sides of the comparison
+    /// coming out of one code path.
+    /// </para>
+    ///
+    /// <para>
+    /// A run naming a single station has no leg to hang anything on, so it gets one to a shared far
+    /// end whose own walls were never measured — nothing rides along from that end.
+    /// </para>
+    /// </summary>
+    private static CaveModel SameReadingsAsChainedLegs(CaveModel survex)
+    {
+        var idByName = new Dictionary<string, uint>();
+        var stations = new List<CaveStation>
+        {
+            // Allocated first so a run of one station has somewhere to point; its own walls were
+            // never measured, so it contributes no reading of its own.
+            new() { Id = 1, Name = "far-end", Position = new CaveVector3(0, 1000, 0) },
+        };
+
+        const uint farEnd = 1;
+
+        uint IdOf(string name)
+        {
+            if (idByName.TryGetValue(name, out var known))
+            {
+                return known;
+            }
+
+            var id = (uint)(stations.Count + 1);
+            idByName[name] = id;
+            stations.Add(new CaveStation
+            {
+                Id = id,
+                Name = name,
+
+                // Positions this format needs but this test does not: spread out so that no two
+                // stations land on one point and get read as one node.
+                Position = new CaveVector3(id * 10, 0, 0),
+            });
+            return id;
+        }
+
+        static CaveLrud WallsOf(CavePassageStation section) =>
+            new(section.Left, section.Right, section.Up, section.Down);
+
+        var shots = new List<CaveShot>();
+
+        foreach (var passage in survex.Passages)
+        {
+            var run = passage.Stations;
+            for (var i = 0; i + 1 < run.Count; i++)
+            {
+                shots.Add(new CaveShot
+                {
+                    FromStationId = IdOf(run[i].StationName),
+                    ToStationId = IdOf(run[i + 1].StationName),
+                    FromLrud = WallsOf(run[i]),
+                    ToLrud = WallsOf(run[i + 1]),
+                });
+            }
+
+            if (run.Count == 1)
+            {
+                shots.Add(new CaveShot
+                {
+                    FromStationId = IdOf(run[0].StationName),
+                    ToStationId = farEnd,
+                    FromLrud = WallsOf(run[0]),
+                });
+            }
+        }
+
+        return new CaveModel
+        {
+            SourceFormat = CaveSourceFormat.Lox,
+            Stations = stations,
+            Shots = shots,
+        };
+    }
+
+    /// <summary>
+    /// One leg with its walls measured at the near end and nothing measured at the far end. The near
+    /// end has all three cases in it at once: two distances measured, one measured as zero because
+    /// the station stands against the wall, and one the surveyor never took.
+    /// </summary>
+    private static CaveModel MeasuredCave() => new()
+    {
+        SourceFormat = CaveSourceFormat.Lox,
+        Surveys = [new CaveSurvey(Id: 1, ParentId: 1, Name: "main", Title: null)],
+        Stations =
+        [
+            Station(1, "a", new CaveVector3(0, 0, 0), raw: 0),
+            Station(2, "b", new CaveVector3(10, 0, 0), raw: 0),
+        ],
+        Shots =
+        [
+            new CaveShot
+            {
+                FromStationId = 1,
+                ToStationId = 2,
+                SurveyId = 1,
+                SectionType = CaveShotSection.Oval,
+
+                // -1 is how this format writes "not measured"; the other format writes a different
+                // negative number for the same statement, which is why the rule that reads it is
+                // about the sign and not about the value.
+                FromLrud = new CaveLrud(Left: 1.5, Right: 2.0, Up: -1, Down: 0),
+                ToLrud = new CaveLrud(-1, -1, -1, -1),
+            },
+        ],
+    };
+
+    /// <summary>
+    /// Two legs of one traverse: one whose walls were measured, and one the file flags as carrying
+    /// no wall measurement while still filling its eight distance fields — with zeros, which is what
+    /// makes the flag the only thing that can tell them apart from a real measurement.
+    /// </summary>
+    private static CaveModel UnmeasuredCave() => new()
+    {
+        SourceFormat = CaveSourceFormat.Lox,
+        Surveys = [new CaveSurvey(Id: 1, ParentId: 1, Name: "main", Title: null)],
+        Stations =
+        [
+            Station(1, "a", new CaveVector3(0, 0, 0), raw: 0),
+            Station(2, "b", new CaveVector3(10, 0, 0), raw: 0),
+            Station(3, "c", new CaveVector3(20, 0, 0), raw: 0),
+        ],
+        Shots =
+        [
+            new CaveShot
+            {
+                FromStationId = 1,
+                ToStationId = 2,
+                SurveyId = 1,
+                FromLrud = new CaveLrud(Left: 1.5, Right: 2.0, Up: 3.0, Down: 0),
+                ToLrud = new CaveLrud(-1, -1, -1, -1),
+            },
+            new CaveShot
+            {
+                FromStationId = 2,
+                ToStationId = 3,
+                SurveyId = 1,
+                Flags = MapLoxShotFlags(LoxNotLrud),
+                RawFlags = LoxNotLrud,
+                FromLrud = new CaveLrud(0, 0, 0, 0),
+                ToLrud = new CaveLrud(0, 0, 0, 0),
+            },
+        ],
     };
 
     private static CaveShot Leg(uint from, uint to, uint raw) => new()
@@ -347,6 +638,19 @@ public class SurveyGraphExtractorTests
     private static CaveStationFlags MapLoxStationFlags(uint raw) =>
         (raw & 2) != 0 ? CaveStationFlags.Entrance : CaveStationFlags.None;
 
-    private static CaveShotFlags MapLoxShotFlags(uint raw) =>
-        (raw & 16) != 0 ? CaveShotFlags.Splay : CaveShotFlags.None;
+    private static CaveShotFlags MapLoxShotFlags(uint raw)
+    {
+        var flags = CaveShotFlags.None;
+        if ((raw & 8) != 0)
+        {
+            flags |= CaveShotFlags.NotLrud;
+        }
+
+        if ((raw & 16) != 0)
+        {
+            flags |= CaveShotFlags.Splay;
+        }
+
+        return flags;
+    }
 }

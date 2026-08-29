@@ -227,6 +227,7 @@ try
     api.MapCaveEndpoints();
     api.MapEntranceEndpoints();
     api.MapSurveyModelEndpoints();
+    api.MapSurveySourceEndpoints();
     api.MapCenterlineEndpoints();
     api.MapCaveSurveyStatisticsEndpoints();
     api.MapCrsEndpoints();

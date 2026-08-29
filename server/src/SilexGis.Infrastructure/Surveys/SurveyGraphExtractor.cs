@@ -2,17 +2,24 @@
 using System.Globalization;
 using NetTopologySuite.Geometries;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Geodata;
 using Therion.Blender;
 
 namespace SilexGis.Infrastructure.Surveys;
 
 /// <summary>
-/// The station and shot rows read out of one compiled survey, where the file sits in the world, and
-/// what reading it could not keep.
+/// The station, shot and passage-dimension rows read out of one compiled survey, where the file sits
+/// in the world, and what reading it could not keep.
 /// </summary>
 /// <param name="Stations">Every station the file names, in file order.</param>
 /// <param name="Shots">Every leg the file carries, in file order — splays included.</param>
+/// <param name="Lrud">
+/// Every wall measurement the file states, keyed by the station it was taken at, whichever of the
+/// two shapes the file used to say it. A reading in which the surveyor measured nothing is not a
+/// reading and is not here, whether the file said so by writing its "not measured" number in every
+/// field or by flagging the whole leg as carrying no wall measurement.
+/// </param>
 /// <param name="DroppedShotCount">
 /// Legs of the traverse whose endpoints matched no station, or matched the same one twice, and so
 /// join the station network nowhere. Splay, surface and duplicate legs are not counted: they are
@@ -24,6 +31,7 @@ namespace SilexGis.Infrastructure.Surveys;
 public sealed record SurveyGraphExtraction(
     IReadOnlyList<SurveyStation> Stations,
     IReadOnlyList<SurveyShot> Shots,
+    IReadOnlyList<SurveyLrud> Lrud,
     int DroppedShotCount,
     int MergedStationCount,
     double AnchorLongitude,
@@ -47,6 +55,15 @@ public sealed record SurveyGraphExtraction(
 /// stored but joins nothing, and two stations at one position become one node. Both losses are
 /// silent, and a network missing a tenth of its legs still produces connectivity numbers that look
 /// entirely reasonable — the counts are the only thing that says otherwise.
+/// </para>
+///
+/// <para>
+/// Passage dimensions are the one thing the two formats describe in genuinely incompatible shapes,
+/// and both are flattened here into one station-keyed row. One format measures the walls at each end
+/// of a leg and names a cross-section shape, so its readings carry the leg they were taken along;
+/// the other emits runs of cross-sections keyed by station name alone, with no leg and no shape.
+/// Whichever the file used, what comes out is a reading at a named station, with the leg and the
+/// shape filled in only where that format has them to give.
 /// </para>
 /// </summary>
 public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
@@ -75,6 +92,13 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
         // measured inflating a reduced network to 143% of the length actually surveyed.
         var nameAtPosition = new Dictionary<CaveVector3, string>(model.Stations.Count);
 
+        // The name of each station by the number the file wrote it at. Only the legs need this, and
+        // only in the format whose legs reference stations by that number rather than by position:
+        // a wall measurement taken at a station that shares a position with another must be stored
+        // against the station that was actually measured, and the position lookup above deliberately
+        // answers with whichever of the two got there first.
+        var nameByFileId = new Dictionary<uint, string>(model.Stations.Count);
+
         var stations = new List<SurveyStation>(model.Stations.Count);
         var mergedStations = 0;
 
@@ -96,13 +120,19 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
                 RawFlags = station.RawFlags,
             });
 
+            nameByFileId[station.Id] = name;
+
             if (!nameAtPosition.TryAdd(station.Position, name))
             {
                 mergedStations++;
             }
         }
 
+        string? StationOf(uint? fileStationId) =>
+            fileStationId is { } id && nameByFileId.TryGetValue(id, out var known) ? known : null;
+
         var shots = new List<SurveyShot>(model.Shots.Count);
+        var readings = new List<SurveyLrud>();
         var droppedShots = 0;
 
         foreach (var shot in model.Shots)
@@ -116,7 +146,7 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
             var (toLongitude, toLatitude, toAltitude) =
                 placement.ToWorld(shot.ToPosition.X, shot.ToPosition.Y, shot.ToPosition.Z);
 
-            shots.Add(new SurveyShot
+            var leg = new SurveyShot
             {
                 SurveyModelId = surveyModelId,
                 FromStationName = from,
@@ -137,7 +167,33 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
                 LengthM = (shot.ToPosition - shot.FromPosition).Length,
                 Flags = flags,
                 RawFlags = shot.RawFlags,
-            });
+            };
+
+            shots.Add(leg);
+
+            // The wall measurements this leg carries, one at each of its ends, in the format that
+            // states them that way. The leg travels with them: it is the only thing that says which
+            // way the surveyor was facing when the walls were measured, and it is exactly what the
+            // other format cannot say.
+            //
+            // Unless the file has already said those numbers mean nothing. That format gives every
+            // leg its eight wall distances whether or not any were taken, and states "this leg
+            // carries no usable wall measurement" with a flag of its own rather than by leaving the
+            // fields empty — so a flagged leg holding four zeros is not a passage of zero width at
+            // a station standing against the wall, it is a leg nobody measured. The negative
+            // sentinel does not catch it, because zero is a real measurement everywhere else.
+            //
+            // Splay, surface and duplicate legs are deliberately not excluded here. What those
+            // flags say is that the leg is not ordinary passage to be counted, not that the
+            // distances recorded at its ends are meaningless: those ends are stations like any
+            // other, and a wall distance measured at one is a measurement. Only the flag that
+            // speaks about the wall distances themselves decides whether they are kept.
+            if ((flags & SurveyShotFlags.NotLrud) == 0)
+            {
+                var section = MapSection(shot.SectionType);
+                AddReading(readings, surveyModelId, StationOf(shot.FromStationId) ?? from, shot.FromLrud, section, leg);
+                AddReading(readings, surveyModelId, StationOf(shot.ToStationId) ?? to, shot.ToLrud, section, leg);
+            }
 
             // A splay is a shot at the wall, and its far end is routinely a point the file names no
             // station for; a surface or duplicate leg is not passage to be counted either. None of
@@ -150,9 +206,28 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
             }
         }
 
+        // The same measurements as the block above, in the shape the other format states them:
+        // ordered runs of cross-sections that name their station and nothing else. There is no leg
+        // to record and no shape to record, and inventing either — picking one of the station's legs
+        // to blame the reading on — would be storing a guess as if the file had said it.
+        foreach (var passage in model.Passages)
+        {
+            foreach (var section in passage.Stations)
+            {
+                AddReading(
+                    readings,
+                    surveyModelId,
+                    section.StationName,
+                    new CaveLrud(section.Left, section.Right, section.Up, section.Down),
+                    shape: null,
+                    leg: null);
+            }
+        }
+
         return new SurveyGraphExtraction(
             stations,
             shots,
+            readings,
             droppedShots,
             mergedStations,
             placement.Anchor.Longitude,
@@ -160,6 +235,76 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
             placement.OriginHeightM,
             placement.AppliedRotationDeg);
     }
+
+    /// <summary>
+    /// Records one set of wall distances at one named station, if there is anything there to record.
+    ///
+    /// <para>
+    /// Two things are dropped rather than stored. A reading whose station could not be named cannot
+    /// be filed against anything — the station name is what identifies a reading, so a nameless one
+    /// is a row nothing could ever ask for. And a reading in which the surveyor measured nothing is
+    /// not a reading: both formats emit all four distances whenever they emit a leg or a
+    /// cross-section at all, filled or not, so keeping the empty ones would put a row on almost
+    /// every station and make "how many stations have passage dimensions" answer with the size of
+    /// the survey.
+    /// </para>
+    /// </summary>
+    private static void AddReading(
+        List<SurveyLrud> readings,
+        Guid surveyModelId,
+        string? stationName,
+        CaveLrud? lrud,
+        SurveySectionShape? shape,
+        SurveyShot? leg)
+    {
+        if (stationName is null || lrud is not { } walls)
+        {
+            return;
+        }
+
+        var left = SurveyDimensions.Measured(walls.Left);
+        var right = SurveyDimensions.Measured(walls.Right);
+        var up = SurveyDimensions.Measured(walls.Up);
+        var down = SurveyDimensions.Measured(walls.Down);
+
+        if (!SurveyDimensions.AnyMeasured(left, right, up, down))
+        {
+            return;
+        }
+
+        readings.Add(new SurveyLrud
+        {
+            SurveyModelId = surveyModelId,
+            StationName = stationName,
+            Shot = leg,
+            Section = shape,
+            LeftM = left,
+            RightM = right,
+            UpM = up,
+            DownM = down,
+        });
+    }
+
+    /// <summary>
+    /// Translates the cross-section shape one of the two formats names into this application's own
+    /// word for it. Written out rather than cast, for the same reason the flags are: these numbers
+    /// are stored, and a reader that renumbers its own vocabulary must not be able to change what a
+    /// row already in the database means.
+    ///
+    /// <para>
+    /// The answer is null where the file said nothing, which covers both the format that has no such
+    /// field and the format whose field was left at its own "unstated" value. Those are the same
+    /// fact — the file did not say — and they are stored the same way.
+    /// </para>
+    /// </summary>
+    private static SurveySectionShape? MapSection(CaveShotSection section) => section switch
+    {
+        CaveShotSection.Oval => SurveySectionShape.Oval,
+        CaveShotSection.Square => SurveySectionShape.Square,
+        CaveShotSection.Diamond => SurveySectionShape.Diamond,
+        CaveShotSection.Tunnel => SurveySectionShape.Tunnel,
+        _ => null,
+    };
 
     /// <summary>
     /// The middle of everything the file draws, in the file's own coordinates. Shot endpoints are
