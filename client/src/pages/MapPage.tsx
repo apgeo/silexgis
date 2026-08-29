@@ -22,6 +22,7 @@ import type { EventsKey } from 'ol/events';
 import type BaseLayer from 'ol/layer/Base';
 import type TileLayer from 'ol/layer/Tile';
 import { unByKey } from 'ol/Observable';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import { useSearchParams } from 'react-router-dom';
@@ -84,6 +85,8 @@ import { attachContextMenu, type MapContextMenuTarget } from '../map/contextMenu
 import { MapEditController, type DrawShape } from '../map/mapEdit.ts';
 import { attachSelection } from '../map/selection.ts';
 import { useShortcuts } from '../hooks/useShortcuts.ts';
+import { geometryFor, isGeographic } from '../viewlinks/geoTargets.ts';
+import { useViewControl } from '../viewlinks/useViewControl.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import './MapPage.css';
@@ -127,6 +130,28 @@ export default function MapPage() {
   const [editController, setEditController] = useState<MapEditController | null>(null);
   const selection = useWorkspaceStore((s) => s.selection);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
+  const queryClient = useQueryClient();
+
+  // Somewhere a hyperlink in a text panel can be sent. Registered for as long as this page is
+  // mounted, and separately from the camera registration above it: that one answers "the view
+  // the reader is looking at", and there is exactly one; this one answers "every view that can
+  // show this", and there are as many as there are windows open.
+  useViewControl({
+    id: 'map2d',
+    kind: 'map2d',
+    labelKey: 'viewLinks.controls.map2d',
+    canReveal: isGeographic,
+    reveal: (ref) => {
+      void geometryFor(queryClient, ref).then((geometry) => {
+        // A feature whose exact position this reader may not see comes back without one. Not
+        // moving is the honest answer: framing an approximation would tell them they are looking
+        // at the place.
+        if (geometry !== null) {
+          fitGeoJsonGeometry(geometry);
+        }
+      });
+    },
+  });
   const visibleGeofileIds = useWorkspaceStore((s) => s.visibleGeofileIds);
   const setGeofileVisible = useWorkspaceStore((s) => s.setGeofileVisible);
   const { data: geofilePage } = useGeofiles({ pageSize: 100 });

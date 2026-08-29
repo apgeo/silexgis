@@ -169,7 +169,12 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
         destroyOnHidden
       >
         {viewing && (
-          <CaveViewPanel fileUrl={viewing.modelUrl} fileName={viewerFileName(viewing)} height="70vh" />
+          <CaveViewPanel
+            fileUrl={viewing.modelUrl}
+            fileName={viewerFileName(viewing)}
+            height="70vh"
+            surveyModelId={viewing.id}
+          />
         )}
       </Modal>
     </Card>

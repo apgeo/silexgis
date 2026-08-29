@@ -6,6 +6,7 @@
 // single-window session needs no channel round-trip.
 
 import type { WorkspaceSelection } from '../stores/workspaceStore.ts';
+import type { ResourceRef, ViewControlDescriptor } from '../viewlinks/resourceRef.ts';
 
 /**
  * Which kind of view an event came from.
@@ -33,7 +34,28 @@ export type WorkspaceEvent =
    * the window it was opened from off to the middle of nowhere. Asking costs one message and is
    * answered only by a view that has been open long enough to be the one worth following.
    */
-  | { kind: 'view-hello'; origin: ViewKind };
+  | { kind: 'view-hello'; origin: ViewKind }
+  /**
+   * Show this resource. Sent by the annotated-text reader when somebody follows a hyperlink,
+   * and applied by whichever view controls in whichever windows can show the thing.
+   *
+   * `to` names the control addresses that should act, and its absence means every control that
+   * can. Addresses rather than window ids, because "show it on the second monitor's map and
+   * nowhere else" is a thing a reader asks for, and a window may hold more than one view.
+   */
+  | { kind: 'reveal'; ref: ResourceRef; to?: readonly string[] }
+  /**
+   * Who is out there. A window announces its own controls on `controls-here`, asks everybody
+   * else to on `controls-roll-call`, and says `controls-gone` as it closes.
+   *
+   * A roll call rather than a heartbeat: a roster is only ever read at the moment somebody
+   * opens the menu that lists it, so it is gathered then and is at most one round trip stale.
+   * Heartbeats would run in every window for the whole session to keep a list nobody is
+   * looking at up to date, and would still be stale at the moment somebody looked.
+   */
+  | { kind: 'controls-here'; windowId: string; controls: readonly ViewControlDescriptor[] }
+  | { kind: 'controls-roll-call' }
+  | { kind: 'controls-gone'; windowId: string };
 
 type Listener = (event: WorkspaceEvent) => void;
 

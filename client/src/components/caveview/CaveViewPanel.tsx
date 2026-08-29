@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { acquireCrsRewrite, CAVEVIEW_HOME, loadCaveView, type CaveViewUi } from '../../caveview/loadCaveView.ts';
+import type { ResourceRef } from '../../viewlinks/resourceRef.ts';
+import { useViewControl } from '../../viewlinks/useViewControl.ts';
 
 export interface CaveViewPanelProps {
   /** Delivery URL of the survey file (carries its own access token, no auth header). */
@@ -16,6 +18,16 @@ export interface CaveViewPanelProps {
   height?: number | string;
   /** Fired with the survey's entrance label when one is clicked in the 3D scene. */
   onEntrancePick?: (displayName: string) => void;
+  /**
+   * Which survey model this panel is showing, when the caller knows.
+   *
+   * Supplied only so the panel can answer links: a passage that names a station of *this* model
+   * is something it can show, and a passage that names another cave's model is not. Without it
+   * the panel still works and simply never volunteers to answer one, which is the right default
+   * — a viewer that accepted every link would jump to a station name that happens to exist in
+   * whatever cave it has open.
+   */
+  surveyModelId?: string;
 }
 
 // CaveView addresses its container by element id; keep ids unique across remounts and
@@ -27,13 +39,55 @@ let panelSequence = 0;
  * hands it to CaveView as a named File (parser choice), and tears the viewer down on
  * unmount. CaveView owns everything inside its container div — React never touches it.
  */
-export default function CaveViewPanel({ fileUrl, fileName, height = 480, onEntrancePick }: CaveViewPanelProps) {
+export default function CaveViewPanel({
+  fileUrl,
+  fileName,
+  height = 480,
+  onEntrancePick,
+  surveyModelId,
+}: CaveViewPanelProps) {
   const { t } = useTranslation();
   const containerIdRef = useRef<string>(null);
   containerIdRef.current ??= `caveview-panel-${panelSequence++}`;
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorDetail, setErrorDetail] = useState<string>();
+
+  // The loaded survey and the viewer that holds it, kept so a link can be answered after the
+  // load. The file is kept as well because showing a named part of the survey is done by loading
+  // it again with that part named — the vendored viewer's one way in — and fetching the bytes a
+  // second time to do it would be a download per click.
+  const loadedRef = useRef<{ ui: CaveViewUi; file: File } | null>(null);
+
+  // Which parts of a survey a passage can name. Station ranges and survey ranges are not here:
+  // the viewer takes one section, so a range would have to be reduced to one end of itself, and
+  // silently showing a reader one end of the stretch they asked for is worse than the panel
+  // saying it cannot show it.
+  const sectionOf = (ref: ResourceRef): string | null => {
+    if (surveyModelId === undefined || ref.targetType !== 'surveyModel' || ref.targetId !== surveyModelId) {
+      return null;
+    }
+
+    const anchor = (typeof ref.anchor === 'object' && ref.anchor !== null ? ref.anchor : {}) as Record<string, unknown>;
+    const key = ref.anchorKind === 'modelStation' ? 'station' : ref.anchorKind === 'modelSurvey' ? 'survey' : null;
+    const value = key === null ? undefined : anchor[key];
+    return typeof value === 'string' && value.length > 0 ? value : null;
+  };
+
+  useViewControl({
+    id: `caveview-${containerIdRef.current}`,
+    kind: 'caveview',
+    labelKey: 'viewLinks.controls.caveview',
+    enabled: status === 'ready' && surveyModelId !== undefined,
+    canReveal: (ref) => sectionOf(ref) !== null,
+    reveal: (ref) => {
+      const section = sectionOf(ref);
+      const loaded = loadedRef.current;
+      if (section !== null && loaded !== null) {
+        loaded.ui.loadCave(loaded.file, section);
+      }
+    },
+  });
 
   // The callback rides a ref so a new identity doesn't reload the whole viewer.
   const onEntrancePickRef = useRef(onEntrancePick);
@@ -66,7 +120,9 @@ export default function CaveViewPanel({ fileUrl, fileName, height = 480, onEntra
         }
       });
       ui = new cv2.CaveViewUI(viewer);
-      ui.loadCave(new File([blob], fileName));
+      const file = new File([blob], fileName);
+      loadedRef.current = { ui, file };
+      ui.loadCave(file);
     })().catch((error: unknown) => {
       if (disposed) return;
       setStatus('error');
@@ -75,6 +131,7 @@ export default function CaveViewPanel({ fileUrl, fileName, height = 480, onEntra
 
     return () => {
       disposed = true;
+      loadedRef.current = null;
       ui?.dispose();
       ui = null;
       releaseCrsRewrite();
