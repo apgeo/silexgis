@@ -7,6 +7,14 @@ namespace SilexGis.Api.Features.Sync;
 /// then sizes its own pages and batches to the answer, which is why these are announced
 /// rather than left to be discovered by a rejected request in a cave with no signal.
 /// </summary>
+/// <remarks>
+/// The salt behind the printed-code derivation is deliberately <b>not</b> here. It is a
+/// compatibility constant rather than an installation's choice — it is fixed so that two datasets
+/// which never met derive the same printed code from the same place code — and nothing on this
+/// server derives a code in any case: a scanned label is answered by looking the stored value up.
+/// It is compiled in beside the derivation it belongs to. A setting for it belongs to whatever
+/// change first derives a code here and needs to agree with a differently-built device.
+/// </remarks>
 public sealed class SyncOptions
 {
     public const string SectionName = "Sync";

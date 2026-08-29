@@ -38,6 +38,7 @@ using SilexGis.Api.Features.Features;
 using SilexGis.Api.Features.Filters;
 using SilexGis.Api.Features.ResLinks;
 using SilexGis.Api.Features.FeatureShares;
+using SilexGis.Api.Features.QrLanding;
 using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.Statistics;
 using SilexGis.Api.Features.Sync;
@@ -156,6 +157,13 @@ try
     // Credential-guessing protection: per-IP fixed window on the auth surface.
     // Limit is configurable for installations behind shared NATs.
     var authPermitLimit = builder.Configuration.GetValue("Auth:RateLimitPerMinute", 60);
+    // Abuse and cost control on the printed-code landing route, and deliberately not a
+    // confidentiality control: a printed code is short and reproducible outside this server, so
+    // its space is exhaustible at any rate a person would tolerate. What makes that pointless is
+    // that a resolving code discloses nothing but the installation's own name. A window of its
+    // own so that a group scanning labels from behind one connection cannot spend the sign-in
+    // allowance of everyone else behind it.
+    var qrPermitLimit = builder.Configuration.GetValue("Qr:RateLimitPerMinute", 60);
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -166,6 +174,15 @@ try
                 {
                     Window = TimeSpan.FromMinutes(1),
                     PermitLimit = authPermitLimit,
+                    QueueLimit = 0,
+                }));
+        options.AddPolicy(PublicQrEndpoints.RateLimitPolicy, context =>
+            System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = qrPermitLimit,
                     QueueLimit = 0,
                 }));
     });
@@ -234,6 +251,7 @@ try
     api.MapFeatureHierarchyEndpoints();
     api.MapFeatureLinkEndpoints();
     api.MapFeatureShareEndpoints();
+    api.MapCaveQrPublicationEndpoints();
     api.MapMapDataEndpoints();
     api.MapSearchEndpoints();
     api.MapDashboardEndpoints();
@@ -254,6 +272,7 @@ try
     api.MapPhotoEndpoints();
     api.MapAlbumEndpoints();
     api.MapPublicPhotoEndpoints();
+    api.MapPublicQrEndpoints();
     api.MapResLinkEndpoints();
     api.MapResLinkRelationTypeEndpoints();
     api.MapGeoreferencedMapEndpoints();

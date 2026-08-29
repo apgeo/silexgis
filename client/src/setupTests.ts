@@ -44,6 +44,7 @@ if (!window.ResizeObserver) {
 // builds its colour gradient through a canvas context the moment it is constructed,
 // which would throw under jsdom. A minimal stub covering the handful of calls that
 // gradient construction makes lets such layers be unit-tested without a real canvas.
+// The drawing no-ops below cover the same need for a component that paints a QR square.
 if (typeof HTMLCanvasElement !== 'undefined') {
   HTMLCanvasElement.prototype.getContext = function stubGetContext(this: HTMLCanvasElement) {
     const gradient = { addColorStop() {} };
@@ -54,6 +55,10 @@ if (typeof HTMLCanvasElement !== 'undefined') {
       clearRect() {},
       drawImage() {},
       putImageData() {},
+      scale() {},
+      translate() {},
+      save() {},
+      restore() {},
       getImageData: (_x: number, _y: number, w: number, h: number) => ({
         data: new Uint8ClampedArray(Math.max(1, w * h * 4)),
       }),

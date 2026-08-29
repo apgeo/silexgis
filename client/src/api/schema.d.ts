@@ -4753,6 +4753,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{id}/qr-publication": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether this cave's codes resolve for a visitor who is not signed in (Share permission). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveQrPublicationDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Lets this cave's codes resolve for visitors who are not signed in (Share permission). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveQrPublicationDto"];
+                    };
+                };
+            };
+        };
+        /** Stops this cave's codes resolving for visitors who are not signed in (Share permission). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/geofiles": {
         parameters: {
             query?: never;
@@ -8147,6 +8227,44 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["PublicAlbumDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/qr/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolves a printed cave code for a visitor who is not signed in. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    code: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublicQrDto"];
                     };
                 };
             };
@@ -12212,6 +12330,17 @@ export interface components {
             canManagePermissions: boolean;
             canViewExactLocation: boolean;
         };
+        CaveQrPublicationDto: {
+            published: boolean;
+            /** Format: uuid */
+            publicationId: null | string;
+            /** Format: uuid */
+            publishedBy: null | string;
+            /** Format: date-time */
+            publishedAt: null | string;
+            /** Format: date-time */
+            revokedAt: null | string;
+        };
         CaverAccountLinkRequest: {
             /** Format: uuid */
             userId: string;
@@ -14342,6 +14471,9 @@ export interface components {
             height: null | number;
             thumbnailUrl: string;
             previewUrl: string;
+        };
+        PublicQrDto: {
+            instanceName: string;
         };
         /** @enum {unknown} */
         RasterStatus: "uploaded" | "processing" | "ready" | "failed";

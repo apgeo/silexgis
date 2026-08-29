@@ -43,6 +43,13 @@ public sealed class FeatureConfiguration : IEntityTypeConfiguration<Feature>
         builder.Property(x => x.Visibility).HasConversion<short>();
         builder.Property(x => x.Properties).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
 
+        // Two indexes stand over expressions inside this document — the lowercased place code
+        // and QR code a surveying device writes into it — so that resolving a code printed on a
+        // label is a lookup rather than a read of every feature. They are created in the
+        // migration that introduced that resolution and are deliberately not modelled here: an
+        // index over an expression is not expressible in this model, and because nothing maps
+        // them, no later model change proposes dropping them either.
+
         // Mixed geometry classes and dimensions by design (one column for every kind; GPX/
         // survey sources carry Z). SRID enforced by the check above, like geofile_features.
         builder.Property(x => x.Geom).HasColumnType("geometry");

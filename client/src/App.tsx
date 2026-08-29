@@ -50,6 +50,7 @@ const GalleryPage = lazy(() => import('./pages/gallery/GalleryPage.tsx'));
 const AlbumsPage = lazy(() => import('./pages/gallery/AlbumsPage.tsx'));
 const AlbumDetailPage = lazy(() => import('./pages/gallery/AlbumDetailPage.tsx'));
 const PublicGalleryPage = lazy(() => import('./pages/gallery/PublicGalleryPage.tsx'));
+const QrLandingPage = lazy(() => import('./pages/QrLandingPage.tsx'));
 const SharedAlbumPage = lazy(() =>
   import('./pages/gallery/PublicGalleryPage.tsx').then((m) => ({ default: m.SharedAlbumPage })));
 const LinkPage = lazy(() => import('./pages/links/LinkPage.tsx'));
@@ -93,6 +94,12 @@ export const routes: RouteObject[] = [
   // installation's curated gallery. Both show renderings and nothing else.
   { path: '/shared/albums/:token', element: <Loadable><SharedAlbumPage /></Loadable> },
   { path: '/gallery/public', element: <Loadable><PublicGalleryPage /></Loadable> },
+  // The address in a QR square bolted to a cave wall. Anonymous, because the person reading it
+  // is standing in a field with a camera app and no account. A path route rather than a hash
+  // one on purpose: the scanner that produces these addresses searches the path and query for
+  // the last separator and never looks past a '#', so a code carried in a fragment would be
+  // discarded before anything could resolve it.
+  { path: '/q/:code', element: <Loadable><QrLandingPage /></Loadable> },
   {
     element: <RequireAuth />,
     children: [
