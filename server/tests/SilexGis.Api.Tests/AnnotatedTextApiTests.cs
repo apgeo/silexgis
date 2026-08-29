@@ -414,9 +414,10 @@ public sealed class AnnotatedTextApiTests : IAsyncLifetime, IDisposable
         using var file = new ByteArrayContent(bytes);
         file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
         form.Add(file, "file", name);
-        var response = await owner.PostAsync("/api/v1/uploads", form);
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-        return (await ReadJsonAsync(response)).GetProperty("documentId").GetGuid();
+        var response = await owner.PostAsync("/api/v1/files/?allowDuplicate=true", form);
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("documentId").GetGuid();
     }
 
     private static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage response)
