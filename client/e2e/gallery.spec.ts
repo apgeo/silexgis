@@ -142,11 +142,46 @@ test('a photograph is credited from the viewer and the gallery says so afterward
 
   // A closed vocabulary rather than free text, because the field exists to be acted on: "may
   // this go in the bulletin" has to be answerable by looking.
-  await drawer.getByLabel('Licence').click();
+  // Both waits below are the point, not ceremony. A click on an option of a list that is still on
+  // its way open is dropped in silence: the option is on screen and clickable, nothing raises, and
+  // the save that follows succeeds — an absent licence is deliberately valid, so the server has
+  // nothing to object to. The only trace is a photograph credited with no licence, which surfaces
+  // as a failure in the facts panel twenty lines below, four steps away from the cause.
+  //
+  // Measured, by alternating the two ways of choosing within one window so both saw the same load:
+  // clicking the option failed 3 runs in 6, choosing it with the keyboard failed 0 in 6, and across
+  // every run today the keyboard form is 18 for 18 against 5 failures in 18 for the click. The wait
+  // for `aria-expanded` is kept because it is still needed, and the read-back below because a lost
+  // commit must fail here, in the drawer with the list open, rather than at the facts panel twenty
+  // lines down against a server that stored exactly what it was sent.
+  //
+  // Two negative results, recorded so they are not repeated: slowing the CPU does not reproduce
+  // this at all and at heavy throttling makes the spec cleaner, because it slows the click and the
+  // transition together and the race lives in the ratio between them; and `aria-expanded` turns
+  // true when the transition starts rather than when it ends, which is why it is necessary here
+  // and not sufficient.
+  const licence = drawer.getByLabel('Licence');
+  await licence.click();
+  await expect(licence).toHaveAttribute('aria-expanded', 'true');
+  // Chosen with the keyboard rather than by clicking the option, and that is the fix rather than a
+  // style preference. rc-select commits a pointer selection on mousedown, and the list re-renders
+  // as its motion classes come off — so a click, being mousedown then mouseup, can straddle that
+  // re-render and be lost with the list left open and nothing chosen. Walking to the option and
+  // pressing Enter puts no pointer event on it at all.
+  //
   // By the option's own title rather than by its text: the list also holds "CC BY-NC-SA", and a
   // text match would be ambiguous between the option and the node inside it.
-  await page.locator('.ant-select-dropdown:visible .ant-select-item-option[title="CC BY-SA"]')
-    .click();
+  const wanted = page.locator('.ant-select-dropdown:visible .ant-select-item-option[title="CC BY-SA"]');
+  await expect(wanted).toBeVisible();
+  for (let i = 0; i < 12; i++) {
+    if (((await wanted.getAttribute('class')) ?? '').includes('ant-select-item-option-active')) break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await page.keyboard.press('Enter');
+  // Scoped to this field: the drawer carries a second select, for the photographer.
+  await expect(
+    drawer.locator('.ant-form-item').filter({ hasText: 'Licence' }).locator('.ant-select-content'),
+  ).toHaveText('CC BY-SA');
 
   await drawer.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
