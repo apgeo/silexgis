@@ -34,7 +34,12 @@ public static class EventEndpoints
     // precisely the danger: every route in the responses group refuses a kind that takes no
     // answers, and the surface stops drawing the tab, so the answers would survive with no door
     // onto them and no count of them anywhere — invisible rather than gone, which nobody notices.
-    private const string KindHasResponsesCode = "event.kind_has_responses";
+    internal const string KindHasResponsesCode = "event.kind_has_responses";
+
+    // A repetition sent to the route that edits one event. Refused rather than ignored: a request
+    // that quietly does nothing with half of what it carries is how somebody comes to believe
+    // they have extended a series that never grew.
+    internal const string RecurrenceCreateOnlyCode = "event.recurrence_create_only";
 
     public static RouteGroupBuilder MapEventEndpoints(this RouteGroupBuilder api)
     {
@@ -43,8 +48,8 @@ public static class EventEndpoints
         events.MapGet("/", ListAsync)
             .WithSummary(
                 "Paged events, most recent first; visibility-filtered. Narrowed by a date "
-                + "window the event overlaps, by a word in its title, by kind and by lifecycle "
-                + "state.");
+                + "window the event overlaps, by a word in its title, by kind, by lifecycle "
+                + "state and by the series an occurrence belongs to.");
         events.MapGet("/defaults", DefaultsAsync)
             .WithSummary(
                 "The audience an event would get if its author named none, so a form can show "
@@ -52,7 +57,11 @@ public static class EventEndpoints
         events.MapGet("/{id:guid}", GetAsync)
             .WithSummary("A single event. Emits the version token its state route requires back.");
         events.MapPost("/", CreateAsync).WithValidation<EventWriteRequest>()
-            .WithSummary("Creates an event (Create permission); the caller becomes owner.");
+            .WithSummary(
+                "Creates an event (Create permission); the caller becomes owner. A request that "
+                + "names a repetition writes the whole series as ordinary events in one act, "
+                + "within a bounded number of occurrences and a bounded horizon, and answers "
+                + "with the first of them.");
         events.MapPut("/{id:guid}", UpdateAsync).WithValidation<EventWriteRequest>()
             .WithSummary("Full update (Write permission). The lifecycle state is not part of it.");
         events.MapDelete("/{id:guid}", DeleteAsync)
@@ -77,6 +86,7 @@ public static class EventEndpoints
         string? search,
         string? kind,
         string? state,
+        Guid? seriesId,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -130,6 +140,15 @@ public static class EventEndpoints
         if (stateFilter is { } wantedState)
         {
             query = query.Where(x => x.State == wantedState);
+        }
+
+        // Narrowing to a series is narrowing to a set of ordinary rows, and it goes through the
+        // same visibility walk as every other narrowing rather than beside it: an occurrence
+        // somebody may not read is absent from its series' listing exactly as it is absent from
+        // the calendar, and no reader learns how many occurrences there are by asking for them.
+        if (seriesId is { } wantedSeries)
+        {
+            query = query.Where(x => x.SeriesId == wantedSeries);
         }
 
         // Accent-insensitive, over the title only — the same reach the trip and camp lists give
@@ -220,6 +239,16 @@ public static class EventEndpoints
         var row = new Event { Title = settled.Title, OwnerUserId = user.UserId };
         Apply(row, settled);
         db.Events.Add(row);
+
+        if (settled.Recurrence is { } recurrence
+            && MaterialiseSeries(db, row, settled, recurrence, user.UserId) is { } refusal)
+        {
+            return refusal;
+        }
+
+        // One save for the whole series, because it is one act to the person who asked for it: a
+        // half-written run of evenings is the state that leaves a calendar looking arranged
+        // without being.
         await db.SaveChangesAsync(ct);
 
         return TypedResults.Created($"/api/v1/events/{row.Id}", Map(row));
@@ -249,6 +278,18 @@ public static class EventEndpoints
         if (ValidateReferences(ctx!, request) is { } problem)
         {
             return problem;
+        }
+
+        // A repetition is how an event is written, never how one is changed. Editing this row
+        // into a series would mean writing rows that are not this one, under a precondition that
+        // is about this one — so it is refused here and a run of occurrences is asked for at
+        // creation, where the whole of what is written is what the caller described.
+        if (request.Recurrence is not null)
+        {
+            return ApiProblems.BadRequest(
+                RecurrenceCreateOnlyCode,
+                "A repetition is settled when an event is created. Changing one occurrence "
+                + "changes that occurrence.");
         }
 
         // Required, as it is on every other full update of a dated record: an edit written on
@@ -332,7 +373,7 @@ public static class EventEndpoints
         return TypedResults.NoContent();
     }
 
-    private static ProblemHttpResult? ValidateReferences(AccessContext ctx, EventWriteRequest request)
+    internal static ProblemHttpResult? ValidateReferences(AccessContext ctx, EventWriteRequest request)
     {
         if (request.CavingGroupId is not null
             && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.Events, request.CavingGroupId.Value))
@@ -343,7 +384,66 @@ public static class EventEndpoints
         return null;
     }
 
-    private static void Apply(Event row, EventWriteRequest request)
+    /// <summary>
+    /// Writes the rest of a series beside the occurrence already built, or refuses the request.
+    /// Adds to the change tracker and saves nothing: the whole series is one save, made by the
+    /// caller.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every occurrence is a whole, ordinary event — its own row, its own identifier, its own
+    /// audience, its own lifecycle. Nothing about it is derived at read time and nothing anywhere
+    /// has to ask which occurrence it is looking at, which is what makes the answers people give,
+    /// the rules anchored on a date, the version token an edit carries and the order a page comes
+    /// back in all go on working with no idea that a series exists.
+    /// </para>
+    /// <para>
+    /// The length of the occurrence travels with it rather than its end date: a three-day course
+    /// repeating monthly is three days every month, so each occurrence's end is its own start
+    /// plus the same span. Copying the first occurrence's end date instead would put every later
+    /// one in the past relative to its start, which the table itself refuses.
+    /// </para>
+    /// </remarks>
+    private static ProblemHttpResult? MaterialiseSeries(
+        SilexGisDbContext db,
+        Event first,
+        EventWriteRequest settled,
+        EventRecurrenceRequest recurrence,
+        Guid ownerUserId)
+    {
+        // The frequency is present because the validator requires it and runs before this.
+        var plan = EventRecurrence.Plan(
+            first.StartDate, recurrence.Frequency!.Value, recurrence.Count, recurrence.Until);
+        if (plan.Refused)
+        {
+            return ApiProblems.BadRequest(plan.RefusalCode!, plan.RefusalDetail);
+        }
+
+        var seriesId = Guid.CreateVersion7();
+        var span = first.EndDate is { } finish ? finish.DayNumber - first.StartDate.DayNumber : 0;
+
+        first.SeriesId = seriesId;
+        first.SeriesRule = recurrence.Rule;
+
+        // The first day of the plan is the event already built, so the rest are written from the
+        // second onwards. Written as full rows rather than copied from the first, so that a
+        // column added to an event tomorrow is either applied to every occurrence by the same
+        // rule the first one went through, or applied to none of them — never to the first alone.
+        foreach (var day in plan.Days.Skip(1))
+        {
+            var occurrence = new Event { Title = settled.Title, OwnerUserId = ownerUserId };
+            Apply(occurrence, settled);
+            occurrence.StartDate = day;
+            occurrence.EndDate = DayRange.EndForStorage(day, day.AddDays(span));
+            occurrence.SeriesId = seriesId;
+            occurrence.SeriesRule = recurrence.Rule;
+            db.Events.Add(occurrence);
+        }
+
+        return null;
+    }
+
+    internal static void Apply(Event row, EventWriteRequest request)
     {
         row.Title = request.Title;
         row.Description = request.Description;
@@ -512,6 +612,8 @@ public static class EventEndpoints
         Visibility = row.Visibility,
         State = row.State,
         PublishedAt = row.PublishedAt,
+        SeriesId = row.SeriesId,
+        SeriesRule = row.SeriesRule,
         CreatedAt = row.CreatedAt,
         UpdatedAt = row.UpdatedAt,
     };

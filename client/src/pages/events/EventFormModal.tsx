@@ -1,22 +1,36 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect } from 'react';
-import { App, DatePicker, Form, Input, InputNumber, Modal, Select, TimePicker } from 'antd';
+import {
+  Alert,
+  App,
+  DatePicker,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Radio,
+  Select,
+  Switch,
+  TimePicker,
+} from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {
   useCavingGroups,
   useCreateEvent,
+  useEditEventSeriesFollowing,
   useEventDefaults,
   useUpdateEvent,
   type EventInfo,
   type EventKind,
+  type EventRecurrenceFrequency,
   type EventWrite,
   type Visibility,
 } from '../../api/hooks.ts';
-import { ApiError } from '../../api/client.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 import { EVENT_KINDS } from './eventKinds.ts';
+import { eventRefusalKey } from './eventRefusals.ts';
 
 interface Props {
   open: boolean;
@@ -25,6 +39,12 @@ interface Props {
   onClose: () => void;
   onSaved?: (event: EventInfo) => void;
 }
+
+/**
+ * What an edit of one occurrence of a repeating event reaches. Only ever offered on an event that
+ * belongs to a run — an event standing on its own has one occurrence and nothing to choose.
+ */
+type EditScope = 'occurrence' | 'following';
 
 interface FormValues {
   title: string;
@@ -37,9 +57,29 @@ interface FormValues {
   description?: string;
   visibility: Visibility;
   cavingGroupId?: string | null;
+  scope?: EditScope;
+  repeats?: boolean;
+  recurrenceFrequency?: EventRecurrenceFrequency;
+  recurrenceRule?: string;
+  recurrenceCount?: number | null;
+  recurrenceUntil?: Dayjs | null;
 }
 
 const VISIBILITIES: readonly Visibility[] = ['private', 'cavingGroup', 'authenticated', 'public'];
+
+const FREQUENCIES: readonly EventRecurrenceFrequency[] = [
+  'daily',
+  'weekly',
+  'fortnightly',
+  'monthly',
+];
+
+/**
+ * The most occurrences one request writes. Shown so that somebody typing a number is told the
+ * ceiling before they are refused by it; the server holds the same figure and is the one that
+ * enforces it, refusing a request past it outright rather than trimming it down to fit.
+ */
+const MAX_OCCURRENCES = 104;
 
 /**
  * Server dates are calendar days and server times are wall-clock strings, both without a zone.
@@ -71,6 +111,10 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
   const [form] = Form.useForm<FormValues>();
   const create = useCreateEvent();
   const update = useUpdateEvent();
+  const editFollowing = useEditEventSeriesFollowing();
+  // Only an occurrence of a run can be edited as a run. An event standing on its own has nothing
+  // to choose between, so it is never asked.
+  const inSeries = !!event?.seriesId;
   const { data: groups } = useCavingGroups();
   // Only asked for while a new event is being written: an event that exists already has an
   // audience of its own, and the default has nothing to say about it.
@@ -123,7 +167,16 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
   }, [open, event, defaults]);
 
   const submit = async () => {
-    const values = await form.validateFields();
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      // The refusal is taken rather than left to travel. Every failure is already drawn against
+      // the field it belongs to, so there is nothing further to say — but an unanswered rejection
+      // is reported as a fault by the observers watching for them, and a form submitted a moment
+      // too early is somebody typing, not a defect.
+      return;
+    }
     const startDate = values.dates![0].format('YYYY-MM-DD');
     const endDate = values.dates?.[1] ? values.dates[1].format('YYYY-MM-DD') : null;
     const body: EventWrite = {
@@ -141,7 +194,29 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
       visibility: values.visibility,
       cavingGroupId: values.cavingGroupId || null,
     };
+    // A repetition is read only when an event is written for the first time. From the moment the
+    // run exists it is ordinary events, and each one is edited as itself — so the route that
+    // changes one occurrence is never sent a repetition, and refuses one if it is.
+    if (!event && values.repeats) {
+      body.recurrence = {
+        frequency: values.recurrenceFrequency,
+        rule: values.recurrenceRule,
+        count: values.recurrenceCount ?? null,
+        until: values.recurrenceUntil ? values.recurrenceUntil.format('YYYY-MM-DD') : null,
+      };
+    }
+
     try {
+      if (event && values.scope === 'following') {
+        // The whole of the rest of the run in one act. It answers with how many occurrences it
+        // really reached and with the addressed one as it now stands, so the page behind this
+        // dialog can redraw without a second read.
+        const result = await editFollowing.mutateAsync({ id: event.id, body });
+        message.success(t('events.seriesEdited', { count: result.changed }));
+        onSaved?.(result.anchor);
+        onClose();
+        return;
+      }
       const saved = event
         ? await update.mutateAsync({ id: event.id, body })
         : await create.mutateAsync(body);
@@ -149,14 +224,11 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
       onSaved?.(saved);
       onClose();
     } catch (error) {
-      // One refusal has a phrase of its own, because "save failed" would leave the author with no
-      // idea what to change: an event people have already answered cannot be turned into a kind
-      // nobody is asked to, since the answers would survive with no surface left that shows them.
-      message.error(
-        error instanceof ApiError && error.code === 'event.kind_has_responses'
-          ? t('events.kindHasResponses')
-          : t('common.saveFailed'),
-      );
+      // Every refusal somebody can reach from this form has words of its own, because "save
+      // failed" would leave the author with no idea what to change — an event people have already
+      // answered cannot be turned into a kind nobody is asked to, and a run asked for with no end
+      // is refused entire rather than trimmed to whatever length somebody else would have guessed.
+      message.error(t(eventRefusalKey(error, 'common.saveFailed')));
     }
   };
 
@@ -166,10 +238,36 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
       title={event ? t('events.edit') : t('events.create')}
       onCancel={onClose}
       onOk={() => void submit()}
-      confirmLoading={create.isPending || update.isPending}
+      confirmLoading={create.isPending || update.isPending || editFollowing.isPending}
       destroyOnHidden
     >
       <Form form={form} layout="vertical" data-testid="event-form">
+        {/* What an edit of one occurrence reaches. Asked before anything else on the form, because
+            it changes the meaning of every field below it — and defaulted to the narrow answer:
+            somebody correcting one evening's place must not silently rewrite the next two years,
+            so the wider act is always the one deliberately chosen. */}
+        {inSeries && (
+          <Form.Item
+            name="scope"
+            label={t('events.scope')}
+            initialValue={'occurrence' satisfies EditScope}
+          >
+            <Radio.Group data-testid="event-scope">
+              <Radio.Button
+                value={'occurrence' satisfies EditScope}
+                data-testid="event-scope-occurrence"
+              >
+                {t('events.scopeOccurrence')}
+              </Radio.Button>
+              <Radio.Button
+                value={'following' satisfies EditScope}
+                data-testid="event-scope-following"
+              >
+                {t('events.scopeFollowing')}
+              </Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+        )}
         <Form.Item name="title" label={t('events.titleField')} rules={[{ required: true }]}>
           <Input maxLength={200} data-testid="event-title" />
         </Form.Item>
@@ -239,6 +337,94 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
             }))}
           />
         </Form.Item>
+        {/* A repetition is offered only while an event is being written for the first time. It is
+            not a property the event keeps: the run is worked out once, here, and written as the
+            ordinary events it is — after which there is nothing left to switch off, only rows to
+            edit and to call off. Editing one occurrence into a run would mean writing rows that
+            are not the one being edited, so the route that changes one refuses a repetition. */}
+        {!event && (
+          <>
+            <Form.Item
+              name="repeats"
+              label={t('events.repeats')}
+              tooltip={t('events.repeatsHelp')}
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Switch data-testid="event-repeats" />
+            </Form.Item>
+            <Form.Item noStyle shouldUpdate={(prev, next) => prev.repeats !== next.repeats}>
+              {({ getFieldValue }) =>
+                getFieldValue('repeats') ? (
+                  <>
+                    <Form.Item
+                      name="recurrenceFrequency"
+                      label={t('events.repeatFrequency')}
+                      rules={[{ required: true }]}
+                      initialValue={'weekly' satisfies EventRecurrenceFrequency}
+                    >
+                      <Select
+                        data-testid="event-repeat-frequency"
+                        options={FREQUENCIES.map((value) => ({
+                          value,
+                          label: t(`events.repeatFrequencyValues.${value}`),
+                        }))}
+                      />
+                    </Form.Item>
+                    {/* The words and the repetition are two different things and are deliberately
+                        two different fields. This sentence is for a person and nothing parses it;
+                        the frequency above is stepped by once, at creation, and is not stored at
+                        all. Keeping them apart is what stops the stored sentence becoming a rule
+                        the application would later be expected to honour. */}
+                    <Form.Item
+                      name="recurrenceRule"
+                      label={t('events.repeatRule')}
+                      tooltip={t('events.repeatRuleHelp')}
+                      rules={[{ required: true }]}
+                    >
+                      <Input maxLength={200} data-testid="event-repeat-rule" />
+                    </Form.Item>
+                    {/* Where it stops. One of the two is enough and both may be given, but a run
+                        told neither is refused rather than written to some length nobody asked
+                        for — which is why the pair is validated together rather than each on its
+                        own. The server holds the same rule and is the one that enforces it. */}
+                    <Form.Item
+                      name="recurrenceCount"
+                      label={t('events.repeatCount')}
+                      tooltip={t('events.repeatCountHelp', { max: MAX_OCCURRENCES })}
+                      dependencies={['recurrenceUntil']}
+                      rules={[
+                        ({ getFieldValue }) => ({
+                          validator: (_rule, value) =>
+                            value || getFieldValue('recurrenceUntil')
+                              ? Promise.resolve()
+                              : Promise.reject(new Error(t('events.repeatBoundRequired'))),
+                        }),
+                      ]}
+                    >
+                      <InputNumber
+                        min={2}
+                        max={MAX_OCCURRENCES}
+                        precision={0}
+                        style={{ width: '100%' }}
+                        data-testid="event-repeat-count"
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      name="recurrenceUntil"
+                      label={t('events.repeatUntil')}
+                      tooltip={t('events.repeatUntilHelp')}
+                      dependencies={['recurrenceCount']}
+                    >
+                      <DatePicker style={{ width: '100%' }} data-testid="event-repeat-until" />
+                    </Form.Item>
+                    <Alert type="info" showIcon title={t('events.repeatsHelp')} />
+                  </>
+                ) : null
+              }
+            </Form.Item>
+          </>
+        )}
       </Form>
     </Modal>
   );

@@ -5,7 +5,7 @@ import { Button, DatePicker, Flex, Input, Select, Table, Tag, Typography } from 
 import type { TablePaginationConfig } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useCan,
   useEvents,
@@ -37,7 +37,16 @@ const asDate = (value: Dayjs | null | undefined): string | undefined =>
 export default function EventListPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const [params, setParams] = useState<EventListParams>({ page: 1, pageSize: 20 });
+  // The one narrowing that arrives in the address rather than from a control on this page: the
+  // detail page of an occurrence links here to show the rest of its run, and a link has to survive
+  // being copied, bookmarked and reloaded. It is read once, as the list's starting state — after
+  // that the page owns its own filters, so clearing the run here does not fight the address bar.
+  const [searchParams] = useSearchParams();
+  const [params, setParams] = useState<EventListParams>({
+    page: 1,
+    pageSize: 20,
+    seriesId: searchParams.get('seriesId') ?? undefined,
+  });
   const [searchInput, setSearchInput] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const search = useDebouncedValue(searchInput);
@@ -72,6 +81,19 @@ export default function EventListPage() {
           </Button>
         )}
       </Flex>
+      {/* Said plainly, and clearable, because a list showing a fraction of the events with no
+          visible reason reads as a list that has lost most of its rows. */}
+      {params.seriesId && (
+        <Tag
+          closable
+          color="processing"
+          style={{ marginBottom: 12 }}
+          data-testid="event-series-filter"
+          onClose={() => narrow({ seriesId: undefined })}
+        >
+          {t('events.seriesFilter')}
+        </Tag>
+      )}
       <Flex gap={8} wrap style={{ marginBottom: 12 }}>
         <Input.Search
           placeholder={t('events.searchPlaceholder')}

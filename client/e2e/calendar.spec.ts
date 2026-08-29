@@ -205,3 +205,72 @@ test('an event says who is coming, and a deadline is not asked', async ({ page }
   await expect(page.getByRole('tab', { name: 'Who is coming', exact: true })).toHaveCount(0);
   await expect(page.getByRole('tab', { name: 'History', exact: true })).toBeVisible();
 });
+
+/**
+ * A club date that comes round again is written as the evenings it is.
+ *
+ * Driven end to end because the whole design rests on what happens after the form closes: the run
+ * is materialised as ordinary events, so each occurrence must be a page of its own that the
+ * existing machinery opens, and the only account of why the same evening appears repeatedly is the
+ * sentence its author wrote. Both halves are checked here — that more than one evening was really
+ * written, and that opening one says it is part of a run and offers the two ways of calling it off.
+ */
+test('a repeating event is written as the evenings it is, and calling one off asks which', async ({
+  page,
+}) => {
+  const title = `E2E Series ${Date.now()}`;
+  await login(page);
+
+  const fillDay = async (value: string) => {
+    const from = page.getByTestId('event-form').getByPlaceholder('Start date');
+    await from.click();
+    await from.fill(value);
+    await page.keyboard.press('Enter');
+    await expect(from).toHaveValue(value);
+  };
+  const today = new Date();
+  const day = `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, '0')}-${`${today.getDate()}`.padStart(2, '0')}`;
+
+  await gotoRoute(page, '/events');
+  await page.getByTestId('event-create').click();
+  await page.getByTestId('event-title').fill(title);
+  await fillDay(day);
+
+  // The repetition is asked for only while the event is being written: from the moment the run
+  // exists it is ordinary events, each edited as itself.
+  await page.getByTestId('event-repeats').click();
+  await expect(page.getByTestId('event-repeat-rule')).toBeVisible();
+  // The words and the repetition are two different fields. This sentence is for a person and
+  // nothing parses it; the frequency beside it is stepped by once, now, and is not stored at all.
+  await page.getByTestId('event-repeat-rule').fill('every week, while the season lasts');
+  await page.getByTestId('event-repeat-count').fill('3');
+  await page.getByRole('button', { name: 'OK' }).click();
+
+  // The create answers with the first occurrence, so the page that opens is an ordinary event page.
+  await expect(page.getByTestId('event-title')).toHaveText(title, { timeout: 15_000 });
+  await expect(page.getByTestId('event-series-banner')).toBeVisible();
+  await expect(page.getByTestId('event-series-banner')).toContainText(
+    'every week, while the season lasts',
+  );
+
+  // The other occurrences are ordinary events on the ordinary list, found by the ordinary search —
+  // which is the whole claim of the design: nothing between the form and this list knows a series
+  // exists.
+  await gotoRoute(page, '/events');
+  // The test id sits on the search control's wrapper rather than on its field, so the box inside
+  // it is what takes the text.
+  await page.getByTestId('event-search').locator('input').fill(title);
+  const rows = page.getByTestId('event-table').getByText(title, { exact: true });
+  await expect(rows).toHaveCount(3, { timeout: 15_000 });
+
+  // Calling off an occurrence of a run has two outcomes, so it is asked in a dialog with the
+  // choice in it rather than in the yes/no popover a single event gets.
+  await rows.first().click();
+  await expect(page.getByTestId('event-series-banner')).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('event-delete').click();
+  await expect(page.getByTestId('event-delete-scope')).toBeVisible();
+  await expect(page.getByTestId('event-delete-scope-following')).toBeVisible();
+  // What is kept is said before anything is chosen: an occurrence that has already begun is the
+  // record of an evening that happened, and is never removed by an act aimed at the rest of the run.
+  await expect(page.getByText(/already begun are kept/)).toBeVisible();
+});

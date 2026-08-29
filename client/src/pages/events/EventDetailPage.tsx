@@ -2,13 +2,16 @@
 import { useState } from 'react';
 import { DeleteOutlined, EditOutlined, LockOutlined } from '@ant-design/icons';
 import {
+  Alert,
   App,
   Button,
   Card,
   Descriptions,
   Flex,
   Popconfirm,
+  Radio,
   Result,
+  Space,
   Spin,
   Tabs,
   Tag,
@@ -20,6 +23,7 @@ import {
   parseAccessActions,
   useCan,
   useDeleteEvent,
+  useDeleteEventSeriesFollowing,
   useEffectiveAccess,
   useEvent,
   type EventKind,
@@ -31,6 +35,7 @@ import { formatTripDates } from '../../components/trips/tripDates.ts';
 import EventFormModal from './EventFormModal.tsx';
 import EventResponsesTab from './EventResponsesTab.tsx';
 import EventStateControl from './EventStateControl.tsx';
+import { eventRefusalKey } from './eventRefusals.ts';
 import { eventKindTakesResponses } from './eventKinds.ts';
 
 /**
@@ -49,13 +54,14 @@ export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: event, isPending, isError } = useEvent(id);
   const { data: effective } = useEffectiveAccess('event', id);
   const domainFallback = useCan('events', 'write');
   const held = effective ? parseAccessActions(effective.actions) : null;
   const remove = useDeleteEvent();
+  const removeFollowing = useDeleteEventSeriesFollowing();
   const [editOpen, setEditOpen] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
 
@@ -97,9 +103,63 @@ export default function EventDetailPage() {
       await remove.mutateAsync(event.id);
       message.success(t('common.deleted'));
       navigate('/events');
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(t(eventRefusalKey(error, 'common.deleteFailed')));
     }
+  };
+
+  const deleteFollowing = async () => {
+    try {
+      const result = await removeFollowing.mutateAsync(event.id);
+      // Both halves are reported, and the kept half is the one that matters: somebody told only
+      // how many went would believe the whole run is gone while the evenings that already happened
+      // are still on the calendar, correctly.
+      message.success(t('events.seriesDeleted', { deleted: result.deleted, kept: result.kept }));
+      navigate('/events');
+    } catch (error) {
+      // Read from the code rather than shown as a general failure. This is the act where an
+      // all-or-nothing refusal is likeliest — rights over a run are often held over part of it —
+      // and "save failed" is both the wrong verb and no hint at all about what happened.
+      message.error(t(eventRefusalKey(error, 'common.deleteFailed')));
+    }
+  };
+
+  /**
+   * Calling off an occurrence of a repeating event is a choice with two outcomes, so it is asked
+   * in a dialog with something to choose in it rather than in the yes/no popover a single event
+   * gets. The narrow answer is the default: calling off two years of evenings must be something
+   * somebody picked, never something they got by confirming.
+   */
+  const confirmSeriesDelete = () => {
+    let scope: 'occurrence' | 'following' = 'occurrence';
+    modal.confirm({
+      title: t('events.seriesDeleteTitle'),
+      okText: t('events.delete'),
+      okButtonProps: { danger: true, 'data-testid': 'event-delete-confirm' },
+      cancelText: t('common.cancel'),
+      content: (
+        <Space orientation="vertical" size="middle" style={{ marginTop: 8 }}>
+          <Radio.Group
+            defaultValue={scope}
+            onChange={(e) => {
+              scope = e.target.value as 'occurrence' | 'following';
+            }}
+            data-testid="event-delete-scope"
+          >
+            <Space orientation="vertical">
+              <Radio value="occurrence" data-testid="event-delete-scope-occurrence">
+                {t('events.scopeOccurrence')}
+              </Radio>
+              <Radio value="following" data-testid="event-delete-scope-following">
+                {t('events.scopeFollowing')}
+              </Radio>
+            </Space>
+          </Radio.Group>
+          <Typography.Text type="secondary">{t('events.seriesDeleteDetail')}</Typography.Text>
+        </Space>
+      ),
+      onOk: () => (scope === 'following' ? deleteFollowing() : deleteEvent()),
+    });
   };
 
   // Only the kinds people are asked about get a list of who is coming. The server holds the same
@@ -166,15 +226,59 @@ export default function EventDetailPage() {
               {t('permissions.button')}
             </Button>
           )}
-          {canDelete && (
-            <Popconfirm title={t('events.deleteConfirm')} onConfirm={() => void deleteEvent()}>
-              <Button danger icon={<DeleteOutlined />} data-testid="event-delete">
+          {/* An event standing on its own keeps the yes/no popover it has always had: there is
+              nothing to choose, and a dialog to say so would be ceremony. One occurrence of a run
+              has two outcomes, and a popover has no body to put the choice in. */}
+          {canDelete &&
+            (event.seriesId ? (
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                data-testid="event-delete"
+                onClick={confirmSeriesDelete}
+              >
                 {t('events.delete')}
               </Button>
-            </Popconfirm>
-          )}
+            ) : (
+              <Popconfirm title={t('events.deleteConfirm')} onConfirm={() => void deleteEvent()}>
+                <Button danger icon={<DeleteOutlined />} data-testid="event-delete">
+                  {t('events.delete')}
+                </Button>
+              </Popconfirm>
+            ))}
         </Flex>
       </Flex>
+
+      {/* That this evening is one of a run, said once and in the words its author used. There is
+          no series to open: the run is the other events carrying the same grouping key, each a
+          whole event of its own. Nothing here is worked out from the sentence — it is shown
+          exactly as written, and the days were settled when the run was created. */}
+      {event.seriesId && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          data-testid="event-series-banner"
+          title={t('events.seriesBanner')}
+          description={
+            <Space orientation="vertical" size={4}>
+              {event.seriesRule && (
+                <span>{t('events.seriesRule', { rule: event.seriesRule })}</span>
+              )}
+              {/* The way to the rest of the run. The occurrences are ordinary events, so the run
+                  is the event list narrowed to the grouping key — narrowed on the server and
+                  through the same visibility walk as any other listing, so a reader is shown the
+                  occurrences they may open and learns nothing about the ones they may not. */}
+              <Typography.Link
+                data-testid="event-series-occurrences"
+                onClick={() => void navigate(`/events?seriesId=${event.seriesId}`)}
+              >
+                {t('events.seriesOccurrences')}
+              </Typography.Link>
+            </Space>
+          }
+        />
+      )}
 
       <Card style={{ marginBottom: 16 }}>
         <Descriptions column={1} size="small">

@@ -4977,6 +4977,10 @@ export type EventInfo = components['schemas']['EventDto'];
 export type EventWrite = components['schemas']['EventWriteRequest'];
 export type EventKind = components['schemas']['EventKind'];
 export type EventDefaults = components['schemas']['EventDefaultsDto'];
+/** How a repeating event comes round. A closed list the server steps by once, at creation. */
+export type EventRecurrenceFrequency = NonNullable<
+  components['schemas']['EventRecurrenceFrequency']
+>;
 
 /**
  * How the event list is narrowed. The window asks what an event *overlapped* rather than what it
@@ -4992,6 +4996,12 @@ export interface EventListParams {
   search?: string;
   kind?: string;
   state?: string;
+  /**
+   * One repeating event's occurrences, by the key they share. A run is not a thing of its own —
+   * it is the ordinary events carrying this key — so it is asked for as a narrowing of the list
+   * and answered through the same visibility walk as every other narrowing.
+   */
+  seriesId?: string;
 }
 
 /** The events this reader may open, narrowed by the filters the list offers. */
@@ -5096,6 +5106,62 @@ export function useDeleteEvent() {
       if (error) {
         throw new ApiError(response.status, error);
       }
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+export type EventSeriesEditResult = components['schemas']['EventSeriesEditResultDto'];
+export type EventSeriesDeleteResult = components['schemas']['EventSeriesDeleteResultDto'];
+
+/**
+ * Applies one edit to this occurrence of a repeating event and to every later one of its series.
+ *
+ * The precondition is set here by hand rather than left to the replay that threads it onto an
+ * ordinary update. That replay is keyed by the path a version was read under, and this write is
+ * addressed to a sub-path of the event rather than to the event itself, so nothing would be sent
+ * and a server that requires one would refuse every edit. It is honestly a precondition over the
+ * occurrence on the screen alone — one token cannot speak for a set — and it is still worth
+ * carrying: it says the evening the author was looking at has not moved underneath them.
+ */
+export function useEditEventSeriesFollowing() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: EventWrite }) => {
+      const etag = lastReadETag(`/api/v1/events/${id}`);
+      return unwrap(
+        api.PUT('/api/v1/events/{id}/series/following', {
+          params: { path: { id } },
+          headers: etag ? { 'If-Match': etag } : undefined,
+          body,
+        }),
+      );
+    },
+    // Every occurrence of the series is an ordinary event on its own page and its own row of the
+    // calendar, so an edit reaching a dozen of them has moved a dozen things this cache holds.
+    onSuccess: (_data, variables) => invalidate(variables.id),
+  });
+}
+
+/**
+ * Calls off this occurrence of a repeating event and every later one, keeping any that has
+ * already begun.
+ *
+ * It answers with both halves — what went and what stayed — because the half that stays is the
+ * surprising one: an occurrence that has already happened is the record of an evening and of who
+ * said they would come, and is never removed by an act aimed at the rest of the run.
+ */
+export function useDeleteEventSeriesFollowing() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error, response } = await api.DELETE('/api/v1/events/{id}/series/following', {
+        params: { path: { id } },
+      });
+      if (error) {
+        throw new ApiError(response.status, error);
+      }
+      return data as EventSeriesDeleteResult;
     },
     onSuccess: () => invalidate(),
   });

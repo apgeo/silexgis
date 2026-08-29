@@ -195,6 +195,50 @@ public class Event : IProtectedEntity, ITimestamped, IAuditable
     /// </remarks>
     public int? MaxParticipants { get; set; }
 
+    /// <summary>
+    /// The series this event is one occurrence of, or null when it stands on its own.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A grouping key and nothing more. There is no series table and no series row: a series is
+    /// the set of events that share this value, and every one of them is an ordinary event. That
+    /// is the whole design. Everything that already keys on one event's identifier — the answer
+    /// somebody gave, the rules anchored on it, its version token, the page it lands on, the
+    /// trail its answers hang off — keeps keying on one identifier, because an occurrence is a
+    /// row rather than a date computed from a rule. The alternative, a stored rule expanded when
+    /// somebody looks, would have made every one of those mechanisms need to say <i>which</i>
+    /// occurrence it meant, and none of them has anywhere to put it.
+    /// </para>
+    /// <para>
+    /// It carries no foreign key, deliberately, because there is nothing to point at. Deleting
+    /// every occurrence of a series leaves no orphan and nothing to tidy up: the series simply
+    /// stops existing, the way a word stops existing when nobody says it.
+    /// </para>
+    /// </remarks>
+    public Guid? SeriesId { get; set; }
+
+    /// <summary>
+    /// How the series repeats, in the words its author used — "every Tuesday", "first Monday of
+    /// the month, term time". Null on an event that is not part of one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Nothing reads this but a person.</b> It is never parsed, never matched, and no dated row
+    /// anywhere is derived from it: the days were worked out once, when the occurrences were
+    /// written, from a repetition the author picked from a short list, and that choice is not
+    /// stored because there is nothing left to do with it. What is stored is the sentence a reader
+    /// needs in order to understand why the same evening appears twelve times.
+    /// </para>
+    /// <para>
+    /// It sits on every occurrence rather than in one place, because there is no one place: the
+    /// series is the rows. The cost is the same sentence written a dozen times; the gain is that
+    /// an occurrence answers "what is this part of" out of the row somebody already loaded, with
+    /// no second table to join, to authorise, to audit, or to leave behind when the last
+    /// occurrence goes.
+    /// </para>
+    /// </remarks>
+    public string? SeriesRule { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

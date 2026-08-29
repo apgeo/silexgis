@@ -10236,7 +10236,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Paged events, most recent first; visibility-filtered. Narrowed by a date window the event overlaps, by a word in its title, by kind and by lifecycle state. */
+        /** Paged events, most recent first; visibility-filtered. Narrowed by a date window the event overlaps, by a word in its title, by kind, by lifecycle state and by the series an occurrence belongs to. */
         get: {
             parameters: {
                 query?: {
@@ -10247,6 +10247,7 @@ export interface paths {
                     search?: string;
                     kind?: string;
                     state?: string;
+                    seriesId?: string;
                 };
                 header?: never;
                 path?: never;
@@ -10266,7 +10267,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Creates an event (Create permission); the caller becomes owner. */
+        /** Creates an event (Create permission); the caller becomes owner. A request that names a repetition writes the whole series as ordinary events in one act, within a bounded number of occurrences and a bounded horizon, and answers with the first of them. */
         post: {
             parameters: {
                 query?: never;
@@ -10454,6 +10455,70 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{id}/series/following": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Applies one edit to this occurrence and every later one of its series (Write permission on all of them, settled before anything is written). The days keep the spacing they had: moving this occurrence moves the rest by the same number of days. Answers with how many occurrences were changed. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EventWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventSeriesEditResultDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Calls off the rest of a repeating event: this occurrence and every later one, except any that has already begun. Answers with how many were removed and how many were kept. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventSeriesDeleteResultDto"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -14991,6 +15056,9 @@ export interface components {
             state: components["schemas"]["ActivityState"];
             /** Format: date-time */
             publishedAt?: null | string;
+            /** Format: uuid */
+            seriesId?: null | string;
+            seriesRule?: null | string;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -15049,6 +15117,31 @@ export interface components {
         };
         /** @enum {unknown} */
         EventKind: "clubMeeting" | "training" | "maintenanceDay" | "gearCheck" | "conference" | "deadline" | null;
+        /** @enum {unknown} */
+        EventRecurrenceFrequency: "daily" | "weekly" | "fortnightly" | "monthly" | null;
+        EventRecurrenceRequest: {
+            frequency?: null | components["schemas"]["EventRecurrenceFrequency"];
+            /** Format: int32 */
+            count?: null | number;
+            /** Format: date */
+            until?: null | string;
+            rule?: null | string;
+        };
+        EventSeriesDeleteResultDto: {
+            /** Format: uuid */
+            seriesId: string;
+            /** Format: int32 */
+            deleted: number;
+            /** Format: int32 */
+            kept: number;
+        };
+        EventSeriesEditResultDto: {
+            /** Format: uuid */
+            seriesId: string;
+            /** Format: int32 */
+            changed: number;
+            anchor: components["schemas"]["EventDto"];
+        };
         EventTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];
         };
@@ -15070,6 +15163,7 @@ export interface components {
             /** Format: uuid */
             cavingGroupId?: null | string;
             visibility?: null | components["schemas"]["Visibility"];
+            recurrence?: null | components["schemas"]["EventRecurrenceRequest"];
         };
         ExpeditionDto: {
             /** Format: uuid */

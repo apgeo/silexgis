@@ -14,13 +14,23 @@ public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
         // the start. Held here and not only in the write path's validation, because every reader
         // is written against it: a row with an end equal to its start would make a single-day
         // event read as a range of itself everywhere at once, and no reader would notice.
-        builder.ToTable("events", t => t.HasCheckConstraint(
-            "ck_events_dates", "end_date IS NULL OR end_date > start_date"));
+        builder.ToTable("events", t =>
+        {
+            t.HasCheckConstraint("ck_events_dates", "end_date IS NULL OR end_date > start_date");
+
+            // Words describing how something repeats, on a row that is part of no series, would
+            // be a sentence about a repetition that is not happening — and the surface that drew
+            // it would say so to every reader. The two columns are one fact and are written
+            // together or not at all.
+            t.HasCheckConstraint(
+                "ck_events_series_rule", "series_rule IS NULL OR series_id IS NOT NULL");
+        });
 
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.Title).HasMaxLength(200);
         builder.Property(x => x.Description).HasMaxLength(4000);
         builder.Property(x => x.Place).HasMaxLength(255);
+        builder.Property(x => x.SeriesRule).HasMaxLength(200);
 
         // Kind, audience and lifecycle state are all closed vocabularies whose numbers are part
         // of the schema contract, so they are stored as the smallints they are declared to be
@@ -42,5 +52,11 @@ public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
         // window is narrowed on.
         builder.HasIndex(x => x.StartDate);
         builder.HasIndex(x => x.OwnerUserId);
+
+        // Every question anybody asks about a series is "the occurrences of this one, in the order
+        // they happen" or "the ones from this day on", so the two columns are indexed together and
+        // in that order. Filtered, because the great majority of events belong to no series and an
+        // index over their nulls would be most of the table saying nothing.
+        builder.HasIndex(x => new { x.SeriesId, x.StartDate }).HasFilter("series_id IS NOT NULL");
     }
 }

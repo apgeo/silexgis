@@ -2,6 +2,7 @@
 using FluentValidation;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Events;
 
 namespace SilexGis.Api.Features.Events;
 
@@ -68,6 +69,19 @@ public sealed record EventDto
 
     /// <summary>When it was first announced, or absent while it never has been.</summary>
     public DateTimeOffset? PublishedAt { get; init; }
+
+    /// <summary>
+    /// The series this occurrence belongs to, or absent when the event stands on its own. A
+    /// grouping key rather than a reference: there is no series to fetch, only the other events
+    /// that carry the same value.
+    /// </summary>
+    public Guid? SeriesId { get; init; }
+
+    /// <summary>
+    /// How the series repeats, in the words its author used. Shown to a reader and read by
+    /// nothing else — no date on this row or any other is derived from it.
+    /// </summary>
+    public string? SeriesRule { get; init; }
 
     public required DateTimeOffset CreatedAt { get; init; }
 
@@ -148,6 +162,71 @@ public sealed record EventWriteRequest
     public Guid? CavingGroupId { get; init; }
 
     public Visibility? Visibility { get; init; }
+
+    /// <summary>
+    /// How this event repeats, or absent when it happens once. Read only when an event is
+    /// created: the occurrences are written then, and from that moment each is an ordinary event
+    /// that is edited, moved and deleted like any other.
+    /// </summary>
+    public EventRecurrenceRequest? Recurrence { get; init; }
+}
+
+/// <summary>
+/// A request to write a run of occurrences rather than one event: how often it comes round, where
+/// the repetition stops, and the words that describe it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>The words and the repetition are two different things and are deliberately not the same
+/// field.</b> <see cref="Rule"/> is a sentence for a person — "every Tuesday, term time" — and
+/// nothing ever parses it. <see cref="Frequency"/> is the short closed list the generator steps by
+/// once, at creation, and it is not stored at all. Keeping them apart is what stops the stored
+/// sentence from becoming a rule the application is expected to honour later, which is the design
+/// this one exists instead of.
+/// </para>
+/// <para>
+/// One of <see cref="Count"/> and <see cref="Until"/> must be given and both may be. A request
+/// naming neither says where it starts and never where it stops, and is refused rather than
+/// answered with somebody's guess at how long "for ever" ought to be.
+/// </para>
+/// </remarks>
+public sealed record EventRecurrenceRequest
+{
+    /// <summary>
+    /// How often it comes round. Nullable so that a body naming no repetition can be told so:
+    /// the vocabulary's first member is the zero value, so a non-nullable field would read an
+    /// absent one as "every day" and write a month of rows nobody asked for.
+    /// </summary>
+    public EventRecurrenceFrequency? Frequency { get; init; }
+
+    /// <summary>How many occurrences in total, the first included, or absent to be bounded by the last day.</summary>
+    public int? Count { get; init; }
+
+    /// <summary>
+    /// The last day an occurrence may fall on, included, or absent to be bounded by the count.
+    /// </summary>
+    public DateOnly? Until { get; init; }
+
+    /// <summary>
+    /// How the repetition would be described to somebody reading the calendar. Required, because
+    /// it is the only explanation a reader ever gets for why the same evening appears a dozen
+    /// times — the repetition itself is not kept.
+    /// </summary>
+    public string? Rule { get; init; }
+}
+
+public sealed class EventRecurrenceRequestValidator : AbstractValidator<EventRecurrenceRequest>
+{
+    public EventRecurrenceRequestValidator()
+    {
+        // Shape only. Whether the bounds describe a series this application will write — that
+        // there is a bound at all, that it repeats more than once, that it does not run past the
+        // ceilings — is one question with one home, the generator, and it answers each with its
+        // own stable code. Asking half of it here as well would be a second rule about the same
+        // thing, free to drift from the first and to refuse under a code no surface expects.
+        RuleFor(x => x.Frequency).NotNull();
+        RuleFor(x => x.Rule).NotEmpty().MaximumLength(200);
+    }
 }
 
 public sealed class EventWriteRequestValidator : AbstractValidator<EventWriteRequest>
@@ -168,6 +247,10 @@ public sealed class EventWriteRequestValidator : AbstractValidator<EventWriteReq
 
         // Room for nobody is not a limit anybody means to state; absent is how "no limit" is said.
         RuleFor(x => x.MaxParticipants).GreaterThan(0).When(x => x.MaxParticipants is not null);
+
+        RuleFor(x => x.Recurrence!)
+            .SetValidator(new EventRecurrenceRequestValidator())
+            .When(x => x.Recurrence is not null);
     }
 }
 
@@ -180,4 +263,55 @@ public sealed record EventDefaultsDto
     public required Visibility Visibility { get; init; }
 
     public Guid? CavingGroupId { get; init; }
+}
+
+/// <summary>
+/// What one edit aimed at a run of occurrences did.
+/// </summary>
+/// <remarks>
+/// The count is the number of occurrences the edit reached, and it is the honest one rather than
+/// the number asked for: a series may hold occurrences this caller cannot see, and the act is
+/// refused entire rather than applied to the visible part, so a number arriving here is a number
+/// of rows that really changed. A surface that says "twelve evenings were changed" when four were
+/// is worse than one that says nothing.
+/// </remarks>
+public sealed record EventSeriesEditResultDto
+{
+    /// <summary>The series the edit was aimed at.</summary>
+    public required Guid SeriesId { get; init; }
+
+    /// <summary>How many occurrences were changed, the addressed one included.</summary>
+    public required int Changed { get; init; }
+
+    /// <summary>
+    /// The occurrence the caller addressed, as it now stands — so a detail page that asked for
+    /// the edit can redraw itself without a second read.
+    /// </summary>
+    public required EventDto Anchor { get; init; }
+}
+
+/// <summary>
+/// What calling off the rest of a repeating event did, and what it left standing.
+/// </summary>
+/// <remarks>
+/// <see cref="Kept"/> is not a leftover of the arithmetic — it is the part a caller most needs to
+/// be told, because it is the part that surprises them. Occurrences that have already begun are
+/// records of something that happened and are never removed by an act aimed at the rest of the
+/// run, so a surface that reports only the deletions leaves somebody believing a series is gone
+/// while half of it is still in the calendar, correctly.
+/// </remarks>
+public sealed record EventSeriesDeleteResultDto
+{
+    /// <summary>The series that was called off.</summary>
+    public required Guid SeriesId { get; init; }
+
+    /// <summary>How many occurrences were removed.</summary>
+    public required int Deleted { get; init; }
+
+    /// <summary>
+    /// How many occurrences of the series stayed, having already happened — counted over the ones
+    /// this caller may read. A count over all of them would tell somebody holding rights on the
+    /// future of a run how many past evenings of it exist that they may not open.
+    /// </summary>
+    public required int Kept { get; init; }
 }
