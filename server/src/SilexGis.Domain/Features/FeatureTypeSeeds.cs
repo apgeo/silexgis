@@ -22,4 +22,24 @@ public static class FeatureTypeSeeds
     /// are read off places of this kind.
     /// </summary>
     public const string Continuation = "continuation";
+
+    /// <summary>
+    /// A stretch of country a club works: a massif, a karst zone, a valley system. It is the kind
+    /// a work area is <em>declared</em> by rather than a label put on one, so that what is a work
+    /// area is a fact about the row and not about whichever list somebody happened to add it to.
+    /// <para>
+    /// Its own kind rather than a tag on the areas that already exist, and that is the whole of
+    /// the decision. A tag is installation-wide free text: renaming or deleting the one that means
+    /// "we work here" would empty the board that lists them, silently and permanently, and nothing
+    /// would fail. A kind is resolved by this constant, and the board that cannot find it answers
+    /// empty — so the code is held in one place where a rename fails the build.
+    /// </para>
+    /// <para>
+    /// The levels below one — a valley inside a massif, a sector inside a valley — are not a
+    /// second kind. They are rows of this kind sitting under another through the containment
+    /// hierarchy every feature already has, which is why a sub-area is a work area in its own
+    /// right the moment somebody opens it.
+    /// </para>
+    /// </summary>
+    public const string WorkArea = "work_area";
 }

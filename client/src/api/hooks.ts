@@ -248,6 +248,9 @@ export const queryKeys = {
   resLinkTargets: (targetType: string, q: string) => ['reslinks', 'targets', targetType, q] as const,
   resLinkRelationTypes: ['reslinks', 'relation-types'] as const,
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
+  // One key for the whole tree: the board, the overview and the map that zooms to one area all
+  // read the same answer, so they cannot disagree about which areas exist or where one of them is.
+  workAreas: ['work-areas'] as const,
   // Every terrain key starts with this list key, so the mutations that invalidate it also reach
   // the paged list and each build's own detail. A key that did not would leave the page showing
   // a build's old phase for as long as its query stayed fresh.
@@ -5501,5 +5504,29 @@ export function useMoveEvent() {
     // As on the event's own update: a move is checked against the version last read, so the move
     // is not finished until the version it produced has been read.
     onSuccess: (_data, variables) => invalidate(variables.id),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Work areas
+// ---------------------------------------------------------------------------
+
+export type WorkArea = components['schemas']['WorkAreaDto'];
+export type WorkAreaCollection = components['schemas']['WorkAreaCollectionDto'];
+
+/**
+ * Every work area this caller may read, as one answer.
+ *
+ * There are tens of these and not thousands — a club works the ground it can reach — so the whole
+ * tree is fetched once and levelled in the browser. That is what lets the dashboard list, the
+ * overview map and the zoom-to-area link share a cache entry instead of asking three times and
+ * risking three different answers.
+ */
+export function useWorkAreas(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.workAreas,
+    queryFn: () => unwrap(api.GET('/api/v1/work-areas', {})),
+    enabled,
+    retry: false,
   });
 }

@@ -19,6 +19,7 @@ import LegacySecurityRedirect from './pages/settings/LegacySecurityRedirect.tsx'
 const MapPage = lazy(() => import('./pages/MapPage.tsx'));
 const Scene3DPage = lazy(() => import('./pages/Scene3DPage.tsx'));
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage.tsx'));
+const WorkAreasPage = lazy(() => import('./pages/workareas/WorkAreasPage.tsx'));
 const CaveListPage = lazy(() => import('./pages/caves/CaveListPage.tsx'));
 const CaveFormPage = lazy(() => import('./pages/caves/CaveFormPage.tsx'));
 const CaveDetailPage = lazy(() => import('./pages/caves/CaveDetailPage.tsx'));
@@ -120,6 +121,7 @@ export const routes: RouteObject[] = [
           { path: '/map', element: <Loadable><MapPage /></Loadable> },
           { path: '/map3d', element: <Loadable><Scene3DPage /></Loadable> },
           { path: '/dashboard', element: <Loadable><DashboardPage /></Loadable> },
+          { path: '/work-areas', element: <Loadable><WorkAreasPage /></Loadable> },
           { path: '/caves', element: <Loadable><CaveListPage /></Loadable> },
           { path: '/caves/new', element: <Loadable><CaveFormPage /></Loadable> },
           { path: '/caves/:id', element: <Loadable><CaveDetailPage /></Loadable> },

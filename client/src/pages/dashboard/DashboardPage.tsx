@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import {
+  BorderOuterOutlined,
   CarOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
@@ -33,8 +34,10 @@ import {
   useDashboardSummary,
   useMapViews,
   useMyTripLogs,
+  useWorkAreas,
   type DashboardActivityItem,
 } from '../../api/hooks.ts';
+import { topLevel } from '../../workareas/tree.ts';
 import { featureDetailPath } from '../../components/features/featureNavigation.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
@@ -55,6 +58,10 @@ export default function DashboardPage() {
   const { message } = App.useApp();
   const { data: summary, isLoading, isError, refetch } = useDashboardSummary();
   const { data: views } = useMapViews();
+  // Only the top of the tree here. The board is a way into a season, not the overview: the levels
+  // beneath are opened on the overview, which knows how to draw and frame them.
+  const { data: workAreas } = useWorkAreas();
+  const topLevelAreas = useMemo(() => topLevel(workAreas?.items ?? []), [workAreas]);
   // A panel of its own, and a request of its own, rather than a fourth source in the activity
   // feed. Two independent reasons, either of which is sufficient. The feed is ordered by when a
   // record was last touched, in every source and in the merge that combines them; what somebody
@@ -261,6 +268,34 @@ export default function DashboardPage() {
                 </Flex>
               </Card>
             )}
+
+            {/* The ground this club works, as the way into a season: the top level only, because
+                this is a jumping-off board and not the overview — the overview is one click away
+                and is where the levels beneath are opened. */}
+            <Card
+              title={t('workAreas.title')}
+              extra={(
+                <Button type="link" size="small" onClick={() => navigate('/work-areas')}>
+                  {t('workAreas.seeAll')}
+                </Button>
+              )}
+            >
+              {topLevelAreas.length ? (
+                <Flex vertical gap={8} align="stretch">
+                  {topLevelAreas.map((area) => (
+                    <Button
+                      key={area.id}
+                      icon={<BorderOuterOutlined />}
+                      onClick={() => navigate(`/map?area=${encodeURIComponent(area.id)}`)}
+                    >
+                      {area.name ?? t('workAreas.untitled')}
+                    </Button>
+                  ))}
+                </Flex>
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('workAreas.none')} />
+              )}
+            </Card>
 
             <Card title={t('dashboard.myViews')}>
               {views?.length ? (

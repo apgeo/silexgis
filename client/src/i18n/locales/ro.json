@@ -41,7 +41,8 @@
       "people": "Persoane",
       "admin": "Administrare",
       "config": "Configurare"
-    }
+    },
+    "workAreas": "Zone de lucru"
   },
   "terrain": {
     "title": "Relief",
@@ -3101,5 +3102,18 @@
       "public": "Toată lumea"
     },
     "delete": "Șterge această listă"
+  },
+  "workAreas": {
+    "title": "Zone de lucru",
+    "allAreas": "Toate zonele",
+    "thisLevel": "La acest nivel",
+    "noSubAreas": "Nimic în interiorul acesteia deocamdată.",
+    "none": "Nicio zonă de lucru nu a fost marcată încă. Desenează o zonă pe hartă și înregistreaz-o ca zonă de lucru.",
+    "untitled": "Zonă fără nume",
+    "openOnMap": "Pe hartă",
+    "seeAll": "Vezi toate",
+    "loadFailed": "Zonele de lucru nu au putut fi încărcate.",
+    "truncated": "Nu sunt afișate toate zonele de lucru: instalația conține mai multe decât listează această vizualizare.",
+    "subAreaCount": "Zone în interior: {{count}}"
   }
 }

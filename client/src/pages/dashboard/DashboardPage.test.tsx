@@ -45,9 +45,13 @@ const canCreate = vi.fn(() => true);
 const refetch = vi.fn();
 const summaryQuery = vi.fn(() => ({ data: summary, isLoading: false, isError: false, refetch }));
 
+/** The work areas the board offers as a way into a season; empty in most of these tests. */
+let workAreas: { id: string; name: string; description: null; parentId: null; childCount: number; geometry: null }[] = [];
+
 vi.mock('../../api/hooks.ts', () => ({
   useDashboardSummary: () => summaryQuery(),
   useMapViews: () => ({ data: views }),
+  useWorkAreas: () => ({ data: { items: workAreas, truncated: false } }),
   useMyTripLogs: (params: unknown) => {
     myTripsSpy(params);
     return upcomingQuery();
@@ -134,6 +138,21 @@ describe('DashboardPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Bihor/ }));
     // The id in the URL is the whole mechanism: the map applies the view it names on arrival.
     expect(screen.getByTestId('location')).toHaveTextContent('/map?view=v1');
+  });
+
+  it('sends a work area to the map as an area request, and offers the overview beside it', () => {
+    workAreas = [
+      { id: 'wa1', name: 'Bucegi', description: null, parentId: null, childCount: 2, geometry: null },
+    ];
+    renderPage();
+
+    // The board lists the top of the tree as a way into a season. Opening one frames the map on
+    // it; the levels beneath are opened on the overview, which is what the other link is for.
+    fireEvent.click(screen.getByRole('button', { name: /Bucegi/ }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/map?area=wa1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'See all' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/work-areas');
   });
 
   it('reports a failed summary instead of painting it as an empty registry', () => {

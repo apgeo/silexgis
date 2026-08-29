@@ -57,7 +57,7 @@ export default function AppLayout() {
   // including a camp: the list is a destination and a camp's own page stays under it, so opening
   // one keeps the camps item lit.
   const sections = [
-    'map3d', 'dashboard', 'caves', 'features', 'geodata', 'gallery', 'albums', 'cabinets',
+    'map3d', 'dashboard', 'work-areas', 'caves', 'features', 'geodata', 'gallery', 'albums', 'cabinets',
     'uploads', 'documents', 'calendar', 'events', 'trip-logs', 'expeditions', 'checklists',
     'caving-groups', 'cavers',
     'admin/audit', 'admin/notification-health', 'admin/messaging', 'admin/message-templates',

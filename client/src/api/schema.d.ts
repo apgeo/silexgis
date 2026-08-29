@@ -11053,6 +11053,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/work-areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every work area this caller may read, with its shape, its description, the area it sits inside and how many sit inside it. Takes no filter. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WorkAreaCollectionDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expeditions/{id}/map": {
         parameters: {
             query?: never;
@@ -18541,6 +18577,21 @@ export interface components {
         };
         /** @enum {unknown} */
         Visibility: "private" | "cavingGroup" | "authenticated" | "public";
+        WorkAreaCollectionDto: {
+            items: components["schemas"]["WorkAreaDto"][];
+            truncated: boolean;
+        };
+        WorkAreaDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            description: null | string;
+            /** Format: uuid */
+            parentId: null | string;
+            /** Format: int32 */
+            childCount: number;
+            geometry: null | components["schemas"]["GeoJsonGeometry"];
+        };
         WorldScope: {
             world: string;
             where?: null | components["schemas"]["FilterNode"];

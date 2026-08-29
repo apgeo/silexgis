@@ -41,7 +41,8 @@
       "people": "People",
       "admin": "Administration",
       "config": "Configuration"
-    }
+    },
+    "workAreas": "Work areas"
   },
   "terrain": {
     "title": "Terrain",
@@ -3101,5 +3102,18 @@
       "public": "Everyone"
     },
     "delete": "Delete this checklist"
+  },
+  "workAreas": {
+    "title": "Work areas",
+    "allAreas": "All areas",
+    "thisLevel": "At this level",
+    "noSubAreas": "Nothing inside this one yet.",
+    "none": "No work area has been marked yet. Draw an area on the map and record it as a work area.",
+    "untitled": "Unnamed area",
+    "openOnMap": "On the map",
+    "seeAll": "See all",
+    "loadFailed": "The work areas could not be loaded.",
+    "truncated": "Not every work area is shown: this installation holds more than this view lists.",
+    "subAreaCount": "Areas inside: {{count}}"
   }
 }

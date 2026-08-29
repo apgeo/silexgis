@@ -2,6 +2,7 @@
 import {
   ApartmentOutlined,
   AppstoreOutlined,
+  BorderOuterOutlined,
   CalendarOutlined,
   CarOutlined,
   CheckSquareOutlined,
@@ -184,6 +185,9 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
     { key: 'map', icon: <EnvironmentOutlined />, label: t('nav.map') },
     { key: 'map3d', icon: <CodeSandboxOutlined />, label: t('nav.map3d') },
     { key: 'dashboard', icon: <DashboardOutlined />, label: t('nav.dashboard') },
+    // Beside the map rather than under the cadastre: this is a way of looking at the ground, not
+    // a register of what is in it, and it is where most readers start a season.
+    { key: 'work-areas', icon: <BorderOuterOutlined />, label: t('nav.workAreas') },
     ...group('cadastre', <ClusterOutlined />, t('nav.groups.cadastre'), [
       { key: 'caves', icon: <TableOutlined />, label: t('nav.caves') },
       { key: 'features', icon: <GoldOutlined />, label: t('nav.features') },
