@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SilexGis.Domain.Entities;
@@ -23,12 +24,29 @@ namespace SilexGis.Infrastructure.Jobs;
 public abstract class ProcessingJobWorkerBase(
     JobLane lane,
     IServiceScopeFactory scopeFactory,
+    IConfiguration configuration,
     ILogger logger) : BackgroundService
 {
-    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
+    private const int DefaultPollSeconds = 2;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var pollSeconds = configuration.GetValue("Jobs:PollSeconds", DefaultPollSeconds);
+        if (pollSeconds <= 0)
+        {
+            // The same switch the notification drain carries, for the same reason. Every test
+            // class shares one database, so a worker started by one class claims the job another
+            // class queued a moment earlier and is about to run itself — and the second class then
+            // finds no queued job at all. That failure is intermittent by construction: it needs
+            // the poll to land inside the gap between enqueueing a job and reading it back, so it
+            // fires under load and passes when the machine is quiet, which is the worst shape a
+            // test failure can have. A test that means to drive a handler drives it directly.
+            logger.LogInformation("Job processing is switched off (Jobs:PollSeconds <= 0)");
+            return;
+        }
+
+        var pollInterval = TimeSpan.FromSeconds(pollSeconds);
+
         // Migrations run in the host startup path before the app starts serving,
         // but hosted services start concurrently — tolerate a briefly missing table.
         await WaitForQueueAsync(stoppingToken);
@@ -39,7 +57,7 @@ public abstract class ProcessingJobWorkerBase(
             await JobsSql.RequeueInterruptedAsync(db, lane, stoppingToken);
         }
 
-        using var timer = new PeriodicTimer(PollInterval);
+        using var timer = new PeriodicTimer(pollInterval);
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -58,7 +76,7 @@ public abstract class ProcessingJobWorkerBase(
             catch (Exception e)
             {
                 logger.LogError(e, "Job worker iteration failed; continuing");
-                await Task.Delay(PollInterval, stoppingToken);
+                await Task.Delay(pollInterval, stoppingToken);
             }
         }
     }
@@ -165,8 +183,9 @@ public abstract class ProcessingJobWorkerBase(
 /// </summary>
 public sealed class ProcessingJobWorker(
     IServiceScopeFactory scopeFactory,
+    IConfiguration configuration,
     ILogger<ProcessingJobWorker> logger)
-    : ProcessingJobWorkerBase(JobLane.General, scopeFactory, logger);
+    : ProcessingJobWorkerBase(JobLane.General, scopeFactory, configuration, logger);
 
 /// <summary>
 /// The worker for terrain builds, which have an instance to themselves.
@@ -178,5 +197,6 @@ public sealed class ProcessingJobWorker(
 /// </remarks>
 public sealed class TerrainProcessingJobWorker(
     IServiceScopeFactory scopeFactory,
+    IConfiguration configuration,
     ILogger<TerrainProcessingJobWorker> logger)
-    : ProcessingJobWorkerBase(JobLane.Terrain, scopeFactory, logger);
+    : ProcessingJobWorkerBase(JobLane.Terrain, scopeFactory, configuration, logger);
