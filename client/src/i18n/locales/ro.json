@@ -33,7 +33,15 @@
     "notificationHealth": "Trimiterea mesajelor",
     "calendar": "Calendar",
     "events": "Evenimente",
-    "checklists": "Liste de verificare"
+    "checklists": "Liste de verificare",
+    "groups": {
+      "cadastre": "Cadastru",
+      "library": "Bibliotecă",
+      "activity": "Activitate",
+      "people": "Persoane",
+      "admin": "Administrare",
+      "config": "Configurare"
+    }
   },
   "terrain": {
     "title": "Relief",

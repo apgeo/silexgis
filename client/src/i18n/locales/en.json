@@ -33,7 +33,15 @@
     "notificationHealth": "Message delivery",
     "calendar": "Calendar",
     "events": "Events",
-    "checklists": "Checklists"
+    "checklists": "Checklists",
+    "groups": {
+      "cadastre": "Cadastre",
+      "library": "Library",
+      "activity": "Activity",
+      "people": "People",
+      "admin": "Administration",
+      "config": "Configuration"
+    }
   },
   "terrain": {
     "title": "Terrain",

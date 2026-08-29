@@ -6,6 +6,8 @@ import '../i18n';
 import AppLayout from './AppLayout.tsx';
 import { routes } from '../App.tsx';
 import type { UnreadNotificationCount } from '../api/hooks.ts';
+import i18n from '../i18n';
+import { buildNavItems, isNavGroup, GROUP_PREFIX } from './navItems.tsx';
 
 let mobile = false;
 let capabilities: Record<string, string> | undefined;
@@ -59,6 +61,18 @@ const selectedItem = () =>
 
 const sider = () => document.querySelector('.ant-layout-sider');
 const zeroWidthTrigger = () => document.querySelector('.ant-layout-sider-zero-width-trigger');
+
+/**
+ * Open the rail, and then a group inside it.
+ *
+ * Both are needed before a grouped destination is in the document at all. The rail opens
+ * collapsed, where antd renders a group's children into a hover popup rather than inline; and a
+ * closed inline group renders no children either. So a page that is offered but not looked for
+ * this way is indistinguishable from one that is gated away — which is what these assertions
+ * are about, and why they drive the rail instead of reading the list behind it.
+ */
+const expandRail = () => fireEvent.click(document.querySelector('.ant-layout-sider-trigger')!);
+const openGroup = (label: string) => fireEvent.click(screen.getByText(label));
 
 beforeEach(() => {
   me = { avatarUrl: null, displayName: null, email: 'caver@example.org' };
@@ -145,6 +159,9 @@ describe('AppLayout selected destination', () => {
     renderShell('/checklists');
 
     expect(screen.getByText('checklists page')).toBeInTheDocument();
+    // The group holding the page opens itself on arrival, so the destination is lit as soon as
+    // the rail is opened — no click on the group needed.
+    expandRail();
     expect(selectedItem()).toBe('Checklists');
   });
 });
@@ -152,7 +169,11 @@ describe('AppLayout selected destination', () => {
 describe('AppLayout nav gating', () => {
   it('offers no admin destinations before capabilities arrive', () => {
     renderShell();
+    expandRail();
 
+    // No administration group at all, rather than an empty one: with nothing granted there is
+    // nothing under it, and an arrow that opens on nothing is worse than no arrow.
+    expect(screen.queryByText('Administration')).toBeNull();
     expect(screen.queryByText('Permission groups')).toBeNull();
     expect(screen.queryByText('Audit')).toBeNull();
   });
@@ -165,11 +186,16 @@ describe('AppLayout nav gating', () => {
       messageTemplates: 'write',
     };
     renderShell();
+    expandRail();
+    openGroup('Administration');
 
     expect(screen.getByText('Permission groups')).toBeInTheDocument();
     expect(screen.getByText('Audit')).toBeInTheDocument();
-    expect(screen.queryByText('Message texts')).toBeNull();
     expect(screen.queryByText('Messaging')).toBeNull();
+    // Configuration holds the other three, and none of them was earned, so the group itself
+    // never appears — there is nothing to open.
+    expect(screen.queryByText('Configuration')).toBeNull();
+    expect(screen.queryByText('Message texts')).toBeNull();
     expect(screen.queryByText('Feature sets')).toBeNull();
   });
 
@@ -180,11 +206,15 @@ describe('AppLayout nav gating', () => {
     // page to anybody would otherwise read as a passing security assertion.
     capabilities = { permissionGroups: 'read, write', taxonomies: 'read, write', audit: 'read' };
     renderShell();
+    expandRail();
+    openGroup('Administration');
     expect(screen.queryByText('Terrain')).toBeNull();
 
     cleanup();
     capabilities = { terrain: 'read, execute, delete' };
     renderShell();
+    expandRail();
+    openGroup('Administration');
     expect(screen.getByText('Terrain')).toBeInTheDocument();
   });
 
@@ -193,45 +223,90 @@ describe('AppLayout nav gating', () => {
     // resource domain, so no amount of domain access earns the page.
     capabilities = { permissionGroups: 'read, write', taxonomies: 'read, write', audit: 'read' };
     renderShell();
+    expandRail();
+    openGroup('Configuration');
     expect(screen.queryByText('Link relations')).toBeNull();
 
     cleanup();
     permissionGroups = [{ slug: 'full-administrators' }];
     renderShell();
+    expandRail();
+    openGroup('Configuration');
     expect(screen.getByText('Link relations')).toBeInTheDocument();
   });
 });
 
 describe('AppLayout nav destinations', () => {
+  // Everything granted, so nothing is filtered out of view. Every domain answers with every
+  // action, whatever domains exist — a fixed list here would quietly stop covering a domain
+  // added later, which is exactly the case this guards.
+  const everything = {
+    can: () => true,
+    taxonomyWrite: true,
+    featureCreate: true,
+    isFullAdmin: true,
+  };
+
+  /** Every key the rail can offer, groups flattened into the destinations they hold. */
+  const allEntries = () => {
+    const items = buildNavItems(i18n.t, everything);
+    return items.flatMap((item) => (isNavGroup(item) ? [item, ...item.children] : [item]));
+  };
+
   it('offers no destination the router cannot match', () => {
-    // Selecting an item navigates to `/<key>`, and this application's router has no
-    // fallback route and no error element: an unmatched path does not land on an empty
-    // page, it replaces header, sider and content with the router's own error screen,
-    // leaving no way back inside the application. So every key the rail can offer has to
-    // resolve, and the rail is asked with everything granted so nothing is out of view.
-    // Every domain answers with every action, whatever domains exist — a fixed list here
-    // would quietly stop covering a domain added later, which is exactly the case this
-    // guards.
-    capabilities = new Proxy({}, { get: () => 'read, write, create, delete' }) as Record<string, string>;
-    permissionGroups = [{ slug: 'full-administrators' }];
-    renderShell();
+    // Selecting an item navigates to `/<key>`, and this application's router has no fallback
+    // route and no error element: an unmatched path does not land on an empty page, it replaces
+    // header, sider and content with the router's own error screen, leaving no way back inside
+    // the application. So every key the rail can offer has to resolve.
+    const destinations = allEntries()
+      .map((entry) => entry.key)
+      .filter((key) => !key.startsWith(GROUP_PREFIX));
 
-    const rail = sider();
-    expect(rail).not.toBeNull();
-    const keys = Array.from(rail!.querySelectorAll('[data-menu-id]'))
-      // rc-menu identifies an item as "<its own id>-<the key we gave it>", where its id is
-      // "rc-menu-uuid" plus a counter that is left off under test. Both shapes are stripped
-      // here; the count assertion below fails loudly if neither matched.
-      .map((node) => /^rc-menu-uuid-(?:\d+-)?(.+)$/.exec(node.getAttribute('data-menu-id') ?? '')?.[1])
-      .filter((key): key is string => key !== undefined);
+    // The rail is long; a mistake that had emptied it would otherwise pass here by finding
+    // nothing at all to check.
+    expect(destinations).toContain('admin/terrain');
+    expect(destinations).toContain('admin/trip-types');
+    expect(destinations.length).toBeGreaterThan(15);
 
-    // The rail is long; a selector that had stopped matching would otherwise pass here
-    // by finding nothing at all to check.
-    expect(keys).toContain('admin/terrain');
-    expect(keys.length).toBeGreaterThan(15);
-
-    const unmatched = keys.filter((key) => matchRoutes(routes, `/${key}`) === null);
+    const unmatched = destinations.filter((key) => matchRoutes(routes, `/${key}`) === null);
     expect(unmatched).toEqual([]);
+  });
+
+  it('gives every entry a label and hides no group behind an empty one', () => {
+    const items = buildNavItems(i18n.t, everything);
+
+    // A group that renders with no children is an arrow that opens on nothing. The builder
+    // drops those, so an empty one here means a group was assembled without its gate.
+    for (const item of items) {
+      if (isNavGroup(item)) {
+        expect(item.children.length).toBeGreaterThan(0);
+      }
+    }
+
+    // A missing key renders as the key itself, which reads as a destination named
+    // "nav.groups.cadastre" sitting in the rail.
+    for (const entry of allEntries()) {
+      expect(entry.label).toBeTruthy();
+      expect(entry.label).not.toMatch(/^nav\./);
+    }
+  });
+
+  it('offers nothing but the always-public pages to an account granted nothing', () => {
+    const items = buildNavItems(i18n.t, {
+      can: () => false,
+      taxonomyWrite: false,
+      featureCreate: false,
+      isFullAdmin: false,
+    });
+    const keys = items.map((item) => item.key);
+
+    // The groups that hold only rights-gated pages disappear entirely rather than becoming
+    // empty arrows; the ones every account may use stay.
+    expect(keys).not.toContain(`${GROUP_PREFIX}library`);
+    expect(keys).not.toContain(`${GROUP_PREFIX}admin`);
+    expect(keys).not.toContain(`${GROUP_PREFIX}config`);
+    expect(keys).toContain('map');
+    expect(keys).toContain(`${GROUP_PREFIX}activity`);
   });
 });
 

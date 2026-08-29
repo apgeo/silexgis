@@ -8,6 +8,19 @@ export const themeConfig: ThemeConfig = {
     colorPrimary: '#146262',
     borderRadius: 4,
   },
+  components: {
+    Layout: {
+      // A shorter bar than antd's 64px default. The header holds one row of controls and no
+      // wrapping content, so the height it saves goes to the map and the tables underneath —
+      // which is most of what anyone has this application open to look at.
+      //
+      // Set here rather than as a height on the element: antd lays the header out from this
+      // token, and an element style that disagreed with it would leave the bar the right size
+      // with its contents still centred against the old one.
+      headerHeight: 48,
+      headerPadding: '0 16px',
+    },
+  },
 };
 
 /** Whether the operating system is currently asking for a dark interface. */

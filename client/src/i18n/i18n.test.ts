@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import i18next from 'i18next';
+import i18n from './index.ts';
+import { CHOICE_KEY } from './languageStorage.ts';
 import { describe, expect, it } from 'vitest';
 import type {
   AccessDomainName,
@@ -283,6 +285,30 @@ const calendarSources: Record<CalendarSource, true> = {
   expedition: true,
   event: true,
 };
+
+describe('the language this application opens in', () => {
+  // Asserted here because the tests themselves are pinned to English in the setup file, so no
+  // other assertion in the suite can see this — and every one of them would keep passing if the
+  // default silently went back to English.
+  it('is Romanian, for a browser that has never been told otherwise', () => {
+    // i18next normalises a string to an array.
+    expect(i18n.options.fallbackLng).toEqual(['ro']);
+  });
+
+  it('settles the language from a deliberate choice and from nothing else', () => {
+    // The detector's default order consults the browser's own languages, which on most machines
+    // says English — so leaving it in place would mean the fallback above was almost never
+    // reached and the application opened in English for nearly everybody.
+    expect(i18n.options.detection?.order).toEqual(['localStorage']);
+    // The one key the switch writes. If these two ever named different keys nothing would fail:
+    // every visit would re-detect, and the choice made last time would never be found again.
+    expect(i18n.options.detection?.lookupLocalStorage).toBe(CHOICE_KEY);
+    // The detector's own cache is not written; it would record what was detected rather than
+    // what was chosen, and the rule that adopts an account's language reads the absence of a
+    // choice to decide whether it may act at all.
+    expect(i18n.options.detection?.caches).toEqual([]);
+  });
+});
 
 // EN and RO must be maintained together.
 describe('i18n locales', () => {

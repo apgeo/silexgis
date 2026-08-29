@@ -1,5 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import '@testing-library/jest-dom/vitest';
+import i18n from './i18n';
+
+// The application opens in Romanian; the tests read English.
+//
+// Almost every assertion about the interface names a string, and those strings are English in
+// the file that asserts them. Left to the default, each one would have to be written in the
+// other language or matched by key, which is how a suite stops saying what it means. That the
+// default *is* Romanian is asserted where it is decided, in the i18n tests, rather than by a
+// hundred files happening to be written in it.
+await i18n.changeLanguage('en');
 
 // antd relies on browser APIs that jsdom does not implement.
 //

@@ -3,33 +3,7 @@ import { useEffect, useRef } from 'react';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useMe, useUpdateLocale } from '../api/hooks.ts';
-
-/**
- * Where a deliberate choice made in this browser is recorded.
- *
- * Deliberately not i18next's own `i18nextLng`. The detector writes that key during `init()` with
- * whatever it detected, before anything has been chosen and before React has mounted, so reading
- * it answers "which language is showing", never "has anyone here picked one" — and gating on it
- * meant the account's stored language was never adopted at all.
- */
-const CHOICE_KEY = 'silexgis.languageChosen';
-
-function chosenHere(): boolean {
-  try {
-    return window.localStorage.getItem(CHOICE_KEY) !== null;
-  } catch {
-    // Private windows and blocked site data throw rather than return nothing.
-    return false;
-  }
-}
-
-function rememberChoice(language: string): void {
-  try {
-    window.localStorage.setItem(CHOICE_KEY, language);
-  } catch {
-    // Nothing to do: the language still changes, it is only the memory of it that is lost.
-  }
-}
+import { chosenHere, rememberChoice } from './languageStorage.ts';
 
 /** The browser's IANA zone name, or nothing when it will not say. */
 function browserTimeZone(): string | null {
