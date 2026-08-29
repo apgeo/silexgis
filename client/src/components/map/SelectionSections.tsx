@@ -7,6 +7,7 @@ import AttachmentSection from '../attachments/AttachmentSection.tsx';
 import HistoryPanel, { type HistoryRestoreProp } from '../history/HistoryPanel.tsx';
 import LinksSection from '../reslinks/LinksSection.tsx';
 import TagChips from '../tags/TagChips.tsx';
+import TextSection from '../../textlink/TextSection.tsx';
 import PanelSection from './PanelSection.tsx';
 import { usePanelLayout } from './usePanelLayout.ts';
 import type { PanelSectionId } from './panelSections.ts';
@@ -68,6 +69,17 @@ export default function SelectionSections({
             canAdd
             open={open}
             entityTitle={subject.entityTitle}
+          />
+        );
+      case 'text':
+        // Closed by default and fetching nothing while it is: the reader inside it is a whole
+        // second surface, and most selected objects have no annotated text written about them.
+        return (
+          <TextSection
+            entityType="feature"
+            entityId={subject.entityId}
+            entityTitle={subject.entityTitle}
+            open={open}
           />
         );
       case 'history':

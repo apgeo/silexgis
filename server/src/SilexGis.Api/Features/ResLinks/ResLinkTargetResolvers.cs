@@ -311,7 +311,8 @@ public sealed class DocumentTargetResolver(SilexGisDbContext db, IAccessService 
                     document.Title,
                     document.DocumentTypeId is { } typeId ? typeNames.GetValueOrDefault(typeId) : null,
                     null,
-                    null);
+                    null,
+                    MediaType: content?.MimeType);
             }
         }
 

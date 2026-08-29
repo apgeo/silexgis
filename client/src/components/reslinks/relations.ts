@@ -23,6 +23,8 @@ export const SEEDED_RELATION_CODES = [
   'adjacent-to',
   'duplicate-of',
   'needs-clarification',
+  // A link-annotated text and the file it is the reading of.
+  'text-of',
   // What a trip did to what it names. All directed, with the trip as the main member.
   'trip-work-area',
   'trip-objective',
@@ -44,6 +46,7 @@ export const DIRECTED_RELATION_CODES: readonly SeededRelationCode[] = [
   'documents',
   'derived-from',
   'duplicate-of',
+  'text-of',
   'trip-work-area',
   'trip-objective',
   'trip-visited',

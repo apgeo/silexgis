@@ -43,6 +43,32 @@ export interface LinkOrigin {
   targetType: ResLinkTargetType;
   targetId: string;
   title?: string | null;
+  /**
+   * Which part of the origin the link is about, when the flow started from a part rather than
+   * from the whole thing — a passage somebody dragged across in an annotated text, and later a
+   * region drawn on a page.
+   *
+   * Composed by the caller rather than in this dialog, and deliberately: a passage is chosen by
+   * selecting it in the text, which has already happened by the time this opens. The anchor
+   * editors here are for the member being *added*, which is a different question.
+   *
+   * Absent means the whole resource, which is what every other flow into this dialog means.
+   */
+  anchor?: { anchorKind: AnchorKind; anchor: unknown; anchorFileId?: string | null } | null;
+}
+
+/** The origin's own member row, whole or anchored, written once for both create paths. */
+function originMember(origin: LinkOrigin, isMain: boolean, sortOrder: number) {
+  return {
+    targetType: origin.targetType,
+    targetId: origin.targetId,
+    isMain,
+    sortOrder,
+    note: null,
+    anchorKind: origin.anchor?.anchorKind ?? ('whole' as AnchorKind),
+    anchor: origin.anchor?.anchor ?? null,
+    anchorFileId: origin.anchor?.anchorFileId ?? null,
+  };
 }
 
 interface Props {
@@ -232,18 +258,7 @@ export default function AddMemberModal({
     const created = await createLink.mutateAsync({
       relationTypeId,
       description: null,
-      members: [
-        {
-          targetType: start.targetType,
-          targetId: start.targetId,
-          isMain: false,
-          sortOrder: 0,
-          note: null,
-          anchorKind: 'whole',
-          anchor: null,
-          anchorFileId: null,
-        },
-      ],
+      members: [originMember(start, false, 0)],
     });
 
     try {
@@ -286,18 +301,9 @@ export default function AddMemberModal({
             relationTypeId,
             description: null,
             members: [
-              {
-                targetType: origin.targetType,
-                targetId: origin.targetId,
-                // The end a directed link reads from: the entity the user started on,
-                // unless they handed the marker to the member they are adding.
-                isMain: directed && !main,
-                sortOrder: 0,
-                note: null,
-                anchorKind: 'whole',
-                anchor: null,
-                anchorFileId: null,
-              },
+              // The end a directed link reads from: the entity the user started on, unless they
+              // handed the marker to the member they are adding.
+              originMember(origin, directed && !main, 0),
               {
                 targetType,
                 targetId: targetId!,

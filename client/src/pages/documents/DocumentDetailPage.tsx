@@ -195,6 +195,7 @@ export default function DocumentDetailPage() {
           <DocumentContent
             file={file}
             initialPage={Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1}
+            documentId={id}
           />
         ) : (
           <Spin />

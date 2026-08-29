@@ -243,7 +243,7 @@ describe('relation phrasing', () => {
     for (const code of DIRECTED_RELATION_CODES) {
       expect(SEEDED_RELATION_CODES).toContain(code);
     }
-    expect(DIRECTED_RELATION_CODES).toHaveLength(14);
+    expect(DIRECTED_RELATION_CODES).toHaveLength(15);
   });
 
   // The picker offers exactly what the server admits: an offer it refuses is a form that

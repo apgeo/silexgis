@@ -1,0 +1,112 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+
+/*
+ * The reading surface. Everything colour-bearing is set from the palette in JavaScript, because
+ * a passage's wash is per relation and there is no fixed set of classes to write it as; what is
+ * here is the shape of the page and the states a passage can be in.
+ */
+
+.tl-root {
+  /* Prose measure. The panel this sits in is resizable and a reader will widen it to see the map
+     beside it, not to read a 200-character line. */
+  max-width: 78ch;
+  line-height: 1.6;
+  /* A long unbroken string — a survey path, a pasted URL — scrolls or wraps inside the panel
+     rather than widening the page under it. */
+  overflow-wrap: anywhere;
+}
+
+.tl-block {
+  margin: 0 0 0.85em;
+}
+
+.tl-h1 {
+  margin: 1.2em 0 0.5em;
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.tl-h2 {
+  margin: 1.1em 0 0.45em;
+  font-size: 1.12em;
+  font-weight: 600;
+}
+
+.tl-h3 {
+  margin: 1em 0 0.4em;
+  font-size: 1.02em;
+  font-weight: 600;
+}
+
+.tl-root > .tl-block:first-child,
+.tl-root > .tl-list:first-child {
+  margin-top: 0;
+}
+
+.tl-quote {
+  margin: 0 0 0.85em;
+  padding-left: 0.9em;
+  border-left: 3px solid currentcolor;
+  opacity: 0.85;
+}
+
+.tl-code {
+  margin: 0 0 0.85em;
+  padding: 0.6em 0.8em;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  /* Pre-formatted text is the one place a long line must not be re-wrapped: it is a station list
+     or a fragment of a survey file, and its columns are the content. */
+  white-space: pre;
+  overflow-x: auto;
+  background: rgb(128 128 128 / 12%);
+}
+
+.tl-list {
+  margin: 0 0 0.85em;
+  padding-left: 1.4em;
+}
+
+.tl-list li {
+  margin-bottom: 0.25em;
+}
+
+/*
+ * A marked passage. `mark` rather than a span: it is what the element means, and it is what a
+ * screen reader announces without being told.
+ *
+ * The browser's own yellow is cleared because the colour here carries information — which
+ * relation this is — and leaving the default under it would tint every relation towards yellow
+ * differently depending on the browser.
+ */
+.tl-passage {
+  color: inherit;
+  background: none;
+  padding: 0.05em 0;
+  border-radius: 2px;
+  cursor: pointer;
+  /* Transitions only the wash. A passage is inside flowing text, so anything that changed its
+     metrics on hover would re-wrap the paragraph under the reader's pointer. */
+  transition: background-color 120ms ease;
+}
+
+.tl-passage:focus-visible {
+  outline: 2px solid currentcolor;
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tl-passage {
+    transition: none;
+  }
+}
+
+/*
+ * While the reader is choosing a passage to link, the text is selectable and nothing else about
+ * it invites a click. Applied on the root rather than on each passage so a selection that runs
+ * across several of them behaves as one gesture.
+ */
+.tl-root.tl-editing .tl-passage {
+  cursor: text;
+}

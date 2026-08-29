@@ -120,6 +120,10 @@ export type ResLinkMemberUpdate = components['schemas']['ResLinkMemberUpdateRequ
 export type ResLinkPointDefault = components['schemas']['ResLinkPointDefaultDto'];
 export type AnchorKind = components['schemas']['AnchorKind'];
 export type ResLinkAnchorState = components['schemas']['ResLinkAnchorState'];
+export type AnnotatedText = components['schemas']['AnnotatedTextDto'];
+export type AnnotatedTextWrite = components['schemas']['AnnotatedTextWriteDto'];
+export type AnnotatedTextCreate = components['schemas']['AnnotatedTextCreateRequest'];
+export type ReanchorReport = components['schemas']['ReanchorReportDto'];
 
 // Query keys live here so invalidation stays precise.
 export const queryKeys = {
@@ -248,6 +252,7 @@ export const queryKeys = {
   resLinkTargets: (targetType: string, q: string) => ['reslinks', 'targets', targetType, q] as const,
   resLinkRelationTypes: ['reslinks', 'relation-types'] as const,
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
+  annotatedText: (documentId: string) => ['annotated-texts', documentId] as const,
   // One key for the whole tree: the board, the overview and the map that zooms to one area all
   // read the same answer, so they cannot disagree about which areas exist or where one of them is.
   workAreas: ['work-areas'] as const,
@@ -1204,11 +1209,22 @@ export function useFeatures(params: FeatureListParams, enabled = true) {
 
 /** Resolves any feature id — generic, cave, entrance or centerline — to its typed envelope. */
 export function useFeature(id: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.feature(id ?? ''),
-    queryFn: () => unwrap(api.GET('/api/v1/features/{id}', { params: { path: { id: id! } } })),
-    enabled: !!id,
-  });
+  return useQuery({ ...featureQuery(id ?? ''), enabled: !!id });
+}
+
+/**
+ * One feature's read as a query object rather than as a hook.
+ *
+ * A view being told to show something is told outside React's render — it is a message arriving
+ * on the workspace bus — so it cannot call a hook and must not reach for the transport either.
+ * Handing out the query lets it go through the same cache under the same key, so a view already
+ * showing that feature pays nothing to be told about it again.
+ */
+export function featureQuery(id: string) {
+  return {
+    queryKey: queryKeys.feature(id),
+    queryFn: () => unwrap(api.GET('/api/v1/features/{id}', { params: { path: { id } } })),
+  };
 }
 
 function useInvalidateFeatures() {
@@ -5528,5 +5544,66 @@ export function useWorkAreas(enabled = true) {
     queryFn: () => unwrap(api.GET('/api/v1/work-areas', {})),
     enabled,
     retry: false,
+  });
+}
+
+// --- link-annotated text ------------------------------------------------------------------
+
+/**
+ * One annotated text's blocks, with the file its anchors are measured against.
+ *
+ * Keyed by the document rather than by the file: a revision replaces the bytes, and a reader
+ * following a link into this document names the document, which is the identity that survives
+ * every edit. `retry: false` because the two ways this fails — the document is not one of these,
+ * and the caller may not read it — are both settled answers that asking again cannot change.
+ */
+export function useAnnotatedText(documentId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.annotatedText(documentId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/annotated-texts/{documentId}', {
+          params: { path: { documentId: documentId! } },
+        }),
+      ),
+    enabled: Boolean(documentId),
+    retry: false,
+  });
+}
+
+export function useCreateAnnotatedText() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AnnotatedTextCreate) => unwrap(api.POST('/api/v1/annotated-texts', { body })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['documents'] });
+      void queryClient.invalidateQueries({ queryKey: ['cabinets'] });
+    },
+  });
+}
+
+/**
+ * Replaces the body with a new revision.
+ *
+ * Both link caches are dropped as well as the text's own, because rewriting the words re-measures
+ * every anchor over them: a panel still holding the previous answer would draw highlights at the
+ * offsets they had before the edit — which is exactly the silent mis-highlighting the re-measuring
+ * exists to prevent, reintroduced on this side of the wire.
+ */
+export function useReplaceAnnotatedText() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ documentId, blocks }: { documentId: string; blocks: AnnotatedText['blocks'] }) =>
+      unwrap(
+        api.PUT('/api/v1/annotated-texts/{documentId}', {
+          params: { path: { documentId } },
+          body: { blocks },
+        }),
+      ),
+    onSuccess: (_result, { documentId }) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.annotatedText(documentId) });
+      void queryClient.invalidateQueries({ queryKey: ['reslinks'] });
+      void queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
   });
 }
