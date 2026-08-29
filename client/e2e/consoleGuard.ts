@@ -10,6 +10,7 @@ import {
   type ErrorKind,
   type ErrorRecord,
 } from '../src/diagnostics/errorIdentity.ts';
+import { CHOICE_KEY } from '../src/i18n/languageStorage.ts';
 
 // Every browser error the suite walks past, recorded.
 //
@@ -133,7 +134,42 @@ function watchPage(page: Page, into: CapturedError[], testInfo: TestInfo) {
  * that is not importing this, so the omission surfaces when the errors are read rather than
  * staying invisible forever.
  */
-export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
+export const test = base.extend<{ consoleErrors: ConsoleErrorGuard; readsEnglish: void }>({
+  /**
+   * The suite reads English, and asks for it before anything is drawn.
+   *
+   * The application opens in Romanian deliberately, and reaches English only through a recorded
+   * choice — not by running in a browser that happens to be configured in English. Every
+   * assertion in this suite names a string and those strings are written in English, so the
+   * choice has to be made somewhere. Made here it is made once, before the first navigation, for
+   * every page the context opens including the windows the application pops out.
+   *
+   * Without it the failure is not "the label is in Romanian": the shared sign-in helper waits
+   * out its timeout on a field labelled `Password` over a form that says `Parolă`, and every
+   * desktop spec fails on the same line of the same helper with nothing naming the language.
+   *
+   * The key is imported rather than spelled again, for the reason its own module gives for
+   * existing: the two disagreeing would be silent — the choice would be written where nothing
+   * reads it and the suite would quietly be back in Romanian. This is the same statement a
+   * person makes by picking English in the header, not a test-only back door.
+   */
+  readsEnglish: [
+    async ({ context }, use) => {
+      // Wrapped, because an init script runs on every document the context loads — `about:blank`
+      // and any sandboxed frame among them — and touching `localStorage` there throws "Access is
+      // denied for this document". That throw reaches the console, so an unguarded version would
+      // manufacture the very errors the guard below exists to catch.
+      await context.addInitScript((key: string) => {
+        try {
+          window.localStorage.setItem(key, 'en');
+        } catch {
+          // A document with no storage is not one the application runs in.
+        }
+      }, CHOICE_KEY);
+      await use();
+    },
+    { auto: true },
+  ],
   consoleErrors: [
     async ({ context }, use, testInfo) => {
       const captured: CapturedError[] = [];
@@ -153,6 +189,7 @@ export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
       // whether this fixture is set up before Playwright creates it.
       context.on('page', watch);
       context.pages().forEach(watch);
+
 
       const unexplained = () =>
         withoutEchoes(captured).filter(

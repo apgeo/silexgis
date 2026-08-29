@@ -12,17 +12,35 @@ import { login } from './helpers.ts';
  * browser; what needs one is that two windows of the same application agree about which views
  * exist and that a reference published in one arrives in the other.
  *
- * The seeded demonstration text is the subject. It is read and never edited, so runs do not
- * contend and nothing has to be taken down afterwards; the one flow that writes brings its own
- * text and links it to a seeded feature, which it also only reads.
+ * The seeded demonstration text is the subject. Two of the three flows only read it. The third
+ * marks a passage of it and takes that link down again at the end, so a second run finds the text
+ * as the first one did — an accumulating pile of links over the same words would leave every
+ * later run asserting against a document the seed never described.
  */
 
-/** The seeded demonstration text, found the way somebody looking for it would find it. */
+/**
+ * The seeded demonstration text, opened the way somebody looking for it would open it: down the
+ * filing tree to the shelf it is on, then the listing.
+ *
+ * The shelf is picked before the listing is read because the listing *is* the shelf's — a
+ * cabinets page with nothing selected lists nothing, so looking for the document straight away
+ * waits out its timeout against a page that was never going to show it. There is no
+ * `/documents` listing route to shortcut through, and asking for one navigates the router to a
+ * page that does not exist, which the console guard reports rather than ignores.
+ */
 async function openSeededText(page: Page): Promise<string> {
-  await page.goto('/documents');
-  // The document listing may not be the shortest route on every installation, so the search the
-  // application already has is used rather than a listing position.
   await page.goto('/cabinets');
+
+  // The archive first: its child shelf is not in the tree until its parent is expanded, and
+  // selecting the parent is what expands it.
+  const archive = page.getByRole('treeitem').filter({ hasText: 'Demo archive' }).first();
+  await expect(archive).toBeVisible({ timeout: 20_000 });
+  await archive.click();
+
+  const shelf = page.getByRole('treeitem').filter({ hasText: 'Survey reports' }).first();
+  await expect(shelf).toBeVisible({ timeout: 20_000 });
+  await shelf.click();
+
   const link = page.getByRole('link', { name: /notes on the 1987 survey/i }).first();
   await expect(link).toBeVisible({ timeout: 20_000 });
   await link.click();
@@ -45,7 +63,10 @@ test.describe('link-annotated text', () => {
     await passages.filter({ hasText: 'Dolina Demo' }).hover();
     const card = page.locator('.ant-popover').filter({ hasText: 'Dolina Demo' }).first();
     await expect(card).toBeVisible({ timeout: 15_000 });
-    await expect(card.getByRole('button', { name: /^Show$/ })).toBeVisible();
+    // Matched on the button's text rather than its accessible name: an antd icon renders as
+    // `role="img"` with a label of its own, so the name computes to "aim Show" and an exact
+    // match on "Show" finds nothing. The text is what discriminates it from "Show in…" beside it.
+    await expect(card.getByRole('button').filter({ hasText: /^Show$/ })).toBeVisible();
   });
 
   test('a passage followed in one window moves the map in another', async ({ page, context }) => {
@@ -58,7 +79,6 @@ test.describe('link-annotated text', () => {
     const before = page.url();
 
     const text = await context.newPage();
-    await text.goto('/cabinets');
     const documentId = await openSeededText(text);
     await text.goto(`/panel/text?document=${documentId}`);
     await expect(text.getByTestId('tl-passage').first()).toBeVisible({ timeout: 20_000 });
@@ -117,6 +137,17 @@ test.describe('link-annotated text', () => {
     await dialog.getByRole('button', { name: /^OK$/ }).click();
 
     await expect(page.getByTestId('tl-passage')).toHaveCount(before + 1, { timeout: 20_000 });
-    await expect(page.getByTestId('tl-passage').filter({ hasText: 'boulder choke' })).toBeVisible();
+    const marked = page.getByTestId('tl-passage').filter({ hasText: 'boulder choke' }).first();
+    await expect(marked).toBeVisible();
+
+    // Taken down through the card that offers it, which is both the cleanup and the only cover
+    // the delete has.
+    await marked.hover();
+    const card = page.locator('.ant-popover').filter({ hasText: 'Falia Demo' }).first();
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    await card.getByRole('button', { name: /Delete link|Șterge legătura/i }).click();
+    await page.getByRole('button', { name: /^OK$/ }).last().click();
+
+    await expect(page.getByTestId('tl-passage')).toHaveCount(before, { timeout: 20_000 });
   });
 });
