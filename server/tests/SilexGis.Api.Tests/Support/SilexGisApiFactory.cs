@@ -38,14 +38,6 @@ public sealed class SilexGisApiFactory(
         // class had just queued — and every "nothing was sent" assertion would go flaky.
         // Tests drive NotificationOutboxService directly instead.
         builder.UseSetting("Notifications:PollSeconds", "0");
-        // The job worker never runs in tests either, and for exactly the same reason. A test that
-        // queues a job and then reads it back to run it is racing a worker that polls every two
-        // seconds for the same row; when the worker wins, the test finds no queued job and fails
-        // with "sequence contains no elements". That race only fires when the poll lands inside
-        // the gap, so it passes on a quiet machine and fails under load — which is how it survived
-        // this long, being re-diagnosed as a fresh regression each time it appeared. A test that
-        // means to run a handler resolves it and calls it directly.
-        builder.UseSetting("Jobs:PollSeconds", "0");
         if (settings is not null)
         {
             foreach (var (key, value) in settings)
