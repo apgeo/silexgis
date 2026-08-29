@@ -1476,9 +1476,9 @@
     "status": "Stare",
     "statusValues": {
       "ready": "Gata",
-      "pending": "Așteaptă conversia",
-      "processing": "Se convertește",
-      "failed": "Nu a putut fi convertit"
+      "pending": "Așteaptă la rând",
+      "processing": "În curs",
+      "failed": "Nu a putut fi procesat"
     },
     "formats": {
       "lox": "Therion .lox",
@@ -1487,9 +1487,14 @@
     },
     "converting": "Pereții sunt pregătiți pentru scena 3D. Lista se actualizează singură când sunt gata.",
     "conversionFailed": "Pereții nu au putut fi convertiți.",
+    "reading": "Ridicarea este citită în stațiile și vizele ei. Planul poate fi deja vizualizat; lista se actualizează singură când citirea s-a încheiat.",
+    "readingFailed": "Ridicarea nu a putut fi citită.",
     "triangles": "{{count}} triunghiuri",
     "precisionLost": "Fișierul a pierdut precizie înainte să ajungă aici",
     "precisionLostHint": "Coordonatele din acest fișier au fost prea mari pentru numerele în care sunt stocate, așa că topografia este mai grosieră decât a fost cartată. Reexportă fișierul față de o origine locală ca să recuperezi detaliul.",
+    "plotDeclaration": "Unde se află această ridicare în lume",
+    "plotDeclarationRequiredHint": "Un fișier .lox nu are câmp pentru un sistem de coordonate, deci nu spune niciodată unde se află. Spune ce înseamnă numerele din el — fără asta ridicarea nu poate fi poziționată și nimic nu poate fi citit din ea.",
+    "plotDeclarationOptionalHint": "Un fișier .3d își declară sistemul de coordonate doar dacă ridicarea a fost compilată cu unul. Dacă acesta îl declară, el este folosit și ce scrii aici este ignorat; dacă nu, doar asta îl poate poziționa.",
     "meshDeclaration": "Unde se află acești pereți în lume",
     "meshDeclarationHint": "Un fișier .stl este doar triunghiuri: nimic din el nu spune în ce sistem de coordonate sunt numerele, iar citit ca zona vecină același fișier ajunge la sute de kilometri distanță. Spune ce înseamnă numerele lui.",
     "coordinatesLocal": "Metri față de un punct",

@@ -47,7 +47,7 @@ public sealed class SurveyMeshHandler(
         // The declaration the uploader made, read back off the row rather than carried in the job
         // payload: a job that is retried days later must convert the file the same way, and the row
         // is the only copy of that answer which survives an edit.
-        var declaration = new MeshSourceDeclaration(
+        var declaration = new SurveySourceDeclaration(
             model.SourceEpsg,
             model.Anchor?.X,
             model.Anchor?.Y,
@@ -108,7 +108,7 @@ public sealed class SurveyMeshHandler(
             // A mesh that cannot be read is nearly always a file the uploader can do something
             // about — the wrong format, an ASCII export, a coordinate system nobody here knows — so
             // that reason is kept. Anything else is ours and is not described to them.
-            model.ProcessingError = e is MeshIOException
+            model.ProcessingError = e is SurveySourceException
                 ? e.Message
                 : "The model could not be converted.";
             await db.SaveChangesAsync(CancellationToken.None);

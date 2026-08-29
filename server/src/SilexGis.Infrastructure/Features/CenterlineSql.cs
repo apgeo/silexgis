@@ -5,13 +5,18 @@ using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 using SilexGis.Infrastructure.Persistence;
 
-namespace SilexGis.Api.Features.Caves;
+namespace SilexGis.Infrastructure.Features;
 
 /// <summary>
 /// Raw SQL for centerline measurements (raw SQL lives only in *Sql.cs files). Length is
 /// computed by PostGIS on the geography type — geodesic on the spheroid — instead of a
 /// hand-rolled approximation, so the number matches what any GIS tool reports.
 /// </summary>
+/// <remarks>
+/// Here rather than beside the upload endpoint because a centerline is now also written by a
+/// background job, which cannot reach the web layer, and both must report the same length for the
+/// same passage.
+/// </remarks>
 public static class CenterlineSql
 {
     /// <summary>Geodesic length in meters of a 4326 geometry.</summary>

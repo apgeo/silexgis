@@ -127,8 +127,8 @@ describe('drawableSurveyMesh', () => {
   });
 
   it('ignores the line-plot models a cave also holds', () => {
-    // A .lox or .3d upload is ready the moment it lands and has no mesh at all; the embedded
-    // survey viewer reads those, and the scene must not try to.
+    // A .lox or .3d upload has no mesh at all and never grows one; the embedded survey viewer
+    // reads those, and the scene must not try to.
     const linePlot = model({ id: 'plot', format: 'lox', meshUrl: null, anchorLongitude: null });
 
     expect(drawableSurveyMesh([linePlot])).toBeUndefined();
@@ -329,6 +329,29 @@ describe('attachSurveyMesh3d', () => {
     await settle();
 
     expect(mesh.getState()).toMatchObject({ status: 'converting', name: 'Coiba Mare' });
+    expect(scene.reads).toEqual([]);
+  });
+
+  it('does not promise walls because a line plot is being read', async () => {
+    const scene = new FakeScene();
+    // A .lox is read into stations and shots after it arrives, and that work never ends in a
+    // mesh. Reporting it the way a conversion is reported would leave the scene waiting for
+    // walls that are not coming, on a cave that simply has none.
+    listed.push([
+      model({
+        id: 'plot',
+        format: 'lox',
+        meshUrl: null,
+        status: 'processing',
+        anchorLongitude: null,
+      }),
+    ]);
+    const mesh = attachSurveyMesh3d(scene);
+
+    mesh.setCave('cave-1');
+    await settle();
+
+    expect(mesh.getState().status).toBe('unavailable');
     expect(scene.reads).toEqual([]);
   });
 

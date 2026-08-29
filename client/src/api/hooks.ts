@@ -632,14 +632,16 @@ export type AuditEntry = components['schemas']['AuditEntryDto'];
 
 /** The signed model URLs live 10 minutes; refresh before they lapse mid-view. */
 const SURVEY_MODEL_URL_REFRESH_MS = 8 * 60_000;
-/** How often a model whose conversion has not finished yet is asked about. */
+/** How often a model whose processing has not finished yet is asked about. */
 const SURVEY_MODEL_CONVERSION_POLL_MS = 2000;
 
 /**
- * A model still on its way to being drawable. Only wall meshes ever are — a line-plot upload is
- * handed to the viewer exactly as it arrived, so it is ready the moment it lands.
+ * A model with work still outstanding on it. Both kinds of upload have some: a wall mesh is
+ * converted into what the 3D scene draws, and a line plot is read into its stations and shots.
+ * The line plot stays viewable throughout — the viewer reads the file as uploaded — so what is
+ * outstanding there is the record behind it, not the picture.
  *
- * A failed conversion counts as settled. The worker may retry it and move the row on again, but
+ * A failure counts as settled. The worker may retry it and move the row on again, but
  * the reader has been told the outcome and is owed nothing further until they act on it; asking
  * every two seconds forever on the chance somebody re-queues the job is a page that never goes
  * quiet.
@@ -667,7 +669,7 @@ export function surveyModelReadableByViewer(model: { format: SurveyModelInfo['fo
 
 /**
  * How often the list re-asks. Two intervals meet in this one number, which is why it is a named
- * rule and not a literal at the query: a conversion in flight is worth a couple of seconds, and
+ * rule and not a literal at the query: work in flight is worth a couple of seconds, and
  * once everything has settled the list must still come back before the signed URLs on it lapse.
  *
  * Exported so the rule — a list holding nothing but finished models stops watching them — can be
@@ -683,7 +685,8 @@ export function surveyModelPollInterval(
 }
 
 export function useSurveyModels(caveId: string | undefined) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: queryKeys.surveyModels(caveId ?? ''),
     queryFn: () =>
       unwrap(api.GET('/api/v1/caves/{caveId}/survey-models', { params: { path: { caveId: caveId! } } })),
@@ -691,6 +694,25 @@ export function useSurveyModels(caveId: string | undefined) {
     staleTime: 5 * 60_000,
     refetchInterval: (query) => surveyModelPollInterval(query.state.data),
   });
+
+  // Reading a line plot records the survey as the cave's own centerline, and it is a background
+  // job that does it — nothing the browser did. So the only sign a page watching this list gets
+  // is the moment the outstanding work stops being outstanding, and that moment is here: this is
+  // the one query that keeps asking. Without this the centerline table beside it stays as it was
+  // found, empty, until somebody reloads the page and wonders why the reload was needed.
+  //
+  // Keyed on the transition rather than the state, so a page that arrives after everything has
+  // settled — the ordinary visit to a cave whose survey was read weeks ago — asks for nothing.
+  const outstanding = (query.data ?? []).some((model) => surveyModelUnsettled(model.status));
+  const wasOutstanding = useRef(outstanding);
+  useEffect(() => {
+    if (wasOutstanding.current && !outstanding && caveId) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.centerlines(caveId) });
+    }
+    wasOutstanding.current = outstanding;
+  }, [outstanding, caveId, queryClient]);
+
+  return query;
 }
 
 /**
@@ -719,20 +741,24 @@ type SurveyModelUploadBody =
   paths['/api/v1/caves/{caveId}/survey-models']['post']['requestBody']['content']['multipart/form-data'];
 
 /**
- * What a wall mesh needs alongside the file, because a triangle soup carries none of it: which
- * coordinate system its numbers are in, and what altitude the plane it calls zero sits at.
+ * What an uploader may say about where a survey file's numbers sit in the world: which coordinate
+ * system they are in, and what altitude the plane the file calls zero sits at.
  *
  * Either a projected system by code, or — for a file exported about a local origin, which is the
  * ordinary case — the position that origin sits at. Never both: with a code, the file's own
  * coordinates say where it is, and a second answer could only contradict the first.
  *
+ * Every half is optional here, and which of them a given file must actually answer is the uploading
+ * screen's to enforce, because only it knows the format: a wall mesh carries no coordinate system
+ * and one of the two line-plot formats has no field for one either, so both have to be told, while
+ * the other line-plot format may state its own and then needs none of this. What is left unanswered
+ * is left off the request rather than sent empty.
+ *
  * Taken from the generated contract rather than restated here, so that a field renamed or re-typed
- * on the server fails this build instead of failing every upload at run time. Only the altitude is
- * required of a caller — the server refuses a declaration without one — and the file itself is
- * appended separately, so both are set aside from what the contract calls optional.
+ * on the server fails this build instead of failing every upload at run time. Only the file itself
+ * is set aside, because it is appended separately.
  */
-export type SurveyMeshDeclaration = Omit<SurveyModelUploadBody, 'file' | 'originHeightM'> &
-  Required<Pick<SurveyModelUploadBody, 'originHeightM'>>;
+export type SurveySourceDeclaration = Omit<SurveyModelUploadBody, 'file'>;
 
 export function useUploadSurveyModel() {
   const invalidate = useInvalidateSurveyModels();
@@ -744,8 +770,8 @@ export function useUploadSurveyModel() {
     }: {
       caveId: string;
       file: File;
-      /** Required for a mesh; the line-plot formats place themselves and take none. */
-      declaration?: SurveyMeshDeclaration;
+      /** What the uploader said about where the file sits; absent when the file says it itself. */
+      declaration?: SurveySourceDeclaration;
     }): Promise<SurveyModelInfo> => {
       const form = new FormData();
       form.append('file', file, file.name);

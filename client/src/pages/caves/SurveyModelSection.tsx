@@ -47,6 +47,10 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
   const [uploading, setUploading] = useState(false);
 
   const stateCell = (model: SurveyModelInfo) => {
+    // Both kinds of upload now have work waiting on them, and it is not the same work: walls are
+    // converted into something the 3D scene can draw, while a line plot is read into its stations
+    // and shots. The state names fit both; the sentence under them has to say which.
+    const walls = model.format === 'stl';
     if (model.status === 'failed') {
       return (
         <Flex vertical gap={2}>
@@ -54,7 +58,8 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
           {/* The server's own words: it knows why this file could not be read, and no phrase
               written here in advance could say it as precisely. */}
           <Typography.Text type="danger" style={{ fontSize: 12 }}>
-            {model.processingError ?? t('surveyModels.conversionFailed')}
+            {model.processingError ??
+              t(walls ? 'surveyModels.conversionFailed' : 'surveyModels.readingFailed')}
           </Typography.Text>
         </Flex>
       );
@@ -64,7 +69,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
         <Flex vertical gap={2}>
           <Tag color="processing">{t(`surveyModels.statusValues.${model.status}`)}</Tag>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {t('surveyModels.converting')}
+            {t(walls ? 'surveyModels.converting' : 'surveyModels.reading')}
           </Typography.Text>
         </Flex>
       );

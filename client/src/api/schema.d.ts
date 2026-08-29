@@ -889,6 +889,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-models/{id}/stations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stations read out of the survey; withheld without the exact-location permission. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfSurveyStationDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-models/{id}/shots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Legs read out of the survey; withheld without the exact-location permission. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfSurveyShotDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{caveId}/centerlines": {
         parameters: {
             query?: never;
@@ -13838,6 +13920,24 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfSurveyShotDto: {
+            items: components["schemas"]["SurveyShotDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfSurveyStationDto: {
+            items: components["schemas"]["SurveyStationDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfTerrainBuildDto: {
             items: components["schemas"]["TerrainBuildDto"][];
             /** Format: int32 */
@@ -14625,6 +14725,10 @@ export interface components {
             /** Format: int32 */
             triangleCount: null | number;
             sourcePrecisionLost: boolean;
+            /** Format: int32 */
+            droppedShotCount: null | number;
+            /** Format: int32 */
+            mergedStationCount: null | number;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -14639,6 +14743,40 @@ export interface components {
             description: null | string;
             /** Format: date */
             surveyedAt: null | string;
+        };
+        SurveyShotDto: {
+            fromStationName: null | string;
+            toStationName: null | string;
+            surveyName: null | string;
+            /** Format: double */
+            fromLongitude: number;
+            /** Format: double */
+            fromLatitude: number;
+            /** Format: double */
+            fromAltitudeM: number;
+            /** Format: double */
+            toLongitude: number;
+            /** Format: double */
+            toLatitude: number;
+            /** Format: double */
+            toAltitudeM: number;
+            /** Format: double */
+            lengthM: number;
+            flags: string[];
+            isSplay: boolean;
+        };
+        SurveyStationDto: {
+            name: string;
+            surveyName: null | string;
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            altitudeM: number;
+            flags: string[];
+            isEntrance: boolean;
+            isFixed: boolean;
         };
         TagDto: {
             /** Format: int64 */

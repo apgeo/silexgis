@@ -4,8 +4,13 @@ using System.Runtime.CompilerServices;
 
 namespace SilexGis.Infrastructure.Surveys;
 
-/// <summary>A mesh file could not be read, with a reason worth showing the person who uploaded it.</summary>
-public sealed class MeshIOException(string message) : Exception(message);
+/// <summary>
+/// An uploaded survey file could not be read, or could not be placed in the world, for a reason
+/// worth showing the person who uploaded it — the wrong format, an export written as text, a
+/// coordinate system nobody here can resolve. Deliberately distinct from the failures that are
+/// ours, which are recorded but not described to them.
+/// </summary>
+public sealed class SurveySourceException(string message) : Exception(message);
 
 /// <summary>
 /// A triangle mesh with shared vertices, in the coordinates its file used.
@@ -82,7 +87,7 @@ public static class StlReader
         var triangleCount = BinaryPrimitives.ReadInt32LittleEndian(header.AsSpan(80));
         if (triangleCount <= 0)
         {
-            throw new MeshIOException(
+            throw new SurveySourceException(
                 "This file declares no triangles. Binary STL is expected; an ASCII STL or a file "
                 + "from another format has to be converted before upload.");
         }
@@ -93,7 +98,7 @@ public static class StlReader
         var expected = (long)HeaderBytes + (long)triangleCount * TriangleBytes;
         if (stream.CanSeek && stream.Length != expected)
         {
-            throw new MeshIOException(
+            throw new SurveySourceException(
                 $"This is not a binary STL: it declares {triangleCount} triangles, which needs "
                 + $"{expected} bytes, and the file is {stream.Length}.");
         }
@@ -131,7 +136,7 @@ public static class StlReader
 
         if (indices.Count == 0)
         {
-            throw new MeshIOException(
+            throw new SurveySourceException(
                 $"All {triangleCount} triangles in this file are degenerate, so there is no surface "
                 + "to show.");
         }
