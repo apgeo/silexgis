@@ -40,3 +40,22 @@ html[data-reduce-motion='true'] *::after {
   transition-duration: 0.001ms !important;
   scroll-behavior: auto !important;
 }
+
+/* A tooltip never swallows a click.
+ *
+ * antd tooltips are decoration — unlike a Popover, nothing in one is meant to be clicked — but
+ * they render at z-index 1070 over everything and accept pointer events, so one that is still
+ * on screen intercepts whatever it covers. On the map toolbar the discard button's tooltip
+ * overlaps the button next to it by design of the layout: measured, 527-624px against a
+ * neighbour at 469-619px. Every click landing in that strip while the tooltip lingers is eaten,
+ * and the reader sees a button that did nothing.
+ *
+ * The overlap is not new; what varies is only whether the tooltip has faded before the next
+ * click. That makes it the worst kind of defect to leave alone — it fails a fraction of the
+ * time, differently on every machine, and reads as the user having missed the button.
+ *
+ * Scoped to `.ant-tooltip`, deliberately not `.ant-popover`: a popover holds real controls and
+ * must stay clickable. */
+.ant-tooltip {
+  pointer-events: none;
+}
