@@ -91,11 +91,23 @@ public sealed class SurveyGraphHandler(
                 // Whatever a previous read of this file left behind. Issued as statements of their
                 // own rather than as tracked deletes, because loading tens of thousands of rows in
                 // order to mark them deleted costs more than the read that produced them.
+                //
+                // The wall measurements go first. Those taken along a leg would follow their leg out
+                // by the foreign key, but the ones the other format states name a station and no leg
+                // at all, so deleting the legs would leave those behind — belonging to a reading of
+                // the file that no longer exists, and indistinguishable from the ones this read is
+                // about to write.
+                await db.SurveyLruds.Where(l => l.SurveyModelId == model.Id).ExecuteDeleteAsync(ct);
                 await db.SurveyShots.Where(s => s.SurveyModelId == model.Id).ExecuteDeleteAsync(ct);
                 await db.SurveyStations.Where(s => s.SurveyModelId == model.Id).ExecuteDeleteAsync(ct);
 
                 db.SurveyStations.AddRange(extraction.Stations);
                 db.SurveyShots.AddRange(extraction.Shots);
+
+                // A reading taken along a leg names its leg through the leg object rather than
+                // through an id, because the id is the database's to assign and both rows are saved
+                // in this one save.
+                db.SurveyLruds.AddRange(extraction.Lrud);
 
                 await WriteCenterlineAsync(model, shape, ct);
 
