@@ -26,7 +26,8 @@ export const groups = {
   ],
   events: [
     'EventAccessDomainTests', 'EventAuthoringTests', 'EventInvitationTests',
-    'EventLifecycleTests', 'EventReminderSweepTests', 'TripInvitationSubjectTests',
+    'EventLifecycleTests', 'EventReminderSweepTests', 'EventSeriesBulkTests', 'EventSeriesTests',
+    'TripInvitationSubjectTests',
   ],
   expeditions: [
     'ExpeditionDiscoveryTests', 'ExpeditionEntityTests', 'ExpeditionLeadsTests',
@@ -117,6 +118,17 @@ export const groups = {
   sms: ['MfaAndRateLimitTests', 'TwoFactorChannelTests'],
   surveys: ['SurveyMeshTests', 'SurveyModelTests'],
   metadata: ['ContentMetadataTests', 'DocumentMetadataTests'],
+  workAreas: ['WorkAreaTests'],
+  // The elevation surface: the chain that builds it, the phases it runs, and the settings and
+  // registration that decide whether it runs at all.
+  terrain: [
+    'GdalScratchDirectoryTests', 'JobQueueLaneTests', 'TerrainActivationTests',
+    'TerrainBakePhaseTests', 'TerrainBuildApiTests', 'TerrainBuildHeightTests',
+    'TerrainBuildPipelineTests', 'TerrainCellFetchTests', 'TerrainMapConfigTests',
+    'TerrainOptionsTests', 'TerrainPipelineRegistrationTests', 'TerrainPreparePhaseTests',
+    'TerrainPublishPhaseTests', 'TerrainRasterPreparationTests', 'TerrainSourceTests',
+    'TerrainTileUploadTests', 'TerrainValidatePhaseTests',
+  ],
 };
 
 // Path prefix (repo-relative, forward slashes) -> group name or inline class list.
@@ -166,6 +178,8 @@ export const areas = {
   'server/src/SilexGis.Api/Features/TripLogs/': 'trips',
   'server/src/SilexGis.Api/Features/Uploads/': 'uploads',
   'server/src/SilexGis.Api/Features/Users/': 'users',
+  'server/src/SilexGis.Api/Features/WorkAreas/': 'workAreas',
+  'server/src/SilexGis.Api/Features/Terrain/': 'terrain',
   // Domain areas
   'server/src/SilexGis.Domain/Auth/': 'users',
   'server/src/SilexGis.Domain/Calendar/': 'calendar',
@@ -180,6 +194,7 @@ export const areas = {
   'server/src/SilexGis.Domain/Profiles/': 'cavers',
   'server/src/SilexGis.Domain/ResLinks/': 'resLinks',
   'server/src/SilexGis.Domain/Settings/': 'settings',
+  'server/src/SilexGis.Domain/Terrain/': 'terrain',
   'server/src/SilexGis.Domain/Trips/': 'trips',
   // Infrastructure areas
   'server/src/SilexGis.Infrastructure/Documents/': 'documents',
@@ -196,6 +211,7 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/Settings/': 'settings',
   'server/src/SilexGis.Infrastructure/Sms/': 'sms',
   'server/src/SilexGis.Infrastructure/Surveys/': 'surveys',
+  'server/src/SilexGis.Infrastructure/Terrain/': 'terrain',
   'server/src/SilexGis.Infrastructure/Trips/': 'trips',
 };
 
@@ -245,30 +261,37 @@ export const crossCutting = {
     'AccessApiTests', 'AccessHistoryTests', 'AccessModelTests', 'AclAndCavingGroupTests',
     'AdminMessagingTests', 'AlbumAndPublicGalleryTests', 'AuthFlowTests', 'BulkImportTests',
     'CabinetApiTests', 'CaveDomainTests', 'CaverRosterTests', 'CavingGroupAnnouncementTests',
-    'CenterlineTests', 'ChecklistAuthoringTests', 'DocumentAccessApiTests', 'DocumentCommentApiTests',
-    'DocumentLanguageTests', 'DocumentMetadataTests', 'EventAuthoringTests', 'EventInvitationTests',
-    'EventLifecycleTests', 'ExpeditionMembershipTests', 'ExpeditionReportTests', 'ExpeditionRosterRoleVocabularyTests',
-    'ExpeditionRosterTests', 'ExpeditionSharingCascadeTests', 'ExpeditionTests', 'ExpeditionTimelineTests',
+    'CenterlineTests', 'ChecklistAuthoringTests', 'DocumentAccessApiTests',
+    'DocumentCommentApiTests', 'DocumentLanguageTests', 'DocumentMetadataTests',
+    'EventAuthoringTests', 'EventInvitationTests', 'EventLifecycleTests',
+    'EventReminderSweepTests', 'EventSeriesBulkTests', 'ExpeditionMembershipTests',
+    'ExpeditionReportTests', 'ExpeditionRosterRoleVocabularyTests', 'ExpeditionRosterTests',
+    'ExpeditionSharingCascadeTests', 'ExpeditionTests', 'ExpeditionTimelineTests',
     'FeatureHierarchyTests', 'FeatureLinkTests', 'FeatureShareTests', 'FeatureTests',
     'FileAttachmentTests', 'GeofileTests', 'MapViewTests', 'NotificationHealthTests',
     'PhotoImportTests', 'ResLinkApiTests', 'SeededGroupUpgradeTests', 'StagedImportTests',
-    'SurveyModelTests', 'TermRuleSetTests', 'TextExtractionPipelineTests', 'TripAndTagTests',
-    'TripAttendanceLimitTests', 'TripCalloutStandDownTests', 'TripChecklistTickTests', 'TripInvitationTests',
-    'TripParticipantRoleVocabularyTests', 'TripPromotionTests', 'TripReportDocumentTests', 'TripReportTemplateTests',
+    'SurveyModelTests', 'TermRuleSetTests', 'TerrainActivationTests', 'TerrainBuildApiTests',
+    'TerrainBuildPipelineTests', 'TerrainSourceTests', 'TextExtractionPipelineTests',
+    'TripAndTagTests', 'TripAttendanceLimitTests', 'TripCalloutStandDownTests',
+    'TripChecklistTickTests', 'TripInvitationTests', 'TripParticipantRoleVocabularyTests',
+    'TripPromotionTests', 'TripReportDocumentTests', 'TripReportTemplateTests',
     'TripStatisticsTests', 'TripTypeVocabularyTests', 'UiDefaultsTests', 'UploadDestinationTests',
   ],
   locationClasses: [
-    'AccessHistoryTests', 'AclAndCavingGroupTests', 'AssociationDisclosureTests', 'AttachmentReachListingTests',
-    'CalendarTests', 'CaveDomainTests', 'CenterlineTests', 'ConcurrencyTests',
-    'DashboardTests', 'DocumentAccessApiTests', 'DocumentCommentNotificationTests', 'DocumentContentSearchTests',
-    'DocumentSurfaceProtectionSweepTests', 'DocumentViewerBytesTests', 'ExpeditionLeadsTests', 'ExpeditionMapTests',
-    'ExpeditionReportTests', 'FeatureFilterCompilerTests', 'FeatureHierarchyTests', 'FeatureLinkTests',
-    'FeatureShareTests', 'FeatureTests', 'FileAccessBatchParityTests', 'FileAttachmentTests',
-    'FilterParityTests', 'FilterWorldConformanceTests', 'GeofileTests', 'GeoreferencedMapTests',
-    'HistoryTests', 'PhotoBytesProtectionTests', 'PhotoImportTests', 'ProtectionDepthTests',
-    'ResLinkApiTests', 'ResLinkProtectionFloorTests', 'StagedImportTests', 'SurveyModelTests',
-    'TripAndTagTests', 'TripCalloutSweepTests', 'TripCaveReachTests', 'TripMeetingPointTests',
-    'TripPlanNotificationTests', 'TripReportDocumentTests', 'TripRoleLinkUnitOfWorkTests', 'TripStatisticsTests',
+    'AccessHistoryTests', 'AclAndCavingGroupTests', 'AssociationDisclosureTests',
+    'AttachmentReachListingTests', 'CalendarTests', 'CaveDomainTests', 'CenterlineTests',
+    'ConcurrencyTests', 'DashboardTests', 'DocumentAccessApiTests',
+    'DocumentCommentNotificationTests', 'DocumentContentSearchTests',
+    'DocumentSurfaceProtectionSweepTests', 'DocumentViewerBytesTests', 'ExpeditionLeadsTests',
+    'ExpeditionMapTests', 'ExpeditionReportTests', 'FeatureFilterCompilerTests',
+    'FeatureHierarchyTests', 'FeatureLinkTests', 'FeatureShareTests', 'FeatureTests',
+    'FileAccessBatchParityTests', 'FileAttachmentTests', 'FilterParityTests',
+    'FilterWorldConformanceTests', 'GeofileTests', 'GeoreferencedMapTests', 'HistoryTests',
+    'PhotoBytesProtectionTests', 'PhotoImportTests', 'ProtectionDepthTests', 'ResLinkApiTests',
+    'ResLinkProtectionFloorTests', 'StagedImportTests', 'SurveyModelTests', 'TripAndTagTests',
+    'TripCalloutSweepTests', 'TripCaveReachTests', 'TripMeetingPointTests',
+    'TripPlanNotificationTests', 'TripReportDocumentTests', 'TripRoleLinkUnitOfWorkTests',
+    'TripStatisticsTests', 'WorkAreaTests',
   ],
 };
 
