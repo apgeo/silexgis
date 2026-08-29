@@ -81,7 +81,14 @@ export default function TwoFactorMethods({ status }: Props) {
         body: { code },
       });
       if (error !== undefined || !data) {
-        message.error(t('security.codeInvalid'));
+        // Repeated wrong codes lock the account, and that refusal has to be readable: told only
+        // that the code is invalid, someone retypes a correct one indefinitely — and on the SMS
+        // method, asks for another paid text each time.
+        message.error(
+          (error as { code?: string } | undefined)?.code === 'auth.locked_out'
+            ? t('security.lockedOut')
+            : t('security.codeInvalid'),
+        );
         return;
       }
       // Recovery codes come back only the first time two-factor is switched on; on later

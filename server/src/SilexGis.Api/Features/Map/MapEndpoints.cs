@@ -448,34 +448,53 @@ public static class MapEndpoints
         }
 
         var polygon = box.ToPolygon();
+        // Either position puts the trip in the window. A trip that states only where its party
+        // meets is a trip somebody looking at a map wants to find — that is what the meeting
+        // point is a column for — and a filter that asked about the sketch alone would leave
+        // every such trip off the map with nothing to say it had been left off.
         var query = db.TripLogs.AsNoTracking()
             .VisibleTo(ctx, AccessDomain.TripLogs)
-            .Where(x => x.Geom != null && x.Geom.Intersects(polygon));
+            .Where(x => (x.Geom != null && x.Geom.Intersects(polygon))
+                || (x.MeetingGeom != null && x.MeetingGeom.Intersects(polygon)));
 
-        // The window asks whether the trip overlapped it, not whether it started inside it, or a
-        // trip that ran across the end of a month is missing from the map for the days it was
-        // actually out. A trip with no end date is one day long.
-        if (from is not null)
-        {
-            var start = from.Value;
-            query = query.Where(x => (x.TripDateEnd ?? x.TripDate) >= start);
-        }
-
-        if (to is not null)
-        {
-            var end = to.Value;
-            query = query.Where(x => x.TripDate <= end);
-        }
+        query = query.OverlappingDays(x => x.TripDate, x => x.TripDateEnd, from, to);
 
         var rows = await query.OrderBy(x => x.Id).Take(MaxPoints).ToListAsync(ct);
-        var features = rows.Select(x => GeoFeature.Of(x.Geom!, new Dictionary<string, object?>
+
+        // One feature per shape the trip states, each saying which it is, rather than one feature
+        // carrying whichever happened to be there. The two mean different things — where the trip
+        // went against where it starts — and a map that drew them as the same thing would put a
+        // car park where the reader read a cave. Both are served exactly, to exactly the readers
+        // of the trip, which the visibility filter above has already decided.
+        //
+        // Each shape is measured against the window in its own right, because the row was matched
+        // if either shape fell inside it: a trip that meets at a car park in this window and works
+        // a cave system a county away would otherwise answer a request for this window with that
+        // distant cave system, which the caller would draw as though it were in view. A window
+        // asks what is in it, and the answer holds nothing else.
+        var features = new List<GeoFeature>(rows.Count);
+        foreach (var x in rows)
         {
-            ["id"] = x.Id,
-            ["title"] = x.Title,
-            ["tripDate"] = x.TripDate.ToString("O"),
-        })).ToList();
+            if (x.Geom is not null && x.Geom.Intersects(polygon))
+            {
+                features.Add(GeoFeature.Of(x.Geom, Properties(x, "sketch")));
+            }
+
+            if (x.MeetingGeom is not null && x.MeetingGeom.Intersects(polygon))
+            {
+                features.Add(GeoFeature.Of(x.MeetingGeom, Properties(x, "meeting")));
+            }
+        }
 
         return TypedResults.Ok(FeatureCollection.Of(features));
+
+        static Dictionary<string, object?> Properties(TripLog trip, string kind) => new()
+        {
+            ["id"] = trip.Id,
+            ["title"] = trip.Title,
+            ["tripDate"] = trip.TripDate.ToString("O"),
+            ["kind"] = kind,
+        };
     }
 
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> GeofileFeaturesAsync(

@@ -21,14 +21,18 @@ namespace SilexGis.Api.Tests;
 public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable
 {
     private readonly SilexGisApiFactory factory;
+    private readonly string connectionString;
     private string adminEmail = null!;
     private string editorEmail = null!;
 
-    public AdminMessagingTests(PostgresFixture postgres) =>
-        factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
+    public AdminMessagingTests(PostgresFixture postgres)
+    {
+        connectionString = postgres.ConnectionString;
+        factory = new SilexGisApiFactory(connectionString, new Dictionary<string, string?>
         {
             ["Auth:RateLimitPerMinute"] = "200",
         });
+    }
 
     public async Task InitializeAsync()
     {
@@ -47,6 +51,12 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable
         (await editor.GetAsync("/api/v1/admin/settings/")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await editor.GetAsync("/api/v1/admin/message-templates/")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await editor.PutAsJsonAsync("/api/v1/admin/settings/security", Policy()))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await editor.PutAsJsonAsync("/api/v1/admin/settings/notifications", new { retentionDays = 30 }))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await editor.PutAsJsonAsync(
+                "/api/v1/admin/settings/announcements",
+                new { paidChannelsEnabled = true, dailyPaidMessageCap = 500 }))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         using var anonymous = factory.CreateClient();
@@ -109,6 +119,104 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable
         (await admin.PutAsJsonAsync("/api/v1/admin/settings/sms", Sms(url: "not-a-url")))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await admin.PutAsJsonAsync("/api/v1/admin/settings/sms", Sms(method: "DELETE")))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // "Keep for nothing" is refused at the form rather than silently turned into the default:
+        // the pruner's own fallback exists for a mistyped environment variable, which nobody is
+        // standing in front of to be told.
+        (await admin.PutAsJsonAsync("/api/v1/admin/settings/notifications", new { retentionDays = 0 }))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await admin.PutAsJsonAsync("/api/v1/admin/settings/notifications", new { retentionDays = 4000 }))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task A_saved_retention_window_is_what_the_page_reads_back()
+    {
+        var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+
+        var saved = await admin.PutAsJsonAsync("/api/v1/admin/settings/notifications", new { retentionDays = 45 });
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var settings = await admin.GetFromJsonAsync<JsonElement>("/api/v1/admin/settings/");
+        settings.GetProperty("notifications").GetProperty("retentionDays").GetInt32().ShouldBe(45);
+    }
+
+    [Fact]
+    public async Task An_installation_spends_nothing_on_announcements_until_somebody_says_otherwise()
+    {
+        // Asserted over what the page actually reads back, because that is the number an operator
+        // would act on. A default that only holds inside the settings record and not out here is
+        // the kind of guard that looks present and is not.
+        var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+
+        var settings = await admin.GetFromJsonAsync<JsonElement>("/api/v1/admin/settings/");
+        var announcements = settings.GetProperty("announcements");
+
+        announcements.GetProperty("paidChannelsEnabled").GetBoolean().ShouldBeFalse();
+        announcements.GetProperty("dailyPaidMessageCap").GetInt32().ShouldBe(100);
+    }
+
+    [Fact]
+    public async Task What_an_announcement_may_cost_is_what_the_page_reads_back()
+    {
+        var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+
+        var saved = await admin.PutAsJsonAsync(
+            "/api/v1/admin/settings/announcements",
+            new { paidChannelsEnabled = true, dailyPaidMessageCap = 250 });
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+
+        var settings = await admin.GetFromJsonAsync<JsonElement>("/api/v1/admin/settings/");
+        var announcements = settings.GetProperty("announcements");
+        announcements.GetProperty("paidChannelsEnabled").GetBoolean().ShouldBeTrue();
+        announcements.GetProperty("dailyPaidMessageCap").GetInt32().ShouldBe(250);
+
+        // Saving it replaces its own section and nothing else: the retention window an operator
+        // set from another form is still there. That is the whole reason this is a section of its
+        // own rather than another key on the notification one.
+        settings.GetProperty("notifications").GetProperty("retentionDays").GetInt32().ShouldBe(365);
+    }
+
+    [Fact]
+    public async Task What_the_deployment_says_about_announcements_is_what_an_installation_starts_from()
+    {
+        // Every other test here goes through the form, which writes a row and never reads
+        // configuration at all. So this one stands the application up with the two keys set in the
+        // deployment's own configuration and nothing saved, because a key that binds to nothing
+        // fails exactly like a key that works: the shipped defaults go on being returned and the
+        // suite stays green while the documented environment variable does nothing.
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.AppSettings.Where(a => a.Key == AppSettingSections.Announcements).ExecuteDeleteAsync();
+
+        await using var deployed = new SilexGisApiFactory(connectionString, new Dictionary<string, string?>
+        {
+            ["Auth:RateLimitPerMinute"] = "200",
+            ["Announcements:PaidChannelsEnabled"] = "true",
+            ["Announcements:DailyPaidMessageCap"] = "250",
+        });
+
+        using var admin = await AuthHelper.BearerClientAsync(deployed, adminEmail);
+        var announcements = (await admin.GetFromJsonAsync<JsonElement>("/api/v1/admin/settings/"))
+            .GetProperty("announcements");
+
+        // Both values, and neither of them a default: true is not the shipped false, and 250 is
+        // not the shipped 100, so a section name or a property name spelled wrong shows up here.
+        announcements.GetProperty("paidChannelsEnabled").GetBoolean().ShouldBeTrue();
+        announcements.GetProperty("dailyPaidMessageCap").GetInt32().ShouldBe(250);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1001)]
+    public async Task A_daily_ceiling_nobody_could_have_meant_is_refused_at_the_form(int cap)
+    {
+        var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+
+        (await admin.PutAsJsonAsync(
+                "/api/v1/admin/settings/announcements",
+                new { paidChannelsEnabled = true, dailyPaidMessageCap = cap }))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
@@ -238,6 +346,25 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable
         {
             factory.Messages.SmsConfigured = true;
         }
+    }
+
+    [Fact]
+    public async Task A_second_test_text_is_refused_by_a_cooldown_the_caller_cannot_clear()
+    {
+        // The per-address request budget is not the bound here. It is shared with the sign-in
+        // routes, it resets every minute, a second replica of the application has a second copy
+        // of it, and every call this route lets through sends a text the operator pays for. This
+        // asserts the shipped default rather than a budget forced small for the test.
+        var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+
+        var first = await admin.PostAsJsonAsync("/api/v1/admin/settings/sms/test", new { recipient = "+40712345678" });
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+
+        var second = await admin.PostAsJsonAsync("/api/v1/admin/settings/sms/test", new { recipient = "+40712345679" });
+
+        second.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await second.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("admin.sms_test_too_soon");
     }
 
     private static SecuritySettingsBody Policy() => new(false, true, true, true, false, 5, 60);

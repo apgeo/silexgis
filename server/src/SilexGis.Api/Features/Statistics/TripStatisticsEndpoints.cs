@@ -7,12 +7,13 @@ using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Api.Features.Statistics;
 
 /// <summary>
-/// What a person, a cave or a club adds up to across trips — read-only, derived on every request,
-/// and counted over the trips the caller may read.
+/// What a person, a cave, a club or a camp adds up to across trips — read-only, derived on every
+/// request, and counted over the trips the caller may read.
 /// </summary>
 /// <remarks>
 /// These are read surfaces and nothing here is askable: a total may be looked at, never filtered
@@ -45,6 +46,10 @@ public static class TripStatisticsEndpoints
             .WithSummary("What one club has organised across the trips the caller may read.");
         stats.MapGet("/caving-groups/{id:guid}/export", ExportCavingGroupAsync)
             .WithSummary("The same figures for one club, as a spreadsheet.");
+        stats.MapGet("/expeditions/{id:guid}", ForExpeditionAsync)
+            .WithSummary("What one camp adds up to across the trips in it the caller may read.");
+        stats.MapGet("/expeditions/{id:guid}/export", ExportExpeditionAsync)
+            .WithSummary("The same figures for one camp, as a spreadsheet.");
 
         return api;
     }
@@ -105,6 +110,25 @@ public static class TripStatisticsEndpoints
             ISpreadsheetWriter sheets,
             CancellationToken ct) =>
         SavedAsync(StatisticsSubject.CavingGroup, id, db, accessAccessor, protection, sheets, ct);
+
+    private static Task<Results<Ok<TripStatisticsDto>, UnauthorizedHttpResult, ProblemHttpResult>>
+        ForExpeditionAsync(
+            Guid id,
+            SilexGisDbContext db,
+            IAccessContextAccessor accessAccessor,
+            FeatureProtection protection,
+            CancellationToken ct) =>
+        SeenAsync(StatisticsSubject.Expedition, id, db, accessAccessor, protection, ct);
+
+    private static Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>>
+        ExportExpeditionAsync(
+            Guid id,
+            SilexGisDbContext db,
+            IAccessContextAccessor accessAccessor,
+            FeatureProtection protection,
+            ISpreadsheetWriter sheets,
+            CancellationToken ct) =>
+        SavedAsync(StatisticsSubject.Expedition, id, db, accessAccessor, protection, sheets, ct);
 
     private static async Task<Results<Ok<TripStatisticsDto>, UnauthorizedHttpResult, ProblemHttpResult>>
         SeenAsync(
@@ -225,7 +249,7 @@ public static class TripStatisticsEndpoints
                 return new Answer(false, null, await TripStatisticsQuery.ComputeAsync(
                     db, protection, ctx, trip => naming.Contains(trip.Id), null, id, ct));
 
-            default:
+            case StatisticsSubject.CavingGroup:
                 if (!Holds(ctx, AccessDomain.CavingGroups, id))
                 {
                     return new Answer(false, ApiProblems.Forbidden("access.forbidden"), null);
@@ -241,6 +265,38 @@ public static class TripStatisticsEndpoints
                 // would report a club's totals as whatever happened to be shared with it.
                 return new Answer(false, null, await TripStatisticsQuery.ComputeAsync(
                     db, protection, ctx, trip => trip.OrganizingCavingGroupId == id, null, null, ct));
+
+            case StatisticsSubject.Expedition:
+                // A camp is governed in its own right, so the question is whether this caller may
+                // read this camp rather than whether they hold camps generally — and a camp they
+                // may not read is missing rather than refused, exactly as the camp's own page and
+                // its trip listing answer. An id that answered differently from one that does not
+                // exist would be an id anybody could go looking for.
+                var camp = await db.Expeditions.AsNoTracking()
+                    .VisibleTo(ctx, AccessDomain.Expeditions)
+                    .AnyAsync(x => x.Id == id, ct);
+                if (!camp)
+                {
+                    return new Answer(false, ApiProblems.NotFound("expedition.not_found"), null);
+                }
+
+                // The trips gathered into the camp, out of the trips this caller may read — which
+                // is why the same camp legitimately shows two people two sets of totals, and why
+                // the surfaces showing them carry the sentence saying so.
+                //
+                // No subject person and no subject cave: a camp is about neither, so its places
+                // are every place its trips reached and its first visits are anybody's.
+                return new Answer(false, null, await TripStatisticsQuery.ComputeAsync(
+                    db,
+                    protection,
+                    ctx,
+                    trip => db.ExpeditionTrips.Any(m => m.ExpeditionId == id && m.TripLogId == trip.Id),
+                    null,
+                    null,
+                    ct));
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(subject));
         }
     }
 
@@ -258,7 +314,9 @@ public static class TripStatisticsEndpoints
     {
         StatisticsSubject.Caver => "caver",
         StatisticsSubject.Cave => "cave",
-        _ => "caving-group",
+        StatisticsSubject.CavingGroup => "caving-group",
+        StatisticsSubject.Expedition => "expedition",
+        _ => throw new ArgumentOutOfRangeException(nameof(subject)),
     };
 
     /// <summary>

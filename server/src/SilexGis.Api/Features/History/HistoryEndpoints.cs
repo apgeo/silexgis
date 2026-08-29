@@ -139,6 +139,19 @@ public static class HistoryEndpoints
         // carry a part told to a narrower audience than the row itself.
         var mayWriteSubject = await MayWriteSubjectAsync(db, access, ctx, entityType, entityId, ct);
 
+        // A camp's child rows name things governed apart from the camp — the trip a membership row
+        // joined, the person a roster row records — and a camp reaches a wider audience than
+        // either. Which of them this caller may read is resolved once for the page, by the same
+        // questions the camp's own listings ask, so the timeline cannot become the one surface
+        // that hands over what the others withhold. The two are asked differently because they
+        // are governed differently: a trip is protected in its own right, so the readable ones
+        // are picked out by the visibility walk the camp's trip listing uses, while reading
+        // people is a right held across the board or not at all — one answer for the page, the
+        // same one the live roster demands before it will name anybody.
+        var readableMembers = await ReadableMemberTripIdsAsync(
+            db, ctx, parsed.Select(x => (x.Row.EntityType, x.Changes)), ct);
+        var peopleHidden = !AccessEvaluator.Decide(ctx, AccessDomain.Cavers, AccessAction.Read, null).Allowed;
+
         var items = parsed.Select(r =>
         {
             var governing = GoverningFeatureId(r.Row);
@@ -150,7 +163,7 @@ public static class HistoryEndpoints
                     revealAssociations);
             var (changes, redacted) = HistoryProtection.Redact(
                 r.Row.EntityType!, r.Changes, governingHidden, hidden.Contains, associationHidden,
-                mayWriteSubject);
+                mayWriteSubject, peopleHidden, id => !readableMembers.Contains(id));
             return new HistoryEventDto(
                 r.Row.Id, r.Row.At, r.Row.UserId, r.UserName, r.Row.Action,
                 r.Row.EntityType!, r.Row.EntityId!,
@@ -182,6 +195,42 @@ public static class HistoryEndpoints
 
         var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, ct);
         return trip is not null && (await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed;
+    }
+
+    /// <summary>
+    /// Of the trips this page's camp-membership rows name, the ones this caller may read.
+    /// </summary>
+    /// <remarks>
+    /// Asked once for the whole page rather than once per row, and only about the ids those rows
+    /// actually name — a timeline holding none of them asks nothing. A trip is protected in its
+    /// own right, so the answer comes from the same visibility walk the camp's trip listing uses.
+    /// </remarks>
+    private static async Task<HashSet<Guid>> ReadableMemberTripIdsAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        IEnumerable<(string? EntityType, JsonObject? Changes)> rows,
+        CancellationToken ct)
+    {
+        var trips = new HashSet<Guid>();
+        foreach (var (entityType, changes) in rows)
+        {
+            if (entityType == nameof(ExpeditionTrip))
+            {
+                CollectReferencedIds(changes, nameof(ExpeditionTrip.TripLogId), trips);
+            }
+        }
+
+        if (trips.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = trips.ToList();
+        return [.. await db.TripLogs.AsNoTracking()
+            .VisibleTo(ctx, AccessDomain.TripLogs)
+            .Where(t => ids.Contains(t.Id))
+            .Select(t => t.Id)
+            .ToListAsync(ct)];
     }
 
     /// <summary>
@@ -263,18 +312,24 @@ public static class HistoryEndpoints
 
         foreach (var property in ReferenceProperties)
         {
-            if (changes[property] is not JsonObject pair)
-            {
-                continue;
-            }
+            CollectReferencedIds(changes, property, ids);
+        }
+    }
 
-            foreach (var side in new[] { pair["old"], pair["new"] })
+    /// <summary>Both sides of one id-bearing property in a diff, where they parse as ids.</summary>
+    private static void CollectReferencedIds(JsonObject? changes, string property, HashSet<Guid> ids)
+    {
+        if (changes?[property] is not JsonObject pair)
+        {
+            return;
+        }
+
+        foreach (var side in new[] { pair["old"], pair["new"] })
+        {
+            if (side is JsonValue value && value.TryGetValue<string>(out var text)
+                && Guid.TryParse(text, out var id))
             {
-                if (side is JsonValue value && value.TryGetValue<string>(out var text)
-                    && Guid.TryParse(text, out var id))
-                {
-                    ids.Add(id);
-                }
+                ids.Add(id);
             }
         }
     }

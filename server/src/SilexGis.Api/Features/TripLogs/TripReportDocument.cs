@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
@@ -22,8 +21,9 @@ internal sealed record TripReportPlate(byte[] Image, string? Caption);
 /// Every field here was produced by the same request the trip page makes, and the names beside
 /// the identifiers come from vocabularies every account may read. Nothing in this record is a
 /// second answer to a question the trip read already answered: the caves are the list that read
-/// returned, which is the redacted one, and the account of what went wrong is present exactly
-/// when that read decided this caller may have it.
+/// returned — already stripped of every cave this reader may not open and every cave they may
+/// not place, and carrying its own count of what was taken out — and the account of what went
+/// wrong is present exactly when that read decided this caller may have it.
 /// </remarks>
 internal sealed record TripReportContent(
     TripLogDto Trip,
@@ -147,37 +147,7 @@ internal static class TripReportDocument
             }
         }
 
-        return Pruned(blocks);
-    }
-
-    /// <summary>
-    /// Takes out every heading nothing came out under.
-    /// </summary>
-    /// <remarks>
-    /// A layout asks for a part before it can know whether the trip has anything to put in it, so
-    /// an empty part is ordinary rather than a mistake — and a bare "Safety" heading on a
-    /// circulated document reads as "nothing happened", which is a different statement from the
-    /// one the record actually makes.
-    /// </remarks>
-    private static List<DocumentBlock> Pruned(List<DocumentBlock> blocks)
-    {
-        var kept = new List<DocumentBlock>(blocks.Count);
-        for (var index = 0; index < blocks.Count; index++)
-        {
-            if (blocks[index].Kind != DocumentBlockKind.Heading)
-            {
-                kept.Add(blocks[index]);
-                continue;
-            }
-
-            var next = index + 1;
-            if (next < blocks.Count && blocks[next].Kind != DocumentBlockKind.Heading)
-            {
-                kept.Add(blocks[index]);
-            }
-        }
-
-        return kept;
+        return ReportComposition.Pruned(blocks);
     }
 
     private static void AppendRoster(List<DocumentBlock> blocks, TripReportContent content)
@@ -262,56 +232,12 @@ internal static class TripReportDocument
     /// nothing and the line should not be written at all.
     /// </summary>
     /// <remarks>
-    /// A name with nothing behind it takes the punctuation written next to it with it, so a line
-    /// reading "{purpose} · {dates} · {club}" on a trip with no club comes out without a dangling
-    /// separator. Only punctuation standing on its own between two names is touched; nothing
-    /// alters the words a person wrote, and nothing collapses the line breaks inside prose.
+    /// How a line behaves when one of its names comes back empty is a rule about the language
+    /// rather than about trips, so it is applied from one place; what each name means is answered
+    /// here, out of the reading this document's producer already has.
     /// </remarks>
-    private static string? Fill(TripReportContent content, string text)
-    {
-        var written = new StringBuilder();
-        string? waiting = null;
-        var anything = false;
-
-        foreach (var token in ReportTemplateFormat.Tokens(text))
-        {
-            if (!token.IsPlaceholder)
-            {
-                waiting += token.Text;
-                continue;
-            }
-
-            var value = Resolve(content, token.Text);
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                if (waiting is not null && !HasWords(waiting))
-                {
-                    waiting = null;
-                }
-
-                continue;
-            }
-
-            if (waiting is not null && (anything || HasWords(waiting)))
-            {
-                written.Append(waiting);
-            }
-
-            waiting = null;
-            written.Append(value);
-            anything = true;
-        }
-
-        if (waiting is not null && HasWords(waiting))
-        {
-            written.Append(waiting);
-        }
-
-        var filled = written.ToString().Trim();
-        return HasWords(filled) ? filled : null;
-    }
-
-    private static bool HasWords(string text) => text.Any(char.IsLetterOrDigit);
+    private static string? Fill(TripReportContent content, string text) =>
+        ReportComposition.Fill(text, name => Resolve(content, name));
 
     private static string? Resolve(TripReportContent content, string name)
     {
@@ -339,6 +265,7 @@ internal static class TripReportDocument
             case "rope": return trip.RopeMetres is { } rope ? Metres(rope) : null;
             case "people": return People(trip);
             case "sketch": return Sketch(trip);
+            case "meeting": return Meeting(trip);
             default: return Answer(content, name);
         }
     }
@@ -374,18 +301,32 @@ internal static class TripReportDocument
 
     private static string? Caves(TripReportContent content)
     {
-        // The caves this trip names, as the trip read itself gave them: a cave whose position
-        // this reader may not place is not on that list at all, and looking one up by any other
-        // route is how it would come back.
-        if (content.Trip.CaveIds.Count == 0)
+        // Names, and never an identifier. The trip read has already taken out of its list every
+        // cave this reader may not open and every cave they may not place; what is left resolves
+        // to a name, and anything that did not would be printed as the identifier itself — which
+        // is the one thing worth withholding, because it is enough to go and ask for the cave by
+        // it. So a name that will not resolve takes its cave out of the line instead.
+        //
+        // What is missing is stated as a count, the way the pictures are: a circulated file that
+        // simply listed fewer caves would read as a trip that went to fewer places, and the
+        // difference between two people's copies would look like a fault in whoever produced one.
+        var names = content.Trip.CaveIds
+            .Select(id => content.CaveNames.GetValueOrDefault(id))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .OrderBy(name => name, StringComparer.CurrentCulture)
+            .ToList();
+        var withheld = content.Trip.CavesWithheld;
+
+        var shortfall = withheld == 0 ? null
+            : withheld == 1 ? "1 cave not shown to you"
+            : $"{withheld} caves not shown to you";
+
+        if (names.Count == 0)
         {
-            return null;
+            return shortfall;
         }
 
-        var names = content.Trip.CaveIds
-            .Select(id => content.CaveNames.GetValueOrDefault(id, id.ToString()))
-            .OrderBy(name => name, StringComparer.CurrentCulture);
-        return string.Join(", ", names);
+        return shortfall is null ? string.Join(", ", names) : $"{string.Join(", ", names)} (+{shortfall})";
     }
 
     /// <summary>
@@ -423,6 +364,32 @@ internal static class TripReportDocument
             + $"{Math.Abs(centre.Y):F5}° {(centre.Y >= 0 ? "N" : "S")}, "
             + $"{Math.Abs(centre.X):F5}° {(centre.X >= 0 ? "E" : "W")}. Everyone who may read this "
             + $"trip sees this shape exactly as drawn, whatever protection the caves it names carry.");
+    }
+
+    /// <summary>
+    /// Where the party gathers, written down rather than drawn.
+    /// </summary>
+    /// <remarks>
+    /// Read out of the same reading the sketch above is, and carrying the same warning welded to
+    /// the same value, because it is the same bargain: a meeting point is exact for everybody who
+    /// may read the trip. It is the one that is worth saying twice — a meeting point stands where
+    /// people actually park, which can be a few hundred metres from an entrance the reader of
+    /// this very document was not told the trip names.
+    /// </remarks>
+    private static string? Meeting(TripLogDto trip)
+    {
+        if (trip.MeetingGeom?.ToGeometryOrNull() is not { IsEmpty: false } shape)
+        {
+            return null;
+        }
+
+        var centre = shape.Centroid;
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{shape.GeometryType} of {shape.NumPoints} position(s), centred on "
+            + $"{Math.Abs(centre.Y):F5}° {(centre.Y >= 0 ? "N" : "S")}, "
+            + $"{Math.Abs(centre.X):F5}° {(centre.X >= 0 ? "E" : "W")}. Everyone who may read this "
+            + $"trip sees this position exactly as placed, whatever protection the caves it names carry.");
     }
 
     /// <summary>How one answer in a section reads, or null when it says nothing.</summary>

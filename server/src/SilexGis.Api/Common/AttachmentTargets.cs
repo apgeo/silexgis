@@ -12,7 +12,7 @@ namespace SilexGis.Api.Common;
 /// <summary>
 /// Wire vocabulary of polymorphic target types: "feature" (any feature id, whatever its
 /// kind) plus the camelCase non-feature entity names ("tripLog", "cavingGroup", "geofile",
-/// "georeferencedMap", "mapView", "storedFile"). Parsed case-insensitively so
+/// "georeferencedMap", "mapView", "storedFile", "expedition"). Parsed case-insensitively so
 /// query-string values behave like the camelCase JSON enum convention. The underlying
 /// enum is shared with other polymorphic-pair consumers (resource links speak a wider
 /// set); attachments and taggings accept only the names above — anything else, later
@@ -51,7 +51,7 @@ public static class AttachmentTargets
     {
         AttachedEntityType.TripLog or AttachedEntityType.CavingGroup or AttachedEntityType.Geofile
             or AttachedEntityType.GeoreferencedMap or AttachedEntityType.MapView
-            or AttachedEntityType.StoredFile => true,
+            or AttachedEntityType.StoredFile or AttachedEntityType.Expedition => true,
         _ => false,
     };
 

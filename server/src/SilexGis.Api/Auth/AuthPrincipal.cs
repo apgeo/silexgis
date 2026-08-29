@@ -4,6 +4,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
+using SilexGis.Domain.Profiles;
 using SilexGis.Infrastructure.Identity;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -18,10 +19,17 @@ internal static class AuthPrincipal
         var identity = new ClaimsIdentity(
             TokenValidationParameters.DefaultAuthenticationType, Claims.Name, Claims.Role);
 
+        // Both name claims are the same protected label every other surface shows. A plain
+        // "display name, or else user name" fallback would publish the email address of every
+        // account that never chose a display name, because registration and external federation
+        // both create accounts with the address as the user name. The address travels in its own
+        // claim, which the email scope gates; these two are gated only by the profile scope.
+        var label = ProfileProtection.Label(user);
+
         identity.SetClaim(Claims.Subject, user.Id.ToString())
             .SetClaim(Claims.Email, user.Email)
-            .SetClaim(Claims.Name, user.UserName)
-            .SetClaim(Claims.PreferredUsername, user.DisplayName ?? user.UserName);
+            .SetClaim(Claims.Name, label)
+            .SetClaim(Claims.PreferredUsername, label);
 
         identity.SetClaims(Claims.Role, [.. await userManager.GetRolesAsync(user)]);
 

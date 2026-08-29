@@ -308,6 +308,65 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable
         }
     }
 
+    /// <summary>
+    /// The same arm, asked about the other position a trip can carry. A trip states where its
+    /// party gathers as well as where the trip went, and a trip that states only the first is
+    /// every bit as positioned as one that states only the second — so a floor that asked about
+    /// the sketch alone would re-admit a guarded name beside coordinates, silently, on exactly
+    /// the trips this arm was written for.
+    /// </summary>
+    [Fact]
+    public async Task A_trip_whose_only_position_is_where_its_party_meets_counts_as_positioned()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var guardedName = $"Guarded meet {suffix}";
+        var guarded = await CreateProtectedCaveAsync(guardedName);
+        var openCave = await CreateCaveAsync($"Meet junction {suffix}", "authenticated");
+
+        var flatTrip = await CreateTripLogAsync($"Flat meet {suffix}", openCave, "authenticated");
+        var meetingTrip = await CreateTripLogAsync(
+            $"Met at {suffix}", openCave, "authenticated",
+            meetingGeom: new { type = "Point", coordinates = new[] { 25.44721, 45.53127 } });
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            // Fixture proof, and it is the whole point of the case: the positioned trip carries
+            // no sketch at all, so what makes it positioned can only be the meeting point.
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var met = await db.TripLogs.AsNoTracking().FirstAsync(t => t.Id == meetingTrip);
+            met.Geom.ShouldBeNull();
+            met.MeetingGeom.ShouldNotBeNull();
+            (await db.TripLogs.AsNoTracking().FirstAsync(t => t.Id == flatTrip)).MeetingGeom.ShouldBeNull();
+        }
+
+        var flatLink = await CreateLinkAsync(
+            Member("feature", guarded), Member("tripLog", flatTrip, sortOrder: 1));
+        var meetingLink = await CreateLinkAsync(
+            Member("feature", guarded), Member("tripLog", meetingTrip, sortOrder: 1));
+
+        await SetRevealAsync(true);
+        try
+        {
+            // Control: nothing in the flat link puts a position beside the guarded name, so the
+            // setting re-admits it.
+            var flatMembers = MembersOf(await BodyAsync(viewer, $"/api/v1/reslinks/{flatLink}"));
+            flatMembers.Count.ShouldBe(2);
+            DisplayTitle(flatMembers, guarded).ShouldBe(guardedName);
+
+            // The meeting point is coordinates this caller may see, so the pairing is refused.
+            var meetingBody = await BodyAsync(viewer, $"/api/v1/reslinks/{meetingLink}");
+            meetingBody.ShouldNotContain(guardedName);
+            MembersOf(meetingBody).Single().GetProperty("targetId").GetGuid().ShouldBe(meetingTrip);
+
+            // The owner may place the cave exactly, so both links read whole for them.
+            MembersOf(await BodyAsync(owner, $"/api/v1/reslinks/{meetingLink}")).Count.ShouldBe(2);
+        }
+        finally
+        {
+            await SetRevealAsync(false);
+        }
+    }
+
     [Fact]
     public async Task A_trip_carrying_its_own_sketch_seats_no_guarded_name_beside_it()
     {
@@ -1243,13 +1302,14 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable
     /// exposes coordinates to every reader and would change what its siblings disclose.
     /// </summary>
     private async Task<Guid> CreateTripLogAsync(
-        string title, Guid caveId, string visibility, object? geom = null)
+        string title, Guid caveId, string visibility, object? geom = null, object? meetingGeom = null)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
         {
             title,
             tripDate = "2026-05-01",
             geom,
+            meetingGeom,
             caveIds = new[] { caveId },
             participants = Array.Empty<object>(),
             visibility,

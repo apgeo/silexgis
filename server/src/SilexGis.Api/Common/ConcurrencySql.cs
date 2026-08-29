@@ -20,6 +20,8 @@ public enum VersionedTable
     MapViews,
     SurveyModels,
     Files,
+    Expeditions,
+    Events,
 }
 
 /// <summary>
@@ -39,6 +41,8 @@ public static class ConcurrencySql
             [VersionedTable.MapViews] = "map_views",
             [VersionedTable.SurveyModels] = "survey_models",
             [VersionedTable.Files] = "files",
+            [VersionedTable.Expeditions] = "expeditions",
+            [VersionedTable.Events] = "events",
         };
 
     /// <summary>Current row version, or null when the row does not exist.</summary>

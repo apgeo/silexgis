@@ -22,7 +22,12 @@ if (import.meta.env.DEV) {
   installErrorReporting();
 }
 
-/** antd locale follows the i18next language (component-internal strings, pickers, …). */
+/**
+ * antd locale follows the i18next language: component-internal strings, and a date picker's
+ * chrome — its placeholders, its "Today" button. A picker's *calendar* comes from elsewhere:
+ * the weekday initials, the month names and the day a week starts on are dayjs's, and the
+ * locale registration that supplies them lives beside the i18next setup.
+ */
 function Root() {
   const { i18n } = useTranslation();
   const appearance = useUiPrefsStore((s) => s.appearance);

@@ -460,6 +460,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("granted_by");
 
+                    b.Property<Guid?>("GrantedViaExpeditionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("granted_via_expedition_id");
+
                     b.Property<Guid?>("PermissionGroupId")
                         .HasColumnType("uuid")
                         .HasColumnName("permission_group_id");
@@ -497,17 +501,25 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("GrantedBy")
                         .HasDatabaseName("ix_access_entries_granted_by");
 
+                    b.HasIndex("GrantedViaExpeditionId")
+                        .HasDatabaseName("ix_access_entries_granted_via_expedition_id");
+
                     b.HasIndex("PermissionGroupId")
                         .HasDatabaseName("ix_access_entries_permission_group_id");
 
                     b.HasIndex("ScopeFeatureId")
                         .HasDatabaseName("ix_access_entries_scope_feature_id");
 
+                    b.HasIndex("ScopeId")
+                        .HasDatabaseName("ix_access_entries_scope_id");
+
                     b.HasIndex("SubjectKind", "SubjectId")
                         .HasDatabaseName("ix_access_entries_subject_kind_subject_id");
 
                     b.ToTable("access_entries", null, t =>
                         {
+                            t.HasCheckConstraint("ck_access_entries_granted_via_expedition", "granted_via_expedition_id IS NULL OR (domain = 1 AND scope_kind = 5)");
+
                             t.HasCheckConstraint("ck_access_entries_narrowing", "(feature_kind IS NULL AND feature_type_id IS NULL) OR (domain = 0 AND scope_kind IN (0, 1) AND (feature_kind IS NULL OR feature_type_id IS NULL))");
 
                             t.HasCheckConstraint("ck_access_entries_one_home", "(permission_group_id IS NOT NULL AND subject_kind IS NULL AND subject_id IS NULL) OR (permission_group_id IS NULL AND subject_kind IS NOT NULL AND subject_id IS NOT NULL)");
@@ -1469,6 +1481,63 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("caving_groups", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.CavingGroupAnnouncement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
+
+                    b.Property<string>("CavingGroupName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("caving_group_name");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("ExpandedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expanded_at");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("message");
+
+                    b.Property<int>("RecipientCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("recipient_count");
+
+                    b.Property<string>("SenderName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("sender_name");
+
+                    b.Property<Guid>("SenderUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sender_user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_caving_group_announcements");
+
+                    b.HasIndex("CavingGroupId")
+                        .HasDatabaseName("ix_caving_group_announcements_caving_group_id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_caving_group_announcements_pending")
+                        .HasFilter("expanded_at IS NULL");
+
+                    b.ToTable("caving_group_announcements", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.CavingGroupMembership", b =>
                 {
                     b.Property<long>("Id")
@@ -1575,6 +1644,87 @@ namespace SilexGis.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("ck_centerlines_kind", "kind = 3");
                         });
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.Checklist", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<short>("Visibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("visibility");
+
+                    b.HasKey("Id")
+                        .HasName("pk_checklists");
+
+                    b.HasIndex("CavingGroupId")
+                        .HasDatabaseName("ix_checklists_caving_group_id");
+
+                    b.HasIndex("OwnerUserId")
+                        .HasDatabaseName("ix_checklists_owner_user_id");
+
+                    b.ToTable("checklists", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ChecklistItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ChecklistId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("checklist_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("text");
+
+                    b.HasKey("Id")
+                        .HasName("pk_checklist_items");
+
+                    b.HasAlternateKey("ChecklistId", "Id")
+                        .HasName("ak_checklist_items_checklist_id_id");
+
+                    b.HasIndex("ChecklistId", "SortOrder", "Id")
+                        .HasDatabaseName("ix_checklist_items_checklist_id_sort_order_id");
+
+                    b.ToTable("checklist_items", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Document", b =>
@@ -2039,6 +2189,346 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_entrance_types_code");
 
                     b.ToTable("entrance_types", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.Event", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("description");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date")
+                        .HasColumnName("end_date");
+
+                    b.Property<TimeOnly?>("EndTime")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("end_time");
+
+                    b.Property<short>("Kind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("kind");
+
+                    b.Property<int?>("MaxParticipants")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_participants");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<string>("Place")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("place");
+
+                    b.Property<DateTimeOffset?>("PlanReminderSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("plan_reminder_sent_at");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<Guid?>("SeriesId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("series_id");
+
+                    b.Property<string>("SeriesRule")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("series_rule");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date")
+                        .HasColumnName("start_date");
+
+                    b.Property<TimeOnly?>("StartTime")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("start_time");
+
+                    b.Property<short>("State")
+                        .HasColumnType("smallint")
+                        .HasColumnName("state");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<short>("Visibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("visibility");
+
+                    b.HasKey("Id")
+                        .HasName("pk_events");
+
+                    b.HasIndex("CavingGroupId")
+                        .HasDatabaseName("ix_events_caving_group_id");
+
+                    b.HasIndex("OwnerUserId")
+                        .HasDatabaseName("ix_events_owner_user_id");
+
+                    b.HasIndex("StartDate")
+                        .HasDatabaseName("ix_events_start_date");
+
+                    b.HasIndex("SeriesId", "StartDate")
+                        .HasDatabaseName("ix_events_series_id_start_date")
+                        .HasFilter("series_id IS NOT NULL");
+
+                    b.ToTable("events", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_events_dates", "end_date IS NULL OR end_date > start_date");
+
+                            t.HasCheckConstraint("ck_events_series_rule", "series_rule IS NULL OR series_id IS NOT NULL");
+                        });
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.Expedition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date")
+                        .HasColumnName("end_date");
+
+                    b.Property<Geometry>("Geom")
+                        .HasColumnType("geometry(Geometry, 4326)")
+                        .HasColumnName("geom");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date")
+                        .HasColumnName("start_date");
+
+                    b.Property<short>("State")
+                        .HasColumnType("smallint")
+                        .HasColumnName("state");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<short>("Visibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("visibility");
+
+                    b.HasKey("Id")
+                        .HasName("pk_expeditions");
+
+                    b.HasIndex("CavingGroupId")
+                        .HasDatabaseName("ix_expeditions_caving_group_id");
+
+                    b.HasIndex("Geom")
+                        .HasDatabaseName("ix_expeditions_geom");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geom"), "gist");
+
+                    b.HasIndex("OwnerUserId")
+                        .HasDatabaseName("ix_expeditions_owner_user_id");
+
+                    b.HasIndex("StartDate")
+                        .HasDatabaseName("ix_expeditions_start_date");
+
+                    b.ToTable("expeditions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_expeditions_dates", "end_date IS NULL OR end_date > start_date");
+                        });
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ExpeditionRosterEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("CaverId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caver_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("ExpeditionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("expedition_id");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("date")
+                        .HasColumnName("from_date");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<long>("RoleId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("role_id");
+
+                    b.Property<DateOnly?>("ToDate")
+                        .HasColumnType("date")
+                        .HasColumnName("to_date");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_expedition_roster");
+
+                    b.HasIndex("CaverId")
+                        .HasDatabaseName("ix_expedition_roster_caver_id");
+
+                    b.HasIndex("ExpeditionId")
+                        .HasDatabaseName("ix_expedition_roster_expedition_id");
+
+                    b.HasIndex("RoleId")
+                        .HasDatabaseName("ix_expedition_roster_role_id");
+
+                    b.ToTable("expedition_roster", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_expedition_roster_dates", "to_date IS NULL OR to_date > from_date");
+                        });
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ExpeditionRosterRole", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_expedition_roster_roles");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_expedition_roster_roles_code");
+
+                    b.ToTable("expedition_roster_roles", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ExpeditionTrip", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("ExpeditionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("expedition_id");
+
+                    b.Property<DateTimeOffset>("JoinedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("joined_at");
+
+                    b.Property<Guid>("TripLogId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("trip_log_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_expedition_trips");
+
+                    b.HasIndex("ExpeditionId")
+                        .HasDatabaseName("ix_expedition_trips_expedition_id");
+
+                    b.HasIndex("TripLogId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_expedition_trips_trip_log_id");
+
+                    b.ToTable("expedition_trips", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Feature", b =>
@@ -3298,10 +3788,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(8000)")
                         .HasColumnName("body");
 
-                    b.Property<short>("Channel")
-                        .HasColumnType("smallint")
-                        .HasColumnName("channel");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -3337,7 +3823,81 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("message_templates", (string)null);
                 });
 
-            modelBuilder.Entity("SilexGis.Domain.Entities.NotificationOutboxEntry", b =>
+            modelBuilder.Entity("SilexGis.Domain.Entities.Notification", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<short>("Category")
+                        .HasColumnType("smallint")
+                        .HasColumnName("category");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Placeholders")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("placeholders")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<DateTimeOffset?>("ReadAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("read_at");
+
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recipient_user_id");
+
+                    b.Property<DateTimeOffset?>("RoutedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("routed_at");
+
+                    b.Property<Guid?>("TargetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_id");
+
+                    b.Property<short?>("TargetKind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("target_kind");
+
+                    b.Property<string>("TemplateKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("template_key");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notifications");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_notifications_created_at");
+
+                    b.HasIndex("Id")
+                        .HasDatabaseName("ix_notifications_unrouted")
+                        .HasFilter("routed_at IS NULL");
+
+                    b.HasIndex("RecipientUserId")
+                        .HasDatabaseName("ix_notifications_unread")
+                        .HasFilter("read_at IS NULL");
+
+                    b.HasIndex("RecipientUserId", "Id")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_notifications_recipient_user_id_id");
+
+                    b.ToTable("notifications", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_notifications_target_pair", "(target_kind IS NULL) = (target_id IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.NotificationDelivery", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -3350,9 +3910,9 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("attempts");
 
-                    b.Property<short>("Category")
+                    b.Property<short>("Channel")
                         .HasColumnType("smallint")
-                        .HasColumnName("category");
+                        .HasColumnName("channel");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -3367,12 +3927,13 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("not_before");
 
-                    b.Property<string>("Placeholders")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("placeholders")
-                        .HasDefaultValueSql("'{}'::jsonb");
+                    b.Property<long>("NotificationId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("notification_id");
+
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recipient_user_id");
 
                     b.Property<DateTimeOffset?>("SentAt")
                         .HasColumnType("timestamp with time zone")
@@ -3382,26 +3943,27 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("status");
 
-                    b.Property<string>("TemplateKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("template_key");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
                     b.HasKey("Id")
-                        .HasName("pk_notification_outbox");
+                        .HasName("pk_notification_deliveries");
 
-                    b.HasIndex("UserId", "Status")
-                        .HasDatabaseName("ix_notification_outbox_user_id_status");
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_notification_deliveries_pending_created_at")
+                        .HasFilter("status = 0");
+
+                    b.HasIndex("Channel", "CreatedAt")
+                        .HasDatabaseName("ix_notification_deliveries_channel_created_at");
+
+                    b.HasIndex("NotificationId", "Channel")
+                        .IsUnique()
+                        .HasDatabaseName("ix_notification_deliveries_notification_id_channel");
+
+                    b.HasIndex("RecipientUserId", "Status")
+                        .HasDatabaseName("ix_notification_deliveries_recipient_user_id_status");
 
                     b.HasIndex("Status", "NotBefore", "Id")
-                        .HasDatabaseName("ix_notification_outbox_status_not_before_id");
+                        .HasDatabaseName("ix_notification_deliveries_status_not_before_id");
 
-                    b.ToTable("notification_outbox", (string)null);
+                    b.ToTable("notification_deliveries", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.PermissionGroup", b =>
@@ -3657,6 +4219,9 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_processing_jobs");
+
+                    b.HasIndex("Kind", "CompletedAt")
+                        .HasDatabaseName("ix_processing_jobs_kind_completed_at");
 
                     b.HasIndex("Status", "Id")
                         .HasDatabaseName("ix_processing_jobs_status_id");
@@ -4533,11 +5098,150 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("text_search_languages", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.TripChecklistTick", b =>
+                {
+                    b.Property<Guid>("TripLogId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("trip_log_id");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<Guid>("ChecklistId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("checklist_id");
+
+                    b.Property<DateTimeOffset>("TickedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ticked_at");
+
+                    b.Property<Guid?>("TickedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticked_by_user_id");
+
+                    b.HasKey("TripLogId", "ItemId")
+                        .HasName("pk_trip_checklist_ticks");
+
+                    b.HasIndex("TickedByUserId")
+                        .HasDatabaseName("ix_trip_checklist_ticks_ticked_by_user_id");
+
+                    b.HasIndex("ChecklistId", "ItemId")
+                        .HasDatabaseName("ix_trip_checklist_ticks_checklist_id_item_id");
+
+                    b.HasIndex("TripLogId", "ChecklistId")
+                        .HasDatabaseName("ix_trip_checklist_ticks_trip_log_id_checklist_id");
+
+                    b.ToTable("trip_checklist_ticks", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TripInvitation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("CaverId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caver_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<DateTimeOffset?>("InvitedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("invited_at");
+
+                    b.Property<Guid?>("InvitedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invited_by_user_id");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<DateTimeOffset?>("RespondedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("responded_at");
+
+                    b.Property<Guid?>("RespondedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("responded_by_user_id");
+
+                    b.Property<short>("Response")
+                        .HasColumnType("smallint")
+                        .HasColumnName("response");
+
+                    b.Property<DateTimeOffset?>("SelectedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("selected_at");
+
+                    b.Property<Guid?>("TripLogId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("trip_log_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_trip_invitations");
+
+                    b.HasIndex("CaverId")
+                        .HasDatabaseName("ix_trip_invitations_caver_id");
+
+                    b.HasIndex("EventId")
+                        .HasDatabaseName("ix_trip_invitations_event_id");
+
+                    b.HasIndex("InvitedByUserId")
+                        .HasDatabaseName("ix_trip_invitations_invited_by_user_id");
+
+                    b.HasIndex("RespondedByUserId")
+                        .HasDatabaseName("ix_trip_invitations_responded_by_user_id");
+
+                    b.HasIndex("TripLogId")
+                        .HasDatabaseName("ix_trip_invitations_trip_log_id");
+
+                    b.HasIndex("EventId", "CaverId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_trip_invitations_event_id_caver_id")
+                        .HasFilter("event_id IS NOT NULL");
+
+                    b.HasIndex("TripLogId", "CaverId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_trip_invitations_trip_log_id_caver_id")
+                        .HasFilter("trip_log_id IS NOT NULL");
+
+                    b.ToTable("trip_invitations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_trip_invitations_one_subject", "(trip_log_id IS NOT NULL AND event_id IS NULL) OR (trip_log_id IS NULL AND event_id IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.TripLog", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("CalloutAlarmAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("callout_alarm_at");
+
+                    b.Property<short>("CalloutState")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((short)0)
+                        .HasColumnName("callout_state");
 
                     b.Property<Guid?>("CavingGroupId")
                         .HasColumnType("uuid")
@@ -4563,6 +5267,10 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<TimeOnly?>("ExitTime")
                         .HasColumnType("time without time zone")
                         .HasColumnName("exit_time");
+
+                    b.Property<DateTimeOffset?>("ExpectedReturnAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expected_return_at");
 
                     b.Property<string>("FieldData")
                         .IsRequired()
@@ -4606,6 +5314,14 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("logistics_schema_version");
 
+                    b.Property<int?>("MaxParticipants")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_participants");
+
+                    b.Property<Geometry>("MeetingGeom")
+                        .HasColumnType("geometry(Geometry, 4326)")
+                        .HasColumnName("meeting_geom");
+
                     b.Property<Guid?>("OrganizingCavingGroupId")
                         .HasColumnType("uuid")
                         .HasColumnName("organizing_caving_group_id");
@@ -4613,6 +5329,10 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<Guid>("OwnerUserId")
                         .HasColumnType("uuid")
                         .HasColumnName("owner_user_id");
+
+                    b.Property<DateTimeOffset?>("PlanReminderSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("plan_reminder_sent_at");
 
                     b.Property<DateTimeOffset?>("PublishedAt")
                         .HasColumnType("timestamp with time zone")
@@ -4688,6 +5408,11 @@ namespace SilexGis.Infrastructure.Migrations
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geom"), "gist");
 
+                    b.HasIndex("MeetingGeom")
+                        .HasDatabaseName("ix_trip_logs_meeting_geom");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("MeetingGeom"), "gist");
+
                     b.HasIndex("OrganizingCavingGroupId")
                         .HasDatabaseName("ix_trip_logs_organizing_caving_group_id");
 
@@ -4699,6 +5424,9 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("TripTypeId")
                         .HasDatabaseName("ix_trip_logs_trip_type_id");
+
+                    b.HasIndex("CalloutState", "CalloutAlarmAt")
+                        .HasDatabaseName("ix_trip_logs_callout_state_callout_alarm_at");
 
                     b.ToTable("trip_logs", (string)null);
                 });
@@ -4825,6 +5553,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_default");
 
+                    b.Property<short>("Kind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("kind");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)
@@ -4838,7 +5570,7 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_trip_report_templates");
 
-                    b.HasIndex("IsDefault")
+                    b.HasIndex("Kind", "IsDefault")
                         .IsUnique()
                         .HasDatabaseName("ux_trip_report_templates_default")
                         .HasFilter("is_default");
@@ -4864,6 +5596,10 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<Guid?>("DefaultChecklistId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("default_checklist_id");
 
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
@@ -4920,6 +5656,9 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("Code")
                         .IsUnique()
                         .HasDatabaseName("ix_trip_types_code");
+
+                    b.HasIndex("DefaultChecklistId")
+                        .HasDatabaseName("ix_trip_types_default_checklist_id");
 
                     b.ToTable("trip_types", (string)null);
                 });
@@ -5277,13 +6016,17 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("category");
 
+                    b.Property<short>("Channel")
+                        .HasColumnType("smallint")
+                        .HasColumnName("channel");
+
+                    b.Property<short>("Choice")
+                        .HasColumnType("smallint")
+                        .HasColumnName("choice");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
-
-                    b.Property<bool>("Enabled")
-                        .HasColumnType("boolean")
-                        .HasColumnName("enabled");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -5296,11 +6039,14 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_user_notification_preferences");
 
-                    b.HasIndex("UserId", "Category")
+                    b.HasIndex("UserId", "Category", "Channel")
                         .IsUnique()
-                        .HasDatabaseName("ix_user_notification_preferences_user_id_category");
+                        .HasDatabaseName("ix_user_notification_preferences_user_id_category_channel");
 
-                    b.ToTable("user_notification_preferences", (string)null);
+                    b.ToTable("user_notification_preferences", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_user_notification_preferences_one_channel", "channel > 0 AND (channel & (channel - 1)) = 0");
+                        });
                 });
 
             modelBuilder.Entity("SilexGis.Infrastructure.Identity.SilexGisRole", b =>
@@ -5441,16 +6187,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("normalized_user_name");
 
-                    b.Property<short>("NotifyDigest")
-                        .HasColumnType("smallint")
-                        .HasColumnName("notify_digest");
-
-                    b.Property<bool>("NotifyEmailEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("notify_email_enabled");
-
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text")
                         .HasColumnName("password_hash");
@@ -5468,10 +6204,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
                         .HasColumnName("pending_phone_number");
-
-                    b.Property<DateTimeOffset?>("PendingPhoneRequestedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("pending_phone_requested_at");
 
                     b.Property<string>("PhoneNumber")
                         .HasColumnType("text")
@@ -5500,6 +6232,11 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<long?>("StorageQuotaBytes")
                         .HasColumnType("bigint")
                         .HasColumnName("storage_quota_bytes");
+
+                    b.Property<string>("TimeZone")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("time_zone");
 
                     b.Property<bool>("TwoFactorAuthenticatorEnabled")
                         .HasColumnType("boolean")
@@ -5549,6 +6286,11 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
+
+                    b.HasIndex("PhoneNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ix_users_phone_number")
+                        .HasFilter("phone_number IS NOT NULL");
 
                     b.ToTable("users", null, t =>
                         {
@@ -5653,6 +6395,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasForeignKey("GrantedBy")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_access_entries_users_granted_by");
+
+                    b.HasOne("SilexGis.Domain.Entities.Expedition", null)
+                        .WithMany()
+                        .HasForeignKey("GrantedViaExpeditionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_access_entries_expeditions_granted_via_expedition_id");
 
                     b.HasOne("SilexGis.Domain.Entities.PermissionGroup", null)
                         .WithMany()
@@ -5848,6 +6596,16 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_cavers_users_user_id");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.CavingGroupAnnouncement", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_caving_group_announcements_caving_groups_caving_group_id");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.CavingGroupMembership", b =>
                 {
                     b.HasOne("SilexGis.Domain.Entities.Caver", null)
@@ -5889,6 +6647,32 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_centerlines_features_id_kind");
 
                     b.Navigation("Feature");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.Checklist", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_checklists_caving_groups_caving_group_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_checklists_users_owner_user_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ChecklistItem", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Checklist", null)
+                        .WithMany()
+                        .HasForeignKey("ChecklistId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_checklist_items_checklists_checklist_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Document", b =>
@@ -5987,6 +6771,79 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasForeignKey("UploadedBy")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_document_versions_users_uploaded_by");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.Event", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_events_caving_groups_caving_group_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_events_users_owner_user_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.Expedition", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_expeditions_caving_groups_caving_group_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_expeditions_users_owner_user_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ExpeditionRosterEntry", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Caver", null)
+                        .WithMany()
+                        .HasForeignKey("CaverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_expedition_roster_cavers_caver_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.Expedition", null)
+                        .WithMany()
+                        .HasForeignKey("ExpeditionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_expedition_roster_expeditions_expedition_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.ExpeditionRosterRole", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_expedition_roster_expedition_roster_roles_role_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.ExpeditionTrip", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Expedition", null)
+                        .WithMany()
+                        .HasForeignKey("ExpeditionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_expedition_trips_expeditions_expedition_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.TripLog", null)
+                        .WithMany()
+                        .HasForeignKey("TripLogId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_expedition_trips_trip_logs_trip_log_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Feature", b =>
@@ -6277,14 +7134,24 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_map_views_users_owner_user_id");
                 });
 
-            modelBuilder.Entity("SilexGis.Domain.Entities.NotificationOutboxEntry", b =>
+            modelBuilder.Entity("SilexGis.Domain.Entities.Notification", b =>
                 {
                     b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
                         .WithMany()
-                        .HasForeignKey("UserId")
+                        .HasForeignKey("RecipientUserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_notification_outbox_users_user_id");
+                        .HasConstraintName("fk_notifications_users_recipient_user_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.NotificationDelivery", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Notification", null)
+                        .WithMany()
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_deliveries_notifications_notification_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.PermissionGroupMember", b =>
@@ -6452,6 +7319,64 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_terrain_build_sources_terrain_builds_terrain_build_id");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.TripChecklistTick", b =>
+                {
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("TickedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_trip_checklist_ticks_users_ticked_by_user_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.TripLog", null)
+                        .WithMany()
+                        .HasForeignKey("TripLogId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_trip_checklist_ticks_trip_logs_trip_log_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.ChecklistItem", null)
+                        .WithMany()
+                        .HasForeignKey("ChecklistId", "ItemId")
+                        .HasPrincipalKey("ChecklistId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_trip_checklist_ticks_checklist_items_checklist_id_item_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TripInvitation", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Caver", null)
+                        .WithMany()
+                        .HasForeignKey("CaverId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_trip_invitations_cavers_caver_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.Event", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_trip_invitations_events_event_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("InvitedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_trip_invitations_users_invited_by_user_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("RespondedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_trip_invitations_users_responded_by_user_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.TripLog", null)
+                        .WithMany()
+                        .HasForeignKey("TripLogId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_trip_invitations_trip_logs_trip_log_id");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.TripLog", b =>
                 {
                     b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
@@ -6502,6 +7427,15 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_trip_log_participants_trip_logs_trip_log_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TripType", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Checklist", null)
+                        .WithMany()
+                        .HasForeignKey("DefaultChecklistId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_trip_types_checklists_default_checklist_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripTypeSchema", b =>

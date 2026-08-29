@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { ApiError, retryQuery } from './client.ts';
+import i18n from '../i18n';
+import { ApiError, retryQuery, sendsTheReadingLanguage } from './client.ts';
 
 describe('retryQuery', () => {
   it('gives up immediately on a client error', () => {
@@ -23,5 +24,25 @@ describe('retryQuery', () => {
   it('stops retrying a retryable failure after three attempts', () => {
     expect(retryQuery(2, new ApiError(500))).toBe(true);
     expect(retryQuery(3, new ApiError(500))).toBe(false);
+  });
+});
+
+describe('the language every request is made in', () => {
+  /** What the middleware installed on the client puts on a request while that language is read. */
+  async function headerSentWhileReadingIn(language: string) {
+    await i18n.changeLanguage(language);
+    // Absolute because a Request is being built outside a browser; the path is immaterial here.
+    const request = new Request('http://localhost/api/v1/notifications/unread-count');
+    sendsTheReadingLanguage.onRequest({ request });
+    return request.headers.get('Accept-Language');
+  }
+
+  it('is the one the reader chose here, not the one their browser was installed in', async () => {
+    // Some of what this client shows is written by the server — the lines in the inbox are — and
+    // the server reads this header before it reads the language the account last saved. Without
+    // it, somebody reading a Romanian site in an English browser gets the page chrome in Romanian
+    // and every line the server wrote in English, on the one screen.
+    expect(await headerSentWhileReadingIn('ro')).toBe('ro');
+    expect(await headerSentWhileReadingIn('en')).toBe('en');
   });
 });

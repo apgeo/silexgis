@@ -14,7 +14,12 @@
     <PackageReference Include="Shouldly" Version="4.3.0" />
     <!-- Transitive only: the version this graph would otherwise settle on carries known
          advisories, and the build treats the audit warning as an error. Pinned here rather
-         than in the product projects, which resolve a clean version on their own. -->
+         than in the product projects, which resolve a clean version on their own.
+         SSH.NET arrives under the container library, which asks for 2025.1.0 — a version
+         carrying a high-severity advisory. No code in this project calls it; removing the
+         reference as "unused" breaks the restore, for a reason nothing near the removal
+         explains. It goes when the container library's own floor moves past the advisory. -->
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
     <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.10" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.14.0" />
     <PackageReference Include="xunit" Version="2.9.3" />

@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
-import { BarChartOutlined, DeleteOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons';
 import {
+  BarChartOutlined,
+  DeleteOutlined,
+  NotificationOutlined,
+  PlusOutlined,
+  TeamOutlined,
+} from '@ant-design/icons';
+import {
+  Alert,
   App,
   Button,
   Drawer,
@@ -11,6 +18,7 @@ import {
   Modal,
   Popconfirm,
   Select,
+  Skeleton,
   Table,
   Tag,
   Typography,
@@ -19,8 +27,10 @@ import List from '../../components/List.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import { useTranslation } from 'react-i18next';
 import {
+  useAnnounceToCavingGroup,
   useCan,
   useCavers,
+  useCavingGroupAnnouncementAudience,
   useCreateCavingGroup,
   useRemoveCavingGroupMember,
   useCavingGroupMembers,
@@ -125,6 +135,150 @@ function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () 
   );
 }
 
+/** How long a notice may be, matching what the server refuses past. */
+const MAX_ANNOUNCEMENT_LENGTH = 200;
+
+/**
+ * Writing to everyone on a caving group's roster.
+ *
+ * Three things this has that an ordinary form does not, and each is here because the act is a
+ * broadcast rather than an edit. **The size of the audience is shown before anything is written**,
+ * counted by the server over the same roster the send itself reads — a person about to tell two
+ * hundred people something should see two hundred while they can still change their mind.
+ * **Sending is a second, deliberate act**: the first button only moves to a step that repeats the
+ * wording back and names the number, so a broadcast is never one careless click. And **what
+ * actually happened is shown afterwards**, including the case where a club is large enough that
+ * the notices are still being written when the answer comes back — otherwise the sender is left
+ * wondering why nobody has replied.
+ */
+function AnnounceDialog({ group, onClose }: { group: CavingGroupInfo; onClose: () => void }) {
+  const { t } = useTranslation();
+  const { data: audience, isPending: counting } = useCavingGroupAnnouncementAudience(group.id);
+  const announce = useAnnounceToCavingGroup(group.id);
+  const [message, setMessage] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [sent, setSent] = useState<{ recipients: number; queued: boolean } | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  const written = message.trim();
+  const recipients = audience?.recipients ?? 0;
+
+  const send = async () => {
+    setFailed(false);
+    try {
+      const result = await announce.mutateAsync({ message: written });
+      setSent({ recipients: result.recipients, queued: result.queued });
+    } catch {
+      setFailed(true);
+    }
+  };
+
+  const footer = sent
+    ? [
+        <Button key="close" type="primary" onClick={onClose}>
+          {t('common.close')}
+        </Button>,
+      ]
+    : confirming
+      ? [
+          <Button key="back" onClick={() => setConfirming(false)}>
+            {t('common.back')}
+          </Button>,
+          <Button key="send" type="primary" loading={announce.isPending} onClick={() => void send()}>
+            {t('cavingGroups.announce.send')}
+          </Button>,
+        ]
+      : [
+          <Button key="cancel" onClick={onClose}>
+            {t('common.cancel')}
+          </Button>,
+          <Button
+            key="continue"
+            type="primary"
+            disabled={written.length === 0 || recipients === 0}
+            onClick={() => setConfirming(true)}
+          >
+            {t('common.continue')}
+          </Button>,
+        ];
+
+  return (
+    <Modal
+      title={t('cavingGroups.announce.title', { name: group.name })}
+      open
+      onCancel={onClose}
+      footer={footer}
+      destroyOnHidden
+    >
+      {sent ? (
+        <Alert
+          type="success"
+          showIcon
+          data-testid="announcement-result"
+          title={
+            sent.queued
+              ? t('cavingGroups.announce.queued', { people: sent.recipients })
+              : t('cavingGroups.announce.done', { people: sent.recipients })
+          }
+        />
+      ) : (
+        <>
+          {/* The count first, and before anything is typed: it is the fact that decides whether
+              this should be written at all, and putting it under the box would show it after the
+              decision had already been made. */}
+          {counting ? (
+            <Skeleton.Input active size="small" style={{ marginBottom: 12 }} />
+          ) : (
+            <Alert
+              type={recipients === 0 ? 'warning' : 'info'}
+              showIcon
+              data-testid="announcement-audience"
+              style={{ marginBottom: 12 }}
+              title={
+                recipients === 0
+                  ? t('cavingGroups.announce.nobody')
+                  : t('cavingGroups.announce.reaches', { people: recipients })
+              }
+              description={recipients === 0 ? undefined : t('cavingGroups.announce.reachesHint')}
+            />
+          )}
+
+          {confirming ? (
+            <>
+              <Typography.Paragraph strong>
+                {t('cavingGroups.announce.confirm')}
+              </Typography.Paragraph>
+              {/* Repeated back rather than left in an editable box: the step exists to be read,
+                  and a field that still looks editable invites another glance at the keyboard
+                  instead of at the words. */}
+              <Typography.Paragraph type="secondary">"{written}"</Typography.Paragraph>
+            </>
+          ) : (
+            <Input.TextArea
+              rows={3}
+              value={message}
+              maxLength={MAX_ANNOUNCEMENT_LENGTH}
+              showCount
+              aria-label={t('cavingGroups.announce.message')}
+              placeholder={t('cavingGroups.announce.placeholder')}
+              onChange={(event) => setMessage(event.target.value.replace(/[\r\n]+/g, ' '))}
+            />
+          )}
+
+          {failed && (
+            <Alert
+              type="error"
+              showIcon
+              style={{ marginTop: 12 }}
+              title={t('cavingGroups.announce.failed')}
+            />
+          )}
+        </>
+      )}
+    </Modal>
+  );
+}
+
 /** CavingGroups directory: browse for everyone, create for managers, manage members inline. */
 export default function CavingGroupsPage() {
   const { t } = useTranslation();
@@ -134,6 +288,7 @@ export default function CavingGroupsPage() {
   const [creating, setCreating] = useState(false);
   const [managing, setManaging] = useState<CavingGroupInfo | null>(null);
   const [counting, setCounting] = useState<CavingGroupInfo | null>(null);
+  const [announcing, setAnnouncing] = useState<CavingGroupInfo | null>(null);
   const [form] = Form.useForm<{
     name: string;
     type: CavingGroupInfo['type'];
@@ -199,7 +354,7 @@ export default function CavingGroupsPage() {
           {
             title: '',
             key: 'actions',
-            width: 260,
+            width: 380,
             render: (_, group) => (
               <Flex gap={8}>
                 <Button size="small" onClick={() => setManaging(group)}>
@@ -210,6 +365,19 @@ export default function CavingGroupsPage() {
                 <Button size="small" icon={<BarChartOutlined />} onClick={() => setCounting(group)}>
                   {t('statistics.open')}
                 </Button>
+                {/* Offered per club rather than from the account's domain-wide rights: the right
+                    to write to a roster can be given for one club and not another, and a check
+                    that names no club cannot see such a rule at all. The server answers it per
+                    row for exactly this. */}
+                {group.canAnnounce && (
+                  <Button
+                    size="small"
+                    icon={<NotificationOutlined />}
+                    onClick={() => setAnnouncing(group)}
+                  >
+                    {t('cavingGroups.announce.open')}
+                  </Button>
+                )}
               </Flex>
             ),
           },
@@ -246,6 +414,10 @@ export default function CavingGroupsPage() {
       </Modal>
 
       {managing && <MemberDrawer group={managing} onClose={() => setManaging(null)} />}
+
+      {announcing && (
+        <AnnounceDialog group={announcing} onClose={() => setAnnouncing(null)} />
+      )}
 
       <Drawer
         title={counting?.name}

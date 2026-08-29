@@ -109,17 +109,24 @@ public sealed class TripReportDocumentTests : IAsyncLifetime, IDisposable
         var readersCopy = await DocumentTextAsync(reader, tripId);
         readersCopy.ShouldContain(open.Name);
         readersCopy.ShouldNotContain(guarded.Name);
+        readersCopy.ShouldNotContain(guarded.Id.ToString());
+
+        // Said, not silently dropped — and said only to the copy it applies to.
+        readersCopy.ShouldContain("1 cave not shown to you");
+        ownersCopy.ShouldNotContain("not shown to you");
     }
 
     /// <summary>
-    /// A cave this reader may not open is not named in the document they are handed, even though
-    /// the trip they may read names it.
+    /// A cave this reader may not open is neither named nor identified in the document they are
+    /// handed, even though the trip they may read names it.
     /// </summary>
     /// <remarks>
     /// The trip's list of caves says which caves the trip was about; it is not a right to read
-    /// those caves. On the screen an unreadable one is a bare identifier, because the page asks
-    /// the cave itself and is refused — so a document that named it would be stating something
-    /// the screen would not, which is the one thing a circulated file must never do.
+    /// those caves, and the identifier is not a lesser disclosure than the name — it is the one
+    /// thing that can be handed to any surface that takes an identifier and turned back into the
+    /// cave. So the identifier goes with the name, and the document says how many caves it is
+    /// not showing rather than listing fewer and letting the difference between two people's
+    /// copies read as a trip that went to fewer places.
     /// </remarks>
     [Fact]
     public async Task A_cave_this_reader_may_not_open_is_not_named_in_the_document_they_are_handed()
@@ -128,17 +135,21 @@ public sealed class TripReportDocumentTests : IAsyncLifetime, IDisposable
         var open = await CreateCaveAsync(locationProtected: false);
         var tripId = await CreateTripAsync(body => body["caveIds"] = new[] { hidden.Id, open.Id });
 
-        // What the screen does with it: the trip names the cave, and asking for the cave is
-        // refused, so the page has nothing but the identifier to print.
+        // The fixture, stated rather than assumed: this reader genuinely cannot open the cave,
+        // and can open the other one, so the two halves below differ by the rule and nothing else.
         (await reader.GetAsync($"/api/v1/caves/{hidden.Id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.GetAsync($"/api/v1/caves/{open.Id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var ownersCopy = await DocumentTextAsync(owner, tripId);
         ownersCopy.ShouldContain(hidden.Name);
         ownersCopy.ShouldContain(open.Name);
+        ownersCopy.ShouldNotContain("not shown to you");
 
         var readersCopy = await DocumentTextAsync(reader, tripId);
         readersCopy.ShouldContain(open.Name);
         readersCopy.ShouldNotContain(hidden.Name);
+        readersCopy.ShouldNotContain(hidden.Id.ToString());
+        readersCopy.ShouldContain("1 cave not shown to you");
     }
 
     /// <summary>

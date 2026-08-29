@@ -420,5 +420,146 @@ public sealed class PerformanceTests : IDisposable
             + $"in {stopwatch.ElapsedMilliseconds} ms");
     }
 
+    /// <summary>
+    /// What a caller pays, on every request, for rules written onto one row at a time.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Sharing a camp writes one rule onto each trip the camp gathered, so a club that has been
+    /// lent three fortnight camps of forty trips holds a hundred and twenty such rules. Every
+    /// one of them is read back on every request that camp's grantees make — the whole set the
+    /// caller holds is loaded once, flattened into an id array per domain and action, and that
+    /// array is spliced into every statement that lists trips: the list itself, the dashboard,
+    /// the map, search, statistics, the leads board and the timeline.
+    /// </para>
+    /// <para>
+    /// Two costs, measured separately because they are paid in different places: loading and
+    /// materialising the rows (once per request) and carrying the array through the guard
+    /// (once per statement). Both are logged; what is asserted is the durable property — the
+    /// ids ride as ONE native uuid[] parameter, not as a hundred and twenty placeholders, and
+    /// the guard's shape does not change with the size of the set.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Rules_written_onto_single_trips_ride_one_array_into_every_trip_query()
+    {
+        const int TripCount = 2000;
+        const int CampSize = 40;
+        const int Camps = 3;
+
+        var ownerId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Editor, $"cost-own-{Guid.NewGuid():N}@t.local");
+        // Holds nothing anywhere except the rules the camps wrote: a Viewer, because the
+        // seeded Editors ruleset reads trips at the all-scope and would carry no ids at all.
+        var holderId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Viewer, $"cost-hold-{Guid.NewGuid():N}@t.local");
+        var emptyHandedId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Viewer, $"cost-none-{Guid.NewGuid():N}@t.local");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var connection = db.Database.GetDbConnection();
+
+        var tripIds = new List<Guid>(TripCount);
+        for (var i = 0; i < TripCount; i++)
+        {
+            var trip = new TripLog
+            {
+                Title = $"Cost trip {i}",
+                TripDate = new DateOnly(2026, 1, 1).AddDays(i % 365),
+                OwnerUserId = ownerId,
+                Visibility = Visibility.Private,
+            };
+            tripIds.Add(trip.Id);
+            db.TripLogs.Add(trip);
+        }
+
+        for (var i = 0; i < Camps * CampSize; i++)
+        {
+            db.AccessEntries.Add(new AccessEntry
+            {
+                SubjectKind = AccessSubjectKind.User,
+                SubjectId = holderId,
+                Effect = AccessEffect.Allow,
+                Domain = AccessDomain.TripLogs,
+                Actions = AccessAction.Read,
+                ScopeKind = AccessScopeKind.Object,
+                ScopeId = tripIds[i],
+            });
+        }
+
+        await db.SaveChangesAsync();
+        await db.Database.ExecuteSqlRawAsync("ANALYZE trip_logs; ANALYZE access_entries;");
+
+        var bare = await MeasureResolveAsync(db, emptyHandedId);
+        var loaded = await MeasureResolveAsync(db, holderId);
+        output.WriteLine(
+            $"context resolve: holding nothing {bare} ms, holding {Camps * CampSize} "
+            + $"object rules {loaded} ms");
+
+        var bareCtx = await AccessContextResolver.ResolveAsync(db, emptyHandedId);
+        var loadedCtx = await AccessContextResolver.ResolveAsync(db, holderId);
+        loadedCtx.For(AccessDomain.TripLogs, AccessAction.Read).AllowObjectIds.Length
+            .ShouldBe(Camps * CampSize, "every rule the camps wrote is carried into the filter");
+
+        var (bareSql, bareParameters) = AccessSql.VisibleToFragment(bareCtx, AccessDomain.TripLogs, "t");
+        var (loadedSql, loadedParameters) = AccessSql.VisibleToFragment(loadedCtx, AccessDomain.TripLogs, "t");
+
+        loadedSql.ShouldContain("= ANY(@acc_r_allow_obj)", Case.Sensitive,
+            "the ids must arrive as one native array parameter — expanded into a placeholder "
+            + "each, the ANY test was measured 50x slower");
+
+        // The set grows the array, never the statement. A caller holding one such rule and a
+        // caller holding a hundred and twenty send PostgreSQL the same text, so the plan is
+        // cached once and the ids are data. (The caller holding none sends a shorter one: the
+        // guard drops to its lean shape when there is nothing to consult, which is the point
+        // of that branch and not a regression.)
+        var singleCtx = new AccessContext(holderId, false, [],
+        [
+            new AccessEntrySnapshot(1, null, AccessSubjectKind.User, holderId, AccessEffect.Allow,
+                AccessDomain.TripLogs, AccessAction.Read, AccessScopeKind.Object, null, tripIds[0], null, null),
+        ]);
+        var (singleSql, _) = AccessSql.VisibleToFragment(singleCtx, AccessDomain.TripLogs, "t");
+        loadedSql.Length.ShouldBe(singleSql.Length,
+            "the statement's shape is the same whatever the set holds; only the array grows");
+
+        var bareCount = $"SELECT count(*) FROM trip_logs t WHERE {bareSql}";
+        var loadedCount = $"SELECT count(*) FROM trip_logs t WHERE {loadedSql}";
+        await ExplainAsync(connection, bareParameters, "trips (guarded, no object rules)", bareCount);
+        await ExplainAsync(
+            connection, loadedParameters, $"trips (guarded, {Camps * CampSize} object rules)", loadedCount);
+
+        var withoutMs = await MeasureQueryAsync(connection, bareParameters, bareCount);
+        var withMs = await MeasureQueryAsync(connection, loadedParameters, loadedCount);
+        output.WriteLine(
+            $"trip count over {TripCount} rows: no object rules {withoutMs} ms, "
+            + $"{Camps * CampSize} object rules {withMs} ms");
+    }
+
+    private static async Task<double> MeasureResolveAsync(SilexGisDbContext db, Guid userId)
+    {
+        await AccessContextResolver.ResolveAsync(db, userId);
+        var stopwatch = Stopwatch.StartNew();
+        for (var i = 0; i < 10; i++)
+        {
+            await AccessContextResolver.ResolveAsync(db, userId);
+        }
+
+        return Math.Round(stopwatch.Elapsed.TotalMilliseconds / 10, 2);
+    }
+
+    private static async Task<double> MeasureQueryAsync(
+        DbConnection connection, DynamicParameters parameters, string sql)
+    {
+        await connection.ExecuteScalarAsync<long>(sql, parameters);
+        var stopwatch = Stopwatch.StartNew();
+        for (var i = 0; i < 10; i++)
+        {
+            await connection.ExecuteScalarAsync<long>(sql, parameters);
+        }
+
+        return Math.Round(stopwatch.Elapsed.TotalMilliseconds / 10, 2);
+    }
+
     public void Dispose() => factory.Dispose();
 }

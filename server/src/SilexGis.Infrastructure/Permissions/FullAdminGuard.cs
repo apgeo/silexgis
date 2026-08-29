@@ -39,41 +39,19 @@ public sealed class FullAdminGuard(SilexGisDbContext db)
          select membership.Id)
         .AnyAsync(ct);
 
+    /// <summary>
+    /// Whether any account holding full administration can actually sign in. Answered from the
+    /// one query that defines that membership, so the guard and everything else that needs the
+    /// same audience cannot answer the question differently.
+    /// </summary>
     public async Task<bool> AnyLiveFullAdminAsync(CancellationToken ct = default)
     {
-        var fullAdminsId = await db.PermissionGroups.AsNoTracking()
-            .Where(g => g.Slug == SeededPermissionGroups.FullAdministratorsSlug)
-            .Select(g => (Guid?)g.Id)
-            .FirstOrDefaultAsync(ct);
-        if (fullAdminsId is null)
+        if (await FullAdministrators.GroupIdAsync(db, ct) is not { } fullAdminsId)
         {
             // Not seeded yet (first boot mid-seed) — nothing to guard.
             return true;
         }
 
-        var now = DateTimeOffset.UtcNow;
-        var liveUsers = db.Users.AsNoTracking()
-            .Where(u => u.LockoutEnd == null || u.LockoutEnd <= now);
-
-        var direct = await db.PermissionGroupMembers.AsNoTracking()
-            .Where(m => m.PermissionGroupId == fullAdminsId && m.MemberKind == AccessSubjectKind.User)
-            .Join(liveUsers, m => m.MemberId, u => u.Id, (m, u) => u.Id)
-            .AnyAsync(ct);
-        if (direct)
-        {
-            return true;
-        }
-
-        return await (
-            from member in db.PermissionGroupMembers.AsNoTracking()
-            where member.PermissionGroupId == fullAdminsId
-                && member.MemberKind == AccessSubjectKind.CavingGroup
-            join membership in db.CavingGroupMemberships.AsNoTracking()
-                on member.MemberId equals membership.CavingGroupId
-            join caver in db.Cavers.AsNoTracking() on membership.CaverId equals caver.Id
-            where caver.UserId != null
-            join user in liveUsers on caver.UserId!.Value equals user.Id
-            select user.Id)
-            .AnyAsync(ct);
+        return await FullAdministrators.LiveMemberIds(db, fullAdminsId).AnyAsync(ct);
     }
 }

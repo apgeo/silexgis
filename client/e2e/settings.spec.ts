@@ -101,14 +101,42 @@ test.describe('settings', () => {
       .click();
   });
 
-  test('turning notification email off disables the per-category switches', async ({ page }) => {
+  test('the notification matrix is per channel, locks what cannot be switched off, and says when a category reaches nobody', async ({
+    page,
+  }) => {
     await page.goto('/settings/notifications');
 
-    const master = page.getByLabel('Notify me by email');
-    await expect(master).toBeVisible({ timeout: 15_000 });
-    await master.click();
+    // A category nobody may switch off is locked on every channel it has, rather than being a
+    // switch that springs back after the server refuses it.
+    const alertsInApp = page.getByTestId('pref-securityAlerts-inApp').getByRole('switch');
+    await expect(alertsInApp).toBeVisible({ timeout: 15_000 });
+    await expect(alertsInApp).toBeDisabled();
 
-    const securityAlerts = page.getByLabel('Security alerts');
-    await expect(securityAlerts).toBeDisabled();
+    // Mail is a choice of three, and in-app a switch, because only one of them can hold a day's
+    // worth of messages back.
+    const planningMail = page.getByTestId('pref-tripPlanning-email');
+    await expect(planningMail.getByText('Daily summary')).toBeVisible();
+    const planningInApp = page.getByTestId('pref-tripPlanning-inApp').getByRole('switch');
+    await expect(planningInApp).toBeEnabled();
+
+    // The development installation has no mail server, so the mail column says so rather than
+    // offering a choice that would quietly do nothing.
+    await expect(page.getByRole('columnheader', { name: 'Email' }).getByText('not set up')).toBeVisible();
+
+    // Switching every channel of one category off is allowed, and is said out loud the moment it
+    // happens rather than after a save.
+    const row = page.getByRole('row').filter({ hasText: 'I am invited to a trip' });
+    await expect(row.getByText('This will not reach you anywhere.')).toBeHidden();
+    await planningMail.getByText('Off', { exact: true }).click();
+    if (await planningInApp.isChecked()) {
+      await planningInApp.click();
+    }
+    await expect(row.getByText('This will not reach you anywhere.')).toBeVisible();
+
+    // Put it back, since the dev database persists between runs.
+    await planningInApp.click();
+    await planningMail.getByText('As it happens', { exact: true }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('Saved.', { exact: true })).toBeVisible();
   });
 });

@@ -126,6 +126,39 @@ public sealed class AuthFlowTests : IDisposable
     }
 
     [Fact]
+    public async Task Userinfo_never_names_an_account_by_its_email_address()
+    {
+        // Registration sets the user name to the address, so an account that chose no display
+        // name has nothing but the address to be named by — and the name claims must still
+        // refuse to be it. The address is not hidden from the caller: it travels in the email
+        // claim, which the email scope gates and the SPA does request.
+        var anonymousEmail = $"noname-{Guid.NewGuid():N}@test.local";
+        (await CreateClient().PostAsJsonAsync(
+            "/api/v1/auth/register", new { email = anonymousEmail, password = "a-long-password-1" }))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var anonymous = await UserInfoAsync(anonymousEmail, "a-long-password-1");
+
+        anonymous.GetProperty("name").GetString()!.ShouldNotContain("@");
+        anonymous.GetProperty("preferred_username").GetString()!.ShouldNotContain("@");
+        anonymous.GetProperty("name").GetString()!.ShouldStartWith("user-");
+        anonymous.GetProperty("preferred_username").GetString()!.ShouldStartWith("user-");
+        anonymous.GetProperty("email").GetString().ShouldBe(anonymousEmail);
+
+        // The positive half, in the same test: an account that did choose a name is called by it.
+        var namedEmail = $"named-{Guid.NewGuid():N}@test.local";
+        (await CreateClient().PostAsJsonAsync(
+            "/api/v1/auth/register",
+            new { email = namedEmail, password = "a-long-password-1", displayName = "Ana Pop" }))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var named = await UserInfoAsync(namedEmail, "a-long-password-1");
+
+        named.GetProperty("name").GetString().ShouldBe("Ana Pop");
+        named.GetProperty("preferred_username").GetString().ShouldBe("Ana Pop");
+    }
+
+    [Fact]
     public async Task Register_creates_account_that_can_sign_in_when_enabled()
     {
         var client = CreateClient();
@@ -241,6 +274,30 @@ public sealed class AuthFlowTests : IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.OK, payload.ToString());
         return (payload.GetProperty("access_token").GetString()!,
                 payload.GetProperty("refresh_token").GetString()!);
+    }
+
+    /// <summary>Signs in, walks the whole code+PKCE flow, and reads back the userinfo document.</summary>
+    private async Task<JsonElement> UserInfoAsync(string email, string password)
+    {
+        var client = CreateClient();
+        (await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var pkce = CreatePkce();
+        var authorize = await client.GetAsync(BuildAuthorizeUrl(pkce.Challenge));
+        authorize.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        var code = QueryHelpers.ParseQuery(authorize.Headers.Location!.Query)["code"].ToString();
+
+        var tokens = await ExchangeAsync(client, new Dictionary<string, string>
+        {
+            ["grant_type"] = "authorization_code",
+            ["code"] = code,
+            ["redirect_uri"] = "http://localhost/auth/callback",
+            ["client_id"] = "silexgis-spa",
+            ["code_verifier"] = pkce.Verifier,
+        });
+
+        return await GetJsonAsync(client, tokens.AccessToken, "/connect/userinfo");
     }
 
     private static Task<JsonElement> GetMeAsync(HttpClient client, string accessToken) =>

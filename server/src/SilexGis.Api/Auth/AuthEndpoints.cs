@@ -259,19 +259,20 @@ public static class AuthEndpoints
             return AuthProblem(StatusCodes.Status400BadRequest, "auth.reset_invalid", "The reset token is invalid or expired.");
         }
 
+        // The reset path is the one an attacker holding a stolen mailbox would use, so it warns
+        // exactly as the signed-in change does — and, like that one, queues the warning before the
+        // change so the Identity store's own save commits both or neither. A rejected token never
+        // reaches that save, so the tracked row is discarded with the request.
+        NotificationQueue.Enqueue(
+            db, user.Id, NotificationCategory.SecurityAlerts,
+            MessageTemplateCatalog.NotifySecurityPasswordChanged,
+            new Dictionary<string, string>());
+
         var result = await userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
         if (!result.Succeeded)
         {
             return AuthProblem(StatusCodes.Status400BadRequest, "auth.reset_invalid", "The reset token is invalid or expired.");
         }
-
-        // The reset path is the one an attacker holding a stolen mailbox would use, so it warns
-        // exactly as the signed-in change does.
-        NotificationQueue.Enqueue(
-            db, user.Id, NotificationCategory.SecurityAlerts,
-            MessageTemplateCatalog.NotifySecurityPasswordChanged,
-            new Dictionary<string, string>());
-        await db.SaveChangesAsync(ct);
 
         return TypedResults.NoContent();
     }

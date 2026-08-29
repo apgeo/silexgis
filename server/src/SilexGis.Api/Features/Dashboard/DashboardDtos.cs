@@ -20,6 +20,9 @@ public enum DashboardActivityKind
     Centerline = 3,
 
     TripLog = 4,
+
+    /// <summary>A camp — the thing a fortnight of trips is gathered under.</summary>
+    Expedition = 5,
 }
 
 /// <summary>

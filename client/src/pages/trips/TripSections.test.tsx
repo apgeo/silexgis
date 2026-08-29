@@ -25,9 +25,22 @@ const safetySchema = JSON.stringify({
     },
   },
 });
+// The planning half of the shipped logistics schema, in the shapes it ships them in: what a
+// party settles before it sets off is asked here rather than in columns of its own, so this
+// card is the only place any of it can be filled in.
 const logisticsSchema = JSON.stringify({
   type: 'object',
   properties: {
+    meeting_time: { type: 'string', title: 'Meeting time' },
+    meeting_description: { type: 'string', title: 'Meeting point, described' },
+    transport_drivers: { type: 'string', title: 'Drivers' },
+    transport_seats: { type: 'integer', title: 'Seats available', minimum: 0 },
+    transport_departure: { type: 'string', title: 'Departure points' },
+    equipment_note: { type: 'string', title: 'Equipment and rigging' },
+    permit_required: { type: 'boolean', title: 'Permit required' },
+    permit_obtained: { type: 'boolean', title: 'Permit obtained' },
+    weather_note: { type: 'string', title: 'Weather note' },
+    whatsapp_group_url: { type: 'string', title: 'Group chat link' },
     permit_holder_caver_id: {
       type: 'string',
       title: 'Permit holder',
@@ -100,6 +113,18 @@ function show(subject: TripLogInfo, canEdit: boolean) {
   );
 }
 
+/**
+ * The editable element behind a field's test id. A control that is one element carries the id
+ * itself; one antd wraps carries it on the wrapper, and the element somebody types into is
+ * inside it.
+ */
+function inputOf(testId: string): HTMLInputElement {
+  const marked = screen.getByTestId(testId);
+  const input = marked instanceof HTMLInputElement ? marked : marked.querySelector('input');
+  expect(input).toBeTruthy();
+  return input as HTMLInputElement;
+}
+
 /** Opens a collapsed section by clicking its header. */
 function openSection(label: string) {
   fireEvent.click(screen.getByText(label));
@@ -141,6 +166,103 @@ describe('TripSections', () => {
     expect(body.caveIds).toBeNull();
   });
 
+  it("keeps the trip's room for people when a section is saved", async () => {
+    // The section save sends the whole trip, and it draws no control for the limit, so omitting
+    // it clears the trip's room for people. Nothing on screen would say so — an unlimited trip
+    // is what no limit means — while everybody who was waiting for a place is silently on it.
+    show(trip({ maxParticipants: 8, fieldData: { conditions: 'wet' } as never }), true);
+    openSection('Field data');
+
+    fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+
+    const body = (updateTrip.mock.calls[0][0] as { body: TripLogWrite }).body;
+    expect(body.maxParticipants).toBe(8);
+  });
+
+  it('carries the meeting point through a section save', async () => {
+    // Same shape of loss as the limit above, and quieter: this card draws no map at all, so a
+    // section saved without echoing the meeting point erases where the party was told to gather
+    // while showing nothing that changed.
+    const meetingGeom = {
+      type: 'Point',
+      coordinates: [25.44, 45.53],
+    } as unknown as TripLogInfo['meetingGeom'];
+    show(trip({ meetingGeom, fieldData: { conditions: 'wet' } as never }), true);
+    openSection('Field data');
+
+    fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+
+    const body = (updateTrip.mock.calls[0][0] as { body: TripLogWrite }).body;
+    expect(body.meetingGeom).toEqual(meetingGeom);
+  });
+
+  it('draws a control for every planning fact and sends what was filled in', async () => {
+    // A fact recorded in a section costs no column and no contract, but it is only a fact
+    // somebody can record if this card draws a control for it: the section surface is the whole
+    // of its user interface, and a key with no field is a fact nobody can state.
+    show(trip(), true);
+    openSection('Logistics');
+
+    const text: Record<string, string> = {
+      meeting_time: '07:30 sharp',
+      meeting_description: 'Layby past the last bridge',
+      transport_drivers: 'Ana and Radu',
+      transport_departure: 'Cluj and Turda',
+      equipment_note: 'Two 60 m ropes and a spare hanger set',
+      weather_note: 'Rain forecast from midday',
+      whatsapp_group_url: 'https://chat.example.invalid/g',
+    };
+    for (const [key, value] of Object.entries(text)) {
+      fireEvent.change(screen.getByTestId(`trip-section-field-${key}`), { target: { value } });
+    }
+
+    // A count is a number box and a settled question is a checkbox — the controls their declared
+    // shapes call for, not seven text boxes.
+    const seats = inputOf('trip-section-field-transport_seats');
+    fireEvent.change(seats, { target: { value: '7' } });
+    fireEvent.blur(seats);
+
+    fireEvent.click(inputOf('trip-section-field-permit_required'));
+
+    // Ticked in error and taken back — the state a person actually reaches when they change their
+    // mind. It has to end as absent and not as "no": on a plan, "the permit has not been
+    // obtained" and "nobody has said" are different states, and the second is the one a readiness
+    // check must not read as the first. A checkbox with no way back could only ever produce the
+    // first of the two once it had been touched.
+    fireEvent.click(inputOf('trip-section-field-permit_obtained'));
+    fireEvent.click(screen.getByTestId('trip-section-field-permit_obtained-clear'));
+
+    fireEvent.click(screen.getByTestId('trip-section-save-logistics'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+
+    const body = (updateTrip.mock.calls[0][0] as { body: TripLogWrite }).body;
+    expect(body.logistics).toEqual({ ...text, transport_seats: 7, permit_required: true });
+    expect(body.logistics).not.toHaveProperty('permit_obtained');
+  });
+
+  /**
+   * The other half of the same distinction, and the one that costs a stored key: a question
+   * answered "no" is written down as "no". Absent and false must both be reachable and must both
+   * survive the round trip, or the two states collapse into whichever the form can produce.
+   */
+  it('writes an answered "no" down, where an unanswered question is left out', async () => {
+    show(trip(), true);
+    openSection('Logistics');
+
+    // Ticked, then unticked: the person has now said "no", which is an answer.
+    const obtained = inputOf('trip-section-field-permit_obtained');
+    fireEvent.click(obtained);
+    fireEvent.click(obtained);
+
+    fireEvent.click(screen.getByTestId('trip-section-save-logistics'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+
+    const body = (updateTrip.mock.calls[0][0] as { body: TripLogWrite }).body;
+    expect(body.logistics).toEqual({ permit_obtained: false });
+  });
+
   it('shows a person the schema names by their name, and offers the roster rather than an identifier', () => {
     // Read-only first: an identifier is not a person, and a reader shown a raw one learns
     // nothing the field was recorded to tell them.
@@ -157,6 +279,147 @@ describe('TripSections', () => {
     const picker = screen.getByTestId('trip-section-field-permit_holder_caver_id');
     expect(picker.querySelector('input')).toBeTruthy();
     expect(picker.className).toContain('ant-select');
+  });
+
+  it('keeps what somebody is typing when the trip is re-read under them', async () => {
+    // Every write to the trip re-reads it, and the answer arrives as a new object seconds
+    // later. Somebody typing in the meantime must not have it taken off the screen — and, the
+    // part that loses work silently, must not have the next save serialise the copy that came
+    // back instead of what they wrote.
+    const before = trip({ fieldData: { conditions: 'wet' } as never });
+    const { rerender } = show(before, true);
+    openSection('Field data');
+
+    fireEvent.change(screen.getByTestId('trip-section-field-club_specific'), {
+      target: { value: 'half a sentence' },
+    });
+
+    // The re-read landing: a different object, carrying what the server holds, which is the
+    // trip without the half sentence in it.
+    rerender(
+      <App>
+        <TripSections trip={trip({ fieldData: { conditions: 'wet' } as never })} canEdit />
+      </App>,
+    );
+
+    expect(screen.getByTestId('trip-section-field-club_specific')).toHaveValue('half a sentence');
+
+    fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+    const body = (updateTrip.mock.calls[0][0] as { body: TripLogWrite }).body;
+    expect(body.fieldData).toEqual({ conditions: 'wet', club_specific: 'half a sentence' });
+  });
+
+  it('keeps a half-written section when a different section is saved under it', async () => {
+    // A save carries one section and leaves the other two absent, so the re-read it triggers is
+    // not an answer about them. Holding the whole card as one either-or would clear the guard on
+    // a field-data save and let that re-read wipe a safety section somebody was part way
+    // through — and the save after that would write the emptied bag out over their work.
+    const { rerender } = show(trip(), true);
+    openSection('Safety');
+    openSection('Field data');
+
+    fireEvent.change(screen.getByTestId('trip-section-field-incident_summary'), {
+      target: { value: 'slip on the pitch head' },
+    });
+    fireEvent.change(screen.getByTestId('trip-section-field-conditions'), {
+      target: { value: 'wet' },
+    });
+    fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+
+    // The re-read: the server's copy, which has the saved field data and knows nothing of the
+    // safety text, because that text was never sent.
+    rerender(
+      <App>
+        <TripSections trip={trip({ fieldData: { conditions: 'wet' } as never })} canEdit />
+      </App>,
+    );
+
+    expect(screen.getByTestId('trip-section-field-incident_summary')).toHaveValue(
+      'slip on the pitch head',
+    );
+
+    fireEvent.click(screen.getByTestId('trip-section-save-safety'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalledTimes(2));
+    const body = (updateTrip.mock.calls[1][0] as { body: TripLogWrite }).body;
+    expect(body.safety).toEqual({ incident_summary: 'slip on the pitch head' });
+  });
+
+  it('never carries what was typed on one trip onto another', async () => {
+    // The page is not remounted when it moves to another trip — the route element is the same
+    // and a trip already read arrives without a loading pass, so this card is only handed a new
+    // prop. Unsent text belongs to the trip it was typed on, and holding it back from the next
+    // one would show one trip's report on another and then save it there.
+    const { rerender } = show(trip({ fieldData: { conditions: 'wet' } as never }), true);
+    openSection('Field data');
+
+    fireEvent.change(screen.getByTestId('trip-section-field-club_specific'), {
+      target: { value: 'about trip one' },
+    });
+
+    rerender(
+      <App>
+        <TripSections
+          trip={trip({ id: 'trip-2', fieldData: { conditions: 'dry' } as never })}
+          canEdit
+        />
+      </App>,
+    );
+
+    expect(screen.getByTestId('trip-section-field-club_specific')).toHaveValue('');
+    expect(screen.getByTestId('trip-section-field-conditions')).toHaveValue('dry');
+
+    fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+    const call = updateTrip.mock.calls[0][0] as { id: string; body: TripLogWrite };
+    expect(call.id).toBe('trip-2');
+    expect(call.body.fieldData).toEqual({ conditions: 'dry' });
+  });
+
+  it('takes up an edit made elsewhere while nothing is being typed here', async () => {
+    // The other half of the same rule, and the reason the card re-syncs at all: with nothing
+    // half-written on it, a trip re-read because somebody else changed it must show what they
+    // changed, and the next save must carry theirs rather than putting the old value back.
+    const { rerender } = show(trip({ fieldData: { conditions: 'wet' } as never }), true);
+    openSection('Field data');
+
+    rerender(
+      <App>
+        <TripSections trip={trip({ fieldData: { conditions: 'flooded' } as never })} canEdit />
+      </App>,
+    );
+
+    expect(screen.getByTestId('trip-section-field-conditions')).toHaveValue('flooded');
+
+    fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+    const body = (updateTrip.mock.calls[0][0] as { body: TripLogWrite }).body;
+    expect(body.fieldData).toEqual({ conditions: 'flooded' });
+  });
+
+  it('keeps a counted fact somebody typed while a save of their own was in flight', async () => {
+    // The window is between a save being sent and the re-read it causes coming back. Anything
+    // typed inside it is not in the copy the server answers with, and is lost the moment the
+    // answer lands unless the card knows it is being written on again.
+    const { rerender } = show(trip(), true);
+    openSection('Measured');
+
+    fireEvent.click(screen.getByTestId('trip-section-save-measured'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByTestId('trip-measure-depthReachedM'), { target: { value: '218' } });
+    rerender(
+      <App>
+        <TripSections trip={trip()} canEdit />
+      </App>,
+    );
+
+    expect(screen.getByTestId('trip-measure-depthReachedM')).toHaveValue('218');
+    fireEvent.click(screen.getByTestId('trip-section-save-measured'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalledTimes(2));
+    const body = (updateTrip.mock.calls[1][0] as { body: TripLogWrite }).body;
+    expect(body.depthReachedM).toBe(218);
   });
 
   it('words a shipped choice in the reader’s language, in the control and in the reading', () => {

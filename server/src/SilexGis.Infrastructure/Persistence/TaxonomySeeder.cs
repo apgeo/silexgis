@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Infrastructure.Persistence;
@@ -41,6 +42,7 @@ public static class TaxonomySeeder
 
         await SeedTripTypesAsync(db, ct);
         await SeedTripParticipantRolesAsync(db, ct);
+        await SeedExpeditionRosterRolesAsync(db, ct);
         await SeedLinkKindsAsync(db, ct);
         await SeedResLinkRelationTypesAsync(db, ct);
         await SeedFeatureTypesAsync(db, ct);
@@ -200,6 +202,31 @@ public static class TaxonomySeeder
             if (!existing.Contains(seed.Code))
             {
                 db.TripParticipantRoles.Add(new TripParticipantRole
+                {
+                    Code = seed.Code,
+                    Name = seed.Name,
+                    SortOrder = sort,
+                });
+            }
+        }
+    }
+
+    // What somebody was at a camp as. A vocabulary of its own rather than the trip's, because
+    // cooking and keeping the base camp are not jobs underground and would mean nothing offered on
+    // a trip form. The rows come from the shared seed list so the admin surface refusing to
+    // re-code or delete a shipped row and this insert can never disagree about which codes those
+    // are — and one of them is load-bearing rather than decorative: a camp's roster with no
+    // "member" row could not record that somebody was simply there.
+    private static async Task SeedExpeditionRosterRolesAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var existing = await db.ExpeditionRosterRoles.Select(x => x.Code).ToHashSetAsync(ct);
+        var sort = 0;
+        foreach (var seed in Domain.Expeditions.ExpeditionRosterRoleSeeds.All)
+        {
+            sort += 10;
+            if (!existing.Contains(seed.Code))
+            {
+                db.ExpeditionRosterRoles.Add(new ExpeditionRosterRole
                 {
                     Code = seed.Code,
                     Name = seed.Name,
@@ -423,7 +450,10 @@ public static class TaxonomySeeder
             ("bivouac", "Bivouac", FeatureCategory.Surface, point, false, "bivouac.png", null),
             ("exploration_point", "Exploration point", FeatureCategory.Surface, point, false, "exploration_point.png", null),
             ("desobstruction", "Desobstruction", FeatureCategory.Surface, point, false, "desobstruction.png", null),
-            ("continuation", "Continuation", FeatureCategory.Surface, point, false, "continuation.png", continuationSchema),
+            // By the shared constant rather than a literal: something else resolves this kind by
+            // code and answers with an empty board if it is not found, which a rename here would
+            // otherwise do silently.
+            (FeatureTypeSeeds.Continuation, "Continuation", FeatureCategory.Surface, point, false, "continuation.png", continuationSchema),
             ("calm", "Calm", FeatureCategory.Surface, point, false, "calm.png", null),
             ("detritus", "Detritus", FeatureCategory.Surface, point, false, "dedritus.png", null),
             ("driller", "Drilling point", FeatureCategory.Surface, point, false, "driller.png", null),

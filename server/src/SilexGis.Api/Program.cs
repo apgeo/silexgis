@@ -15,10 +15,14 @@ using SilexGis.Api.Features.Attachments;
 using SilexGis.Api.Features.AccessHistory;
 using SilexGis.Api.Features.Audit;
 using SilexGis.Api.Features.Cabinets;
+using SilexGis.Api.Features.Checklists;
 using SilexGis.Api.Features.Crs;
+using SilexGis.Api.Features.Calendar;
 using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Dashboard;
 using SilexGis.Api.Features.Documents;
+using SilexGis.Api.Features.Events;
+using SilexGis.Api.Features.Expeditions;
 using SilexGis.Api.Features.Export;
 using SilexGis.Api.Features.Files;
 using SilexGis.Api.Features.Geofiles;
@@ -133,6 +137,8 @@ try
     builder.Services.AddOptions<TerrainOptions>()
         .BindConfiguration(TerrainOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
+    builder.Services.AddScoped<AdminTestSendThrottle>();
+builder.Services.AddScoped<GroupAnnouncementThrottle>();
     builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
     // One resolver per resource-link target world; the directory is what the link
     // surface fans out through for display, the picker feed and the authoring floor.
@@ -145,6 +151,7 @@ try
     builder.Services.AddScoped<IResLinkTargetResolver, CabinetTargetResolver>();
     builder.Services.AddScoped<IResLinkTargetResolver, SurveyModelTargetResolver>();
     builder.Services.AddScoped<IResLinkTargetResolver, GeofileTargetResolver>();
+    builder.Services.AddScoped<IResLinkTargetResolver, ExpeditionTargetResolver>();
     builder.Services.AddScoped<ResLinkTargetDirectory>();
     // Credential-guessing protection: per-IP fixed window on the auth surface.
     // Limit is configurable for installations behind shared NATs.
@@ -210,9 +217,13 @@ try
     api.MapMeCredentialEndpoints();
     api.MapMeNotificationEndpoints();
     api.MapMePreferenceEndpoints();
+    api.MapMeLocaleEndpoints();
     api.MapUiDefaultsEndpoints();
     api.MapMeDataExportEndpoints();
     api.MapMeCapabilityEndpoints();
+    api.MapNotificationInboxEndpoints();
+    api.MapNotificationConfigEndpoints();
+    api.MapNotificationHealthEndpoints();
     api.MapUnsubscribeEndpoints();
     api.MapMfaEndpoints();
     api.MapTaxonomyEndpoints();
@@ -230,6 +241,7 @@ try
     api.MapMapDataEndpoints();
     api.MapSearchEndpoints();
     api.MapDashboardEndpoints();
+    api.MapCalendarEndpoints();
     api.MapGeofileEndpoints();
     api.MapTermRuleEndpoints();
     api.MapStagedImportEndpoints();
@@ -251,18 +263,32 @@ try
     api.MapResLinkRelationTypeEndpoints();
     api.MapGeoreferencedMapEndpoints();
     api.MapTripLogEndpoints();
+    api.MapTripInvitationEndpoints();
+    api.MapTripChecklistEndpoints();
+    api.MapChecklistEndpoints();
+    api.MapExpeditionEndpoints();
+    api.MapEventEndpoints();
+    api.MapEventSeriesEndpoints();
+    api.MapEventInvitationEndpoints();
+    api.MapExpeditionReportEndpoints();
+    api.MapExpeditionMapEndpoints();
+    api.MapExpeditionLeadsEndpoints();
+    api.MapExpeditionRosterEndpoints();
     api.MapTripReportTemplateEndpoints();
     api.MapTripTypeEndpoints();
     api.MapTripParticipantRoleEndpoints();
+    api.MapExpeditionRosterRoleEndpoints();
     api.MapTripStatisticsEndpoints();
     api.MapTagEndpoints();
     api.MapAuditEndpoints();
     api.MapAccessHistoryEndpoints();
     api.MapHistoryEndpoints();
     api.MapObjectAccessEndpoints();
+    api.MapExpeditionSharingEndpoints();
     api.MapPermissionGroupEndpoints();
     api.MapFeatureSetEndpoints();
     api.MapCavingGroupEndpoints();
+    api.MapCavingGroupAnnouncementEndpoints();
     api.MapCaverEndpoints();
     api.MapUserEndpoints();
     api.MapMapViewEndpoints();

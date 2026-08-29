@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Notifications;
-using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Notifications;
 
 namespace SilexGis.Api.Features.Notifications;
 
 public sealed record UnsubscribeRequest(string Token);
 
 /// <summary>What was switched off, so the page can say so in the user's own words.</summary>
-public sealed record UnsubscribeResultDto(NotificationCategory Category);
+/// <param name="Kind">Whether one category was switched off, or the daily summary itself.</param>
+/// <param name="Category">Null when the daily summary was switched off — it names no category.</param>
+public sealed record UnsubscribeResultDto(UnsubscribeKind Kind, NotificationCategory? Category);
 
 public sealed class UnsubscribeRequestValidator : AbstractValidator<UnsubscribeRequest>
 {
@@ -43,7 +44,7 @@ public static class UnsubscribeEndpoints
             .RequireRateLimiting("auth")
             .WithValidation<UnsubscribeRequest>()
             .WithTags("Notifications")
-            .WithSummary("Switches off one notification category using the token from a message.");
+            .WithSummary("Switches one notification category's mail off using the token from a message. The inbox inside the application is untouched.");
 
         return api;
     }
@@ -51,40 +52,59 @@ public static class UnsubscribeEndpoints
     private static async Task<Results<Ok<UnsubscribeResultDto>, ProblemHttpResult>> UnsubscribeAsync(
         UnsubscribeRequest request,
         IUnsubscribeTokens tokens,
-        SilexGisDbContext db,
+        NotificationOptOut optOut,
         CancellationToken ct)
     {
-        if (!tokens.TryRead(request.Token, out var userId, out var category))
+        if (!tokens.TryRead(request.Token, out var subject))
         {
             return ApiProblems.BadRequest("notification.unsubscribe_invalid", "That link is no longer valid.");
         }
 
-        // Security alerts have no opt-out anywhere else either, and a token for one could only
-        // come from a tampered link — the sender never puts one in those messages.
+        if (subject.Kind == UnsubscribeKind.DailyDigest)
+        {
+            return await StopTheDailySummaryAsync(subject.UserId, optOut, ct);
+        }
+
+        var category = subject.Category;
+
+        // The categories nobody may switch off have no opt-out anywhere else either, and a token
+        // for one could only come from a tampered link — the sender never puts one in those
+        // messages.
         if (!NotificationCategories.IsUserConfigurable(category))
         {
             return ApiProblems.BadRequest(
-                "notification.unsubscribe_locked", "Security alerts cannot be switched off.");
+                "notification.unsubscribe_locked", "That kind of notification cannot be switched off.");
         }
 
-        var row = await db.UserNotificationPreferences
-            .FirstOrDefaultAsync(p => p.UserId == userId && p.Category == category, ct);
+        // Mail only. The link was clicked in a mail client, which says where the reader does not
+        // want to be reached and says nothing whatever about the inbox inside the application —
+        // so the notifications keep arriving there, which is where somebody who has switched mail
+        // off reads them.
+        _ = await optOut.StopCategoryEmailAsync(subject.UserId, category, ct);
 
-        if (row is null)
-        {
-            db.UserNotificationPreferences.Add(new UserNotificationPreference
-            {
-                UserId = userId,
-                Category = category,
-                Enabled = false,
-            });
-        }
-        else
-        {
-            row.Enabled = false;
-        }
+        return TypedResults.Ok(new UnsubscribeResultDto(UnsubscribeKind.Category, category));
+    }
 
-        await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(new UnsubscribeResultDto(category));
+    /// <summary>
+    /// Switches mail off for every category whose mail may be switched off.
+    /// </summary>
+    /// <remarks>
+    /// The daily summary is not a category and cannot be switched off as one: it collects whatever
+    /// the reader still hears about by mail. Merely returning each of those to one message per
+    /// event would send more mail than the link was clicked to stop, so the only honest reading of
+    /// "stop sending me this summary" is to stop the mail. Nothing about the inbox inside the
+    /// application moves, and alerts about the account's own credentials still go out: they ignore
+    /// this by design, because whoever is taking an account over may be holding a live session
+    /// while they do it.
+    /// </remarks>
+    private static async Task<Results<Ok<UnsubscribeResultDto>, ProblemHttpResult>> StopTheDailySummaryAsync(
+        Guid userId, NotificationOptOut optOut, CancellationToken ct)
+    {
+        // An account that is gone answers exactly as one that was changed, for the same reason a
+        // bad token does: anything else turns the endpoint into a way to test whether an account
+        // is real.
+        _ = await optOut.StopAllEmailAsync(userId, ct);
+
+        return TypedResults.Ok(new UnsubscribeResultDto(UnsubscribeKind.DailyDigest, null));
     }
 }

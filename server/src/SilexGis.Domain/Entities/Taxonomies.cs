@@ -43,6 +43,18 @@ public class RockType : TaxonomyBase;
 public class TripParticipantRole : TaxonomyBase;
 
 /// <summary>
+/// What somebody was at a camp as: simply there, organising it, cooking, keeping the base camp,
+/// driving, carrying the first-aid kit, looking after the gear, or visiting.
+/// <para>
+/// A vocabulary of its own rather than the jobs people are recorded under on a trip, because being
+/// at a camp is not a job underground: the cook who never went below was there for the fortnight,
+/// and offering "cook" on the trip form would mean nothing. A row rather than a value fixed at
+/// build time, for the same reason every other lookup here is one.
+/// </para>
+/// </summary>
+public class ExpeditionRosterRole : TaxonomyBase;
+
+/// <summary>
 /// Data-level document-kind registry: a survey report, a permit, a trip report. Each kind
 /// may carry a JSON Schema describing the metadata documents of that kind hold, using the
 /// same versioned-schema-over-jsonb mechanism the feature-kind registry uses — one
@@ -148,6 +160,27 @@ public class TripType : TaxonomyBase
 
     /// <inheritdoc cref="LogisticsSchemaVersion"/>
     public int SafetySchemaVersion { get; set; } = FirstSchemaVersion;
+
+    /// <summary>
+    /// The list of things a trip of this purpose settles before it sets off, if an administrator
+    /// has named one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A reference and not a copy. The list is an ordinary owned, shareable row with an audience
+    /// of its own, so pointing a purpose at one leaves the list a single thing that can be
+    /// corrected once for every trip that uses it — where a copy taken at the moment a purpose
+    /// was set would drift from it silently and forever.
+    /// </para>
+    /// <para>
+    /// Pointing at a list confers nothing. A reader who may read a trip but not the list it
+    /// names is told nothing about the list, because the list answers to its own audience and a
+    /// reference from somewhere else is not consent. Nulled rather than blocked when the list it
+    /// names is deleted: a purpose that outlives its list is a purpose with no list, not a
+    /// purpose nobody can delete a list out from under.
+    /// </para>
+    /// </remarks>
+    public Guid? DefaultChecklistId { get; set; }
 
     /// <summary>The schema this purpose asks <paramref name="section"/> to conform to, if any.</summary>
     /// <remarks>

@@ -120,6 +120,17 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<TripLogParticipant> TripLogParticipants => Set<TripLogParticipant>();
 
+    public DbSet<TripInvitation> TripInvitations => Set<TripInvitation>();
+
+    public DbSet<Expedition> Expeditions => Set<Expedition>();
+
+    public DbSet<ExpeditionTrip> ExpeditionTrips => Set<ExpeditionTrip>();
+
+    public DbSet<ExpeditionRosterRole> ExpeditionRosterRoles => Set<ExpeditionRosterRole>();
+
+    /// <summary>Who was at a camp and for which days — never who was on its trips.</summary>
+    public DbSet<ExpeditionRosterEntry> ExpeditionRoster => Set<ExpeditionRosterEntry>();
+
     public DbSet<Tag> Tags => Set<Tag>();
 
     public DbSet<Tagging> Taggings => Set<Tagging>();
@@ -142,6 +153,16 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<MapView> MapViews => Set<MapView>();
 
+    public DbSet<Checklist> Checklists => Set<Checklist>();
+
+    /// <summary>Dated things a club runs that are not trips and not camps.</summary>
+    public DbSet<Event> Events => Set<Event>();
+
+    public DbSet<ChecklistItem> ChecklistItems => Set<ChecklistItem>();
+
+    /// <summary>What each trip has confirmed of the list it works through: who, and when.</summary>
+    public DbSet<TripChecklistTick> TripChecklistTicks => Set<TripChecklistTick>();
+
     public DbSet<SurveyModel> SurveyModels => Set<SurveyModel>();
 
     public DbSet<UserAddress> UserAddresses => Set<UserAddress>();
@@ -150,7 +171,11 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<AccountDataExport> AccountDataExports => Set<AccountDataExport>();
 
-    public DbSet<NotificationOutboxEntry> NotificationOutbox => Set<NotificationOutboxEntry>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+
+    public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
+
+    public DbSet<CavingGroupAnnouncement> CavingGroupAnnouncements => Set<CavingGroupAnnouncement>();
 
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
 

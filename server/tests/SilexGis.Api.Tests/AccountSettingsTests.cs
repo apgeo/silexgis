@@ -9,7 +9,9 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain;
+using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
@@ -84,7 +86,6 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
     {
         var response = await me.PutAsJsonAsync("/api/v1/me", ProfileBody(
             firstName: "Ana", lastName: "Pop", displayName: "Ana P", bio: "Caver since 2010.",
-            phoneNumber: "+40 700 111 222", locale: "ro",
             realName: "cavingGroup", email: "authenticated"));
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 
@@ -92,18 +93,32 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         profile.GetProperty("firstName").GetString().ShouldBe("Ana");
         profile.GetProperty("lastName").GetString().ShouldBe("Pop");
         profile.GetProperty("displayName").GetString().ShouldBe("Ana P");
-        profile.GetProperty("phoneNumber").GetString().ShouldBe("+40 700 111 222");
 
-        profile.GetProperty("locale").GetString().ShouldBe("ro");
         profile.GetProperty("visibility").GetProperty("realName").GetString().ShouldBe("cavingGroup");
         profile.GetProperty("visibility").GetProperty("email").GetString().ShouldBe("authenticated");
     }
 
     [Fact]
-    public async Task Profile_rejects_an_overlong_name_and_a_bad_locale()
+    public async Task The_profile_save_cannot_move_the_language()
+    {
+        // The language is switched from the application shell, far from any open profile form,
+        // and this save is a full-DTO replace. If it carried the language, a form opened before
+        // the switch would put the old answer back — and with it, the language every message this
+        // account is sent is written in.
+        (await me.PutAsJsonAsync("/api/v1/me/locale", new { language = "ro", timeZone = (string?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var response = await me.PutAsJsonAsync("/api/v1/me", ProfileBody(firstName: "Ana"));
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+
+        (await GetMeAsync(me)).GetProperty("locale").GetString().ShouldBe("ro");
+    }
+
+    [Fact]
+    public async Task Profile_rejects_an_overlong_name()
     {
         var response = await me.PutAsJsonAsync("/api/v1/me", ProfileBody(
-            firstName: new string('x', 300), locale: "english"));
+            firstName: new string('x', 300)));
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
@@ -120,6 +135,102 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         var profile = await GetMeAsync(me);
         profile.GetProperty("email").GetString().ShouldBe(MyEmail);
         profile.GetProperty("userName").GetString().ShouldBe(MyEmail);
+    }
+
+    [Fact]
+    public async Task The_language_choice_is_stored_on_its_own_without_the_profile_form()
+    {
+        // The application shell switches language far from any profile form, so the choice has a
+        // route of its own rather than riding the full-DTO profile save, which would let a stale
+        // form overwrite it.
+        var saved = await me.PutAsJsonAsync(
+            "/api/v1/me/locale", new { language = "ro", timeZone = "Europe/Bucharest" });
+
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+        JsonDocument.Parse(await saved.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("language").GetString().ShouldBe("ro");
+
+        // Visible on both the resource of its own and the profile the rest of the app reads.
+        var read = JsonDocument.Parse(await (await me.GetAsync("/api/v1/me/locale/")).Content.ReadAsStringAsync())
+            .RootElement;
+        read.GetProperty("language").GetString().ShouldBe("ro");
+        (await GetMeAsync(me)).GetProperty("locale").GetString().ShouldBe("ro");
+
+        // The zone is stored with it. This is the one moment the browser volunteers one, and
+        // rules about a person's own day are wrong by an hour for half the year without it.
+        read.GetProperty("timeZone").GetString().ShouldBe("Europe/Bucharest");
+    }
+
+    [Fact]
+    public async Task A_language_change_that_names_no_zone_leaves_the_stored_one_alone()
+    {
+        (await me.PutAsJsonAsync(
+            "/api/v1/me/locale", new { language = "ro", timeZone = "Europe/Bucharest" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // A browser that will not name a zone is not somebody asking to forget theirs — and every
+        // language change would otherwise empty the column for anyone whose browser goes quiet
+        // about it once.
+        var saved = await me.PutAsJsonAsync(
+            "/api/v1/me/locale", new { language = "en", timeZone = (string?)null });
+
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonDocument.Parse(await saved.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("timeZone").GetString().ShouldBe("Europe/Bucharest");
+
+        var read = JsonDocument.Parse(
+            await (await me.GetAsync("/api/v1/me/locale/")).Content.ReadAsStringAsync()).RootElement;
+        read.GetProperty("language").GetString().ShouldBe("en");
+        read.GetProperty("timeZone").GetString().ShouldBe("Europe/Bucharest");
+    }
+
+    [Fact]
+    public async Task The_language_route_refuses_a_language_that_is_not_a_tag_and_a_zone_that_is_not_a_zone()
+    {
+        foreach (var body in new object[]
+        {
+            new { language = "english", timeZone = (string?)null },
+            new { language = "", timeZone = (string?)null },
+            new { language = "ro", timeZone = "Not A Zone" },
+        })
+        {
+            var response = await me.PutAsJsonAsync("/api/v1/me/locale", body);
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body.ToString());
+            JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement
+                .GetProperty("code").GetString().ShouldBe("validation.failed");
+        }
+
+        // The positive half: a language with no zone at all is accepted, because a browser that
+        // cannot name its zone must still be able to say what it reads.
+        (await me.PutAsJsonAsync("/api/v1/me/locale", new { language = "en", timeZone = (string?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task A_zone_name_of_one_word_is_a_zone()
+    {
+        // A browser on a machine set to UTC, and one hardened against fingerprinting, both report
+        // exactly "UTC" — no region, no slash. Refusing it would fail the whole save, language
+        // included, so every account in that entirely ordinary population would stay English.
+        var saved = await me.PutAsJsonAsync("/api/v1/me/locale", new { language = "ro", timeZone = "UTC" });
+
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+
+        var read = JsonDocument.Parse(
+            await (await me.GetAsync("/api/v1/me/locale/")).Content.ReadAsStringAsync()).RootElement;
+        read.GetProperty("language").GetString().ShouldBe("ro");
+        read.GetProperty("timeZone").GetString().ShouldBe("UTC");
+    }
+
+    [Fact]
+    public async Task The_language_route_requires_authentication()
+    {
+        using var anonymous = factory.CreateClient();
+
+        (await anonymous.GetAsync("/api/v1/me/locale/")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.PutAsJsonAsync("/api/v1/me/locale", new { language = "ro", timeZone = (string?)null }))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -284,55 +395,241 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
-    public async Task Notification_settings_list_every_category_and_lock_security_alerts()
+    public async Task Notification_settings_are_a_matrix_of_every_category_against_every_channel()
     {
         // Nothing is delivered on an installation with no mail server, and the page must say so —
-        // so this reads the settings with the channel reporting itself as absent.
+        // so this reads the settings with one channel reporting itself as absent and the paid one
+        // absent too. Absent is not the same as switched off, and the read has to keep them apart.
         factory.Messages.MailConfigured = false;
+        factory.Messages.SmsConfigured = false;
         var read = JsonDocument.Parse(
             await (await me.GetAsync("/api/v1/me/notifications/")).Content.ReadAsStringAsync()).RootElement;
         factory.Messages.MailConfigured = true;
+        factory.Messages.SmsConfigured = true;
 
         var categories = read.GetProperty("categories").EnumerateArray().ToList();
         categories.Count.ShouldBe(NotificationCategories.All.Count);
-        categories.Single(c => c.GetProperty("category").GetString() == "securityAlerts")
-            .GetProperty("locked").GetBoolean().ShouldBeTrue();
-        read.GetProperty("deliveryConfigured").GetBoolean().ShouldBeFalse();
+
+        // Only the inbox is left, because it is the one channel with no transport to be missing.
+        read.GetProperty("configuredChannels").EnumerateArray()
+            .Select(c => c.GetString()).ShouldBe(["inApp"]);
+
+        var alerts = categories.Single(c => c.GetProperty("category").GetString() == "securityAlerts");
+        var alertMail = alerts.GetProperty("channels").EnumerateArray()
+            .Single(c => c.GetProperty("channel").GetString() == "email");
+        alertMail.GetProperty("locked").GetBoolean().ShouldBeTrue();
+        alertMail.GetProperty("available").GetBoolean().ShouldBeFalse();
+
+        // Both categories nobody may mute are locked, and a third is not — asserted together,
+        // because a page that locked everything would pass a test that only looked at the locked
+        // ones. Each is locked for its own reason rather than by family resemblance: a live
+        // session must not be able to silence the warning that an account is being taken over,
+        // and an overdue party is not news that can wait for the morning.
+        bool MailLocked(string category) =>
+            categories.Single(c => c.GetProperty("category").GetString() == category)
+                .GetProperty("channels").EnumerateArray()
+                .Single(c => c.GetProperty("channel").GetString() == "email")
+                .GetProperty("locked").GetBoolean();
+
+        MailLocked("securityAlerts").ShouldBeTrue();
+        MailLocked("tripCallout").ShouldBeTrue();
+        MailLocked("tripPlanning").ShouldBeFalse();
+
+        // An account that has never opened this page reads back as the documented defaults, on
+        // every channel of every category — not as silence, and not as everything off.
+        foreach (var category in categories)
+        {
+            foreach (var channel in category.GetProperty("channels").EnumerateArray())
+            {
+                channel.GetProperty("choice").GetString().ShouldBe("immediate");
+            }
+
+            category.GetProperty("reachesNobody").GetBoolean().ShouldBeFalse();
+        }
 
         var saved = await me.PutAsJsonAsync("/api/v1/me/notifications/", new
         {
-            emailEnabled = false,
-            digest = "daily",
-            categories = new[] { new { category = "cavingGroupMembership", enabled = false } },
+            categories = new[]
+            {
+                new
+                {
+                    category = "cavingGroupMembership",
+                    channels = new[]
+                    {
+                        new { channel = "email", choice = "daily" },
+                        new { channel = "inApp", choice = "off" },
+                    },
+                },
+            },
         });
         saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
 
-        var after = JsonDocument.Parse(await saved.Content.ReadAsStringAsync()).RootElement;
-        after.GetProperty("emailEnabled").GetBoolean().ShouldBeFalse();
-        after.GetProperty("digest").GetString().ShouldBe("daily");
-        after.GetProperty("categories").EnumerateArray()
-            .Single(c => c.GetProperty("category").GetString() == "cavingGroupMembership")
-            .GetProperty("enabled").GetBoolean().ShouldBeFalse();
+        var after = JsonDocument.Parse(await saved.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("categories").EnumerateArray()
+            .Single(c => c.GetProperty("category").GetString() == "cavingGroupMembership");
+        Cell(after, "email").GetProperty("choice").GetString().ShouldBe("daily");
+        Cell(after, "inApp").GetProperty("choice").GetString().ShouldBe("off");
 
-        // One save writes the whole set, so there is no half-stored state to reason about later.
+        // A summary is offerable on mail and nowhere else: the inbox cannot hold anything back.
+        Cell(after, "email").GetProperty("canDefer").GetBoolean().ShouldBeTrue();
+        Cell(after, "inApp").GetProperty("canDefer").GetBoolean().ShouldBeFalse();
+
+        // One save writes the whole matrix, so there is no half-stored state to reason about
+        // later: every category against every channel that category may actually use here. Not
+        // every channel in its ceiling — a channel this installation will not pay for is masked
+        // out of the write by the same rule that masks it out of the read, so no row is stored for
+        // a cell nobody could set and nothing would resolve.
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var stored = await db.UserNotificationPreferences.CountAsync(p => p.UserId == myId);
-        stored.ShouldBe(NotificationCategories.All.Count);
+        stored.ShouldBe(NotificationCategories.All.Sum(c => NotificationChannelKinds
+            .Split(NotificationMatrix.Usable(c, NotificationChannelKinds.Everything))
+            .Count()));
+
+        static JsonElement Cell(JsonElement category, string channel) =>
+            category.GetProperty("channels").EnumerateArray()
+                .Single(c => c.GetProperty("channel").GetString() == channel);
     }
 
     [Fact]
-    public async Task Security_alerts_cannot_be_switched_off()
+    public async Task A_category_may_be_switched_off_everywhere_and_the_read_says_it_reaches_nobody()
+    {
+        var saved = await me.PutAsJsonAsync("/api/v1/me/notifications/", new
+        {
+            categories = new[]
+            {
+                new
+                {
+                    category = "jobCompleted",
+                    channels = new[]
+                    {
+                        new { channel = "email", choice = "off" },
+                        new { channel = "inApp", choice = "off" },
+                    },
+                },
+            },
+        });
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+
+        // A legitimate state, reached deliberately — and one the read has to name, so nobody can
+        // arrive at it without being told that this category now reaches them nowhere.
+        var categories = JsonDocument.Parse(await saved.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("categories").EnumerateArray().ToList();
+        categories.Single(c => c.GetProperty("category").GetString() == "jobCompleted")
+            .GetProperty("reachesNobody").GetBoolean().ShouldBeTrue();
+
+        // The positive half, in the same test: nothing else moved.
+        categories.Single(c => c.GetProperty("category").GetString() == "tripPlanning")
+            .GetProperty("reachesNobody").GetBoolean().ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_category_nobody_may_switch_off_is_refused_rather_than_quietly_rewritten()
     {
         var response = await me.PutAsJsonAsync("/api/v1/me/notifications/", new
         {
-            emailEnabled = true,
-            digest = "immediate",
-            categories = new[] { new { category = "securityAlerts", enabled = false } },
+            categories = new[]
+            {
+                new
+                {
+                    category = "securityAlerts",
+                    channels = new[] { new { channel = "email", choice = "off" } },
+                },
+            },
         });
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await ProblemCodeAsync(response)).ShouldBe("me.notification_locked");
+        (await ProblemCodeAsync(response)).ShouldBe("me.notification_choice_refused");
+    }
+
+    [Fact]
+    public async Task A_channel_a_category_may_never_use_is_refused()
+    {
+        // A category whose ceiling does not name a channel can never be set to use it, however the
+        // write is phrased: trip planning is one of the many that a message charged for per
+        // recipient would be wrong for, so asking for a text there is refused outright rather than
+        // stored and silently dropped later. Which categories may name a paid channel at all is
+        // settled once, in the ceiling's own tests; this is only the refusal at the write path.
+        var response = await me.PutAsJsonAsync("/api/v1/me/notifications/", new
+        {
+            categories = new[]
+            {
+                new
+                {
+                    category = "tripPlanning",
+                    channels = new[] { new { channel = "sms", choice = "immediate" } },
+                },
+            },
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ProblemCodeAsync(response)).ShouldBe("me.notification_choice_refused");
+    }
+
+    [Fact]
+    public async Task A_channel_the_installation_pays_for_is_stored_as_the_member_left_it()
+    {
+        // The whole point of the switch: while the installation pays for nothing, a member cannot
+        // choose the charging channel at all; once it does, the choice they make is the choice
+        // that comes back. The failure this guards against is silent and one-sided — a write path
+        // narrower than the page's own rule accepts the choice, resolves it back to "off" and
+        // stores that, so the member reopens the page and finds it undone with no error anywhere.
+        (await SetGroupAnnouncementSmsAsync("immediate")).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        await SetPaidChannelsAsync(true);
+        try
+        {
+            var saved = await SetGroupAnnouncementSmsAsync("immediate");
+            saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+
+            // What the page reads back from the save itself...
+            JsonDocument.Parse(await saved.Content.ReadAsStringAsync()).RootElement
+                .GetProperty("categories").EnumerateArray()
+                .Single(c => c.GetProperty("category").GetString() == "groupAnnouncement")
+                .GetProperty("channels").EnumerateArray()
+                .Single(c => c.GetProperty("channel").GetString() == "sms")
+                .GetProperty("choice").GetString().ShouldBe("immediate");
+
+            // ...and what was actually written down, which is the half a read-back sharing the
+            // same rule could agree with while both were wrong.
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var row = await db.UserNotificationPreferences.AsNoTracking().SingleAsync(
+                p => p.UserId == myId
+                    && p.Category == NotificationCategory.GroupAnnouncement
+                    && p.Channel == NotificationChannelKind.Sms);
+            row.Choice.ShouldBe(NotificationChannelChoice.Immediate);
+        }
+        finally
+        {
+            await SetPaidChannelsAsync(false);
+        }
+    }
+
+    private Task<HttpResponseMessage> SetGroupAnnouncementSmsAsync(string choice) =>
+        me.PutAsJsonAsync("/api/v1/me/notifications/", new
+        {
+            categories = new[]
+            {
+                new
+                {
+                    category = "groupAnnouncement",
+                    channels = new[] { new { channel = "sms", choice } },
+                },
+            },
+        });
+
+    /// <summary>Says whether this installation will pay for messages, as the administrator's form does.</summary>
+    /// <remarks>
+    /// Cleared again afterwards: every class here shares one database, and an installation-wide
+    /// answer left switched on would follow the next test class into its own assertions.
+    /// </remarks>
+    private async Task SetPaidChannelsAsync(bool pay)
+    {
+        using var scope = factory.Services.CreateScope();
+        var settings = scope.ServiceProvider.GetRequiredService<IAppSettingsService>();
+        await settings.SaveAsync(
+            AppSettingSections.Announcements, new AnnouncementSettings { PaidChannelsEnabled = pay });
     }
 
     [Fact]
@@ -488,9 +785,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
         string? lastName = null,
         string? displayName = null,
         string? bio = null,
-        string? phoneNumber = null,
         Guid? cavingClubId = null,
-        string locale = "en",
         string realName = "private",
         string email = "private") => new
         {
@@ -498,9 +793,7 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
             lastName,
             displayName,
             bio,
-            phoneNumber,
             cavingClubId,
-            locale,
             visibility = new
             {
                 realName,

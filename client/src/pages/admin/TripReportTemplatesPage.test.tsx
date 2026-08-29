@@ -38,7 +38,8 @@ vi.mock('../../api/hooks.ts', async () => {
 
 vi.mock('../../api/download.ts', () => ({
   downloadFile: (url: string) => download(url) as Promise<void>,
-  tripReportTemplateDefaultUrl: () => '/api/v1/trip-report-templates/default',
+  tripReportTemplateDefaultUrl: (kind: string) =>
+    `/api/v1/trip-report-templates/default?kind=${kind}`,
 }));
 
 const { default: TripReportTemplatesPage } = await import('./TripReportTemplatesPage.tsx');
@@ -63,7 +64,7 @@ describe('TripReportTemplatesPage', () => {
   it('hands out the layout the system ships, which is where a club’s own starts', () => {
     show();
     fireEvent.click(screen.getByTestId('report-template-shipped'));
-    expect(download).toHaveBeenCalledWith('/api/v1/trip-report-templates/default');
+    expect(download).toHaveBeenCalledWith('/api/v1/trip-report-templates/default?kind=trip');
   });
 
   it('stores an edited layout, and which one write-ups use when nobody chooses', async () => {
@@ -100,5 +101,13 @@ describe('TripReportTemplatesPage', () => {
     show();
     expect(screen.getByText('Club bulletin')).toBeTruthy();
     expect(screen.getByText('Used when nobody chooses')).toBeTruthy();
+  });
+
+  it('says what each layout writes up, since trip and camp layouts are listed together', () => {
+    // Each kind has a chosen layout of its own, so two rows can carry the "used" tag at once —
+    // without this column they read as contradicting each other.
+    show();
+    expect(screen.getByRole('columnheader', { name: 'Writes up' })).toBeTruthy();
+    expect(screen.getByText('A trip')).toBeTruthy();
   });
 });

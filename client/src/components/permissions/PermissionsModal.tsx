@@ -30,6 +30,14 @@ interface DraftRule {
   effect: 'allow' | 'deny';
   scopeKind: 'object' | 'subtree';
   actions: Set<AccessActionFlag>;
+  /**
+   * Set when the rule was written by a camp being shared down to the trips inside it. Such a
+   * rule is anchored on this object but is not one of its own: the save below replaces only the
+   * rules written here, so a camp's rule offered as editable would be a row somebody deletes,
+   * saves, and finds back where it was. It is shown — hiding it would leave a reader wondering
+   * who else can read this — and it is shown as not theirs to change.
+   */
+  grantedViaExpeditionId: string | null;
 }
 
 interface PermissionsModalProps {
@@ -78,15 +86,22 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
         effect: entry.effect,
         scopeKind: entry.scopeKind === 'subtree' ? 'subtree' : 'object',
         actions: new Set([...parseAccessActions(entry.actions)]),
+        grantedViaExpeditionId: entry.grantedViaExpeditionId ?? null,
       })));
     }
   }, [open, rules]);
 
   const hasDeny = entries.some((entry) => entry.effect === 'deny');
+  const hasInherited = entries.some((entry) => entry.grantedViaExpeditionId !== null);
 
   const addRule = () => {
+    // Only a rule this object owns blocks another like it. A rule a camp wrote is shown here but
+    // is not this object's to edit, so counting it as a duplicate would leave a subject the camp
+    // already named with no way to be given a right of the trip's own — the button would do
+    // nothing and there would be nothing on screen saying why.
     if (!subjectId || entries.some((e) =>
-      e.subjectId === subjectId && e.subjectKind === subjectKind
+      e.grantedViaExpeditionId === null
+      && e.subjectId === subjectId && e.subjectKind === subjectKind
       && e.effect === effect && e.scopeKind === scopeKind)) {
       return;
     }
@@ -100,6 +115,7 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
       effect,
       scopeKind: scopedToFeature ? scopeKind : 'object',
       actions: new Set<AccessActionFlag>(['read']),
+      grantedViaExpeditionId: null,
     }]);
     setSubjectId(undefined);
     setUserQuery('');
@@ -123,6 +139,9 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
   const onSave = async () => {
     try {
       await replaceRules.mutateAsync(entries
+        // A rule a camp wrote is not this object's to replace: the server keeps it whatever
+        // this save says, so sending it back would only invite it to be sent as something else.
+        .filter((e) => e.grantedViaExpeditionId === null)
         .filter((e) => e.actions.size > 0)
         .map((e) => ({
           subjectKind: e.subjectKind,
@@ -243,6 +262,15 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
             </Button>
           </Flex>
 
+          {hasInherited && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              title={t('permissions.viaExpeditionHint')}
+            />
+          )}
+
           {hasDeny && (
             <Alert
               type="warning"
@@ -254,7 +282,9 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
 
           <Table<DraftRule>
             scroll={{ x: 'max-content' }}
-            rowKey={(entry) => `${entry.subjectKind}:${entry.subjectId}:${entry.effect}:${entry.scopeKind}`}
+            rowKey={(entry) =>
+              `${entry.subjectKind}:${entry.subjectId}:${entry.effect}:${entry.scopeKind}`
+              + `:${entry.grantedViaExpeditionId ?? ''}`}
             size="small"
             pagination={false}
             dataSource={entries}
@@ -270,6 +300,11 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
                   <>
                     <Tag>{t(`permissions.${entry.subjectKind}`)}</Tag>
                     {entry.subjectName ?? entry.subjectId}
+                    {entry.grantedViaExpeditionId !== null && (
+                      <Tag color="blue" style={{ marginInlineStart: 8 }}>
+                        {t('permissions.viaExpedition')}
+                      </Tag>
+                    )}
                   </>
                 ),
               },
@@ -312,7 +347,10 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
                 render: (_: unknown, entry: DraftRule, index: number) => (
                   <Checkbox
                     checked={entry.actions.has(flag)}
-                    disabled={flag === 'create' && entry.scopeKind === 'object'}
+                    disabled={
+                      (flag === 'create' && entry.scopeKind === 'object')
+                      || entry.grantedViaExpeditionId !== null
+                    }
                     onChange={(e) => toggleAction(index, flag, e.target.checked)}
                   />
                 ),
@@ -321,12 +359,13 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
                 title: '',
                 key: 'remove',
                 width: 50,
-                render: (_, __, index) => (
+                render: (_, entry, index) => (
                   <Button
                     size="small"
                     type="text"
                     danger
                     icon={<DeleteOutlined />}
+                    disabled={entry.grantedViaExpeditionId !== null}
                     onClick={() => setEntries(entries.filter((_, i) => i !== index))}
                   />
                 ),

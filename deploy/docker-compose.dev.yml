@@ -11,7 +11,11 @@ services:
       POSTGRES_USER: silexgis
       POSTGRES_PASSWORD: silexgis
     ports:
-      - "5432:5432"
+      # Loopback only. This database ships a well-known throwaway password, and a published
+      # port is not covered by a host firewall's input rules — Docker forwards it before they
+      # are consulted — so a bare "5432:5432" offers it to every machine that can reach this
+      # host. The developer still reaches it at localhost:5432 either way.
+      - "127.0.0.1:5432:5432"
     volumes:
       - silexgis-dev-db:/var/lib/postgresql/data
     healthcheck:

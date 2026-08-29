@@ -4,6 +4,8 @@ using System.Text.RegularExpressions;
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Auth;
@@ -125,14 +127,20 @@ public static class MePhoneEndpoints
             return ApiProblems.BadRequest("me.phone_unchanged", "That is already your confirmed number.");
         }
 
+        // Deliberately not checked here. Answering "another account already uses that number"
+        // before anything has been proved would let any signed-in caller ask, one number at a
+        // time, whether a number belongs to a member of this installation — a question the
+        // profile rules refuse to answer, since a phone number is a visibility-governed field.
+        // The number is checked at confirmation instead, where the caller has returned a code
+        // texted to it and so controls it.
+
         var policy = await settings.GetSecurityAsync(ct);
-        if (TooSoon(user.PendingPhoneRequestedAt, policy))
+        if (await SendThrottle.TooSoonAsync(userManager, user, TwoFactorMethod.Sms, policy, SendThrottle.PhoneChange))
         {
             return ApiProblems.BadRequest("me.phone_resend_too_soon", "Wait a moment before asking again.");
         }
 
         user.PendingPhoneNumber = number;
-        user.PendingPhoneRequestedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
 
         return await SendCodeAsync(user, number, userManager, dispatcher, policy, ct);
@@ -158,13 +166,10 @@ public static class MePhoneEndpoints
         }
 
         var policy = await settings.GetSecurityAsync(ct);
-        if (TooSoon(user.PendingPhoneRequestedAt, policy))
+        if (await SendThrottle.TooSoonAsync(userManager, user, TwoFactorMethod.Sms, policy, SendThrottle.PhoneChange))
         {
             return ApiProblems.BadRequest("me.phone_resend_too_soon", "Wait a moment before asking again.");
         }
-
-        user.PendingPhoneRequestedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(ct);
 
         return await SendCodeAsync(user, pending, userManager, dispatcher, policy, ct);
     }
@@ -188,24 +193,57 @@ public static class MePhoneEndpoints
             return ApiProblems.BadRequest("me.phone_change_missing", "There is nothing to confirm.");
         }
 
+        if (await CodeAttempts.LockedOutAsync(userManager, user))
+        {
+            return ApiProblems.BadRequest(
+                "auth.locked_out", "Account temporarily locked after repeated failures.");
+        }
+
         // The token is bound to the number it was issued for, so a code texted to one number
         // cannot be replayed to confirm another.
         var valid = await userManager.VerifyChangePhoneNumberTokenAsync(
             user, request.Code.Replace(" ", string.Empty), pending);
         if (!valid)
         {
+            await CodeAttempts.FailedAsync(userManager, user);
             return ApiProblems.BadRequest("me.phone_confirm_invalid", "The code is not valid or has expired.");
         }
+
+        // One number reaching exactly one account is what lets an inbound message ever be
+        // attributed. Checked here, where the caller has proved they control the number.
+        if (await db.Users.AnyAsync(u => u.Id != user.Id && u.PhoneNumber == pending, ct))
+        {
+            return ApiProblems.BadRequest(
+                "me.phone_taken", "Another account already uses that number.");
+        }
+
+        await CodeAttempts.SucceededAsync(userManager, user);
 
         user.PhoneNumber = pending;
         user.PhoneNumberConfirmed = true;
         user.PendingPhoneNumber = null;
-        user.PendingPhoneRequestedAt = null;
-        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (IsPhoneNumberCollision(e))
+        {
+            // The read above is not a lock, so two accounts confirming the same number can both
+            // pass it and the index decides. Answering with the same refusal the read gives means
+            // the endpoint and the index say one thing rather than a 500 that says nothing.
+            db.ChangeTracker.Clear();
+            return ApiProblems.BadRequest(
+                "me.phone_taken", "Another account already uses that number.");
+        }
 
         return TypedResults.Ok(new PhoneStatusDto(
             user.PhoneNumber, true, null, await smsDelivery.IsConfiguredAsync(ct)));
     }
+
+    /// <summary>Whether a failed save was the phone number's uniqueness index refusing a duplicate.</summary>
+    private static bool IsPhoneNumberCollision(DbUpdateException e) =>
+        e.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult>> RemoveAsync(
         ClaimsPrincipal principal,
@@ -222,7 +260,6 @@ public static class MePhoneEndpoints
         user.PhoneNumber = null;
         user.PhoneNumberConfirmed = false;
         user.PendingPhoneNumber = null;
-        user.PendingPhoneRequestedAt = null;
 
         // Leaving the method on would be a second factor pointing at nothing — the account would
         // still be asked for a texted code that can never arrive.
@@ -257,10 +294,9 @@ public static class MePhoneEndpoints
             return ApiProblems.BadRequest("me.sms_send_failed", "The code could not be sent to that number.");
         }
 
+        // Stamped only once a text really went out, so a gateway that is refusing does not lock
+        // the account holder out of trying again.
+        await SendThrottle.MarkSentAsync(userManager, user, TwoFactorMethod.Sms, SendThrottle.PhoneChange);
         return TypedResults.Ok(new PhoneChallengeDto(TwoFactorChallengeEndpoints.MaskPhone(number), lifetime));
     }
-
-    private static bool TooSoon(DateTimeOffset? lastRequestedAt, SecuritySettings policy) =>
-        lastRequestedAt is { } last
-        && DateTimeOffset.UtcNow - last < TimeSpan.FromSeconds(Math.Clamp(policy.TwoFactorResendIntervalSeconds, 0, 600));
 }

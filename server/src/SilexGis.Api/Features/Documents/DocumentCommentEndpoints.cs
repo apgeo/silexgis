@@ -238,12 +238,16 @@ public static class DocumentCommentEndpoints
             return ApiProblems.BadRequest(AnchorFileNotFoundCode, "The anchored file is not part of this document.");
         }
 
+        // Named out here rather than inside the branch below because it outlives the
+        // validation: whoever wrote the remark being answered is one of the two people the
+        // new one concerns.
+        DocumentComment? parent = null;
         if (request.ParentId is { } parentId)
         {
             // Scoped to this document, so a parent belonging to another one answers as
             // absent — which is both the honest answer to "may this be your parent" and the
             // answer that says nothing about what exists elsewhere.
-            var parent = await db.DocumentComments.AsNoTracking()
+            parent = await db.DocumentComments.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == parentId && c.DocumentId == documentId, ct);
             if (parent is null)
             {
@@ -268,6 +272,10 @@ public static class DocumentCommentEndpoints
         };
 
         db.DocumentComments.Add(comment);
+
+        // Queued into the same transaction as the remark itself, so nobody is told about
+        // something that did not commit.
+        await DocumentCommentNotifier.PostedAsync(db, access, user, document, parent, ct);
         await db.SaveChangesAsync(ct);
 
         var labels = await ProfileDirectory.ResolveLabelsAsync(db, user, [user.UserId], ct);

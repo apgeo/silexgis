@@ -3,7 +3,7 @@ import { App } from 'antd';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
-import type { TripStatistics } from '../../api/hooks.ts';
+import type { StatisticsSubject, TripStatistics } from '../../api/hooks.ts';
 
 const { statisticsSpy } = vi.hoisted(() => ({
   statisticsSpy: vi.fn(),
@@ -34,9 +34,10 @@ const totals: TripStatistics = {
   surveyStations: 47,
   earliestTripDate: '2026-05-03',
   latestTripDate: '2026-06-01',
+  photographs: 9,
 };
 
-function show(subject: 'caver' | 'cave' | 'cavingGroup', data: TripStatistics | undefined, isError = false) {
+function show(subject: StatisticsSubject, data: TripStatistics | undefined, isError = false) {
   statisticsSpy.mockReturnValue({ data, isLoading: false, isError });
   return render(
     <App>
@@ -69,6 +70,17 @@ describe('TripStatisticsPanel', () => {
 
     show('cave', totals);
     expect(screen.getByText('People')).toBeTruthy();
+  });
+
+  it('adds a camp up through the same panel, sentence and all', () => {
+    show('expedition', totals);
+
+    // A camp is a fourth subject rather than a surface of its own, so it cannot come to state a
+    // figure the other three withhold. The sentence carries more weight here than anywhere else:
+    // a camp's totals are the ones several people sit down and compare.
+    expect(statisticsSpy).toHaveBeenCalledWith('expedition', 'subject-1');
+    expect(screen.getByText('People')).toBeTruthy();
+    expect(screen.getByText(/Counted over the trips you may read/)).toBeTruthy();
   });
 
   it('shows nothing at all when the subject may not be read', () => {

@@ -114,6 +114,7 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
                 user.PhoneNumber,
                 user.CavingClubId,
                 user.Locale,
+                user.TimeZone,
                 user.AvatarPreset,
                 user.CreatedAt,
                 user.UpdatedAt,
@@ -144,9 +145,14 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
 
             await WriteEntryAsync(archive, "preferences.json", new
             {
-                NotificationEmail = user.NotifyEmailEnabled,
-                Digest = user.NotifyDigest.ToString(),
-                Categories = notifications.Select(p => new { Category = p.Category.ToString(), p.Enabled }),
+                Notifications = notifications
+                    .OrderBy(p => p.Category).ThenBy(p => p.Channel)
+                    .Select(p => new
+                    {
+                        Category = p.Category.ToString(),
+                        Channel = p.Channel.ToString(),
+                        Choice = p.Choice.ToString(),
+                    }),
                 Interface = JsonSerializer.Deserialize<JsonElement>(user.UiPreferences),
             }, ct);
 
@@ -203,6 +209,21 @@ public sealed class AccountDataExportHandler(SilexGisDbContext db, IFileStore fi
         MapViews = await db.MapViews.AsNoTracking()
             .Where(v => v.OwnerUserId == userId)
             .Select(v => new { v.Id, v.Name, v.CreatedAt })
+            .ToListAsync(ct),
+        Checklists = await db.Checklists.AsNoTracking()
+            .Where(c => c.OwnerUserId == userId)
+            .Select(c => new { c.Id, c.Title, c.CreatedAt })
+            .ToListAsync(ct),
+        Events = await db.Events.AsNoTracking()
+            .Where(e => e.OwnerUserId == userId)
+            .Select(e => new { e.Id, e.Title, Kind = e.Kind.ToString(), e.StartDate, e.CreatedAt })
+            .ToListAsync(ct),
+        // What this account has confirmed as settled on a trip's list, which is a record of
+        // something this person said and therefore theirs to be given a copy of. Only the
+        // identities travel: the words of the line belong to whoever wrote the list.
+        ChecklistTicks = await db.TripChecklistTicks.AsNoTracking()
+            .Where(t => t.TickedByUserId == userId)
+            .Select(t => new { t.TripLogId, t.ChecklistId, t.ItemId, t.TickedAt })
             .ToListAsync(ct),
         // Uploader identity lives on the revision a file belongs to, so the personal-data
         // export reaches it through that join rather than through the file row.

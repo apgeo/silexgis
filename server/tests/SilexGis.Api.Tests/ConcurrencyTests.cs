@@ -44,6 +44,26 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable
         owner = await AuthHelper.BearerClientAsync(factory, $"cc-own-{suffix}@t.local");
     }
 
+    /// <summary>
+    /// Every versioned table names a table that exists. The allow-list is an enum beside a
+    /// dictionary and the compiler checks neither against the other, so a table registered in
+    /// one and forgotten in the other would first be noticed as a failure to serve an ETag on a
+    /// live endpoint. Asking for a row that is not there answers "no version" from a real
+    /// database, which is only possible if both halves and the schema agree.
+    /// </summary>
+    [Fact]
+    public async Task Every_versioned_table_resolves_against_the_schema()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        foreach (var table in Enum.GetValues<VersionedTable>())
+        {
+            var version = await ConcurrencySql.VersionAsync(db, table, Guid.CreateVersion7(), default);
+            version.ShouldBeNull($"{table} should resolve and report no row.");
+        }
+    }
+
     [Fact]
     public async Task Etag_and_if_match_guard_against_lost_updates()
     {

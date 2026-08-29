@@ -1,7 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
 import { DeleteOutlined, EllipsisOutlined, PlusOutlined } from '@ant-design/icons';
-import { App, Button, DatePicker, Flex, Form, Input, Modal, Select, TimePicker, Typography } from 'antd';
+import {
+  App,
+  Button,
+  DatePicker,
+  Flex,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Select,
+  TimePicker,
+  Typography,
+} from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {
@@ -15,6 +27,7 @@ import {
   type TripParticipantRole,
 } from '../../api/hooks.ts';
 import { participantRoleLabel } from '../../components/trips/participantRoles.ts';
+import { caverReference } from '../../components/trips/roster.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 import { tripTypeLabel } from '../../components/trips/tripTypes.ts';
 import TripGeometryField from './TripGeometryField.tsx';
@@ -41,9 +54,11 @@ interface FormValues {
   results?: string;
   weather?: string;
   geom?: TripGeometry | null;
+  meetingGeom?: TripGeometry | null;
   participants: RosterRow[];
   proposers: RosterRow[];
   visibility: TripLogInfo['visibility'];
+  maxParticipants?: number | null;
 }
 
 /**
@@ -67,29 +82,20 @@ interface RosterRow {
   note?: string | null;
 }
 
-// A row still reading the name it arrived under still points at its person; one typed over names
-// whoever the new text names, and the server matches that against the roster or adds them to it.
-// Sending the reference back beside a corrected name would store nothing at all — the reference
-// is what the server reads — so a misspelling would survive every attempt to fix it, silently.
-// Comparing against the loaded name rather than clearing on any keystroke matters: the name shown
-// for somebody who holds an account is their profile's, which need not be the name the roster
-// holds, so detaching on an edit that changed nothing would quietly make two people out of one.
-// A row typed in names no job, and the server reads that as simply having been there.
+// Who each row names is decided by the one rule that decides it everywhere a person can be
+// edited beside the text naming them, rather than restated here; the server matches a bare name
+// against the roster or adds them to it. A row typed in names no job, and the server reads that
+// as simply having been there.
 const toParticipants = (rows: RosterRow[]) =>
   rows
     .filter((row) => row.name.trim().length > 0)
-    .map((row) => {
-      const name = row.name.trim();
-      const stillTheirs = row.caverId != null && name === row.loadedName;
-      return {
-        caverId: stillTheirs ? row.caverId! : null,
-        newCaverName: stillTheirs ? null : name,
-        roleId: row.roleId ?? null,
-        entryTime: row.entryTime ?? null,
-        exitTime: row.exitTime ?? null,
-        note: row.note ?? null,
-      };
-    });
+    .map((row) => ({
+      ...caverReference(row),
+      roleId: row.roleId ?? null,
+      entryTime: row.entryTime ?? null,
+      exitTime: row.exitTime ?? null,
+      note: row.note ?? null,
+    }));
 
 const toRosterRow = (person: TripLogInfo['participants'][number]): RosterRow => ({
   caverId: person.caverId,
@@ -271,9 +277,11 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           results: trip.results ?? undefined,
           weather: trip.weatherConditions ?? undefined,
           geom: trip.geom ?? null,
+          meetingGeom: trip.meetingGeom ?? null,
           participants: trip.participants.map(toRosterRow),
           proposers: trip.proposers.map(toRosterRow),
           visibility: trip.visibility,
+          maxParticipants: trip.maxParticipants ?? undefined,
         });
       } else {
         form.setFieldsValue({
@@ -281,6 +289,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           // and the field is a range, so a bare day would leave it failing its own required rule.
           dates: [dayjs(), dayjs()],
           geom: null,
+          meetingGeom: null,
           participants: [],
           proposers: [],
           visibility: 'private',
@@ -312,6 +321,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
       locationText: values.locationText?.trim() || null,
       organizingCavingGroupId: values.organizingCavingGroupId ?? null,
       geom: values.geom ?? null,
+      meetingGeom: values.meetingGeom ?? null,
       // Not a cleared list — no list at all. Which caves the trip is about is recorded on its
       // page, role by role, and this form must not be able to undo that by saving a title.
       caveIds: null,
@@ -337,6 +347,10 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
       fieldData: null,
       logistics: null,
       safety: null,
+      // How many the trip has room for, as this form now reads it. Empty is a trip with no
+      // limit, which is a real answer and not a missing one — so it is sent as an explicit
+      // absence, and clearing the box really does take the limit off.
+      maxParticipants: values.maxParticipants ?? null,
     };
 
     try {
@@ -396,6 +410,17 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           <Form.Item name="exitTime" label={t('trips.exitTime')} style={{ flex: 1 }}>
             <TimePicker style={{ width: '100%' }} format="HH:mm" minuteStep={5} />
           </Form.Item>
+          {/* How many places the trip has. Left empty for a trip that turns nobody away; a
+              number is what makes the people past it a waiting list rather than a refusal —
+              nobody is ever refused here, they stand in the order they answered in. */}
+          <Form.Item
+            name="maxParticipants"
+            label={t('trips.maxParticipants')}
+            tooltip={t('trips.maxParticipantsHelp')}
+            style={{ flex: 1 }}
+          >
+            <InputNumber min={1} precision={0} style={{ width: '100%' }} data-testid="trip-max-participants" />
+          </Form.Item>
         </Flex>
         <Flex gap={12}>
           <Form.Item name="locationText" label={t('trips.location')} style={{ flex: 1 }}>
@@ -447,6 +472,23 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
         </Form.Item>
         <Form.Item name="geom" label={t('trips.geometry')}>
           <TripGeometryField active={shown} height={260} />
+        </Form.Item>
+        {/* Where the party gathers, drawn by the same control as the sketch above and carrying the
+            same warning, because it is disclosed on the same terms: everybody who may read the
+            trip is told it exactly. A club that draws the approach as well draws it here too —
+            one shape, so there is no rule about which of two to believe. */}
+        <Form.Item
+          name="meetingGeom"
+          label={t('trips.meetingGeometry')}
+          tooltip={t('trips.meetingGeometryHint')}
+        >
+          <TripGeometryField
+            active={shown}
+            height={260}
+            testId="trip-meeting-geometry"
+            warningTitle={t('trips.meetingGeometryWarning')}
+            warningDetail={t('trips.meetingGeometryWarningDetail')}
+          />
         </Form.Item>
       </Form>
     </Modal>

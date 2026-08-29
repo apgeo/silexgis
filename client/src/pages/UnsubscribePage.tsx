@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Flex, Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
+import type { UnsubscribeResult } from '../api/hooks.ts';
 
 type State = 'working' | 'done' | 'failed';
 
@@ -17,7 +18,7 @@ export default function UnsubscribePage() {
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const [state, setState] = useState<State>('working');
-  const [category, setCategory] = useState<string | null>(null);
+  const [result, setResult] = useState<UnsubscribeResult | null>(null);
   const attempted = useRef(false);
 
   const token = params.get('token');
@@ -43,8 +44,7 @@ export default function UnsubscribePage() {
           setState('failed');
           return;
         }
-        const body = (await response.json()) as { category: string };
-        setCategory(body.category);
+        setResult((await response.json()) as UnsubscribeResult);
         setState('done');
       })
       .catch(() => setState('failed'));
@@ -68,12 +68,26 @@ export default function UnsubscribePage() {
             type="success"
             showIcon
             style={{ marginBottom: 16 }}
-            title={t('unsubscribe.done', {
-              category: category
-                ? t(`settings.notifications.events.${category}`)
-                : t('unsubscribe.theseMessages'),
-            })}
-            description={t('unsubscribe.changeAnyTime')}
+            title={
+              // A daily summary is not a category and never names one: it collects everything the
+              // reader still hears about, so the link stops the mail rather than one subject.
+              result?.kind === 'dailyDigest'
+                ? t('unsubscribe.doneDigest')
+                : t('unsubscribe.done', {
+                    category: result?.category
+                      ? t(`settings.notifications.events.${result.category}`)
+                      : t('unsubscribe.theseMessages'),
+                  })
+            }
+            description={
+              // Which channel this switched off, said out loud. The link was clicked in a mail
+              // client, so it speaks for mail and for nothing else — the inbox inside the
+              // application keeps every one of these, and somebody who has just stopped the mail
+              // is exactly the person who needs telling where they still are.
+              result?.kind === 'dailyDigest'
+                ? `${t('unsubscribe.inboxUntouched')} ${t('unsubscribe.alertsStillSent')} ${t('unsubscribe.changeAnyTime')}`
+                : `${t('unsubscribe.inboxUntouched')} ${t('unsubscribe.changeAnyTime')}`
+            }
           />
         )}
 

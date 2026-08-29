@@ -71,6 +71,62 @@ public enum AccessDomain : short
     Documents = 19,
 
     /// <summary>
+    /// Expeditions: a camp or a project that gathers many trips into one thing with one
+    /// report. Expedition rows carry the owner/caving-group/visibility trio, so an
+    /// expedition is governed like any other owned content.
+    /// <para>
+    /// It is a domain of its own rather than an arrangement governed through the trips
+    /// inside it, the way an album is governed through its documents. An expedition is the
+    /// natural boundary a partner club is invited across — "share this camp with them" is
+    /// one act — and sharing one object needs an entry scoped to that object. An entry
+    /// scoped to one object resolves what it is anchored to against the table its domain
+    /// names, so an expedition id written under the trip-log domain names nothing and the
+    /// entry is refused. Riding the trip domain would therefore mean giving up per-object
+    /// grants on the expedition itself, which is the one thing the sharing it exists for
+    /// needs.
+    /// </para>
+    /// </summary>
+    Expeditions = 20,
+
+    /// <summary>
+    /// Checklists: the lists of what a party settles before it sets off. Checklist rows
+    /// carry the owner/caving-group/visibility trio, so a checklist is governed like any
+    /// other owned content — by entries written against it, by its owner, and by its
+    /// audience. A list an administrator publishes for the whole installation is an
+    /// ordinary row of this domain with an audience everyone falls inside, not a case of
+    /// its own.
+    /// <para>
+    /// It is a domain of its own rather than something governed through the trips that
+    /// use a list, and both halves of that are forced. An entry scoped to one object
+    /// resolves what it is anchored to against the table its domain names, so a checklist
+    /// id written under the trip domain names nothing and the entry is refused — which is
+    /// exactly the grant "share this list with them" is made of. And the only shape left,
+    /// a grant over every trip, is one flag: it would hand its holder every checklist in
+    /// the installation, private ones included, and a grant meant for lists would confer
+    /// read on every trip. There is no setting between the two.
+    /// </para>
+    /// </summary>
+    Checklists = 21,
+
+    /// <summary>
+    /// Calendar events: the meetings, training, working days and deadlines a club puts in its
+    /// calendar that are not trips and not camps. Event rows carry the
+    /// owner/caving-group/visibility trio, so an event is governed like any other owned content —
+    /// by entries written against it, by its owner, and by its audience.
+    /// <para>
+    /// It is a domain of its own rather than something governed through the trips that share its
+    /// calendar, and that is forced rather than chosen. An entry scoped to one object resolves
+    /// what it is anchored to against the table its domain names, so an event id written under
+    /// the trip domain names nothing and the entry is refused — and that entry is exactly the
+    /// grant "share this event with them" is made of, which is the whole of what a club calendar
+    /// visible to a partner club means. The only shape left, a grant over every trip, is one
+    /// flag: it would hand its holder every event in the installation, private ones included, and
+    /// a grant meant for a club's meetings would confer read on every trip. There is no setting
+    /// between the two.
+    /// </para>
+    /// </summary>
+    Events = 22,
+    /// <summary>
     /// Terrain: the elevation surface the 3D scene draws, and the builds that produce it.
     /// An installation-level domain like <see cref="Settings"/>, <see cref="Audit"/> and
     /// <see cref="Jobs"/> — a terrain build has no owner, no caving group and no audience,
@@ -79,8 +135,14 @@ public enum AccessDomain : short
     /// entries here are only ever valid at the whole-installation scope, and every check
     /// is asked of the domain rather than of a row. Execute starts a build and publishes
     /// one, Read lists builds with their status and size, Delete removes a retained build.
-    /// Value 20 is deliberately skipped: it belongs to a domain being added in parallel,
-    /// and this catalogue is append-only — a value is never renumbered or reused.
+    /// <para>
+    /// Numbered 23 rather than 21. This domain and the three above it were written on two
+    /// lines of work at once, and both reached for the next free value: 21 was claimed
+    /// twice. Nothing had been stored under either yet, so the collision was settled by
+    /// moving this one, which had the fewer readers, and leaving 20-22 contiguous as the
+    /// other line had already reserved them. Append-only resumes from here: 21 and 22 are
+    /// spoken for above and are never to be reused.
+    /// </para>
     /// </summary>
-    Terrain = 21,
+    Terrain = 23,
 }

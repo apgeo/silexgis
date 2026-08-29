@@ -115,6 +115,14 @@ public static class ProfileProtection
     }
 
     /// <summary>
+    /// The same name, read straight off a profile. Exists so that a caller holding the whole
+    /// user — the token and userinfo claims, above all — cannot accidentally assemble its own
+    /// "display name, or else user name" fallback and publish the address that way.
+    /// </summary>
+    public static string Label(IUserProfile subject) =>
+        Label(subject.Id, subject.DisplayName, subject.UserNameValue, subject.EmailValue);
+
+    /// <summary>
     /// Projects a profile down to what <paramref name="relation"/> may see. Hidden fields come
     /// back null; hidden addresses come back as an empty list.
     /// </summary>
@@ -131,7 +139,7 @@ public static class ProfileProtection
 
         return new PublicProfile(
             subject.Id,
-            Label(subject.Id, subject.DisplayName, subject.UserNameValue, subject.EmailValue),
+            Label(subject),
             subject.DisplayName,
             subject.AvatarFileId,
             subject.AvatarPreset,

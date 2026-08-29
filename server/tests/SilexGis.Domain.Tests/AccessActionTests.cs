@@ -60,10 +60,15 @@ public class AccessActionTests
         ((short)AccessDomain.Features).ShouldBe((short)0);
         ((short)AccessDomain.Jobs).ShouldBe((short)18);
         ((short)AccessDomain.Documents).ShouldBe((short)19);
-        // 21, not the next unused number: 20 is claimed by a domain being added in
-        // parallel. The catalogue is append-only, and two members sharing a value would
-        // neither fail to compile nor violate a database constraint — it would surface
-        // only as one domain's rules quietly governing the other's rows.
-        ((short)AccessDomain.Terrain).ShouldBe((short)21);
+        // Pinned together, and this is what the assertion is for. Two members sharing a
+        // value would neither fail to compile nor violate a database constraint — it would
+        // surface only as one domain's rules quietly governing the other's rows. That very
+        // collision happened here: terrain and checklists were written on two lines of work
+        // at once and both took 21. Terrain moved to 23 because it had the fewer readers,
+        // and 20-22 stayed contiguous. The catalogue is append-only from 23 on.
+        ((short)AccessDomain.Expeditions).ShouldBe((short)20);
+        ((short)AccessDomain.Checklists).ShouldBe((short)21);
+        ((short)AccessDomain.Events).ShouldBe((short)22);
+        ((short)AccessDomain.Terrain).ShouldBe((short)23);
     }
 }

@@ -107,6 +107,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable
             name = "Broken",
             body = "title: {title}\nphotograph: all of them\nfield: Where = {gps_position}",
             isDefault = false,
+            kind = "trip",
         });
         var payload = await refused.Content.ReadAsStringAsync();
         refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, payload);
@@ -171,6 +172,40 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>
+    /// Which kind of thing a layout writes up is asked for on every save, never assumed.
+    /// </summary>
+    /// <remarks>
+    /// A save is a full replace, so a kind that fell back to a default would be stamped over the
+    /// kind the stored layout already had — retyping a camp layout as a trip layout, and, if it
+    /// was the chosen one, taking the club's chosen trip layout with it. Nothing in the answer
+    /// would say so, and camp write-ups would quietly go back to the shipped layout. The positive
+    /// half is over the same fixture: the same body with the kind named is stored.
+    /// </remarks>
+    [Fact]
+    public async Task A_layout_saved_without_saying_what_it_writes_up_is_refused()
+    {
+        const string Body = "title: {title}\nheading: Ordinary";
+
+        using var refused = await admin.PostAsJsonAsync(
+            "/api/v1/trip-report-templates/", new { name = "Kindless", body = Body, isDefault = false });
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+
+        var stored = await StoreAsync(admin, "Kinded", Body, isDefault: false);
+
+        // And a rewrite of a stored layout is refused the same way, which is the case that
+        // silently retyped one: the layout is still there afterwards, still of its own kind.
+        using var rewritten = await admin.PutAsJsonAsync(
+            $"/api/v1/trip-report-templates/{stored}",
+            new { name = "Kindless again", body = Body, isDefault = false });
+        rewritten.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await rewritten.Content.ReadAsStringAsync());
+
+        var listed = await admin.GetFromJsonAsync<JsonElement>("/api/v1/trip-report-templates/");
+        var row = listed.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == stored);
+        row.GetProperty("name").GetString().ShouldBe("Kinded");
+        row.GetProperty("kind").GetString().ShouldBe("trip");
+    }
+
+    /// <summary>
     /// The layout a write-up gets when nobody names one is the one chosen for the installation,
     /// and only one layout may be that.
     /// </summary>
@@ -222,6 +257,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable
             name = "Not mine",
             body = "title: {title}",
             isDefault = false,
+            kind = "trip",
         });
         refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await refused.Content.ReadAsStringAsync());
 
@@ -241,7 +277,7 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable
     private async Task<Guid> StoreAsync(HttpClient client, string name, string body, bool isDefault)
     {
         using var response = await client.PostAsJsonAsync(
-            "/api/v1/trip-report-templates/", new { name, body, isDefault });
+            "/api/v1/trip-report-templates/", new { name, body, isDefault, kind = "trip" });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         var id = JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();

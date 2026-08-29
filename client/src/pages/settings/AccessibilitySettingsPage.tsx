@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { App, Button, Card, Flex, InputNumber, Select, Switch, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useUiPreferences, useUpdateUiPreferences } from '../../api/hooks.ts';
+import { useLanguageChoice } from '../../i18n/languageChoice.ts';
 import {
   DEFAULT_APPEARANCE,
   useUiPrefsStore,
@@ -29,7 +30,8 @@ interface StoredPreferences {
  * that waited for a round trip before repainting would feel broken.
  */
 export default function AccessibilitySettingsPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const { language, choose } = useLanguageChoice();
   const { message } = App.useApp();
   const appearance = useUiPrefsStore((s) => s.appearance);
   const setAppearance = useUiPrefsStore((s) => s.setAppearance);
@@ -114,8 +116,8 @@ export default function AccessibilitySettingsPage() {
             <Typography.Text style={{ minWidth: 160 }}>{t('common.language')}</Typography.Text>
             <Select
               style={{ width: 200 }}
-              value={i18n.resolvedLanguage}
-              onChange={(lng) => void i18n.changeLanguage(lng)}
+              value={language}
+              onChange={choose}
               aria-label={t('common.language')}
               options={[
                 { value: 'en', label: 'English' },

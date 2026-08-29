@@ -18,6 +18,9 @@ public sealed record AuditEntryDto(
     string Action,
     string? EntityType,
     string? EntityId,
+    /// <summary>The entity whose trail this row also belongs to, when it belongs to one.</summary>
+    string? RootEntityType,
+    string? RootEntityId,
     /// <summary>Per-property diff: { "prop": { "old": …, "new": … } }.</summary>
     JsonElement? Changes);
 
@@ -29,7 +32,9 @@ public static class AuditEndpoints
     {
         api.MapGet("/audit", ListAsync)
             .WithTags("Audit")
-            .WithSummary("Audit trail, filterable by entity (\"Feature\" selects every feature kind); requires Read on the Audit domain.");
+            .WithSummary(
+                "Audit trail, filterable by entity (\"Feature\" selects every feature kind) and "
+                + "by the entity a row belongs to; requires Read on the Audit domain.");
         return api;
     }
 
@@ -39,6 +44,8 @@ public static class AuditEndpoints
         IAccessContextAccessor accessAccessor,
         string? entityType,
         string? entityId,
+        string? rootEntityType,
+        string? rootEntityId,
         string? action,
         int? page,
         int? pageSize,
@@ -75,6 +82,19 @@ public static class AuditEndpoints
             query = query.Where(x => x.EntityId == entityId);
         }
 
+        // The other way in: rows an act wrote all at once. Sharing one camp writes a rule onto
+        // every trip it gathered — forty rows nobody authored one at a time, which are an
+        // account of one act only if they can be asked for together.
+        if (!string.IsNullOrWhiteSpace(rootEntityType))
+        {
+            query = query.Where(x => x.RootEntityType == rootEntityType);
+        }
+
+        if (!string.IsNullOrWhiteSpace(rootEntityId))
+        {
+            query = query.Where(x => x.RootEntityId == rootEntityId);
+        }
+
         if (!string.IsNullOrWhiteSpace(action))
         {
             query = query.Where(x => x.Action == action);
@@ -99,6 +119,8 @@ public static class AuditEndpoints
             x.Action,
             x.EntityType,
             x.EntityId,
+            x.RootEntityType,
+            x.RootEntityId,
             x.Changes is null ? null : JsonSerializer.Deserialize<JsonElement>(x.Changes))).ToList();
 
         return TypedResults.Ok(new PagedResult<AuditEntryDto>(items, p, size, total));

@@ -117,6 +117,46 @@ public sealed class FeatureIntegrityTests : IAsyncLifetime, IDisposable
         await ExecuteAsync(db => db.FeatureShares.Where(s => s.Id == good.Id).ExecuteDeleteAsync());
     }
 
+    [Theory]
+    [InlineData(AttachedEntityType.Album)]
+    [InlineData(AttachedEntityType.Expedition)]
+    public async Task A_row_pointing_at_a_vanished_target_is_reported_for_every_kind_that_has_a_table(
+        AttachedEntityType type)
+    {
+        // The polymorphic pair has no foreign key, so nothing but this check notices a row
+        // whose target is gone. The net is a list of kinds, one line each, and a kind left off
+        // it is silently unchecked rather than loudly wrong — which is why each kind that has
+        // a table of its own is driven rather than read off the list.
+        (await VerifyAsync()).ShouldBeEmpty();
+
+        var tagId = await ExecuteReturningAsync(async db =>
+        {
+            var name = $"orphan-net-{Guid.NewGuid():N}"[..20];
+            var tag = new Tag { Name = name, Slug = name };
+            db.Tags.Add(tag);
+            await db.SaveChangesAsync();
+            return tag.Id;
+        });
+
+        var vanished = Guid.CreateVersion7();
+        await ExecuteAsync(async db =>
+        {
+            db.Taggings.Add(new Tagging { TagId = tagId, EntityType = type, EntityId = vanished });
+            await db.SaveChangesAsync();
+        });
+
+        var problem = (await VerifyAsync()).ShouldHaveSingleItem();
+        problem.Check.ShouldBe("tagging_orphan");
+        problem.Detail.ShouldContain(vanished.ToString());
+        problem.Detail.ShouldContain(type.ToString());
+
+        // The suite shares one database and other classes assert the verifier finds nothing at
+        // all, so this puts back what it broke.
+        await ExecuteAsync(db => db.Taggings.Where(t => t.EntityId == vanished).ExecuteDeleteAsync());
+        await ExecuteAsync(db => db.Tags.Where(t => t.Id == tagId).ExecuteDeleteAsync());
+        (await VerifyAsync()).ShouldBeEmpty();
+    }
+
     // ---- helpers ----
 
     /// <summary>
@@ -173,6 +213,12 @@ public sealed class FeatureIntegrityTests : IAsyncLifetime, IDisposable
     {
         using var scope = factory.Services.CreateScope();
         await action(scope.ServiceProvider.GetRequiredService<SilexGisDbContext>());
+    }
+
+    private async Task<T> ExecuteReturningAsync<T>(Func<SilexGisDbContext, Task<T>> action)
+    {
+        using var scope = factory.Services.CreateScope();
+        return await action(scope.ServiceProvider.GetRequiredService<SilexGisDbContext>());
     }
 
     private async Task<Guid> SingleAsync(Func<SilexGisDbContext, IQueryable<Guid>> query)

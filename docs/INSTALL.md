@@ -934,6 +934,12 @@ For Twilio, point `Url` at
 `ContentType=application/json` and a body such as
 `{"to":"{to}","from":"{from}","message":"{text}"}`.
 
+A configured SMS gateway is also what a charging notification channel needs: with
+`SILEXGIS__Announcements__PaidChannelsEnabled` on, an announcement to a caving group may be
+texted to the members who have confirmed a telephone number, and every such message is charged by
+your gateway. Nothing else is ever texted, and `SILEXGIS__Announcements__DailyPaidMessageCap`
+bounds what one day of it may cost.
+
 Use **Messaging → Send test** in the admin pages to confirm a channel works before anyone
 depends on it; a failure is reported with the server's own error message.
 
@@ -988,7 +994,18 @@ policy**:
   affected by upgrading.
 - **Which second factors are allowed.** Texted codes are **off by default**: a phone number can be
   moved to another SIM by persuading a mobile operator, which makes SMS the weakest of the three.
-- **Code lifetime and the wait between codes.**
+- **Code lifetime and the wait between codes.** The wait is counted **per account**, in the
+  database, and nobody can reset it by deleting their number and starting again. A wrong code
+  counts against the account's ordinary lockout, so a six-digit code cannot be sat and guessed at.
+  The **Send a test message** buttons on the mail and SMS pages carry the same per-account wait, so
+  a test cannot be looped into a bill.
+
+A member's **telephone number is a sign-in credential**, not a profile field: it can only be changed
+through the security page, by returning a code texted to the new number, and one number belongs to
+one account. Whether other members can see it is still a profile setting. A **confirmed** number is
+also the only address a notification can be texted to, so a member who has never confirmed one is
+never reached that way — and a number waiting for its code is nobody's address, only the
+destination of the code that proves it.
 
 ## Non-Docker install
 
@@ -1057,6 +1074,14 @@ the reasoning beside each one.
 | `SILEXGIS__Protection__RevealProtectedAssociations` | `false` | show a caller without exact-location rights that a document is attached to a position-protected cave. The document itself is served either way; only the pairing is affected, and switching this on never reveals a position — a photo carrying its own capture point stays unpaired regardless |
 | `SILEXGIS__Notifications__PollSeconds` | `15` | how often queued notifications are sent; **0 switches sending off entirely, and queued messages keep accumulating** |
 | `SILEXGIS__Notifications__DigestHourUtc` | `7` | the hour (UTC) at which daily summaries go out |
+| `SILEXGIS__Notifications__RetentionDays` | `365` | how long a notification stays readable in the recipient's list before it is deleted — read or unread alike, and whether or not an email ever went out for it. Values of zero or less are ignored in favour of the default, so a mistyped setting cannot empty the list. This one is also editable in **Admin → Messaging → Notifications**; a window saved there replaces this value, and an installation that never opens that page keeps whatever is set here |
+| `SILEXGIS__Notifications__QuietHoursFrom` | *(empty)* | the wall-clock time, `HH:mm`, at which nothing more may be sent to a member until the window closes. Read in each member's own time zone, so it means the same hour of their night whatever the season. Quiet hours are off unless **both** ends are given; a value that cannot be read as `HH:mm` counts as not given, so a typo leaves sending exactly as it was rather than holding messages back at an hour nobody chose |
+| `SILEXGIS__Notifications__QuietHoursTo` | *(empty)* | the wall-clock time the window closes. Earlier than the opening time for the ordinary window that runs across midnight, such as `22:00` to `07:00`. A window whose two ends are equal is ignored rather than read as "every hour", which would silence an account permanently. Messages held by the window become due the moment it closes; the notification itself is in the member's list the whole time, because a list interrupts nobody. Warnings a member may not switch off — about their own account, or a party overdue underground — ignore the window entirely |
+| `SILEXGIS__Notifications__TimeZone` | `UTC` | the IANA zone whose night is used for a member who has never told the installation theirs; a member's own zone is stored the first time their browser reports it |
+| `SILEXGIS__Notifications__BadgeTransport` | `poll` | how a signed-in page keeps the unread count in the header current. `poll` — the only transport implemented — asks again once a minute. `sse` is reserved for a server-pushed stream and does not exist yet: selecting it today leaves the count moving only when the reader marks something read or returns to the tab. Any other value is treated as a typo and answered as `poll` |
+| `SILEXGIS__Notifications__AnnouncementFanOutLimit` | `50` | how many people an announcement to a caving group may be written to inside the request that sends it. A roster larger than this is recorded once and handed out by a background pass moments later, so a large club does not turn one click into a slow request holding a write transaction open. The number is budgeted from what a caving club is rather than measured — a local club runs to a few dozen, a national federation to several hundred — so raise it if your largest roster is bigger and sending still feels instant |
+| `SILEXGIS__Announcements__PaidChannelsEnabled` | `false` | whether an announcement to a caving group may go out by a channel that charges for every message. Off, so an installation opts into spending money rather than inheriting it — and while it is off such a channel is not merely hidden: no member can choose it, no preference for it resolves to anything, and no outbound copy on it is created. Also editable in **Admin → Messaging → Notifications**; what is saved there replaces this value. The charging channel is the **text message**, so switching this on can put real messages on a real bill: it additionally needs the `SILEXGIS__Sms__*` settings (or **Admin → Messaging → SMS**) pointing at a working gateway, and only an announcement to a caving group may use it. A member is texted only if they have confirmed a telephone number on their own security page |
+| `SILEXGIS__Announcements__DailyPaidMessageCap` | `100` | how many messages on a charging channel this installation will send in a day before it refuses. Counted over messages already committed today, including ones still waiting to go out, because money committed is money spent. Values of zero or less are ignored in favour of the default — the switch above is how an installation sends none. Also editable in **Admin → Messaging → Notifications** |
 | `SILEXGIS__About__InstanceName` | `SilexGIS` | name used in the messages this installation sends |
 | `SILEXGIS__Auth__DefaultPermissionGroups` | *(empty)* | comma-separated permission-group slugs (e.g. `editors`) every new account joins at registration or first external sign-in |
 | `SILEXGIS__Map__CenterlineDetailZoom` | `18` | zoom at which cave centerlines switch from passage outlines to full survey detail |
@@ -1082,5 +1107,7 @@ the reasoning beside each one.
 | `SILEXGIS__AccessHistory__CollapseWindow` | `01:00:00` | within this window, the same person fetching the same file again is the same reading and adds no row |
 | `SILEXGIS__AccessHistory__SweepInterval` | `1.00:00:00` | how often the pass that deletes expired access-history rows is queued. `00:00:00` turns the schedule off, and nothing is then deleted. Note the leading `1.` — a day is written `d.hh:mm:ss`, and `24:00:00` on its own means twenty-four **days** |
 | `SILEXGIS__FeatureIntegrity__Interval` | `1.00:00:00` | how often a background pass re-checks the map data for internal inconsistencies; findings go to the log and the admin jobs list. `00:00:00` turns the schedule off |
+| `SILEXGIS__TripCallout__SweepInterval` | `00:15:00` | how often a background pass checks whether a party that said when it would be back is overdue, and tells the people the trip names. This interval is also how late that message can arrive, which is why it is minutes rather than hours. `00:00:00` turns the check off entirely and nobody is told, whatever a trip has recorded. Values above `00:30:00` are treated as `00:30:00`: a trip showing an armed check reports a check that has not run for an hour as *unchecked* and tells the reader to reach the party another way, and a warning every armed trip carries permanently is one nobody reads |
+| `SILEXGIS__TripCallout__ReminderLead` | `2.00:00:00` | how far ahead of a trip, or of a club event, the people it concerns are reminded that it is coming up. The same pass sends both, so something put back or called off stops reminding anybody. One setting for the whole installation, not one per reader. `00:00:00` sends no reminders and leaves the overdue check running |
 
 Secrets belong only in the environment / `.env`, never in the repository.

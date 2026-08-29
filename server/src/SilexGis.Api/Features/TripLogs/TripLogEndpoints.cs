@@ -18,16 +18,41 @@ namespace SilexGis.Api.Features.TripLogs;
 
 public static class TripLogEndpoints
 {
+    // A lifecycle state a listing was asked to narrow by that a trip does not have. Its own code
+    // rather than the transition refusal's: nothing is being moved, a word was simply not
+    // recognised, and a client that cannot tell those apart cannot say anything useful about
+    // either.
+    private const string StateInvalidCode = "trip_log.state_invalid";
+
     public static RouteGroupBuilder MapTripLogEndpoints(this RouteGroupBuilder api)
     {
         var trips = api.MapGroup("/trip-logs").WithTags("TripLogs");
 
         trips.MapGet("/", ListAsync)
             .WithSummary("Paged trip logs with date/cave filters; visibility-filtered.");
+        trips.MapGet("/mine", MineAsync)
+            .WithSummary(
+                "The trips the calling account is on \u2014 named on the roster or asked about it "
+                + "\u2014 soonest first, from today unless a window says otherwise, and narrowable "
+                + "by lifecycle state. Whose trips these are is worked out from the caller and "
+                + "cannot be asked for: there is no parameter naming a person, because one would "
+                + "answer where a named person has been out of trips the asker may not read.");
         trips.MapGet("/{id:guid}", GetAsync)
             .WithSummary("Single trip log with caves and participants.");
         trips.MapPost("/", CreateAsync).WithValidation<TripLogWriteRequest>()
-            .WithSummary("Creates a trip log (Create permission on trip logs); the caller becomes owner.");
+            .WithSummary(
+                "Creates a trip log written up after the event (Create permission on trip logs); "
+                + "the caller becomes owner, and an audience the request does not name is private.");
+        trips.MapPost("/plans", CreatePlanAsync).WithValidation<TripLogWriteRequest>()
+            .WithSummary(
+                "Creates a trip that has not happened yet (Create permission on trip logs). The "
+                + "same trip in every respect but one: an audience the request does not name is "
+                + "the author's caving group rather than private, because a proposal only its "
+                + "author can read is a proposal to nobody. The state it starts in is the same.");
+        trips.MapGet("/plan-default", PlanDefaultAsync)
+            .WithSummary(
+                "The audience a trip being planned would get for this caller if they name none, "
+                + "answered before the trip exists so a form can say who will see it.");
         trips.MapPut("/{id:guid}", UpdateAsync).WithValidation<TripLogWriteRequest>()
             .WithSummary(
                 "Full update (Write permission). The whole roster is replaced, in every role, so a "
@@ -35,10 +60,26 @@ public static class TripLogEndpoints
                 + "when a list is supplied, and left as they are when the field is omitted.");
         trips.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes a trip log with its links and attachments.");
-        trips.MapPost("/{id:guid}/publish", PublishAsync)
-            .WithSummary("Announces a trip log and tells the people named on it (Write permission).");
-        trips.MapPost("/{id:guid}/unpublish", UnpublishAsync)
-            .WithSummary("Returns a trip log to draft — the reverse of publishing (Write permission).");
+        trips.MapPost("/{id:guid}/state", TransitionAsync)
+            .WithValidation<TripLogTransitionRequest>()
+            .WithSummary(
+                "Moves a trip log to another lifecycle state (Write permission). One endpoint "
+                + "rather than a verb per state: the moves a trip may make are a table, and a "
+                + "verb per move can only ever offer the handful somebody thought to name.");
+        trips.MapPost("/{id:guid}/callout", ArrangeCalloutAsync)
+            .WithValidation<TripCalloutRequest>()
+            .WithSummary(
+                "Arranges, changes or calls off the check that notices if the party does not come "
+                + "back (Write permission). Its own door rather than two fields on the trip, so "
+                + "that saving the trip from a surface which never drew them cannot quietly leave "
+                + "a party unwatched.");
+        trips.MapPost("/{id:guid}/callout/stand-down", StandDownCalloutAsync)
+            .WithSummary(
+                "Says the party is out, which stops the overdue check. Open to anyone the trip "
+                + "names or has asked, and deliberately not to whoever may edit the trip: it is a "
+                + "statement about where people are, not a change to the record of the trip. It "
+                + "stands the check down rather than erasing it, so what was arranged stays "
+                + "readable afterwards.");
         trips.MapGet("/{id:guid}/report", TripReportEndpoints.DownloadAsync)
             .WithSummary(
                 "The trip written up as a document, built from this caller's own reading of the "
@@ -62,6 +103,7 @@ public static class TripLogEndpoints
         DateOnly? from,
         DateOnly? to,
         Guid? caveId,
+        Guid? expeditionId,
         string? search,
         CancellationToken ct)
     {
@@ -74,26 +116,20 @@ public static class TripLogEndpoints
 
         var query = db.TripLogs.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs);
 
-        // A trip may run across several days, so the window asks whether the trip overlapped it
-        // rather than whether it started inside it: a trip that ran 27 February to 2 March belongs
-        // in March as much as in February. A trip with no end date is one day long.
-        if (from is not null)
-        {
-            var start = from.Value;
-            query = query.Where(x => (x.TripDateEnd ?? x.TripDate) >= start);
-        }
-
-        if (to is not null)
-        {
-            var end = to.Value;
-            query = query.Where(x => x.TripDate <= end);
-        }
+        query = query.OverlappingDays(x => x.TripDate, x => x.TripDateEnd, from, to);
 
         if (caveId is not null)
         {
-            // Filtering trips by a location-protected cave would place the cave through
-            // the trips' geometries — behave as if nothing is linked.
-            if (await protection.ShouldRedactLinkAsync(ctx, caveId, ct))
+            // Asked through the same rule the rows themselves are mapped by, and for the same
+            // reason in both directions. A cave this caller may not open is one the listing
+            // will not name, so it must not be usable as a filter either: an id that answers
+            // differently from one that does not exist is an id anybody can go looking for,
+            // and the answer would be the trips that reached it — each carrying its own exact
+            // geometry, which places the cave the filter would not name. The position gate is
+            // the other half of the same question: filtering by a guarded cave places it
+            // through the trips' geometries even when the cave itself is readable. Either one
+            // failing behaves as if nothing is linked.
+            if ((await DisclosableCaveIdsAsync(db, protection, ctx, [caveId.Value], ct)).Count == 0)
             {
                 var (emptyPage, emptySize) = Paging.Normalize(page, pageSize);
                 return TypedResults.Ok(new PagedResult<TripLogDto>([], emptyPage, emptySize, 0));
@@ -105,6 +141,31 @@ public static class TripLogEndpoints
             query = query.Where(x => namingTrips.Contains(x.Id));
         }
 
+        if (expeditionId is not null)
+        {
+            // This is the camp's own trip list, so it is filtered like every other listing here
+            // and shows only what the caller may read — the same camp therefore lists different
+            // trips to different people, and both listings are right.
+            //
+            // A camp the caller may not read answers as though it gathered nothing, rather than
+            // filtering by it: the trips are readable, so filtering would tell the caller which
+            // of them a camp they cannot open holds, and an id that answers differently from one
+            // that does not exist is an id anybody can go looking for.
+            var readableCamp = await db.Expeditions.AsNoTracking()
+                .VisibleTo(ctx, AccessDomain.Expeditions)
+                .AnyAsync(x => x.Id == expeditionId.Value, ct);
+            if (!readableCamp)
+            {
+                var (emptyPage, emptySize) = Paging.Normalize(page, pageSize);
+                return TypedResults.Ok(new PagedResult<TripLogDto>([], emptyPage, emptySize, 0));
+            }
+
+            var members = db.ExpeditionTrips.AsNoTracking()
+                .Where(m => m.ExpeditionId == expeditionId.Value)
+                .Select(m => m.TripLogId);
+            query = query.Where(x => members.Contains(x.Id));
+        }
+
         if (!string.IsNullOrWhiteSpace(search))
         {
             var pattern = $"%{search}%";
@@ -114,6 +175,119 @@ public static class TripLogEndpoints
         var (p, size) = Paging.Normalize(page, pageSize);
         var total = await query.CountAsync(ct);
         var rows = await query.OrderByDescending(x => x.TripDate).ThenByDescending(x => x.CreatedAt)
+            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
+
+        var items = await MapWithChildrenAsync(db, access, protection, ctx, user, rows, ct);
+        return TypedResults.Ok(new PagedResult<TripLogDto>(items, p, size, total));
+    }
+
+    /// <summary>
+    /// The caller's own trips, soonest first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Whose trips these are is resolved from the request's own identity and from nothing
+    /// supplied. That is the whole shape of this route, not an implementation detail: a
+    /// parameter naming a person would let somebody assemble where that person has been out of
+    /// trips they may never open, and the size of the answer gives it away even when no row
+    /// comes back — ask once, ask again with a different window, and the difference is when that
+    /// person was underground. Filtering trips by participant is refused everywhere else in this
+    /// application for exactly that reason, and a query string is the same request with
+    /// different spelling. So there is no participant parameter here, under any name, and adding
+    /// one would undo a refusal the rest of the code takes seriously.
+    /// </para>
+    /// <para>
+    /// Being on a trip is not a right to read it. The caller's ordinary reading is applied first
+    /// and this narrows what is left, so a trip somebody was asked about and then shut out of
+    /// disappears from their own list — which is correct: the list is a view of records, and a
+    /// record nobody may read is not shown by a different door.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<PagedResult<TripLogDto>>, UnauthorizedHttpResult, ProblemHttpResult>> MineAsync(
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
+        FeatureProtection protection,
+        int? page,
+        int? pageSize,
+        DateOnly? from,
+        DateOnly? to,
+        string? state,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var user = await userAccessor.GetAsync(ct);
+        if (ctx is null || user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        // Lifecycle states arrive as the camelCase words the rest of the contract spells them
+        // with, parsed here rather than by route binding: binding a bad word would answer with a
+        // bare 400 carrying no code, and a client cannot tell that apart from any other refusal.
+        // A word this application does not have, and one a trip cannot hold, are refused alike —
+        // a caller who asked for something that cannot exist wants to be told, not handed the
+        // whole list.
+        ActivityState? stateFilter = null;
+        if (!string.IsNullOrWhiteSpace(state))
+        {
+            if (!Enum.TryParse<ActivityState>(state, ignoreCase: true, out var stateValue)
+                || !Enum.IsDefined(stateValue)
+                || !ActivityStates.IsTripLogState(stateValue))
+            {
+                return ApiProblems.BadRequest(StateInvalidCode, $"Unknown state '{state}'.");
+            }
+
+            stateFilter = stateValue;
+        }
+
+        var query = db.TripLogs.AsNoTracking().VisibleTo(ctx, AccessDomain.TripLogs);
+
+        // Being asked counts as being on it, and saying no counts as not being on it. Somebody
+        // invited and not yet written onto the roster has the trip in their diary as much as
+        // anybody already named; somebody who declined does not, and would otherwise fill a short
+        // list with the weekends they turned down while the trip they are going on falls off the
+        // end. Being written onto the party regardless is the organiser overruling the answer, and
+        // puts the trip back.
+        var mine = TripAudience.TripIdsTheAccountIsOn(db, user.UserId);
+        query = query.Where(x => mine.Contains(x.Id));
+
+        // Coming up means from today onwards unless the caller says otherwise, so the default is
+        // a floor rather than a fixed window: a list of what somebody is going on is useless if
+        // it opens on last winter. Dates here are the trip's own calendar days and today is read
+        // in UTC, which is the only clock this application stores — a trip on the boundary can
+        // therefore appear or drop a few hours early or late for a reader far from it, and that
+        // is preferable to a per-reader answer nothing else in the application gives.
+        //
+        // An explicit window is honoured as asked, backwards included. Every row here is a trip
+        // the caller is on and may already read, so widening it discloses nothing that was being
+        // withheld; the same list then answers "what have I been on" without a second door.
+        var windowStart = from ?? DateOnly.FromDateTime(DateTime.UtcNow);
+
+        query = query.OverlappingDays(x => x.TripDate, x => x.TripDateEnd, windowStart, to);
+
+        // No state is excluded by default, and that is a decision rather than an omission. A trip
+        // the caller is on that has been called off is exactly the thing they most need to see on
+        // a list of what is coming up, and hiding it would make the list quietly disagree with the
+        // trip's own page. Narrowing is offered instead, so a surface that wants only what is
+        // going ahead asks for it and says so.
+        if (stateFilter is { } wantedState)
+        {
+            query = query.Where(x => x.State == wantedState);
+        }
+
+        var (p, size) = Paging.Normalize(page, pageSize);
+        var total = await query.CountAsync(ct);
+
+        // Ascending, which is the opposite of every other trip listing and is the point of this
+        // one: the next thing somebody is going on is the row they came for, so it is the first.
+        // The tie-break is the primary key and has to be — two trips on the same day are
+        // ordinary, and an order that does not separate them lets a row appear on two pages or on
+        // none as the database chooses. A timestamp is the same bug one step further away, since
+        // two rows written in the same tick tie again; the identifiers are time-ordered, so
+        // ascending by id reads as "the one entered first" among trips that start together.
+        var rows = await query.OrderBy(x => x.TripDate).ThenBy(x => x.Id)
             .Skip((p - 1) * size).Take(size).ToListAsync(ct);
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, rows, ct);
@@ -143,7 +317,42 @@ public static class TripLogEndpoints
         return TypedResults.Ok(items[0]);
     }
 
-    private static async Task<Results<Created<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
+    /// <summary>Creates a trip written up after the event.</summary>
+    private static Task<Results<Created<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
+        TripLogWriteRequest request,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
+        FeatureProtection protection,
+        TripSectionWriter sections,
+        CancellationToken ct) =>
+        CreateCoreAsync(
+            TripCreationIntent.Report, request, db, access, accessAccessor, userAccessor,
+            protection, sections, ct);
+
+    /// <summary>Creates a trip that has not happened yet.</summary>
+    private static Task<Results<Created<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreatePlanAsync(
+        TripLogWriteRequest request,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
+        FeatureProtection protection,
+        TripSectionWriter sections,
+        CancellationToken ct) =>
+        CreateCoreAsync(
+            TripCreationIntent.Plan, request, db, access, accessAccessor, userAccessor,
+            protection, sections, ct);
+
+    /// <summary>
+    /// Creating a trip, whichever door it came through. The two doors differ in one thing and it
+    /// is decided here, before anything is checked against it: the audience a request that names
+    /// none falls back to. Everything after that point is identical, which is why they share a
+    /// body rather than each growing their own copy of eight steps.
+    /// </summary>
+    private static async Task<Results<Created<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateCoreAsync(
+        TripCreationIntent intent,
         TripLogWriteRequest request,
         SilexGisDbContext db,
         IAccessService access,
@@ -160,12 +369,28 @@ public static class TripLogEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!CreateRules.MayCreate(ctx, AccessDomain.TripLogs, request.CavingGroupId))
+        // Who may read the trip is one answer in two values, so the default decides it only when
+        // the request answers neither of them. A request that names either half has taken the
+        // decision itself and both halves are read as it sent them — a stated audience with no
+        // group binding is somebody saying "not the club", and quietly supplying one would widen
+        // what they asked for. A request that names only a group is still naming a group: the
+        // audience falls back, but dropping the binding would take the row out of every rule
+        // written about that group's content, a refusal aimed at the group among them.
+        //
+        // Settled before the create check and the reference checks below, so a binding this rule
+        // supplies is guarded exactly like one the caller typed rather than slipping in behind
+        // them.
+        var fallback = TripAudienceRules.DefaultAudience(intent, ctx.CavingGroupIds);
+        var (visibility, cavingGroupId) = request.Visibility is null && request.CavingGroupId is null
+            ? fallback
+            : (request.Visibility ?? fallback.Visibility, request.CavingGroupId);
+
+        if (!CreateRules.MayCreate(ctx, AccessDomain.TripLogs, cavingGroupId))
         {
             return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
-        var problem = await ValidateReferencesAsync(db, ctx, request, ct);
+        var problem = await ValidateReferencesAsync(db, ctx, request with { CavingGroupId = cavingGroupId }, ct);
         if (problem is not null)
         {
             return problem;
@@ -173,6 +398,8 @@ public static class TripLogEndpoints
 
         var trip = new TripLog { Title = request.Title, OwnerUserId = user.UserId };
         Apply(trip, request);
+        trip.Visibility = visibility;
+        trip.CavingGroupId = cavingGroupId;
         // A new row has nothing stored, so every section is a first write and is measured
         // against the purpose's schemas as they stand.
         try
@@ -197,6 +424,42 @@ public static class TripLogEndpoints
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
         return TypedResults.Created($"/api/v1/trip-logs/{trip.Id}", items[0]);
+    }
+
+    /// <summary>
+    /// Who would be able to read a trip this caller plans, if they name no audience themselves —
+    /// the same rule the plan door applies, answered before the trip exists so a form can name
+    /// the audience rather than recite the rule. The group's name travels with its id because a
+    /// notice saying "your group" and a reader who belongs to one they had forgotten about are
+    /// not the same thing.
+    /// </summary>
+    /// <remarks>
+    /// Tells the caller nothing they do not already know: it reports their own membership, and
+    /// only when it is the single one that decides the answer.
+    /// </remarks>
+    private static async Task<Results<Ok<TripPlanDefaultDto>, UnauthorizedHttpResult>> PlanDefaultAsync(
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var (visibility, groupId) = TripAudienceRules.DefaultAudience(
+            TripCreationIntent.Plan, ctx.CavingGroupIds);
+        if (groupId is null)
+        {
+            return TypedResults.Ok(new TripPlanDefaultDto(visibility, null, null));
+        }
+
+        var name = await db.CavingGroups.AsNoTracking()
+            .Where(group => group.Id == groupId.Value)
+            .Select(group => group.Name)
+            .FirstOrDefaultAsync(ct);
+        return TypedResults.Ok(new TripPlanDefaultDto(visibility, groupId, name));
     }
 
     private static async Task<Results<Ok<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -251,13 +514,32 @@ public static class TripLogEndpoints
             return ApiProblems.BadRequest(e.Code, e.Message);
         }
 
-        if (request.CaveIds is { } caveIds)
-        {
-            await ReconcileCaveLinksAsync(db, protection, ctx, trip.Id, caveIds, ct);
-        }
+        var addedCaves = request.CaveIds is { } caveIds
+            ? await ReconcileCaveLinksAsync(db, protection, ctx, trip.Id, caveIds, ct)
+            : [];
 
         var added = await ReconcileRosterAsync(db, trip.Id, request, ct);
+
+        // Asked before the first message is queued, because queueing one is itself a change and
+        // would answer this question for it. A request that carries back exactly what it was
+        // given — a form saved without an edit, a version restored onto the version already
+        // loaded — moves no column, and a notice announcing a change that provably did not happen
+        // is how a category earns being muted along with the messages that matter.
+        var somethingChanged = db.ChangeTracker.HasChanges();
+
         await NotifyParticipantsAsync(db, access, user, trip, added, ct);
+        // A trip people are expecting to go on has changed under them, so the people it concerns
+        // are told — everybody named on it and everybody asked about it, minus whoever this same
+        // write has just told about it another way. What changed is not in the message: saying so
+        // would mean saying which field, and the fields include the places the trip is about.
+        if (somethingChanged)
+        {
+            await TripPlanNotifier.ChangedAsync(db, access, user, trip, added, ct);
+        }
+
+        // A cave named onto a trip after people were asked onto it is the same pairing arriving in
+        // the other order, and the people who can open it are told the same way.
+        await TripCaveAccessNotifier.CavesAddedAsync(db, access, user, trip, addedCaves, ct);
         await db.SaveChangesAsync(ct);
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
@@ -292,6 +574,27 @@ public static class TripLogEndpoints
         }
 
         // Participant rows cascade; polymorphic rows are cleaned here.
+        //
+        // The trip's place in a camp goes with it, and the camp is otherwise untouched: a camp
+        // that gathered this trip has one fewer member, which is what deleting the trip means.
+        await db.ExpeditionTrips.Where(m => m.TripLogId == trip.Id).ExecuteDeleteAsync(ct);
+
+        // Every rule anchored on this trip goes with it — the ones authored on its own
+        // permissions tab and the ones a camp's sharing wrote onto it alike. A rule whose
+        // anchor no longer exists is what the integrity check reports as an orphan, and it
+        // reads as a live grant on every surface that lists rules by subject.
+        //
+        // Loaded and removed rather than deleted in one statement, because a rule
+        // disappearing is a change to who may reach what, and every other place rules are
+        // withdrawn records that. A set-based delete never reaches the change tracker, so the
+        // withdrawal would happen with nothing in the trail to say it had.
+        var anchored = await db.AccessEntries
+            .Where(e => e.Domain == AccessDomain.TripLogs
+                && e.ScopeKind == AccessScopeKind.Object
+                && e.ScopeId == trip.Id)
+            .ToListAsync(ct);
+        db.AccessEntries.RemoveRange(anchored);
+
         await db.Attachments
             .Where(a => a.EntityType == AttachedEntityType.TripLog && a.EntityId == trip.Id)
             .ExecuteDeleteAsync(ct);
@@ -334,50 +637,18 @@ public static class TripLogEndpoints
     }
 
     /// <summary>
-    /// Announces a trip: the point at which the people named on it are told about it.
-    /// </summary>
-    private static Task<Results<Ok<TripLogDto>, ProblemHttpResult>> PublishAsync(
-        Guid id,
-        HttpContext http,
-        SilexGisDbContext db,
-        IAccessService access,
-        IAccessContextAccessor accessAccessor,
-        IUserContextAccessor userAccessor,
-        FeatureProtection protection,
-        CancellationToken ct) =>
-        TransitionAsync(id, ActivityState.Published, http, db, access, accessAccessor, userAccessor, protection, ct);
-
-    /// <summary>
-    /// The reverse of publishing. It takes the trip back for more work; it does not undo the
-    /// announcement, and the date of the first one is kept. It is also the door a trip that was
-    /// called off comes back through, so there is one answer to "how do I get at this again".
-    /// </summary>
-    private static Task<Results<Ok<TripLogDto>, ProblemHttpResult>> UnpublishAsync(
-        Guid id,
-        HttpContext http,
-        SilexGisDbContext db,
-        IAccessService access,
-        IAccessContextAccessor accessAccessor,
-        IUserContextAccessor userAccessor,
-        FeatureProtection protection,
-        CancellationToken ct) =>
-        TransitionAsync(id, ActivityState.Draft, http, db, access, accessAccessor, userAccessor, protection, ct);
-
-    // ---- shared pieces ----
-
-    /// <summary>
-    /// Moves a trip to another lifecycle state. Which moves exist is not decided here — the
-    /// transition table is the one place that knows, so a state a trip may not hold and a move it
-    /// may not make are refused by the same rule and with the same code.
+    /// Arranges, changes or calls off the check that notices if a party does not come back.
     /// </summary>
     /// <remarks>
-    /// The precondition is required exactly as it is on a full update: publishing announces the
-    /// write-up somebody has read, and announcing a version that changed underneath them is the
-    /// lost update the header exists to prevent.
+    /// Whoever may change the trip, because arranging one is part of planning the trip. Saying the
+    /// party is out is the other half and is not this: it belongs to the people on the trip and
+    /// has its own route. The precondition header is required as on every other write to a trip —
+    /// this one edits the record, and two people arranging different hours is the lost update it
+    /// exists to catch.
     /// </remarks>
-    private static async Task<Results<Ok<TripLogDto>, ProblemHttpResult>> TransitionAsync(
+    private static async Task<Results<Ok<TripLogDto>, ProblemHttpResult>> ArrangeCalloutAsync(
         Guid id,
-        ActivityState target,
+        TripCalloutRequest request,
         HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
@@ -406,6 +677,144 @@ public static class TripLogEndpoints
             return stale;
         }
 
+        ApplyCallout(trip, request);
+        await db.SaveChangesAsync(ct);
+
+        var arranged = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
+        return TypedResults.Ok(arranged[0]);
+    }
+
+    /// <summary>
+    /// Says the party is out: the overdue check stops, and stays on the trip as something that was
+    /// arranged and stood down rather than being erased.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Who may.</b> Anybody the trip names or has asked — not whoever may edit it. The two are
+    /// different questions with different answers: the person who knows the party is out is on the
+    /// trip, and making them wait for somebody with the right to change the record is exactly the
+    /// delay a callout exists to avoid. Whoever may edit the trip is not left without a way: the
+    /// arrangement itself is theirs to change, and clearing the alarm time on the trip calls the
+    /// whole thing off. Reading the trip is required as well, because saying nothing about a trip
+    /// you cannot read is the same refusal every other route gives.
+    /// </para>
+    /// <para>
+    /// <b>Why it takes no precondition header.</b> Every other write to a trip requires one, to
+    /// stop two people overwriting each other's edits. This one is not an edit: there is one value
+    /// it can write, everybody who may call it is saying the same thing, and a stale header would
+    /// refuse the message that says a party is safe. Two people tapping it at once is two people
+    /// agreeing.
+    /// </para>
+    /// <para>
+    /// A second tap answers 200 rather than a conflict, for the same reason: somebody who is not
+    /// sure the first one went through will tap again, and telling them it failed is the one wrong
+    /// answer available. A trip nobody arranged a check for is the refusal, because there is
+    /// nothing to stand down and saying "done" would report a check that never existed as handled.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<TripLogDto>, ProblemHttpResult>> StandDownCalloutAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
+        FeatureProtection protection,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var user = await userAccessor.GetAsync(ct);
+        var trip = await db.TripLogs.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (trip is null || ctx is null || user is null)
+        {
+            return ApiProblems.NotFound("trip_log.not_found");
+        }
+
+        if (!(await access.DecideAsync(ctx, AccessAction.Read, trip, ct)).Allowed)
+        {
+            return ApiProblems.NotFound("trip_log.not_found");
+        }
+
+        // The same set the alarm itself is sent to, asked from the one place that knows it: the
+        // people it would wake are the people who may say it is not needed. Two definitions of
+        // "who this trip concerns" would be free to disagree, and the disagreement that mattered
+        // would be somebody told a party is overdue with no way to say they are not.
+        var concerns = await TripAudience.ConcerningAsync(db, [trip.Id], user.UserId, ct);
+        if (!concerns.Contains(trip.Id))
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        if (trip.CalloutState == TripCalloutState.None)
+        {
+            return ApiProblems.Conflict(
+                "trip_log.callout_not_armed",
+                "This trip has no overdue check to stand down.");
+        }
+
+        if (trip.CalloutState != TripCalloutState.StoodDown)
+        {
+            // The times stay exactly as they were. What was arranged is part of the record of the
+            // trip — a search that was nearly called is worth being able to read afterwards — and
+            // the state is the only thing that moves.
+            trip.CalloutState = TripCalloutState.StoodDown;
+            await db.SaveChangesAsync(ct);
+        }
+
+        var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
+        return TypedResults.Ok(items[0]);
+    }
+
+    // ---- shared pieces ----
+
+    /// <summary>
+    /// Moves a trip to another lifecycle state. Which moves exist is not decided here — the
+    /// transition table is the one place that knows, so a state a trip may not hold and a move it
+    /// may not make are refused by the same rule and with the same code.
+    /// </summary>
+    /// <remarks>
+    /// The precondition is required exactly as it is on a full update: publishing announces the
+    /// write-up somebody has read, and announcing a version that changed underneath them is the
+    /// lost update the header exists to prevent.
+    /// </remarks>
+    private static async Task<Results<Ok<TripLogDto>, ProblemHttpResult>> TransitionAsync(
+        Guid id,
+        TripLogTransitionRequest request,
+        HttpContext http,
+        SilexGisDbContext db,
+        IAccessService access,
+        IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
+        FeatureProtection protection,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var user = await userAccessor.GetAsync(ct);
+        var trip = await db.TripLogs.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (trip is null)
+        {
+            return ApiProblems.NotFound("trip_log.not_found");
+        }
+
+        if (ctx is null || user is null || !(await access.DecideAsync(ctx, AccessAction.Write, trip, ct)).Allowed)
+        {
+            return (await access.DecideAsync(ctx, AccessAction.Read, trip, ct)).Allowed
+                ? ApiProblems.Forbidden()
+                : ApiProblems.NotFound("trip_log.not_found");
+        }
+
+        if (await Concurrency.CheckIfMatchAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, required: true) is { } stale)
+        {
+            return stale;
+        }
+
+        // One question, not two: a target the vocabulary admits but a trip may not hold appears in
+        // no pair of the table, so asking the table refuses it for the same reason and under the
+        // same code as an illegal move. Asking whether the state is an admitted one first would be
+        // a second rule saying the same thing, free to drift from it.
+        //
+        // The state is present because the validator filter runs before this and requires it; a
+        // body that names none is a 400 and never arrives here.
+        var target = request.State!.Value;
         if (!ActivityStates.MayTripLogTransition(trip.State, target))
         {
             return ApiProblems.Conflict(
@@ -413,7 +822,28 @@ public static class TripLogEndpoints
                 $"A trip log does not move from {trip.State} to {target}.");
         }
 
+        var stateBefore = trip.State;
         trip.State = target;
+        if (target == ActivityState.Cancelled)
+        {
+            // A deliberate notice sent by the path that calls a trip off, not a state-entry one:
+            // the switch that decides whether entering a state tells the roster the trip exists
+            // still answers "no" for a cancelled trip, and should. Being called off is the one
+            // thing the people expecting to go on it have to be told, and it is told here.
+            await TripPlanNotifier.CancelledAsync(db, access, user, trip, stateBefore, ct);
+        }
+        else if (target != ActivityState.Published && TripPlanNotices.AnnouncesChanges(stateBefore))
+        {
+            // A move of a plan is a change to it, and the one people are most likely to need: a
+            // trip put back to a date not yet chosen the evening before is exactly what somebody
+            // expecting to go on it has to hear. Told only when they were already expecting it —
+            // a plan leaving the workshop announces itself by other means, and the notice would
+            // otherwise be the first they heard of it. Whether the state it lands in is still one
+            // people are expecting anything from is the notifier's own question, so a plan going
+            // back into the workshop or off to be written up stays silent.
+            await TripPlanNotifier.ChangedAsync(db, access, user, trip, [], ct);
+        }
+
         if (target == ActivityState.Published)
         {
             // The stamp records when the trip first went out and is never moved: withdrawing it and
@@ -478,11 +908,91 @@ public static class TripLogEndpoints
         trip.SurveyStations = request.SurveyStations;
         trip.RopeMetres = request.RopeMetres;
         trip.HadIncident = request.HadIncident;
+        // Written straight through, and null clears it: a trip with no stated limit is the ordinary
+        // case, so there is nothing else an absent number could be asking for. It is never checked
+        // against how many people have said they are coming — lowering a limit below the answers
+        // already given moves people to waiting, which is what a limit is for, and refusing the
+        // edit would leave whoever runs the trip unable to say how many places there really are.
+        trip.MaxParticipants = request.MaxParticipants;
         trip.OrganizingCavingGroupId = request.OrganizingCavingGroupId;
         trip.Geom = request.Geom?.ToGeometryOrNull();
-        trip.CavingGroupId = request.CavingGroupId;
-        trip.Visibility = request.Visibility;
+        trip.MeetingGeom = request.MeetingGeom?.ToGeometryOrNull();
+        // An audience the request does not name is left exactly as it stands. The only place a
+        // trip's audience is decided for it is the moment it is created, and it is decided there
+        // before this runs — so a null arriving here can only mean "not editing who may read it",
+        // and a save from a surface that never drew the field cannot quietly narrow or widen one.
+        //
+        // The group binding moves with it rather than on its own, because the two are one answer:
+        // a group-visible trip whose binding is cleared names no group and is therefore readable
+        // by nobody but its owner. Writing the binding unconditionally would do exactly that to
+        // every save from a surface that drew neither field — the case the nullability above
+        // exists to protect — and it would do it silently, with the stored audience still
+        // reading "the caving group".
+        if (request.Visibility is { } visibility)
+        {
+            trip.Visibility = visibility;
+            trip.CavingGroupId = request.CavingGroupId;
+        }
     }
+
+    /// <summary>
+    /// Arms, re-arms or calls off the overdue check from the two times the request states.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The state is not a field anybody sends, because a surface that could post "armed" could
+    /// post "stood down" too, and saying a party is out belongs to the people on the trip rather
+    /// than to whoever may edit it. So it follows from the alarm time, by three readings:
+    /// </para>
+    /// <para>
+    /// No alarm time means there is no arrangement — a callout is called off by clearing the hour
+    /// it was set for, and there is nothing else an absent alarm on a trip somebody is editing
+    /// could be asking for.
+    /// </para>
+    /// <para>
+    /// An alarm time that differs from the stored one is a new arrangement and arms the check,
+    /// whichever state it was in. A party who came back, stood the check down and then went in
+    /// again for the evening has arranged a second callout, not repeated the first.
+    /// </para>
+    /// <para>
+    /// The same alarm time leaves the state alone, and that reading is the load-bearing one: it is
+    /// what stops an edit made for some entirely other reason — a note added, a person added,
+    /// anything a form saves whole — from quietly re-arming a check that somebody has already
+    /// stood down, which would raise an alarm about a party that is sitting in the pub.
+    /// </para>
+    /// </remarks>
+    private static void ApplyCallout(TripLog trip, TripCalloutRequest request)
+    {
+        var armedFor = trip.CalloutAlarmAt;
+        trip.ExpectedReturnAt = request.ExpectedReturnAt;
+        trip.CalloutAlarmAt = request.CalloutAlarmAt;
+
+        if (request.CalloutAlarmAt is null)
+        {
+            trip.CalloutState = TripCalloutState.None;
+        }
+        else if (request.CalloutAlarmAt != armedFor)
+        {
+            trip.CalloutState = TripCalloutState.Armed;
+        }
+    }
+
+    /// <summary>
+    /// Whether the scheduled pass would actually look at this trip's check, which is a narrower
+    /// question than whether a check is arranged on it.
+    /// </summary>
+    /// <remarks>
+    /// A check on a trip that was called off or put back stays on the record — clearing it is a
+    /// person's decision, not a rule's — but no pass will ever raise it, because the arrangement it
+    /// was set against no longer describes anything happening. Saying when the pass last ran would
+    /// then be answering a question nobody asked: the pass did run, and it deliberately looked
+    /// straight past this trip. Reporting that as <i>checked</i> is the one reading this whole
+    /// value exists to prevent, so the answer is withheld and the surface falls back to saying the
+    /// check is not being watched.
+    /// </remarks>
+    private static bool IsWatched(TripLog trip) =>
+        trip.CalloutState is TripCalloutState.Armed or TripCalloutState.Overdue
+            && TripCalloutRules.WatchesForOverdue(trip.State);
 
     /// <summary>
     /// The three sections as raw text, or null for one the request does not mention. Absent and
@@ -503,22 +1013,88 @@ public static class TripLogEndpoints
     /// </summary>
     private const string CaveListRole = "trip-visited";
 
+    /// <summary>
+    /// Of the caves a trip's roles name, the ones this caller may be told about at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two gates, in this order. The first is readability: <em>naming a cave is a read of the
+    /// cave</em>. A trip's own audience is not the cave's — a cave nobody but its owner may open
+    /// can be named on a trip half the club reads, and a trip's readership is in general a list
+    /// somebody types. Handing over the identifier of such a cave hands over the one thing that
+    /// is enough to go and ask for the cave elsewhere, so the identifier is withheld rather than
+    /// the name alone — on the trip's own cave list and on everything built from it, which is
+    /// what this rule governs and the whole of what it claims. A trip carries other panels with
+    /// withholding rules of their own, and they answer for themselves.
+    /// </para>
+    /// <para>
+    /// The second is placement, and it is a separate question with a separate answer: a trip
+    /// carries its own exact geometry, so "this trip reached that cave" places a guarded cave by
+    /// proximity even when the cave itself is perfectly readable. Neither gate implies the other
+    /// — the placement walk deliberately answers only about position and reads its rows past
+    /// every visibility filter, so it can never stand in for the first.
+    /// </para>
+    /// <para>
+    /// This is the one home of that rule for a trip's cave list. Every surface carrying the list
+    /// asks here — the read that produces it and the write that reconciles it alike — because
+    /// the write has to put back exactly what the read took out, and two copies of the predicate
+    /// are two answers waiting to drift apart.
+    /// </para>
+    /// </remarks>
+    internal static async Task<HashSet<Guid>> DisclosableCaveIdsAsync(
+        SilexGisDbContext db,
+        FeatureProtection protection,
+        AccessContext ctx,
+        IReadOnlyCollection<Guid> namedCaveIds,
+        CancellationToken ct)
+    {
+        var ids = namedCaveIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        // Narrowed in the statement rather than after it, and narrowed to caves in the same
+        // predicate: the list promises caves, and a role naming a spring belongs to the roles.
+        var readable = await db.Features.AsNoTracking()
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+            .Where(f => ids.Contains(f.Id) && f.Kind == FeatureKind.Cave)
+            .Select(f => f.Id)
+            .ToListAsync(ct);
+
+        // Asked over what survived the first gate, never over the whole named set: the position
+        // rule cannot be expressed in the same statement, and asking it first would let an
+        // unguarded private cave through on the strength of having no position to guard.
+        var redacted = await protection.RedactedLinkTargetIdsAsync(ctx, readable, ct);
+        return [.. readable.Where(id => !redacted.Contains(id))];
+    }
+
     // Reconcile with a diff (add/remove only what changed) rather than delete-all +
     // recreate-all: a full recreate logs a "created" event for every unchanged child on every
-    // save, so the diff keeps the timeline honest. Also preserves caves the caller could not
-    // see: those were redacted out of the list they edited, so treating the submitted list as
-    // the whole truth would silently drop them.
+    // save, so the diff keeps the timeline honest. Also preserves caves the caller was never
+    // shown, for either of the two reasons a cave is kept off the list they edited: treating a
+    // list handed over short as the whole truth would silently drop them.
     //
     // That last guard is why a list is only reconciled when one is actually supplied. Naming a
     // cave one at a time — which is how it is done now — cannot express "forget everything not
     // in this list", so the hazard simply does not arise there; it arises only here, where an
     // absence has to be read as an instruction, and here it is guarded.
     //
-    // Reads over every role, writes under one. A cave the trip already names — whatever it did
-    // there — is left exactly as it is rather than named a second time, and a cave dropped from
-    // the list is unnamed only from the role this path writes: a list with no roles in it is not
-    // an instruction to forget that the trip surveyed somewhere.
-    private static async Task ReconcileCaveLinksAsync(
+    // Reads over every role, writes under one, and that asymmetry is chosen rather than
+    // tolerated. A cave the trip already names — whatever it did there — is left exactly as it is
+    // rather than named a second time, and a cave dropped from the list is unnamed only from the
+    // role this path writes: a list with no roles in it is not an instruction to forget that the
+    // trip surveyed somewhere, and one coarse list must not be able to erase a finer statement
+    // somebody made on purpose elsewhere. The consequence, accepted with the rule: dropping a
+    // cave the trip holds only under some other role does nothing. Nothing is hidden by that —
+    // this write answers with the trip read afresh, whose list still names that cave — and the
+    // way to take such a cave off a trip is through the role that put it there.
+    /// <returns>
+    /// The caves this write newly named on the trip. A cave put back because the caller was never
+    /// shown it is not among them: nothing about it changed, and it is the caves that arrive that
+    /// somebody asked on the trip may turn out not to be able to open.
+    /// </returns>
+    private static async Task<List<Guid>> ReconcileCaveLinksAsync(
         SilexGisDbContext db,
         FeatureProtection protection,
         AccessContext ctx,
@@ -535,14 +1111,24 @@ public static class TripLogEndpoints
             .Select(pair => pair.FeatureId)
             .Distinct()
             .ToList();
-        var redacted = await protection.RedactedLinkTargetIdsAsync(ctx, named, ct);
-        var desired = requestedCaveIds.Concat(named.Where(redacted.Contains)).ToHashSet();
+
+        // Put back everything this caller was never shown, decided by the very function that
+        // decided what to show them. The two have to agree exactly: whatever the read takes out,
+        // the write puts back. A narrower re-add is not a smaller safeguard — it is a silent
+        // deletion, because the caller omits a cave they were never offered and the trip loses a
+        // link nobody asked to drop. That is why this asks the shared rule rather than the
+        // position rule alone: the position rule reads its rows past every visibility filter and
+        // answers only about where a cave is, so a cave held back for being unreadable is not
+        // among the ones it names.
+        var disclosable = await DisclosableCaveIdsAsync(db, protection, ctx, named, ct);
+        var desired = requestedCaveIds.Concat(named.Where(id => !disclosable.Contains(id))).ToHashSet();
 
         foreach (var caveId in named.Where(id => !desired.Contains(id)))
         {
             await TripRoleLinks.UnnameFeatureAsync(db, tripId, caveId, CaveListRole, ct);
         }
 
+        var addedCaveIds = new List<Guid>();
         foreach (var caveId in desired.Where(id => !named.Contains(id)))
         {
             // A role code that is not in the vocabulary means the installation's link types were
@@ -552,16 +1138,21 @@ public static class TripLogEndpoints
             {
                 throw new InvalidOperationException($"Relation type '{CaveListRole}' is not seeded.");
             }
+
+            addedCaveIds.Add(caveId);
         }
+
+        return addedCaveIds;
     }
 
     /// <summary>
-    /// The two roles the trip write path names by itself: everyone a trip records was either
+    /// The two roles a trip names by itself, wherever it writes its list of people: everyone a
+    /// trip records was either
     /// simply there or put it forward, and both are shipped rows precisely so this can rely on
     /// them existing. Missing means the vocabulary was never seeded, and a write that stored
     /// nobody while answering 200 is worse than one that fails.
     /// </summary>
-    private static async Task<(long Participant, long Proposer)> ShippedRosterRolesAsync(
+    internal static async Task<(long Participant, long Proposer)> ShippedRosterRolesAsync(
         SilexGisDbContext db, CancellationToken ct)
     {
         var ids = await db.TripParticipantRoles.AsNoTracking()
@@ -724,14 +1315,17 @@ public static class TripLogEndpoints
     /// of that data than a DTO is.
     /// </para>
     /// <para>
-    /// Every path that would tell somebody about a trip comes through here, so the two rules that
-    /// decide whether a message goes out at all are checked here once, for every caller alike. A
-    /// trip being written and a trip called off both keep their silence however their roster is
-    /// edited; and nobody is told about a trip they could not open, whether their name went on it
-    /// through an edit or through the announcement. A message to somebody the trip is closed to
-    /// would be useless to them and would still hand them its title and date, so the recipient's
-    /// own right to read it is decided here — freshly, against the trip as it now stands — rather
-    /// than assumed from their being named on it.
+    /// Every path that puts somebody's name on a trip comes through here, so the state rule is
+    /// checked once for every caller alike: a trip being written and a trip called off both keep
+    /// their silence however their roster is edited. Whether each recipient may actually read the
+    /// trip is the shared recipient rule, applied here as everywhere else — freshly, from that
+    /// person's own access, against the trip as it now stands, rather than assumed from their
+    /// being named on it.
+    /// </para>
+    /// <para>
+    /// The notices about a trip <i>being planned</i> — asked on it, changed, called off — are
+    /// deliberate acts by a person rather than a name arriving on a roster, and are sent by the
+    /// paths that cause them.
     /// </para>
     /// </remarks>
     private static async Task NotifyParticipantsAsync(
@@ -747,19 +1341,8 @@ public static class TripLogEndpoints
             return;
         }
 
-        // Load-bearing rather than defensive: one person holds as many roles on a trip as they
-        // did jobs, so one write can newly list the same person several times over.
-        var candidates = addedUserIds.Distinct().Where(id => id != user.UserId).ToList();
-        var recipients = new List<Guid>();
-        foreach (var candidate in candidates)
-        {
-            var theirs = await AccessContextResolver.ResolveAsync(db, candidate, ct);
-            if ((await access.DecideAsync(theirs, AccessAction.Read, trip, ct)).Allowed)
-            {
-                recipients.Add(candidate);
-            }
-        }
-
+        var recipients = await NotificationRecipients.WhoMayReadAsync(
+            db, access, trip, addedUserIds, user.UserId, ct);
         if (recipients.Count == 0)
         {
             return;
@@ -794,6 +1377,14 @@ public static class TripLogEndpoints
             return ApiProblems.BadRequest("trip_log.geometry_invalid", "Geometry is malformed or invalid.");
         }
 
+        // Checked with the same words and the same code as the sketch: both are geometry on the
+        // same request, and a caller that sent one malformed shape learns the same thing about
+        // either. Which field it was is in the request the caller sent.
+        if (request.MeetingGeom is not null && request.MeetingGeom.ToGeometryOrNull() is null)
+        {
+            return ApiProblems.BadRequest("trip_log.geometry_invalid", "Geometry is malformed or invalid.");
+        }
+
         // The purpose vocabulary is a row set an installation extends, so an unknown identity is
         // a plain bad request rather than a shape the request validator could have caught. The
         // vocabulary is readable by every account, so naming a row that does not exist discloses
@@ -812,7 +1403,10 @@ public static class TripLogEndpoints
 
         // A cave is a feature row, so existence and readability are one filtered count; an id
         // the caller cannot read is reported exactly like a nonexistent one, so linking cannot
-        // be used to probe for caves.
+        // be used to probe for caves. Nobody is ever forced to send one: the list a caller was
+        // handed holds only caves they may be told about, and the ones kept off it are put back
+        // by the reconcile rather than expected back from them — so refusing an unreadable id
+        // here cannot turn into a save that fails over a cave the caller never saw.
         var caveIds = (request.CaveIds ?? []).Distinct().ToList();
         if (caveIds.Count > 0)
         {
@@ -884,6 +1478,45 @@ public static class TripLogEndpoints
         // here. Distinct because two roles naming one cave are two rows and one cave.
         var caveLinks = await TripRoleLinks.PairsForAsync(db, tripIds, FeatureKind.Cave, ct);
 
+        // Which camp gathered each trip, narrowed to the camps this caller may read. A camp is
+        // governed in its own right, so naming one on a trip a caller may read would hand them
+        // the identity of a thing they have no right to open — and the identity is enough to ask
+        // for it. Filtered in the statement, not after it, for the reason every other listing
+        // here is: a filter applied to results is a filter somebody later forgets to apply.
+        var readableCampIds = db.Expeditions.AsNoTracking()
+            .VisibleTo(ctx, AccessDomain.Expeditions).Select(e => e.Id);
+        var campOfTrip = await db.ExpeditionTrips.AsNoTracking()
+            .Where(m => tripIds.Contains(m.TripLogId) && readableCampIds.Contains(m.ExpeditionId))
+            .Select(m => new { m.TripLogId, m.ExpeditionId })
+            .ToDictionaryAsync(m => m.TripLogId, m => m.ExpeditionId, ct);
+
+        // When the pass that watches for overdue parties last finished, asked only when one of
+        // these trips actually has a live check — the answer means nothing for a trip nobody
+        // arranged one for, and asking anyway would put a query on every listing of every trip.
+        //
+        // Only a pass that succeeded counts. A pass that failed checked nothing, and a failure
+        // that reported itself as "last checked at" would be the exact reassurance this value
+        // exists to withhold: an armed alarm whose watcher has not run is unchecked, and a surface
+        // has to be able to say so. Null — no pass has ever completed — says the same thing more
+        // strongly, so it is never dressed up as "not applicable".
+        DateTimeOffset? lastSwept = null;
+        HashSet<Guid> onTheTrip = [];
+        var liveCallouts = trips
+            .Where(t => t.CalloutState is TripCalloutState.Armed or TripCalloutState.Overdue)
+            .Select(t => t.Id)
+            .ToList();
+        if (liveCallouts.Count > 0)
+        {
+            lastSwept = await db.ProcessingJobs.AsNoTracking()
+                .Where(j => j.Kind == ProcessingJobKinds.TripCalloutSweep
+                    && j.Status == ProcessingJobStatus.Succeeded)
+                .MaxAsync(j => j.CompletedAt, ct);
+
+            // Asked from the one place that knows who a trip concerns, and asked only about the
+            // trips where the answer could mean anything.
+            onTheTrip = await TripAudience.ConcerningAsync(db, liveCallouts, user.UserId, ct);
+        }
+
         var roles = await ShippedRosterRolesAsync(db, ct);
         var participantRows = await (
             from participant in db.TripLogParticipants.AsNoTracking()
@@ -922,20 +1555,31 @@ public static class TripLogEndpoints
             })
             .ToList();
 
-        // Exact trip geometry + protected-cave link would disclose the cave; hide those links.
-        var redacted = await protection.RedactedLinkTargetIdsAsync(
-            ctx, [.. caveLinks.Select(x => x.FeatureId)], ct);
+        // Which of the caves these trips name this caller may be told about — readable first,
+        // then placeable. Decided for the whole page at once; what is left out is counted per
+        // trip below rather than named.
+        var disclosableCaves = await DisclosableCaveIdsAsync(
+            db, protection, ctx, [.. caveLinks.Select(x => x.FeatureId)], ct);
 
         // Which of these trips this caller may change, decided for the whole page at once so a
         // longer listing does not cost more round trips. It answers one question here: who is
         // told what went wrong, as against who is told that something did.
         var writable = await ProtectedWrites.WritableAsync(access, ctx, trips, ct);
 
+        // How much of the list its purpose names each of these trips has settled, resolved for the
+        // whole page at once rather than per row: which list a trip is measured against belongs to
+        // its purpose, so asking per trip would put the same query on a page fifty times. Nothing
+        // here narrows the page — a trip with nothing settled is on this list exactly as a trip
+        // fully settled is, because how ready a party is is a reading for that party and never a
+        // rule about who may see the plan.
+        var readiness = await TripChecklistReads.ReadinessForAsync(db, ctx, trips, ct);
+
         return [.. trips.Select(trip => MapOne(trip, writable.Contains(trip.Id)))];
 
         TripLogDto MapOne(TripLog trip, bool mayWrite)
         {
             var (safety, safetyVersion) = TripDisclosure.Safety(trip, mayWrite);
+            var named = caveLinks.Where(x => x.TripId == trip.Id).Select(x => x.FeatureId).ToList();
             return new TripLogDto(
                 trip.Id,
                 trip.Title,
@@ -950,7 +1594,7 @@ public static class TripLogEndpoints
                 trip.LocationText,
                 trip.OrganizingCavingGroupId,
                 trip.Geom is null ? null : GeoJsonGeometry.From(trip.Geom),
-                [.. caveLinks.Where(x => x.TripId == trip.Id && !redacted.Contains(x.FeatureId)).Select(x => x.FeatureId)],
+                [.. named.Where(disclosableCaves.Contains)],
                 // Everyone but the proposers, whatever job they did, so a role added to the
                 // vocabulary after this was written shows up as somebody who was there rather
                 // than as nobody at all. The two lists partition the roster between them.
@@ -973,7 +1617,20 @@ public static class TripLogEndpoints
                 JsonSerializer.Deserialize<JsonElement>(trip.Logistics),
                 trip.LogisticsSchemaVersion,
                 safety is null ? null : JsonSerializer.Deserialize<JsonElement>(safety),
-                safetyVersion);
+                safetyVersion,
+                campOfTrip.TryGetValue(trip.Id, out var campId) ? campId : null,
+                named.Count(id => !disclosableCaves.Contains(id)),
+                trip.MaxParticipants,
+                trip.ExpectedReturnAt,
+                trip.CalloutAlarmAt,
+                trip.CalloutState,
+                IsWatched(trip) ? lastSwept : null,
+                onTheTrip.Contains(trip.Id),
+                trip.MeetingGeom is null ? null : GeoJsonGeometry.From(trip.MeetingGeom),
+                readiness.TryGetValue(trip.Id, out var settled)
+                    ? new TripChecklistReadinessDto(
+                        settled.ChecklistId, settled.Readiness.Ticked, settled.Readiness.Total)
+                    : null);
         }
     }
 }

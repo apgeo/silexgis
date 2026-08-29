@@ -274,7 +274,8 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
     {
         var caveId = await CreateCaveAsync("Validation Cave", "private");
 
-        // The target vocabulary is feature | tripLog | geofile | georeferencedMap | mapView.
+        // The target vocabulary is feature | tripLog | geofile | georeferencedMap | mapView |
+        // expedition | event.
         // Anything else — including the retired per-kind names — is rejected with a stable code.
         foreach (var badName in new[] { "cave", "caveEntrance", "surfaceFeature", "banana" })
         {
@@ -387,8 +388,8 @@ public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        return await db.NotificationOutbox.AsNoTracking()
-            .CountAsync(n => n.UserId == userId && n.Category == NotificationCategory.PermissionGranted);
+        return await db.Notifications.AsNoTracking()
+            .CountAsync(n => n.RecipientUserId == userId && n.Category == NotificationCategory.PermissionGranted);
     }
 
     /// <summary>

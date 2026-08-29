@@ -128,6 +128,15 @@ const TRIP_SECTION_FIELDS = ['fieldData', 'logistics', 'safety'] as const;
  *
  * A section that *is* named is restored on purpose, and is measured — but it arrives from the
  * audit trail as a jsonb string while the write DTO takes an object, so it is parsed back first.
+ *
+ * The cave list travels as null for a related reason and a sharper one. It is not a restorable
+ * property of a trip at all — restore is offered only for the trip row's own audited fields — so
+ * what sits here is never an older value being put back, only whatever copy of the trip happens
+ * to be loaded. Echoing it would turn restoring a title into an instruction about the trip's
+ * caves, given from a copy that may already be stale. And the list a reader is handed is
+ * deliberately short of every cave they may not be told about, so echoing it is precisely the
+ * shape that reads as "forget those". No list at all is the only honest thing a restore has to
+ * say about one.
  */
 export function applyTripRestore<T extends Record<string, unknown>>(
   current: T,
@@ -138,6 +147,7 @@ export function applyTripRestore<T extends Record<string, unknown>>(
   for (const field of TRIP_SECTION_FIELDS) {
     base[field] = null;
   }
+  base.caveIds = null;
 
   const next = applyRestore(base, changes, props);
   for (const field of TRIP_SECTION_FIELDS) {
