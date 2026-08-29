@@ -55,7 +55,10 @@ test('a doline is drawn as an outline and its measured shape is shown', async ({
   await page.goto('/features');
   const row = page.getByRole('row', { name: new RegExp(featureName) });
   await expect(row).toBeVisible({ timeout: 15_000 });
-  await row.getByRole('link', { name: featureName }).click();
+  // The name cell is text, not an anchor: this table carries its navigation on the row itself,
+  // so the row is what a person clicks to open the feature.
+  await row.click();
+  await expect(page).toHaveURL(/\/features\/[0-9a-f-]+$/, { timeout: 15_000 });
 
   const card = page.locator('.ant-card').filter({ hasText: 'Measured shape' });
   await expect(card).toBeVisible({ timeout: 15_000 });
@@ -68,7 +71,7 @@ test('a doline is drawn as an outline and its measured shape is shown', async ({
   await expect(card.getByText('m\u00b2')).toBeVisible();
   await expect(card.getByText('Circularity')).toBeVisible();
   await expect(card.getByText('Elongation')).toBeVisible();
-  await expect(card.getByText('Long-axis bearing')).toBeVisible();
+  await expect(card.getByTestId('feature-morphometry').getByText('Long-axis bearing')).toBeVisible();
 
   // The alignment is stated as an alignment. A long axis has no direction, and a page presenting
   // it as a bearing would let two readings of the same doline be recorded as opposite.

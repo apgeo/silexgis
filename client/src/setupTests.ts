@@ -1,5 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
+import { afterEach } from 'vitest';
+
+// Testing Library unmounts what a test rendered only when Vitest exposes its hooks as
+// globals, and this project keeps them explicit imports instead. Without that unmount a
+// component stays mounted after its test ends, so React's scheduler can still hold a
+// pending callback when Vitest disposes the jsdom environment for the file — the callback
+// then runs against a torn-down `window` and is reported as an unhandled error that is
+// blamed on whichever file happened to finish last. Registering the unmount here restores
+// the per-test teardown the tests are written to assume.
+afterEach(cleanup);
 
 // antd relies on browser APIs that jsdom does not implement.
 //
