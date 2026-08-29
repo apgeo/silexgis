@@ -79,8 +79,12 @@ async function portAnswering() {
 const args = process.argv.slice(2);
 const keep = args.includes('--keep');
 const reuse = process.env.SILEXGIS_E2E_REUSE === '1';
-const projectArg = args.find((a) => a.startsWith('--project='));
-const specs = args.filter((a) => !a.startsWith('--'));
+// Everything except this script's own flag goes to Playwright untouched. Filtering to an
+// allow-list is what the first version did, and it silently swallowed `--repeat-each=3` —
+// the run reported one pass where three were asked for, which reads as a settled answer
+// rather than as a dropped argument. Passing the rest through means `-g`, `--repeat-each`,
+// `--headed`, `--project` and anything Playwright grows later all work without being listed.
+const passthrough = args.filter((a) => a !== '--keep');
 
 const apiEnv = {
   ...process.env,
@@ -208,9 +212,7 @@ try {
   }
 
   step('Running the browser leg');
-  const playwrightArgs = ['playwright', 'test'];
-  if (projectArg) playwrightArgs.push(`--project=${projectArg.split('=')[1]}`);
-  playwrightArgs.push(...specs);
+  const playwrightArgs = ['playwright', 'test', ...passthrough];
 
   exitCode = run('npx', playwrightArgs, {
     cwd: clientDir,
