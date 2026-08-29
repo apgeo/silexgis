@@ -4399,6 +4399,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{id}/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The shape one cave's survey measures, and where that disagrees with its record. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveStatisticsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/orientation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which way and how steeply one cave's passage runs. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveOrientationDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/features": {
         parameters: {
             query?: never;
@@ -12284,6 +12360,35 @@ export interface components {
             thumbnailUrl: string;
             caption: null | string;
         };
+        CaveIndexSummary: {
+            /** Format: int32 */
+            segmentCount: number;
+            /** Format: int32 */
+            pathCount: number;
+            /** Format: double */
+            totalLengthM: number;
+            /** Format: double */
+            planLengthM: number;
+            hasAltitudes: boolean;
+            /** Format: double */
+            highestZM: null | number;
+            /** Format: double */
+            lowestZM: null | number;
+            /** Format: double */
+            verticalExtentM: null | number;
+            /** Format: double */
+            maximumExtentM: null | number;
+            /** Format: double */
+            verticality: null | number;
+            /** Format: double */
+            horizontality: null | number;
+            /** Format: double */
+            linearity: null | number;
+            /** Format: double */
+            lengthToDepthRatio: null | number;
+            /** Format: double */
+            sinuosity: null | number;
+        };
         CaveListItemDto: {
             /** Format: uuid */
             id: string;
@@ -12313,6 +12418,23 @@ export interface components {
             name: null | string;
             geom: null | components["schemas"]["GeoJsonPoint"];
             approximateLocation: boolean;
+        };
+        CaveOrientationDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasAltitudes: boolean;
+            /** Format: int32 */
+            segmentCount: number;
+            /** Format: double */
+            totalLengthM: number;
+            byCount: components["schemas"]["OrientationMeasure"];
+            byLength: components["schemas"]["OrientationMeasure"];
+            bins: components["schemas"]["OrientationBin"][];
+            dip: null | components["schemas"]["DipSummary"];
         };
         CaveParentDto: {
             /** Format: uuid */
@@ -12357,6 +12479,20 @@ export interface components {
             email: null | string;
             phone: null | string;
             notes: null | string;
+        };
+        CaveStatisticsDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasAltitudes: boolean;
+            indices: components["schemas"]["CaveIndexSummary"];
+            paths: components["schemas"]["PathSinuosity"][];
+            length: components["schemas"]["MorphometryComparison"];
+            depth: components["schemas"]["MorphometryComparison"];
+            declaredDisagrees: boolean;
         };
         CaveSummaryDto: {
             /** Format: uuid */
@@ -12571,6 +12707,21 @@ export interface components {
             longitudeColumn?: null | string;
             elevationColumn?: null | string;
             wktColumn?: null | string;
+        };
+        DipSummary: {
+            /** Format: int32 */
+            sampleCount: number;
+            /** Format: double */
+            totalLengthM: number;
+            /** Format: double */
+            meanDipDegrees: null | number;
+            /** Format: double */
+            meanAbsoluteDipDegrees: null | number;
+            /** Format: double */
+            minimumDipDegrees: null | number;
+            /** Format: double */
+            maximumDipDegrees: null | number;
+            bins: components["schemas"]["OrientationBin"][];
         };
         DirectoryImportConfigDto: {
             roots: string[];
@@ -13807,6 +13958,20 @@ export interface components {
             preferredMethod: null | components["schemas"]["TwoFactorMethod"];
             methods: components["schemas"]["MfaMethodDto"][];
         };
+        /** @enum {unknown} */
+        MorphometryAgreement: "notDeclared" | "notComputed" | "agrees" | "disagrees";
+        MorphometryComparison: {
+            /** Format: double */
+            computedM: null | number;
+            /** Format: double */
+            declaredM: null | number;
+            /** Format: double */
+            differenceM: null | number;
+            /** Format: double */
+            relativeDifference: null | number;
+            agreement: components["schemas"]["MorphometryAgreement"];
+            disagrees?: boolean;
+        };
         MyPermissionGroupDto: {
             /** Format: uuid */
             id: string;
@@ -13859,6 +14024,36 @@ export interface components {
         };
         ObjectAccessReplaceRequest: {
             entries: components["schemas"]["ObjectAccessEntryWrite"][];
+        };
+        OrientationBin: {
+            /** Format: double */
+            fromDegrees: number;
+            /** Format: double */
+            toDegrees: number;
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            lengthM: number;
+            /** Format: double */
+            countFraction: number;
+            /** Format: double */
+            lengthFraction: number;
+        };
+        OrientationMeasure: {
+            /** Format: double */
+            meanAxisDegrees: null | number;
+            /** Format: double */
+            resultantLength: number;
+            /** Format: double */
+            effectiveSampleSize: number;
+            /** Format: double */
+            rayleighZ: null | number;
+            /** Format: double */
+            rayleighP: null | number;
+            /** Format: double */
+            entropyNats: null | number;
+            /** Format: double */
+            entropyNormalized: null | number;
         };
         /** @enum {unknown} */
         PageDivision: "whole" | "page" | "sheet" | "slide";
@@ -14100,6 +14295,16 @@ export interface components {
         PasswordChangeRequest: {
             currentPassword: string;
             newPassword: string;
+        };
+        PathSinuosity: {
+            /** Format: int32 */
+            pathIndex: number;
+            /** Format: double */
+            lengthM: number;
+            /** Format: double */
+            straightLineM: number;
+            /** Format: double */
+            sinuosity: null | number;
         };
         PermissionGroupDto: {
             /** Format: uuid */
@@ -14848,6 +15053,8 @@ export interface components {
             /** Format: date */
             surveyedAt: null | string;
         };
+        /** @enum {unknown} */
+        SurveySegmentBasis: "unavailable" | "surveyFlags" | "skeletonHeuristic";
         SurveyShotDto: {
             fromStationName: null | string;
             toStationName: null | string;
