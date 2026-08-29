@@ -108,18 +108,24 @@ export default function AnnotatedTextPanel({
   /** Where a target is sent when a passage is followed: every view that is not muted. */
   const revealEverywhere = useCallback(
     (target: HighlightTarget) => {
-      const to = controls.filter((c) => !muted.has(c.address)).map((c) => c.address);
-      if (to.length === 0) {
-        return;
-      }
-
-      reveal(refFor(target), to);
-
-      // The workspace selection is set alongside, not instead: it is what the detail panel, the
-      // history and the breadcrumb all read, and a map that flew somewhere while the panel beside
-      // it still described the previous cave is the kind of half-move that reads as a bug.
+      // The workspace selection is set first and unconditionally. It is what the detail panel,
+      // the history and the breadcrumb read, and it is not a fact about any view: making it
+      // depend on one leaves a passage clicked where no view is open — the document's own page,
+      // or a panel whose views the reader has muted — doing nothing whatsoever.
       if (target.targetType === 'feature') {
         setSelection({ kind: 'feature', featureId: target.targetId });
+      }
+
+      // With nothing muted the request names no controls at all, which the registry reads as
+      // "every view that can show it". That is not a shortcut: naming them would mean sending
+      // only to the roster this panel last gathered, so a click in the first moments after it
+      // mounts would reach nothing, and a window opened since the last roll call would be
+      // missed. Enumerating is needed only to leave a muted view out.
+      const to = muted.size === 0
+        ? undefined
+        : controls.filter((c) => !muted.has(c.address)).map((c) => c.address);
+      if (to === undefined || to.length > 0) {
+        reveal(refFor(target), to);
       }
     },
     [controls, muted, setSelection],
