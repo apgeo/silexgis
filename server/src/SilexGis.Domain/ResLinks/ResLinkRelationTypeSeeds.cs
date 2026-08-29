@@ -33,6 +33,13 @@ public static class ResLinkRelationTypeSeeds
         new("duplicate-of", "Original of", true, "Duplicate of"),
         new("needs-clarification", "Needs clarification", false, null),
 
+        // A link-annotated text and the scanned or word-processed document it is the reading
+        // of. Directed with the annotated text as the main member, so the forward name reads
+        // out of it ("Text of") and the inverse reads back from the file it transcribes ("Has
+        // text"). Distinct from "documents", which relates a document to the thing in the
+        // world it is about; this relates two representations of the same words.
+        new("text-of", "Text of", true, "Has text"),
+
         // What a trip did to what it names. Directed with the trip as the main member, so the
         // forward name reads out of the trip ("Surveyed") and the inverse reads back from what
         // the trip named ("Surveyed on trip"); undirected roles would be ambiguous the first

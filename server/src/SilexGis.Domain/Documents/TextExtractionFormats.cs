@@ -42,6 +42,12 @@ public static class TextExtractionFormats
         "application/gpx+xml",
         "application/vnd.google-earth.kml+xml",
         "application/geo+json",
+
+        // The link-annotated text format. Read like any other document, deliberately: its
+        // whole point is prose somebody wrote, and prose nobody can find is prose nobody
+        // reads. The reader that handles it produces the words themselves, never the JSON
+        // structure they are stored in.
+        AnnotatedText.MediaType,
     ];
 
     /// <summary>Whether text is worth trying to read out of a file recorded under this format.</summary>

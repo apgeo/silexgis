@@ -195,6 +195,10 @@ public static class DependencyInjection
 
         // Readers of stored files' text layers. Stateless, so one of each serves everything;
         // the selector is what turns a stored format into the reader that understands it.
+        // First, so that the format this application writes is claimed by the reader that
+        // understands it whatever any later reader's media-type test grows to accept.
+        services.AddSingleton<Documents.Extraction.ITextExtractor,
+            Documents.Extraction.AnnotatedTextExtractor>();
         services.AddSingleton<Documents.Extraction.ITextExtractor,
             Documents.Extraction.PlainTextExtractor>();
         services.AddSingleton<Documents.Extraction.ITextExtractor,
@@ -208,6 +212,8 @@ public static class DependencyInjection
         services.AddSingleton<Documents.Extraction.ITextExtractor,
             Documents.Extraction.LegacyOfficeTextExtractor>();
         services.AddSingleton<Documents.Extraction.TextExtractorSelector>();
+
+        services.AddScoped<Documents.AnnotatedTextService>();
 
         services.AddScoped<IProcessingJobHandler, GeofileImportHandler>();
         services.AddScoped<IProcessingJobHandler, RasterCogHandler>();
