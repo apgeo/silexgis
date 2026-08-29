@@ -88,6 +88,14 @@ public static class DemoSeeder
         {
             await SeedDocumentsAsync(db, documents, fileStore, ownerUserId, demoCaveId.Value, ct);
             await db.SaveChangesAsync(ct);
+
+            // After the documents block and outside it, on a guard of its own. That block is
+            // gated on the demo archive not existing, so anything nested inside it never runs
+            // again on a database that has already seen the demo — the dataset would quietly
+            // stay as it was on every machine that had one, which is the same trap the camp
+            // roster above is hoisted out of.
+            await SeedAnnotatedTextAsync(db, documents, fileStore, ownerUserId, demoCaveId.Value, ct);
+            await db.SaveChangesAsync(ct);
         }
     }
 
@@ -166,7 +174,6 @@ public static class DemoSeeder
         });
 
         await SeedResourceLinkAsync(db, ownerUserId, demoCaveId, report, ct);
-        await SeedAnnotatedTextAsync(db, documents, fileStore, ownerUserId, demoCaveId, report, ct);
     }
 
     /// <summary>
@@ -196,7 +203,6 @@ public static class DemoSeeder
         IFileStore fileStore,
         Guid ownerUserId,
         Guid demoCaveId,
-        DocumentFile report,
         CancellationToken ct)
     {
         const string title = "Peștera Demo Mare — notes on the 1987 survey";
@@ -204,6 +210,25 @@ public static class DemoSeeder
         {
             return;
         }
+
+        // The report this text is the reading of, and the shelf it is filed on, looked up by
+        // name rather than handed in — that is what lets this run on a database seeded before
+        // it existed. Without the report there is nothing for the text to be the text *of*, so
+        // there is nothing worth demonstrating and the block does not run at all.
+        var report = await (from version in db.DocumentVersions.AsNoTracking()
+                            join reported in db.Documents.AsNoTracking() on version.DocumentId equals reported.Id
+                            join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
+                            where version.IsCurrent && reported.Title.EndsWith("1987 survey report")
+                            select new { reported.Id, FileId = file.Id }).FirstOrDefaultAsync(ct);
+        if (report is null)
+        {
+            return;
+        }
+
+        var cabinetId = await db.Cabinets.AsNoTracking()
+            .Where(c => c.Name == "Survey reports")
+            .Select(c => (Guid?)c.Id)
+            .FirstOrDefaultAsync(ct);
 
         AnnotatedBlock[] blocks =
         [
@@ -241,6 +266,18 @@ public static class DemoSeeder
         var document = db.Documents.Local.Single(d => d.Id == text.Version.DocumentId);
         document.Visibility = Visibility.Public;
 
+        // Filed beside the report it reads, because that is where somebody would look for it —
+        // and because an unfiled document is reachable only through the inbox, which is a
+        // different surface from the one this demonstrates.
+        if (cabinetId is { } shelf)
+        {
+            db.CabinetDocuments.Add(new CabinetDocument
+            {
+                CabinetId = shelf,
+                DocumentId = text.Version.DocumentId,
+            });
+        }
+
         var stream = AnnotatedText.CanonicalText(blocks);
         var dolinaId = await db.Features
             .Where(f => f.Name == "Dolina Demo")
@@ -260,7 +297,7 @@ public static class DemoSeeder
 
         await LinkPassageAsync(
             db, ownerUserId, text, stream, "the 1987 survey report", "text-of",
-            feature: null, document: report.Version.DocumentId, ct);
+            feature: null, document: report.Id, ct);
     }
 
     /// <summary>
