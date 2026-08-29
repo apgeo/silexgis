@@ -1140,7 +1140,21 @@
     "metresSurveyed": "Cartat",
     "metresOfRope": "Coardă",
     "surveyStations": "Puncte topografice",
-    "incidents": "Ture cu incident"
+    "incidents": "Ture cu incident",
+    "orientation": {
+      "rose": "Roza direcțiilor galeriilor",
+      "weighting": "Ponderare",
+      "byLength": "După lungime",
+      "byCount": "După număr",
+      "north": "N",
+      "east": "E",
+      "south": "S",
+      "west": "V",
+      "ringLabel": "{{value}}%",
+      "meanAxis": "Direcția medie {{value}}°",
+      "roseDescriptionLength": "Direcțiile galeriilor pe {{sectors}} sectoare de {{width}}°, cu nordul în sus, ponderate după lungimea cartată. Fiecare direcție este desenată pe ambele părți ale diagramei, pentru că o galerie parcursă într-un sens și aceeași galerie cartată dinspre celălalt capăt sunt o singură direcție, nu două. Cea mai puternică este {{from}}–{{to}}°, cu {{percent}}% din lungime.",
+      "roseDescriptionCount": "Direcțiile galeriilor pe {{sectors}} sectoare de {{width}}°, cu nordul în sus, ponderate după numărul de vize topografice. Fiecare direcție este desenată pe ambele părți ale diagramei, pentru că o galerie parcursă într-un sens și aceeași galerie cartată dinspre celălalt capăt sunt o singură direcție, nu două. Cea mai puternică este {{from}}–{{to}}°, cu {{percent}}% din vize."
+    }
   },
   "permissions": {
     "title": "Permisiuni",

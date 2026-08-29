@@ -1140,7 +1140,21 @@
     "metresSurveyed": "Surveyed",
     "metresOfRope": "Rope",
     "surveyStations": "Survey stations",
-    "incidents": "Trips with an incident"
+    "incidents": "Trips with an incident",
+    "orientation": {
+      "rose": "Passage rose",
+      "weighting": "Weighting",
+      "byLength": "By length",
+      "byCount": "By count",
+      "north": "N",
+      "east": "E",
+      "south": "S",
+      "west": "W",
+      "ringLabel": "{{value}}%",
+      "meanAxis": "Mean trend {{value}}°",
+      "roseDescriptionLength": "Passage trends over {{sectors}} sectors of {{width}}°, north up, weighted by surveyed length. Each trend is drawn on both sides of the diagram because a passage running one way and the same passage surveyed from its other end are one trend, not two. The strongest is {{from}}–{{to}}°, carrying {{percent}}% of the length.",
+      "roseDescriptionCount": "Passage trends over {{sectors}} sectors of {{width}}°, north up, weighted by the number of survey legs. Each trend is drawn on both sides of the diagram because a passage running one way and the same passage surveyed from its other end are one trend, not two. The strongest is {{from}}–{{to}}°, carrying {{percent}}% of the legs."
+    }
   },
   "permissions": {
     "title": "Permissions",
